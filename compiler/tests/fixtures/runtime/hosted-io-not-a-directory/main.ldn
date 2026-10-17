@@ -16,20 +16,18 @@ open_refused: (state: hosted.system, path: []u8, writing: bool,
     yes = false
     named: text.host_string = text.host_over(path)
     mut opened: io.file = io.out(state)
-    --  Parenthesised, so that each recovery's `else` is the call's and not
-    --  the branch's.
     if writing then
-        opened = (io.open_write(state, named) else (problem)
+        opened = io.open_write(state, named) else (problem)
             yes = problem == io.not_found
                   and hosted.last_errno(state) == errno
             return
-        end)
+        end
     else
-        opened = (io.open_read(state, named) else (problem)
+        opened = io.open_read(state, named) else (problem)
             yes = problem == io.not_found
                   and hosted.last_errno(state) == errno
             return
-        end)
+        end
     end if
     io.close(state, opened) else (problem)
         _ = problem

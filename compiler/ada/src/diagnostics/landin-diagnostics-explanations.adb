@@ -105,7 +105,9 @@ package body Landin.Diagnostics.Explanations is
                & "e tour paragraph and whether the form is a recorded boun"
                & "dary, withdrawn with a replacement, or transferred to la"
                & "ter work. Write the program without it, or with what the"
-               & " note says replaces it.",
+               & " note says replaces it. A call's result is no place, so "
+               & "indexing one is a recorded boundary: bind the result to "
+               & "a name, then index the name.",
             when Catalogue.Malformed_Integer =>
                "An integer literal is malformed if a base prefix has no "
                & "digits, a digit is not in its base, an underscore begins"
@@ -487,7 +489,10 @@ package body Landin.Diagnostics.Explanations is
                & "lls in `try for` also propagate their declared errors: t"
                & "he enclosing routine must declare or infer those atoms, "
                & "and its caller may recover them through ordinary call `e"
-               & "lse`.",
+               & "lse`. In an `if` arm, `else value` after a call divides "
+               & "the `if` [1820], which leaves the call unrecovered: writ"
+               & "e `(f() else 0)`, or bind the error with `else (problem)"
+               & "`.",
             when Catalogue.Assembly_Block_Contract =>
                "An assembly block, operand or template breaks [1630]'s b"
                & "lock contract or [1990]'s register rules. Only `assemble"
@@ -504,10 +509,14 @@ package body Landin.Diagnostics.Explanations is
                & "arded with `_ =` [1020], and a call that returns none ha"
                & "s no value to use, infer from, or discard [1920] [1930],"
                & " nor one for its `else` to yield in place of a result [1"
-               & "030]. Destructuring binds the names of a multiple result"
-               & ", each at most once [0990]. Discard the result explicitl"
-               & "y, use a call that returns one, or bind the result names"
-               & " the signature declares.",
+               & "030]. An `if`, `match` or bare `begin` used as a stateme"
+               & "nt takes no value from its branches, so a branch that en"
+               & "ds with one would drop it; in an `if` arm that value is "
+               & "often a call's `else value` the `if` took as its own [18"
+               & "20]. Destructuring binds the names of a multiple result,"
+               & " each at most once [0990]. Discard the result explicitly"
+               & ", use a call that returns one, or bind the result names "
+               & "the signature declares.",
             when Catalogue.Control_Value =>
                "A `break` must carry a value exactly when its target nee"
                & "ds one [1180] [1190]; every value-producing fallthrough "

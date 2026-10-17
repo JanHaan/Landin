@@ -1145,13 +1145,6 @@ records: (inout out: io.buffered_writer(hosted.system), input: []u8)
     end while
 end records
 
---  Say on standard error why the program stopped.
-complain: (host: hosted.system, message: []u8) -> none =
-    io.write(host, io.err(host), message) else (ignored)
-        _ = ignored
-    end
-end complain
-
 public main: () -> (code: i32) =
     host := hosted.host()
     memory := heap.host()
@@ -1166,20 +1159,32 @@ public main: () -> (code: i32) =
 
     read_all(host, whole) else (problem)
         if problem == text.no_space then
-            complain(host, "revcomp: out of memory\n")
+            io.write(host, io.err(host), "revcomp: out of memory\n")
+                else (ignored)
+                _ = ignored
+            end
         else
-            complain(host, "revcomp: standard input could not be read\n")
+            io.write(host, io.err(host), "revcomp: standard input could not be read\n")
+                else (ignored)
+                _ = ignored
+            end
         end if
         return
     end
     records(out, text.used(whole)) else (problem)
         _ = problem
-        complain(host, "revcomp: standard output could not be written\n")
+        io.write(host, io.err(host), "revcomp: standard output could not be written\n")
+            else (ignored)
+            _ = ignored
+        end
         return
     end
     io.flush(out) else (problem)
         _ = problem
-        complain(host, "revcomp: standard output could not be written\n")
+        io.write(host, io.err(host), "revcomp: standard output could not be written\n")
+            else (ignored)
+            _ = ignored
+        end
         return
     end
     code = 0
@@ -2310,14 +2315,6 @@ exchange: (host: hosted.system,
                text.used(echoed))
 end exchange
 
---  Say that the loopback address the program was to use is not on this
---  system.
-unavailable: (inout out: io.buffered_writer(hosted.system)) -> none =
-    io.put(out, "this system has no such loopback address\n") else (problem)
-        _ = problem
-    end
-end unavailable
-
 public main: () -> (code: i32) =
     host := hosted.host()
     mut storage: [512]u8 = zeroed
@@ -2331,7 +2328,12 @@ public main: () -> (code: i32) =
         exchange(host, out, family) else (problem)
             --  A system without IPv6 cannot run the second half, which
             --  says so rather than passing over it.
-            if problem == io.address_unavailable then unavailable(out) end if
+            if problem == io.address_unavailable then
+                io.put(out, "this system has no such loopback address\n")
+                    else (ignored)
+                    _ = ignored
+                end
+            end if
             code = 2
             return
         end

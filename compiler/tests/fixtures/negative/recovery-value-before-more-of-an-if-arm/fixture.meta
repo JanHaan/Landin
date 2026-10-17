@@ -1,0 +1,9 @@
+class: negative
+summary: [1820] lets a call's `else value` in an `if` arm divide the `if`, so the value followed by more of the arm is reported as the `if`'s other branch, naming the parenthesised recovery, rather than as a value that is not its block's last
+program: program.ldn
+codes: L0110
+expect: expected.txt
+args: ../tests/fixtures/negative/recovery-value-before-more-of-an-if-arm/program.ldn
+status: 1
+constructs: 1030, 1050, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

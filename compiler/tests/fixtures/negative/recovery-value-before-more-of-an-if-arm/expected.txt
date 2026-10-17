@@ -1,0 +1,6 @@
+error[L0110]: this is the `if`'s other branch, because the `else` before it divides the `if` rather than recovering the call
+  --> ../tests/fixtures/negative/recovery-value-before-more-of-an-if-arm/program.ldn:11:34
+   |
+11 |         first := checked(1) else 7
+   |                                  ^
+  = note: [1820]: in an `if` arm, recover a call with parentheses, `(call(...) else value)`, or bind the error, `else (problem) ... end`

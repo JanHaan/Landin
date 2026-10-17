@@ -1,0 +1,10 @@
+error[L0301]: a union of atoms is a type, and here it needs a name of its own
+  --> ../tests/fixtures/negative/atom-union-measured-by-sizeof-needs-a-name/program.ldn:3:21
+  |
+3 |     n = sizeof read | write
+  |                     ^
+  --> ../tests/fixtures/negative/atom-union-measured-by-sizeof-needs-a-name/program.ldn:3:9
+  |
+3 |     n = sizeof read | write
+  |         ^^^^^^^^^^^ the union begins here
+  = note: [0640]: declare it, `name: type = a | b`, and write the name; a union is written in place only as a binding's, a parameter's, a return's or a field's type

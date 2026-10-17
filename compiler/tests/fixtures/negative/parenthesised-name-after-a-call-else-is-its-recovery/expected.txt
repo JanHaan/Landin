@@ -1,0 +1,7 @@
+error[L0110]: parentheses after a call's `else` bind its error; write `else fallback` for the branch's value
+  --> ../tests/fixtures/negative/parenthesised-name-after-a-call-else-is-its-recovery/program.ldn:6:40
+  |
+6 |     r = if c then twice(fallback) else (fallback) end if
+  |                                        ^^^^^^^^^^
+  = note: [1820]: `else (name)` after a call opens that call's recovery, even in an `if` arm
+  = help: write `else fallback`

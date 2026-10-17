@@ -1,0 +1,14 @@
+bad: atom
+
+checked: (n: u32) -> (r: u32) ! bad =
+    fail bad when n == 0
+    r = n
+end checked
+
+pick: (c: bool) -> (r: u32) =
+    r = 0
+    if c then
+        first := checked(1) else 7
+        r = first + 1
+    end if
+end pick

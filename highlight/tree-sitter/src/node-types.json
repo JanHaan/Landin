@@ -612,6 +612,10 @@
           {
             "type": "_type",
             "named": true
+          },
+          {
+            "type": "atom_union",
+            "named": true
           }
         ]
       },
@@ -993,6 +997,10 @@
         "types": [
           {
             "type": "_type",
+            "named": true
+          },
+          {
+            "type": "atom_union",
             "named": true
           }
         ]
@@ -1476,6 +1484,10 @@
         "types": [
           {
             "type": "_type",
+            "named": true
+          },
+          {
+            "type": "atom_union",
             "named": true
           }
         ]
@@ -2310,7 +2322,15 @@
             "named": true
           },
           {
-            "type": "identifier",
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "indexed_expression",
+            "named": true
+          },
+          {
+            "type": "labeled_application",
             "named": true
           }
         ]
@@ -2363,6 +2383,10 @@
         "types": [
           {
             "type": "_type",
+            "named": true
+          },
+          {
+            "type": "atom_union",
             "named": true
           }
         ]
@@ -2454,6 +2478,10 @@
         "types": [
           {
             "type": "_type",
+            "named": true
+          },
+          {
+            "type": "atom_union",
             "named": true
           }
         ]

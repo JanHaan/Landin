@@ -1,0 +1,9 @@
+class: negative
+summary: [1790] writes an atom union in place only as a declared type, so one as a type argument is reported once, naming the declaration it needs
+program: program.ldn
+codes: L0101
+expect: expected.txt
+args: ../tests/fixtures/negative/atom-union-as-a-type-argument-needs-a-name/program.ldn
+status: 1
+constructs: 0640, 1290, 1790
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

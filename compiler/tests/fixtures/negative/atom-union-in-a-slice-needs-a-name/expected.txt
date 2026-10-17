@@ -1,0 +1,10 @@
+error[L0101]: a union inside an array, slice or function type needs a name of its own
+  --> ../tests/fixtures/negative/atom-union-in-a-slice-needs-a-name/program.ldn:3:16
+  |
+3 | count: (modes: []read | write) -> (n: usize) =
+  |                ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atom-union-in-a-slice-needs-a-name/program.ldn:3:9
+  |
+3 | count: (modes: []read | write) -> (n: usize) =
+  |         ^^^^^ declared here
+  = note: [0640]: declare it, `name: type = a | b`, and write the name in the enclosing type

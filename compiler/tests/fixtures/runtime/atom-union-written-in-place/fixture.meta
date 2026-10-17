@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: [1790] writes an atom union in place as a binding's, a parameter's, a named return's, a field's and a payload field's type, and as D189's pointer union, and it is the same structural set as the declared alias, so values pass between the two both ways
+program: main.ldn
+status: 42
+constructs: 0480, 0640, 0680, 1790
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

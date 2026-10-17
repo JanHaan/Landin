@@ -1343,6 +1343,26 @@ package body Landin.Stages.Resolution is
                                    & Spelled (Named) & "` by calling it, as"
                                    & " in `" & Spelled (Named) & "(value)`",
                         Into    => Found);
+                  --  [1750]: the name is an argument of a call that the
+                  --  line above ran on into, through a `(` that begins
+                  --  this line.  That line end is the mistake to name.
+                  elsif Named /= Landin.Source.Names.No_Name
+                    and then Syn.Continued_Around (Of_Tree, Node)
+                               /= Syn.No_Node
+                  then
+                     Names.Report
+                       (Item    => Names.Unresolved_Name,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor (Of_Tree, Node),
+                        Message => "`" & Spelled (Named)
+                                   & "` is not declared here, because the"
+                                   & " `(` that begins this line continues"
+                                   & " the line above as a call",
+                        Note    => "[1750]: a line end ends no statement;"
+                                   & " assign a value that begins with a"
+                                   & " parenthesis to its place, or begin"
+                                   & " a struct value with its type's name",
+                        Into    => Found);
                   elsif Named /= Landin.Source.Names.No_Name then
                      Names.Report
                        (Item    => Names.Unresolved_Name,

@@ -2338,6 +2338,23 @@ def token_dump():
 UNSTATED_BY_GRAMMAR = {"L0109"}
 
 
+#  Negative fixtures the parser refuses by a rule stated in prose beside the
+#  productions rather than by them, so the grammar derives each, as it does
+#  every positive fixture, and the parser's refusal is that rule's.  A
+#  context-free grammar ignores the line ends between tokens and admits two
+#  readings where the prose chooses one.
+#
+#  [1820]: a call's `else (name)` opens that call's recovery even in an `if`
+#  arm, so `if c then f() else (r) end if` is refused, while the grammar
+#  derives `(r)` as the `if`'s other branch.  Any other call-site `else`
+#  there divides the `if`, so a value followed by more of the arm is
+#  refused, while the grammar derives the whole as the call's recovery.
+STATED_IN_PROSE = {
+    "parenthesised-name-after-a-call-else-is-its-recovery": "[1820]",
+    "recovery-value-before-more-of-an-if-arm": "[1820]",
+}
+
+
 def fixed_results(meta):
     """The files a fixture's `fixed:` names as results of its fixes."""
     named = re.search(r"^fixed: (.+)$",
@@ -2622,6 +2639,8 @@ def check_grammar_corpus(full_run):
                     elif codes and all(one in UNSTATED_BY_GRAMMAR
                                        for one in codes):
                         must_derive = True
+            if kind == "negative" and name in STATED_IN_PROSE:
+                must_derive = True
 
             #  A fix's result is a program that compiles clean, so it
             #  derives however the program it was made from was refused.
@@ -2674,6 +2693,13 @@ def check_grammar_corpus(full_run):
                                         "the scanner says %r and the "
                                         "fixture expects %r"
                                         % (complaint, expected)))
+
+    #  A prose rule's table names fixtures that are there.
+    for name in sorted(STATED_IN_PROSE):
+        if not os.path.isdir(os.path.join(fixtures, "negative", name)):
+            out.append(("check.py", 1,
+                        "STATED_IN_PROSE names negative/%s, which is not a"
+                        " fixture" % name))
 
     #  Repository-owned library and example modules are source programs too.
     #  Rooted runtime fixtures execute them, while this independent side

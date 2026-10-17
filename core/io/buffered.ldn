@@ -80,8 +80,7 @@ public put: (provider: type is writer, inout out: buffered_writer(provider),
              bytes: []u8) -> none ! io_failed =
     count: usize = lenof bytes
     return when count == 0
-    room := out.buffer
-    capacity: usize = lenof room
+    capacity: usize = lenof out.buffer
     if count > capacity - out.used then
         try flush(out)
         if count >= capacity then

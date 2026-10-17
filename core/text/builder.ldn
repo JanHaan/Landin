@@ -56,8 +56,7 @@ end length
 --- How many bytes the builder holds before it next fills: its buffer's
 --- length, which grows for a builder from `growing`.
 public capacity: (source: builder) -> (count: usize) =
-    room := source.buffer
-    count = lenof room
+    count = lenof source.buffer
 end capacity
 
 --- Forget everything written, keeping the buffer for the next text.
@@ -82,8 +81,7 @@ end truncate
 public release: (inout target: builder) -> none =
     target.used = 0
     return when not target.owned
-    room := target.buffer
-    extent: usize = lenof room
+    extent: usize = lenof target.buffer
     block: ptr mut u8 = addr target.buffer[0]
     match target.growth
         bounded: return
@@ -110,8 +108,7 @@ end view
 --  to before the old one is given back, and reports `no_space` when the
 --  allocator refuses.  A failure changes nothing.
 room: (inout target: builder, extra: usize) -> none ! no_space =
-    current := target.buffer
-    capacity_now: usize = lenof current
+    capacity_now: usize = lenof target.buffer
     return when extra <= capacity_now - target.used
     maximum: usize = 0 -% 1
     fail no_space when extra > maximum - target.used

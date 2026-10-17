@@ -42,13 +42,6 @@ byte_extent: (item: type, slots: usize)
     extent = slots * item_size
 end byte_extent
 
-next_growth: (capacity: usize) -> (next: usize) ! mem.out_of_memory =
-    next = grown(capacity) else (problem)
-        _ = problem
-        fail mem.out_of_memory
-    end
-end next_growth
-
 free_empty: (item: type, provider: type is mem.allocator,
              inout value: mem.storage(item), memory: provider) -> none =
     slots: usize = mem.capacity(value)
@@ -106,7 +99,10 @@ public push: (item: type, provider: type is mem.allocator,
               inout value: list(item), memory: provider,
               escaping added: item) -> none ! mem.out_of_memory =
     if length(value) == capacity(value) then
-        next: usize = try next_growth(capacity(value))
+        next: usize = grown(capacity(value)) else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end
         try reserve(value, memory, next)
     end if
     admitted: usize = mem.admit(value.values, added) else (problem)

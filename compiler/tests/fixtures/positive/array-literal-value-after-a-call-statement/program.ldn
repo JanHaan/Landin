@@ -1,0 +1,10 @@
+mut seen: u32 = 0
+
+note: () -> none =
+    seen += 1
+end note
+
+pair: () -> (both: [2]u32) =
+    note()
+    [seen, seen + 1]
+end pair

@@ -149,14 +149,6 @@ exchange: (host: hosted.system,
                text.used(echoed))
 end exchange
 
---  Say that the loopback address the program was to use is not on this
---  system.
-unavailable: (inout out: io.buffered_writer(hosted.system)) -> none =
-    io.put(out, "this system has no such loopback address\n") else (problem)
-        _ = problem
-    end
-end unavailable
-
 public main: () -> (code: i32) =
     host := hosted.host()
     mut storage: [512]u8 = zeroed
@@ -170,7 +162,12 @@ public main: () -> (code: i32) =
         exchange(host, out, family) else (problem)
             --  A system without IPv6 cannot run the second half, which
             --  says so rather than passing over it.
-            if problem == io.address_unavailable then unavailable(out) end if
+            if problem == io.address_unavailable then
+                io.put(out, "this system has no such loopback address\n")
+                    else (ignored)
+                    _ = ignored
+                end
+            end if
             code = 2
             return
         end

@@ -1,0 +1,9 @@
+class: negative
+summary: [1750] lets a `-` that begins a line continue the line above as a subtraction, so the body that meant `-1` as its value ends without one, and the report says the last line continued the one above
+program: program.ldn
+codes: L0302
+expect: expected.txt
+args: ../tests/fixtures/negative/line-leading-minus-continues-the-value/program.ldn
+status: 1
+constructs: 1750, 1800, 1910
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,7 @@
+twice: (n: u32) -> (r: u32) =
+    r = n * 2
+end twice
+
+pick: (c: bool, fallback: u32) -> (r: u32) =
+    r = if c then twice(fallback) else (fallback) end if
+end pick

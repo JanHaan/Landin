@@ -1,0 +1,9 @@
+class: negative
+summary: [1020] drops no value by omission, so a branch of an `if`, `elsif`, `match` or `begin` used as a statement that ends with a value is refused, naming both routes: a value written after an infallible call's `else` in an `if` arm, a call that hands back a result, a literal match arm and a block's last line
+program: program.ldn
+codes: L0331, L0331, L0331, L0331
+expect: expected.txt
+args: ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn
+status: 1
+constructs: 1020, 1050, 1210, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

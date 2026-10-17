@@ -1,0 +1,9 @@
+class: negative
+summary: [1790] writes an atom union in place only as a declared type, so one passed as a static type argument is reported as needing a name of its own, naming the declaration
+program: program.ldn
+codes: L0327
+expect: expected.txt
+args: ../tests/fixtures/negative/atom-union-as-a-static-type-argument-needs-a-name/program.ldn
+status: 1
+constructs: 0640, 1290, 1790
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

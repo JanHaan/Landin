@@ -1,0 +1,10 @@
+error[L0101]: a union here needs a name of its own
+  --> ../tests/fixtures/negative/atom-union-as-a-distinct-base-needs-a-name/program.ldn:2:30
+  |
+2 | access: type = distinct read | write
+  |                              ^^^^^^^
+  --> ../tests/fixtures/negative/atom-union-as-a-distinct-base-needs-a-name/program.ldn:2:1
+  |
+2 | access: type = distinct read | write
+  | ^^^^^^ declared here
+  = note: [0640]: declare it, `name: type = a | b`, and write the name; a union is written in place only as a binding's, a parameter's, a return's or a field's type

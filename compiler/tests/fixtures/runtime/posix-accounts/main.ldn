@@ -64,8 +64,7 @@ parsed: (host: hosted.system, inout out: io.buffered_writer(hosted.system))
     loop do
         item: io.line = try io.read_line(lines)
         break when item.finished
-        bytes: []u8 = item.bytes
-        if lenof bytes == 0 then
+        if lenof item.bytes == 0 then
             groups = true
         elsif groups then
             try group_line(out, item.bytes)

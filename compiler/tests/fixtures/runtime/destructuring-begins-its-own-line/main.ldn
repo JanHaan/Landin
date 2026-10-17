@@ -1,0 +1,33 @@
+--  [1750]: a `(` that begins a line, and whose `)` is followed by `:=`,
+--  begins a destructuring binding rather than a call of the line above, so
+--  a line ending in a name -- a guard's condition, an assignment's value --
+--  is followed by one with no statement between them.
+bad: atom
+
+split: (n: u32) -> (high: u32, low: u32) =
+    high = n / 10
+    low = n % 10
+end split
+
+guarded: (n: u32, missing: bool) -> (sum: u32) ! bad =
+    fail bad when missing
+    (high, low) := split(n)
+    sum = high + low
+end guarded
+
+early: (n: u32, present: bool) -> (sum: u32) =
+    sum = 0
+    return when not present
+    (high: tens, low: ones) := split(n)
+    sum = tens * ones
+end early
+
+public main: () -> (code: i32) =
+    mut total: u32 = guarded(34, false) else 0
+    total += early(25, true)
+    mut last: u32 = 0
+    last = total
+    (high, _) := split(last)
+    total += high
+    code = i32(total)
+end main

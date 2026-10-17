@@ -1,0 +1,10 @@
+error[L0301]: this line begins with `(`, which continues the line above as a call of a value that is no function
+  --> ../tests/fixtures/negative/line-leading-parenthesis-continues-as-a-call/program.ldn:5:5
+  |
+5 |     (rows: 0, cols: 0)
+  |     ^
+  --> ../tests/fixtures/negative/line-leading-parenthesis-continues-as-a-call/program.ldn:4:20
+  |
+4 |     met := wide == limit
+  |                    ^^^^^ the line above ends with this
+  = note: [1750]: a line end ends no statement; to begin a value with a struct, name its type, `size(rows: 0, ...)`, or assign a parenthesised value to its place

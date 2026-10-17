@@ -1,0 +1,6 @@
+size: type = (rows: u32, cols: u32)
+
+measured: (wide: u32, limit: u32) -> (whole: size) =
+    met := wide == limit
+    (rows: 0, cols: 0)
+end measured

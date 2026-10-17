@@ -1,0 +1,40 @@
+error[L0331]: this value ends a branch nothing takes a value from, so it would be dropped
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:10:27
+   |
+10 |         r = twice(1) else 7
+   |                           ^
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:9:5
+  |
+9 |     if c then
+  |     ^^^^^^^^^ used as a statement
+  = note: [1020]: write the branch as a statement, discarding a value with `_ =`; where a call's recovery was meant, write `(f() else value)` or bind the error with `else (problem)` [1820]
+error[L0331]: this value ends a branch nothing takes a value from, so it would be dropped
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:15:9
+   |
+15 |         twice(k)
+   |         ^^^^^^^^
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:12:5
+   |
+12 |     if k == 1 then
+   |     ^^^^^^^^^^^^^^ used as a statement
+  = note: [1020]: write the branch as a statement, discarding a value with `_ =`; where a call's recovery was meant, write `(f() else value)` or bind the error with `else (problem)` [1820]
+error[L0331]: this value ends a branch nothing takes a value from, so it would be dropped
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:19:13
+   |
+19 |         no: 3
+   |             ^
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:17:5
+   |
+17 |     match a
+   |     ^^^^^^^ used as a statement
+  = note: [1020]: write the branch as a statement, discarding a value with `_ =`; where a call's recovery was meant, write `(f() else value)` or bind the error with `else (problem)` [1820]
+error[L0331]: this value ends a branch nothing takes a value from, so it would be dropped
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:23:9
+   |
+23 |         k
+   |         ^
+  --> ../tests/fixtures/negative/value-ending-a-statement-branch-is-refused/program.ldn:21:5
+   |
+21 |     begin
+   |     ^^^^^ used as a statement
+  = note: [1020]: write the branch as a statement, discarding a value with `_ =`; where a call's recovery was meant, write `(f() else value)` or bind the error with `else (problem)` [1820]

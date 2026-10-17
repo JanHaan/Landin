@@ -1,0 +1,10 @@
+error[L0101]: a range subtype narrows an integer type, and a union is none
+  --> ../tests/fixtures/negative/atom-union-as-a-range-base-is-refused/program.ldn:2:11
+  |
+2 | r: type = read | write range 1..2
+  |           ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atom-union-as-a-range-base-is-refused/program.ldn:2:1
+  |
+2 | r: type = read | write range 1..2
+  | ^ the type declared here
+  = note: [0660]: write the range after a named integer type, and the union as a type of its own

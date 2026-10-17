@@ -83,13 +83,13 @@ memory_open: (self: memory, path: text.host_string, writing: bool)
     inc self.state.val.open_calls
     wanted: []u8 = text.host_bytes(path)
     mut at: usize = 0
-    while at < memory_file_count(self.files) do
+    while at < lenof self.files do
         current: ptr mut memory_file = addr self.files[at]
         if memory_same_bytes(wanted, current.val.name) then
             fail no_access when writing and not current.val.writable
             fail no_access when not writing and not current.val.readable
             fail io_failed when current.val.opened
-              or current.val.length > memory_bytes_count(current.val.contents)
+              or current.val.length > lenof current.val.contents
             current.val.cursor = 0
             current.val.opened = true
             current.val.writing = writing
@@ -118,19 +118,19 @@ memory_same_file: (self: memory, left: text.host_string,
     same = false
     left_name: []u8 = text.host_bytes(left)
     right_name: []u8 = text.host_bytes(right)
-    mut left_index: usize = memory_file_count(self.files)
-    mut right_index: usize = memory_file_count(self.files)
-    for at in usize(0)..<memory_file_count(self.files) do
-        if left_index == memory_file_count(self.files)
+    mut left_index: usize = lenof self.files
+    mut right_index: usize = lenof self.files
+    for at in usize(0)..<lenof self.files do
+        if left_index == lenof self.files
           and memory_same_bytes(left_name, self.files[at].name) then
             left_index = at
         end if
-        if right_index == memory_file_count(self.files)
+        if right_index == lenof self.files
           and memory_same_bytes(right_name, self.files[at].name) then
             right_index = at
         end if
     end for
-    fail io_failed when left_index == memory_file_count(self.files)
+    fail io_failed when left_index == lenof self.files
     same = left_index == right_index
 end memory_same_file
 
@@ -149,7 +149,7 @@ memory_close: (self: memory, sink opened: file) -> none ! io_failed =
     else
         fail io_failed when usize(opened) < 3
         index: usize = usize(opened) - 3
-        fail io_failed when index >= memory_file_count(self.files)
+        fail io_failed when index >= lenof self.files
         current: ptr mut memory_file = addr self.files[index]
         fail io_failed when not current.val.opened
         current.val.opened = false
@@ -191,10 +191,10 @@ memory_read: (self: memory, opened: file, into: []mut u8)
     end if
     fail io_failed when usize(opened) < 3
     index: usize = usize(opened) - 3
-    fail io_failed when index >= memory_file_count(self.files)
+    fail io_failed when index >= lenof self.files
     current: ptr mut memory_file = addr self.files[index]
     fail io_failed when not current.val.opened or current.val.writing
-      or current.val.length > memory_bytes_count(current.val.contents)
+      or current.val.length > lenof current.val.contents
     count = try memory_take(current.val.contents[0..<current.val.length],
                             current.val.cursor, into, state.val.read_limit)
     current.val.cursor += count
@@ -214,8 +214,8 @@ memory_write_some: (self: memory, opened: file, bytes: []u8)
     if count > state.val.write_limit then count = state.val.write_limit end if
     if usize(opened) == 1 then
         fail io_failed when not state.val.output_open
-          or state.val.output_used > memory_bytes_count(self.output)
-        available: usize = memory_bytes_count(self.output) - state.val.output_used
+          or state.val.output_used > lenof self.output
+        available: usize = lenof self.output - state.val.output_used
         fail io_failed when available == 0
         if count > available then count = available end if
         mut n: usize = 0
@@ -226,8 +226,8 @@ memory_write_some: (self: memory, opened: file, bytes: []u8)
         state.val.output_used += count
     elsif usize(opened) == 2 then
         fail io_failed when not state.val.errors_open
-          or state.val.errors_used > memory_bytes_count(self.errors)
-        available: usize = memory_bytes_count(self.errors) - state.val.errors_used
+          or state.val.errors_used > lenof self.errors
+        available: usize = lenof self.errors - state.val.errors_used
         fail io_failed when available == 0
         if count > available then count = available end if
         mut n: usize = 0
@@ -239,11 +239,11 @@ memory_write_some: (self: memory, opened: file, bytes: []u8)
     else
         fail io_failed when usize(opened) < 3
         index: usize = usize(opened) - 3
-        fail io_failed when index >= memory_file_count(self.files)
+        fail io_failed when index >= lenof self.files
         current: ptr mut memory_file = addr self.files[index]
         fail io_failed when not current.val.opened or not current.val.writing
-          or current.val.length > memory_bytes_count(current.val.contents)
-        available: usize = memory_bytes_count(current.val.contents) - current.val.length
+          or current.val.length > lenof current.val.contents
+        available: usize = lenof current.val.contents - current.val.length
         fail io_failed when available == 0
         if count > available then count = available end if
         mut n: usize = 0
@@ -278,11 +278,11 @@ memory_err: (self: memory) -> (stream: file) =
     stream = file_value(2)
 end memory_err
 memory_argument_count: (self: memory) -> (count: usize) =
-    count = memory_args_count(self.arguments)
+    count = lenof self.arguments
 end memory_argument_count
 memory_argument: (self: memory, index: usize)
                  -> (value: text.host_string from self) ! no_argument =
-    fail no_argument when index >= memory_args_count(self.arguments)
+    fail no_argument when index >= lenof self.arguments
     value = text.host_over(self.arguments[index])
 end memory_argument
 
@@ -318,10 +318,10 @@ end memory_under
 --  slot is under it.
 memory_directory_slot: (self: memory, path: text.host_string)
                        -> (slot: usize) =
-    slot = memory_file_count(self.files)
+    slot = lenof self.files
     wanted: []u8 = text.host_bytes(path)
     return when lenof wanted == 0
-    for at in usize(0)..<memory_file_count(self.files) do
+    for at in usize(0)..<lenof self.files do
         if memory_under(self.files[at].name, wanted) then
             slot = at
             return
@@ -375,9 +375,8 @@ memory_open_directory: (self: memory, path: text.host_string,
                        ! not_found | no_access | io_failed =
     inc self.state.val.open_calls
     slot: usize = memory_directory_slot(self, path)
-    fail not_found when slot == memory_file_count(self.files)
-    named: []u8 = text.host_bytes(path)
-    opened = (handle: slot, stream: lenof named, position: 0,
+    fail not_found when slot == lenof self.files
+    opened = (handle: slot, stream: lenof text.host_bytes(path), position: 0,
               buffer: buffer, filled: 0, cursor: 0, finished: false)
 end memory_open_directory
 
@@ -387,7 +386,7 @@ memory_refill: (self: memory, inout opened: directory) -> none ! io_failed =
     opened.filled = 0
     opened.cursor = 0
     prefix: []u8 = self.files[opened.handle].name[0..<opened.stream]
-    while opened.position < memory_file_count(self.files) do
+    while opened.position < lenof self.files do
         (component, below) := memory_component(
             self.files[opened.position].name, prefix)
         if lenof component > 0
@@ -395,7 +394,7 @@ memory_refill: (self: memory, inout opened: directory) -> none ! io_failed =
         then
             fail io_failed when lenof component > 65535
             needed: usize = lenof component + 3
-            if needed > memory_bytes_count(opened.buffer) - opened.filled then
+            if needed > lenof opened.buffer - opened.filled then
                 --  An entry larger than the whole buffer can never be read.
                 fail io_failed when opened.filled == 0
                 return
@@ -444,9 +443,9 @@ memory_entry_size: (self: memory, opened: directory,
     for byte in wanted do
         fail not_found when byte == 0 or byte == 47
     end for
-    fail io_failed when opened.handle >= memory_file_count(self.files)
+    fail io_failed when opened.handle >= lenof self.files
     prefix: []u8 = self.files[opened.handle].name[0..<opened.stream]
-    for at in usize(0)..<memory_file_count(self.files) do
+    for at in usize(0)..<lenof self.files do
         (component, below) := memory_component(self.files[at].name, prefix)
         if memory_same_bytes(component, wanted) then
             current: ptr memory_file = addr self.files[at]
@@ -472,9 +471,9 @@ memory_make_directory: (self: memory, path: text.host_string)
                        -> none
                        ! already_exists | not_found | no_access | io_failed =
     slot: usize = memory_directory_slot(self, path)
-    fail already_exists when slot < memory_file_count(self.files)
+    fail already_exists when slot < lenof self.files
     wanted: []u8 = text.host_bytes(path)
-    for at in usize(0)..<memory_file_count(self.files) do
+    for at in usize(0)..<lenof self.files do
         fail already_exists when memory_same_bytes(wanted, self.files[at].name)
     end for
     fail no_access
@@ -483,7 +482,7 @@ end memory_make_directory
 memory_remove_file: (self: memory, path: text.host_string)
                     -> none ! not_found | no_access | io_failed =
     wanted: []u8 = text.host_bytes(path)
-    for at in usize(0)..<memory_file_count(self.files) do
+    for at in usize(0)..<lenof self.files do
         fail no_access when memory_same_bytes(wanted, self.files[at].name)
     end for
     fail not_found
@@ -492,7 +491,7 @@ end memory_remove_file
 memory_remove_directory: (self: memory, path: text.host_string)
                          -> none ! not_found | no_access | io_failed =
     slot: usize = memory_directory_slot(self, path)
-    fail no_access when slot < memory_file_count(self.files)
+    fail no_access when slot < lenof self.files
     fail not_found
 end memory_remove_directory
 
@@ -514,19 +513,6 @@ public written_errors: (host: memory) -> (bytes: []u8 from host) =
     errors: []mut u8 = host.errors
     bytes = errors[0..<host.state.val.errors_used]
 end written_errors
-
-memory_file_count: (values: []memory_file) -> (count: usize) =
-    count = lenof values
-end memory_file_count
-scripted_program_count: (values: []scripted_program) -> (count: usize) =
-    count = lenof values
-end scripted_program_count
-memory_args_count: (values: [][]u8) -> (count: usize) =
-    count = lenof values
-end memory_args_count
-memory_bytes_count: (values: []u8) -> (count: usize) =
-    count = lenof values
-end memory_bytes_count
 
 --  A memory environment, beside the memory world: an `environment`
 --  provider over the caller's entries.
@@ -559,12 +545,12 @@ memory_split: (entry: []u8) -> (name: []u8 from entry, value: []u8 from entry) =
 end memory_split
 
 memory_variable_count: (self: memory_variables) -> (count: usize) =
-    count = memory_args_count(self.entries)
+    count = lenof self.entries
 end memory_variable_count
 
 memory_variable_at: (self: memory_variables, index: usize)
                     -> (item: variable from self) ! no_variable =
-    fail no_variable when index >= memory_args_count(self.entries)
+    fail no_variable when index >= lenof self.entries
     (name, value) := memory_split(self.entries[index])
     item = (name: text.host_over(name), value: text.host_over(value))
 end memory_variable_at
@@ -572,7 +558,7 @@ end memory_variable_at
 memory_variable_named: (self: memory_variables, name: text.host_string)
                        -> (value: text.host_string from self) ! no_variable =
     wanted: []u8 = text.host_bytes(name)
-    for at in usize(0)..<memory_args_count(self.entries) do
+    for at in usize(0)..<lenof self.entries do
         (name: found, value: given) := memory_split(self.entries[at])
         if memory_same_bytes(found, wanted) then
             value = text.host_over(given)
@@ -659,8 +645,8 @@ memory_inherit: (self: scripted_programs, bytes: []u8, errors: bool) -> none =
     state: ptr mut memory_space = self.world.state
     if errors then
         return when not state.val.errors_open
-          or state.val.errors_used > memory_bytes_count(self.world.errors)
-        mut n: usize = memory_bytes_count(self.world.errors) - state.val.errors_used
+          or state.val.errors_used > lenof self.world.errors
+        mut n: usize = lenof self.world.errors - state.val.errors_used
         if n > lenof bytes then n = lenof bytes end if
         for at in usize(0)..<n do
             self.world.errors[state.val.errors_used + at] = bytes[at]
@@ -668,8 +654,8 @@ memory_inherit: (self: scripted_programs, bytes: []u8, errors: bool) -> none =
         state.val.errors_used += n
     else
         return when not state.val.output_open
-          or state.val.output_used > memory_bytes_count(self.world.output)
-        mut n: usize = memory_bytes_count(self.world.output) - state.val.output_used
+          or state.val.output_used > lenof self.world.output
+        mut n: usize = lenof self.world.output - state.val.output_used
         if n > lenof bytes then n = lenof bytes end if
         for at in usize(0)..<n do
             self.world.output[state.val.output_used + at] = bytes[at]
@@ -695,7 +681,7 @@ memory_spawn: (self: scripted_programs, path: text.host_string,
         fail io_failed when not memory_name_valid(name)
     end for
     wanted: []u8 = text.host_bytes(path)
-    for index in usize(0)..<scripted_program_count(self.programs) do
+    for index in usize(0)..<lenof self.programs do
         program: ptr mut scripted_program = addr self.programs[index]
         if memory_same_bytes(wanted, program.val.path) then
             fail io_failed when program.val.running
@@ -713,10 +699,10 @@ memory_spawn: (self: scripted_programs, path: text.host_string,
                 memory_inherit(self, program.val.errors, true)
             end if
             if streams.output <> piped then
-                program.val.output_read = memory_bytes_count(program.val.output)
+                program.val.output_read = lenof program.val.output
             end if
             if streams.errors <> piped then
-                program.val.errors_read = memory_bytes_count(program.val.errors)
+                program.val.errors_read = lenof program.val.errors
             end if
             started = (handle: index, input: memory_pipe_file(index, 0),
                        output: memory_pipe_file(index, 1),
@@ -733,7 +719,7 @@ end memory_spawn
 --  The running program a child is.
 memory_child: (self: scripted_programs, started: child)
               -> (program: ptr mut scripted_program from self) ! io_failed =
-    fail io_failed when started.handle >= scripted_program_count(self.programs)
+    fail io_failed when started.handle >= lenof self.programs
     program = addr self.programs[started.handle]
     fail io_failed when not program.val.running
 end memory_child

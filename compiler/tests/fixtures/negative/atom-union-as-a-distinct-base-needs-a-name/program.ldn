@@ -1,0 +1,2 @@
+read, write: atom
+access: type = distinct read | write

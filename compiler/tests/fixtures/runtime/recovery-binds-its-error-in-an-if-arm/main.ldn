@@ -1,0 +1,47 @@
+--  [1820]: `else (name)` after a call opens that call's recovery wherever
+--  it stands, in a `then` or an `elsif` arm too, and the arm goes on after
+--  it.  A recovery that gives a value in an arm is parenthesised with its
+--  call, and an `if` used as a value recovers inside its arm the same way.
+bad: atom
+
+mut calls: u32 = 0
+
+checked: (n: u32) -> (r: u32) ! bad =
+    calls += 1
+    fail bad when n == 0
+    r = n
+end checked
+
+noted: (n: u32) -> none ! bad =
+    calls += 1
+    fail bad when n == 0
+end noted
+
+public main: () -> (code: i32) =
+    mut total: u32 = 0
+    if calls == 7 then
+        total = 1000
+    elsif calls == 0 then
+        first := checked(0) else (problem)
+            _ = problem
+            5
+        end
+        total += first
+    end if
+    if total == 5 then
+        noted(0) else (ignored)
+            _ = ignored
+            total += 10
+        end
+        total += (checked(0) else 1)
+    end if
+    picked := if total == 16 then
+        checked(7) else (problem)
+            _ = problem
+            0
+        end
+    else
+        99
+    end if
+    code = i32(total + picked + calls) + 15
+end main

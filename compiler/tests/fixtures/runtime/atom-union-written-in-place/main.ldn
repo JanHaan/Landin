@@ -1,0 +1,56 @@
+--  [1790]: a binding, a parameter, a named return and a field may write an
+--  atom union in place, and it is the same structural set a declared alias
+--  of that union names, so values pass between the two in both directions.
+--  D189's pointer union and a variant's payload field write it the same way.
+north, south, east, west, absent: atom
+compass: type = north | south | east | west
+
+facing: (way: north | south) -> (turned: east | west) =
+    turned = match way
+        north: east
+        south: west
+    end match
+end facing
+
+heading: type = struct
+    toward: north | south
+    held: ptr u32 | absent
+end heading
+
+course: type = struct
+    route: variant
+        still |
+        straight: (toward: east | west)
+    end route
+end course
+
+weight: (where: absent | ptr u32) -> (value: u32) =
+    match where
+        absent: value = 0
+        ptr (cell): value = cell.val
+    end match
+end weight
+
+public main: () -> (code: i32) =
+    mut held: u32 = 9
+    named: compass = north
+    mut seen: north | south | east | west = named
+    turned: compass = facing(south)
+    seen = turned
+    entry: heading = (toward: south, held: addr held)
+    mut plan: course = (route: still)
+    plan.route = straight(toward: facing(entry.toward))
+    mut total: u32 = weight(entry.held) + weight(absent)
+    match plan.route
+        still: total += 0
+        straight(toward): total += match toward
+            east: 10
+            west: 30
+        end match
+    end match
+    total += match seen
+        west: 3
+        _: 0
+    end match
+    code = i32(total)
+end main

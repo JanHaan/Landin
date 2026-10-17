@@ -567,6 +567,85 @@ package body Landin.Syntax is
    function Recovery_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Element (Of_Tree, Id).Recovery);
 
+   function Line_Fact_Of
+     (Of_Tree : Tree; Id : Node_Id; Kind : Line_Fact_Kind)
+      return Landin.Source.Span;
+
+   function Line_Fact_Of
+     (Of_Tree : Tree; Id : Node_Id; Kind : Line_Fact_Kind)
+      return Landin.Source.Span is
+   begin
+      for Fact of Of_Tree.Line_Facts loop
+         if Fact.Node = Id and then Fact.Kind = Kind then
+            return Fact.Where;
+         end if;
+      end loop;
+      return Landin.Source.Empty_Span;
+   end Line_Fact_Of;
+
+   function Continued_At (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
+     is (Line_Fact_Of (Of_Tree, Id, Continues_Line));
+
+   function Else_Left_At (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
+     is (Line_Fact_Of (Of_Tree, Id, Leaves_Else));
+
+   function Continued_Within (Of_Tree : Tree; Id : Node_Id) return Node_Id
+   is
+      Around : constant Landin.Source.Span := Where (Of_Tree, Id);
+      Found  : Node_Id := No_Node;
+   begin
+      for Fact of Of_Tree.Line_Facts loop
+         if Fact.Kind = Continues_Line
+           and then Landin.Source.Contains
+             (Around, Where (Of_Tree, Fact.Node))
+         then
+            Found := Fact.Node;
+         end if;
+      end loop;
+      return Found;
+   end Continued_Within;
+
+   function Continued_Around (Of_Tree : Tree; Id : Node_Id) return Node_Id
+   is
+      Inner : constant Landin.Source.Span := Where (Of_Tree, Id);
+      Found : Node_Id := No_Node;
+   begin
+      for Fact of Of_Tree.Line_Facts loop
+         if Fact.Kind = Continues_Line
+           and then Kind (Of_Tree, Fact.Node) in Call | Labeled_Application
+           and then Landin.Source."<=" (Fact.Where.First, Inner.First)
+           and then Landin.Source.Contains
+             (Where (Of_Tree, Fact.Node), Inner)
+           and then
+             (Found = No_Node
+              or else Landin.Source.Contains
+                (Where (Of_Tree, Found), Where (Of_Tree, Fact.Node)))
+         then
+            Found := Fact.Node;
+         end if;
+      end loop;
+      return Found;
+   end Continued_Around;
+
+   function Else_Left_Within (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
+   is
+      Around : constant Landin.Source.Span := Where (Of_Tree, Id);
+      Found  : Landin.Source.Span := Landin.Source.Empty_Span;
+   begin
+      for Fact of Of_Tree.Line_Facts loop
+         if Fact.Kind = Leaves_Else
+           and then Landin.Source.Contains
+             (Around, Where (Of_Tree, Fact.Node))
+         then
+            Found := Fact.Where;
+         end if;
+      end loop;
+      return Found;
+   end Else_Left_Within;
+
    function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Element (Of_Tree, Id).Runtime_Count);
 

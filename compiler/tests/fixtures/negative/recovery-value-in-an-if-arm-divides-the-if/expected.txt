@@ -1,0 +1,20 @@
+error[L0332]: this arm produces no value, because the `else` after its call divides the `if` rather than recovering the call
+  --> ../tests/fixtures/negative/recovery-value-in-an-if-arm-divides-the-if/program.ldn:11:9
+   |
+11 |         r = checked(1) else 7
+   |         ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/recovery-value-in-an-if-arm-divides-the-if/program.ldn:11:24
+   |
+11 |         r = checked(1) else 7
+   |                        ^^^^ this `else` divides the `if`
+  = note: [1820]: in an `if` arm, recover a call with parentheses, `(call(...) else value)`, or bind the error, `else (problem) ... end`
+error[L0329]: this failing call is not recovered: the `else` after it divides the `if` around it
+  --> ../tests/fixtures/negative/recovery-value-in-an-if-arm-divides-the-if/program.ldn:11:13
+   |
+11 |         r = checked(1) else 7
+   |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/recovery-value-in-an-if-arm-divides-the-if/program.ldn:11:24
+   |
+11 |         r = checked(1) else 7
+   |                        ^^^^ this `else` divides the `if`
+  = note: [1820]: in an `if` arm, recover a call with parentheses, `(call(...) else value)`, or bind the error, `else (problem) ... end`

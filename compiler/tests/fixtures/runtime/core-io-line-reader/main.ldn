@@ -43,8 +43,7 @@ finished: (inout lines: io.line_reader(io.memory)) -> (yes: bool) =
         _ = problem
         return
     end
-    bytes: []u8 = item.bytes
-    yes = item.finished and lenof bytes == 0
+    yes = item.finished and lenof item.bytes == 0
 end finished
 
 --  Read the input with reads of at most LIMIT bytes, the FAIL_AT'th read

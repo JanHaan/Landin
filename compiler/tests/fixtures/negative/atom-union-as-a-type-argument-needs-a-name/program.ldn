@@ -1,0 +1,6 @@
+read, write: atom
+box: type (item: type) = (held: item)
+
+opened: (value: box(read | write)) -> (held: read | write) =
+    held = value.held
+end opened

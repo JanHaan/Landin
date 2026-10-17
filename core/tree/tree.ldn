@@ -73,11 +73,11 @@ public add_leaf: (provider: type is mem.allocator, inout value: tree,
     mut previous_low: usize = 0
     mut previous_high: usize = 0
     if length(value) > 0 then
-        last: node_value = (vec.get(value.nodes, length(value) - 1) else (problem)
+        last: node_value = vec.get(value.nodes, length(value) - 1) else (problem)
             _ = problem
             --  A nonempty list always has its last node.
             fail too_many_nodes
-        end)
+        end
         previous_low = last.through_low
         previous_high = last.through_high
     end if
@@ -112,30 +112,30 @@ public add_branch: (provider: type is mem.allocator, inout value: tree,
     mut before_low: usize = 0
     mut before_high: usize = 0
     if begins > 0 then
-        predecessor: node_value = (vec.get(value.nodes, begins - 1) else (problem)
+        predecessor: node_value = vec.get(value.nodes, begins - 1) else (problem)
             _ = problem
             fail invalid_children
-        end)
+        end
         before_low = predecessor.through_low
         before_high = predecessor.through_high
     end if
     mut through_low: usize = 0
     mut through_high: usize = 0
     if available > 0 then
-        last: node_value = (vec.get(value.nodes, available - 1) else (problem)
+        last: node_value = vec.get(value.nodes, available - 1) else (problem)
             _ = problem
             fail invalid_children
-        end)
+        end
         through_low = last.through_low
         through_high = last.through_high
     end if
     mut total: usize = 0
     if amount > 0 then
-        end_node: node_value = (vec.get(value.nodes, begins + amount - 1)
+        end_node: node_value = vec.get(value.nodes, begins + amount - 1)
             else (problem)
             _ = problem
             fail invalid_children
-        end)
+        end
         total = end_node.through_low -% before_low
         mut high: usize = end_node.through_high - before_high
         if end_node.through_low < before_low then dec high end if

@@ -1110,6 +1110,38 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                             in Call | Labeled_Application;
 
+   --  Two facts about a line end the grammar decided without it, kept so
+   --  a later stage refusing what the parser accepted can say what the
+   --  line end did.  Continued_At is the `(` of a call, or the operator of
+   --  a binary expression, that begins its line and so continues the line
+   --  above [1750]; Else_Left_At is the `else` written after a call that
+   --  divided an enclosing `if` instead of recovering the call [1820].
+   --  Each is Empty_Span when the node has none, which is nearly always.
+   function Continued_At (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
+     with Pre => Contains (Of_Tree, Id);
+   function Else_Left_At (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
+     with Pre => Contains (Of_Tree, Id);
+
+   --  The last node written within Id whose Continued_At is not empty, or
+   --  No_Node: the call or operator through which a line ran on into the
+   --  next one somewhere inside Id.
+   function Continued_Within (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id);
+
+   --  The innermost call around Id whose `(` begins a line before Id is
+   --  written, or No_Node: Id is then one of the arguments the line above
+   --  ran on into [1750].
+   function Continued_Around (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id);
+
+   --  The last Else_Left_At span of a node written within Id, or
+   --  Empty_Span.
+   function Else_Left_Within (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
+     with Pre => Contains (Of_Tree, Id);
+
    --  Runtime parameters only. D138's type and fixed formals share the
    --  declaration's trailing signature run but never enter this ABI-facing
    --  view.
@@ -1645,12 +1677,27 @@ private
    --  controlled finalization defers abort and looks up the current
    --  exception on every read; Element is a plain copy, which the
    --  optimizer reduces to the component the query names.
+   type Line_Fact_Kind is (Continues_Line, Leaves_Else);
+
+   --  Sparse, beside the nodes: a parser records one only where a line
+   --  end met a call's `(` or an operator, or where a call left its
+   --  `else` to an enclosing `if`.
+   type Line_Fact is record
+      Node  : Node_Id := No_Node;
+      Kind  : Line_Fact_Kind := Continues_Line;
+      Where : Landin.Source.Span := Landin.Source.Empty_Span;
+   end record;
+
+   package Line_Fact_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Line_Fact);
+
    type Tree is limited record
       Source : Landin.Source.Source_Id := Landin.Source.No_Source;
       Serial : Landin.Serials.Serial := Landin.Serials.Next;
       Items  : Node_Vectors.Vector;
       Links  : Slot_Vectors.Vector;
       Signature_Links : Slot_Vectors.Vector;
+      Line_Facts : Line_Fact_Vectors.Vector;
       --  The parser fixes this before appending declarations to Program.
       Import_Prefix_Length : Natural := 0;
    end record;

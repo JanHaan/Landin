@@ -250,8 +250,7 @@ end capacity
 --- Return the length of the supplied metadata slice, which may exceed the
 --- configured slot count.
 public bookkeeping_capacity: (memory: provider) -> (count: usize) =
-    bookkeeping: []mut slot = memory.bookkeeping
-    count = lenof bookkeeping
+    count = lenof memory.bookkeeping
 end bookkeeping_capacity
 
 --- Return the number of currently allocated slots.

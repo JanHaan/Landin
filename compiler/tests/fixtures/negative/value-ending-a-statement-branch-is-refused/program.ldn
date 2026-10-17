@@ -1,0 +1,26 @@
+yes, no: atom
+
+twice: (n: u32) -> (r: u32) =
+    r = n * 2
+end twice
+
+pick: (c: bool, k: u32, a: yes | no) -> (r: u32) =
+    r = 0
+    if c then
+        r = twice(1) else 7
+    end if
+    if k == 1 then
+        r = 1
+    elsif k == 2 then
+        twice(k)
+    end if
+    match a
+        yes: r = 2
+        no: 3
+    end match
+    begin
+        r += 1
+        k
+    end
+    r += 1
+end pick

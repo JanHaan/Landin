@@ -1,0 +1,523 @@
+==================
+A call's bound recovery in an if arm
+==================
+
+f: (c: bool) -> (r: u32) =
+    if c then
+        r = g() else (problem)
+            r = 1
+        end
+        r += 1
+    end if
+end f
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (scalar_type))))
+      (block
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (if_expression
+                              (logical_or_expression
+                                (logical_and_expression
+                                  (comparison_expression
+                                    (alternation_expression
+                                      (exclusion_expression
+                                        (conjunction_expression
+                                          (shift_expression
+                                            (sum_expression
+                                              (product_expression
+                                                (unary_expression
+                                                  (indexed_expression
+                                                    (identifier))))))))))))
+                              (block
+                                (assignment_statement
+                                  (place
+                                    (indexed_expression
+                                      (identifier)))
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (call_expression
+                                                        (indexed_expression
+                                                          (identifier))
+                                                        (recovery_clause
+                                                          (identifier)
+                                                          (block
+                                                            (assignment_statement
+                                                              (place
+                                                                (indexed_expression
+                                                                  (identifier)))
+                                                              (logical_or_expression
+                                                                (logical_and_expression
+                                                                  (comparison_expression
+                                                                    (alternation_expression
+                                                                      (exclusion_expression
+                                                                        (conjunction_expression
+                                                                          (shift_expression
+                                                                            (sum_expression
+                                                                              (product_expression
+                                                                                (unary_expression
+                                                                                  (literal
+                                                                                    (integer_literal)))))))))))))))))))))))))))
+                                (assignment_statement
+                                  (place
+                                    (indexed_expression
+                                      (identifier)))
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))))))))))))))))
+      (identifier))))
+
+==================
+A destructuring that begins the line after a name
+==================
+
+f: (x: bool) -> (r: u32) ! bad =
+    fail bad when x
+    (a, b) := two()
+    r = a + b
+end f
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (scalar_type)))
+        (errors
+          (declaration_reference
+            (identifier))))
+      (block
+        (fail_statement
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier)))))))))))))
+        (destructuring_binding
+          (destructured_field
+            (identifier))
+          (destructured_field
+            (identifier))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (call_expression
+                                (indexed_expression
+                                  (identifier))))))))))))))
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
+      (identifier))))
+
+==================
+An atom union written in place
+==================
+
+holder: type = (mode: read | write, held: absent | ptr u32)
+
+f: (mode: read | write) -> (r: east | west) =
+    local: read | write = mode
+    r = east
+end f
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      (identifier)
+      (struct_body
+        (field
+          (identifier_list
+            (identifier))
+          (atom_union
+            (declaration_reference
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (field
+          (identifier_list
+            (identifier))
+          (atom_union
+            (declaration_reference
+              (identifier))
+            (pointer_type
+              (scalar_type)))))))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (atom_union
+              (declaration_reference
+                (identifier))
+              (declaration_reference
+                (identifier)))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (atom_union
+              (declaration_reference
+                (identifier))
+              (declaration_reference
+                (identifier))))))
+      (block
+        (binding
+          (identifier_list
+            (identifier))
+          (atom_union
+            (declaration_reference
+              (identifier))
+            (declaration_reference
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier)))))))))))))
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
+      (identifier))))
+
+==================
+lenof of a path and of a call's result
+==================
+
+f: (h: holder) -> (r: usize) =
+    r = lenof h.bytes[0..<1] + lenof h.rows[1] + lenof used(h) + lenof g() else (p) h.bytes end
+end f
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (scalar_type))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (measurement_expression
+                                (identifier)
+                                (indexed_expression
+                                  (indexed_expression
+                                    (indexed_expression
+                                      (identifier))
+                                    (member_selection
+                                      (identifier)))
+                                  (index_selection
+                                    (logical_or_expression
+                                      (logical_and_expression
+                                        (comparison_expression
+                                          (alternation_expression
+                                            (exclusion_expression
+                                              (conjunction_expression
+                                                (shift_expression
+                                                  (sum_expression
+                                                    (product_expression
+                                                      (unary_expression
+                                                        (literal
+                                                          (integer_literal))))))))))))
+                                    (logical_or_expression
+                                      (logical_and_expression
+                                        (comparison_expression
+                                          (alternation_expression
+                                            (exclusion_expression
+                                              (conjunction_expression
+                                                (shift_expression
+                                                  (sum_expression
+                                                    (product_expression
+                                                      (unary_expression
+                                                        (literal
+                                                          (integer_literal)))))))))))))))))
+                          (product_expression
+                            (unary_expression
+                              (measurement_expression
+                                (identifier)
+                                (indexed_expression
+                                  (indexed_expression
+                                    (indexed_expression
+                                      (identifier))
+                                    (member_selection
+                                      (identifier)))
+                                  (index_selection
+                                    (logical_or_expression
+                                      (logical_and_expression
+                                        (comparison_expression
+                                          (alternation_expression
+                                            (exclusion_expression
+                                              (conjunction_expression
+                                                (shift_expression
+                                                  (sum_expression
+                                                    (product_expression
+                                                      (unary_expression
+                                                        (literal
+                                                          (integer_literal)))))))))))))))))
+                          (product_expression
+                            (unary_expression
+                              (measurement_expression
+                                (identifier)
+                                (call_expression
+                                  (indexed_expression
+                                    (identifier))
+                                  (arguments
+                                    (logical_or_expression
+                                      (logical_and_expression
+                                        (comparison_expression
+                                          (alternation_expression
+                                            (exclusion_expression
+                                              (conjunction_expression
+                                                (shift_expression
+                                                  (sum_expression
+                                                    (product_expression
+                                                      (unary_expression
+                                                        (indexed_expression
+                                                          (identifier)))))))))))))))))
+                          (product_expression
+                            (unary_expression
+                              (measurement_expression
+                                (identifier)
+                                (call_expression
+                                  (indexed_expression
+                                    (identifier))
+                                  (recovery_clause
+                                    (identifier)
+                                    (block
+                                      (logical_or_expression
+                                        (logical_and_expression
+                                          (comparison_expression
+                                            (alternation_expression
+                                              (exclusion_expression
+                                                (conjunction_expression
+                                                  (shift_expression
+                                                    (sum_expression
+                                                      (product_expression
+                                                        (unary_expression
+                                                          (indexed_expression
+                                                            (indexed_expression
+                                                              (identifier))
+                                                            (member_selection
+                                                              (identifier)))))))))))))))))))))))))))))
+      (identifier))))
+
+==================
+An array literal on the line after a call statement
+==================
+
+pair: () -> (both: [2]u32) =
+    note()
+    [1, 2]
+end pair
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (array_type
+              (logical_or_expression
+                (logical_and_expression
+                  (comparison_expression
+                    (alternation_expression
+                      (exclusion_expression
+                        (conjunction_expression
+                          (shift_expression
+                            (sum_expression
+                              (product_expression
+                                (unary_expression
+                                  (literal
+                                    (integer_literal))))))))))))
+              (scalar_type)))))
+      (block
+        (call_expression
+          (indexed_expression
+            (identifier)))
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (array_literal
+                              (logical_or_expression
+                                (logical_and_expression
+                                  (comparison_expression
+                                    (alternation_expression
+                                      (exclusion_expression
+                                        (conjunction_expression
+                                          (shift_expression
+                                            (sum_expression
+                                              (product_expression
+                                                (unary_expression
+                                                  (literal
+                                                    (integer_literal))))))))))))
+                              (logical_or_expression
+                                (logical_and_expression
+                                  (comparison_expression
+                                    (alternation_expression
+                                      (exclusion_expression
+                                        (conjunction_expression
+                                          (shift_expression
+                                            (sum_expression
+                                              (product_expression
+                                                (unary_expression
+                                                  (literal
+                                                    (integer_literal))))))))))))))))))))))))
+      (identifier))))

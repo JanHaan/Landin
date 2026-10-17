@@ -1,0 +1,10 @@
+error[L0302]: this function can reach its `end` without assigning the return, because its last line continues the line above it [1750] and gives no value to `r`
+  --> ../tests/fixtures/negative/line-leading-minus-continues-the-value/program.ldn:1:1
+  |
+1 | lowered: (x: i32) -> (r: i32) =
+  | ^^^^^^^
+  --> ../tests/fixtures/negative/line-leading-minus-continues-the-value/program.ldn:1:23
+  |
+1 | lowered: (x: i32) -> (r: i32) =
+  |                       ^ declared here with no value
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check

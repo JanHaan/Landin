@@ -1,0 +1,5 @@
+class: positive
+summary: [1820] indexes no call, so a `[` that begins the line after a call statement cannot continue it and begins the array literal that is the block's value
+program: program.ldn
+constructs: 0520, 1750, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -71,6 +71,7 @@ module.exports = grammar({
     $.minus_percent,
     $.minus_equals,
     $.minus_percent_equals,
+    $._destructuring_open,
   ],
 
   extras: $ => [
@@ -232,7 +233,7 @@ module.exports = grammar({
         optional('mut'),
         field('name', $.identifier_list),
         ':',
-        field('type', $._type),
+        field('type', $._declared_type),
         optional(seq('=', field('value', $._expression))),
       ),
       seq(
@@ -340,6 +341,9 @@ module.exports = grammar({
       repeat(seq('|', $._union_member)),
     ),
     _union_member: $ => choice($.declaration_reference, $.type_application, $.pointer_type),
+    // [1790]: a binding, a parameter, a named return and a field may write
+    // the union in place; it is the set a declared alias of it names.
+    _declared_type: $ => choice($._type, $.atom_union),
     encoded_union: $ => prec.dynamic(1, seq(
       optional(choice($.scalar_type, $.identifier)), '(', $.encoded_member,
       repeat(seq('|', $.encoded_member)), ')',
@@ -366,7 +370,7 @@ module.exports = grammar({
       ')',
     ),
     // D233: several field names may share one type, `at` position included.
-    field: $ => seq(field('name', $.identifier_list), ':', field('type', $._type),
+    field: $ => seq(field('name', $.identifier_list), ':', field('type', $._declared_type),
       optional(seq('at', $._expression,
                    optional(seq('..', $._expression))))),
     variant_part: $ => seq(
@@ -414,12 +418,12 @@ module.exports = grammar({
     // parameter may also be named caller.
     // D233: several parameter names may share one convention and type.
     parameter: $ => choice(
-      seq('caller', field('name', $.identifier_list), ':', field('type', $._type)),
-      seq(field('name', alias('caller', $.identifier)), ':', field('type', $._type)),
+      seq('caller', field('name', $.identifier_list), ':', field('type', $._declared_type)),
+      seq(field('name', alias('caller', $.identifier)), ':', field('type', $._declared_type)),
       seq(
         optional('escaping'),
         optional($.parameter_convention),
-        field('name', $.identifier_list), ':', field('type', $._type),
+        field('name', $.identifier_list), ':', field('type', $._declared_type),
       ),
     ),
     parameter_convention: _ => choice('in', 'inout', 'sink'),
@@ -432,7 +436,7 @@ module.exports = grammar({
     // D233: several return names may share one type; a comma reaching ':'
     // instead starts the next named return rather than extending `from`.
     named_return: $ => seq(
-      field('name', $.identifier_list), ':', field('type', $._type),
+      field('name', $.identifier_list), ':', field('type', $._declared_type),
       optional(seq('from', commaSep1($.identifier))),
     ),
     errors: $ => prec.right(seq(
@@ -521,12 +525,15 @@ module.exports = grammar({
     _condition: $ => choice($._expression, $.condition_declaration),
     condition_declaration: $ => choice(
       seq(optional('mut'), field('name', $._declaration_name), ':=', field('value', $._expression)),
-      seq(optional('mut'), field('name', $._declaration_name), ':', field('type', $._type),
+      seq(optional('mut'), field('name', $._declaration_name), ':', field('type', $._declared_type),
           '=', field('value', $._expression)),
     ),
 
+    // [1750]: one that begins a line follows a line ending in a name, which
+    // the external scanner tells from a call by the `:=` after its `)`.
     destructuring_binding: $ => seq(
-      '(', commaSep1($.destructured_field), ')', ':=', $._expression,
+      choice('(', alias($._destructuring_open, '(')),
+      commaSep1($.destructured_field), ')', ':=', $._expression,
     ),
     destructured_field: $ => choice(
       '_',
@@ -764,10 +771,15 @@ module.exports = grammar({
       // `lenof` is contextual in the kernel: a declaration may also be named
       // lenof.  Keep the leading token an identifier and let highlight queries
       // apply an equality predicate instead of turning it into a keyword.
-      seq(
+      // [1820]: the primary a name begins -- the name, a path through it
+      // or a call's result -- or D31's parenthesised literal.
+      prec.dynamic(20, seq(
         field('operator', $.identifier),
-        field('value', choice($.identifier, seq('(', $.array_literal, ')'))),
-      ),
+        field('value', choice(
+          $.indexed_expression, $.call_expression, $.labeled_application,
+          seq('(', $.array_literal, ')'),
+        )),
+      )),
     ),
 
     // `of` is contextual for the same reason as `lenof`: it remains a legal

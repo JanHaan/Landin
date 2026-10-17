@@ -2497,6 +2497,18 @@ package body Landin.Stages.Checking.References is
             when Syn.Len_Of =>
                --  D14/D31: a fixed-array length does not read its storage,
                --  and array-literal elements are typechecked but not run.
+               --  A measured call runs [0370], so what its arguments lend
+               --  and what it transfers are checked as at any call.
+               if Syn.Kind (Tree, Syn.Operand_Of (Tree, Node))
+                 in Syn.Call | Syn.Labeled_Application
+               then
+                  declare
+                     Ignored : constant Origin_Fact :=
+                       Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
+                  begin
+                     pragma Unreferenced (Ignored);
+                  end;
+               end if;
                return No_Origin;
 
             when Syn.Try_Expression =>

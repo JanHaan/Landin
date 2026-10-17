@@ -1,0 +1,9 @@
+class: negative
+summary: [1750] lets a `(` that begins a line continue the line above as a call, and the call of a value that is no function is reported at that `(`, naming the continuation and the struct's type as the way to begin a value, with no second report for the value that never arrived
+program: program.ldn
+codes: L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/line-leading-parenthesis-continues-as-a-call/program.ldn
+status: 1
+constructs: 0710, 1750, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

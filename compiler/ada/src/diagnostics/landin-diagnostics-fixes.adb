@@ -167,6 +167,18 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Measure_Bare;
 
+   function Unwrap_Name
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span;
+      Name   : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Unwrap_Name, Exact, "write `else " & Name & "`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Name));
+      return Result;
+   end Unwrap_Name;
+
    function Compare
      (Source : Landin.Source.Source_Id;
       Where  : Landin.Source.Span) return Fix

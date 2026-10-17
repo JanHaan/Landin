@@ -1924,7 +1924,8 @@ package body Landin.Stages.Checking is
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
          Value_Because : String := "";
-         Routine_Body : Boolean := False);
+         Routine_Body : Boolean := False;
+         Owner : Landin.Provenance.Origin := Landin.Provenance.No_Origin);
       procedure Check_Routine_Body
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Check_External_Declaration
@@ -9678,7 +9679,23 @@ package body Landin.Stages.Checking is
                                 Syn.Type_Projection (Caller_Tree, Argument);
                               Actual : Type_Descriptor;
                            begin
-                              if Written_Type = Syn.No_Node then
+                              if Written_Type = Syn.No_Node
+                                and then Syn.Kind (Caller_Tree, Argument)
+                                  = Syn.Call_Argument
+                                and then Syn.Kind
+                                  (Caller_Tree,
+                                   Syn.Argument_RHS (Caller_Tree, Argument))
+                                  = Syn.Bitwise_Or
+                              then
+                                 --  [1790]: a union is written in place
+                                 --  only as a declared type.
+                                 Report_Static
+                                   (Argument, Positive (Position),
+                                    "a union as a static type argument"
+                                    & " needs a name of its own: declare"
+                                    & " it, `name: type = a | b`, and pass"
+                                    & " the name");
+                              elsif Written_Type = Syn.No_Node then
                                  Report_Static
                                    (Argument, Positive (Position),
                                     "this static type argument is not a type");
@@ -13332,6 +13349,24 @@ package body Landin.Stages.Checking is
                return Ty.Bool;
             end if;
 
+            if Of_Kind = Syn.Bitwise_Or then
+               --  [1790]: `a | b` of atoms is a union, a type, and is
+               --  written in place only as a declared type.
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Anchor (Of_Tree, Site),
+                  Message => "a union of atoms is a type, and here it needs"
+                             & " a name of its own",
+                  Note    => "[0640]: declare it, `name: type = a | b`, and"
+                             & " write the name; a union is written in place"
+                             & " only as a binding's, a parameter's, a"
+                             & " return's or a field's type",
+                  Related => Syn.Origin (Of_Tree, Left),
+                  Because => "the union begins here",
+                  Into    => Found);
+               return Ty.Ill_Typed;
+            end if;
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
@@ -20443,6 +20478,9 @@ package body Landin.Stages.Checking is
                      end if;
 
                      if Held not in Ty.Fixed_Array | Ty.Slice_Value then
+                        --  A name points at what it names; a path or a
+                        --  call is its own value, so the second place is
+                        --  the measurement that asked.
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
                            Source  => Syn.Source_Of (Of_Tree),
@@ -20451,8 +20489,17 @@ package body Landin.Stages.Checking is
                                       & " has no length",
                            Note    => "[0370]: `lenof` measures a fixed array,"
                                       & " array literal or slice",
-                           Related => Syn.Origin (Of_Tree, Asked),
-                           Because => "what it names",
+                           Related =>
+                             (if Syn.Kind (Of_Tree, Asked)
+                                   = Syn.Name_Reference
+                              then Syn.Origin (Of_Tree, Asked)
+                              else (Source => Syn.Source_Of (Of_Tree),
+                                    Where  => Syn.Anchor (Of_Tree, Node))),
+                           Because =>
+                             (if Syn.Kind (Of_Tree, Asked)
+                                   = Syn.Name_Reference
+                              then "what it names"
+                              else "measured here"),
                            Into    => Found);
                         return Kept (Ty.Ill_Typed);
                      end if;
@@ -22521,7 +22568,31 @@ package body Landin.Stages.Checking is
                      return Kept (Ty.Ill_Typed);
                   end if;
 
-                  if Held /= Ty.Function_Value
+                  if (Held /= Ty.Function_Value
+                      or else Signature = Landin.Checking.No_Signature)
+                    and then Syn.Continued_At (Of_Tree, Node)
+                               /= Landin.Source.Empty_Span
+                  then
+                     --  [1750]: the `(` began a line, and the line above
+                     --  ran on into it.  That is the mistake to name, at
+                     --  the `(`, rather than the callee it found.
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Continued_At (Of_Tree, Node),
+                        Message => "this line begins with `(`, which"
+                                   & " continues the line above as a call"
+                                   & " of a value that is no function",
+                        Note    => "[1750]: a line end ends no statement;"
+                                   & " to begin a value with a struct, name"
+                                   & " its type, `size(rows: 0, ...)`, or"
+                                   & " assign a parenthesised value to its"
+                                   & " place",
+                        Related => Syn.Origin (Of_Tree, Callee),
+                        Because => "the line above ends with this",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  elsif Held /= Ty.Function_Value
                     or else Signature = Landin.Checking.No_Signature
                   then
                      Bad.Report
@@ -25703,7 +25774,8 @@ package body Landin.Stages.Checking is
                Check_Block
                  (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
                   Expected, Value_Site, Value_Because,
-                  Routine_Body => Optional_Value);
+                  Routine_Body => Optional_Value,
+                  Owner => Syn.Origin (Of_Tree, Node));
             end if;
          end Visit_Arm;
 
@@ -28640,13 +28712,15 @@ package body Landin.Stages.Checking is
                         Syn.Origin (Of_Tree, This),
                         "the condition of this branch");
                      Check_Block
-                       (Of_Tree, Syn.Body_Of (Of_Tree, This), Returns);
+                       (Of_Tree, Syn.Body_Of (Of_Tree, This), Returns,
+                        Owner => Syn.Origin (Of_Tree, Node));
                   end;
                end loop;
 
                if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
                   Check_Block
-                    (Of_Tree, Syn.Else_Body (Of_Tree, Node), Returns);
+                    (Of_Tree, Syn.Else_Body (Of_Tree, Node), Returns,
+                     Owner => Syn.Origin (Of_Tree, Node));
                end if;
 
             when Syn.Match_Statement =>
@@ -28665,11 +28739,13 @@ package body Landin.Stages.Checking is
                         Site           => Syn.Origin (Of_Tree, Node),
                         Is_Block       => True));
                   Check_Block
-                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns);
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns,
+                     Owner => Syn.Origin (Of_Tree, Node));
                   Loop_Values.Delete_Last;
                else
                   Check_Block
-                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns);
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns,
+                     Owner => Syn.Origin (Of_Tree, Node));
                end if;
 
             when Syn.Try_Expression =>
@@ -28730,7 +28806,8 @@ package body Landin.Stages.Checking is
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
          Value_Because : String := "";
-         Routine_Body : Boolean := False)
+         Routine_Body : Boolean := False;
+         Owner : Landin.Provenance.Origin := Landin.Provenance.No_Origin)
       is
       begin
          for Index in 1 .. Syn.Statement_Count (Of_Tree, Node) loop
@@ -28805,6 +28882,36 @@ package body Landin.Stages.Checking is
                         Commit_To (Of_Tree, Value, Ty.Default_Integer);
                      elsif Got = Ty.Untyped_Float then
                         Commit_To (Of_Tree, Value, Ty.Default_Float);
+                     end if;
+                     --  [1020]: nothing consumes this block's answer, so a
+                     --  value ending it would be dropped by omission, as a
+                     --  call standing alone would be (D244).  In an `if`
+                     --  arm it is often a call's recovery the `if` took as
+                     --  its own `else` [1820].
+                     --  A recovery's own block is D310's to refuse, once,
+                     --  so only an `if`, `match` or bare block used as a
+                     --  statement, the Owner, is held to this here.
+                     if Landin.Provenance.Is_Known (Owner)
+                       and then Got in Ty.Settled
+                       and then Got /= Ty.No_Value
+                     then
+                        Bad.Report
+                          (Item    => Bad.Result_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Value),
+                           Message => "this value ends a branch nothing"
+                                      & " takes a value from, so it would"
+                                      & " be dropped",
+                           Note    => "[1020]: write the branch as a"
+                                      & " statement, discarding a value"
+                                      & " with `_ =`; where a call's"
+                                      & " recovery was meant, write"
+                                      & " `(f() else value)` or bind the"
+                                      & " error with `else (problem)`"
+                                      & " [1820]",
+                           Related => Owner,
+                           Because => "used as a statement",
+                           Into    => Found);
                      end if;
                   end;
                end if;
@@ -35311,20 +35418,48 @@ package body Landin.Stages.Checking is
                declare
                   Of_Tree : constant not null access constant Syn.Tree :=
                     Tree_For (Issues (Index).Source);
+                  Left : constant Landin.Source.Span :=
+                    (if Syn.Kind (Of_Tree.all, Issues (Index).Node)
+                          in Syn.Call | Syn.Labeled_Application
+                     then Syn.Else_Left_At
+                            (Of_Tree.all, Issues (Index).Node)
+                     else Landin.Source.Empty_Span);
                begin
-                  Bad.Report
-                    (Item    => Bad.Error_Contract_Violated,
-                     Source  => Issues (Index).Source,
-                     Where   => Syn.Where
-                       (Of_Tree.all, Issues (Index).Node),
-                     Message => "this failing call is neither tried nor"
-                                & " recovered with `else`",
-                     Note    => "[0960]/[1030]: write `try` to propagate or"
-                                & " `else` to handle the declared error",
-                     Related => Landin.Checking.Signature_Origin
-                       (Types.all, Issues (Index).Signature),
-                     Because => "this failing signature",
-                     Into    => Found);
+                  if Left /= Landin.Source.Empty_Span then
+                     --  [1820]: the `else` written after the call divides
+                     --  the `if` whose arm the call ends.
+                     Bad.Report
+                       (Item    => Bad.Error_Contract_Violated,
+                        Source  => Issues (Index).Source,
+                        Where   => Syn.Where
+                          (Of_Tree.all, Issues (Index).Node),
+                        Message => "this failing call is not recovered:"
+                                   & " the `else` after it divides the"
+                                   & " `if` around it",
+                        Note    => "[1820]: in an `if` arm, recover a call"
+                                   & " with parentheses, `(call(...) else"
+                                   & " value)`, or bind the error, `else"
+                                   & " (problem) ... end`",
+                        Related => (Source => Issues (Index).Source,
+                                    Where  => Left),
+                        Because => "this `else` divides the `if`",
+                        Into    => Found);
+                  else
+                     Bad.Report
+                       (Item    => Bad.Error_Contract_Violated,
+                        Source  => Issues (Index).Source,
+                        Where   => Syn.Where
+                          (Of_Tree.all, Issues (Index).Node),
+                        Message => "this failing call is neither tried nor"
+                                   & " recovered with `else`",
+                        Note    => "[0960]/[1030]: write `try` to propagate"
+                                   & " or `else` to handle the declared"
+                                   & " error",
+                        Related => Landin.Checking.Signature_Origin
+                          (Types.all, Issues (Index).Signature),
+                        Because => "this failing signature",
+                        Into    => Found);
+                  end if;
                end;
             end if;
          end loop;

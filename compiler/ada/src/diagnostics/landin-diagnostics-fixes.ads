@@ -121,6 +121,18 @@ package Landin.Diagnostics.Fixes is
       Measured : String) return Fix
      with Pre => Landin.Source.Length (Where) > 0;
 
+   --  [1820]'s parenthesised name after a call's `else`, which binds
+   --  the call's error, written where the branch of an `if` was meant:
+   --  Where covers `(name)` and becomes Name.  Exact: the parenthesised
+   --  name as a branch's value and the bare name mean the same value, and
+   --  no recovery can be what was meant, because the bound block it would
+   --  open is closed by the `if`'s own `end if`.
+   function Unwrap_Name
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span;
+      Name   : String) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
    --  The `=` at Where, written inside an expression, becomes `==`.
    --  Likely: [0390] says an expression never assigns, so the one thing a
    --  `=` there can mean is a comparison, but the author may instead

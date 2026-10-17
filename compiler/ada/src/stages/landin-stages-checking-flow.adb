@@ -472,6 +472,20 @@ package body Landin.Stages.Checking.Flow is
         return Res.Declaration_Id;
       procedure Reset_Binding
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set);
+      --  [0370]: a `lenof` whose operand is not evaluated.  A fixed
+      --  array's length is its type's, so a name or a path naming one is
+      --  not read; a slice is read once for its length, and a call runs
+      --  whatever its result's shape, because what it does is not known
+      --  from its type.
+      function Measures_Unevaluated
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Len_Of
+            and then Landin.Checking.Type_Of
+              (Types.all, Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+                /= Ty.Slice_Value
+            and then Syn.Kind (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+              not in Syn.Call | Syn.Labeled_Application);
+
       --  Whether the whole-array read is a D20 assignment source or a D21
       --  binding initializer.  Only Require_Array threads through, since
       --  every other whole-name read (a discard, an `inc`) is neither.
@@ -1909,10 +1923,7 @@ package body Landin.Stages.Checking.Flow is
          --  separately checked no-capture body reads nothing in this flow.
          if Syn.Kind (Of_Tree, Node)
               in Syn.Size_Of | Syn.Align_Of | Syn.Anonymous_Function
-           or else (Syn.Kind (Of_Tree, Node) = Syn.Len_Of
-                    and then Landin.Checking.Type_Of
-                      (Types.all, Of_Tree, Syn.Operand_Of (Of_Tree, Node))
-                        /= Ty.Slice_Value)
+           or else Measures_Unevaluated (Of_Tree, Node)
          then
             return;
          end if;
@@ -2074,10 +2085,7 @@ package body Landin.Stages.Checking.Flow is
          --  D31 includes calls inside an array literal measured by lenof.
          if Syn.Kind (Of_Tree, Root)
               in Syn.Anonymous_Function | Syn.Size_Of | Syn.Align_Of
-           or else (Syn.Kind (Of_Tree, Root) = Syn.Len_Of
-                    and then Landin.Checking.Type_Of
-                      (Types.all, Of_Tree, Syn.Operand_Of (Of_Tree, Root))
-                        /= Ty.Slice_Value)
+           or else Measures_Unevaluated (Of_Tree, Root)
          then
             return False;
          end if;
@@ -2134,10 +2142,7 @@ package body Landin.Stages.Checking.Flow is
                Edges := Fallthrough_Edge;
 
             when Syn.Len_Of =>
-               if Landin.Checking.Type_Of
-                 (Types.all, Of_Tree, Syn.Operand_Of (Of_Tree, Node))
-                   = Ty.Slice_Value
-               then
+               if not Measures_Unevaluated (Of_Tree, Node) then
                   Flow_Expression
                     (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Result,
                      State, Edges, Whole_As);
@@ -3815,6 +3820,28 @@ package body Landin.Stages.Checking.Flow is
                      Related => Syn.Origin (Of_Tree, Block),
                      Because => "this block is empty",
                      Into    => Sink.all);
+               elsif Landin.Source."/="
+                       (Syn.Else_Left_Within (Of_Tree, Block),
+                        Landin.Source.Empty_Span)
+               then
+                  --  [1820]: the block is an `if` arm whose call left the
+                  --  `else` after it to divide the `if`.
+                  Bad.Report
+                    (Item    => Bad.Control_Value,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Block),
+                     Message => "this arm produces no value, because the"
+                                & " `else` after its call divides the `if`"
+                                & " rather than recovering the call",
+                     Note    => "[1820]: in an `if` arm, recover a call with"
+                                & " parentheses, `(call(...) else value)`,"
+                                & " or bind the error, `else (problem) ..."
+                                & " end`",
+                     Related => (Source => Syn.Source_Of (Of_Tree),
+                                 Where  => Syn.Else_Left_Within
+                                   (Of_Tree, Block)),
+                     Because => "this `else` divides the `if`",
+                     Into    => Sink.all);
                else
                   Bad.Report
                     (Item    => Bad.Control_Value,
@@ -3887,10 +3914,46 @@ package body Landin.Stages.Checking.Flow is
       if Syn.Kind (Of_Tree, Body_Node) = Syn.Block
         and then Edges.Falls_Through
       then
-         Require_Returns_Assigned
-           (Syn.Anchor (Of_Tree, Function_Node), State,
-            "this function can reach its `end` without assigning the"
-            & " return");
+         declare
+            --  [1750]: the body's last line may have run on into the
+            --  line after it, through a `(` or a `-` that begins that
+            --  line, so the value meant to end the body never does.
+            Last_Item : constant Syn.Node_Id :=
+              (if Syn.Slot_Count (Of_Tree, Body_Node) = 0 then Syn.No_Node
+               else Syn.Slot
+                 (Of_Tree, Body_Node, Syn.Slot_Count (Of_Tree, Body_Node)));
+            Joined : constant Syn.Node_Id :=
+              (if Last_Item = Syn.No_Node then Syn.No_Node
+               else Syn.Continued_Within (Of_Tree, Last_Item));
+         begin
+            if Joined /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Joined)
+                in Syn.Call | Syn.Labeled_Application
+              and then Landin.Checking.Type_Of (Types.all, Of_Tree, Joined)
+                = Ty.Ill_Typed
+            then
+               --  The call that line made is refused where it is written,
+               --  and that report names the line end; a second one for
+               --  the value that never arrived would only repeat it.
+               null;
+            elsif Joined /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Joined)
+                not in Syn.Call | Syn.Labeled_Application
+            then
+               --  An operator that is also a prefix, `-` beginning the
+               --  last line, made that line part of the one above.
+               Require_Returns_Assigned
+                 (Syn.Anchor (Of_Tree, Function_Node), State,
+                  "this function can reach its `end` without assigning"
+                  & " the return, because its last line continues the line"
+                  & " above it [1750] and gives no value to");
+            else
+               Require_Returns_Assigned
+                 (Syn.Anchor (Of_Tree, Function_Node), State,
+                  "this function can reach its `end` without assigning the"
+                  & " return");
+            end if;
+         end;
       end if;
       if Edges.Falls_Through then
          Require_Inout_Places_Live

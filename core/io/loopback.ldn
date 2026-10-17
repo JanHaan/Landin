@@ -104,17 +104,13 @@ public network_over: (inout state: network_space,
                      -> (host: memory_network from state, sockets) =
     state = (next_port: 49152, arrivals: 0, calls: 0, fail_at: 0,
              without_ipv6: false, connections: 0, datagrams: 0, lost: 0)
-    for index in usize(0)..<network_slot_count(sockets) do
+    for index in usize(0)..<lenof sockets do
         sockets[index].role = free_slot
         sockets[index].start = 0
         sockets[index].filled = 0
     end for
     host = (state: addr state, sockets: sockets)
 end network_over
-
-network_slot_count: (values: []network_socket) -> (count: usize) =
-    count = lenof values
-end network_slot_count
 
 --  Count a call, failing the one the test chose.
 counted: (self: memory_network) -> none ! io_failed =
@@ -160,7 +156,7 @@ end overlaps
 port_taken: (self: memory_network, at: address, role: usize)
             -> (taken: bool) =
     taken = false
-    for index in usize(0)..<network_slot_count(self.sockets) do
+    for index in usize(0)..<lenof self.sockets do
         held: ptr network_socket = addr self.sockets[index]
         same_kind: bool = if role == datagram_slot
         then held.val.role == datagram_slot
@@ -188,7 +184,7 @@ end with_free_port
 
 --  A free record's index.
 free_index: (self: memory_network) -> (index: usize) ! io_failed =
-    for at in usize(0)..<network_slot_count(self.sockets) do
+    for at in usize(0)..<lenof self.sockets do
         if self.sockets[at].role == free_slot then
             index = at
             return
@@ -223,7 +219,7 @@ end opened
 slot_of: (self: memory_network, socket: file, role: usize)
          -> (slot: ptr mut network_socket from self) ! io_failed =
     index: usize = usize(socket)
-    fail io_failed when index >= network_slot_count(self.sockets)
+    fail io_failed when index >= lenof self.sockets
     slot = addr self.sockets[index]
     fail io_failed when slot.val.role == free_slot
       or (role <> free_slot and slot.val.role <> role)
@@ -263,14 +259,14 @@ network_connect: (self: memory_network, to: address) -> (connected: file)
     try counted(self)
     fail address_unavailable when not has_family(self, to)
     fail unreachable when not is_local(to)
-    mut listener: usize = network_slot_count(self.sockets)
-    for index in usize(0)..<network_slot_count(self.sockets) do
+    mut listener: usize = lenof self.sockets
+    for index in usize(0)..<lenof self.sockets do
         if self.sockets[index].role == listening_slot
           and takes(self.sockets[index].local, to) then
             listener = index
         end if
     end for
-    fail refused when listener == network_slot_count(self.sockets)
+    fail refused when listener == lenof self.sockets
     client: usize = try free_index(self)
     self.sockets[client].role = connection_slot
     server: usize = free_index(self) else (problem)
@@ -302,17 +298,17 @@ network_accept: (self: memory_network, listener: file) -> (accepted: file)
                 ! timed_out | io_failed =
     try counted(self)
     _ = try slot_of(self, listener, listening_slot)
-    mut found: usize = network_slot_count(self.sockets)
-    for index in usize(0)..<network_slot_count(self.sockets) do
+    mut found: usize = lenof self.sockets
+    for index in usize(0)..<lenof self.sockets do
         candidate: ptr network_socket = addr self.sockets[index]
         if candidate.val.pending
           and candidate.val.listener == usize(listener)
-          and (found == network_slot_count(self.sockets)
+          and (found == lenof self.sockets
                or candidate.val.order < self.sockets[found].order) then
             found = index
         end if
     end for
-    fail timed_out when found == network_slot_count(self.sockets)
+    fail timed_out when found == lenof self.sockets
     self.sockets[found].pending = false
     accepted = file(found)
 end network_accept
@@ -337,8 +333,7 @@ delivered: (self: memory_network, sender: ptr mut network_socket,
     count = lenof bytes
     return when to.val.receiving_closed
     compacted(to)
-    room: []mut u8 = to.val.buffer
-    left: usize = lenof room - to.val.filled
+    left: usize = lenof to.val.buffer - to.val.filled
     if count > left then count = left end if
     ends: usize = to.val.filled + count
     mem.copy(to.val.buffer[to.val.filled..<ends], bytes[0..<count])
@@ -401,9 +396,8 @@ queued: (self: memory_network, receiver: ptr mut network_socket,
          sender: address, bytes: []u8) -> none ! io_failed =
     state: ptr mut network_space = self.state
     compacted(receiver)
-    room: []mut u8 = receiver.val.buffer
     needed: usize = datagram_header + lenof bytes
-    if needed > lenof room - receiver.val.filled then
+    if needed > lenof receiver.val.buffer - receiver.val.filled then
         inc state.val.lost
         return
     end if
@@ -433,7 +427,7 @@ network_send_to: (self: memory_network, socket: file, bytes: []u8,
     fail io_failed when lenof bytes > longest_datagram
       or to.family <> slot.val.local.family
     fail unreachable when not is_local(to)
-    for index in usize(0)..<network_slot_count(self.sockets) do
+    for index in usize(0)..<lenof self.sockets do
         receiver: ptr mut network_socket = addr self.sockets[index]
         if receiver.val.role == datagram_slot
           and takes(receiver.val.local, to) then
@@ -538,7 +532,7 @@ network_close_socket: (self: memory_network, sink socket: file)
         orphaned(self, slot.val.partner)
     elsif slot.val.role == listening_slot then
         --  Connections waiting to be accepted are reset with it.
-        for pending in usize(0)..<network_slot_count(self.sockets) do
+        for pending in usize(0)..<lenof self.sockets do
             waiting: ptr mut network_socket = addr self.sockets[pending]
             if waiting.val.pending and waiting.val.listener == index then
                 orphaned(self, waiting.val.partner)

@@ -63,9 +63,8 @@ end compact
 refill: (provider: type is reader, inout lines: line_reader(provider))
         -> none ! io_failed =
     try compact(lines)
-    room := lines.buffer
     got: usize = try provider.read(lines.host, lines.opened,
-                                   lines.buffer[lines.filled..<lenof room])
+                                   lines.buffer[lines.filled..<lenof lines.buffer])
     if got == 0 then
         lines.finished = true
     else
@@ -124,8 +123,7 @@ public read_line: (provider: type is reader,
                         finished: waiting == 0)
                 return
             end if
-            room := lines.buffer
-            if waiting == lenof room then
+            if waiting == lenof lines.buffer then
                 lines.start = 0
                 lines.filled = 0
                 lines.skipping = true

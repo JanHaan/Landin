@@ -87,13 +87,6 @@ records: (inout out: io.buffered_writer(hosted.system), input: []u8)
     end while
 end records
 
---  Say on standard error why the program stopped.
-complain: (host: hosted.system, message: []u8) -> none =
-    io.write(host, io.err(host), message) else (ignored)
-        _ = ignored
-    end
-end complain
-
 public main: () -> (code: i32) =
     host := hosted.host()
     memory := heap.host()
@@ -108,20 +101,32 @@ public main: () -> (code: i32) =
 
     read_all(host, whole) else (problem)
         if problem == text.no_space then
-            complain(host, "revcomp: out of memory\n")
+            io.write(host, io.err(host), "revcomp: out of memory\n")
+                else (ignored)
+                _ = ignored
+            end
         else
-            complain(host, "revcomp: standard input could not be read\n")
+            io.write(host, io.err(host), "revcomp: standard input could not be read\n")
+                else (ignored)
+                _ = ignored
+            end
         end if
         return
     end
     records(out, text.used(whole)) else (problem)
         _ = problem
-        complain(host, "revcomp: standard output could not be written\n")
+        io.write(host, io.err(host), "revcomp: standard output could not be written\n")
+            else (ignored)
+            _ = ignored
+        end
         return
     end
     io.flush(out) else (problem)
         _ = problem
-        complain(host, "revcomp: standard output could not be written\n")
+        io.write(host, io.err(host), "revcomp: standard output could not be written\n")
+            else (ignored)
+            _ = ignored
+        end
         return
     end
     code = 0

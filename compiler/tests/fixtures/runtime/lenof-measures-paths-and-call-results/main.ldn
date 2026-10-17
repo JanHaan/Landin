@@ -1,0 +1,44 @@
+--  [1820]: `lenof` measures the primary a name begins: a field path, an
+--  element path, a slice of one, and a call's result, recovered or not.  A
+--  fixed array a name or path reaches is not read, a slice is read once,
+--  and a call runs whatever its result's shape.
+bad: atom
+
+holder: type = struct
+    bytes: []u8
+    grid: [3][5]u8
+    rows: [2][]u8
+end holder
+
+mut calls: u32 = 0
+
+made: (n: u32) -> (row: [4]u8) =
+    calls += 1
+    row = [1, 2, 3, 4]
+    row[0] = u8(n)
+end made
+
+sliced: (value: holder) -> (bytes: []u8 from value) =
+    calls += 10
+    bytes = value.bytes
+end sliced
+
+refused: (value: holder) -> (bytes: []u8 from value) ! bad =
+    calls += 100
+    fail bad when lenof value.bytes > 0
+    bytes = value.bytes
+end refused
+
+public main: () -> (code: i32) =
+    data: [6]u8 = [1, 2, 3, 4, 5, 6]
+    value: holder = (bytes: data[0..<6], grid: [of [of 0]],
+                     rows: [data[0..<2], data[0..<3]])
+    paths := lenof value.bytes + lenof value.grid + lenof value.grid[1]
+             + lenof value.rows[1] + lenof value.bytes[1..<4]
+    results := lenof made(7) + lenof sliced(value)
+               + lenof refused(value) else (problem)
+        _ = problem
+        data[0..<2]
+    end
+    code = i32(paths + results) + i32(calls) - 101
+end main

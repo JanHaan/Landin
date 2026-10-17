@@ -333,13 +333,9 @@ public terminals_over: (screens: []screen)
     host = (screens: screens)
 end terminals_over
 
-screen_count: (values: []screen) -> (count: usize) =
-    count = lenof values
-end screen_count
-
 memory_is_terminal: (self: memory_terminals, stream: file) -> (yes: bool) =
     yes = false
-    for index in usize(0)..<screen_count(self.screens) do
+    for index in usize(0)..<lenof self.screens do
         if self.screens[index].stream == stream then yes = true end if
     end for
 end memory_is_terminal
@@ -347,7 +343,7 @@ end memory_is_terminal
 memory_window_size: (self: memory_terminals, stream: file)
                     -> (size: window) ! not_a_terminal | io_failed =
     size = (rows: 0, columns: 0)
-    for index in usize(0)..<screen_count(self.screens) do
+    for index in usize(0)..<lenof self.screens do
         if self.screens[index].stream == stream then
             size = self.screens[index].size
             return

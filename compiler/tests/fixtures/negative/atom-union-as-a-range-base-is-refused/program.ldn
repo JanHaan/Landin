@@ -1,0 +1,2 @@
+read, write: atom
+r: type = read | write range 1..2

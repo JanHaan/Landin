@@ -72,13 +72,13 @@ start: () -> noreturn =
                 0
             end)
         elsif operation == 3 then
-            (uart.stop(receiver) else (problem)
+            uart.stop(receiver) else (problem)
                 record(problem)
-            end)
+            end
         elsif operation == 4 then
-            (uart.restart(receiver) else (problem)
+            uart.restart(receiver) else (problem)
                 record(problem)
-            end)
+            end
         elsif operation == 5 then
             saved_mask = cpu.disable_interrupts()
         elsif operation == 6 then

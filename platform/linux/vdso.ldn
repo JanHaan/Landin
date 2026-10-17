@@ -333,11 +333,10 @@ fixed if compiler.os == linux then
         (found: present, image) := vdso_image()
         found = false
         address = 0
-        if present then
-            (found: named, offset) := vdso_find(image, name, version)
-            (found: _, value: base) := auxiliary(at_sysinfo_ehdr)
-            found = named
-            if named then address = usize(base) + offset end if
-        end if
+        return when not present
+        (found: named, offset) := vdso_find(image, name, version)
+        (found: _, value: base) := auxiliary(at_sysinfo_ehdr)
+        found = named
+        if named then address = usize(base) + offset end if
     end vdso_symbol
 end if

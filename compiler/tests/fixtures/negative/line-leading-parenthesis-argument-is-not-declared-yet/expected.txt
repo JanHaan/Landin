@@ -1,0 +1,6 @@
+error[L0201]: `y` is not declared here, because the `(` that begins this line continues the line above as a call
+  --> ../tests/fixtures/negative/line-leading-parenthesis-argument-is-not-declared-yet/program.ldn:3:6
+  |
+3 |     (y + 1) * 2
+  |      ^
+  = note: [1750]: a line end ends no statement; assign a value that begins with a parenthesis to its place, or begin a struct value with its type's name

@@ -208,25 +208,25 @@ end system_read_child
 --  Close every pipe the child still has, keeping the first failure.
 close_pipes: (self: system, started: io.child) -> (closed: bool) =
     closed = true
-    if started.input_open and not pipe_closed(self, started.input) then
-        closed = false
+    if started.input_open then
+        close_pipe(self, started.input) else (problem)
+            _ = problem
+            closed = false
+        end
     end if
-    if started.output_open and not pipe_closed(self, started.output) then
-        closed = false
+    if started.output_open then
+        close_pipe(self, started.output) else (problem)
+            _ = problem
+            closed = false
+        end
     end if
-    if started.errors_open and not pipe_closed(self, started.errors) then
-        closed = false
+    if started.errors_open then
+        close_pipe(self, started.errors) else (problem)
+            _ = problem
+            closed = false
+        end
     end if
 end close_pipes
-
---  Whether a pipe closed without a failure.
-pipe_closed: (self: system, opened: io.file) -> (closed: bool) =
-    closed = true
-    close_pipe(self, opened) else (problem)
-        _ = problem
-        closed = false
-    end
-end pipe_closed
 
 --  Wait for the child, again when a signal interrupts the wait.
 waited: (self: system, child: posix.process_id)

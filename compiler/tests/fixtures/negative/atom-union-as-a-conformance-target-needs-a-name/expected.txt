@@ -1,0 +1,10 @@
+error[L0101]: a union here needs a name of its own
+  --> ../tests/fixtures/negative/atom-union-as-a-conformance-target-needs-a-name/program.ldn:4:6
+  |
+4 | read | write is named ()
+  |      ^^^^^^^
+  --> ../tests/fixtures/negative/atom-union-as-a-conformance-target-needs-a-name/program.ldn:4:1
+  |
+4 | read | write is named ()
+  | ^^^^ this conformance
+  = note: [0640]: declare it, `name: type = a | b`, and write the name; a union is written in place only as a binding's, a parameter's, a return's or a field's type

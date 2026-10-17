@@ -120,7 +120,10 @@ one, which is the whole of the rule: 'mut x' is two tokens and
 rule below this layer mentions it. A line end therefore never
 terminates a statement: when the token after it can continue the
 expression or selection before it, it does. This is [1060]'s
-one-line rule read from the other direction.
+one-line rule read from the other direction. One `(` is read by where it
+stands: a `(` that begins a line, and whose matching `)` is followed by
+`:=`, begins [0990]'s destructuring binding rather than a call of the line
+above, because a call is no place and that reading could never derive.
 
 ```landin-grammar
 space       ::= " " | "\t" | line_end | comment
@@ -299,9 +302,24 @@ is a type position through its fully applied positional application. D135
 substitutes an alias during checking; D137 interns a struct application by its
 template and normalized actual tuple, then checks the substituted field shape.
 
+A binding, a parameter, a named return and a field declare a type, and
+there [0640]'s atom union may be written in place: `mode: read | write`.
+It is the same structural set a type declaration of that union names, so the
+two are one type and either may be written where the other is (D216). It
+includes D189's pointer union, `absent | ptr node`, and since `ptr` binds
+tighter than `|`, `ptr a | b` is that union of `ptr a` and `b`. A function
+type's parameters and returns are declared too. Everywhere else a type is
+written, as an array's or a slice's element, as a type argument, a
+`distinct` base or a conformance's target, a union needs that declaration's
+name, and the one refusal says so; a range
+subtype narrows an integer type, which no union is. `sizeof`, `alignof` and
+a labelled argument read `a | b` as [1820]'s alternation, and a union there
+is refused the same way.
+
 ```landin-grammar
-binding       ::= "mut"? identifiers ":" type ("=" expression)?
+binding       ::= "mut"? identifiers ":" declared_type ("=" expression)?
                 | "mut"? identifier ":=" expression
+declared_type ::= type | atom_union
 type          ::= function_type | array_type | pointer_type | slice_type
                 | any_type | type_application | scalar_name | packed_unsigned | text_name
                 | declaration_reference
@@ -398,7 +416,8 @@ struct_body      ::= ("layout" "(" ("c" | "optimal"
                      ("struct" member+ "end" identifier?
                      | "(" field ("," field)* ")")
 member           ::= field | variant_part
-field            ::= identifiers ":" type ("at" expression (".." expression)?)?
+field            ::= identifiers ":" declared_type
+                     ("at" expression (".." expression)?)?
 variant_part     ::= identifier ":" "variant" variant_case
                    ("|" variant_case)* "end" identifier
 variant_case     ::= identifier (":" "(" field ("," field)* ")")?
@@ -482,11 +501,12 @@ routine_formal     ::= parameter | type_formal
 errors             ::= "!" (declaration_reference
                              ("|" declaration_reference)* | "...")
 parameters         ::= parameter ("," parameter)*
-parameter          ::= "caller" identifiers ":" type
-                     | "escaping"? parameter_convention? identifiers ":" type
+parameter          ::= "caller" identifiers ":" declared_type
+                     | "escaping"? parameter_convention? identifiers ":"
+                       declared_type
 parameter_convention ::= "in" | "inout" | "sink"
 returns     ::= "(" named_return ("," named_return)* ")" | "none" | "noreturn"
-named_return ::= identifiers ":" type
+named_return ::= identifiers ":" declared_type
                  ("from" identifier ("," identifier)*)?
 body        ::= block
 block       ::= statement* | value_statement* expression
@@ -536,7 +556,13 @@ selected variant part and each case arm carries one statement or one
 expression; a bare `begin` block makes a multi-statement arm. D78 extends the
 arm with positional payload bindings. An `if`, a `match`, and a bare `begin`
 block retain their statement forms and also occupy expression positions under
-[1820].
+[1820]. Used as a statement, one takes no value from its branches, so a
+branch, an `elsif` or `else` arm, a `match` arm or the block itself, that
+ends with a value is refused, as a call standing alone that hands one back
+is: nothing would take the value, and [1020] drops none by omission. The
+refusal names the two routes, a branch written as a statement and, where the
+value followed a call's `else` that divided an `if` [1820], the recovery
+parenthesised or bound.
 A place is [1820]'s indexed selection, so a binding, a field of a struct, or
 an enabled array element is written
 and stepped exactly as the binding holding it is. What may be
@@ -675,7 +701,7 @@ loop        ::= "loop" "do" block "end" "loop"
               | identifier ":" "loop" "do" block "end" identifier
 condition   ::= expression | condition_declaration
 condition_declaration ::= "mut"? identifier ":=" expression
-                        | "mut"? identifier ":" type "=" expression
+                        | "mut"? identifier ":" declared_type "=" expression
 while       ::= "while" condition "do" block
                 ("complete" block)? "end" "while"
               | identifier ":" "while" condition "do" block
@@ -732,7 +758,10 @@ reason, and takes what a selection named: `a[i]`, `a.b[i]` and
 `a[lower..<upper]` are all written there. The two range spellings are
 retained separately so inclusive and half-open upper bounds are checked before
 an address is formed. Neither form derives from a call, because nothing
-selects from one and nothing indexes one either. A call may consume that
+selects from one and nothing indexes one either; [1830] refuses both as a
+recorded boundary and names the route, a name bound to the result. A `[` that
+begins a line after a call or a parenthesis therefore cannot continue it, and
+begins what follows. A call may consume that
 complete selection as its callee, which is how a function-valued field is
 called; the call itself still cannot be selected or indexed.
 D266 extends a conversion's callee from a name to a written type. It remains
@@ -755,9 +784,13 @@ that admit it. D72's construction and [0980]'s direct named call have one
 neutral RHS, and resolution classifies the callee before selecting type or
 expression projections. A construction may then use the optional trailing
 fill; the all-fill spelling remains refused by name.
-A call-site `else` binds to the call except where that same token directly
-closes an enclosing `then` or `elsif` arm; parentheses around the recovered
-call make the inner use explicit.
+A call-site `else` followed by a parenthesised name or `_`, and not by `:=`,
+opens that call's recovery wherever it stands, an `if` arm included. Any
+other call-site `else` binds to the call except where that same token can
+close an enclosing `then` or `elsif` arm: there it divides the `if`, which is
+the one reading `if c then a() else b() end if` can have, and parentheses
+around the recovered call, `(f() else 0)`, recover it in the arm. A refusal
+that meets either reading names this rule and that route.
 An `if`, exhaustive `match`, bare `begin` block, `loop`, `while`, or `for` is
 also a primary. A loop is value-producing when its targeted `break` edges carry
 `with` values. Every break edge then carries one value of the joined type; a
@@ -770,6 +803,14 @@ order. In a value context the final expression of every edge that can fall
 through supplies the answer; an edge that returns supplies none. D124 gives the
 complete edge and type rule, and D125 gives its storage representation. D158
 extends the same caller-owned representation to loop values.
+`lenof` [0370] measures the primary a name begins: the name, a field or
+element path through it, a slice of one, or a call's result, recovered or
+not. A fixed array's length is its type's, so a name or path that names one
+is not evaluated, as D31's literal is not, and an index inside that path is
+not evaluated either; a slice is evaluated once and its length read; a call
+is evaluated whatever its result's shape, because what it does is not known
+from its type. The word stays contextual: `lenof(x)` calls a routine named
+`lenof`, and `lenof[i]` indexes a binding of that name.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 
@@ -806,7 +847,8 @@ conversion_type ::= function_type | array_type | pointer_type | slice_type
 pointer_conversion ::= "ptr" "(" expression ")"
 any_construction ::= "any" "(" expression ")"
 empty_slice ::= "[" "]"
-measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
+measurement ::= ("sizeof" | "alignof") type
+              | "lenof" (call | labeled_application | indexed)
               | "lenof" "(" array_literal ")"
 arguments   ::= expression ("," expression)* ("," assembly_operand)*
 assembly_operand ::= ("in" | "inout") identifier ":" type
@@ -5094,6 +5136,11 @@ make malformed aggregate syntax valid only when placed beneath `lenof`.
 for its length. That would make calls and reads observable despite the count being
 fixed by syntax, require hidden array storage, and prematurely admit a general
 array value. It was declined.
+
+D333 supersedes this decision in part: `lenof` now takes a path, a slice
+and a call's result as well as a name and a literal, a call is always
+evaluated, and only a name or a path over a fixed array is measured
+without being read.
 
 **Pinned by** `positive/lenof-array-literal-does-not-read-elements`,
 `negative/lenof-array-literal-element-mismatch`,
@@ -19397,3 +19444,115 @@ the accounts NSS keeps.
 **Pinned by** `runtime/posix-accounts`, which parses a database given on
 standard input, `runtime/posix-accounts-libc` and the driver case `the C
 runtime comes from the link`.
+
+### D330 — A call's bound recovery recovers inside an `if` arm too
+
+**The tour said** at [1030] that a call-site `else` handles the call's failure,
+and [1820] let an `else` close an enclosing `then` or `elsif` arm, the
+dangling `else`. The parser applied that to the whole arm, so
+`x = f() else (problem) … end` was refused there, and the library carried
+parenthesised recoveries and helper routines to keep a recovery out of an arm.
+
+**Chosen:** a call-site `else` followed by a parenthesised name or `_`, and not
+by `:=`, opens that call's recovery wherever it stands, an `if` arm included.
+Any other call-site `else` divides the `if` where it can close a `then` or
+`elsif` arm, so `if c then a() else b() end if` keeps its one-line meaning, and
+`(f() else 0)` recovers the call there; the refusals of that form name the
+route. `if c then f() else (r) end if` is refused with an exact fix to
+`else r`, since parentheses after a call's `else` bind its error. A recovery's
+body starts its own arm.
+
+**The alternatives:** better refusals alone, which left every workaround in
+place; deciding by the line, and taking whichever reading parses, both of
+which would silently change a one-line `if` whose first call can fail.
+
+**Pinned by** `runtime/recovery-binds-its-error-in-an-if-arm`,
+`negative/parenthesised-name-after-a-call-else-is-its-recovery`,
+`negative/recovery-value-before-more-of-an-if-arm` and
+`negative/recovery-value-in-an-if-arm-divides-the-if`.
+
+### D331 — A line that begins `(` and binds with `:=` destructures
+
+**The tour said** at [1750] that a line end never ends a statement when the
+next token can continue it, so a line beginning `(` continued the one above as
+a call, and `(a, b) := f()` after a statement was L0105.
+
+**Chosen:** a `(` that begins a line, and whose matching `)` is followed by
+`:=`, begins a destructuring binding. Continuation is otherwise unchanged, so a
+call's arguments and a conformance's entries may still begin the next line.
+The parser records where a line-leading `(` or prefix operator continued a
+line, and a later refusal there says so: a construction after a name is L0301
+naming `size(rows: 0, …)` as the route, without the misleading report that
+used to come first; an undeclared name and a value that became an operand say
+the line above was continued.
+
+**The alternatives:** keeping `(` and `[` on their operand's line, which
+reverses [1750], changes a pinned fixture and reformats about a hundred
+sites; and ending statements at line ends.
+
+**Pinned by** `runtime/destructuring-begins-its-own-line`,
+`negative/line-leading-parenthesis-continues-as-a-call`,
+`negative/line-leading-parenthesis-argument-is-not-declared-yet` and
+`negative/line-leading-minus-continues-the-value`.
+
+### D332 — An atom union may be written in place as a declared type
+
+**The tour said** at [0640] that atom sets are structural, and an error set
+wrote `! a | b` in place, but a parameter, a binding or a field needed an
+alias, and an inline union was refused as an unclosed parameter list.
+
+**Chosen:** `declared_type ::= type | atom_union` is the type of a binding, a
+condition declaration, a parameter, a named return and a field, payload fields
+included; `ptr a | b` is the pointer union of `ptr a` and `b`. It is the same
+structural set an alias with those members names (D216). As an element type,
+a type argument, a labelled argument, a `distinct` or range base, a
+conformance target, a static type argument or `sizeof`'s operand it is still
+refused, once, naming the alias.
+
+**The alternatives:** a better refusal alone; and unions anywhere with
+parenthesised types, which collide with signatures and inline records.
+
+**Pinned by** `runtime/atom-union-written-in-place` and the
+`negative/atom-union-*` fixtures.
+
+### D333 — `lenof` measures paths and calls, and a call is always evaluated
+
+**The tour said** at [0370] that `lenof` gives a length, and D31 admitted only a
+name and a literal, so a field, an element or a call's result had to be bound
+to be measured: seven library helpers and dozens of locals did only that.
+
+**Chosen:** `lenof` takes a name, a field or element path, a slice, a call's
+result or a literal. A name, or a path that names a fixed array, is measured
+from its type and not read, nor any index inside it, though a constant index
+is still checked; so `lenof rows[i]` over a fixed array does not evaluate `i`.
+A slice is evaluated once, and a call is always evaluated, even when it
+returns a fixed array. Indexing or selecting a call's result stays [1830]'s
+recorded boundary, and L0010 says to bind the value to a name and index the
+name; a `[` beginning the line after a call is no longer read as an index.
+
+**The alternatives:** paths alone, which leaves a call's result to a local; and
+a better refusal alone.
+
+**Pinned by** `runtime/lenof-measures-paths-and-call-results`, which requires
+the call to have run, `negative/lenof-of-a-path-or-call-that-has-no-length`,
+`positive/array-literal-value-after-a-call-statement` and
+`negative/index-of-a-qualified-call-is-refused-there`.
+
+### D334 — A statement's branch takes no value
+
+**The tour said** at [1020] that no value is dropped by omission. An `if`,
+`match` or bare `begin` used as a statement silently threw away the value a
+branch ended with, so `if c then r = 1 else 7 end if` compiled, and under
+D330's dangling `else` so did `r = g() else 7` in an arm when `g` cannot fail.
+
+**Chosen:** a branch of a statement `if`, `elsif` or `else` arm, a statement
+`match` arm or a bare `begin` that ends with a value is L0331, as D244 refuses
+a call standing alone that hands back a result, naming both routes: the branch
+written as a statement, or the call's recovery parenthesised or bound. A
+recovery's own block stays D310's.
+
+**The alternatives:** discarding silently, which [1020] declines; and refusing
+only after a call's `else`, though the same discard happens without one.
+
+**Pinned by** `negative/value-ending-a-statement-branch-is-refused` and
+`negative/none-call-else-value`.

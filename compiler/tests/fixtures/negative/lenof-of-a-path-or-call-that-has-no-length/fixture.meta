@@ -1,0 +1,9 @@
+class: negative
+summary: [1820] lets `lenof` measure a field path or a call's result, and each that is no array or slice is refused at the operand, with the measurement as its second place
+program: program.ldn
+codes: L0301, L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/lenof-of-a-path-or-call-that-has-no-length/program.ldn
+status: 1
+constructs: 0370, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

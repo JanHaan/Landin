@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: [1820] measures with `lenof` a field path, an element path, a slice of a path and a call's result, recovered or not; a fixed array a path reaches is not read and a call runs whatever its result's shape
+program: main.ldn
+status: 42
+constructs: 0370, 0570, 1030, 1820
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

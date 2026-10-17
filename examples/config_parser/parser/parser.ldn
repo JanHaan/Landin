@@ -156,15 +156,15 @@ parse_entry: (source: []u8, inout parser: parser_state,
         return
     end if
     if parser.look.what == lexer.number then
-        number: u32 = (parse_digits(source, parser.look.begins,
-                                    parser.look.ends, 0)
+        number: u32 = parse_digits(source, parser.look.begins,
+                                   parser.look.ends, 0)
             else (problem)
             _ = problem
             try report(logger, parser.look.begins, bad_number[0..<20])
             recover_to_boundary(source, parser)
             item = no_entry
             return
-        end)
+        end
         advance(source, parser)
         block: ptr mut u8 = try mem.allocate
             (arena, sizeof value, alignof value)

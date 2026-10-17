@@ -258,7 +258,8 @@ end f
 
 A recovery clause's body is indented from the line its call begins on, and
 its `end` stands on that line's indentation, however the `else` that opens
-it is placed. An `else` that begins a line continues the call.
+it is placed. An `else` that begins a line continues the call, and a bound
+recovery in an `if` arm is laid out as it is anywhere else.
 
 ```landin
 f: () -> none =
@@ -306,7 +307,9 @@ end f
 ### Other continuations
 
 Any other line that continues a declaration or a statement stands four
-spaces in from the line it began on.
+spaces in from the line it began on. A line that begins with a `(` whose `)`
+is followed by `:=` continues nothing: it is a destructuring binding of its
+own [1750], and stands where its block's statements do.
 
 ```landin
 f: () -> none =

@@ -126,8 +126,7 @@ end capacity
 
 --- Return the number of initialized items in the prefix.
 public length: (item: type, store: storage(item)) -> (count: usize) =
-    prefix := store.prefix
-    count = lenof prefix
+    count = lenof store.prefix
 end length
 
 --- Lend a mutable slice of the initialized prefix. End uses of the view

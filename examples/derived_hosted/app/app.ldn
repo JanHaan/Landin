@@ -29,7 +29,10 @@ public process: (provider: type is mem.allocator, memory: provider,
             end if
             --  One explicit retry. The buffered cursor survives failure;
             --  a second failure is terminal and normal cleanup still runs.
-            try emit_retry(cfg.to, world, pending, line)
+            cfg.to.emit(world, pending, line) else (problem)
+                _ = problem
+                try cfg.to.emit(world, pending, line)
+            end
             clear_message(pending)
             inc kept
         end if
@@ -73,12 +76,3 @@ public run: (provider: type is mem.allocator, memory: provider,
     log: any diag.log = any(addr logger)
     kept = try run_logged(memory, world, chunk_size, log)
 end run
-
-emit_retry: (to: any dest, world: any io.world, inout pending: message,
-             line: []u8)
-            -> none ! io.io_failed =
-    to.emit(world, pending, line) else (problem)
-        _ = problem
-        try to.emit(world, pending, line)
-    end
-end emit_retry

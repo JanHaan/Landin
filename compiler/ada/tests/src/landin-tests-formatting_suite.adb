@@ -690,8 +690,66 @@ package body Landin.Tests.Formatting_Suite is
               "view := () -> none ! problem(wrapped)" & LF);
    end Written_Types_Touch_Their_Values;
 
+   --  A union written in place, a measured path or call, a recovery bound
+   --  in an `if` arm and a destructuring that begins the line after a guard
+   --  take the layout every other form of their kind does: the union spaces
+   --  its bars as a declared one, a measurement is one operand, the
+   --  recovery is laid out as anywhere else, and the destructuring is a
+   --  statement of its own, at the statement's indentation.
+   procedure Parser_Frictions_Are_Laid_Out
+     (Item : in out Landin.Testing.Context);
+
+   procedure Parser_Frictions_Are_Laid_Out
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Expect (Item, "a union in place spaces its bars",
+              "f: (mode: read|write) -> (r: east|west) =" & LF
+              & "    local: read|write = mode" & LF
+              & "    r = east" & LF & "end f" & LF,
+              "f: (mode: read | write) -> (r: east | west) =" & LF
+              & "    local: read | write = mode" & LF
+              & "    r = east" & LF & "end f" & LF);
+      Expect (Item, "a measured path is one operand",
+              "f: (h: holder) -> (r: usize) =" & LF
+              & "    r = lenof  h.bytes+lenof   used(h)" & LF
+              & "end f" & LF,
+              "f: (h: holder) -> (r: usize) =" & LF
+              & "    r = lenof h.bytes + lenof used(h)" & LF
+              & "end f" & LF);
+      Expect (Item, "a recovery bound in an if arm is laid out as a"
+              & " recovery",
+              "f: (c: bool) -> (r: u32) =" & LF
+              & "    if c then" & LF
+              & "        r = g() else (problem)" & LF
+              & "        r = 1" & LF
+              & "        end" & LF
+              & "    end if" & LF
+              & "end f" & LF,
+              "f: (c: bool) -> (r: u32) =" & LF
+              & "    if c then" & LF
+              & "        r = g() else (problem)" & LF
+              & "            r = 1" & LF
+              & "        end" & LF
+              & "    end if" & LF
+              & "end f" & LF);
+      Expect (Item, "a destructuring after a guard is its own statement",
+              "f: (x: bool) -> (r: u32) ! bad =" & LF
+              & "    fail bad when x" & LF
+              & "        (a, b) := two()" & LF
+              & "    r = a + b" & LF
+              & "end f" & LF,
+              "f: (x: bool) -> (r: u32) ! bad =" & LF
+              & "    fail bad when x" & LF
+              & "    (a, b) := two()" & LF
+              & "    r = a + b" & LF
+              & "end f" & LF);
+   end Parser_Frictions_Are_Laid_Out;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "formatting", "the parser frictions are laid out",
+         Parser_Frictions_Are_Laid_Out'Access);
       Landin.Testing.Register
         (Into, "formatting", "written types touch their values",
          Written_Types_Touch_Their_Values'Access);

@@ -126,23 +126,23 @@ public next_entry: (key: type is cmp.hashable, item: type,
         position.next_slot = value.first_used
     end if
     fail end_of_entries when position.next_slot >= slots
-    record: bucket = (mem.get(value.buckets, position.next_slot)
+    record: bucket = mem.get(value.buckets, position.next_slot)
         else (problem)
         _ = problem
         fail end_of_entries
-    end)
+    end
     fail end_of_entries when record.state <> slot_used
     position.next_slot = record.next_used
-    found_key: key = (mem.get(value.keys, record.dense_index)
+    found_key: key = mem.get(value.keys, record.dense_index)
         else (problem)
         _ = problem
         fail end_of_entries
-    end)
-    found_item: item = (mem.get(value.values, record.dense_index)
+    end
+    found_item: item = mem.get(value.values, record.dense_index)
         else (problem)
         _ = problem
         fail end_of_entries
-    end)
+    end
     result = (key: found_key, item: found_item)
 end next_entry
 
@@ -251,11 +251,11 @@ install_at: (key: type is cmp.hashable, item: type,
     slots: usize = slots(value)
     mut dense: usize = 0
     if was_dead then
-        record: bucket = (mem.get(value.buckets, at) else (problem)
+        record: bucket = mem.get(value.buckets, at) else (problem)
             _ = problem
             placed = false
             return
-        end)
+        end
         dense = record.dense_index
         if not replace_value(value.keys, dense, added_key) then
             placed = false
@@ -266,22 +266,22 @@ install_at: (key: type is cmp.hashable, item: type,
             return
         end if
     else
-        dense = (mem.admit(value.keys, added_key) else (problem)
+        dense = mem.admit(value.keys, added_key) else (problem)
             _ = problem
             placed = false
             return
-        end)
-        value_dense: usize = (mem.admit(value.values, added_item)
+        end
+        value_dense: usize = mem.admit(value.values, added_item)
             else (problem)
             _ = problem
-            discarded: key = (mem.withdraw(value.keys) else (release_problem)
+            discarded: key = mem.withdraw(value.keys) else (release_problem)
                 _ = release_problem
                 placed = false
                 return
-            end)
+            end
             placed = false
             return
-        end)
+        end
         if value_dense <> dense then
             placed = false
             return
@@ -296,12 +296,12 @@ install_at: (key: type is cmp.hashable, item: type,
         return
     end if
     if value.last_used < slots then
-        mut tail: bucket = (mem.get(value.buckets, value.last_used)
+        mut tail: bucket = mem.get(value.buckets, value.last_used)
             else (problem)
             _ = problem
             placed = false
             return
-        end)
+        end
         tail.next_used = at
         if not replace_value(value.buckets, value.last_used, tail) then
             placed = false
@@ -341,10 +341,10 @@ search_for_insert: (key: type is cmp.hashable, item: type,
     mut first_dead: usize = slots
     mut probed: usize = 0
     while probed < slots do
-        record: bucket = (mem.get(value.buckets, at) else (problem)
+        record: bucket = mem.get(value.buckets, at) else (problem)
             _ = problem
             fail mem.out_of_memory
-        end)
+        end
         if record.state == slot_free then
             if first_dead < slots then
                 result = (updated: false, slot_index: first_dead,
@@ -359,11 +359,11 @@ search_for_insert: (key: type is cmp.hashable, item: type,
                 first_dead = at
             end if
         elsif record.state == slot_used then
-            existing: key = (mem.get(value.keys, record.dense_index)
+            existing: key = mem.get(value.keys, record.dense_index)
                 else (problem)
                 _ = problem
                 fail mem.out_of_memory
-            end)
+            end
             if key.equal(existing, wanted) then
                 if not replace_value(value.values, record.dense_index,
                                      replacement)
@@ -398,11 +398,11 @@ place_absent: (key: type is cmp.hashable, item: type,
     mut first_dead: usize = slots
     mut probed: usize = 0
     while probed < slots do
-        record: bucket = (mem.get(value.buckets, at) else (problem)
+        record: bucket = mem.get(value.buckets, at) else (problem)
             _ = problem
             placed = false
             return
-        end)
+        end
         if record.state == slot_dead then
             if first_dead == slots then
                 first_dead = at
@@ -477,42 +477,42 @@ rehash: (key: type is cmp.hashable, item: type,
     mut new_last: usize = want
     while migrated < value.count do
         fail mem.out_of_memory when old_at >= old_slots
-        old_bucket: bucket = (mem.get(value.buckets, old_at) else (problem)
+        old_bucket: bucket = mem.get(value.buckets, old_at) else (problem)
             _ = problem
             fail mem.out_of_memory
-        end)
+        end
         fail mem.out_of_memory when old_bucket.state <> slot_used
-        old_key: key = (mem.get(value.keys, old_bucket.dense_index)
+        old_key: key = mem.get(value.keys, old_bucket.dense_index)
             else (problem)
             _ = problem
             fail mem.out_of_memory
-        end)
+        end
         mut target: usize = index_of(old_key, want)
         mut searched: usize = 0
         while searched < want do
-            target_bucket: bucket = (mem.get(new_buckets, target)
+            target_bucket: bucket = mem.get(new_buckets, target)
                 else (problem)
                 _ = problem
                 fail mem.out_of_memory
-            end)
+            end
             break when target_bucket.state == slot_free
             target = next_index(target, want)
             inc searched
         end while
         fail mem.out_of_memory when searched == want
 
-        key_dense: usize = (mem.transfer
+        key_dense: usize = mem.transfer
             (value.keys, old_bucket.dense_index, new_keys)
             else (problem)
             _ = problem
             fail mem.out_of_memory
-        end)
-        value_dense: usize = (mem.transfer
+        end
+        value_dense: usize = mem.transfer
             (value.values, old_bucket.dense_index, new_values)
             else (problem)
             _ = problem
             fail mem.out_of_memory
-        end)
+        end
         fail mem.out_of_memory when key_dense <> value_dense
         moved_bucket: bucket =
             (state: slot_used, dense_index: key_dense,
@@ -521,11 +521,11 @@ rehash: (key: type is cmp.hashable, item: type,
             fail mem.out_of_memory
         end if
         if new_last < want then
-            mut tail: bucket = (mem.get(new_buckets, new_last)
+            mut tail: bucket = mem.get(new_buckets, new_last)
                 else (problem)
                 _ = problem
                 fail mem.out_of_memory
-            end)
+            end
             tail.next_used = target
             if not replace_value(new_buckets, new_last, tail) then
                 fail mem.out_of_memory
@@ -610,17 +610,17 @@ locate: (key: type is cmp.hashable, item: type,
     mut slot: usize = index_of(wanted, slots)
     mut probed: usize = 0
     while probed < slots do
-        record: bucket = (mem.get(value.buckets, slot) else (problem)
+        record: bucket = mem.get(value.buckets, slot) else (problem)
             _ = problem
             fail missing
-        end)
+        end
         fail missing when record.state == slot_free
         if record.state == slot_used then
-            existing: key = (mem.get(value.keys, record.dense_index)
+            existing: key = mem.get(value.keys, record.dense_index)
                 else (problem)
                 _ = problem
                 fail missing
-            end)
+            end
             if key.equal(existing, wanted) then
                 found = (slot: slot, dense: record.dense_index)
                 return
@@ -680,25 +680,25 @@ public remove: (key: type is cmp.hashable, item: type,
     mut at: usize = index_of(wanted, slots)
     mut probed: usize = 0
     while probed < slots do
-        record: bucket = (mem.get(value.buckets, at) else (problem)
+        record: bucket = mem.get(value.buckets, at) else (problem)
             _ = problem
             fail missing
-        end)
+        end
         fail missing when record.state == slot_free
         if record.state == slot_used then
-            existing: key = (mem.get(value.keys, record.dense_index)
+            existing: key = mem.get(value.keys, record.dense_index)
                 else (problem)
                 _ = problem
                 fail missing
-            end)
+            end
             if key.equal(existing, wanted) then
                 if record.previous_used < slots then
                     mut previous: bucket =
-                        (mem.get(value.buckets, record.previous_used)
+                        mem.get(value.buckets, record.previous_used)
                         else (problem)
                             _ = problem
                             fail missing
-                        end)
+                        end
                     previous.next_used = record.next_used
                     if not replace_value(value.buckets,
                                          record.previous_used, previous)
@@ -710,11 +710,11 @@ public remove: (key: type is cmp.hashable, item: type,
                 end if
                 if record.next_used < slots then
                     mut next: bucket =
-                        (mem.get(value.buckets, record.next_used)
+                        mem.get(value.buckets, record.next_used)
                         else (problem)
                             _ = problem
                             fail missing
-                        end)
+                        end
                     next.previous_used = record.previous_used
                     if not replace_value(value.buckets, record.next_used,
                                          next)

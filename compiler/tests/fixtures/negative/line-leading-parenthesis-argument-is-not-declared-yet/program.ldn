@@ -1,0 +1,4 @@
+scaled: (x: u32) -> (r: u32) =
+    y := x
+    (y + 1) * 2
+end scaled

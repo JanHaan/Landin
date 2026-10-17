@@ -72,6 +72,7 @@ package body Landin.Syntax.Forest is
                    Items  => Nodes,
                    Links  => Original.Links,
                    Signature_Links => Original.Signature_Links,
+                   Line_Facts => Original.Line_Facts,
                    Import_Prefix_Length => Original.Import_Prefix_Length));
    end Copy_Add;
 

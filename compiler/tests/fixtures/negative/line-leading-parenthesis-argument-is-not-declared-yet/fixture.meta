@@ -1,0 +1,9 @@
+class: negative
+summary: [1750] lets a `(` that begins a line continue the binding above as a call, so the binding's own name inside it is not declared yet, and the report says the line end made that call
+program: program.ldn
+codes: L0201
+expect: expected.txt
+args: ../tests/fixtures/negative/line-leading-parenthesis-argument-is-not-declared-yet/program.ldn
+status: 1
+constructs: 1750, 1840
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

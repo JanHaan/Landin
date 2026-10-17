@@ -1,0 +1,5 @@
+read, write: atom
+
+count: (modes: []read | write) -> (n: usize) =
+    n = lenof modes
+end count

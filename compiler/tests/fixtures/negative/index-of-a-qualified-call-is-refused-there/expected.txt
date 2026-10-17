@@ -1,4 +1,4 @@
-error[L0010]: an index requires a named place
+error[L0010]: an index requires a named place; bind the value to a name, then index the name
   --> ../tests/fixtures/negative/index-of-a-qualified-call-is-refused-there/main.ldn:4:23
   |
 4 |     b := text.bytes(s)[3..<6]

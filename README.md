@@ -334,7 +334,10 @@ This is the maintained inventory of what the compiler does today:
   flow, lexical `defer` and failure-only `undo`, declared errors, every loop
   and literal family, explicit conversion to a written type such as
   `[]u8(text)`, the enabled scalar conversions, range subtypes and
-  `unchecked` regions. Generics take fixed parameters by compile-time
+  `unchecked` regions. An atom union may be written in place as a
+  binding's, parameter's, return's or field's type, `lenof` measures a field
+  or element path or a call's result, and `else (problem)` recovers a call in
+  an `if` arm as anywhere else. Generics take fixed parameters by compile-time
   substitution; concepts carry a whole-program conformance register. Generic
   calls pass only the evidence their checked bodies use; direct and `any C`
   dispatch share table storage only when their layouts and entries match.
@@ -533,7 +536,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.36 — The recurring parser frictions (planned).**
+**Next roadmap item: R13.35 — Dynamic loading (planned).**
 
 ## Questions, bugs and ideas
 

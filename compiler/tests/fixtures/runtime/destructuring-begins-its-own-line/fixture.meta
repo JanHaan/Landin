@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: [1750] begins a destructuring binding at a `(` that begins a line and whose `)` is followed by `:=`, so it follows a guard's condition or an assignment's value ending in a name rather than continuing that line as a call
+program: main.ldn
+status: 18
+constructs: 0990, 1750, 1810
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

@@ -1,0 +1,4 @@
+lowered: (x: i32) -> (r: i32) =
+    y := x
+    -1
+end lowered

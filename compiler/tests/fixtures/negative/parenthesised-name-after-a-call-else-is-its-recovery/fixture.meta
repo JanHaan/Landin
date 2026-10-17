@@ -1,0 +1,10 @@
+class: negative
+summary: [1820] reads `else (name)` after a call as that call's recovery even in an `if` arm, so a parenthesised name written for the branch's value is reported at its parentheses and written bare, a repair a tool may apply unasked
+program: program.ldn
+codes: L0110
+fixed: program.fixed
+expect: expected.txt
+args: ../tests/fixtures/negative/parenthesised-name-after-a-call-else-is-its-recovery/program.ldn
+status: 1
+constructs: 1030, 1050, 1820
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

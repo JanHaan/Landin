@@ -128,7 +128,7 @@ public prepare_logged: (provider: type is mem.allocator, memory: provider,
                 try vec.push(chain, memory, selected)
             elsif equal(arg, "--every") then
                 only_levels = false
-                mut every: usize = (sample_number(parameter) else (problem)
+                mut every: usize = sample_number(parameter) else (problem)
                     _ = problem
                     inc warnings
                     if problem == bad_encoding then
@@ -140,7 +140,7 @@ public prepare_logged: (provider: type is mem.allocator, memory: provider,
                                      "--every wants a positive number, using 1\n")
                     end if
                     1
-                end)
+                end
                 if every == 0 then every = 1
                     inc warnings
                     try log.note(text.nowhere, diag.error,
@@ -184,10 +184,10 @@ public open_output: (provider: type is mem.allocator, memory: provider,
         fail bad_argument when try world.same_file(value.input, target)
         stream: io.file = try world.open_write(target)
         initial: text_dest = (stream: stream)
-        object := (mem.new(memory, initial) else (problem)
+        object := mem.new(memory, initial) else (problem)
             world.close(stream) else (close_problem) _ = close_problem end
             fail problem
-        end)
+        end
         value.to = any(object)
         value.output = stream
         value.owns_output = true

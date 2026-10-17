@@ -1,0 +1,9 @@
+holder: type = (count: u32, bytes: []u8)
+
+counted: (value: holder) -> (count: u32) =
+    count = value.count
+end counted
+
+measured: (value: holder) -> (total: usize) =
+    total = lenof value.count + lenof counted(value)
+end measured

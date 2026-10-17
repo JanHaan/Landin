@@ -8853,6 +8853,19 @@ package body Landin.Stages.Lowering is
                   if Type_At (Of_Tree, Asked) = Ty.Slice_Value then
                      return Lower_Slice (Of_Tree, Asked, Scope).Length;
                   end if;
+                  --  A call runs whatever its result's shape; a fixed
+                  --  array it returns lands in a temporary, exactly as
+                  --  `_ = call` gives it one, and its length is its type's.
+                  if Syn.Kind (Of_Tree, Asked)
+                    in Syn.Call | Syn.Labeled_Application
+                  then
+                     Lower_Stored_Expression
+                       (Of_Tree, Asked, Scope,
+                        Add_Value_Temporary (Of_Tree, Asked));
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                  end if;
                   declare
                      Length : constant Ty.Magnitude := Ty.Magnitude
                        (Landin.Checking.Array_Length

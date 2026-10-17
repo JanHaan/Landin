@@ -366,6 +366,9 @@
     "runtime/assembly-saved-registers": {
       "mode": "execute"
     },
+    "runtime/atom-union-written-in-place": {
+      "mode": "execute"
+    },
     "runtime/atom-values-cross-the-abi": {
       "mode": "execute"
     },
@@ -766,6 +769,9 @@
     "runtime/destructured-atom-set-result": {
       "mode": "execute"
     },
+    "runtime/destructuring-begins-its-own-line": {
+      "mode": "execute"
+    },
     "runtime/diagnostic-loggers-dispatch": {
       "codes": [
         "L0015"
@@ -1132,6 +1138,9 @@
       "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/lenof-array-literal-is-compile-time": {
+      "mode": "execute"
+    },
+    "runtime/lenof-measures-paths-and-call-results": {
       "mode": "execute"
     },
     "runtime/lenof-named-fixed-arrays": {
@@ -2272,6 +2281,9 @@
       "mode": "execute"
     },
     "runtime/raw-literal-bytes": {
+      "mode": "execute"
+    },
+    "runtime/recovery-binds-its-error-in-an-if-arm": {
       "mode": "execute"
     },
     "runtime/recursive-fibonacci": {

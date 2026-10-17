@@ -503,12 +503,17 @@ On an array the length is a compile-time value; on a slice
 it is a run-time value; on a literal it is compile-time.
 The expressions in a literal measured by lenof are checked for one
 scalar element type but are not evaluated or read.
+lenof measures a name, a field or element through it, or what a call
+returns. A call runs; an array a name or a path reaches is not read,
+because its type holds its length.
 
 ```landin
 w1 := sizeof u32
 a1 := alignof u64
 n1 := lenof grid
 n2 := lenof ([next(), next(), next()]) -- 3; next is not called
+n3 := lenof table.keys                 -- a field
+n4 := lenof read_all(source)           -- read_all is called
 
 ```
 
@@ -1150,6 +1155,11 @@ it back grants no integer operations or conversions.
 compass: type = north | south | east | west
 
 ```
+
+A binding, a parameter, a return or a field may write the union in place,
+and it is the same type as the declared name: `facing: (way: north | south)
+-> (ahead: bool)` takes a `compass` value that is north or south. Inside an
+array, a slice or a pointer the union needs its name.
 
 ### [0650] Distinct type
 
@@ -2366,6 +2376,11 @@ through its ordinary caller-owned storage. A bound error name has the call's
 complete atom set and is visible
 only inside its recovery block. An exhaustive atom `match` may name every atom
 or end with one `_` arm for those left over.
+
+Inside an `if` arm, `else value` after a call is the `if`'s own `else`,
+which is how `if c then a() else b() end if` reads. A recovery there is
+parenthesised, `(open_file(path) else 0)`, or binds the error, which
+`else (e)` always does wherever it is written.
 
 Being an expression, it also works in argument position:
 

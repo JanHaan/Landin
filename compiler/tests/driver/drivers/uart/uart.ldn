@@ -113,8 +113,7 @@ snapshot: (inout r: rx) -> (count: usize) ! overrun | transfer_error | exhausted
     if produced < r.consumed then r.broken = true end if
     fail transfer_error when r.broken
     have := produced -% r.consumed
-    backing := r.buf
-    capacity := lenof backing
+    capacity := lenof r.buf
     if have > u32(capacity) then
         r.lost = true
         r.consumed = produced

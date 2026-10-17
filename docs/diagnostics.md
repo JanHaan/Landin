@@ -161,7 +161,9 @@ import. Project-first root selection cannot change namespace availability.
 The program uses a construct the tour describes and the kernel does not enable
 yet [1830]. The two notes name the tour paragraph and whether the form is a
 recorded boundary, withdrawn with a replacement, or transferred to later work.
-Write the program without it, or with what the note says replaces it.
+Write the program without it, or with what the note says replaces it. A call's
+result is no place, so indexing one is a recorded boundary: bind the result to
+a name, then index the name.
 
 ```landin
 point: type = struct
@@ -835,7 +837,10 @@ first-class signature writes a concrete error set instead of `! ...`. Add the
 atom to the error set, handle or propagate the call, or remove the handling
 from an infallible call. The implicit provider calls in `try for` also
 propagate their declared errors: the enclosing routine must declare or infer
-those atoms, and its caller may recover them through ordinary call `else`.
+those atoms, and its caller may recover them through ordinary call `else`. In
+an `if` arm, `else value` after a call divides the `if` [1820], which leaves
+the call unrecovered: write `(f() else 0)`, or bind the error with
+`else (problem)`.
 
 ```landin
 missing, denied: atom
@@ -867,6 +872,9 @@ A call's result is used in a way its signature does not allow. A result that
 is handed back must be used or discarded with `_ =` [1020], and a call that
 returns none has no value to use, infer from, or discard [1920] [1930], nor
 one for its `else` to yield in place of a result [1030].
+An `if`, `match` or bare `begin` used as a statement takes no value from its
+branches, so a branch that ends with one would drop it; in an `if` arm that
+value is often a call's `else value` the `if` took as its own [1820].
 Destructuring binds the names of a multiple result, each at most once [0990].
 Discard the result explicitly, use a call that returns one, or bind the
 result names the signature declares.

@@ -1,0 +1,4 @@
+read, write: atom
+f: () -> (n: usize) =
+    n = sizeof read | write
+end f
