@@ -1325,6 +1325,94 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Arm64_Float_Registers_Are_Described;
 
+   --  A value that emits no instruction, a constant stored from the zero
+   --  register where it is used, keeps its labels but gets no line row: a
+   --  row covering no instruction is one Darwin's LLDB read as the next
+   --  line's when it placed a breakpoint after a routine's prologue.  No
+   --  `.loc` may be followed at once by its value's closing label.
+   procedure Arm64_Rows_Cover_Instructions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Rows_Cover_Instructions
+     (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+      Source : constant String :=
+        "flagged: (a: i32) -> (r: bool) =" & LF
+        & "copy: i32 = a" & LF
+        & "r = false" & LF
+        & "if copy > 3 then r = true end if end flagged" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "code = 0 if flagged(4) then code = 42 end if end main";
+      procedure One (Target : String);
+
+      procedure One (Target : String) is
+      begin
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Result : Landin.Driver.Outcome;
+         begin
+            Host.Add_File ("main.ldn", Source);
+            Args.Append (Target);
+            Args.Append ("main.ldn");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("out.s");
+            Args.Append ("--debug=full");
+            Args.Append ("--optimize=size");
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, 0, Target & " size debug emission");
+            declare
+               Text : constant String := Host.Written ("out.s");
+               Empty : Natural := 0;
+               Rows : Natural := 0;
+               First : Positive := Text'First;
+               Previous_Row : Boolean := False;
+            begin
+               while First <= Text'Last loop
+                  declare
+                     Last : Natural := First;
+                  begin
+                     while Last <= Text'Last and then Text (Last) /= LF loop
+                        Last := Last + 1;
+                     end loop;
+                     declare
+                        Line : constant String := Text (First .. Last - 1);
+                     begin
+                        if Previous_Row
+                          and then Contains (Line, "debug_after_")
+                        then
+                           Empty := Empty + 1;
+                        end if;
+                        Previous_Row := Line'Length > 5
+                          and then Line (Line'First .. Line'First + 4)
+                            = HT & ".loc";
+                        if Previous_Row then
+                           Rows := Rows + 1;
+                        end if;
+                     end;
+                     First := Last + 1;
+                  end;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Rows > 0, Target & " emits line rows");
+               Landin.Testing.Check_Equal
+                 (Item, Empty, 0,
+                  Target & " rows that cover no instruction");
+               Landin.Testing.Check
+                 (Item, Contains (Text, "xzr"),
+                  Target & " stores the constant from the zero register");
+            end;
+         end;
+      end One;
+   begin
+      One ("--target=linux-arm64");
+      One ("--target=darwin-arm64");
+   end Arm64_Rows_Cover_Instructions;
+
    --  At speed scalar replacement gives each part of the local slice
    --  `rest` a scalar slot of its own, so the variable lives in two places
    --  at once: its location is each piece's followed by DW_OP_piece (0x93)
@@ -1432,6 +1520,9 @@ package body Landin.Tests.Debugging_Suite is
       Landin.Testing.Register
         (Into, "debugging", "arm64 float registers are described",
          Arm64_Float_Registers_Are_Described'Access);
+      Landin.Testing.Register
+        (Into, "debugging", "arm64 line rows cover instructions",
+         Arm64_Rows_Cover_Instructions'Access);
       Landin.Testing.Register
         (Into, "debugging", "module data and slices are described",
          Module_Data_And_Slices_Are_Described'Access);

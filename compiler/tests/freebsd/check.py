@@ -339,7 +339,7 @@ class Lane:
     def build_debugger(self):
         source = HERE / 'debug.ldn'
         lines = {needle: next(i for i, line in enumerate(source.read_text().splitlines(), 1)
-                              if needle in line) for needle in ('result = local + 1', 'result = inner(local)', 'result = ready')}
+                              if needle in line) for needle in ('result = local + 1', 'result = step(local)', 'result = ready')}
         results = []
         for optimize, specialize in PROFILES:
             label = 'debug-' + optimize + '-' + specialize

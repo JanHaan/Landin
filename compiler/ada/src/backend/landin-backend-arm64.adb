@@ -2445,6 +2445,8 @@ package body Landin.Backend.Arm64 is
          References : Use_Counts renames Reference_Data.Data.all;
          Current_Block : Landin.IR.Block_Id := 1;
          Current_Position : Positive := 1;
+         --  Under debugging, the line holding the current value's row.
+         Row : Positive := 1;
          Folded : Address_Fold;
          Folded_Base : Unbounded.Unbounded_String;
          --  The branch a comparison right before it already took, testing
@@ -6312,9 +6314,59 @@ package body Landin.Backend.Arm64 is
                     Natural (Current_Value)) & ":");
                   Put (Dwarf.Source_Line (Debug.all,
                     Landin.IR.Origin_Of (Of_Unit, Item, Current_Value)));
+                  Row := Lines.Last_Index;
                end if;
                Instruction (Current_Value);
                if Debug /= null then
+                  --  A value that emits no instruction, such as a constant
+                  --  stored from the zero register where it is used, keeps
+                  --  the labels its location lists name but no line row of
+                  --  its own: a row covering no instruction is one LLDB's
+                  --  prologue and line lookups read as the next line's.
+                  declare
+                     --  A line without its leading tab or spaces.
+                     function Content (Line : String) return String;
+
+                     function Content (Line : String) return String is
+                        First : Positive := Line'First;
+                     begin
+                        while First <= Line'Last
+                          and then Line (First) in ' ' | ASCII.HT
+                        loop
+                           First := First + 1;
+                        end loop;
+                        return Line (First .. Line'Last);
+                     end Content;
+
+                     Emits : Boolean := False;
+                  begin
+                     for Index in Row + 1 .. Lines.Last_Index loop
+                        declare
+                           Text : constant String := Content
+                             (Unbounded.To_String
+                                (Lines.Element (Index).Text));
+                        begin
+                           if Text'Length > 0
+                             and then Text (Text'First) /= '.'
+                             and then Text (Text'Last) /= ':'
+                           then
+                              Emits := True;
+                              exit;
+                           end if;
+                        end;
+                     end loop;
+                     declare
+                        Text : constant String := Content
+                          (Unbounded.To_String (Lines.Element (Row).Text));
+                     begin
+                        if not Emits
+                          and then Ada.Strings.Fixed.Index (Text, ".loc ")
+                            = Text'First
+                        then
+                           Lines.Delete (Row);
+                        end if;
+                     end;
+                  end;
                   Put (Dwarf.Label_Name (Local_Prefix, "after", Item,
                     Natural (Current_Value)) & ":");
                end if;
