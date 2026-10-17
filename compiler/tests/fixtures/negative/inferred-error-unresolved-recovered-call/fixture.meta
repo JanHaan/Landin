@@ -1,0 +1,9 @@
+class: negative
+summary: a recovered call whose callee names nothing, in a routine whose error set is inferred, reports its unresolved names and nothing else; the language server, which checks such a program, leaves no inference open
+program: program.ldn
+constructs: 0940, 1030, 1860
+codes: L0201, L0201
+expect: expected.txt
+args: ../tests/fixtures/negative/inferred-error-unresolved-recovered-call/program.ldn
+status: 1
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

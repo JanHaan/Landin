@@ -36909,8 +36909,15 @@ package body Landin.Stages.Checking is
                   --  A diagnosed invalid call can leave a recovered error
                   --  type unknown without awaiting any generic key.  Keep
                   --  that source refusal rather than treating the rejected
-                  --  call as an unexplained inference dependency.
-                  if Landin.Diagnostics.Has_Errors (Found) then
+                  --  call as an unexplained inference dependency.  The
+                  --  refusal may be an earlier stage's: the language server
+                  --  checks a program whose only errors are unresolved
+                  --  names, so that its editor answers still have types,
+                  --  and a recovered call whose callee did not resolve has
+                  --  no error set to infer, its refusal already reported.
+                  if Landin.Diagnostics.Has_Errors (Found)
+                    or else Landin.Diagnostics.Has_Errors (Report (Context))
+                  then
                      goto Publish_Diagnostics;
                   end if;
                   raise Landin.Compiler_Defect with

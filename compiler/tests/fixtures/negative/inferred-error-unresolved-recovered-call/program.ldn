@@ -1,0 +1,13 @@
+--  The fuzzer's seed 500673, a mutation of
+--  negative/inferred-error-missing-erased-member: a recovered call whose
+--  callee names nothing, in a routine whose error set is inferred, is two
+--  unresolved names and nothing else, here and in the language server,
+--  which checks such a program and must not find inference left open.
+display: type = concept (t: type)
+end display
+
+consumer: (erased: any display) -> (answer: i32) ! ... =
+    answer = erase+%d.code() else (problem)
+        fail problem
+    end
+end consumer

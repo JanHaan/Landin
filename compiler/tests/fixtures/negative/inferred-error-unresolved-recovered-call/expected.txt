@@ -1,0 +1,13 @@
+error[L0201]: `erase` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/inferred-error-unresolved-recovered-call/program.ldn:10:14
+   |
+10 |     answer = erase+%d.code() else (problem)
+   |              ^^^^^
+  = note: [1860]: a name that is not in scope is a misspelling, not a new binding
+  = help: did you mean `erased`?
+error[L0201]: `d` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/inferred-error-unresolved-recovered-call/program.ldn:10:21
+   |
+10 |     answer = erase+%d.code() else (problem)
+   |                     ^
+  = note: [1860]: a name that is not in scope is a misspelling, not a new binding

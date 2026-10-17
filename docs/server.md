@@ -139,7 +139,10 @@ bindings of other names and checks for hover types. Definition and hover still
 answer in unaffected code. The unresolved name has no definition or type, and
 diagnostics remain the same as a build's resolution diagnostics; any type
 errors found during this extra editor check are not published until the names
-are resolved.
+are resolved. A call whose callee is one of those names has no error set for
+the check to infer: a routine that recovers from it, `! ...` included, is
+left with the build's diagnostics rather than an inference the check cannot
+close, which the session `unresolved-recovered-call` holds the server to.
 
 Anything else is refused as the protocol says: a request the server does not
 offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
