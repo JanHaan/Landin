@@ -194,7 +194,11 @@ class Lane:
         shared = []
         for name in [n.strip() for n in meta.get('c-shared', '').split(',') if n.strip()]:
             library = self.bundle / (label + '-' + Path(name).stem + '.so')
-            self.command([*self.cc, '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
+            # This links, so it keeps LLD, but as `--ld-path`: Clang refuses
+            # `-fuse-ld=` with a path under -Werror as deprecated.
+            linking = [('--ld-path=' + a[len('-fuse-ld='):]) if a.startswith('-fuse-ld=') else a
+                       for a in self.cc]
+            self.command([*linking, '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
                           '-fPIC', '-shared', base / name, '-o', library],
                          label + '-shared-' + Path(name).stem)
             shared.append(library.name)
