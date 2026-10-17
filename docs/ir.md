@@ -28,7 +28,10 @@ The current path is:
 checked source
     -> lowering -> verified IR
     -> evidence specialization -> verified IR
-    -> simplification -> verified IR
+    -> inlining, at speed -> verified IR
+    -> scalar replacement and simplification -> verified IR
+    -> if-conversion -> verified IR
+    -> in-place parameter reads -> verified IR
     -> target layout, allocation and instruction selection
     -> assembly -> platform assembler and linker
 ```
@@ -276,6 +279,28 @@ and C classification. Lowering emits zero carriers in the final call block,
 after source-ordered argument evaluation, so later control-flow expressions
 cannot strand a carrier in a predecessor block.
 
+Under size and speed, `Landin.IR.In_Place` lets the receiving routine read
+such a parameter where its caller keeps it when nothing could tell the
+difference: the routine only reads the parameter, passes its address on only
+as another by-value argument, and nothing it does before its last read can
+write memory outside its own frame. A store through an address or to a module
+datum, an atomic access, an assembly block, an indirect call, a call to an
+import and a direct call to a routine that may do any of those, transitively,
+all could; a whole-unit summary answers the last. A parameter two words wide
+or narrower, a slice among them, is read in place only outside loops, where
+its copy costs more than reading through a carrier that may sit in memory. A
+call's address of the parameter may pass through a slot lowering keeps it in
+across later arguments, and at speed a read through that slot, which is how
+an inlined copy reads a parameter its caller passed on, is a read of the
+parameter. The parameter's slot then
+becomes an address slot holding the carrier, reached as an `inout` place is,
+and keeps its declaration so a debugger still shows the value. Its former
+shaped slot stays as its home: a zero carrier clears that home, and the
+parameter addresses it. The same pass gives a call the storage of a slice or
+`any` argument directly, instead of lowering's fresh copy, when nothing
+between that copy and the call can write memory. `--optimize none` keeps
+every copy.
+
 Variant selection retains the selected case identity. Each backend derives
 its padded payload extent, clears that payload and writes the tag; a bare
 case writes only the tag. Inactive bytes and layout padding are unspecified.
@@ -354,8 +379,9 @@ runtime traps such as a failed arithmetic check.
 
 Verification runs in release builds as well as debug builds. It checks the
 completed unit before backend use, and the current specialization and
-simplification passes verify their inputs and outputs. It checks storage
-runs and identities before dereferencing them, then block structure,
+simplification passes verify their inputs and outputs; scalar replacement
+runs first inside simplification, whose output verification covers both. It
+checks storage runs and identities before dereferencing them, then block structure,
 reachability, operand order, type agreement, signatures, shapes, paths,
 evidence and static images. Pointer-provenance verification indexes stores
 and reads, then follows uninitialized paths for each read slot, retaining the
@@ -381,11 +407,71 @@ Specialization currently proves incoming static evidence where it can and
 replaces eligible indirect dispatch with direct calls. It retains existing
 instance entries and the working indirect fallback for unknown or exposed
 entries. Specialization creates no new semantic instances: generics and
-dynamic dispatch must already work without it.
+dynamic dispatch must already work without it. Its profitability policy,
+D211's, charges an instance's weighted operations as growth under size and
+none, where unspecialized instances can share one body; under speed a
+rewrite inside an existing instance counts no growth. An instance is not an
+export: a public template gives its instances no symbol of their own, so
+only a function value, an image or an evidence entry exposes one.
+
+At `--optimize speed`, `Landin.IR.Inlining` then replaces a direct call
+to a small routine with a copy of its body (D339). The routine must have a
+body, no exposed address, the ordinary convention and Landin's own
+transport, and weigh at most a bound of those weighted operations as
+lowering made it; the copy's own calls stay calls, and a routine grows by at
+most the larger of a fixed floor and its own weight, calls inside loops
+first. The call's block ends by storing each argument into the copy of its
+parameter, copying or clearing a by-value aggregate as the routine's entry
+would, or reading it where the caller keeps it when the routine only reads
+it and nothing can write that storage while the copy runs. A parameter the
+caller passes as a constant is read as that constant, which is what lets
+simplification fold the copy. The copy's blocks come next in the item, its
+one return last, and the rest of the caller's block after them; values that
+crossed the call wait in slots, constants are made again, and the call's
+result is read from the copy's result slot. A routine that can fail is
+copied only at lowering's failure test after its call: its `fail` stores
+the atom into the call's status slot and jumps to the failing block, and
+its return to the other. Each copied block, slot and source alias names
+its `Inline_Site` — the routine, the call's origin and the call's scope —
+and every copied instruction keeps its own origin, so its traps and line
+rows are the routine's. Debug emission turns a site into DWARF's inlined
+subroutine. Cortex-M0, whose backend does not read the objective, is left
+alone.
+
+Scalar replacement runs at size and speed, as the first step of
+simplification, which verifies the two passes' output in one walk; at speed
+that is after inlining, so an inlined copy's slots are split like the
+caller's own, and each piece keeps its slot's inline site. A slot
+holding a slice, or a record or fixed array of at most four scalars, is
+otherwise only reachable through field loads, field stores and whole copies,
+which neither forwarding, the proofs of checks nor a backend's register
+allocation sees through. When every use of a local slot names one of its
+parts or copies or clears it whole, the pass gives each part a scalar slot
+of its own: part accesses become ordinary loads and stores, a whole copy one
+load and store per part, and a clear one store of zero per part. A taken
+address, an internal address carrier, a partial copy, a nested path, a
+routine's result slot or a source alias keeps the slot whole; D94's callee
+copy then still reads complete storage. A parameter the routine never writes
+stays whole as its caller's copy arrived; at speed each part a loop reads is
+copied out of it once on entry, where a backend can keep it in a register.
+The copy's one store comes first, so a check's proof still sees the
+parameter's part through it, and the parameter, now read only on entry, may
+then be read in place. Parts with packing, atom codes or an erased receiver
+are left alone, so every load the pass rewrites carries no check and no trap
+moves; a slice's bounds checks read its length from the new scalar slot.
+Size keeps declared variables in their frame cells and splits only compiler
+temporaries. The analysis is one scan over the instructions and slots and
+one strongly connected component walk over the blocks; the rebuild copies
+each instruction once and adds at most one load and one store per moved
+part.
 
 Simplification folds supported constants, forwards eligible local slot
 values, simplifies known branches and removes unused computations when
-their effects allow it. Values remain block-local. Forwarding hands a load
+their effects allow it. A read of a module value that is not `mut` folds to
+the static image every backend emits for it, measured for the selected
+target, and a measurement [0370] asks for folds the same way; a module
+value defined outside the program, given a link name or placed keeps its
+read. Values remain block-local. Forwarding hands a load
 the stored value itself, so floating-point and pointer slots forward too:
 the bits, and a pointer's pointee, are the ones the store verified. A
 compiler temporary whose loads were all forwarded, such as the slot that
@@ -422,6 +508,46 @@ such as `x + 0`, `x * 1`, `x & x` and `x == x` reduce to their operand or
 answer; none is applied to a float, where `-0.0 + 0.0` and a NaN's
 comparison with itself say otherwise.
 
+A check can also be proved across blocks. A comparison whose branch is the
+only way into a block bounds there the slots it compared: `at` in
+`while at > 0 do dec at`, `left` and `right` in
+`while left < right do inc left dec right`, and `i` in
+`for i in first..<lenof s do s[i]`, whose end is a slot stored once, in a
+block that dominates the loop, from the length of a slice nothing in the
+routine writes. The bound holds in the block's whole subtree of the
+dominator tree unless a store to one of those slots can reach a use there
+without passing the block again; otherwise it holds only in the block
+itself, before the block stores to them. A value's type and what produced
+it bound it too, so a `u8` widened to `usize` is always inside a `[256]`
+array, and an index that passed a fixed array's check in a block passes any
+at least as long later in that block. Such a check cannot fail, so its
+instruction keeps its operation and is marked unchecked, which every
+backend reads as no check edge. The flag set by an `unchecked` region is
+never read as a fact. The dominator tree is Lengauer and Tarjan's, in
+O(E log V) work, and each bound then costs a binary search over the blocks
+the stores to its slots can reach.
+
+Under size and speed, `Landin.IR.If_Conversion` then turns some branches
+into choices (D338). A block that ends in a branch whose arms meet again,
+each arm at most one block, computes both arms itself when neither can trap,
+call or touch anything but a private slot: a scalar that nothing names but
+its own loads and stores. It picks each stored slot's value with `Choose`, an
+operation lowering never makes, stores it, and jumps to where the arms met;
+nothing reaches the arms' blocks then, and compaction drops them. A checked
+`x = x + k` in an arm whose other side leaves `x` alone qualifies too, as
+`x + (if c then k else 0)`, because that addition traps exactly when the arm
+would have. So `if a < b then inc n end if` becomes a comparison, a choice of
+one or zero and an addition, with no branch. A check, a call, a memory access
+or a division in an arm keeps the branch, and so does a condition computed
+from a slot an arm stores, such as `inc at if at == n then at = 0 end if` in
+a loop, where each choice would wait on the one before it. Each arm is held to six operations
+besides constants, loads and stores, and the work is linear in the routine.
+x86-64 selects a choice as `cmov` or `setcc` and arm64 as `csel`, `fcsel` or
+`cset`, each on the flags a comparison right before it leaves when that is
+the comparison's only use. RV64 and Cortex-M0 have no conditional move: they
+use the condition's own zero or one for a choice of one or zero and branch
+around one load for any other.
+
 These passes expose useful facts to the backend while leaving register
 allocation and machine instruction selection there. The current controls and
 defaults are documented in the
@@ -441,7 +567,10 @@ a slot, a datum, a field, a pointer's referent or an array's element — so a
 debugger can present it as an element pointer and a length. Nothing that
 executes reads that element: it is not pointee evidence, no layout reads it,
 shape comparison ignores it, and the verifier neither requires nor trusts it.
-Every named module datum is a variable at its own symbol.
+Every named module datum is a variable at its own symbol. A declared slot
+that scalar replacement split keeps its declaration and records its first
+piece; its location is then each piece's location followed by `DW_OP_piece`,
+in address order with padding left empty, available where every piece is.
 
 `Landin.IR.Dump` produces deterministic text for inspection and regression
 comparison. `compiler/tests/lowering.ir` records the positive fixture corpus
@@ -497,11 +626,15 @@ the target contracts added no opcode or serialized IR field; the existing comple
 
 
 The shared arm64 backend gives every routine an x29/x30 frame record and
-keeps source slots in fixed frame homes. With optimization disabled, scalar
-IR values also have separate homes. Size and speed modes reuse nonoverlapping
-scalar homes; speed mode can keep eligible nonfloating temporaries in unused
-x19-x28 registers. Declared assembly registers remain excluded, addressable
-values stay in storage, and promoted registers are saved and described by CFI.
+keeps source slots in fixed frame homes except at speed. Without
+optimization, scalar IR values also have separate homes. Size and speed
+modes reuse nonoverlapping scalar homes. At speed, slots and values whose
+interval no call or assembly crosses take x0-x7 or, for floats, d18-d31,
+neither of which costs a save; a parameter keeps the argument register it
+arrives in. Where enough scalar traffic pays for a save, x19-x28 and, for
+floats, d8-d15 hold the rest, including locations live across a call.
+Declared assembly registers remain excluded, addressable values stay in
+storage, and saved registers are described by CFI.
 Native Landin calls use integer bit carriers, address-based aggregate copies
 and a separate w8 failure carrier. The Darwin C planner maps the same verified
 signatures onto Apple's independent register banks, HFA rules, indirect
@@ -563,7 +696,8 @@ routine plus the blocks each slot is live into, bounded by a multiple of the
 routine past which the remaining slots get the whole routine. x86-64 offers
 rbx and r12-r14 to slots over these intervals, heaviest first by references
 weighted with loop depth, so slots whose intervals are disjoint share a
-register; arm64 does the same with x19-x24 at speed. A slot that is an
+register; arm64 does the same at speed with x0-x7 and d18-d31 for intervals
+no call crosses and x19-x24 and d8-d15 for the rest. A slot that is an
 address an operation reaches storage through counts each such reach as a
 read and may hold a register too. A load whose value dies before its slot is
 next stored is the slot's register. In a routine without assembly, values

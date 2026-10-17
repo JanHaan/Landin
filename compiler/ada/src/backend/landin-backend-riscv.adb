@@ -3005,6 +3005,44 @@ package body Landin.Backend.RiscV is
                      Predicate ("x5", Condition);
                      Store_Value (Value);
                   end;
+               when Landin.IR.Choose =>
+                  --  D338.  The base ISA has no conditional move: a choice
+                  --  of one or zero is the condition's own zero or one,
+                  --  and any other keeps a branch around one load.
+                  declare
+                     use type Landin.Types.Magnitude;
+
+                     function Is_Number
+                       (Which : Landin.IR.Value_Id;
+                        Of_Value : Landin.Types.Magnitude) return Boolean
+                       is (Landin.IR.Op_Of (Of_Unit, Item, Which)
+                             = Landin.IR.Number
+                           and then Kind (Value) in Landin.Types.Integer_Name
+                           and then Landin.IR.Number_Of
+                             (Of_Unit, Item, Which) = Of_Value
+                           and then (Of_Value = 0
+                                     or else not Landin.IR.Is_Negated
+                                       (Of_Unit, Item, Which)));
+                     Done : constant String := Fresh;
+                  begin
+                     if Is_Number (Operand (2), 1)
+                       and then Is_Number (Operand (3), 0)
+                     then
+                        Load_Value (Operand (1));
+                     elsif Is_Number (Operand (2), 0)
+                       and then Is_Number (Operand (3), 1)
+                     then
+                        Load_Value (Operand (1));
+                        Emit ("xori x5, x5, 1");
+                     else
+                        Load_Value (Operand (1), "x7");
+                        Load_Value (Operand (2));
+                        Emit ("bnez x7, " & Done);
+                        Load_Value (Operand (3));
+                        Put (Done & ":");
+                     end if;
+                     Store_Value (Value);
+                  end;
                when Landin.IR.Range_Check =>
                   Load_Value (Operand (1));
                   Extend ("x5", Kind (Value));
@@ -3412,6 +3450,35 @@ package body Landin.Backend.RiscV is
                   Aggregate : constant Boolean := Landin.IR.Is_Aggregate
                     (Of_Unit, Item, Slot)
                     or else Landin.IR.Is_Array (Of_Unit, Item, Slot);
+                  Home : constant Landin.IR.Slot_Id :=
+                    Landin.IR.In_Place_Home (Of_Unit, Item, Slot);
+
+                  --  The unit a shaped slot moves by.  The carrier
+                  --  addresses storage aligned for this shape (docs/ir.md)
+                  --  and the slot is fresh, so an aligned whole-unit
+                  --  extent moves by words.
+                  function Width_Of
+                    (Shaped : Landin.IR.Slot_Id;
+                     Bytes : Landin.Targets.Byte_Count)
+                     return Landin.Targets.Byte_Count;
+
+                  function Width_Of
+                    (Shaped : Landin.IR.Slot_Id;
+                     Bytes : Landin.Targets.Byte_Count)
+                     return Landin.Targets.Byte_Count
+                  is
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Aggregate_Extent
+                       (Of_Unit, Item, Shaped, Facts, Size, Alignment);
+                     if Alignment >= 8 and then Bytes mod 8 = 0 then
+                        return 8;
+                     elsif Alignment >= 4 and then Bytes mod 4 = 0 then
+                        return 4;
+                     end if;
+                     return 1;
+                  end Width_Of;
                begin
                   if Index <= 8 then
                      Emit ("mv x6, x" & Trimmed (Natural'Image (Index + 9)));
@@ -3429,20 +3496,9 @@ package body Landin.Backend.RiscV is
                           Whole_Clear_Extent
                             ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
                              Landin.IR.No_Path_Steps);
-                        Size : Landin.Targets.Byte_Count;
-                        Alignment : Landin.Targets.Byte_Alignment;
-                        Width : Landin.Targets.Byte_Count := 1;
+                        Width : constant Landin.Targets.Byte_Count :=
+                          Width_Of (Slot, Bytes);
                      begin
-                        Landin.Backend.Aggregate_Extent
-                          (Of_Unit, Item, Slot, Facts, Size, Alignment);
-                        --  The carrier addresses storage aligned for this
-                        --  shape (docs/ir.md) and the slot is fresh, so an
-                        --  aligned whole-unit extent moves by words.
-                        if Alignment >= 8 and then Bytes mod 8 = 0 then
-                           Width := 8;
-                        elsif Alignment >= 4 and then Bytes mod 4 = 0 then
-                           Width := 4;
-                        end if;
                         Frame_Address (Slot_Offset (Layout, Slot), "x5");
                         Emit ("beqz x6, " & Zero_Label);
                         if Width > 1 then
@@ -3461,6 +3517,34 @@ package body Landin.Backend.RiscV is
                      end;
                   else
                      Store_Slot (Slot, "x6");
+                  end if;
+
+                  --  Landin.IR.In_Place's parameter is an address slot,
+                  --  stored above like a scalar, through which the body
+                  --  reads its caller's storage.  D97's zero carrier still
+                  --  clears the parameter's own home, which the parameter
+                  --  then addresses.
+                  if Home /= Landin.IR.No_Slot then
+                     declare
+                        Done_Label : constant String := Fresh;
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Whole_Clear_Extent
+                            ((Kind => Landin.IR.Frame_Slot, Slot => Home), 0,
+                             Landin.IR.No_Path_Steps);
+                        Width : constant Landin.Targets.Byte_Count :=
+                          Width_Of (Home, Bytes);
+                     begin
+                        Emit ("bnez x6, " & Done_Label);
+                        Frame_Address (Slot_Offset (Layout, Home), "x5");
+                        if Width > 1 then
+                           Move_Words (Bytes, Width, Copy => False);
+                        else
+                           Zero_Bytes (Bytes);
+                        end if;
+                        Frame_Address (Slot_Offset (Layout, Home), "x6");
+                        Store_Slot (Slot, "x6");
+                        Put (Done_Label & ":");
+                     end;
                   end if;
                end;
             end loop;
@@ -4002,6 +4086,7 @@ package body Landin.Backend.RiscV is
                         | Landin.IR.Load_Variant_Field
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
+                        | Landin.IR.Choose
                         | Landin.IR.Jump | Landin.IR.Branch
                         | Landin.IR.Fail | Landin.IR.Halt =>
                         --  [1940] admits none of these in a module value,

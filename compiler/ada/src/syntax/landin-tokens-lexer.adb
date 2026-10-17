@@ -29,30 +29,61 @@ package body Landin.Tokens.Lexer is
 
    function Keyword_Kind (Run : String) return Token_Kind;
 
+   --  The reserved literals' images without their `KW_`, made once when
+   --  the lexer is elaborated rather than on every probe of every name.
+   --  A literal longer than the room raises Constraint_Error then, so the
+   --  room is also a bound no reserved word exceeds.
+   Image_Room : constant := 32;
+
+   type Word_Image is record
+      Letters : String (1 .. Image_Room) := [others => ' '];
+      Length  : Natural := 0;
+   end record;
+
+   function Image_Of (Word : Reserved_Word) return Word_Image;
+
+   function Image_Of (Word : Reserved_Word) return Word_Image is
+      Image   : constant String := Word'Image;
+      Letters : constant String := Image (Image'First + 3 .. Image'Last);
+      Result  : Word_Image;
+   begin
+      Result.Letters (1 .. Letters'Length) := Letters;
+      Result.Length := Letters'Length;
+      return Result;
+   end Image_Of;
+
+   Word_Images : constant array (Reserved_Word) of Word_Image :=
+     [for Word in Reserved_Word => Image_Of (Word)];
+
    function Keyword_Kind (Run : String) return Token_Kind is
       --  The reserved literals in Token_Kind are alphabetical.  Compare
       --  against their images so the spelling still lives only in the enum.
-      Upper : constant String := Ada.Characters.Handling.To_Upper (Run);
       Left  : Integer := Reserved_Word'Pos (Reserved_Word'First);
       Right : Integer := Reserved_Word'Pos (Reserved_Word'Last);
    begin
-      while Left <= Right loop
-         declare
-            Middle : constant Integer := Left + (Right - Left) / 2;
-            Word   : constant Reserved_Word := Reserved_Word'Val (Middle);
-            Image  : constant String := Word'Image;
-            Letters : constant String :=
-              Image (Image'First + 3 .. Image'Last);
-         begin
-            if Upper = Letters then
-               return Word;
-            elsif Upper < Letters then
-               Right := Middle - 1;
-            else
-               Left := Middle + 1;
-            end if;
-         end;
-      end loop;
+      if Run'Length > Image_Room then
+         return Identifier;
+      end if;
+      declare
+         Upper : constant String := Ada.Characters.Handling.To_Upper (Run);
+      begin
+         while Left <= Right loop
+            declare
+               Middle  : constant Integer := Left + (Right - Left) / 2;
+               Word    : constant Reserved_Word := Reserved_Word'Val (Middle);
+               Image   : Word_Image renames Word_Images (Word);
+               Letters : String renames Image.Letters (1 .. Image.Length);
+            begin
+               if Upper = Letters then
+                  return Word;
+               elsif Upper < Letters then
+                  Right := Middle - 1;
+               else
+                  Left := Middle + 1;
+               end if;
+            end;
+         end loop;
+      end;
 
       return Identifier;
    end Keyword_Kind;

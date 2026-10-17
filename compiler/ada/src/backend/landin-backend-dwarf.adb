@@ -614,34 +614,160 @@ package body Landin.Backend.Dwarf is
          end case;
       end Emit_Type;
 
-      procedure Routine
-        (Item : Item_Id; Plan : Placement; Frame_Plan : Frame);
-      procedure Routine
-        (Item : Item_Id; Plan : Placement; Frame_Plan : Frame) is
-         Availability : Debug_Locations.Analysis :=
-           Debug_Locations.Prepare (Of_Unit, Item);
-         Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
-         Decl : constant Declaration_Id :=
+      --  The scope a routine's own parameters and locals hang from: the
+      --  signature scope above its first block.
+      function Signature_Root (Item : Item_Id) return Scope_Id;
+      function Signature_Root (Item : Item_Id) return Scope_Id is
+         Root : Scope_Id := Scope_Of (Of_Unit, Item, First_Block);
+      begin
+         while Root /= Landin.Resolution.No_Scope
+           and then Landin.Resolution.Sort_Of (Meanings, Root)
+             /= Landin.Resolution.Signature
+         loop
+            Root := Landin.Resolution.Enclosing (Meanings, Root);
+         end loop;
+         return Root;
+      end Signature_Root;
+
+      function Routine_Name (Item : Item_Id) return String is
+        (if (if Generic_Template_Of (Of_Unit, Item) /= No_Declaration
+             then Generic_Template_Of (Of_Unit, Item)
+             else Declares (Of_Unit, Item)) = No_Declaration
+         then Symbol (Item)
+         else Decl_Name
            (if Generic_Template_Of (Of_Unit, Item) /= No_Declaration
             then Generic_Template_Of (Of_Unit, Item)
-            else Declares (Of_Unit, Item));
-         package Index_Vectors is new Ada.Containers.Vectors
-           (Positive, Positive);
-         type Scope_Group is record
-            Scope : Scope_Id;
-            Slots, Aliases, Children : Index_Vectors.Vector;
-         end record;
-         package Scope_Vectors is new Ada.Containers.Vectors
-           (Positive, Scope_Group);
-         package Scope_Maps is new Ada.Containers.Ordered_Maps
-           (Scope_Id, Positive);
-         Groups : Scope_Vectors.Vector;
+            else Declares (Of_Unit, Item)));
+
+      --  D339: a routine an inlined copy names is described once more,
+      --  abstractly (DWARF4 3.3.8.1): its name, its parameters, locals and
+      --  lexical blocks with their names and types and no address.  Every
+      --  copy is a DW_TAG_inlined_subroutine whose entries refer to these
+      --  for what they are and say only where they are.  The routine's own
+      --  out-of-line description is the one it had.
+      function Abstract_Label
+        (Callee : Item_Id; Kind : String := ""; Index : Natural := 0)
+         return String is
+        (Prefix & "debug_abstract_" & N (Natural (Callee))
+         & (if Kind = "" then "" else "_" & Kind & "_" & N (Index)));
+
+      Abstract_Wanted : array (1 .. Item_Count (Of_Unit)) of Boolean :=
+        [others => False];
+
+      function Has_Inlined_Copies return Boolean is
+        (for some Index in 1 .. Item_Count (Of_Unit) =>
+           Kind_Of (Of_Unit, Item_Id (Index)) = Landin.IR.Routine
+           and then Inline_Site_Count (Of_Unit, Item_Id (Index)) > 0);
+
+      Inlined_Copies : constant Boolean := Has_Inlined_Copies;
+
+      --  A slot's presented type.
+      function Slot_Type (Item : Item_Id; Slot : Slot_Id) return Positive;
+      function Slot_Type (Item : Item_Id; Slot : Slot_Id) return Positive is
+         Shape : Field_Shape;
+      begin
+         if Is_Address (Of_Unit, Item, Slot) then
+            Shape := Address_Shape (Of_Unit, Item, Slot);
+         elsif Is_Array (Of_Unit, Item, Slot) then
+            Shape := Whole_Slot_Array_Shape (Of_Unit, Item, Slot);
+         elsif Is_Aggregate (Of_Unit, Item, Slot) then
+            Shape := (Kind => Aggregate_Field_Shape,
+                      Nominal => Nominal_Of (Of_Unit, Item, Slot),
+                      others => <>);
+         else
+            Shape := (Element => Type_Of (Of_Unit, Item, Slot),
+                      Pointee => Pointee_Of (Of_Unit, Item, Slot),
+                      others => <>);
+         end if;
+         return (if Shape.Kind = Aggregate_Field_Shape
+                   and then Shape.Nominal = No_Nominal_Type
+                   and then not Is_Address (Of_Unit, Item, Slot)
+                 then Intern ((Shape => Shape, Item => Item,
+                              Slot => Slot, others => <>))
+                 else Shape_Type (Shape));
+      end Slot_Type;
+
+      --  What a source alias presents, as Alias_Variables reaches it.
+      function Alias_Shape
+        (Item : Item_Id; Index : Positive) return Field_Shape;
+      function Alias_Shape
+        (Item : Item_Id; Index : Positive) return Field_Shape
+      is
+         Alias : constant Source_Alias :=
+           Nth_Source_Alias (Of_Unit, Item, Index);
+         Shape : Field_Shape;
+      begin
+         case Alias.Place.Kind is
+            when Module_Datum =>
+               if Result_Of (Of_Unit, Alias.Place.Datum)
+                 = Landin.Types.Fixed_Array
+               then
+                  Shape := Whole_Array_Shape (Of_Unit, Alias.Place.Datum);
+                  if Alias.Field > 0 then
+                     Shape := Array_Element_Shape (Of_Unit, Shape);
+                  end if;
+               else
+                  Shape := Nth_Field_Shape
+                    (Of_Unit, Alias.Place.Datum, Alias.Field);
+               end if;
+            when Frame_Slot =>
+               if Alias.Field > 0 then
+                  Shape := (if Is_Array (Of_Unit, Item, Alias.Place.Slot)
+                            then Slot_Array_Element_Shape
+                              (Of_Unit, Item, Alias.Place.Slot)
+                            else Nth_Slot_Field_Shape
+                              (Of_Unit, Item, Alias.Place.Slot,
+                               Alias.Field));
+               elsif Is_Aggregate (Of_Unit, Item, Alias.Place.Slot) then
+                  Shape := (Kind => Aggregate_Field_Shape,
+                            Nominal => Nominal_Of
+                              (Of_Unit, Item, Alias.Place.Slot),
+                            others => <>);
+               else
+                  Shape := Whole_Slot_Array_Shape
+                    (Of_Unit, Item, Alias.Place.Slot);
+               end if;
+            when Runtime_Address =>
+               Shape := Address_Shape (Of_Unit, Item, Alias.Place.Address);
+               if Alias.Field > 0 then
+                  Shape := Shape_At
+                    (Of_Unit, Shape,
+                     [1 => (Part_Position (Alias.Field), 0)]);
+               end if;
+         end case;
+         return Shape_At
+           (Of_Unit, Shape, Source_Alias_Path (Of_Unit, Item, Index));
+      end Alias_Shape;
+
+      function Is_Parameter (Item : Item_Id; Slot : Slot_Id) return Boolean
+        is (for some Index in 1 .. Parameter_Count (Of_Unit, Item) =>
+              Nth_Parameter (Of_Unit, Item, Index) = Slot);
+
+      package Index_Vectors is new Ada.Containers.Vectors
+        (Positive, Positive);
+      type Scope_Group is record
+         Scope : Scope_Id;
+         Slots, Aliases, Inlines, Children : Index_Vectors.Vector;
+      end record;
+      package Scope_Vectors is new Ada.Containers.Vectors
+        (Positive, Scope_Group);
+      package Scope_Maps is new Ada.Containers.Ordered_Maps
+        (Scope_Id, Positive);
+
+      --  The lexical scopes below Root that hold a declared slot or alias
+      --  of Item belonging to Site (zero: Item's own), and, for Item's
+      --  own, the scopes its inlined copies were called from.  Group 1 is
+      --  Root.
+      procedure Group_Scopes
+        (Item : Item_Id; Site : Natural; Root : Scope_Id;
+         Groups : in out Scope_Vectors.Vector;
+         With_Copies : Boolean);
+      procedure Group_Scopes
+        (Item : Item_Id; Site : Natural; Root : Scope_Id;
+         Groups : in out Scope_Vectors.Vector;
+         With_Copies : Boolean)
+      is
          Group_Indices : Scope_Maps.Map;
-         function Has_Trap (Value : Value_Id) return Boolean is
-           (Trapped /= null and then Trapped (Item, Value));
-         Root : Scope_Id := Scope_Of (Of_Unit, Item, First_Block);
-         Parameters : array (1 .. Slot_Count (Of_Unit, Item)) of Boolean :=
-           [others => False];
 
          procedure Add_Scope_Path (From : Scope_Id);
          procedure Add_Scope_Path (From : Scope_Id) is
@@ -656,6 +782,160 @@ package body Landin.Backend.Dwarf is
                Scope := Landin.Resolution.Enclosing (Meanings, Scope);
             end loop;
          end Add_Scope_Path;
+      begin
+         Groups.Append (Scope_Group'(Scope => Root, others => <>));
+         Group_Indices.Insert (Root, 1);
+         for Index in 1 .. Slot_Count (Of_Unit, Item) loop
+            declare
+               Binding : constant Declaration_Id :=
+                 Declares (Of_Unit, Item, Slot_Id (Index));
+            begin
+               if Binding /= No_Declaration
+                 and then Inlined_At (Of_Unit, Item, Slot_Id (Index)) = Site
+               then
+                  declare
+                     Scope : constant Scope_Id :=
+                       Landin.Resolution.Scope_Of (Meanings, Binding);
+                  begin
+                     Add_Scope_Path (Scope);
+                     if Group_Indices.Contains (Scope) then
+                        Groups.Reference
+                          (Group_Indices.Element (Scope)).Slots.Append
+                            (Index);
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+         for Index in 1 .. Source_Alias_Count (Of_Unit, Item) loop
+            if Alias_Inlined_At (Of_Unit, Item, Index) = Site then
+               declare
+                  Scope : constant Scope_Id := Landin.Resolution.Scope_Of
+                    (Meanings, Nth_Source_Alias
+                       (Of_Unit, Item, Index).Binding);
+               begin
+                  Add_Scope_Path (Scope);
+                  if Group_Indices.Contains (Scope) then
+                     Groups.Reference
+                       (Group_Indices.Element (Scope)).Aliases.Append (Index);
+                  end if;
+               end;
+            end if;
+         end loop;
+         if With_Copies then
+            for Copy in 1 .. Inline_Site_Count (Of_Unit, Item) loop
+               declare
+                  Scope : constant Scope_Id :=
+                    Nth_Inline_Site (Of_Unit, Item, Copy).Scope;
+               begin
+                  Add_Scope_Path (Scope);
+                  Groups.Reference
+                    ((if Group_Indices.Contains (Scope)
+                      then Group_Indices.Element (Scope) else 1)).Inlines
+                    .Append (Copy);
+               end;
+            end loop;
+         end if;
+         for Index in 2 .. Natural (Groups.Length) loop
+            declare
+               Parent : constant Scope_Id := Landin.Resolution.Enclosing
+                 (Meanings, Groups.Element (Index).Scope);
+            begin
+               if Group_Indices.Contains (Parent) then
+                  Groups.Reference
+                    (Group_Indices.Element (Parent)).Children.Append
+                      (Index);
+               end if;
+            end;
+         end loop;
+      end Group_Scopes;
+
+      procedure Routine
+        (Item : Item_Id; Plan : Placement; Frame_Plan : Frame);
+      procedure Routine
+        (Item : Item_Id; Plan : Placement; Frame_Plan : Frame) is
+         Availability : Debug_Locations.Analysis :=
+           Debug_Locations.Prepare (Of_Unit, Item);
+         Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
+         function Has_Trap (Value : Value_Id) return Boolean is
+           (Trapped /= null and then Trapped (Item, Value));
+         Parameters : array (1 .. Slot_Count (Of_Unit, Item)) of Boolean :=
+           [others => False];
+
+         --  The routine a copy is of; Item itself for Site zero.
+         function Origin_Item (Site : Natural) return Item_Id is
+           (if Site = 0 then Item
+            else Nth_Inline_Site (Of_Unit, Item, Site).Callee);
+
+         --  The address ranges of Item's blocks belonging to Site whose
+         --  scope is inside Scope (any scope when Scope is No_Scope), each
+         --  with the traps laid out after the body for them.  A lexical
+         --  block of Item's own holds the copies called inside it.
+         procedure Range_List
+           (Name : String; Site : Natural; Scope : Scope_Id);
+         procedure Range_List
+           (Name : String; Site : Natural; Scope : Scope_Id) is
+         begin
+            --  Entries below contain linked addresses, not offsets
+            --  from a containing routine's low PC.  Select base zero
+            --  explicitly. ELF has no single CU low PC; Darwin also
+            --  supplies a relocatable base for dsymutil's rewrite.
+            US.Append (Ranges, Name & ":" & LF
+              & HT & ".quad -1,0" & LF);
+            for B in 1 .. Block_Count (Of_Unit, Item) loop
+               declare
+                  Block : constant Block_Id := Block_Id (B);
+                  Count : constant Natural := Length (Of_Unit, Item, Block);
+               begin
+                  if Count > 0
+                    and then
+                      (if Inlined_At (Of_Unit, Item, Block) = Site
+                       then Scope = Landin.Resolution.No_Scope
+                         or else Debug_Locations.Within
+                           (Meanings, Scope_Of (Of_Unit, Item, Block), Scope)
+                       else Site = 0
+                         and then Scope /= Landin.Resolution.No_Scope
+                         and then Debug_Locations.Within
+                           (Meanings,
+                            Nth_Inline_Site
+                              (Of_Unit, Item,
+                               Inlined_At (Of_Unit, Item, Block)).Scope,
+                            Scope))
+                  then
+                     US.Append (Ranges, HT & ".quad "
+                       & L ("value", Item, Natural (Nth_Value
+                         (Of_Unit, Item, Block, 1))) & LF
+                       & HT & ".quad " & L ("after", Item,
+                         Natural (Nth_Value (Of_Unit, Item, Block, Count)))
+                       & LF);
+                     for P in 1 .. Count loop
+                        declare
+                           V : constant Natural := Natural
+                             (Nth_Value (Of_Unit, Item, Block, P));
+                        begin
+                           if Has_Trap (Value_Id (V)) then
+                              US.Append (Ranges, HT & ".quad "
+                                & L ("trap", Item, V) & LF
+                                & HT & ".quad " & L ("trapped", Item, V)
+                                & LF);
+                           end if;
+                        end;
+                     end loop;
+                  end if;
+               end;
+            end loop;
+            US.Append (Ranges, HT & ".quad 0,0" & LF);
+         end Range_List;
+
+         --  ELF startup objects may contribute to these sections before
+         --  us. A section relocation carries the final linked offset;
+         --  subtracting our own start would address another object.
+         procedure Ranges_Attribute (Name : String);
+         procedure Ranges_Attribute (Name : String) is
+         begin
+            Put (HT & ".long " & Name
+              & (if Mach_O then "-" & Prefix & "debug_ranges" else ""));
+         end Ranges_Attribute;
 
          --  Overwriter, when not No_Value, is a value Live leaves out
          --  whose first instruction still finds the location: the range
@@ -743,8 +1023,10 @@ package body Landin.Backend.Dwarf is
             US.Append (Locations, HT & ".quad 0,0" & LF);
          end Location_List;
 
-         procedure Alias_Variables (Indices : Index_Vectors.Vector);
-         procedure Alias_Variables (Indices : Index_Vectors.Vector) is
+         procedure Alias_Variables
+           (Indices : Index_Vectors.Vector; Site : Natural);
+         procedure Alias_Variables
+           (Indices : Index_Vectors.Vector; Site : Natural) is
          begin
             for Index of Indices loop
                declare
@@ -818,6 +1100,16 @@ package body Landin.Backend.Dwarf is
                         then
                            Shape := Whole_Slot_Array_Shape
                              (Of_Unit, Item, Alias.Place.Slot);
+                        elsif Alias_Inlined_Parameter (Of_Unit, Item, Index)
+                          /= No_Slot
+                          and then Is_Aggregate
+                            (Of_Unit, Item, Alias.Place.Slot)
+                        then
+                           --  D339: a copied parameter read in place.
+                           Shape := (Kind => Aggregate_Field_Shape,
+                                     Nominal => Nominal_Of
+                                       (Of_Unit, Item, Alias.Place.Slot),
+                                     others => <>);
                         else
                            raise Landin.Compiler_Defect with
                              "a whole slot alias requires array storage";
@@ -845,10 +1137,25 @@ package body Landin.Backend.Dwarf is
                        & HT & ".uleb128 "
                        & Landin.Targets.Byte_Count'Image (Offset) & LF);
                   end if;
-                  U (10);
-                  Str (Decl_Name (Alias.Binding));
-                  Ref (T (Shape_Type (Shape)));
-                  Coordinates (Alias.Site);
+                  if Site = 0 then
+                     U (10);
+                     Str (Decl_Name (Alias.Binding));
+                     Ref (T (Shape_Type (Shape)));
+                     Coordinates (Alias.Site);
+                  elsif Alias_Inlined_Parameter (Of_Unit, Item, Index)
+                    /= No_Slot
+                  then
+                     U (20);
+                     Ref (Abstract_Label
+                       (Origin_Item (Site), "slot",
+                        Natural (Alias_Inlined_Parameter
+                          (Of_Unit, Item, Index))));
+                  else
+                     U (21);
+                     Ref (Abstract_Label
+                       (Origin_Item (Site), "alias",
+                        Alias_Inlined_Origin (Of_Unit, Item, Index)));
+                  end if;
                   Put (HT & ".long " & Loc
                     & (if Mach_O then "-" & Prefix & "debug_loc" else ""));
                   Location_List
@@ -858,8 +1165,107 @@ package body Landin.Backend.Dwarf is
             end loop;
          end Alias_Variables;
 
-         procedure Variables (Indices : Index_Vectors.Vector);
-         procedure Variables (Indices : Index_Vectors.Vector) is
+         --  A variable scalar replacement split lives in its pieces: each
+         --  piece's location and DW_OP_piece with its size, in address
+         --  order, any padding an empty piece.  It is available where every
+         --  piece is, and has no location if one piece has none.
+         procedure Pieces (Slot : Slot_Id; Loc : String);
+         procedure Pieces (Slot : Slot_Id; Loc : String) is
+            Count : constant Positive :=
+              Positive (Slot_Part_Count (Of_Unit, Item, Slot));
+            First : constant Slot_Id := First_Piece (Of_Unit, Item, Slot);
+            type Extents is array (1 .. Count) of Landin.Targets.Byte_Count;
+            Offsets, Sizes : Extents;
+            Placed : array (1 .. Count) of Boolean := [others => False];
+            Total : Landin.Targets.Byte_Count := 0;
+            Covered : Landin.Targets.Byte_Count := 0;
+            Expr : US.Unbounded_String;
+            Live : Debug_Locations.Flags.Vector;
+
+            function Piece (Size : Landin.Targets.Byte_Count) return String
+              is (HT & ".byte 0x93" & LF & HT & ".uleb128"
+                  & Landin.Targets.Byte_Count'Image (Size) & LF);
+         begin
+            if Is_Array (Of_Unit, Item, Slot) then
+               declare
+                  Size : constant Landin.Targets.Byte_Count :=
+                    Landin.Targets.Byte_Count (Landin.Targets.Bytes
+                      (Size_Of (Slot_Array_Element (Of_Unit, Item, Slot),
+                                Facts)));
+               begin
+                  for Part in 1 .. Count loop
+                     Offsets (Part) :=
+                       Landin.Targets.Byte_Count (Part - 1) * Size;
+                     Sizes (Part) := Size;
+                  end loop;
+                  Total := Landin.Targets.Byte_Count (Count) * Size;
+               end;
+            else
+               declare
+                  Layout : constant Landin.Targets.Layouts.Plan :=
+                    Slot_Layout (Of_Unit, Item, Slot, Facts);
+               begin
+                  for Part in 1 .. Count loop
+                     Offsets (Part) := Layout.Offsets (Part);
+                     Sizes (Part) := Landin.Targets.Byte_Count
+                       (Landin.Targets.Bytes (Size_Of (Nth_Slot_Part
+                          (Of_Unit, Item, Slot, Part_Position (Part)),
+                           Facts)));
+                  end loop;
+                  Total := Layout.Size;
+               end;
+            end if;
+            Live.Append (True, Ada.Containers.Count_Type
+              (Value_Count (Of_Unit, Item)));
+            for Step in 1 .. Count loop
+               declare
+                  Next : Natural := 0;
+               begin
+                  for Part in 1 .. Count loop
+                     if not Placed (Part)
+                       and then (Next = 0
+                                 or else Offsets (Part) < Offsets (Next))
+                     then
+                        Next := Part;
+                     end if;
+                  end loop;
+                  Placed (Next) := True;
+                  declare
+                     Held : constant Slot_Id := First + Slot_Id (Next - 1);
+                     Where : constant String :=
+                       Slot_Expression (Plan, Frame_Plan, Held, False, False);
+                     Here : Debug_Locations.Flags.Vector :=
+                       Debug_Locations.Available_Piece
+                         (Availability, Of_Unit, Meanings, Info, Item,
+                          Slot, Held);
+                     --  An overwriter describes one piece, not the whole.
+                     Overwriter : Value_Id := No_Value;
+                  begin
+                     if Where = "" then
+                        Location_List (Loc, US.Null_Unbounded_String, Live);
+                        return;
+                     end if;
+                     if Offsets (Next) > Covered then
+                        US.Append (Expr, Piece (Offsets (Next) - Covered));
+                     end if;
+                     US.Append (Expr, Where & Piece (Sizes (Next)));
+                     Covered := Offsets (Next) + Sizes (Next);
+                     Narrow (Of_Unit, Item, Plan, Held, Here, Overwriter);
+                     for Value in 1 .. Live.Last_Index loop
+                        Live (Value) := Live (Value) and then Here (Value);
+                     end loop;
+                  end;
+               end;
+            end loop;
+            if Total > Covered then
+               US.Append (Expr, Piece (Total - Covered));
+            end if;
+            Location_List (Loc, Expr, Live);
+         end Pieces;
+
+         procedure Variables (Indices : Index_Vectors.Vector; Site : Natural);
+         procedure Variables (Indices : Index_Vectors.Vector; Site : Natural)
+         is
          begin
             for Index of Indices loop
                declare
@@ -867,121 +1273,110 @@ package body Landin.Backend.Dwarf is
                   Binding : constant Declaration_Id :=
                     Declares (Of_Unit, Item, Slot);
                   Parameter : constant Boolean := Parameters (Index);
-                  Typ : Positive;
-                  Shape : Field_Shape;
                   Expr : US.Unbounded_String;
                   Loc : constant String := L ("loc", Item, Index);
                begin
-                  if Is_Address (Of_Unit, Item, Slot) then
-                     Shape := Address_Shape (Of_Unit, Item, Slot);
-                  elsif Is_Array (Of_Unit, Item, Slot) then
-                     Shape := Whole_Slot_Array_Shape (Of_Unit, Item, Slot);
-                  elsif Is_Aggregate (Of_Unit, Item, Slot) then
-                     Shape := (Kind => Aggregate_Field_Shape,
-                               Nominal => Nominal_Of (Of_Unit, Item, Slot),
-                               others => <>);
+                  if Site = 0 then
+                     U (if Parameter then 3 else 10);
+                     Str (Decl_Name (Binding));
+                     Ref (T (Slot_Type (Item, Slot)));
+                     Coordinates (Origin_Of (Of_Unit, Item, Slot));
                   else
-                     Shape := (Element => Type_Of (Of_Unit, Item, Slot),
-                               Pointee => Pointee_Of (Of_Unit, Item, Slot),
-                               others => <>);
+                     U (if Is_Parameter
+                          (Origin_Item (Site),
+                           Inlined_Origin (Of_Unit, Item, Slot))
+                        then 20 else 21);
+                     Ref (Abstract_Label
+                       (Origin_Item (Site), "slot",
+                        Natural (Inlined_Origin (Of_Unit, Item, Slot))));
                   end if;
-                  Typ := (if Shape.Kind = Aggregate_Field_Shape
-                            and then Shape.Nominal = No_Nominal_Type
-                            and then not Is_Address (Of_Unit, Item, Slot)
-                          then Intern ((Shape => Shape, Item => Item,
-                                       Slot => Slot, others => <>))
-                          else Shape_Type (Shape));
-                  U (if Parameter then 3 else 10);
-                  Str (Decl_Name (Binding));
-                  Ref (T (Typ));
-                  Coordinates (Origin_Of (Of_Unit, Item, Slot));
                   Put (HT & ".long " & Loc
                     & (if Mach_O then "-" & Prefix & "debug_loc" else ""));
-                  Expr := US.To_Unbounded_String
-                    (Slot_Expression (Plan, Frame_Plan, Slot,
-                       Is_Address (Of_Unit, Item, Slot), False));
-                  declare
-                     Live : Debug_Locations.Flags.Vector :=
-                       Debug_Locations.Available
-                         (Availability, Of_Unit, Meanings, Info,
-                          Item, Slot, Parameter);
-                     Overwriter : Value_Id := No_Value;
-                  begin
-                     Narrow (Of_Unit, Item, Plan, Slot, Live, Overwriter);
-                     Location_List (Loc, Expr, Live, Overwriter);
-                  end;
+                  if First_Piece (Of_Unit, Item, Slot) /= No_Slot then
+                     Pieces (Slot, Loc);
+                  else
+                     Expr := US.To_Unbounded_String
+                       (Slot_Expression (Plan, Frame_Plan, Slot,
+                          Is_Address (Of_Unit, Item, Slot), False));
+                     declare
+                        Live : Debug_Locations.Flags.Vector :=
+                          Debug_Locations.Available
+                            (Availability, Of_Unit, Meanings, Info,
+                             Item, Slot, Parameter);
+                        Overwriter : Value_Id := No_Value;
+                     begin
+                        Narrow (Of_Unit, Item, Plan, Slot, Live, Overwriter);
+                        Location_List (Loc, Expr, Live, Overwriter);
+                     end;
+                  end if;
                end;
             end loop;
          end Variables;
 
+         procedure Inlined_Subroutine (Site : Positive);
+
          procedure Lexical_Scope
-           (Group_Index : Positive; Is_Root : Boolean := False);
+           (Groups : Scope_Vectors.Vector; Group_Index : Positive;
+            Site : Natural; Is_Root : Boolean := False);
          procedure Lexical_Scope
-           (Group_Index : Positive; Is_Root : Boolean := False)
+           (Groups : Scope_Vectors.Vector; Group_Index : Positive;
+            Site : Natural; Is_Root : Boolean := False)
          is
             Group : constant Scope_Group := Groups.Element (Group_Index);
             Name : constant String :=
-              L ("scope", Item, Natural (Group.Scope));
+              (if Site = 0 then L ("scope", Item, Natural (Group.Scope))
+               else Prefix & "debug_iscope_" & N (Natural (Item)) & "_"
+                 & N (Site) & "_" & N (Natural (Group.Scope)));
          begin
             if not Is_Root then
-               U (11);
-               --  ELF startup objects may contribute to these sections before
-               --  us. A section relocation carries the final linked offset;
-               --  subtracting our own start would address another object.
-               Put (HT & ".long " & Name
-                 & (if Mach_O then "-" & Prefix & "debug_ranges" else ""));
-               --  Entries below contain linked addresses, not offsets
-               --  from a containing routine's low PC.  Select base zero
-               --  explicitly. ELF has no single CU low PC; Darwin also
-               --  supplies a relocatable base for dsymutil's rewrite.
-               US.Append (Ranges, Name & ":" & LF
-                 & HT & ".quad -1,0" & LF);
-               for B in 1 .. Block_Count (Of_Unit, Item) loop
-                  declare
-                     Block : constant Block_Id := Block_Id (B);
-                     Count : constant Natural := Length (Of_Unit, Item, Block);
-                  begin
-                     if Count > 0 and then Debug_Locations.Within
-                       (Meanings, Scope_Of (Of_Unit, Item, Block),
-                        Group.Scope)
-                     then
-                        US.Append (Ranges, HT & ".quad "
-                          & L ("value", Item, Natural (Nth_Value
-                            (Of_Unit, Item, Block, 1))) & LF
-                          & HT & ".quad " & L ("after", Item,
-                            Natural (Nth_Value (Of_Unit, Item, Block, Count)))
-                          & LF);
-                        for P in 1 .. Count loop
-                           declare
-                              V : constant Natural := Natural
-                                (Nth_Value (Of_Unit, Item, Block, P));
-                           begin
-                              if Has_Trap (Value_Id (V)) then
-                                 US.Append (Ranges, HT & ".quad "
-                                   & L ("trap", Item, V) & LF
-                                   & HT & ".quad " & L ("trapped", Item, V)
-                                   & LF);
-                              end if;
-                           end;
-                        end loop;
-                     end if;
-                  end;
-               end loop;
-               US.Append (Ranges, HT & ".quad 0,0" & LF);
+               if Site = 0 then
+                  U (11);
+               else
+                  U (22);
+                  Ref (Abstract_Label
+                    (Origin_Item (Site), "scope", Natural (Group.Scope)));
+               end if;
+               Ranges_Attribute (Name);
+               Range_List (Name, Site, Group.Scope);
             end if;
-            Variables (Group.Slots);
-            Alias_Variables (Group.Aliases);
+            Variables (Group.Slots, Site);
+            Alias_Variables (Group.Aliases, Site);
+            for Copy of Group.Inlines loop
+               Inlined_Subroutine (Copy);
+            end loop;
             for Child of Group.Children loop
-               Lexical_Scope (Child);
+               Lexical_Scope (Groups, Child, Site);
             end loop;
             if not Is_Root then
                U (0);
             end if;
          end Lexical_Scope;
+
+         --  One inlined copy: where it is, what routine it is, where it
+         --  was called from, and its own parameters, locals and blocks.
+         procedure Inlined_Subroutine (Site : Positive) is
+            Copy : constant Inline_Site :=
+              Nth_Inline_Site (Of_Unit, Item, Site);
+            Name : constant String :=
+              Prefix & "debug_inline_" & N (Natural (Item)) & "_" & N (Site);
+            Groups : Scope_Vectors.Vector;
+         begin
+            Abstract_Wanted (Positive (Copy.Callee)) := True;
+            U (19);
+            Ref (Abstract_Label (Copy.Callee));
+            Ranges_Attribute (Name);
+            Range_List (Name, Site, Landin.Resolution.No_Scope);
+            Coordinates (Copy.Call);
+            Group_Scopes
+              (Item, Site, Signature_Root (Copy.Callee), Groups, False);
+            Lexical_Scope (Groups, 1, Site, Is_Root => True);
+            U (0);
+         end Inlined_Subroutine;
+
+         Groups : Scope_Vectors.Vector;
       begin
          U (2);
-         Str (if Decl = No_Declaration then Symbol (Item)
-              else Decl_Name (Decl));
+         Str (Routine_Name (Item));
          --  The source name is the debugger lookup name.  An assembler
          --  alias (notably a discarded .L generic-instance label) is not
          --  a source-language linkage name that GDB can demangle.
@@ -992,66 +1387,73 @@ package body Landin.Backend.Dwarf is
            & (if Frame_Register = 6 then "0x56"
               else N (16#50# + Frame_Register)));
          Coordinates (Origin_Of (Of_Unit, Item));
-         while Root /= Landin.Resolution.No_Scope
-           and then Landin.Resolution.Sort_Of (Meanings, Root)
-             /= Landin.Resolution.Signature
-         loop
-            Root := Landin.Resolution.Enclosing (Meanings, Root);
-         end loop;
-         Groups.Append (Scope_Group'(Scope => Root, others => <>));
-         Group_Indices.Insert (Root, 1);
          for Index in 1 .. Parameter_Count (Of_Unit, Item) loop
             Parameters (Positive (Nth_Parameter (Of_Unit, Item, Index))) :=
               True;
          end loop;
-         for Index in 1 .. Slot_Count (Of_Unit, Item) loop
-            declare
-               Binding : constant Declaration_Id :=
-                 Declares (Of_Unit, Item, Slot_Id (Index));
-            begin
-               if Binding /= No_Declaration then
-                  declare
-                     Scope : constant Scope_Id :=
-                       Landin.Resolution.Scope_Of (Meanings, Binding);
-                  begin
-                     Add_Scope_Path (Scope);
-                     if Group_Indices.Contains (Scope) then
-                        Groups.Reference
-                          (Group_Indices.Element (Scope)).Slots.Append
-                            (Index);
-                     end if;
-                  end;
-               end if;
-            end;
-         end loop;
-         for Index in 1 .. Source_Alias_Count (Of_Unit, Item) loop
-            declare
-               Scope : constant Scope_Id := Landin.Resolution.Scope_Of
-                 (Meanings, Nth_Source_Alias
-                    (Of_Unit, Item, Index).Binding);
-            begin
-               Add_Scope_Path (Scope);
-               if Group_Indices.Contains (Scope) then
-                  Groups.Reference
-                    (Group_Indices.Element (Scope)).Aliases.Append (Index);
-               end if;
-            end;
-         end loop;
-         for Index in 2 .. Natural (Groups.Length) loop
-            declare
-               Parent : constant Scope_Id := Landin.Resolution.Enclosing
-                 (Meanings, Groups.Element (Index).Scope);
-            begin
-               if Group_Indices.Contains (Parent) then
-                  Groups.Reference
-                    (Group_Indices.Element (Parent)).Children.Append
-                      (Index);
-               end if;
-            end;
-         end loop;
-         Lexical_Scope (1, Is_Root => True);
+         Group_Scopes (Item, 0, Signature_Root (Item), Groups, True);
+         Lexical_Scope (Groups, 1, 0, Is_Root => True);
          U (0);
       end Routine;
+
+      --  The abstract description of a routine an inlined copy names.
+      procedure Abstract_Routine (Item : Item_Id);
+      procedure Abstract_Routine (Item : Item_Id) is
+         Groups : Scope_Vectors.Vector;
+
+         procedure Abstract_Scope
+           (Group_Index : Positive; Is_Root : Boolean := False);
+         procedure Abstract_Scope
+           (Group_Index : Positive; Is_Root : Boolean := False)
+         is
+            Group : constant Scope_Group := Groups.Element (Group_Index);
+         begin
+            if not Is_Root then
+               Put (Abstract_Label (Item, "scope", Natural (Group.Scope))
+                    & ":");
+               U (18);
+            end if;
+            for Index of Group.Slots loop
+               declare
+                  Slot : constant Slot_Id := Slot_Id (Index);
+               begin
+                  Put (Abstract_Label (Item, "slot", Index) & ":");
+                  U (if Is_Parameter (Item, Slot) then 16 else 17);
+                  Str (Decl_Name (Declares (Of_Unit, Item, Slot)));
+                  Ref (T (Slot_Type (Item, Slot)));
+                  Coordinates (Origin_Of (Of_Unit, Item, Slot));
+               end;
+            end loop;
+            for Index of Group.Aliases loop
+               declare
+                  Alias : constant Source_Alias :=
+                    Nth_Source_Alias (Of_Unit, Item, Index);
+               begin
+                  Put (Abstract_Label (Item, "alias", Index) & ":");
+                  U (17);
+                  Str (Decl_Name (Alias.Binding));
+                  Ref (T (Shape_Type (Alias_Shape (Item, Index))));
+                  Coordinates (Alias.Site);
+               end;
+            end loop;
+            for Child of Group.Children loop
+               Abstract_Scope (Child);
+            end loop;
+            if not Is_Root then
+               U (0);
+            end if;
+         end Abstract_Scope;
+      begin
+         Put (Abstract_Label (Item) & ":");
+         U (15);
+         Str (Routine_Name (Item));
+         Coordinates (Origin_Of (Of_Unit, Item));
+         --  DW_INL_inlined.
+         Put (HT & ".byte 1");
+         Group_Scopes (Item, 0, Signature_Root (Item), Groups, False);
+         Abstract_Scope (1, Is_Root => True);
+         U (0);
+      end Abstract_Routine;
 
       --  A module datum lives at its symbol for the whole run, so it is a
       --  compilation-unit variable with one fixed address, not a location
@@ -1089,7 +1491,8 @@ package body Landin.Backend.Dwarf is
       procedure Abbreviation
         (Code, Tag : Natural; Children : Boolean; Attributes : String)
       is
-         Fields : constant String := Attributes & ",0,0";
+         Fields : constant String :=
+           (if Attributes = "" then "0,0" else Attributes & ",0,0");
          First : Positive := Fields'First;
       begin
          U (Code);
@@ -1136,6 +1539,25 @@ package body Landin.Backend.Dwarf is
       --  A module variable: one address expression, never a list.
       Abbreviation (14, 16#34#, False,
         "0x03,0x08,0x49,0x13,0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0x02,0x18");
+      --  D339's inlined copies, only where a unit has one, so a unit
+      --  without keeps its bytes: the abstract routine with
+      --  DW_AT_inline, its parameter, variable and lexical block with no
+      --  location, and the copy with its abstract origin, ranges and
+      --  call file, line and column, its parameter, variable and block.
+      if Inlined_Copies then
+         Abbreviation (15, 16#2e#, True,
+           "0x03,0x08,0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0x20,0x0b");
+         Abbreviation (16, 16#05#, False,
+           "0x03,0x08,0x49,0x13,0x3a,0x0f,0x3b,0x0f,0x39,0x0f");
+         Abbreviation (17, 16#34#, False,
+           "0x03,0x08,0x49,0x13,0x3a,0x0f,0x3b,0x0f,0x39,0x0f");
+         Abbreviation (18, 16#0b#, True, "");
+         Abbreviation (19, 16#1d#, True,
+           "0x31,0x13,0x55,0x17,0x58,0x0f,0x59,0x0f,0x57,0x0f");
+         Abbreviation (20, 16#05#, False, "0x31,0x13,0x02,0x17");
+         Abbreviation (21, 16#34#, False, "0x31,0x13,0x02,0x17");
+         Abbreviation (22, 16#0b#, True, "0x31,0x13,0x55,0x17");
+      end if;
       U (0);
       Put (Section ("info", Mach_O));
       Put (CU & ":");
@@ -1182,6 +1604,11 @@ package body Landin.Backend.Dwarf is
                Module_Datum (Item);
             end if;
          end;
+      end loop;
+      for Index in Abstract_Wanted'Range loop
+         if Abstract_Wanted (Index) then
+            Abstract_Routine (Item_Id (Index));
+         end if;
       end loop;
       declare
          Index : Positive := 1;

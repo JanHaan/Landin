@@ -298,6 +298,12 @@ def registers(debugger, config_path):
                 record(stop + '.caller', caller.GetFunctionName(), expected['caller'])
                 for name, value in expected['caller_values'].items():
                     read(caller, stop + '.caller', name, value)
+            if 'backtrace' in expected:
+                # An inlined frame is a frame of its own, named for its routine.
+                record(stop + '.backtrace',
+                       [thread.GetFrameAtIndex(i).GetFunctionName()
+                        for i in range(len(expected['backtrace']))],
+                       expected['backtrace'])
             target.BreakpointDelete(bp.GetID())
         process.Continue()
         record('inferior exited', process.GetState(), lldb.eStateExited)

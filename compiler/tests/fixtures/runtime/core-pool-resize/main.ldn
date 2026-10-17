@@ -1,0 +1,63 @@
+--  mem.resize through a pool: a block keeps its slot to any extent the
+--  slot holds, with its bytes; a larger extent, or an extent the block does
+--  not have, is refused with the block as it was; a zero extent keeps the
+--  slot, and the block is freed with it.
+import core/mem
+import core/pool
+
+--  The first `count` bytes at `block` set to 1, 2, 3 and on: what a
+--  resize must keep.
+ramp: (block: ptr mut u8, count: usize) -> none =
+    for at in usize(0)..<count do
+        cell: ptr mut u8 = ptr(usize(block) + at)
+        cell.val = u8(at + 1)
+    end for
+end ramp
+
+holds_ramp: (block: ptr mut u8, count: usize) -> (yes: bool) =
+    yes = false
+    for at in usize(0)..<count do
+        cell: ptr u8 = ptr(usize(block) + at)
+        return when cell.val <> u8(at + 1)
+    end for
+    yes = true
+end holds_ramp
+
+pool_resizes: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut backing: [64]u8 = zeroed
+    mut slots: [2]pool.slot = zeroed
+    mut space: pool.space = zeroed
+    slab := try pool.over(space, addr backing[0], 64, 16, 2, 1, slots[0..<2])
+    block := try mem.allocate(slab, usize(4), usize(1))
+    ramp(block, 4)
+    --  Any extent the slot holds is kept in it.
+    grown := try mem.resize(slab, block, usize(4), usize(16), usize(1))
+    return when usize(grown) <> usize(block) or not holds_ramp(grown, 4)
+    --  A larger one, or an extent the block does not have, is refused.
+    mut refusals: usize = 0
+    _ = mem.resize(slab, grown, usize(16), usize(17), usize(1)) else (problem)
+        _ = problem
+        inc refusals
+        grown
+    end
+    _ = mem.resize(slab, grown, usize(8), usize(4), usize(1)) else (problem)
+        _ = problem
+        inc refusals
+        grown
+    end
+    return when refusals <> 2 or pool.live(slab) <> 1
+      or not holds_ramp(grown, 4)
+    --  A zero extent keeps the slot, and the block is freed with it.
+    empty := try mem.resize(slab, grown, usize(16), usize(0), usize(1))
+    return when usize(empty) <> usize(block)
+    mem.free(slab, empty, usize(0))
+    ok = pool.live(slab) == 0 and pool.frees(slab) == 1
+         and pool.rejected_frees(slab) == 0
+end pool_resizes
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not (pool_resizes() else false)
+    code = 42
+end main

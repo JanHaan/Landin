@@ -337,7 +337,7 @@ class ParserTranscriptTests(unittest.TestCase):
 
 
 def register_transcript(lines: dict[str, int], pc: str = "0x401063",
-                        held: str = "42") -> str:
+                        held: str = "42", leaf: str = "inline_leaf") -> str:
     source = "compiler/tests/debugging/registers.ldn"
 
     def section(name: str, body: str) -> str:
@@ -364,6 +364,18 @@ def register_transcript(lines: dict[str, int], pc: str = "0x401063",
         section("register-inner-ready-caller",
                 f"#1  0x000000000040106a in register_pick (argument=...) at {source}:18"),
         "LANDIN-VALUE register-inner-ready-caller.picked=41",
+        section("register-leaf-ready-line",
+                frame(leaf, lines["leaf-ready"])),
+        section("register-leaf-ready-pc", "0x401121"),
+        "LANDIN-VALUE register-leaf-ready.base=2",
+        "LANDIN-VALUE register-leaf-ready.doubled=4",
+        section("register-leaf-ready-caller",
+                f"#1  inline_outer (start=<optimized out>) at {source}:36"),
+        "LANDIN-VALUE register-leaf-ready-caller.first=2",
+        section("register-leaf-ready-backtrace",
+                f"#0  {leaf} (base=2) at {source}:{lines['leaf-ready']}\n"
+                f"#1  inline_outer (start=<optimized out>) at {source}:36\n"
+                f"#2  0x0000000000401161 in main () at {source}:47"),
         section("inferior-exit", "[Inferior 1 (process 1) exited with code 052]"),
     )) + "\n"
 
@@ -383,6 +395,17 @@ class RegisterTranscriptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "held=42"):
             CHECK.check_register_transcript(
                 register_transcript(self.lines, held="<optimized out>"), self.lines)
+
+    def test_a_copy_described_as_its_caller_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "stopped outside inline_leaf"):
+            CHECK.check_register_transcript(
+                register_transcript(self.lines, leaf="inline_outer"), self.lines)
+
+    def test_a_backtrace_without_the_inlined_frame_is_rejected(self) -> None:
+        transcript = register_transcript(self.lines).replace(
+            "#0  inline_leaf (base=2)", "#0  inline_outer (start=1)")
+        with self.assertRaisesRegex(ValueError, "leaf-ready backtrace"):
+            CHECK.check_register_transcript(transcript, self.lines)
 
     def test_memory_is_not_a_register(self) -> None:
         self.assertFalse(CHECK.register_at(

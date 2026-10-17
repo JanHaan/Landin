@@ -213,6 +213,32 @@ fixed if compiler.os == darwin or compiler.os == freebsd then
         fail failure() when libc.munmap(usize(base), length) <> 0
     end system_unmap
 
+    --  The pages after the mapping, asked for at its end without
+    --  `MAP_FIXED`, which would replace whatever is mapped there: a system
+    --  that puts them elsewhere has none free there, and they are given
+    --  back.
+    system_extend: (base: ptr mut u8, length: usize, new_length: usize)
+                   -> none ! errno =
+        wanted: usize = usize(base) + length
+        extra: usize = new_length - length
+        result: usize = libc.mmap(wanted, extra,
+                                  libc.prot_read | libc.prot_write,
+                                  libc.map_private | libc.map_anonymous, -1,
+                                  0)
+        fail failure() when result == libc.map_failed
+        if result <> wanted then
+            _ = libc.munmap(result, extra)
+            fail enomem
+        end if
+    end system_extend
+
+    --  A mapping cannot move here, so it grows where it is or not at all.
+    system_remap: (base: ptr mut u8, length: usize, new_length: usize)
+                  -> (moved: ptr mut u8) ! errno =
+        try system_extend(base, length, new_length)
+        moved = ptr(usize(base))
+    end system_remap
+
     system_page_size: () -> (bytes: usize) =
         bytes = usize(libc.getpagesize())
     end system_page_size

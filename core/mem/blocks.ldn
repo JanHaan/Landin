@@ -87,11 +87,14 @@ fixed if compiler.os == freestanding then
         end while
     end find
 else
-    --  Elsewhere they move a machine word, a usize, at a time between a head
-    --  and a tail moved a byte at a time.  Every word they read or write is at
-    --  a multiple of the word, because RV64 may trap on a misaligned access or
-    --  emulate it slowly, and a word holds its bytes least significant first,
-    --  as on every target Landin describes.
+    --  Elsewhere they move a machine word, a usize, at a time, and a word
+    --  holds its bytes least significant first, as on every target Landin
+    --  describes.  x86-64 and arm64 load and store a word at any address, so
+    --  there copying up and searching move words from the first byte and
+    --  bytes only in the tail.  RV64 may trap on a misaligned access or
+    --  emulate it slowly, so there every word read or written is at a
+    --  multiple of the word, between a head and a tail moved a byte at a
+    --  time; so is every word copying down and filling move on any of them.
     word: usize = sizeof usize
     word_mask: usize = word - 1
     --  A one in every byte of a word, and the high bit of every byte.
@@ -121,67 +124,113 @@ else
         end if
     end copy
 
-    --  Copy the first `count` bytes of `source` to the start of `into`, both
-    --  at least that long, from the first byte up.  Once the destination is at
-    --  a word, a source at a word too is copied a word at a time, and any other
-    --  has each destination word put together from the two source words it
-    --  straddles, read only where they lie inside the source.  A destination
-    --  that overlaps the source begins at or before it, so a source word is
-    --  always read before the destination word that overlaps it is written.
-    copy_up: (into: []mut u8, source: []u8, count: usize) -> none =
-        target_address: usize = usize(addr into[0])
-        source_address: usize = usize(addr source[0])
-        mut at: usize = 0
+    --  The `count` words from `address` on, at a multiple of the word on
+    --  RV64 and anywhere on x86-64 and arm64.  The bytes are the caller's:
+    --  the view borrows nothing.
+    words_over: (address: usize, count: usize) -> (words: []mut usize) =
+        first: ptr mut [1]usize = ptr(address)
+        words = first.val[0..<1]
         unchecked begin
-            --  Every index is below `count` by its loop's condition.
-            while at < count and (target_address + at) & word_mask <> 0 do
-                into[at] = source[at]
-                inc at
-            end while
-            skew: usize = (source_address + at) & word_mask
-            if skew == 0 then
-                while count - at >= word do
-                    source_word: ptr usize = ptr(source_address + at)
-                    target_word: ptr mut usize = ptr(target_address + at)
-                    target_word.val = source_word.val
-                    at += word
-                end while
-            elsif count - at >= 3 * word then
-                --  The source word holding byte `at` begins `skew` bytes before
-                --  it, inside the source once `at` is at least `skew`: a word
-                --  more of bytes gets it there and keeps the destination at a
-                --  word.
-                if at < skew then
-                    stop: usize = at + word
-                    while at < stop do
-                        into[at] = source[at]
-                        inc at
-                    end while
-                end if
-                shift: usize = 8 * skew
-                back: usize = 8 * word - shift
-                mut low_address: usize = source_address + at - skew
-                low_word: ptr usize = ptr(low_address)
-                mut low: usize = low_word.val
-                --  The next source word ends inside the source while `reach`
-                --  bytes remain.
-                reach: usize = 2 * word - skew
-                while count - at >= reach do
-                    high_word: ptr usize = ptr(low_address + word)
-                    high: usize = high_word.val
-                    target_word: ptr mut usize = ptr(target_address + at)
-                    target_word.val = (low >> shift) | (high << back)
-                    low = high
-                    low_address += word
-                    at += word
-                end while
-            end if
-            while at < count do
-                into[at] = source[at]
-                inc at
-            end while
+            --  The caller's bytes hold `count` words.
+            words = words[0..<count]
         end unchecked
-    end copy_up
+    end words_over
+
+    fixed if compiler.arch == x86_64 or compiler.arch == arm64 then
+        --  Copy the first `count` bytes of `source` to the start of `into`,
+        --  both at least that long, from the first byte up: a word at a time
+        --  wherever the two begin, then the bytes left over.  A destination
+        --  that overlaps the source begins at or before it, so every source
+        --  byte is read before the destination byte over it is written.
+        copy_up: (into: []mut u8, source: []u8, count: usize) -> none =
+            whole: usize = count / word
+            targets: []mut usize = words_over(usize(addr into[0]), whole)
+            sources: []usize = words_over(usize(addr source[0]), whole)
+            mut at: usize = 0
+            unchecked begin
+                --  Every index is below its loop's bound.
+                while at < whole do
+                    targets[at] = sources[at]
+                    inc at
+                end while
+                at = whole * word
+                while at < count do
+                    into[at] = source[at]
+                    inc at
+                end while
+            end unchecked
+        end copy_up
+    else
+        --  Copy the first `count` bytes of `source` to the start of `into`,
+        --  both at least that long, from the first byte up.  Once the
+        --  destination is at a word, a source at a word too is copied a word
+        --  at a time, and any other has each destination word put together
+        --  from the two source words it straddles, read only where they lie
+        --  inside the source.  A destination that overlaps the source begins
+        --  at or before it, so a source word is always read before the
+        --  destination word that overlaps it is written.
+        copy_up: (into: []mut u8, source: []u8, count: usize) -> none =
+            target_address: usize = usize(addr into[0])
+            source_address: usize = usize(addr source[0])
+            mut at: usize = 0
+            unchecked begin
+                --  Every index is below its loop's bound.
+                while at < count and (target_address + at) & word_mask <> 0 do
+                    into[at] = source[at]
+                    inc at
+                end while
+                skew: usize = (source_address + at) & word_mask
+                if skew == 0 then
+                    whole: usize = (count - at) / word
+                    targets: []mut usize =
+                        words_over(target_address + at, whole)
+                    sources: []usize = words_over(source_address + at, whole)
+                    mut next: usize = 0
+                    while next < whole do
+                        targets[next] = sources[next]
+                        inc next
+                    end while
+                    at += whole * word
+                elsif count - at >= 3 * word then
+                    --  The source word holding byte `at` begins `skew` bytes
+                    --  before it, inside the source once `at` is at least
+                    --  `skew`: a word more of bytes gets it there and keeps
+                    --  the destination at a word.
+                    if at < skew then
+                        stop: usize = at + word
+                        while at < stop do
+                            into[at] = source[at]
+                            inc at
+                        end while
+                    end if
+                    --  Destination word `next` is the high bytes of source
+                    --  word `next` and the low bytes of the one after it,
+                    --  which ends inside the source for every one of the
+                    --  `whole` words.
+                    whole: usize = (count - at - (word - skew)) / word
+                    targets: []mut usize =
+                        words_over(target_address + at, whole)
+                    sources: []usize =
+                        words_over(source_address + at - skew, whole + 1)
+                    shift: usize = 8 * skew
+                    back: usize = 8 * word - shift
+                    mut low: usize = sources[0]
+                    mut next: usize = 0
+                    while next < whole do
+                        high: usize = sources[next + 1]
+                        targets[next] = (low >> shift) | (high << back)
+                        low = high
+                        inc next
+                    end while
+                    at += whole * word
+                end if
+                while at < count do
+                    into[at] = source[at]
+                    inc at
+                end while
+            end unchecked
+        end copy_up
+    end if
 
     --  Copy the first `count` bytes of `source` to the start of `into` from
     --  the last byte down, for a destination that begins after the first
@@ -239,35 +288,82 @@ else
         end unchecked
     end fill
 
-    --- The index of the first byte of `source` equal to `value`, or the length
-    --- of `source` when there is none, so that `source[0..<find(source, v)]`
-    --- is always the part before it.
-    public find: (source: []u8, value: u8) -> (index: usize) =
-        index = 0
-        count: usize = lenof source
-        return when count == 0
-        source_address: usize = usize(addr source[0])
-        pattern: usize = usize(value) * ones
+    --  The byte offset of the first of the `count` words from `address` on
+    --  that holds the byte every byte of `pattern` is, or the offset just
+    --  past them when none does; the caller searches that word a byte at a
+    --  time.  A word holds the byte exactly when its exclusive or with
+    --  `pattern` has a zero byte, which is exactly when subtracting a one
+    --  from every byte borrows into a high bit that was clear.
+    find_words: (address: usize, count: usize, pattern: usize)
+                -> (index: usize) =
+        held: []usize = words_over(address, count)
+        mut next: usize = 0
         unchecked begin
-            --  Every index is below `count` by its loop's condition.
-            while index < count and (source_address + index) & word_mask <> 0 do
-                return when source[index] == value
-                inc index
-            end while
-            --  A word holds `value` exactly when its exclusive or with
-            --  `pattern` has a zero byte, which is exactly when subtracting a
-            --  one from every byte borrows into a high bit that was clear.
-            --  The word's bytes are then searched one at a time.
-            while count - index >= word do
-                at: ptr usize = ptr(source_address + index)
-                mixed: usize = at.val ^ pattern
+            --  Every index is below its loop's bound.
+            while next < count do
+                mixed: usize = held[next] ^ pattern
                 break when (mixed -% ones) & ~mixed & highs <> 0
-                index += word
-            end while
-            while index < count do
-                return when source[index] == value
-                inc index
+                inc next
             end while
         end unchecked
-    end find
+        index = next * word
+    end find_words
+
+    fixed if compiler.arch == x86_64 or compiler.arch == arm64 then
+        --- The index of the first byte of `source` equal to `value`, or the
+        --- length of `source` when there is none, so that
+        --- `source[0..<find(source, v)]` is always the part before it.
+        public find: (source: []u8, value: u8) -> (index: usize) =
+            count: usize = lenof source
+            index = count
+            return when count == 0
+            pattern: usize = usize(value) * ones
+            mut at: usize = find_words(usize(addr source[0]), count / word,
+                                       pattern)
+            unchecked begin
+                --  Every index is below `count` by its loop's condition.
+                while at < count do
+                    if source[at] == value then
+                        index = at
+                        return
+                    end if
+                    inc at
+                end while
+            end unchecked
+        end find
+    else
+        --- The index of the first byte of `source` equal to `value`, or the
+        --- length of `source` when there is none, so that
+        --- `source[0..<find(source, v)]` is always the part before it.
+        public find: (source: []u8, value: u8) -> (index: usize) =
+            count: usize = lenof source
+            index = count
+            return when count == 0
+            source_address: usize = usize(addr source[0])
+            pattern: usize = usize(value) * ones
+            mut at: usize = 0
+            unchecked begin
+                --  Every index is below `count` by its loop's condition.
+                while at < count and (source_address + at) & word_mask <> 0 do
+                    if source[at] == value then
+                        index = at
+                        return
+                    end if
+                    inc at
+                end while
+            end unchecked
+            at += find_words(source_address + at, (count - at) / word,
+                             pattern)
+            unchecked begin
+                --  Every index is below `count` by its loop's condition.
+                while at < count do
+                    if source[at] == value then
+                        index = at
+                        return
+                    end if
+                    inc at
+                end while
+            end unchecked
+        end find
+    end if
 end if

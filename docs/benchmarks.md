@@ -95,6 +95,63 @@ output, the geometric mean is 1.8 times C's time: fannkuch-redux and
 mandelbrot within a quarter of C's, Go's and Zig's, and reverse-complement
 faster than Ada's, Node.js's and Python's.
 
+### Closing the remaining gap
+
+The next fixes came from measuring native arm64 and ordinary programs as
+well as these five. The arm64 backend gained what x86-64 had: floating-point
+values in registers, results in their own register with immediate operands,
+fused comparisons, division by a constant as a multiplication and small
+copies as moves. Both backends give small routines registers, caller-saved
+where no call crosses a value. Immutable module values fold; a check a
+dominating comparison or a type's range proves is removed; a callee reads an
+aggregate argument where its caller keeps it when nothing can change it; an
+allocator resizes a block in place or with `mremap`. Then small direct calls
+are copied into their callers at `speed`, slices and small structs are split
+into scalars, a branch whose arms only compute becomes a choice, and every
+x86-64 routine starts on a 64-byte boundary. fasta's port now counts in its
+lookup, as the Benchmark Game's C program does, rather than leaving at the
+first match.
+
+Copying an unchanged executable moved its time by up to half, with where its
+code landed in physical memory, so these times are the median of three
+fresh copies of each executable, C's re-measured the same way in the same
+session:
+
+| | fannkuch-redux 12 | mandelbrot 16000 | fasta 25,000,000 | reverse-complement, fasta's 25,000,000 | binary-trees 21 |
+|---|---|---|---|---|---|
+| Landin, before | 47.6 (1.20) | 21.2 (1.14) | 6.09 (1.99) | 1.63 (2.10) | 57.6 (3.87) |
+| Landin, after | 41.7 (1.05) | 20.0 (1.07) | 3.78 (1.23) | 0.99 (1.30) | 32.8 (2.22) |
+| C | 39.7 | 18.6 | 3.08 | 0.76 | 14.8 |
+
+The geometric mean fell from 1.86 times C's time to 1.32, with every output
+the C program's.
+
+On an Apple M1 Pro, at sizes of a few seconds (fannkuch-redux 11, mandelbrot
+4000, fasta 2,500,000, binary-trees 16, reverse-complement on that fasta's
+output), as multiples of C built with the system's own compiler:
+
+| | fannkuch-redux | mandelbrot | fasta | reverse-complement | binary-trees |
+|---|---|---|---|---|---|
+| Darwin, before | 2.35 | 8.66 | 10.8 | 6.87 | 4.89 |
+| Darwin, after | 1.07 | 1.50 | 2.51 | 2.01 | 1.60 |
+| Linux arm64, before | 2.60 | 8.99 | 4.39 | 7.53 | 9.18 |
+| Linux arm64, after | 1.18 | 1.55 | 0.99 | 2.26 | 2.98 |
+
+Landin's own times are nearly the same on both systems; the multiples differ
+because C's do, fasta's C being two and a half times faster on Darwin and
+binary-trees' twice as fast on Linux.
+
+Seven ordinary programs, each against a straightforward C one: a `core/vec`
+list pushed, read and popped ten million times, a `core/map` of a million
+keys looked up eight million times, a `core/sort` of two million integers
+and records, `text.format` writing three million lines, a lexer over 33
+megabytes, word count over 171, and a hundred million calls through
+`any shape`. After the first of these fixes they ran 1.8 (sort) to 9.5
+(vec) times C's time, from 2.2 (word count) to 13.9, the largest gains in
+vec, map, the lexer and sort; copying small calls then took a further third
+off word count and a fifth off vec, and splitting structs nearly a fifth off
+the lexer.
+
 ## Peak resident memory
 
 Megabytes, before the fixes.
@@ -130,6 +187,11 @@ The programs differ in ways that matter to their times:
 - Rust's fasta compares integer thresholds against the raw seed and does no
   floating-point arithmetic. Python's uses `bisect` and writes the ALU
   sequence as one block.
+- The Landin fasta timed here stopped its probability search at the first
+  cumulative probability above the random number, a branch the processor
+  mispredicts about once a symbol. The port now counts the probabilities
+  the number reaches, as C's program does, which the compiler selects
+  without a branch.
 - C's fannkuch-redux uses a different permutation generator and skips the
   last flip.
 - In binary-trees, C, Ada and Rust allocate and free each node through

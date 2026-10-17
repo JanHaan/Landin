@@ -26,14 +26,14 @@ end injector_value
 
 --- Allocator wrapper with deterministic failure injection and cumulative
 --- counters, as a handle: copies share one budget. Holds a copy of its inner
---- provider's handle, delegates permitted allocations and frees, and refuses
---- in-place growth.
+--- provider's handle, delegates permitted allocations, resizes and frees,
+--- and refuses in-place growth.
 public injector: type (inner_provider: type) = injector_value(inner_provider)
 
 --- Fill `state` for an injector over `inner` with a budget of
---- `allowed_attempts` allocation calls that may reach it, and return its
---- handle. An inner failure consumes one of them too; an injected failure
---- never calls the inner provider and counts only in `attempts` and
+--- `allowed_attempts` allocation and resize calls that may reach it, and
+--- return its handle. An inner failure consumes one of them too; an injected
+--- failure never calls the inner provider and counts only in `attempts` and
 --- `injected_failures`.
 public over: (inner_provider: type is mem.allocator, inout state: space,
               inner: inner_provider, allowed_attempts: usize)
@@ -102,9 +102,35 @@ injector_grow: (inner_provider: type,
     grown = false
 end injector_grow
 
+--  A resize may allocate, so it is an attempt as an allocation is: it spends
+--  the budget, may be refused without reaching the inner provider, and is
+--  otherwise delegated.  The block it returns replaces the one it was given,
+--  so the live count does not change.
+injector_resize: (inner_provider: type is mem.allocator,
+                  self: injector(inner_provider), block: ptr mut u8,
+                  old_size: usize, new_size: usize, alignment: usize)
+                 -> (moved: ptr mut u8) ! mem.out_of_memory =
+    state: ptr mut counters = self.state
+    inc state.val.attempts
+    if state.val.remaining == 0 then
+        inc state.val.injected_failures
+        fail mem.out_of_memory
+    end if
+
+    dec state.val.remaining
+    inc state.val.delegated
+    moved = mem.resize(self.inner, block, old_size, new_size, alignment)
+        else (problem)
+        _ = problem
+        inc state.val.inner_failures
+        fail mem.out_of_memory
+    end
+    inc state.val.successes
+end injector_resize
+
 (inner_provider: type is mem.allocator) injector_value(inner_provider)
     is mem.allocator (alloc: injector_alloc, grow: injector_grow,
-                      free: injector_free)
+                      resize: injector_resize, free: injector_free)
 
 --- Return how many allocation attempts may still reach the inner provider.
 public remaining: (inner_provider: type,

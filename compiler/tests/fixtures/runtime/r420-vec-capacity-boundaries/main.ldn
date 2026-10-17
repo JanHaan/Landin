@@ -39,8 +39,16 @@ probe_grow: (self: probe, block: ptr mut u8,
     grown = false
 end probe_grow
 
+--  Resizing moves the block, through this provider's own allocation
+--  and free.
+probe_resize: (self: probe, block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (moved: ptr mut u8) ! mem.out_of_memory =
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end probe_resize
+
 probe is mem.allocator (alloc: probe_alloc, grow: probe_grow,
-                        free: probe_free)
+                        resize: probe_resize, free: probe_free)
 
 zero_item: type = [0]u8
 

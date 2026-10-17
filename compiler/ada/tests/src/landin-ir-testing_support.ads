@@ -82,6 +82,24 @@ package Landin.IR.Testing_Support is
      with Pre => Holds (Into, Item)
                  and then Holds (Into, Item, Slot);
 
+   --  Points an in-place parameter at another home, or at none.
+   procedure Overwrite_In_Place_Home
+     (Into : in out Unit;
+      Item : Item_Id;
+      Slot : Slot_Id;
+      Home : Slot_Id)
+     with Pre => Holds (Into, Item)
+                 and then Holds (Into, Item, Slot);
+
+   --  Only scalar replacement records a split slot's first piece.
+   procedure Overwrite_First_Piece
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Slot   : Slot_Id;
+      Piece  : Slot_Id)
+     with Pre => Holds (Into, Item)
+                 and then Holds (Into, Item, Slot);
+
    --  Evidence operations have public builders whose preconditions make an
    --  out-of-range identity or entry unconstructible.  These hooks damage a
    --  value after construction so each verifier rule remains executable.

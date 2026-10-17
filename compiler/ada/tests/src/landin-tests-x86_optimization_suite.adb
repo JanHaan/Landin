@@ -7,10 +7,13 @@ with Interfaces;
 
 with Landin.Backend.Reciprocals;
 with Landin.Backend.X86_64.Allocation;
+with Landin.Backend.X86_64.Dwarf;
 with Landin.Backend.X86_64.Machine;
 with Landin.Build_Reports;
 with Landin.Debugging;
 with Landin.IR;
+with Landin.IR.If_Conversion;
+with Landin.IR.Simplification;
 with Landin.Optimization;
 with Landin.Source;
 with Landin.Stages.Checking;
@@ -39,6 +42,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    use type IR.Block_Id;
    use type IR.Declaration_Id;
    use type IR.Opcode;
+   use type IR.Slot_Id;
    use type IR.Value_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Byte_Count;
@@ -86,6 +90,22 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Float_Branches_Read_Flags
      (Item : in out Landin.Testing.Context);
    procedure Conditions_Jump (Item : in out Landin.Testing.Context);
+   procedure Small_Routines (Item : in out Landin.Testing.Context);
+   procedure Caller_Saved_Slots (Item : in out Landin.Testing.Context);
+   procedure Float_Sources (Item : in out Landin.Testing.Context);
+   procedure Known_Atoms (Item : in out Landin.Testing.Context);
+   procedure Counted_Flag_Adds (Item : in out Landin.Testing.Context);
+   procedure Choices_Move_Conditionally
+     (Item : in out Landin.Testing.Context);
+   procedure Speed_Places_Code (Item : in out Landin.Testing.Context);
+
+   --  Source lowered, simplified and if-converted at Objective, as the
+   --  driver does, then emitted; and the text of one routine in it.
+   function Converted
+     (Item : in out Landin.Testing.Context;
+      Source : String;
+      Objective : Opt.Objective) return String;
+   function Routine (Text, Name : String) return String;
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
@@ -304,6 +324,8 @@ package body Landin.Tests.X86_Optimization_Suite is
 
    --  Twelve conditional updates give the u32 local, the first u32 slot,
    --  the most static references; the nested loop gives usize the weight.
+   --  The call in the inner loop leaves the slots only the callee-saved
+   --  registers, fewer than the slots, so each objective must rank them.
    procedure Loop_Nesting (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -321,9 +343,11 @@ package body Landin.Tests.X86_Optimization_Suite is
          & "mut setup: u32 = 0" & LF & US.To_String (Updates)
          & "mut i: usize = 0 mut total: usize = 0" & LF
          & "while i < limit do mut j: usize = 0" & LF
-         & "while j < limit do total = total + j inc j end while" & LF
+         & "while j < limit do total = total + step(j) + i inc j"
+         & " end while" & LF
          & "inc i end while" & LF
-         & "result = total + usize(setup) end walk");
+         & "result = total + usize(setup) end walk" & LF
+         & "step: (x: usize) -> (r: usize) = r = x end step");
       declare
          Code : IR.Unit renames Landin.Stages.Code (Work).all;
          Facts : constant Landin.Targets.Target_Facts :=
@@ -1400,7 +1424,7 @@ package body Landin.Tests.X86_Optimization_Suite is
                   & " one-operand multiply");
             else
                Landin.Testing.Check
-                 (Item, Contains (Text, HT & "addl $3, %r")
+                 (Item, Contains (Text, HT & "addl $3, %")
                   and then not Contains (Text, "$3, %eax")
                   and then not Contains (Text, "movabsq $3,")
                   and then Contains (Text, HT & "imulq $5, %r")
@@ -1506,6 +1530,427 @@ package body Landin.Tests.X86_Optimization_Suite is
       end loop;
    end Element_Addressing;
 
+   --  A routine too small to repay saving a callee-saved register still
+   --  holds its parameter where it arrives and its values in caller-saved
+   --  registers, and at speed keeps its named result in one too.
+   procedure Small_Routines (Item : in out Landin.Testing.Context) is
+      use type Opt.Objective;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower
+        (Item, Work,
+         "pair: type = struct a: i64 b: i64 end pair" & LF
+         & "public area: (p: ptr pair) -> (value: i64) =" & LF
+         & "value = p.val.a * p.val.b end area");
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Facts : constant Landin.Targets.Target_Facts :=
+           Landin.Stages.Target (Work);
+         Parameter : constant Positive :=
+           Positive (IR.Nth_Parameter (Code, 1, 1));
+      begin
+         for Objective in Opt.Size .. Opt.Speed loop
+            declare
+               Plan : constant Alloc.Plan :=
+                 Alloc.Make (Code, 1, Facts, (Objective, Opt.Off));
+               Text : constant String := Emitted (Work, (Objective, Opt.Off));
+               Caller_Saved : Boolean := True;
+            begin
+               for Place of Plan.Value loop
+                  Caller_Saved := Caller_Saved
+                    and then (Place.Kind = Alloc.Absent
+                              or else (Place.Kind = Alloc.GP
+                                       and then Place.Register
+                                         in Alloc.Caller_Saved));
+               end loop;
+               Landin.Testing.Check
+                 (Item, Plan.Slot (Parameter).Kind = Alloc.GP
+                  and then Plan.Slot (Parameter).Register = Alloc.RDI
+                  and then Alloc.Save_Count (Plan) = 0
+                  and then Caller_Saved
+                  and then not Contains (Text, "%rdi, -"),
+                  "a small routine reads its parameter where it arrives"
+                  & " and saves no register");
+               if Objective = Opt.Speed then
+                  Landin.Testing.Check
+                    (Item, not Contains (Text, "(%rbp)")
+                     and then Contains (Text, "(%rdi), %"),
+                     "at speed a small routine touches no frame cell");
+               end if;
+            end;
+         end loop;
+      end;
+   end Small_Routines;
+
+   --  Slots whose intervals hold no call take caller-saved registers.
+   --  `inc` and `dec` compute in the counter's own register, a widening
+   --  conversion and a comparison work where their operands live, and a
+   --  variable stored from a value that outlives it is that value's
+   --  register, which a debugger is told until something overwrites it.
+   --  Speed aligns the loop's head.
+   procedure Caller_Saved_Slots (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      HT : constant Character := Character'Val (9);
+      Speed : constant Opt.Options := (Opt.Speed, Opt.Off);
+   begin
+      Lower
+        (Item, Work,
+         "public reverse_prefix: (inout values: [16]u8) -> none =" & LF
+         & "mut left: usize = 0" & LF
+         & "mut right: usize = usize(values[0])" & LF
+         & "while left < right do" & LF
+         & "saved: u8 = values[left]" & LF
+         & "values[left] = values[right]" & LF
+         & "values[right] = saved" & LF
+         & "inc left dec right end while end reverse_prefix");
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Facts : constant Landin.Targets.Target_Facts :=
+           Landin.Stages.Target (Work);
+         Plan : constant Alloc.Plan := Alloc.Make (Code, 1, Facts, Speed);
+         Text : constant String := Emitted (Work, Speed);
+         Counters, In_Place, Shared : Natural := 0;
+         --  DWARF's operation naming the register `saved` is held in.
+         Saved_Register : US.Unbounded_String;
+      begin
+         for Index in 1 .. IR.Slot_Count (Code, 1) loop
+            if IR.Declares (Code, 1, IR.Slot_Id (Index)) /= IR.No_Declaration
+              and then IR.Slot_Id (Index) /= IR.Nth_Parameter (Code, 1, 1)
+              and then IR.Type_Of (Code, 1, IR.Slot_Id (Index))
+                = Landin.Types.Usize
+              and then Plan.Slot (Index).Kind = Alloc.GP
+              and then Plan.Slot (Index).Register in Alloc.Caller_Saved
+            then
+               Counters := Counters + 1;
+            end if;
+         end loop;
+         for Index in 1 .. IR.Value_Count (Code, 1) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Index);
+            begin
+               if IR.Op_Of (Code, 1, Value) in IR.Add | IR.Subtract
+                 and then IR.Op_Of
+                   (Code, 1, IR.Nth_Operand (Code, 1, Value, 1))
+                   = IR.Load
+               then
+                  declare
+                     Slot : constant Positive := Positive
+                       (IR.Slot_Of
+                          (Code, 1, IR.Nth_Operand (Code, 1, Value, 1)));
+                  begin
+                     if Plan.Value (Index).Kind = Alloc.GP
+                       and then Plan.Slot (Slot).Kind = Alloc.GP
+                       and then Plan.Value (Index).Register
+                         = Plan.Slot (Slot).Register
+                     then
+                        In_Place := In_Place + 1;
+                     end if;
+                  end;
+               elsif IR.Op_Of (Code, 1, Value) = IR.Store
+                 and then IR.Type_Of (Code, 1, IR.Slot_Of (Code, 1, Value))
+                   = Landin.Types.U8
+                 and then IR.Declares (Code, 1, IR.Slot_Of (Code, 1, Value))
+                   /= IR.No_Declaration
+               then
+                  declare
+                     Slot : Alloc.Location renames Plan.Slot
+                       (Positive (IR.Slot_Of (Code, 1, Value)));
+                     Stored : Alloc.Location renames Plan.Value
+                       (Positive (IR.Nth_Operand (Code, 1, Value, 1)));
+                  begin
+                     if Slot.Kind = Alloc.GP and then Stored.Kind = Alloc.GP
+                       and then Slot.Register = Stored.Register
+                     then
+                        Shared := Shared + 1;
+                        Saved_Register := US.To_Unbounded_String
+                          (".byte " & Ada.Strings.Fixed.Trim
+                             (Natural'Image
+                                (16#50# + X86.Dwarf.Register_Number
+                                   (Slot.Register)),
+                              Ada.Strings.Both));
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Counters = 2 and then Alloc.Save_Count (Plan) < 4,
+            "counters crossing no call hold caller-saved registers");
+         Landin.Testing.Check
+           (Item, In_Place = 2,
+            "inc and dec compute in the counter's own register");
+         Landin.Testing.Check
+           (Item, not Contains (Text, "%rax") and then not Contains
+              (Text, "%eax"),
+            "widening and comparing need no accumulator");
+         Landin.Testing.Check
+           (Item, Shared = 1,
+            "a variable shares the register of the value stored into it");
+         Landin.Testing.Check
+           (Item, Contains (Text, ".p2align 4,,10" & LF & HT
+                            & ".p2align 3" & LF & ".L1_")
+            and then not Contains
+              (Emitted (Work, (Opt.Size, Opt.Off)), ".p2align 4"),
+            "speed aligns a loop's head");
+         declare
+            Info : aliased Landin.Debugging.Information
+              (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+            Debug_Text : US.Unbounded_String;
+            Debug_Report : Reports.Report;
+         begin
+            Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+            X86.Emit
+              (Code, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all, Facts, Speed,
+               Debug_Text, Debug_Report, Debug => Info'Access);
+            Landin.Testing.Check
+              (Item, Contains (US.To_String (Debug_Text), """saved""")
+               and then US.Length (Saved_Register) > 0
+               and then Contains
+                 (US.To_String (Debug_Text),
+                  US.To_String (Saved_Register) & LF),
+               "variables in caller-saved registers have DWARF locations");
+         end;
+      end;
+   end Caller_Saved_Slots;
+
+   --  Speed holds a float parameter, a conversion's float and a call's
+   --  float result in XMM registers.
+   procedure Float_Sources (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Speed : constant Opt.Options := (Opt.Speed, Opt.Off);
+   begin
+      Lower
+        (Item, Work,
+         "half: (y: f64) -> (r: f64) = r = y * 0.5 end half" & LF
+         & "public mix: (x: f64, n: i64) -> (r: f64) =" & LF
+         & "r = f64(n) * 2.0 + half(x) * 3.0 end mix");
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Facts : constant Landin.Targets.Target_Facts :=
+           Landin.Stages.Target (Work);
+         Callee : constant Alloc.Plan := Alloc.Make (Code, 1, Facts, Speed);
+         Caller : constant Alloc.Plan := Alloc.Make (Code, 2, Facts, Speed);
+         Converted, Returned : Boolean := False;
+      begin
+         for Index in 1 .. IR.Value_Count (Code, 2) loop
+            case IR.Op_Of (Code, 2, IR.Value_Id (Index)) is
+               when IR.Conversion =>
+                  Converted := Caller.Value (Index).Kind = Alloc.SSE;
+               when IR.Call =>
+                  Returned := Caller.Value (Index).Kind = Alloc.SSE;
+               when others => null;
+            end case;
+         end loop;
+         Landin.Testing.Check
+           (Item, Callee.Slot (Positive (IR.Nth_Parameter (Code, 1, 1))).Kind
+              = Alloc.SSE
+            and then Contains (Emitted (Work, Speed), "movq %rdi, %xmm"),
+            "a float parameter moves into an XMM register");
+         Landin.Testing.Check
+           (Item, Converted and then Returned,
+            "a conversion's and a call's float hold XMM registers");
+      end;
+   end Float_Sources;
+
+   --  The code a load of an atom checks cannot be wrong when the store
+   --  reaching it in its block wrote an atom of its set.
+   procedure Known_Atoms (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower
+        (Item, Work,
+         "oops: atom" & LF
+         & "public pick: (x: u32) -> none ! oops =" & LF
+         & "if x > 3 then fail oops end if end pick");
+      Landin.Testing.Check
+        (Item, Contains (Emitted (Work, (Opt.None, Opt.Off)),
+                         "_trap_conversion")
+         and then not Contains
+           (Emitted (Work, (Opt.Speed, Opt.Off)), "_trap_conversion")
+         and then not Contains
+           (Emitted (Work, (Opt.Size, Opt.Off)), "_trap_conversion"),
+         "a stored atom is not checked again where it is loaded");
+   end Known_Atoms;
+
+   function Converted
+     (Item : in out Landin.Testing.Context;
+      Source : String;
+      Objective : Opt.Objective) return String
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower (Item, Work, Source);
+      IR.Simplification.Run
+        (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
+         Objective);
+      IR.If_Conversion.Run
+        (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
+         Objective);
+      return Emitted (Work, (Objective, Opt.Off));
+   end Converted;
+
+   function Routine (Text, Name : String) return String is
+      First : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, LF & Name & ":" & LF);
+      Last : constant Natural :=
+        (if First = 0 then 0
+         else Ada.Strings.Fixed.Index
+           (Text (First .. Text'Last), ".size " & Name & ","));
+   begin
+      if First = 0 or else Last = 0 then
+         return "";
+      end if;
+      return Text (First .. Last);
+   end Routine;
+
+   --  D338: counting the elements a comparison holds for adds the
+   --  comparison's own flag, set straight from the comparison, and keeps
+   --  the addition's overflow check.
+   procedure Counted_Flag_Adds (Item : in out Landin.Testing.Context) is
+      HT : constant Character := Character'Val (9);
+      Source : constant String :=
+        "public floats: (t: []f64, v: f64) -> (n: usize) = "
+        & "mut k: usize = 0 first: usize = 0 "
+        & "for i in first..<lenof t do if v >= t[i] then inc k end if "
+        & "end for n = k end floats "
+        & "public signed: (t: []i32, v: i32) -> (n: u32) = "
+        & "mut k: u32 = 0 first: usize = 0 "
+        & "for i in first..<lenof t do if t[i] < v then inc k end if "
+        & "end for n = k end signed";
+   begin
+      for Objective in Opt.Size .. Opt.Speed loop
+         declare
+            Text : constant String := Converted (Item, Source, Objective);
+            Floats : constant String := Routine (Text, "floats");
+            Signed : constant String := Routine (Text, "signed");
+            Where : constant String :=
+              " at " & Opt.Objective'Image (Objective);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Floats, "ucomisd ")
+                     and then Contains
+                       (Floats, LF & HT & "setae %al" & LF & HT
+                                & "movzbl %al, %eax" & LF)
+                     and then not Contains (Floats, "cmpb $0,")
+                     and then Contains (Floats, "jc "),
+               "a float count adds setae's flag" & Where);
+            Landin.Testing.Check
+              (Item, Contains
+                       (Signed, LF & HT & "setl %al" & LF & HT
+                                & "movzbl %al, %eax" & LF)
+                     and then not Contains (Signed, "cmpb $0,"),
+               "a signed count adds setl's flag" & Where);
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, not Contains
+           (Routine (Converted (Item, Source, Opt.None), "floats"),
+            "movzbl %al, %eax"),
+         "none counts with a branch");
+   end Counted_Flag_Adds;
+
+   --  D338: a choice between two values is a cmov on the flags of the
+   --  comparison right before it, or on a stored bool, an unordered float
+   --  pair choosing the second value as `a < b` does.
+   procedure Choices_Move_Conditionally
+     (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+      Source : constant String :=
+        "public least: (a: i64, b: i64) -> (r: i64) = "
+        & "if a < b then r = a else r = b end if end least "
+        & "public below: (a: u16, b: u16, x: u16) -> (r: u16) = "
+        & "if a < b then r = x else r = 7 end if end below "
+        & "public fleast: (a: f64, b: f64) -> (r: f64) = "
+        & "if a < b then r = a else r = b end if end fleast "
+        & "public pick: (c: bool, a: u32, b: u32) -> (r: u32) = "
+        & "if c then r = a else r = b end if end pick";
+   begin
+      for Objective in Opt.Size .. Opt.Speed loop
+         declare
+            Text : constant String := Converted (Item, Source, Objective);
+            Least : constant String := Routine (Text, "least");
+            Below : constant String := Routine (Text, "below");
+            Float_Least : constant String := Routine (Text, "fleast");
+            Pick : constant String := Routine (Text, "pick");
+            Where : constant String :=
+              " at " & Opt.Objective'Image (Objective);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Least, HT & "cmovl ")
+                     and then Contains (Least, "%rax" & LF)
+                     and then not Contains (Least, "setl"),
+               "a signed minimum moves on the comparison's flags" & Where);
+            Landin.Testing.Check
+              (Item, Contains (Below, HT & "cmovb ")
+                     and then Contains (Below, ", %eax" & LF),
+               "a narrow choice moves at 32 bits" & Where);
+            Landin.Testing.Check
+              (Item, Contains (Float_Least, "ucomisd ")
+                     and then Contains (Float_Least, HT & "cmova ")
+                     and then not Contains (Float_Least, "setp"),
+               "a float minimum moves its bits on above" & Where);
+            Landin.Testing.Check
+              (Item, Contains (Pick, "cmpb $0,")
+                     and then Contains (Pick, HT & "cmovne "),
+               "a stored bool is tested before the move" & Where);
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, not Contains (Converted (Item, Source, Opt.None), "cmov"),
+         "none chooses with a branch");
+   end Choices_Move_Conditionally;
+
+   --  Speed starts every routine on a cache line and pads a loop's head to
+   --  thirty-two bytes where only a jump reaches it, so that padding never
+   --  runs; a head control falls into keeps GCC's bounded padding.  Size
+   --  and none place nothing.
+   procedure Speed_Places_Code (Item : in out Landin.Testing.Context) is
+      HT : constant Character := Character'Val (9);
+      Source : constant String :=
+        "public fill: (inout t: [64]u8) -> none = "
+        & "for at in usize(0)..<64 do t[at] = u8(at) end for end fill "
+        & "public total: (t: []u8) -> (n: usize) = n = 0 "
+        & "mut at: usize = 0 while at < lenof t do "
+        & "n = n + usize(t[at]) inc at end while end total";
+      Speed : constant String := Converted (Item, Source, Opt.Speed);
+      Fill : constant String := Routine (Speed, "fill");
+      Total : constant String := Routine (Speed, "total");
+      Sections : constant Natural :=
+        Ada.Strings.Fixed.Count (Speed, HT & ".section .text.landin_routine_");
+   begin
+      Landin.Testing.Check
+        (Item, Sections >= 2
+         and then Ada.Strings.Fixed.Count
+           (Speed, ",""ax"",@progbits" & LF & HT & ".p2align 6" & LF)
+           = Sections,
+         "speed starts every routine on a cache line");
+      Landin.Testing.Check
+        (Item, Contains (Fill, LF & HT & "jmp .L")
+         and then Ada.Strings.Fixed.Count (Fill, HT & ".p2align 5" & LF) = 1
+         and then not Contains (Fill, ".p2align 4"),
+         "a loop head only a jump reaches is padded to 32 bytes");
+      Landin.Testing.Check
+        (Item, Contains (Total, HT & ".p2align 4,,10" & LF & HT
+                         & ".p2align 3" & LF & ".L")
+         and then not Contains (Total, ".p2align 5"),
+         "a loop head control falls into keeps bounded padding");
+      for Objective in Opt.None .. Opt.Size loop
+         Landin.Testing.Check
+           (Item, not Contains
+              (Converted (Item, Source, Objective), ".p2align 6")
+            and then not Contains
+              (Converted (Item, Source, Objective), ".p2align 5"),
+            Opt.Objective'Image (Objective) & " places no code");
+      end loop;
+   end Speed_Places_Code;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1558,6 +2003,22 @@ package body Landin.Tests.X86_Optimization_Suite is
         (Into, "x86 opt", "arithmetic shapes", Arithmetic_Shapes'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "element addressing", Element_Addressing'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "small routines", Small_Routines'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "caller-saved slots", Caller_Saved_Slots'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "float sources", Float_Sources'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "known atoms", Known_Atoms'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "a counted comparison is a flag add",
+         Counted_Flag_Adds'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "a choice is a conditional move",
+         Choices_Move_Conditionally'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "speed places code", Speed_Places_Code'Access);
    end Register;
 
 end Landin.Tests.X86_Optimization_Suite;

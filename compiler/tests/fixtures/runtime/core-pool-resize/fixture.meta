@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: mem.resize through a pool keeps a block in its slot to any extent the slot holds, with its bytes, refuses a larger extent or one the block does not have with the block as it was, and keeps the slot for a zero extent, freed with it
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0940, 1230, 1360
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

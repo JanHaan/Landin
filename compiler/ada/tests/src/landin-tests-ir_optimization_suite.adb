@@ -3,10 +3,17 @@ with Landin.IR.Testing_Support;
 with Landin.Targets.Capabilities;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
+with Landin.Backend.Arm64;
 with Landin.Backend.X86_64;
+with Landin.Backend.X86_64.Allocation;
 with Landin.Build_Reports;
 with Landin.IR.Control_Flow;
+with Landin.IR.Dominance;
 with Landin.IR.Dump;
+with Landin.IR.If_Conversion;
+with Landin.IR.In_Place;
+with Landin.IR.Scalar_Replacement;
 with Landin.IR.Simplification;
 with Landin.IR.Specialization;
 with Landin.IR.Specialization_Policy;
@@ -70,6 +77,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Constant_Shifts (Item : in out Landin.Testing.Context);
    procedure Effect_Preservation (Item : in out Landin.Testing.Context);
    procedure Overwritten_Local_Stores (Item : in out Landin.Testing.Context);
+   procedure Scalar_Replacement (Item : in out Landin.Testing.Context);
    procedure Forwarding_Through_Writes
      (Item : in out Landin.Testing.Context);
    procedure Block_Value_Numbering (Item : in out Landin.Testing.Context);
@@ -88,6 +96,22 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure Scalar_Boundaries (Item : in out Landin.Testing.Context);
    procedure Policy_Boundaries (Item : in out Landin.Testing.Context);
    procedure Cyclic_Islands (Item : in out Landin.Testing.Context);
+   procedure In_Place_Parameters (Item : in out Landin.Testing.Context);
+   procedure Module_Constants (Item : in out Landin.Testing.Context);
+   procedure Proved_Checks (Item : in out Landin.Testing.Context);
+   procedure Dominators (Item : in out Landin.Testing.Context);
+   procedure Choices_From_Computing_Arms
+     (Item : in out Landin.Testing.Context);
+   procedure Branches_Around_Observable_Arms
+     (Item : in out Landin.Testing.Context);
+
+   --  Source lowered, simplified and if-converted at Objective: the
+   --  branches and choices left, and how many choices take two constants.
+   procedure Converted
+     (Item : in out Landin.Testing.Context;
+      Source : String;
+      Objective : Opt.Objective;
+      Branches, Choices, Constant_Choices : out Natural);
 
    type Incoming_Kind is (Literal_Table, Unknown_Table, Wrong_Table);
    type Assembly_Case is
@@ -337,6 +361,95 @@ package body Landin.Tests.IR_Optimization_Suite is
         ("public f: (flag: bool) -> (r: i32) = "
          & "mut x: i32 = 1 if flag then x = 2 end if r = x end f", 0);
    end Overwritten_Local_Stores;
+
+   procedure Scalar_Replacement (Item : in out Landin.Testing.Context) is
+      --  Pieces: scalar slots the pass adds.  Split_Declared: declared
+      --  slots it moves into pieces.  Field_Loads: loads that still read a
+      --  field, which for a parameter are its copies on entry.
+      procedure Check
+        (Label, Source : String; Objective : Opt.Objective;
+         Pieces, Split_Declared, Field_Loads : Natural);
+
+      procedure Check
+        (Label, Source : String; Objective : Opt.Objective;
+         Pieces, Split_Declared, Field_Loads : Natural)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+
+         function Slots (Code : IR.Unit) return Natural;
+         function Slots (Code : IR.Unit) return Natural is
+            Total : Natural := 0;
+         begin
+            for I in 1 .. IR.Item_Count (Code) loop
+               Total := Total + IR.Slot_Count (Code, IR.Item_Id (I));
+            end loop;
+            return Total;
+         end Slots;
+      begin
+         Lower (Item, Work, Source);
+         declare
+            Code : IR.Unit renames Landin.Stages.Code (Work).all;
+            Before : constant Natural := Slots (Code);
+            Split : Natural := 0;
+         begin
+            IR.Scalar_Replacement.Run
+              (Code, Landin.Stages.Target (Work), Objective);
+            for I in 1 .. IR.Item_Count (Code) loop
+               for S in 1 .. IR.Slot_Count (Code, IR.Item_Id (I)) loop
+                  if IR.First_Piece (Code, IR.Item_Id (I), IR.Slot_Id (S))
+                       /= IR.No_Slot
+                    and then IR.Declares
+                      (Code, IR.Item_Id (I), IR.Slot_Id (S))
+                      /= Landin.Provenance.No_Declaration
+                  then
+                     Split := Split + 1;
+                  end if;
+               end loop;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Slots (Code) - Before, Pieces, Label & ": pieces");
+            Landin.Testing.Check_Equal
+              (Item, Split, Split_Declared, Label & ": declared slots split");
+            Landin.Testing.Check_Equal
+              (Item, Count (Code, IR.Load_Field), Field_Loads,
+               Label & ": field loads");
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Code).Kind = IR.Verifier.Nothing_Wrong,
+               Label & ": the result verifies");
+         end;
+      end Check;
+
+      Loop_Source : constant String :=
+        "public f: (s: []u8) -> (r: usize) = r = 0 first: usize = 0 "
+        & "for i in first..<lenof s do r += usize(s[i]) end for end f";
+      Local_Source : constant String :=
+        "public f: (s: []u8) -> (r: usize) = mut t: []u8 = s "
+        & "t = t[1..<lenof t] r = lenof t end f";
+   begin
+      Check ("none", Loop_Source, Opt.None, 0, 0, 4);
+      --  The parameter stays whole as it arrived; its two parts are
+      --  copied out once and every loop read becomes a scalar load.
+      Check ("parameter", Loop_Source, Opt.Speed, 2, 0, 2);
+      --  At size no register would hold the copies.
+      Check ("parameter at size", Loop_Source, Opt.Size, 0, 0, 4);
+      --  The copy into the split local reads the whole parameter's parts.
+      Check ("local at speed", Local_Source, Opt.Speed, 2, 1, 2);
+      --  Size keeps a declared variable in its frame cell.
+      Check ("local at size", Local_Source, Opt.Size, 0, 0, 6);
+      Check ("address taken",
+             "public f: (s: []u8) -> (r: usize) = mut t: []u8 = s "
+             & "p: ptr []u8 = addr t v: []u8 = p.val r = lenof v end f",
+             Opt.Speed, 0, 0, 2);
+      --  The argument is a snapshot of t that its address carrier keeps
+      --  whole, so t is split and copied into the snapshot part by part.
+      --  g reads x outside any loop, so x is read where it arrived.
+      Check ("passed whole",
+             "g: (x: []u8) -> (r: usize) = r = lenof x end g "
+             & "public f: (s: []u8) -> (r: usize) = t: []u8 = s "
+             & "r = g(t) + lenof t end f",
+             Opt.Speed, 2, 1, 4);
+   end Scalar_Replacement;
 
    procedure Forwarding_Through_Writes
      (Item : in out Landin.Testing.Context)
@@ -1033,7 +1146,11 @@ package body Landin.Tests.IR_Optimization_Suite is
                   begin
                      Landin.Testing.Check
                        (Item, Decision.Benefit = 17
-                        and then Decision.Estimated_Growth = 12
+                        --  D211: at speed a rewrite inside an existing
+                        --  instance grows nothing; elsewhere it may split
+                        --  a shared body, so the body is charged.
+                        and then Decision.Estimated_Growth =
+                          (if Objective = Opt.Speed then 0 else 12)
                         and then Decision.Reason =
                           (if Mode = Opt.Off then Reports.Disabled
                            elsif Mode = Opt.All_Eligible then Reports.Forced
@@ -1080,56 +1197,68 @@ package body Landin.Tests.IR_Optimization_Suite is
          begin
             Lower (Item, Work,
                    "f: () -> none = end f g: () -> none = end g");
-            for Expose in Boolean loop
-               declare
-                  Code : IR.Unit;
-                  Report : Reports.Report;
-               begin
-                  Evidence_Unit
-                    (Code, Work, Literal_Table, 3, False,
-                     Split_Template => True);
-                  if Expose then
-                     --  Item 1 is the provider; item 3 is the second
-                     --  instance of f. A retained table exposes its address.
-                     declare
-                        Table : constant IR.Evidence_Id := IR.Add_Evidence
-                          (Code, (Element => Landin.Types.I32, others => <>));
-                     begin
-                        IR.Add_Evidence_Entry
-                          (Code, Table, 3,
-                           IR.Signature_Of (Code, IR.Item_Id'(3)));
-                     end;
-                  end if;
-                  IR.Specialization.Run (Code, Facts, (Opt.Size, Opt.Auto),
-                                         Report);
-                  Landin.Testing.Check_Equal
-                    (Item, Reports.Specialization_Count (Report), 3,
-                     "two templates retain three normalized decisions");
-                  for I in 1 .. 3 loop
-                     declare
-                        Decision : constant Reports.Specialization_Decision :=
-                          Reports.Nth_Specialization (Report, I);
-                        Single : constant Boolean :=
-                          I = 3 or else (Expose and then I = 1);
-                     begin
-                        Landin.Testing.Check
-                          (Item, Decision.Reason =
-                             (if Single then Reports.Single_Instance
-                              elsif Expose then Reports.Address_Exposed
-                              else Reports.Cost_Threshold),
-                           "counts exclude other templates and exposed roots");
-                        Landin.Testing.Check
-                          (Item, Decision.Action =
-                             (if Single then Reports.Specialized
-                              else Reports.Declined),
-                           "counting does not override evidence or cost");
-                     end;
-                  end loop;
-                  Landin.Testing.Check_Equal
-                    (Item, Count (Code, IR.Indirect_Call),
-                     (if Expose then 1 else 2),
-                     "unselected instances retain their dispatch fallback");
-               end;
+            for Objective in Opt.Objective range Opt.Size .. Opt.Speed loop
+               for Expose in Boolean loop
+                  declare
+                     Code : IR.Unit;
+                     Report : Reports.Report;
+                  begin
+                     Evidence_Unit
+                       (Code, Work, Literal_Table, 3, False,
+                        Split_Template => True);
+                     if Expose then
+                        --  Item 1 is the provider; item 3 is the second
+                        --  instance of f.  A retained table exposes its
+                        --  address.
+                        declare
+                           Table : constant IR.Evidence_Id :=
+                             IR.Add_Evidence
+                               (Code,
+                                (Element => Landin.Types.I32, others => <>));
+                        begin
+                           IR.Add_Evidence_Entry
+                             (Code, Table, 3,
+                              IR.Signature_Of (Code, IR.Item_Id'(3)));
+                        end;
+                     end if;
+                     IR.Specialization.Run
+                       (Code, Facts, (Objective, Opt.Auto), Report);
+                     Landin.Testing.Check_Equal
+                       (Item, Reports.Specialization_Count (Report), 3,
+                        "two templates retain three normalized decisions");
+                     for I in 1 .. 3 loop
+                        declare
+                           Decision : constant
+                             Reports.Specialization_Decision :=
+                               Reports.Nth_Specialization (Report, I);
+                           Single : constant Boolean :=
+                             I = 3 or else (Expose and then I = 1);
+                        begin
+                           Landin.Testing.Check
+                             (Item, Decision.Reason =
+                                (if Single then Reports.Single_Instance
+                                 elsif Expose then Reports.Address_Exposed
+                                 elsif Objective = Opt.Speed
+                                 then Reports.Profitable
+                                 else Reports.Cost_Threshold),
+                              "counts exclude other templates and exposed "
+                              & "roots");
+                           Landin.Testing.Check
+                             (Item, Decision.Action =
+                                (if Single or else (Objective = Opt.Speed
+                                                     and then not Expose)
+                                 then Reports.Specialized
+                                 else Reports.Declined),
+                              "counting does not override evidence or cost");
+                        end;
+                     end loop;
+                     Landin.Testing.Check_Equal
+                       (Item, Count (Code, IR.Indirect_Call),
+                        (if Expose then 1
+                         elsif Objective = Opt.Speed then 0 else 2),
+                        "unselected instances retain their dispatch fallback");
+                  end;
+               end loop;
             end loop;
          end;
       end loop;
@@ -1751,10 +1880,773 @@ package body Landin.Tests.IR_Optimization_Suite is
       Check_Target (Landin.Targets.Synthetic_32);
    end Dead_Function_Addresses;
 
+   --  D94's callee copy goes only where nothing could tell: each routine
+   --  below either reads its `in` aggregate where the caller keeps it or
+   --  keeps the copy, and a slice argument loses its caller temporary.
+   procedure In_Place_Parameters (Item : in out Landin.Testing.Context) is
+      Source : constant String :=
+        "pair: type = struct left: u64 right: u64 rows: [6]u64 end pair "
+        & "mut global: pair = zeroed "
+        --  Only reads.
+        & "total: (value: pair) -> (sum: u64) = "
+        & "sum = value.left + value.rows[5] end total "
+        --  Its address is taken.
+        & "apart: (value: pair) -> (at: usize) = "
+        & "at = usize(addr value) end apart "
+        --  The original is written through an inout place before a read.
+        & "inout_first: (value: pair, inout original: pair) -> (seen: u64) = "
+        & "original.left = 1 seen = value.left end inout_first "
+        --  A call that writes the original falls between two reads.
+        & "set_right: (inout original: pair) -> none = "
+        & "original.right = 2 end set_right "
+        & "across_call: (value: pair, inout original: pair) -> (seen: u64) = "
+        & "seen = value.right set_right(original) "
+        & "seen = seen + value.right end across_call "
+        --  A call rewrites a module binding the original may be.
+        & "clobber: () -> none = global.left = 9 end clobber "
+        & "across_global: (value: pair) -> (seen: u64) = "
+        & "clobber() seen = value.left end across_global "
+        --  The write comes after the last read.
+        & "read_then_write: (value: pair, original: ptr mut pair) "
+        & "-> (seen: u64) = seen = value.left original.val.left = 5 "
+        & "end read_then_write "
+        --  Passed on with a later argument, through a saved carrier.
+        & "pick: (value: pair, extra: u64) -> (sum: u64) = "
+        & "sum = value.right + extra end pick "
+        & "relay: (value: pair, extra: u64) -> (sum: u64) = "
+        & "sum = pick(value, extra + 1) end relay "
+        & "length_of: (bytes: []u8) -> (count: u64) = "
+        & "count = u64(lenof bytes) end length_of "
+        --  A scalar arriving in the register a zero carrier's clear uses.
+        & "after_scalar: (a: u64, value: pair) -> (sum: u64) = "
+        & "sum = a + value.left end after_scalar "
+        & "public main: () -> (code: i32) = text: []u8 = ""abcd"" "
+        & "mut p: pair = zeroed "
+        & "code = i32(length_of(text)) + i32(total(zeroed)) "
+        & "+ i32(relay(p, 1)) + i32(after_scalar(1, zeroed)) end main";
+
+      procedure One (Objective : Opt.Objective);
+
+      procedure One (Objective : Opt.Objective) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Name : constant String := Opt.Objective'Image (Objective);
+      begin
+         Lower (Item, Work, Source);
+         IR.Simplification.Run
+           (Landin.Stages.Code (Work).all, Landin.Stages.Target (Work),
+            Objective);
+         declare
+            Code : IR.Unit renames Landin.Stages.Code (Work).all;
+
+            function Named (Spelling : String) return IR.Item_Id;
+            function Named (Spelling : String) return IR.Item_Id is
+            begin
+               for Which in 1 .. IR.Item_Count (Code) loop
+                  declare
+                     Id : constant IR.Item_Id := IR.Item_Id (Which);
+                  begin
+                     if IR.Declares (Code, Id) /= IR.No_Declaration
+                       and then Landin.Source.Names.Spelling
+                         (Landin.Stages.Identities (Work).all,
+                          Landin.Resolution.Name_Of
+                            (Landin.Stages.Meanings (Work).all,
+                             IR.Declares (Code, Id))) = Spelling
+                     then
+                        return Id;
+                     end if;
+                  end;
+               end loop;
+               raise Landin.Compiler_Defect with "missing item " & Spelling;
+            end Named;
+
+            function In_Place (Spelling : String) return Boolean
+              is (IR.In_Place_Home
+                    (Code, Named (Spelling),
+                     IR.Nth_Parameter (Code, Named (Spelling), 1))
+                  /= IR.No_Slot);
+
+            function Copies (Spelling : String) return Natural;
+            function Copies (Spelling : String) return Natural is
+               Total : Natural := 0;
+            begin
+               for V in 1 .. IR.Value_Count (Code, Named (Spelling)) loop
+                  if IR.Op_Of (Code, Named (Spelling), IR.Value_Id (V))
+                    = IR.Copy_Array
+                  then
+                     Total := Total + 1;
+                  end if;
+               end loop;
+               return Total;
+            end Copies;
+
+            Main_Copies : constant Natural := Copies ("main");
+            Read_Only : constant Boolean := Objective /= Opt.None;
+         begin
+            IR.In_Place.Run (Code, Landin.Stages.Target (Work), Objective);
+            Landin.Testing.Check
+              (Item, In_Place ("total") = Read_Only,
+               Name & ": a parameter only read is read in place");
+            Landin.Testing.Check
+              (Item, In_Place ("read_then_write") = Read_Only,
+               Name & ": a write after the last read keeps it in place");
+            Landin.Testing.Check
+              (Item, (In_Place ("relay") and then In_Place ("pick"))
+                       = Read_Only,
+               Name & ": a saved carrier passed on is read in place");
+            Landin.Testing.Check
+              (Item, In_Place ("length_of") = Read_Only,
+               Name & ": a slice parameter is read in place");
+            Landin.Testing.Check
+              (Item,
+               not In_Place ("apart") and then not In_Place ("inout_first")
+               and then not In_Place ("across_call")
+               and then not In_Place ("across_global"),
+               Name & ": an address, an inout write and a writing call keep"
+               & " the copy");
+            --  At speed scalar replacement has already split `text`, whose
+            --  copy into the temporary is then one store per part.
+            Landin.Testing.Check_Equal
+              (Item,
+               Copies ("main") + (if Objective = Opt.Size then 1 else 0),
+               Main_Copies,
+               Name & ": only an optimizing pass drops the slice temporary");
+
+            --  The verifier holds the parameter to its home.
+            if Read_Only then
+               declare
+                  Routine : constant IR.Item_Id := Named ("total");
+                  Slot : constant IR.Slot_Id :=
+                    IR.Nth_Parameter (Code, Routine, 1);
+                  Home : constant IR.Slot_Id :=
+                    IR.In_Place_Home (Code, Routine, Slot);
+               begin
+                  IR.Testing_Support.Overwrite_In_Place_Home
+                    (Code, Routine, Slot, Slot);
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Verifier.Check (Code).Kind
+                       = IR.Verifier.Runtime_Address_Is_Not_Valid,
+                     Name & ": a parameter cannot be its own home");
+                  IR.Testing_Support.Overwrite_In_Place_Home
+                    (Code, Routine, Slot, IR.No_Slot);
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Verifier.Check (Code).Kind
+                       = IR.Verifier.Routine_Signature_Disagrees,
+                     Name & ": an address for a value parameter needs a"
+                     & " home");
+                  IR.Testing_Support.Overwrite_In_Place_Home
+                    (Code, Routine, Slot, Home);
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Verifier.Check (Code).Kind
+                       = IR.Verifier.Nothing_Wrong,
+                     Name & ": the home restored verifies");
+               end;
+            end if;
+
+            --  A zero carrier's clear writes %rdi, where a first scalar
+            --  parameter arrives: that parameter may not stay there.
+            declare
+               use type Landin.Backend.X86_64.Allocation.Location_Kind;
+               use type Landin.Backend.X86_64.Allocation.Register_Id;
+               Routine : constant IR.Item_Id := Named ("after_scalar");
+               Plan : constant Landin.Backend.X86_64.Allocation.Plan :=
+                 Landin.Backend.X86_64.Allocation.Make
+                   (Code, Routine, Landin.Stages.Target (Work),
+                    (Optimize => Objective, Specialize => Opt.Off));
+               Scalar : constant Positive :=
+                 Positive (IR.Nth_Parameter (Code, Routine, 1));
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  not (Plan.Slot (Scalar).Kind
+                         = Landin.Backend.X86_64.Allocation.GP
+                       and then Plan.Slot (Scalar).Register
+                         = Landin.Backend.X86_64.Allocation.RDI),
+                  Name & ": a zero carrier's clear moves a scalar out of"
+                  & " the register it arrived in");
+            end;
+
+            declare
+               Assembly : Ada.Strings.Unbounded.Unbounded_String;
+               Report : Reports.Report;
+            begin
+               Landin.Backend.X86_64.Emit
+                 (Code, Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work),
+                  (Optimize => Objective, Specialize => Opt.Off),
+                  Assembly, Report);
+               declare
+                  Text : constant String :=
+                    Ada.Strings.Unbounded.To_String (Assembly);
+
+                  function Entry_Of (Spelling : String) return String;
+                  function Entry_Of (Spelling : String) return String is
+                     First : constant Natural := Ada.Strings.Fixed.Index
+                       (Text, ASCII.LF & Spelling & ":" & ASCII.LF);
+                     Last : constant Natural :=
+                       (if First = 0 then 0
+                        else Ada.Strings.Fixed.Index
+                          (Text, "_done:", First));
+                  begin
+                     return (if First = 0 or else Last = 0 then ""
+                             else Text (First .. Last));
+                  end Entry_Of;
+
+                  Kept : constant String := Entry_Of ("inout_first");
+                  Read : constant String := Entry_Of ("total");
+               begin
+                  Landin.Testing.Check
+                    (Item,
+                     Ada.Strings.Fixed.Index (Kept, "_zero_arg_1:") /= 0,
+                     Name & ": x86-64 copies a parameter that must stay");
+                  Landin.Testing.Check
+                    (Item,
+                     (Ada.Strings.Fixed.Index (Read, "_zero_arg_1:") = 0
+                      and then Ada.Strings.Fixed.Index (Read, "(%rsi)") = 0
+                      and then Ada.Strings.Fixed.Index (Read, "jnz ") /= 0)
+                     = Read_Only,
+                     Name & ": x86-64 reads in place, clearing its home only"
+                     & " for a zero carrier");
+               end;
+            end;
+         end;
+      end One;
+      --  arm64 keeps a parameter in the register it arrives in, where
+      --  its carrier is still found: the zero test reads that register,
+      --  and x10 only once the entry has loaded the carrier into it.
+      procedure Arm64 (Objective : Opt.Objective);
+
+      procedure Arm64 (Objective : Opt.Objective) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_Arm64);
+         Name : constant String := "arm64 " & Opt.Objective'Image (Objective);
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Reports.Report;
+      begin
+         Lower (Item, Work, Source);
+         IR.Simplification.Run
+           (Landin.Stages.Code (Work).all, Landin.Stages.Target (Work),
+            Objective);
+         IR.In_Place.Run
+           (Landin.Stages.Code (Work).all, Landin.Stages.Target (Work),
+            Objective);
+         Landin.Backend.Arm64.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Landin.Stages.Target (Work),
+            (Optimize => Objective, Specialize => Opt.Off),
+            Assembly, Report);
+         declare
+            Text : constant String :=
+              Ada.Strings.Unbounded.To_String (Assembly);
+            First : constant Natural := Ada.Strings.Fixed.Index
+              (Text, ASCII.LF & "total:" & ASCII.LF);
+            Test : constant Natural :=
+              (if First = 0 then 0
+               else Ada.Strings.Fixed.Index (Text, "cbnz ", First));
+            Register_Last : constant Natural :=
+              (if Test = 0 then 0
+               else Ada.Strings.Fixed.Index (Text, ",", Test));
+            Register : constant String :=
+              (if Register_Last = 0 then ""
+               else Text (Test + 5 .. Register_Last - 1));
+         begin
+            Landin.Testing.Check
+              (Item,
+               Register /= ""
+               and then
+                 (Register in "x0" | "x1" | "x2" | "x3" | "x4" | "x5"
+                              | "x6" | "x7"
+                  or else Ada.Strings.Fixed.Index
+                    (Text (First .. Test), "mov " & Register & ",") /= 0),
+               Name & ": the zero test reads the register holding the"
+               & " carrier, here " & Register);
+         end;
+      end Arm64;
+   begin
+      One (Opt.None);
+      One (Opt.Size);
+      One (Opt.Speed);
+      Arm64 (Opt.Size);
+      Arm64 (Opt.Speed);
+   end In_Place_Parameters;
+   --  A module value that is not `mut` is its target's image wherever it
+   --  is read, and what then becomes constant folds with it; a `mut` one,
+   --  and every value under the reference profile, is still read.
+   procedure Module_Constants (Item : in out Landin.Testing.Context) is
+      Source : constant String :=
+        "word: usize = sizeof usize "
+        & "mask: usize = word - 1 "
+        & "mut moving: usize = 3 "
+        & "public f: (x: usize) -> (r: usize) = "
+        & "r = (x & mask) + moving end f";
+   begin
+      for Wide in Boolean loop
+         for Objective in Opt.Objective loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Wide then Landin.Targets.Linux_X86_64
+                  else Landin.Targets.Synthetic_32);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Folded : Boolean := False;
+               Reads : Natural := 0;
+            begin
+               Lower (Item, Work, Source);
+               IR.Simplification.Run
+                 (Landin.Stages.Code (Work).all, Facts, Objective);
+               declare
+                  Code : IR.Unit renames Landin.Stages.Code (Work).all;
+               begin
+                  for I in 1 .. IR.Item_Count (Code) loop
+                     if IR.Kind_Of (Code, IR.Item_Id (I)) = IR.Routine then
+                        for V in 1 .. IR.Value_Count (Code, IR.Item_Id (I))
+                        loop
+                           if IR.Op_Of (Code, IR.Item_Id (I), IR.Value_Id (V))
+                             = IR.Load_Datum
+                           then
+                              Reads := Reads + 1;
+                           elsif IR.Op_Of
+                             (Code, IR.Item_Id (I), IR.Value_Id (V))
+                             = IR.Bitwise_And
+                           then
+                              declare
+                                 Mask : constant IR.Value_Id := IR.Nth_Operand
+                                   (Code, IR.Item_Id (I), IR.Value_Id (V), 2);
+                              begin
+                                 Folded := IR.Op_Of
+                                   (Code, IR.Item_Id (I), Mask) = IR.Number
+                                   and then IR.Number_Of
+                                     (Code, IR.Item_Id (I), Mask)
+                                     = (if Wide then 7 else 3);
+                              end;
+                           end if;
+                        end loop;
+                     end if;
+                  end loop;
+                  Landin.Testing.Check
+                    (Item, Folded = (Objective /= Opt.None),
+                     "an immutable module value is its target's image");
+                  Landin.Testing.Check_Equal
+                    (Item, Reads, (if Objective = Opt.None then 2 else 1),
+                     "a mutable module value is still read");
+               end;
+            end;
+         end loop;
+      end loop;
+   end Module_Constants;
+
+   --  [1960] and D211: a check whose operands a dominating comparison, a
+   --  type's range or a passed check in its block bounds cannot fail, and
+   --  loses its edge.  Every case beside one that must keep it.
+   procedure Proved_Checks (Item : in out Landin.Testing.Context) is
+      procedure Check_Proved
+        (Source : String; Op : IR.Opcode; Expected : Natural; Why : String;
+         Objective : Opt.Objective := Opt.Size);
+
+      procedure Check_Proved
+        (Source : String; Op : IR.Opcode; Expected : Natural; Why : String;
+         Objective : Opt.Objective := Opt.Size)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Total : Natural := 0;
+      begin
+         Lower (Item, Work, Source);
+         IR.Simplification.Run
+           (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
+            Objective);
+         declare
+            Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         begin
+            for I in 1 .. IR.Item_Count (Code) loop
+               if IR.Kind_Of (Code, IR.Item_Id (I)) = IR.Routine then
+                  for V in 1 .. IR.Value_Count (Code, IR.Item_Id (I)) loop
+                     if IR.Op_Of (Code, IR.Item_Id (I), IR.Value_Id (V)) = Op
+                       and then IR.Is_Unchecked
+                         (Code, IR.Item_Id (I), IR.Value_Id (V))
+                     then
+                        Total := Total + 1;
+                     end if;
+                  end loop;
+               end if;
+            end loop;
+         end;
+         Landin.Testing.Check_Equal (Item, Total, Expected, Why);
+      end Check_Proved;
+   begin
+      Check_Proved
+        ("public f: (t: [256]u8, b: u8) -> (r: u8) = r = t[usize(b)] end f",
+         IR.Load_Element, 1, "a widened u8 indexes [256]u8");
+      Check_Proved
+        ("public f: (t: [255]u8, b: u8) -> (r: u8) = r = t[usize(b)] end f",
+         IR.Load_Element, 0, "a u8 may be 255, past [255]u8");
+      Check_Proved
+        ("public f: (t: [256]u8, b: u16) -> (r: u8) = r = t[usize(b)] end f",
+         IR.Load_Element, 0, "a u16 may be past [256]u8");
+      Check_Proved
+        ("public f: (n: usize) -> (r: usize) = mut at: usize = n r = 0 "
+         & "while at > 0 do dec at r += 1 end while end f",
+         IR.Subtract, 1, "a decrement under at > 0");
+      Check_Proved
+        ("public f: (n: u32) -> (r: u32) = r = 0 "
+         & "if n <> 0 then r = n - 1 end if end f",
+         IR.Subtract, 1, "an unsigned value other than zero is above it");
+      Check_Proved
+        ("public f: (x: usize, flag: bool) -> (r: usize) = "
+         & "mut y: usize = 0 if x > 0 then y = 1 end if r = x - 1 + y end f",
+         IR.Subtract, 0, "a join's other edge proves nothing");
+      Check_Proved
+        ("public f: (inout v: [16]u8) -> none = mut left: usize = 0 "
+         & "mut right: usize = usize(v[0]) while left < right do "
+         & "inc left dec right end while end f",
+         IR.Add, 1, "left < right leaves room above left");
+      Check_Proved
+        ("public f: (inout v: [16]u8) -> none = mut left: usize = 0 "
+         & "mut right: usize = usize(v[0]) while left < right do "
+         & "inc left dec right end while end f",
+         IR.Subtract, 1, "left < right puts right above zero");
+      Check_Proved
+        ("public f: (n: usize) -> (r: usize) = mut i: usize = 0 "
+         & "while i <= n do inc i end while r = i end f",
+         IR.Add, 0, "i <= n leaves no room when n is the largest");
+      Check_Proved
+        ("public f: (n: usize, flag: bool) -> (r: usize) = "
+         & "mut i: usize = 0 r = 0 while i < n do "
+         & "if flag then i = i + 5 end if r = i + 1 end while end f",
+         IR.Add, 0, "a store on the way to a use ends the fact");
+      Check_Proved
+        ("public f: (s: []u8) -> (r: usize) = r = 0 first: usize = 0 "
+         & "for i in first..<lenof s do r += usize(s[i]) end for end f",
+         IR.Slice_Address, 1, "a loop below a slice's length indexes it");
+      Check_Proved
+        ("public f: (s: []u8) -> (r: usize) = r = 0 first: usize = 0 "
+         & "for i in first..<lenof s do r += usize(s[i + 1]) end for end f",
+         IR.Slice_Address, 0, "the next element may be past the end");
+      Check_Proved
+        ("public f: (s: []u8, t: []u8) -> (r: usize) = r = 0 "
+         & "first: usize = 0 "
+         & "for i in first..<lenof t do r += usize(s[i]) end for end f",
+         IR.Slice_Address, 0, "another slice's length bounds nothing");
+      Check_Proved
+        ("public f: (s: []u8, t: []u8) -> (r: usize) = r = 0 "
+         & "mut u: []u8 = s first: usize = 0 "
+         & "for i in first..<lenof u do u = t r += usize(u[i]) end for end f",
+         IR.Slice_Address, 0, "a reassigned slice's length bounds nothing");
+      Check_Proved
+        ("public f: (s: []u8) -> (r: u8) = r = s[lenof s - 1] end f",
+         IR.Slice_Address, 1, "a length less one that did not trap");
+      Check_Proved
+        ("public f: (s: []u8) -> (r: u8) = mut x: usize = 0 "
+         & "unchecked begin x = lenof s - 1 end unchecked r = s[x] end f",
+         IR.Slice_Address, 0, "an unchecked length less one may wrap");
+      --  At speed scalar replacement copies a parameter's length out on
+      --  entry and splits a local slice; the proofs see through both.
+      Check_Proved
+        ("public f: (s: []u8) -> (r: usize) = r = 0 first: usize = 0 "
+         & "for i in first..<lenof s do r += usize(s[i]) end for end f",
+         IR.Slice_Address, 1, "an entry copy of the length bounds the loop",
+         Opt.Speed);
+      Check_Proved
+        ("public f: (s: []u8) -> (r: usize) = r = 0 first: usize = 0 "
+         & "for i in first..<lenof s do r += usize(s[i + 1]) end for end f",
+         IR.Slice_Address, 0, "at speed the next element may be past the end",
+         Opt.Speed);
+      Check_Proved
+        ("public f: (s: []u8) -> (r: usize) = r = 0 mut u: []u8 = s "
+         & "first: usize = 0 "
+         & "for i in first..<lenof u do r += usize(u[i]) end for end f",
+         IR.Slice_Address, 1, "a split local's length bounds the loop",
+         Opt.Speed);
+      Check_Proved
+        ("public f: (s: []u8, t: []u8) -> (r: usize) = r = 0 "
+         & "mut u: []u8 = s first: usize = 0 "
+         & "for i in first..<lenof u do u = t r += usize(u[i]) end for end f",
+         IR.Slice_Address, 0, "a split slice reassigned bounds nothing",
+         Opt.Speed);
+      Check_Proved
+        ("public f: (i: usize) -> (r: u8) = mut v: [8]u8 = zeroed "
+         & "v[i] = 3 r = v[i] end f",
+         IR.Load_Element, 1, "a passed index check is not repeated");
+      Check_Proved
+        ("public f: (inout v: [8]u8, i: usize) -> (r: u8) = "
+         & "unchecked begin v[i] = 1 end unchecked r = v[i] end f",
+         IR.Storage_Address, 1, "an unchecked index proves nothing");
+   end Proved_Checks;
+
+   --  Lengauer and Tarjan's tree over a hand-made graph with a join, a
+   --  loop and an unreached block, then work that stays near-linear over
+   --  a ladder whose every rung also jumps to one exit.
+   procedure Dominators (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Code : IR.Unit;
+      Site : Landin.Provenance.Origin;
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      IR.Prepare (Code, Landin.Stages.Meanings (Work).all);
+      Site := IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
+      declare
+         Routine : constant IR.Item_Id := IR.Add_Item
+           (Code, IR.Routine, 1, Landin.Types.No_Value, Site);
+         Blocks : array (1 .. 7) of IR.Block_Id;
+         Condition : IR.Value_Id;
+      begin
+         for B in Blocks'Range loop
+            Blocks (B) := IR.Add_Block
+              (Code, Routine, Landin.Resolution.Program_Scope, Site);
+         end loop;
+         for B in Blocks'Range loop
+            IR.Enter (Code, Routine, Blocks (B));
+            case B is
+               when 1 | 4 =>
+                  Condition := IR.Emit_Truth (Code, Routine, True, Site);
+                  IR.Emit_Branch
+                    (Code, Routine, Condition, Blocks (B + 1),
+                     Blocks (B + 2), Site);
+               when 2 | 3 | 5 | 7 =>
+                  IR.Emit_Jump (Code, Routine, Blocks (4), Site);
+               when others =>
+                  IR.Emit_Leave (Code, Routine, IR.No_Value, Site);
+            end case;
+            IR.Leave_Block (Code, Routine);
+         end loop;
+         declare
+            Graph : constant IR.Control_Flow.Graph :=
+              IR.Control_Flow.Make (Code, Routine);
+            Tree : IR.Dominance.Tree;
+            function Up (B : Positive) return IR.Block_Id
+              is (IR.Dominance.Immediate (Tree, Blocks (B)));
+         begin
+            IR.Dominance.Build (Tree, Graph);
+            Landin.Testing.Check
+              (Item, Up (1) = IR.No_Block and then Up (2) = Blocks (1)
+               and then Up (3) = Blocks (1) and then Up (4) = Blocks (1)
+               and then Up (5) = Blocks (4) and then Up (6) = Blocks (4)
+               and then Up (7) = IR.No_Block
+               and then IR.Dominance.Reached (Tree) = 6
+               and then IR.Dominance.Position (Tree, Blocks (7)) = 0,
+               "each reached block's immediate dominator, none unreached");
+            Landin.Testing.Check
+              (Item, IR.Dominance.Dominates (Tree, Blocks (4), Blocks (5))
+               and then IR.Dominance.Dominates (Tree, Blocks (1), Blocks (1))
+               and then not IR.Dominance.Strictly_Dominates
+                 (Tree, Blocks (1), Blocks (1))
+               and then not IR.Dominance.Dominates
+                 (Tree, Blocks (2), Blocks (4))
+               and then not IR.Dominance.Dominates
+                 (Tree, Blocks (5), Blocks (4))
+               and then not IR.Dominance.Dominates
+                 (Tree, Blocks (7), Blocks (4)),
+               "a join and a loop's back edge dominate nothing past them");
+         end;
+      end;
+      declare
+         Rungs : constant := 4096;
+         Routine : constant IR.Item_Id := IR.Add_Item
+           (Code, IR.Routine, IR.No_Declaration, Landin.Types.No_Value, Site);
+         Blocks : array (1 .. Rungs + 1) of IR.Block_Id;
+         Condition : IR.Value_Id;
+      begin
+         for B in Blocks'Range loop
+            Blocks (B) := IR.Add_Block
+              (Code, Routine, Landin.Resolution.Program_Scope, Site);
+         end loop;
+         for B in Blocks'Range loop
+            IR.Enter (Code, Routine, Blocks (B));
+            if B < Rungs then
+               Condition := IR.Emit_Truth (Code, Routine, True, Site);
+               IR.Emit_Branch
+                 (Code, Routine, Condition, Blocks (B + 1),
+                  Blocks (Rungs + 1), Site);
+            elsif B = Rungs then
+               IR.Emit_Jump (Code, Routine, Blocks (1), Site);
+            else
+               IR.Emit_Leave (Code, Routine, IR.No_Value, Site);
+            end if;
+            IR.Leave_Block (Code, Routine);
+         end loop;
+         declare
+            Graph : constant IR.Control_Flow.Graph :=
+              IR.Control_Flow.Make (Code, Routine);
+            Tree : IR.Dominance.Tree;
+         begin
+            IR.Dominance.Build (Tree, Graph);
+            Landin.Testing.Check
+              (Item, IR.Dominance.Immediate (Tree, Blocks (Rungs + 1))
+                 = Blocks (1)
+               and then IR.Dominance.Immediate (Tree, Blocks (Rungs))
+                 = Blocks (Rungs - 1)
+               and then IR.Dominance.Evaluation_Steps (Tree) <= 4 * Rungs,
+               "a long ladder's tree in near-linear evaluation:"
+               & Natural'Image (IR.Dominance.Evaluation_Steps (Tree)));
+         end;
+      end;
+   end Dominators;
+
+   procedure Converted
+     (Item : in out Landin.Testing.Context;
+      Source : String;
+      Objective : Opt.Objective;
+      Branches, Choices, Constant_Choices : out Natural)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+   begin
+      Lower (Item, Work, Source);
+      IR.Simplification.Run
+        (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
+         Objective);
+      IR.If_Conversion.Run
+        (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
+         Objective);
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Branches := Count (Code, IR.Branch);
+         Choices := Count (Code, IR.Choose);
+         Constant_Choices := 0;
+         for I in 1 .. IR.Item_Count (Code) loop
+            for V in 1 .. IR.Value_Count (Code, IR.Item_Id (I)) loop
+               if IR.Op_Of (Code, IR.Item_Id (I), IR.Value_Id (V))
+                    = IR.Choose
+                 and then
+                   (for all Position in 2 .. 3 =>
+                      IR.Op_Of
+                        (Code, IR.Item_Id (I),
+                         IR.Nth_Operand
+                           (Code, IR.Item_Id (I), IR.Value_Id (V), Position))
+                      = IR.Number)
+               then
+                  Constant_Choices := Constant_Choices + 1;
+               end if;
+            end loop;
+         end loop;
+      end;
+   end Converted;
+
+   --  D338: an `if` whose arms only load, store and compute without a
+   --  trap becomes a choice at size and speed, as does a checked count
+   --  that only one arm makes; `--optimize none` keeps every branch.
+   procedure Choices_From_Computing_Arms
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Expect
+        (Source : String; Choices, Constants : Natural; Why : String);
+
+      procedure Expect
+        (Source : String; Choices, Constants : Natural; Why : String)
+      is
+         Branches, Found, Constant_Found : Natural;
+      begin
+         for Objective in Opt.Size .. Opt.Speed loop
+            Converted
+              (Item, Source, Objective, Branches, Found, Constant_Found);
+            Landin.Testing.Check
+              (Item, Branches = 0 and then Found = Choices
+                     and then Constant_Found = Constants,
+               Why & " at " & Opt.Objective'Image (Objective)
+               & ": branches" & Natural'Image (Branches)
+               & ", choices" & Natural'Image (Found)
+               & ", of constants" & Natural'Image (Constant_Found));
+         end loop;
+         Converted
+           (Item, Source, Opt.None, Branches, Found, Constant_Found);
+         Landin.Testing.Check
+           (Item, Branches > 0 and then Found = 0,
+            Why & ": none converts nothing");
+      end Expect;
+   begin
+      Expect
+        ("public f: (a: i32, b: i32) -> (r: i32) = "
+         & "if a < b then r = a else r = b end if end f",
+         1, 0, "a minimum chooses between its operands");
+      Expect
+        ("public f: (a: f64, b: f64) -> (r: u32) = mut n: u32 = 0 "
+         & "if a >= b then inc n end if r = n end f",
+         1, 1, "a checked count adds a chosen one or zero");
+      Expect
+        ("public f: (a: f64, b: f64) -> (r: f64) = mut m: f64 = b "
+         & "if a < b then m = a * 2.0 - 1.0 end if r = m end f",
+         1, 0, "float arithmetic cannot trap");
+      Expect
+        ("public f: (a: u8, b: u8) -> (r: u8) = mut x: u8 = 0 "
+         & "mut y: u8 = 0 if a <> b then x = a +% b y = a ^ b "
+         & "else x = 1 end if r = x | y end f",
+         2, 0, "each slot an arm stores is chosen");
+      Expect
+        ("public f: (c: bool, n: usize) -> (r: usize) = mut k: usize = n "
+         & "if c then dec k end if r = k end f",
+         1, 1, "a checked decrement subtracts a chosen one or zero");
+   end Choices_From_Computing_Arms;
+
+   --  D211 lets no trap, call or write move to where its arm did not
+   --  run, so an arm with one keeps its branch.  So does an arm whose
+   --  condition reads the slot it stores, whose choice would wait on the
+   --  value it chose last.
+   procedure Branches_Around_Observable_Arms
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Expect (Source : String; Why : String);
+
+      procedure Expect (Source : String; Why : String) is
+         Branches, Choices, Constants : Natural;
+      begin
+         for Objective in Opt.Size .. Opt.Speed loop
+            Converted (Item, Source, Objective, Branches, Choices, Constants);
+            Landin.Testing.Check
+              (Item, Branches = 1 and then Choices = 0,
+               Why & " at " & Opt.Objective'Image (Objective));
+         end loop;
+      end Expect;
+   begin
+      Expect
+        ("public f: (t: [4]u32, i: usize, c: bool) -> (r: u32) = r = 0 "
+         & "if c then r = t[i] end if end f",
+         "an index check in an arm");
+      Expect
+        ("public f: (n: u32, d: u32) -> (r: u32) = r = 0 "
+         & "if d > 1 then r = n / d end if end f",
+         "a division in an arm");
+      Expect
+        ("public f: (a: u32, b: u32, c: bool) -> (r: u32) = r = 0 "
+         & "if c then r = a + b end if end f",
+         "a checked addition that is not the slot's own update");
+      Expect
+        ("public f: (c: bool, n: u32) -> (r: u32) = mut k: u32 = n "
+         & "if c then inc k else k = 0 end if r = k end f",
+         "a checked update the other arm also stores");
+      Expect
+        ("g: () -> (r: u32) = r = 1 end g "
+         & "public f: (c: bool) -> (r: u32) = r = 0 "
+         & "if c then r = g() end if end f",
+         "a call in an arm");
+      Expect
+        ("public f: (p: ptr mut u32, c: bool) -> none = "
+         & "if c then p.val = 1 end if end f",
+         "a store through a pointer");
+      Expect
+        ("public f: (c: bool) -> (r: u32) = mut k: u32 = 0 "
+         & "p: ptr mut u32 = addr k if c then k = 1 end if "
+         & "r = p.val end f",
+         "a store to a slot whose address is taken");
+      Expect
+        ("public f: (m: u32, s: u32) -> (r: u32) = mut at: u32 = s "
+         & "at = at +% 1 if at == m then at = 0 end if r = at end f",
+         "a condition read from the slot the arm stores");
+   end Branches_Around_Observable_Arms;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "ir opt", "memory events", Memory_Events'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "in-place parameters", In_Place_Parameters'Access);
       Landin.Testing.Register
         (Into, "ir opt", "exposure traversal keeps references",
          Exposure_Traversal_Keeps_References'Access);
@@ -1784,6 +2676,8 @@ package body Landin.Tests.IR_Optimization_Suite is
         (Into, "ir opt", "overwritten local stores",
          Overwritten_Local_Stores'Access);
       Landin.Testing.Register
+        (Into, "ir opt", "scalar replacement", Scalar_Replacement'Access);
+      Landin.Testing.Register
         (Into, "ir opt", "static dispatch", Static_Dispatch'Access);
       Landin.Testing.Register
         (Into, "ir opt", "exposed evidence", Exposed_Evidence'Access);
@@ -1810,5 +2704,19 @@ package body Landin.Tests.IR_Optimization_Suite is
         (Into, "ir opt", "policy boundaries", Policy_Boundaries'Access);
       Landin.Testing.Register
         (Into, "ir opt", "cyclic islands", Cyclic_Islands'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "module constants", Module_Constants'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "proved checks", Proved_Checks'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "dominators", Dominators'Access);
+      Landin.Testing.Register
+        (Into, "ir opt",
+         "if-conversion chooses between arms that only compute",
+         Choices_From_Computing_Arms'Access);
+      Landin.Testing.Register
+        (Into, "ir opt",
+         "if-conversion keeps a branch whose arm could be observed",
+         Branches_Around_Observable_Arms'Access);
    end Register;
 end Landin.Tests.IR_Optimization_Suite;

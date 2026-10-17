@@ -38,8 +38,18 @@ The manifest covers each independent optimization and specialization control
 in both build modes.  Each digest's key names its exact profile so that a
 host disagreement identifies the path that produced it.
 
+The manifest says nothing about how `refine` itself was built: every host
+emits with its debug compiler.  The release compiler is the one people run,
+and a debug and a release build of one tree once disagreed on the bytes of
+every program that decoded text by codepoint, because Ada leaves the order
+of a call's actuals open and the two builds emitted two of them in opposite
+orders.  `modes` is that half: both builds compile the positive and runtime
+corpora, and the Cortex-M counterparts, at the four standard profiles, and
+every result has to agree.
+
     emit REFINE ROOT OUT.json     write this host's manifest
     compare A.json B.json [...]   require every manifest to agree
+    modes DEBUG RELEASE ROOT      require the two compiler builds to agree
 """
 import concurrent.futures
 import hashlib
@@ -281,6 +291,108 @@ def compare(paths):
     return 0
 
 
+#  The build-mode comparison: the request is fixed, so only the compiler's
+#  own build differs.  One target per backend; the standard profiles are the
+#  runtime corpus's own, so each pair is one the harness also executes.
+MODE_TARGETS = ("linux-x86-64", "linux-arm64", "cortex-m0")
+STANDARD_PROFILES = (("none", "off"), ("size", "off"), ("size", "auto"),
+                     ("speed", "auto"))
+#  A runtime fixture's `targets:` uses the lane names; refine names one
+#  of them differently.
+LANE_TARGETS = {"cortex-m": "cortex-m0", "macos-arm64": "darwin-arm64"}
+
+
+def mode_entries(root, targets):
+    """(name, directory, operands, targets) for each source compared.
+
+    A positive fixture is compiled for every target, a runtime fixture for
+    the targets its `targets:` names, and a Cortex-M counterpart, which has
+    no fixture record, for Cortex-M.
+    """
+    tests = Path(root).resolve() / "compiler/tests"
+    entries = []
+    for kind in ("positive", "runtime"):
+        for fixture in sorted(p for p in (tests / "fixtures" / kind).iterdir()
+                              if p.is_dir()):
+            wanted = targets
+            if kind == "runtime":
+                named = set()
+                for line in (fixture / "fixture.meta").read_text().splitlines():
+                    if line.startswith("targets:"):
+                        named = {LANE_TARGETS.get(one.strip(), one.strip())
+                                 for one in line.split(":", 1)[1].split(",")}
+                wanted = tuple(t for t in targets if t in named)
+            if wanted:
+                entries.append((kind + "/" + fixture.name, fixture,
+                                operands(fixture), wanted))
+    if "cortex-m0" in targets:
+        for case in sorted(p for p in (tests / "cortex-m/cases").iterdir()
+                           if p.is_dir()):
+            entries.append(("cortex-m/" + case.name, case, ["main.ldn"],
+                            ("cortex-m0",)))
+    return entries
+
+
+def emit_both(job):
+    """One request through both compilers: each result, then the key."""
+    key, compilers, directory, sources, target, optimize, specialize, tmp = job
+    results = []
+    for n, refine in enumerate(compilers):
+        asm = Path(tmp) / ("%d.s" % n)
+        result = subprocess.run(
+            [str(refine), "--target=" + target, "--optimize=" + optimize,
+             "--specialize=" + specialize, "--emit=asm", "-o", str(asm)]
+            + sources, capture_output=True, cwd=directory)
+        if result.returncode != 0 or not asm.exists():
+            #  A refusal agrees only with the same refusal, said the same way.
+            results.append("refused:%d:%s" % (
+                result.returncode,
+                hashlib.sha256(result.stdout + result.stderr).hexdigest()))
+        else:
+            results.append(hashlib.sha256(asm.read_bytes()).hexdigest())
+        asm.unlink(missing_ok=True)
+    return key, results
+
+
+def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
+    compilers = (Path(debug).resolve(), Path(release).resolve())
+    if workers is None:
+        workers = min(MAX_WORKERS, os.cpu_count() or 1)
+    entries = mode_entries(root, targets)
+    disagree, emitted, refused = [], 0, 0
+    with tempfile.TemporaryDirectory() as tmp:
+        jobs = []
+        for name, directory, sources, wanted in entries:
+            for target in wanted:
+                for optimize, specialize in STANDARD_PROFILES:
+                    key = (f"{name}|{target}|"
+                           f"optimize={optimize}|specialize={specialize}")
+                    scratch = Path(tmp) / str(len(jobs))
+                    scratch.mkdir()
+                    jobs.append((key, compilers, directory, sources, target,
+                                 optimize, specialize, scratch))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            for key, (first, second) in pool.map(emit_both, jobs):
+                if first != second:
+                    disagree.append("%s: debug %s, release %s"
+                                    % (key, first[:24], second[:24]))
+                elif first.startswith("refused:"):
+                    refused += 1
+                else:
+                    emitted += 1
+    print("sources %d  requests %d  emitted %d  refused alike %d  disagree %d"
+          % (len(entries), len(jobs), emitted, refused, len(disagree)))
+    faults = sorted(disagree)
+    if not emitted:
+        faults.insert(0, "no assembly digest was emitted")
+    if faults:
+        print("the debug and release compilers do not emit the same bytes: "
+              "%d fault(s)" % len(faults), file=sys.stderr)
+        report_faults(faults)
+        return 1
+    return 0
+
+
 def main(argv):
     if len(argv) == 5 and argv[1] == "emit":
         return emit(argv[2], argv[3], argv[4])
@@ -291,6 +403,14 @@ def main(argv):
                   file=sys.stderr)
             return 2
         return emit(argv[2], argv[3], argv[4], targets=targets)
+    if len(argv) in (5, 6) and argv[1] == "modes":
+        targets = tuple(argv[5].split(",")) if len(argv) == 6 else MODE_TARGETS
+        if (not targets or not set(targets) <= set(TARGETS)
+                or len(set(targets)) != len(targets)):
+            print("modes: TARGETS must be distinct names from %s" % ", ".join(TARGETS),
+                  file=sys.stderr)
+            return 2
+        return modes(argv[2], argv[3], argv[4], targets=targets)
     if len(argv) >= 4 and argv[1] == "merge":
         return merge(argv[2], argv[3:])
     #  One manifest reaches compare() rather than the usage text, so that
@@ -302,6 +422,7 @@ def main(argv):
     print("usage: emit_manifest.py emit REFINE ROOT OUT.json [TARGET,...]", file=sys.stderr)
     print("       emit_manifest.py merge OUT.json PART.json [...]", file=sys.stderr)
     print("       emit_manifest.py compare A.json B.json [...]", file=sys.stderr)
+    print("       emit_manifest.py modes DEBUG RELEASE ROOT [TARGET,...]", file=sys.stderr)
     return 2
 
 

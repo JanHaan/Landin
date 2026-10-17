@@ -8,6 +8,7 @@ with Landin.IR.Verifier;
 
 package body Landin.IR.Specialization is
    use type Landin.Optimization.Specialization_Mode;
+   use type Landin.Optimization.Objective;
    use type Landin.Targets.Byte_Count;
    use type Landin.Build_Reports.Specialization_Action;
 
@@ -348,10 +349,18 @@ package body Landin.IR.Specialization is
                         Code : constant Instruction :=
                           Code_At (Item, Value_Id (V));
                      begin
-                        Decision.Estimated_Growth := Natural'Min
-                          (Natural'Last - Effects.Weight (Code.Op),
-                           Decision.Estimated_Growth)
-                          + Effects.Weight (Code.Op);
+                        --  D211: the rewrite turns a projection and its
+                        --  indirect call into a direct call in an instance
+                        --  that exists either way.  At speed that adds
+                        --  nothing.  At size and none the unspecialized
+                        --  instances may share one body, which a rewrite
+                        --  would split, so there the body is charged.
+                        if Options.Optimize /= Landin.Optimization.Speed then
+                           Decision.Estimated_Growth := Natural'Min
+                             (Natural'Last - Effects.Weight (Code.Op),
+                              Decision.Estimated_Growth)
+                             + Effects.Weight (Code.Op);
+                        end if;
                         Has_Dispatch := Has_Dispatch or else
                           (Code.Op = Evidence_Function and then
                            not Evidence_Is_Erased (Into, Code.Evidence));

@@ -105,7 +105,10 @@ it retains no successful exact-revision acceptance record and accepts no
 revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
 x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for every
 target but RV64 in both build modes, and compares emitted assembly digests
-across hosts; disagreement fails the aggregate gate. RV64 is suspended from
+across hosts; disagreement fails the aggregate gate. Those manifests come
+from debug compilers, so the gate's `build-modes` jobs also require the debug
+and release compilers of one tree to emit the same bytes for the positive and
+runtime corpora on Linux x86-64, Linux arm64 and Cortex-M. RV64 is suspended from
 the gates until it has better CI, so the manifests leave it out and its
 emission and physical execution jobs are skipped; only the compiler's own
 test program still checks it. It does not assemble, link or run those programs.
@@ -510,8 +513,17 @@ remains independent. `./scripts/quality.sh` measures the objects a built
 compiler produces. At size and speed the simplifier forwards a slot's value
 across writes that cannot reach it and computes identical operations and
 checks within a block once, and the x86-64 and arm64 allocators give slots
-registers over their live intervals; x86-64 also keeps each routine's traps
-after its body and folds indexed accesses into scaled operands. A program
+registers over their live intervals, small routines' among them in
+caller-saved registers, floating-point values included; both keep each
+routine's traps after its body, compute into a result's own register with
+immediate operands, fuse comparisons with their branches and fold indexed
+accesses into scaled operands. Immutable module values fold, a check a
+dominating comparison proves is removed, and a callee reads an aggregate
+argument where its caller keeps it when nothing can change it. At speed a
+direct call to a small routine becomes a copy of its body, which the
+debuggers show as an inlined frame of that routine (D339); slices and small
+structs split into scalars; and a branch whose arms only compute becomes a
+choice (D338). A program
 lowers, emits and assembles only the routines it can reach, so it pays for
 the library it calls rather than everything it imports.
 [The Benchmark Game, measured](docs/benchmarks.md) compares five ports, their

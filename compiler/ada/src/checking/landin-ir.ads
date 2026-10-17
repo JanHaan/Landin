@@ -344,6 +344,15 @@ package Landin.IR is
       --  the instruction itself defines nothing.  It is one instruction
       --  with the fixed effects of a call, which is what keeps it in place.
       Assembly,
+      --  D338's branchless selection: its first operand, a bool, chooses
+      --  the second when true and the third when false, both computed
+      --  already.  Lowering never makes one; Landin.IR.If_Conversion
+      --  turns a two-armed `if` into one only when neither arm can trap,
+      --  call, store outside a private slot or do anything else a
+      --  program could observe, so choosing after computing both is
+      --  what branching between them would have done.  A backend may
+      --  branch again; it never needs to.
+      Choose,
       --  The terminators.  Leave is [1810]'s `return`, which "carries no
       --  value" in the source because the named return is a place
       --  [0930]; here it carries what that place held, because what a
@@ -2013,6 +2022,16 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Slot)
                  and then Is_Address (Of_Unit, Item, Slot);
 
+   --  A D94/D95 `in` parameter that Landin.IR.In_Place lets the callee read
+   --  where its caller keeps it.  Its parameter slot is then an address
+   --  slot that holds the incoming carrier, and its home is the shaped
+   --  slot the parameter would otherwise have been copied into: D97's zero
+   --  carrier still clears that slot, and the parameter then addresses it.
+   --  No_Slot for every other slot, the home itself included.
+   function In_Place_Home
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Slot_Id
+     with Pre => Holds (Of_Unit, Item, Slot);
+
    --  A fixed-array cell carries the repeated element once and its target-
    --  width length, never a length-sized field run.
    --  Slice_Element is the element a slice's carrier reaches; see
@@ -2336,6 +2355,15 @@ package Landin.IR is
    function Origin_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Landin.Provenance.Origin
+     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   --  Scalar replacement moves every part of a small array or aggregate
+   --  slot into a scalar slot of its own, part N into the Nth of a run
+   --  beginning here, and nothing reads or writes the slot itself after.
+   --  It keeps its declaration, so a debugger describes the variable by
+   --  its pieces.  No_Slot for every slot the pass left whole.
+   function First_Piece
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Slot_Id
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
 
    ------------------------------------------------------------------
@@ -3716,6 +3744,25 @@ package Landin.IR is
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Binary'Result, Op);
 
+   --  D338's choice of If_True when Condition holds and of If_False when
+   --  it does not.  Only Landin.IR.If_Conversion makes one; Result is
+   --  stated by the caller, as Emit_Binary's is, so a mutation can make it
+   --  disagree with the operands and the verifier can say so.
+   function Emit_Choose
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Condition : Value_Id;
+      If_True   : Value_Id;
+      If_False  : Value_Id;
+      Result    : Landin.Types.Scalar_Name;
+      Site      : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Condition)
+                  and then Holds (Into, Item, If_True)
+                  and then Holds (Into, Item, If_False)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Choose'Result, Choose);
+
    --  A call with no arguments yet.  [0410] evaluates arguments left to
    --  right, and every instruction that computes one is already above
    --  this one in the block, so the run below is only the order [1920]
@@ -3978,6 +4025,69 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Index : Positive)
       return Path_Step_Array;
 
+   ------------------------------------------------------------------
+   --  Inlined copies
+   ------------------------------------------------------------------
+
+   --  D339: where Landin.IR.Inlining copied a routine's body into a
+   --  caller in place of one direct call.  A site names the routine whose
+   --  body it is, the call it replaced and the scope that call stood in,
+   --  which is what source debugging needs to describe the copy as a frame
+   --  of that routine called from there.  The copied blocks, slots and
+   --  source aliases each name their site, and the caller's own name none;
+   --  a copied slot or alias also names the one of the routine's own it
+   --  copies.  Sites are one-based within their item.  None of this is an
+   --  execution fact: what the copy does is its instructions.
+   type Inline_Site is record
+      Callee : Item_Id := No_Item;
+      Call   : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+      Scope  : Scope_Id := Landin.Resolution.No_Scope;
+   end record;
+
+   function Inline_Site_Count (Of_Unit : Unit; Item : Item_Id) return Natural
+     with Pre => Holds (Of_Unit, Item);
+
+   function Nth_Inline_Site
+     (Of_Unit : Unit; Item : Item_Id; Site : Positive) return Inline_Site
+     with Pre => Holds (Of_Unit, Item)
+                 and then Site <= Inline_Site_Count (Of_Unit, Item);
+
+   --  Zero for the item's own block, slot or alias.
+   function Inlined_At
+     (Of_Unit : Unit; Item : Item_Id; Block : Block_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Block);
+
+   function Inlined_At
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Slot);
+
+   --  The callee's slot a copied slot copies; No_Slot for the item's own
+   --  slots and for the temporaries the copy itself needed.
+   function Inlined_Origin
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Slot_Id
+     with Pre => Holds (Of_Unit, Item, Slot);
+
+   function Alias_Inlined_At
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Natural
+     with Pre => Holds (Of_Unit, Item)
+                 and then Index <= Source_Alias_Count (Of_Unit, Item);
+
+   --  The callee's own alias position a copied alias copies; zero for the
+   --  item's own and for a parameter's alias below.
+   function Alias_Inlined_Origin
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Natural
+     with Pre => Holds (Of_Unit, Item)
+                 and then Index <= Source_Alias_Count (Of_Unit, Item);
+
+   --  A copy that reads a by-value aggregate argument where the caller
+   --  keeps it describes the callee's parameter as an alias of that
+   --  storage; this is the parameter it stands for, and No_Slot for every
+   --  other alias.
+   function Alias_Inlined_Parameter
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Slot_Id
+     with Pre => Holds (Of_Unit, Item)
+                 and then Index <= Source_Alias_Count (Of_Unit, Item);
+
 private
 
    --  One run per item, end to end in one vector, which is what
@@ -4078,6 +4188,13 @@ private
       Pointee     : Pointee_Id                 := No_Pointee;
       --  The element a slice carrier slot reaches; see Field_Shape.
       Slice_Element : Pointee_Id               := No_Pointee;
+      --  In_Place_Home's answer.
+      Home        : Slot_Id                   := No_Slot;
+      --  Inlined_At's and Inlined_Origin's answers.
+      Inlined     : Natural                   := 0;
+      Origin      : Slot_Id                   := No_Slot;
+      --  See First_Piece.
+      First_Piece : Slot_Id                   := No_Slot;
    end record;
 
    type Block_Record is record
@@ -4087,6 +4204,8 @@ private
                       Landin.Provenance.No_Origin;
       First_Value : Natural                   := 0;
       Values      : Natural                   := 0;
+      --  Inlined_At's answer.
+      Inlined     : Natural                   := 0;
    end record;
 
    type Item_Record is record
@@ -4116,6 +4235,8 @@ private
       Returns_To  : Slot_Id                   := No_Slot;
       Blocks      : Run;
       Values      : Run;
+      --  Nth_Inline_Site's run in Unit.Inline_Sites.
+      Inlines     : Run;
       Fields      : Run;
       --  [0520]'s shape, when Result says the item is an array.  D121
       --  lets that element be an aggregate, so it is a shape and not a
@@ -4299,12 +4420,20 @@ private
    type Stored_Source_Alias is record
       Info : Source_Alias;
       Path : Run;
+      --  Alias_Inlined_At's, Alias_Inlined_Origin's and
+      --  Alias_Inlined_Parameter's answers.
+      Inlined : Natural := 0;
+      Origin  : Natural := 0;
+      Parameter : Slot_Id := No_Slot;
    end record;
    package Source_Alias_Vectors is new Ada.Containers.Vectors
      (Positive, Stored_Source_Alias);
 
    package Assembly_Operand_Vectors is new Ada.Containers.Vectors
      (Positive, Assembly_Operand);
+
+   package Inline_Site_Vectors is new Ada.Containers.Vectors
+     (Positive, Inline_Site);
 
    --  The queries in the body read these tables with Element rather than
    --  by indexing.  An indexed read elaborates a Constant_Reference, whose
@@ -4334,6 +4463,7 @@ private
       Signatures : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
       Assembly_Operands : Assembly_Operand_Vectors.Vector;
+      Inline_Sites : Inline_Site_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;
       Return_Source_Runs : Return_Source_Run_Vectors.Vector;
       Evidence   : Evidence_Vectors.Vector;

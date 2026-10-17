@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D211 lets a callee read an in record where its caller keeps it only when no write can reach that storage before its last read; an inout write, a writing call or a rewritten module binding keeps D94's copy, a zero carrier still reads zeroes, and a slice argument a later argument changes keeps its caller snapshot
+program: main.ldn
+status: 42
+constructs: 0410, 0430, 0520, 0570, 0900
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

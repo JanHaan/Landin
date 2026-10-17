@@ -18,7 +18,8 @@ def inputs(root):
     """Compiler sources, test sources and native build policy; never prose."""
     paths = set(BUILD_SCRIPTS)
     ada = root / 'compiler/ada'
-    paths.update(p.relative_to(root).as_posix() for p in ada.glob('*.gpr'))
+    paths.update(p.relative_to(root).as_posix()
+                 for pattern in ('*.gpr', '*.adc') for p in ada.glob(pattern))
     for directory in ('src', 'tests/src'):
         paths.update(p.relative_to(root).as_posix()
                      for p in (ada / directory).rglob('*')

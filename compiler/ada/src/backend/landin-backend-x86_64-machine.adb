@@ -7,7 +7,23 @@ package body Landin.Backend.X86_64.Machine is
 
    package US renames Ada.Strings.Unbounded;
    use type Landin.Types.Folded;
-   use type Token_Vectors.Vector;
+
+   --  Record one token: its text joins the stream's spelling.
+   procedure Add
+     (Into : in out Stream; Kind : Token_Kind; Text : String;
+      Identity : Natural := 0);
+
+   procedure Add
+     (Into : in out Stream; Kind : Token_Kind; Text : String;
+      Identity : Natural := 0)
+   is
+      First : constant Positive := US.Length (Into.Spelled) + 1;
+   begin
+      US.Append (Into.Spelled, Text);
+      Into.Tokens.Append
+        (Token'(Kind => Kind, First => First,
+                Last => First + Text'Length - 1, Identity => Identity));
+   end Add;
 
    function Starts (Text, Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
@@ -182,17 +198,12 @@ package body Landin.Backend.X86_64.Machine is
                   Kind := Mnemonic;
                   First_Token := False;
                end if;
-               Into.Tokens.Append
-                 (Token'(Kind => Kind,
-                         Text => US.To_Unbounded_String
-                           (Text (First .. Position - 1)), Identity => 0));
+               Add (Into, Kind, Text (First .. Position - 1));
             end;
          end if;
       end loop;
       --  An instruction boundary is evidence, including for prefix opcodes.
-      Into.Tokens.Append
-        (Token'(Kind => Punctuation, Text => US.To_Unbounded_String (";"),
-                Identity => 0));
+      Add (Into, Punctuation, ";");
    end Instruction;
 
    procedure Define_Label (Into : in out Stream; Name : String) is
@@ -204,9 +215,7 @@ package body Landin.Backend.X86_64.Machine is
          return;
       end if;
       Into.Labels.Append (US.To_Unbounded_String (Name));
-      Into.Tokens.Append
-        (Token'(Kind => Definition, Text => US.Null_Unbounded_String,
-                Identity => Into.Labels.Last_Index));
+      Add (Into, Definition, "", Identity => Into.Labels.Last_Index);
    end Define_Label;
 
    procedure Seal (Into : in out Stream) is
@@ -228,15 +237,23 @@ package body Landin.Backend.X86_64.Machine is
             Labels.Insert (Name, Index);
          end;
       end loop;
-      for Part of Into.Tokens loop
-         if Part.Kind = Operand and then Labels.Contains
-           (US.To_String (Part.Text))
-         then
-            Part.Kind := Local;
-            Part.Identity := Labels.Element (US.To_String (Part.Text));
-            Part.Text := US.Null_Unbounded_String;
-         end if;
-      end loop;
+      declare
+         Spelled : constant String := US.To_String (Into.Spelled);
+      begin
+         for Part of Into.Tokens loop
+            if Part.Kind = Operand then
+               declare
+                  Found : constant Maps.Cursor :=
+                    Labels.Find (Spelled (Part.First .. Part.Last));
+               begin
+                  if Maps.Has_Element (Found) then
+                     Part := (Kind => Local, First => 1, Last => 0,
+                              Identity => Maps.Element (Found));
+                  end if;
+               end;
+            end if;
+         end loop;
+      end;
       Into.Sealed := True;
    end Seal;
 
@@ -247,7 +264,28 @@ package body Landin.Backend.X86_64.Machine is
       then
          raise Landin.Compiler_Defect with "unsealed machine body comparison";
       end if;
-      return Left.Tokens = Right.Tokens;
+      if Natural (Left.Tokens.Length) /= Natural (Right.Tokens.Length) then
+         return False;
+      end if;
+      declare
+         Left_Text : constant String := US.To_String (Left.Spelled);
+         Right_Text : constant String := US.To_String (Right.Spelled);
+      begin
+         for Index in Left.Tokens.First_Index .. Left.Tokens.Last_Index loop
+            declare
+               L : constant Token := Left.Tokens.Element (Index);
+               R : constant Token := Right.Tokens.Element (Index);
+            begin
+               if L.Kind /= R.Kind or else L.Identity /= R.Identity
+                 or else Left_Text (L.First .. L.Last)
+                   /= Right_Text (R.First .. R.Last)
+               then
+                  return False;
+               end if;
+            end;
+         end loop;
+      end;
+      return True;
    end Equivalent;
 
    function Digest (Of_Stream : Stream) return Ada.Containers.Hash_Type is
@@ -257,12 +295,17 @@ package body Landin.Backend.X86_64.Machine is
       if not Of_Stream.Recording or else not Of_Stream.Sealed then
          raise Landin.Compiler_Defect with "unsealed machine body digest";
       end if;
-      for Part of Of_Stream.Tokens loop
-         Result := Result * 31
-           + Ada.Containers.Hash_Type (Token_Kind'Pos (Part.Kind));
-         Result := Result * 31 + Ada.Strings.Hash (US.To_String (Part.Text));
-         Result := Result * 31 + Ada.Containers.Hash_Type (Part.Identity);
-      end loop;
+      declare
+         Spelled : constant String := US.To_String (Of_Stream.Spelled);
+      begin
+         for Part of Of_Stream.Tokens loop
+            Result := Result * 31
+              + Ada.Containers.Hash_Type (Token_Kind'Pos (Part.Kind));
+            Result := Result * 31
+              + Ada.Strings.Hash (Spelled (Part.First .. Part.Last));
+            Result := Result * 31 + Ada.Containers.Hash_Type (Part.Identity);
+         end loop;
+      end;
       return Result;
    end Digest;
 

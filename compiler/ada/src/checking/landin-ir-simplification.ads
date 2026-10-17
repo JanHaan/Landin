@@ -2,7 +2,10 @@ with Landin.Optimization;
 with Landin.Targets;
 
 package Landin.IR.Simplification is
-   --  Input is verified even when the objective disables edits.
+   --  Input is verified even when the objective disables edits.  An
+   --  enabled run first gives the parts of small slots scalar slots of
+   --  their own (Landin.IR.Scalar_Replacement), then simplifies, then
+   --  verifies what both did.
    --  No floating reassociation, cross-block values, or unchecked assumptions.
    procedure Run
      (Into : in out Unit;

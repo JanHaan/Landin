@@ -1,0 +1,85 @@
+--  Slices and small records of scalars held in locals and parameters.  An
+--  optimizing build gives each of their parts a scalar of its own; every
+--  part read and written, every whole copy and clear, and every whole use
+--  that keeps a record together still sees the same values.
+reading: type = struct
+    tag: u8
+    count: u64
+    done: bool
+    scale: f64
+end reading
+
+cursor: type = struct
+    at: ptr u32
+    count: usize
+end cursor
+
+--  A parameter's parts, read on every iteration.
+sum: (bytes: []u8) -> (total: u64) =
+    total = 0
+    first: usize = 0
+    for at in first..<lenof bytes do
+        total += u64(bytes[at])
+    end for
+end sum
+
+--  A local slice narrowed on every iteration, then copied whole into one
+--  that is passed on.
+tail_sum: (bytes: []u8) -> (total: u64) =
+    mut rest: []u8 = bytes
+    total = 0
+    first: usize = 0
+    while lenof rest > 1 do
+        total += u64(rest[first])
+        rest = rest[1..<lenof rest]
+    end while
+    kept: []u8 = rest
+    total += sum(kept)
+end tail_sum
+
+--  A record copied whole, written field by field, cleared and read back.
+records: (start: reading) -> (result: u64) =
+    mut a: reading = start
+    mut b: reading = zeroed
+    result = 0
+    return when b.done or b.count <> 0 or b.tag <> 0 or b.scale <> 0.0
+    mut round: u32 = 0
+    while round < 3 do
+        b = a
+        a.count += u64(b.tag)
+        a.scale = b.scale * 2.0
+        a.done = not b.done
+        inc round
+    end while
+    b = zeroed
+    b.tag = a.tag
+    result = a.count + u64(b.tag) + u64(a.scale)
+    if a.done and not b.done then
+        result += 1
+    end if
+end records
+
+--  A parameter with a pointer part, read on every iteration.
+total_of: (source: cursor) -> (total: u32) =
+    total = 0
+    mut index: usize = 0
+    while index < source.count do
+        total += source.at.val
+        inc index
+    end while
+end total_of
+
+public main: () -> (code: i32) =
+    data: [6]u8 = [1, 2, 3, 4, 5, 6]
+    seven: u32 = 7
+    place: cursor = (at: addr seven, count: 3)
+    code = 1
+    return when sum(data[0..<6]) <> 21
+    code = 2
+    return when tail_sum(data[1..<6]) <> 20
+    code = 3
+    return when records((tag: 5, count: 10, done: false, scale: 0.5)) <> 35
+    code = 4
+    return when total_of(place) <> 21
+    code = 42
+end main

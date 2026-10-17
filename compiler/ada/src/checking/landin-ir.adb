@@ -1912,7 +1912,8 @@ package body Landin.IR is
          raise Compiler_Defect with "invalid source alias provenance";
       end if;
       Open_Run (Held.Aliases, Natural (Into.Aliases.Length));
-      Into.Aliases.Append (Stored_Source_Alias'(Alias, Steps));
+      Into.Aliases.Append
+        (Stored_Source_Alias'(Info => Alias, Path => Steps, others => <>));
       Held.Aliases.Count := Held.Aliases.Count + 1;
       Into.Items (Positive (Item)) := Held;
    end Note_Source_Alias;
@@ -1939,6 +1940,41 @@ package body Landin.IR is
       end loop;
       return Result;
    end Source_Alias_Path;
+
+   function Inline_Site_Count (Of_Unit : Unit; Item : Item_Id) return Natural
+     is (Element (Of_Unit, Item).Inlines.Count);
+
+   function Nth_Inline_Site
+     (Of_Unit : Unit; Item : Item_Id; Site : Positive) return Inline_Site
+     is (Of_Unit.Inline_Sites.Element
+           (Element (Of_Unit, Item).Inlines.First + Site));
+
+   function Inlined_At
+     (Of_Unit : Unit; Item : Item_Id; Block : Block_Id) return Natural
+     is (Of_Unit.Blocks.Element (Block_At (Of_Unit, Item, Block)).Inlined);
+
+   function Inlined_At
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Inlined);
+
+   function Inlined_Origin
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Slot_Id
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Origin);
+
+   function Alias_Inlined_At
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Natural
+     is (Of_Unit.Aliases.Element
+           (Element (Of_Unit, Item).Aliases.First + Index).Inlined);
+
+   function Alias_Inlined_Origin
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Natural
+     is (Of_Unit.Aliases.Element
+           (Element (Of_Unit, Item).Aliases.First + Index).Origin);
+
+   function Alias_Inlined_Parameter
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Slot_Id
+     is (Of_Unit.Aliases.Element
+           (Element (Of_Unit, Item).Aliases.First + Index).Parameter);
 
    procedure Add_Field
      (Into    : in out Unit;
@@ -2549,6 +2585,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
      is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Element);
 
+   function In_Place_Home
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Slot_Id
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Home);
+
    function Add_Array_Slot
      (Into     : in out Unit;
       Item     : Item_Id;
@@ -2874,6 +2914,10 @@ package body Landin.IR is
      return Declaration_Id
      is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Declaration);
 
+   function First_Piece
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Slot_Id
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).First_Piece);
+
    function Nominal_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Nominal_Type_Id
      is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Nominal);
@@ -2909,7 +2953,8 @@ package body Landin.IR is
         (Block_Record'(Scope       => Scope,
                        Site        => Site,
                        First_Value => 0,
-                       Values      => 0));
+                       Values      => 0,
+                       Inlined     => 0));
       Held.Blocks.Count := Held.Blocks.Count + 1;
       Into.Items (Positive (Item)) := Held;
       return Block_Id (Held.Blocks.Count);
@@ -5101,6 +5146,29 @@ package body Landin.IR is
       Into.Operands.Append (Right);
       return Append (Into, Item, Made);
    end Emit_Binary;
+
+   function Emit_Choose
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Condition : Value_Id;
+      If_True   : Value_Id;
+      If_False  : Value_Id;
+      Result    : Landin.Types.Scalar_Name;
+      Site      : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op     => Choose,
+                     Result => Result,
+                     Site   => Site,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 3;
+      Into.Operands.Append (Condition);
+      Into.Operands.Append (If_True);
+      Into.Operands.Append (If_False);
+      return Append (Into, Item, Made);
+   end Emit_Choose;
 
    function Emit_Failure_Test
      (Into  : in out Unit;

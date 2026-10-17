@@ -1,0 +1,106 @@
+--  mem.resize through an arena and through a failure injector over one.
+--  The arena grows and shrinks its latest block in place, giving the tail
+--  back, and moves any other block to the top; the injector spends its
+--  budget on a resize as on an allocation.  Every resize keeps the bytes
+--  the block held, a zero extent is a block like any other, and a refusal
+--  leaves the block, its bytes and its provider as they were.
+import core/fault
+import core/mem
+
+--  The first `count` bytes at `block` set to 1, 2, 3 and on: what a
+--  resize must keep.
+ramp: (block: ptr mut u8, count: usize) -> none =
+    for at in usize(0)..<count do
+        cell: ptr mut u8 = ptr(usize(block) + at)
+        cell.val = u8(at + 1)
+    end for
+end ramp
+
+holds_ramp: (block: ptr mut u8, count: usize) -> (yes: bool) =
+    yes = false
+    for at in usize(0)..<count do
+        cell: ptr u8 = ptr(usize(block) + at)
+        return when cell.val <> u8(at + 1)
+    end for
+    yes = true
+end holds_ramp
+
+arena_resizes: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut backing: [128]u8 = zeroed
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr backing[0], 128)
+    first := try mem.allocate(arena, usize(8), usize(1))
+    ramp(first, 8)
+    --  The latest block grows where it is, and gives its tail back when it
+    --  shrinks.
+    grown := try mem.resize(arena, first, usize(8), usize(24), usize(1))
+    return when usize(grown) <> usize(first) or mem.arena_used(arena) <> 24
+      or not holds_ramp(grown, 8)
+    shrunk := try mem.resize(arena, grown, usize(24), usize(12), usize(1))
+    return when usize(shrunk) <> usize(first) or mem.arena_used(arena) <> 12
+      or not holds_ramp(shrunk, 8)
+    --  Once another block follows it, it moves to the top with its bytes,
+    --  and the bytes it leaves stay spent.
+    ramp(shrunk, 12)
+    second := try mem.allocate(arena, usize(4), usize(1))
+    moved := try mem.resize(arena, shrunk, usize(12), usize(20), usize(1))
+    return when usize(moved) <> usize(second) + 4
+      or mem.arena_used(arena) <> 36 or not holds_ramp(moved, 12)
+    --  A block that is not the latest shrinks where it is, and the arena
+    --  keeps its bytes.
+    kept := try mem.resize(arena, second, usize(4), usize(2), usize(1))
+    return when usize(kept) <> usize(second) or mem.arena_used(arena) <> 36
+    --  The latest block shrinks to nothing where it is, and grows from
+    --  nothing there again.
+    empty := try mem.resize(arena, moved, usize(20), usize(0), usize(1))
+    return when usize(empty) <> usize(moved) or mem.arena_used(arena) <> 16
+    again := try mem.resize(arena, empty, usize(0), usize(8), usize(1))
+    return when usize(again) <> usize(moved) or mem.arena_used(arena) <> 24
+    --  More than the backing holds is refused with the block, its bytes
+    --  and the arena as they were.
+    ramp(again, 8)
+    mut refused: bool = false
+    left: ptr mut u8 = mem.resize(arena, again, usize(8), usize(200),
+                                  usize(1)) else (problem)
+        _ = problem
+        refused = true
+        again
+    end
+    return when not refused or usize(left) <> usize(again)
+      or mem.arena_used(arena) <> 24 or not holds_ramp(again, 8)
+    ok = true
+end arena_resizes
+
+injected_resizes: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut backing: [64]u8 = zeroed
+    mut space: mem.arena_space = zeroed
+    arena := mem.arena_over_unchecked(space, addr backing[0], 64)
+    mut counters: fault.space = zeroed
+    budget := fault.over(counters, arena, usize(2))
+    block := try mem.allocate(budget, usize(4), usize(1))
+    ramp(block, 4)
+    grown := try mem.resize(budget, block, usize(4), usize(8), usize(1))
+    return when usize(grown) <> usize(block) or not holds_ramp(grown, 4)
+    --  The budget is spent: the third attempt never reaches the arena.
+    mut refused: bool = false
+    _ = mem.resize(budget, grown, usize(8), usize(16), usize(1))
+        else (problem)
+        _ = problem
+        refused = true
+        grown
+    end
+    ok = refused and fault.attempts(budget) == 3
+         and fault.delegated(budget) == 2 and fault.successes(budget) == 2
+         and fault.injected_failures(budget) == 1
+         and mem.arena_used(arena) == 8 and holds_ramp(grown, 4)
+end injected_resizes
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not (arena_resizes() else false)
+    code = 2
+    return when not (injected_resizes() else false)
+    code = 42
+end main

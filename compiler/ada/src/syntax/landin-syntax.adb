@@ -128,7 +128,7 @@ package body Landin.Syntax is
      is (Node_Id (Of_Tree.Items.Length));
 
    function Kind (Of_Tree : Tree; Id : Node_Id) return Node_Kind
-     is (Element (Of_Tree, Id).Kind);
+     is (Of_Tree.Kinds.Element (Positive (Id)));
 
    function Root (Of_Tree : Tree) return Node_Id
      is (Last_Node (Of_Tree));

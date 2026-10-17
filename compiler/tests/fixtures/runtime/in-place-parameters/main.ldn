@@ -1,0 +1,109 @@
+--  Landin.IR.In_Place lets a callee read an `in` aggregate where its
+--  caller keeps it, but only where D94's copy could not be told apart.
+--  Each routine below either may read in place or must keep the copy, and
+--  each call checks that it read the value it was given.
+
+pair: type = struct
+    left: u64
+    right: u64
+    rows: [6]u64
+end pair
+
+mut global: pair = zeroed
+
+--  Only reads: read in place.
+total: (value: pair) -> (sum: u64) =
+    sum = value.left + value.right + value.rows[5]
+end total
+
+--  Passes its parameter on and reads nothing after: read in place, and so
+--  is `total` behind it.
+relay: (value: pair) -> (sum: u64) =
+    sum = total(value)
+end relay
+
+--  Writes the original through an inout place, then reads: the copy stays.
+inout_first: (value: pair, inout original: pair) -> (seen: u64) =
+    original.left = 1000
+    seen = value.left
+end inout_first
+
+--  Reads, calls something that writes the original, reads again: the copy
+--  stays.
+set_right: (inout original: pair) -> none =
+    original.right = 7000
+end set_right
+
+across_call: (value: pair, inout original: pair) -> (seen: u64) =
+    seen = value.right
+    set_right(original)
+    seen = seen + value.right
+end across_call
+
+--  The original is a module binding a callee rewrites: the copy stays.
+clobber_global: () -> none =
+    global.left = 9
+end clobber_global
+
+across_global: (value: pair) -> (seen: u64) =
+    clobber_global()
+    seen = value.left
+end across_global
+
+--  Reads everything first, then writes the original: read in place.
+read_then_write: (value: pair, original: ptr mut pair) -> (seen: u64) =
+    seen = value.left + value.right
+    original.val.left = 500
+end read_then_write
+
+--  Passes its parameter to a callee that writes the original before it
+--  reads: the outer one reads in place, the inner one keeps its copy.
+write_then_total: (value: pair, original: ptr mut pair) -> (seen: u64) =
+    original.val.right = 0
+    seen = total(value)
+end write_then_total
+
+pass_on: (value: pair, original: ptr mut pair) -> (seen: u64) =
+    seen = write_then_total(value, original)
+end pass_on
+
+--  A slice argument reaches its callee without a caller temporary unless a
+--  later argument may change it first.
+length_of: (bytes: []u8) -> (count: u64) =
+    count = u64(lenof bytes)
+end length_of
+
+shorten: (inout bytes: []u8) -> (count: u64) =
+    bytes = bytes[0..<1]
+    count = 0
+end shorten
+
+both: (bytes: []u8, extra: u64) -> (count: u64) =
+    count = u64(lenof bytes) + extra
+end both
+
+public main: () -> (code: i32) =
+    code = 1
+    mut p: pair = (left: 1, right: 2, rows: [0, 0, 0, 0, 0, 4])
+    return when total(p) <> 7
+    return when total(zeroed) <> 0
+    return when relay(p) <> 7
+    return when relay(zeroed) <> 0
+    return when inout_first(p, p) <> 1 or p.left <> 1000
+    p.left = 1
+    return when across_call(p, p) <> 4 or p.right <> 7000
+    p.right = 2
+    global = p
+    return when across_global(global) <> 1 or global.left <> 9
+    return when read_then_write(p, addr p) <> 3 or p.left <> 500
+    p.left = 1
+    return when pass_on(p, addr p) <> 7 or p.right <> 0
+    p.right = 2
+
+    text: []u8 = "abcd"
+    mut bytes: []u8 = text
+    return when length_of(bytes) <> 4
+    return when both(bytes, shorten(bytes)) <> 4
+    return when length_of(bytes) <> 1
+    code = 42
+end main

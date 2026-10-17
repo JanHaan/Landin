@@ -25,7 +25,8 @@ COMPLETE_WORKLOADS = ("derived-parser", "derived-containers",
 
 
 def profiles_for(name: str) -> tuple[tuple[str, str], ...]:
-    if name in ("specialization", "folding", "threshold", *COMPLETE_WORKLOADS):
+    if name in ("specialization", "folding", "threshold", "speed-growth",
+                *COMPLETE_WORKLOADS):
         return PROFILES + (("none", "all"), ("speed", "all"))
     return PROFILES
 
@@ -287,6 +288,8 @@ def main() -> None:
         sources.update({name: config["source"] for name, config in configurations.items()})
         sources["threshold"] = (HERE.parent / "fixtures" / "runtime"
                                 / "r450-specialization-threshold" / "main.ldn")
+        sources["speed-growth"] = (HERE.parent / "fixtures" / "runtime"
+                                   / "specialization-speed-growth" / "main.ldn")
         template = (HERE / "arrays.ldn.in").read_text()
         for count in (4, 4096):
             path = scratch / f"array-{count}.ldn"
@@ -391,10 +394,13 @@ def main() -> None:
             decisions = measured["build"]["specializations"]
             require(len(decisions) == 2, f"{key}: expected two source instances")
             selected = key in ("speed-auto", "none-all", "speed-all")
+            # D211 charges the instance's weight as growth at size and
+            # none, where the unspecialized instances can share one body.
+            growth = 0 if key.startswith("speed-") else 209
             for decision in decisions:
                 require((decision["entry_calls"], decision["loop_depth"],
                          decision["represented_bytes"], decision["benefit"],
-                         decision["estimated_growth"]) == (8, 4, 4, 321, 209),
+                         decision["estimated_growth"]) == (8, 4, 4, 321, growth),
                         f"{key}: source specialization cost inputs changed")
                 require(decision["action"] ==
                         ("specialized" if selected else "declined")
@@ -422,6 +428,41 @@ def main() -> None:
                         and by_item[r["shared_with"]]["indirect_calls"] > 0
                         for r in routines) == (0 if selected else 1),
                     f"{key}: threshold witness lost its shared fallback")
+        # One entry call outside any loop is worth less than its body's
+        # weight, so size and none decline it and keep one shared body.
+        # At speed the rewrite inside an existing instance counts no growth
+        # under D211, so it is made, and each instance dispatches directly.
+        for key, measured in evidence["speed-growth"].items():
+            decisions = measured["build"]["specializations"]
+            require(len(decisions) == 2, f"{key}: expected two source instances")
+            selected = key in ("speed-auto", "none-all", "speed-all")
+            growth = 0 if key.startswith("speed-") else 169
+            for decision in decisions:
+                require((decision["entry_calls"], decision["loop_depth"],
+                         decision["represented_bytes"], decision["benefit"],
+                         decision["estimated_growth"]) == (1, 0, 4, 9, growth),
+                        f"{key}: speed growth cost inputs changed")
+                require(decision["action"] ==
+                        ("specialized" if selected else "declined")
+                        and decision["direct_calls_made"] == (1 if selected else 0),
+                        f"{key}: speed growth decision is wrong")
+                reason = ("disabled" if key.endswith("-off") else
+                          "forced" if key.endswith("-all") else
+                          "profitable" if selected else "cost-threshold")
+                require(decision["reason"] == reason,
+                        f"{key}: speed growth reason is not factual")
+            routines = measured["build"]["routines"]
+            indirect = sum(r["indirect_calls"] for r in routines)
+            require(indirect == 0 if selected else indirect > 0,
+                    f"{key}: emitted dispatch disagrees with speed growth decisions")
+            # What size keeps by declining: both instances in one body.
+            by_item = {r["item"]: r for r in routines}
+            if key.startswith("size-"):
+                require(indirect == 1 and sum(
+                    r["shared_with"] != 0
+                    and by_item[r["shared_with"]]["indirect_calls"] > 0
+                    for r in routines) == 1,
+                        f"{key}: speed growth witness lost its shared body")
         # The complete P3 client supplies a real container workload, rather
         # than another policy probe. Its measurements have no size budget;
         # specialization must stay factual and preserve the execution oracle.

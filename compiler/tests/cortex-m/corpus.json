@@ -483,6 +483,9 @@
     "runtime/checks-return-after-the-region": {
       "mode": "execute"
     },
+    "runtime/choices-over-nan-comparisons": {
+      "mode": "execute"
+    },
     "runtime/clock-manual": {
       "mode": "execute"
     },
@@ -622,12 +625,21 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
+    "runtime/core-mem-resize": {
+      "mode": "execute"
+    },
     "runtime/core-mem-zero-prefix": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
+    },
+    "runtime/core-pool-resize": {
+      "mode": "execute"
+    },
+    "runtime/core-region-resize": {
+      "mode": "execute"
     },
     "runtime/core-spill-pointer-items": {
       "mode": "execute",
@@ -1070,6 +1082,13 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
+    "runtime/hosted-heap-resize": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
+    },
     "runtime/hosted-io-not-a-directory": {
       "codes": [
         "L0015"
@@ -1102,6 +1121,9 @@
     "runtime/in-array-argument-precedes-later-argument": {
       "mode": "execute"
     },
+    "runtime/in-place-parameters": {
+      "mode": "execute"
+    },
     "runtime/in-struct-argument-precedes-later-argument": {
       "mode": "execute"
     },
@@ -1112,6 +1134,16 @@
       "mode": "execute"
     },
     "runtime/inferred-function-values": {
+      "mode": "execute"
+    },
+    "runtime/inline-copies-fail-and-clean-up": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/io on the freestanding target before checking declarations."
+    },
+    "runtime/inline-copies-trap-in-place": {
       "mode": "execute"
     },
     "runtime/inout-pointer-alias-is-unchecked": {
@@ -2414,6 +2446,9 @@
       "reason": "The linked RV64 instruction inspection requires a fixed public extern(c) symbol; Cortex-M0 disables general C exports while its native array-index fixtures execute the corresponding indexing operation.",
       "witness": "compiler/tests/fixtures/runtime/rv64-indexed-address/main.ldn"
     },
+    "runtime/scalar-replacement-parts": {
+      "mode": "execute"
+    },
     "runtime/scalar-selection-copies": {
       "mode": "execute"
     },
@@ -2471,6 +2506,9 @@
       "mode": "execute"
     },
     "runtime/slice-place-in-value-arm": {
+      "mode": "execute"
+    },
+    "runtime/specialization-speed-growth": {
       "mode": "execute"
     },
     "runtime/stack-arguments-cross-calls": {

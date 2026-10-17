@@ -1,9 +1,11 @@
 --  Deterministic physical locations for the verified block-local value model
 --  and for slots over their live intervals.  Five otherwise-unused SysV
---  callee-save GP registers, four caller-saved ones for values and, at
---  speed, eight XMM registers are allocated.  SysV saves no XMM register
---  across a call, so no XMM interval spans one.  Scratch, argument and
---  failure registers remain owned by selection.
+--  callee-save GP registers, four caller-saved ones and, at speed, eight
+--  XMM registers are allocated.  SysV saves no XMM register across a call,
+--  so no XMM interval spans one, and no caller-saved location's interval
+--  holds an operation that writes its register.  A small routine takes no
+--  callee-saved register, whose save would cost more than it saves.
+--  Scratch, argument and failure registers remain owned by selection.
 with Ada.Containers.Vectors;
 with Landin.Optimization;
 
@@ -15,9 +17,11 @@ package Landin.Backend.X86_64.Allocation is
                         R8, R9);
    subtype General_Register is Register_Id range RBX .. R9;
    subtype Saved_Register is Register_Id range RBX .. R15;
-   --  Four caller-saved registers selection touches only in the
-   --  operations Untouched names in the body: a value may hold one only
-   --  where none of those lies in its interval.  No slot holds one.
+   --  The caller-saved registers selection writes only in the operations
+   --  Touches names: a value or slot may hold one only where none of those
+   --  lies in its interval.  %rax, %rcx and %rdx are its accumulator and
+   --  scratch, %r11 stages stores, probes the stack and holds C transport,
+   --  and %r10 carries a failure's code, so none of those is offered.
    subtype Caller_Saved is Register_Id range RSI .. R9;
    type SSE_Register is (XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14,
                          XMM15);
@@ -74,15 +78,41 @@ package Landin.Backend.X86_64.Allocation is
    --  when that fits the sign-extended imm32 an instruction carries, and
    --  otherwise "".  A float constant has none.  Size and speed leave a
    --  constant with no location when every use of it is a right operand
-   --  of add, subtract, a bitwise operator or a multiply selection does
-   --  with `imul`, a constant shift amount, or the value a store to a
-   --  slot, field, element, datum or address writes: selection writes
-   --  the immediate at each of those.
+   --  of add, subtract, a comparison, a bitwise operator or a multiply
+   --  selection does with `imul`, a constant shift amount, either value
+   --  D338's choice chooses between, or the value a store to a slot,
+   --  field, element, datum or address writes: selection writes the
+   --  immediate at each of those.
    function Immediate
      (Of_Unit : Landin.IR.Unit;
       Item : Landin.IR.Item_Id;
       Value : Landin.IR.Value_Id;
       Facts : Landin.Targets.Target_Facts) return String;
+
+   --  Whether selection writes Register in emitting Value other than as
+   --  Value's own location.  Calls, copies, clears and fills, selecting a
+   --  variant, assembly and a leave copying an aggregate result or
+   --  marshalling a C one use the argument registers; a conversion's
+   --  float decoding and an atom table search in a packed field or
+   --  element, which may be any field or element access carrying a u32,
+   --  also use %r8 and %r9.  An interval includes its last use,
+   --  so a call's own operands are never in them either: the call fills
+   --  its argument registers in order.
+   function Touches
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Value : Landin.IR.Value_Id;
+      Register : Caller_Saved) return Boolean;
+
+   --  D338: whether Value is a comparison that the choice right after it
+   --  takes as its condition and as nothing else.  When that is its only
+   --  use, the choice reads its verdict from the flags and the comparison
+   --  needs no location.  A float equality or inequality is not one: an
+   --  unordered NaN needs the parity flag as well.
+   function Flags_Choice
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Value : Landin.IR.Value_Id) return Boolean;
 
    function Name (Register : General_Register; Size : Width) return String;
    function Name (Register : SSE_Register) return String;

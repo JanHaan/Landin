@@ -82,7 +82,8 @@ class ScalingMemory(unittest.TestCase):
                   contextlib.redirect_stdout(stdout),
                   contextlib.redirect_stderr(stderr)):
                 status = scaling.main(["--refine", sys.executable, "--runs=1",
-                                       "--no-derived", "--json", str(report)])
+                                       "--no-derived", "--optimize=size",
+                                       "--json", str(report)])
             record = json.loads(report.read_text())
         return status, stdout.getvalue(), stderr.getvalue(), record
 
@@ -106,6 +107,61 @@ class ScalingMemory(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("no positive peak memory measurement", errors)
         self.assertEqual(record["families"]["sample"], [])
+
+
+class ScalingObjectives(unittest.TestCase):
+    def test_every_family_runs_at_size_and_at_speed(self):
+        seen = []
+
+        def sample(*args):
+            seen.append(args[-1])
+            size = scaling.SIZES[(len(seen) - 1) % len(scaling.SIZES)]
+            #  Speed's emission grows four times per doubling.
+            emission = (4.0 ** scaling.SIZES.index(size)
+                        if args[-1] == "speed" else float(size))
+            return {"frontend": float(size), "emission": emission,
+                    "peak_kib": size, "sizes": {"declarations": size}}
+
+        stdout, stderr = CapturedOutput(), io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "measurements.json"
+            with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
+                  mock.patch.object(scaling, "write_program"),
+                  mock.patch.object(scaling, "median_of", side_effect=sample),
+                  contextlib.redirect_stdout(stdout),
+                  contextlib.redirect_stderr(stderr)):
+                status = scaling.main(["--refine", sys.executable, "--runs=1",
+                                       "--no-derived", "--json", str(report)])
+            record = json.loads(report.read_text())
+        self.assertEqual(seen, ["size"] * 5 + ["speed"] * 5)
+        self.assertEqual(status, 1)
+        self.assertIn("sample at speed: emission 1000 -> 2000 grew 4.00x",
+                      stderr.getvalue())
+        self.assertNotIn("sample: emission", stderr.getvalue())
+        self.assertEqual(sorted(record["families"]), ["sample", "sample at speed"])
+
+    def test_the_objective_reaches_the_compiler(self):
+        with tempfile.TemporaryDirectory() as work:
+            report = Path(work) / "stages.json"
+            commands = []
+
+            def compile_once(command, *_args):
+                commands.append(command)
+                report.write_text(json.dumps({
+                    "stages": [{"stage": name, "processor_us": 100,
+                                "peak_kib": 32}
+                               for name in scaling.FRONTEND + scaling.EMISSION],
+                    "sizes": {}}))
+                return subprocess.CompletedProcess(command, 0, b"", b"")
+
+            with mock.patch.object(scaling, "run_compiler",
+                                   side_effect=compile_once):
+                scaling.measure("refine", work, work, str(report), 1,
+                                objective="speed")
+                scaling.measure("refine", work, work, str(report), 1)
+        self.assertIn("--optimize=speed", commands[0])
+        self.assertIn("--optimize=size", commands[1])
 
 
 class ScalingSamples(unittest.TestCase):

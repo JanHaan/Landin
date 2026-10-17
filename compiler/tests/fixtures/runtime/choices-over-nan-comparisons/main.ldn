@@ -1,0 +1,154 @@
+-- D338: an `if` whose arms only compute a value becomes a choice at size
+-- and speed, and must answer as the branch did for every operand, an
+-- unordered NaN among them.  Equality is false for one, inequality true
+-- and every ordered comparison false (D162).  The bits are 1 for ==, 2 for
+-- <>, 4 for <, 8 for <=, 16 for > and 32 for >=.
+
+-- How many of the six comparisons hold, counted as `n += a < b` is in C:
+-- each arm adds one to the count, which becomes the count plus the
+-- comparison's zero or one.
+counted: (a: f64, b: f64) -> (count: u32) =
+    mut held: u32 = 0
+    if a == b then
+        inc held
+    end if
+    if a <> b then
+        inc held
+    end if
+    if a < b then
+        inc held
+    end if
+    if a <= b then
+        inc held
+    end if
+    if a > b then
+        inc held
+    end if
+    if a >= b then
+        inc held
+    end if
+    count = held
+end counted
+
+-- The comparison bits, each chosen between two values by its arms.
+chosen: (a: f32, b: f32) -> (bits: u32) =
+    mut equal: u32 = 0
+    if a == b then
+        equal = 1
+    else
+        equal = 0
+    end if
+    mut unequal: u32 = 7
+    if a <> b then
+        unequal = 2
+    else
+        unequal = 0
+    end if
+    mut below: u32 = 0
+    if a < b then
+        below = 4
+    end if
+    mut at_most: u32 = 8
+    if not (a <= b) then
+        at_most = 0
+    end if
+    mut above: u32 = 0
+    if a > b then
+        above = 16
+    end if
+    mut at_least: u32 = 0
+    if a >= b then
+        at_least = 32
+    end if
+    bits = equal | unequal | below | at_most | above | at_least
+end chosen
+
+-- The smaller of two floats as `a < b` chooses it: the second whenever
+-- they are unordered.  Its bits are compared, so a NaN and a signed zero
+-- are each the one chosen.
+smaller: (a: f64, b: f64) -> (least: f64) =
+    if a < b then
+        least = a
+    else
+        least = b
+    end if
+end smaller
+
+same_bits: (left: f64, right: f64) -> (same: bool) =
+    same = (left == right and 1.0 / left == 1.0 / right)
+           or (left <> left and right <> right)
+end same_bits
+
+-- A bool chosen by a comparison of floats.
+matches: (a: f32, b: f32) -> (same: bool) =
+    mut held: bool = false
+    if a == b then
+        held = true
+    end if
+    same = held
+end matches
+
+-- An arm that can trap keeps its branch: none of these may trap when its
+-- condition is false, and each would if both arms were computed.
+guarded: (values: []u32, at: usize, divisor: u32, big: u32) -> (sum: u32) =
+    mut element: u32 = 0
+    if at < lenof values then
+        element = values[at]
+    end if
+    mut quotient: u32 = 0
+    if divisor <> 0 then
+        quotient = 100 / divisor
+    end if
+    mut doubled: u32 = 0
+    if big < 1000 then
+        doubled = big * 2
+    end if
+    sum = element + quotient + doubled
+end guarded
+
+-- An addition kept as the count plus a chosen zero cannot overflow when
+-- its arm is not taken.
+saturated: (a: f64, b: f64) -> (count: u8) =
+    mut held: u8 = 255
+    if a < b then
+        inc held
+    end if
+    count = held
+end saturated
+
+public main: () -> (code: i32) =
+    values: [3]u32 = [5, 6, 7]
+    if counted(1.0, 2.0) == 3
+      and counted(2.0, 1.0) == 3
+      and counted(1.0, 1.0) == 3
+      and counted(0.0, -0.0) == 3
+      and counted(f64.nan, 1.0) == 1
+      and counted(1.0, f64.nan) == 1
+      and counted(f64.nan, f64.nan) == 1
+      and chosen(1.0, 2.0) == 14
+      and chosen(2.0, 1.0) == 50
+      and chosen(-0.0, 0.0) == 41
+      and chosen(f32.nan, 1.0) == 2
+      and chosen(1.0, -f32.nan) == 2
+      and chosen(f32.infinity, f32.nan) == 2
+      and same_bits(smaller(1.0, 2.0), 1.0)
+      and same_bits(smaller(2.0, 1.0), 1.0)
+      and same_bits(smaller(0.0, -0.0), -0.0)
+      and same_bits(smaller(-0.0, 0.0), 0.0)
+      and same_bits(smaller(f64.nan, 1.0), 1.0)
+      and same_bits(smaller(1.0, f64.nan), f64.nan)
+      and same_bits(smaller(-f64.infinity, f64.nan), f64.nan)
+      and matches(2.0, 2.0)
+      and not matches(1.0, 2.0)
+      and not matches(f32.nan, f32.nan)
+      and matches(0.0, -0.0)
+      and guarded(values, 1, 4, 10) == 6 + 25 + 20
+      and guarded(values, 3, 0, 4000000000) == 0
+      and saturated(f64.nan, 1.0) == 255
+      and saturated(2.0, 1.0) == 255
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

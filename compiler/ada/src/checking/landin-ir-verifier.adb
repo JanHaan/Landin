@@ -113,6 +113,9 @@ package body Landin.IR.Verifier is
                & " D187 removes, or sits in a module value",
             when Slot_Out_Of_Range    =>
                "a load or a store names a slot the item does not have",
+            when Pieces_Disagree =>
+               "a split slot's pieces are not scalar slots of its parts'"
+               & " types",
             when Store_Disagrees_With_Slot =>
                "a store writes a value the slot's type does not hold",
             when Store_To_A_Parameter =>
@@ -215,6 +218,8 @@ package body Landin.IR.Verifier is
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
                "a datum contains a call, and [1940] admits none",
+            when Choice_Inside_A_Datum =>
+               "a datum contains a choice, and [1940] admits none",
             when Call_Failure_Slot_Disagrees =>
                "a call's failure slot disagrees with its declared errors",
             when Assembly_Operand_Malformed =>
@@ -262,6 +267,7 @@ package body Landin.IR.Verifier is
             when Unary_Kind    => 1,
             when Binary_Kind   => 2,
             when Failure_Test  => 1,
+            when Choose        => 3,
             when Evidence_Function | Evidence_Self => 1,
             when Storage_Address | Place_Address | Function_Address
                | Evidence_Address | Call | Indirect_Call => 0,
@@ -2467,15 +2473,12 @@ package body Landin.IR.Verifier is
                     (Part, Array_Element_Shape (Of_Unit, Shape)),
                when others => False);
 
-      function Part_Agrees_With_Slot
+      --  The by-value form of Part_Agrees_With_Slot: a shaped or scalar
+      --  slot that holds the value itself.
+      function Value_Part_Agrees
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
          return Boolean
-        is (if Part.Convention = Inout_Place
-            then Is_Address (Of_Unit, Item, Slot)
-              and then Same_Shape
-                (Of_Unit, Pointee_Shape (Of_Unit, Part.Pointee),
-                 Address_Shape (Of_Unit, Item, Slot))
-            else not Is_Address (Of_Unit, Item, Slot)
+        is (not Is_Address (Of_Unit, Item, Slot)
               and then (case Part.Kind is
                when Landin.Types.Scalar_Name =>
                   not Is_Aggregate (Of_Unit, Item, Slot)
@@ -2506,6 +2509,61 @@ package body Landin.IR.Verifier is
                     (Of_Unit, Part.Signature,
                      Signature_Of (Of_Unit, Item, Slot)),
                when others => False));
+
+      --  Landin.IR.In_Place's parameter agrees through its home, and its
+      --  address reaches exactly the home's shape.
+      function In_Place_Agrees
+        (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
+         return Boolean;
+
+      function In_Place_Agrees
+        (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
+         return Boolean
+      is
+         Home : constant Slot_Id := In_Place_Home (Of_Unit, Item, Slot);
+         Shape : constant Field_Shape :=
+           Address_Shape (Of_Unit, Item, Slot);
+      begin
+         if not Holds (Of_Unit, Item, Home)
+           or else not Value_Part_Agrees (Item, Part, Home)
+         then
+            return False;
+         elsif Is_Array (Of_Unit, Item, Home) then
+            return Same_Shape
+              (Of_Unit, Shape, Whole_Slot_Array_Shape (Of_Unit, Item, Home));
+         elsif not Is_Aggregate (Of_Unit, Item, Home)
+           or else Shape.Kind /= Aggregate_Field_Shape
+           or else Shape.Nominal /= Nominal_Of (Of_Unit, Item, Home)
+           or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+           or else Aggregate_Field_Count (Of_Unit, Shape)
+                     /= Slot_Field_Count (Of_Unit, Item, Home)
+         then
+            return False;
+         end if;
+         for Field in 1 .. Slot_Field_Count (Of_Unit, Item, Home) loop
+            if not Same_Shape
+              (Of_Unit, Nth_Aggregate_Field (Of_Unit, Shape, Field),
+               Nth_Slot_Field_Shape (Of_Unit, Item, Home, Field))
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end In_Place_Agrees;
+
+      function Part_Agrees_With_Slot
+        (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
+         return Boolean
+        is (if Part.Convention = Inout_Place
+            then Is_Address (Of_Unit, Item, Slot)
+              and then In_Place_Home (Of_Unit, Item, Slot) = No_Slot
+              and then Same_Shape
+                (Of_Unit, Pointee_Shape (Of_Unit, Part.Pointee),
+                 Address_Shape (Of_Unit, Item, Slot))
+            elsif Is_Address (Of_Unit, Item, Slot)
+            then In_Place_Home (Of_Unit, Item, Slot) /= No_Slot
+              and then In_Place_Agrees (Item, Part, Slot)
+            else Value_Part_Agrees (Item, Part, Slot));
 
       function Results_Agree_With_Slot
         (Item : Item_Id; Signature : Signature_Id; Slot : Slot_Id)
@@ -4434,6 +4492,50 @@ package body Landin.IR.Verifier is
                           Item => Id, others => <>);
                end if;
 
+               --  Scalar replacement's pieces: one scalar slot per part,
+               --  of that part's type, in a run the item has.
+               declare
+                  First : constant Slot_Id :=
+                    First_Piece (Of_Unit, Id, Slot_Id (Slot));
+                  Parts : constant Element_Total :=
+                    Slot_Part_Count (Of_Unit, Id, Slot_Id (Slot));
+               begin
+                  if First /= No_Slot
+                    and then
+                      (Parts = 0
+                       or else Is_Address (Of_Unit, Id, Slot_Id (Slot))
+                       or else Natural (First) > Slot_Count (Of_Unit, Id)
+                       or else Parts > Element_Total
+                         (Slot_Count (Of_Unit, Id) - Natural (First) + 1))
+                  then
+                     return (Kind => Pieces_Disagree,
+                             Item => Id, others => <>);
+                  end if;
+                  for Part in 1 .. (if First = No_Slot then 0
+                                    else Natural (Parts))
+                  loop
+                     declare
+                        Piece : constant Slot_Id :=
+                          First + Slot_Id (Part - 1);
+                     begin
+                        if not Slot_Part_Is_Scalar
+                            (Of_Unit, Id, Slot_Id (Slot),
+                             Part_Position (Part))
+                          or else Is_Aggregate (Of_Unit, Id, Piece)
+                          or else Is_Array (Of_Unit, Id, Piece)
+                          or else Is_Address (Of_Unit, Id, Piece)
+                          or else Type_Of (Of_Unit, Id, Piece)
+                            /= Nth_Slot_Part
+                              (Of_Unit, Id, Slot_Id (Slot),
+                               Part_Position (Part))
+                        then
+                           return (Kind => Pieces_Disagree,
+                                   Item => Id, others => <>);
+                        end if;
+                     end;
+                  end loop;
+               end;
+
                if Is_Address (Of_Unit, Id, Slot_Id (Slot))
                  and then
                    (Is_Aggregate (Of_Unit, Id, Slot_Id (Slot))
@@ -4451,6 +4553,31 @@ package body Landin.IR.Verifier is
                   return (Kind => Runtime_Address_Is_Not_Valid,
                           Item => Id, others => <>);
                end if;
+
+               --  An in-place parameter's home is a shaped slot of the
+               --  same item that no source binding names; see
+               --  Part_Agrees_With_Slot for its shape.
+               declare
+                  Home : constant Slot_Id :=
+                    In_Place_Home (Of_Unit, Id, Slot_Id (Slot));
+               begin
+                  if Home /= No_Slot
+                    and then
+                      (not Is_Address (Of_Unit, Id, Slot_Id (Slot))
+                       or else not Holds (Of_Unit, Id, Home)
+                       or else Home = Slot_Id (Slot)
+                       or else Is_Address (Of_Unit, Id, Home)
+                       or else In_Place_Home (Of_Unit, Id, Home) /= No_Slot
+                       or else Declares (Of_Unit, Id, Home)
+                                 /= No_Declaration
+                       or else not
+                         (Is_Aggregate (Of_Unit, Id, Home)
+                          or else Is_Array (Of_Unit, Id, Home)))
+                  then
+                     return (Kind => Runtime_Address_Is_Not_Valid,
+                             Item => Id, others => <>);
+                  end if;
+               end;
 
                if Is_Aggregate (Of_Unit, Id, Slot_Id (Slot)) then
                   for Field in
@@ -8129,6 +8256,57 @@ package body Landin.IR.Verifier is
                                          Item => Id, Block => Block,
                                          Value => V);
                               end if;
+
+                           when Choose =>
+                              --  D338: a bool chooses between two values
+                              --  of the result's scalar type, neither
+                              --  carrying a function, an atom set or a
+                              --  pointee, and only where code executes.
+                              declare
+                                 Chosen : constant Landin.Types.Type_Kind :=
+                                   Result_Of (Of_Unit, Id, V);
+                              begin
+                                 if Is_Datum then
+                                    return (Kind => Choice_Inside_A_Datum,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 elsif Result_Of
+                                   (Of_Unit, Id,
+                                    Nth_Operand (Of_Unit, Id, V, 1))
+                                   /= Landin.Types.Bool
+                                 then
+                                    return (Kind => Condition_Is_Not_A_Bool,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                                 for Position in 2 .. 3 loop
+                                    declare
+                                       Each : constant Value_Id :=
+                                         Nth_Operand (Of_Unit, Id, V,
+                                                      Position);
+                                    begin
+                                       if Result_Of (Of_Unit, Id, Each)
+                                         /= Chosen
+                                       then
+                                          return (Kind => Operands_Disagree,
+                                                  Item => Id, Block => Block,
+                                                  Value => V);
+                                       elsif Chosen
+                                         not in Landin.Types.Scalar_Name
+                                         or else Signature_Of
+                                           (Of_Unit, Id, Each) /= No_Signature
+                                         or else Atom_Set_Of
+                                           (Of_Unit, Id, Each) /= No_Atom_Set
+                                         or else Pointee_Of
+                                           (Of_Unit, Id, Each) /= No_Pointee
+                                       then
+                                          return (Kind => Result_Disagrees,
+                                                  Item => Id, Block => Block,
+                                                  Value => V);
+                                       end if;
+                                    end;
+                                 end loop;
+                              end;
 
                            when Failure_Test =>
                               declare

@@ -18,6 +18,7 @@ with Ada.Strings.Fixed;
 with Landin.Targets.Capabilities;
 with Landin.Backend.AAPCS64_ABI;
 with Landin.Backend.Arm64.Platform;
+with Landin.Backend.Arm64.Selection;
 with Landin.Backend.ELF;
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Work_Arrays;
@@ -40,6 +41,9 @@ package body Landin.Backend.Arm64 is
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Item_Id;
    use type Landin.IR.Value_Id;
+   use type Landin.IR.Block_Id;
+   use type Landin.IR.Storage_Kind;
+   use type Selection.Word;
    use type Landin.IR.Opcode;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
@@ -118,10 +122,62 @@ package body Landin.Backend.Arm64 is
          then Landin.Types.Width (Landin.Types.Integer_Name (Kind), Facts)
          else 8);
 
+   --  Register numbers are DWARF's for AArch64: x0-x30 are 0-30, and
+   --  v0-v31, whose low halves are d0-d31 and s0-s31, are 64-95.
+   subtype Register_Number is Natural range 0 .. 95;
+   No_Register : constant Natural := Natural'Last;
+   --  x0-x7, which selection writes only to pass a call's arguments and
+   --  take its result, to leave, and in a C routine's entry and C
+   --  transport: a location may hold one where no call or assembly lies
+   --  in its interval, and a parameter only the one it arrives in.
+   subtype Argument_Register is Register_Number range 0 .. 7;
+   --  x19-x28, which the prologue saves and every epilogue restores.
+   subtype Saved_General is Register_Number range 19 .. 28;
+   subtype Float_Register is Register_Number range 64 .. 95;
+   --  d8-d15, whose low halves AAPCS64 preserves across a call and which
+   --  no assembly block may name, saved as x19-x28 are.
+   subtype Saved_Float is Float_Register range 72 .. 79;
+   --  d18-d31.  Selection's float scratch is d16 and d17 and C transport's
+   --  d0-d7, so only a call or assembly changes these.
+   subtype Free_Float is Float_Register range 82 .. 95;
+
+   --  No register a location may hold is one selection writes as scratch
+   --  inside an operation (Landin.Backend.Arm64.Selection).
+   pragma Compile_Time_Error
+     (Argument_Register'Last >= Selection.General_Scratch'First
+      or else Saved_General'First <= Selection.General_Scratch'Last
+      or else Saved_Float'Last - Float_Register'First
+        >= Selection.Float_Scratch'First
+      or else Free_Float'First - Float_Register'First
+        <= Selection.Float_Scratch'Last,
+      "an allocatable register is selection's scratch");
+
+   --  The Step'th register of First .. Through in the order a location
+   --  is offered them: x0-x7 downward, which leaves the parameters that
+   --  arrive in the lowest of them where they are longest, and every
+   --  other run upward.
+   function Order (First, Through, Step : Register_Number)
+     return Register_Number
+     is (if First in Argument_Register then Through - Step
+         else First + Step);
+
+   --  A register as selection spells it at a width: x or w, d or s.
+   function Name
+     (Number : Register_Number;
+      Size : Landin.Targets.Scalar_Size := Landin.Targets.Byte_8)
+      return String
+     is (if Number in Float_Register
+         then (if Size = Landin.Targets.Byte_8 then "d" else "s")
+           & Trimmed (Natural'Image (Number - Float_Register'First))
+         else (if Size = Landin.Targets.Byte_8 then "x" else "w")
+           & Trimmed (Natural'Image (Number)));
+
    --  [1630]: which of x19-x28 some block of the routine declares.  Each
    --  is saved in a frame home by the prologue and restored by every
-   --  epilogue, which is what declaring one means.
-   type Saved_Set is array (19 .. 28) of Boolean;
+   --  epilogue, which is what declaring one means.  The same set names
+   --  the callee-saved registers a routine's locations hold, and the
+   --  registers a plan uses at all.
+   type Saved_Set is array (Register_Number) of Boolean;
 
    function Declared
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Saved_Set;
@@ -139,7 +195,7 @@ package body Landin.Backend.Arm64 is
                for Which in 1 .. Landin.IR.Assembly_Operand_Count
                  (Of_Unit, Item, Value)
                loop
-                  for Number in Result'Range loop
+                  for Number in Saved_General loop
                      if Landin.IR.Register_Of
                           (Landin.IR.Nth_Assembly_Operand
                              (Of_Unit, Item, Value, Which))
@@ -170,7 +226,7 @@ package body Landin.Backend.Arm64 is
 
    type Value_Location is record
       Home : Natural := 0;
-      Register : Natural := 0;
+      Register : Natural := No_Register;
       Size : Held_Size := Landin.Targets.Byte_8;
       Address_Required : Boolean := False;
    end record;
@@ -181,22 +237,37 @@ package body Landin.Backend.Arm64 is
    --  the value Through, or from the entry when From is No_Value.  Both
    --  stay No_Value for a slot whose location holds everywhere.
    type Slot_Location is record
-      Register : Natural := 0;
+      Register : Natural := No_Register;
       From, Through : Landin.IR.Value_Id := Landin.IR.No_Value;
    end record;
    package Slot_Vectors is new Ada.Containers.Vectors
      (Positive, Slot_Location);
+   --  Saves are the registers the prologue saves; Held, every register a
+   --  location holds, saved or not.
    type Allocation_Plan is record
       Values : Location_Vectors.Vector;
       Slots : Slot_Vectors.Vector;
       Homes : Natural := 0;
       Saves : Saved_Set := [others => False];
+      Held : Saved_Set := [others => False];
    end record;
 
    --  The slots placed in one register for their whole interval, by the
    --  position each interval opens at.
    package Reservations is new Ada.Containers.Ordered_Maps
      (Key_Type => Natural, Element_Type => Positive);
+
+   --  Size and speed give no place to a constant only instruction
+   --  selection reads: every use puts it straight into the register that
+   --  needs it, or into the instruction itself.  A call, a C routine's
+   --  leave and [1630]'s text reach a value through its frame home, so a
+   --  constant one of them names is placed like any other value.
+   function Lives_Nowhere
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Value : Landin.IR.Value_Id; Address_Required : Boolean) return Boolean
+     is (not Address_Required
+         and then Landin.IR.Op_Of (Of_Unit, Item, Value)
+           in Landin.IR.Number | Landin.IR.Truth | Landin.IR.Atom);
 
    function Allocate
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
@@ -241,11 +312,13 @@ package body Landin.Backend.Arm64 is
          package Mask_Buffers is new Landin.Backend.Work_Arrays
            (Boolean, Home_Mask, False);
          Start_Data, Last_Data, Sequence_Data, Next_Release_Data,
-           Next_Free_Data, Written_Data : Count_Buffers.Buffer (Value_Count);
-         Release_Data : Count_Buffers.Buffer (Value_Count + 1);
-         Use_Data, Weight_Data, Interval_Data :
-           Count_Buffers.Buffer (Slot_Count);
-         Eligible_Data : Mask_Buffers.Buffer (Slot_Count);
+           Next_Free_Data, Written_Data, Opening_Data :
+             Count_Buffers.Buffer (Value_Count);
+         Release_Data, Call_Data : Count_Buffers.Buffer (Value_Count + 1);
+         Use_Data, Weight_Data, Interval_Data, Parameter_Data,
+           First_Use_Data, Last_Use_Data, First_Block_Data :
+             Count_Buffers.Buffer (Slot_Count);
+         Eligible_Data, Across_Data : Mask_Buffers.Buffer (Slot_Count);
          Starts : Counts renames Start_Data.Data.all;
          Lasts : Counts renames Last_Data.Data.all;
          Sequence : Counts renames Sequence_Data.Data.all;
@@ -257,15 +330,33 @@ package body Landin.Backend.Arm64 is
          Written_After : Counts renames Written_Data.Data.all;
          Uses : Counts renames Use_Data.Data.all;
          Weights : Counts renames Weight_Data.Data.all;
-         --  The slots placed in a register, by weight and then as a mark.
+         --  The slots placed in a register, by weight and then as a mark:
+         --  1 for one placed over its interval, 2 for one given a span in
+         --  a single block by the scan.
          Interval_Slots : Counts renames Interval_Data.Data.all;
          Eligible : Home_Mask renames Eligible_Data.Data.all;
+         --  Each slot's first and last load or store, by position, the
+         --  block of its first, and whether another block has one too;
+         --  and the slot, if any, whose store at a position opens a span
+         --  of its own.
+         First_Use : Counts renames First_Use_Data.Data.all;
+         Last_Use : Counts renames Last_Use_Data.Data.all;
+         First_Block : Counts renames First_Block_Data.Data.all;
+         Across_Blocks : Home_Mask renames Across_Data.Data.all;
+         Opening : Counts renames Opening_Data.Data.all;
+         --  How many calls and assembly blocks lie before each position.
+         Calls_Before : Counts renames Call_Data.Data.all;
+         --  Each parameter slot's place among the parameters, else 0.
+         Parameter_Of : Counts renames Parameter_Data.Data.all;
          Free_Homes : array (Held_Size) of Natural := [others => 0];
-         Busy_Until : array (19 .. 28) of Natural := [others => 0];
+         Busy_Until : array (Register_Number) of Natural := [others => 0];
          Declared_Set : constant Saved_Set := Result.Saves;
          Tick : Natural := 0;
          Traffic : Natural := 0;
          Has_Assembly : Boolean := False;
+         --  Whether a callee-saved register pays for its save: below this
+         --  much scalar traffic a routine leaves them alone.
+         Saving : Boolean := False;
          Speed : constant Boolean :=
            Options.Optimize = Landin.Optimization.Speed;
          C_Entry : constant Boolean :=
@@ -281,11 +372,12 @@ package body Landin.Backend.Arm64 is
            (if Speed
             then Landin.IR.Liveness.Slot_Intervals (Of_Unit, Item, Graph)
             else Landin.IR.Liveness.Interval_Vectors.Empty_Vector);
-         --  Registers x19-x24 may hold slots, each over a run of disjoint
-         --  intervals, and the next interval each has still to open.
-         subtype Slot_Register is Natural range 19 .. 24;
-         Placed : array (Slot_Register) of Reservations.Map;
-         Upcoming : array (19 .. 28) of Reservations.Cursor :=
+         --  Registers x0-x7, x19-x24, d8-d15 and d18-d31 may hold slots,
+         --  each over a run of disjoint intervals, and the next interval
+         --  each has still to open.
+         subtype Slot_General is Saved_General range 19 .. 24;
+         Placed : array (Register_Number) of Reservations.Map;
+         Upcoming : array (Register_Number) of Reservations.Cursor :=
            [others => Reservations.No_Element];
 
          procedure Reach
@@ -296,6 +388,21 @@ package body Landin.Backend.Arm64 is
          procedure Open (Position : Natural);
          function Clear (Number, Position, Last : Natural) return Boolean;
          function Read_In_Place (Value : Positive) return Natural;
+         function Released_By (Value : Positive; Position : Natural)
+            return Natural;
+         function Stored_Into (Value : Positive; Position : Natural)
+            return Natural;
+
+         --  Whether a call or assembly block lies at some position from
+         --  First through Last: either may change x0-x7 and d18-d31.
+         function Calls_In (First, Last : Natural) return Boolean is
+           (Last >= First
+            and then Calls_Before (Last + 1) > Calls_Before (First));
+
+         --  The last position a slot placed in a register holds it.
+         function Holds_Through (Slot : Positive) return Natural is
+           (if Interval_Slots (Slot) = 2 then Last_Use (Slot)
+            else Spans (Slot).Last);
 
          --  An operation reaching storage needs a frame slot's cell, and
          --  reads only the address an address slot holds.
@@ -317,23 +424,45 @@ package body Landin.Backend.Arm64 is
            (Of_Slot : Landin.IR.Slot_Id; Value : Landin.IR.Value_Id)
          is
             Slot : constant Positive := Positive (Of_Slot);
-            Step : constant Natural :=
-              8 ** Natural'Min (Depth (Positive
-                (Landin.IR.Block_Of (Of_Unit, Item, Value))), 4);
+            At_Position : constant Positive := Starts (Positive (Value));
+            Block : constant Positive :=
+              Positive (Landin.IR.Block_Of (Of_Unit, Item, Value));
+            Step : constant Natural := 8 ** Natural'Min (Depth (Block), 4);
          begin
+            if First_Use (Slot) = 0 or else At_Position < First_Use (Slot) then
+               First_Use (Slot) := At_Position;
+            end if;
+            Last_Use (Slot) := Natural'Max (Last_Use (Slot), At_Position);
+            if First_Block (Slot) = 0 then
+               First_Block (Slot) := Block;
+            elsif First_Block (Slot) /= Block then
+               Across_Blocks (Slot) := True;
+            end if;
             Uses (Slot) := Uses (Slot) + 1;
             Weights (Slot) :=
               (if Weights (Slot) > Natural'Last - Step
                then Natural'Last else Weights (Slot) + Step);
          end Count_Use;
 
-         --  Each eligible slot read or written twice may hold one of six
-         --  registers over its whole interval: the heaviest slot first,
-         --  ties to the earlier, each to the first register whose
-         --  intervals so far it does not meet.  The rest of every
-         --  register is the values'.
+         --  Each eligible slot read or written twice may hold a register
+         --  over its whole interval: the heaviest slot first, ties to the
+         --  earlier, each to the first register whose intervals so far it
+         --  does not meet.  An interval no call or assembly lies in takes
+         --  x0-x7 or d18-d31 first, which cost no save, a parameter only
+         --  the argument register it arrives in, which its entry then
+         --  leaves alone.  Where saving pays, x19-x24 and d8-d15 follow.
+         --  The rest of every register is the values'.
          procedure Place_Intervals is
             Count : Natural := 0;
+
+            procedure Mark (Number : Register_Number);
+            procedure Mark (Number : Register_Number) is
+            begin
+               for Cursor in Placed (Number).Iterate loop
+                  Interval_Slots (Reservations.Element (Cursor)) := 1;
+               end loop;
+               Upcoming (Number) := Placed (Number).First;
+            end Mark;
 
             function Before (Left, Right : Positive) return Boolean is
               (Weights (Interval_Slots (Left))
@@ -353,6 +482,82 @@ package body Landin.Backend.Arm64 is
 
             procedure Sort is new Ada.Containers.Generic_Sort
               (Positive, Before, Swap);
+
+            --  The slot at Position in weight order, given the first
+            --  register it may take, or only a parameter's own one.
+            procedure Place (Position : Positive; Own_Only : Boolean);
+            procedure Place (Position : Positive; Own_Only : Boolean) is
+               Index : constant Positive := Interval_Slots (Position);
+               Span : constant Landin.IR.Liveness.Interval := Spans (Index);
+               Slot : Slot_Location renames Result.Slots (Index);
+               Float : constant Boolean := Landin.IR.Type_Of
+                 (Of_Unit, Item, Landin.IR.Slot_Id (Index))
+                   in Landin.Types.Float_Name;
+               Free : constant Boolean := not Has_Assembly
+                 and then not Calls_In
+                   (Natural'Max (Span.First, 1), Span.Last);
+
+               procedure Try (Number : Register_Number);
+               procedure Try (Number : Register_Number) is
+                  Below : constant Reservations.Cursor :=
+                    Placed (Number).Floor (Span.Last);
+               begin
+                  if Slot.Register = No_Register
+                    and then not Declared_Set (Number)
+                    and then
+                      (not Reservations.Has_Element (Below)
+                       or else Spans (Reservations.Element (Below)).Last
+                         < Span.First)
+                  then
+                     Placed (Number).Insert (Span.First, Index);
+                     Slot.Register := Number;
+                     Result.Held (Number) := True;
+                     if Number in Saved_General | Saved_Float then
+                        Result.Saves (Number) := True;
+                     end if;
+                  end if;
+               end Try;
+            begin
+               if Own_Only then
+                  if Free and then not Float
+                    and then Parameter_Of (Index) - 1 in Argument_Register
+                  then
+                     Try (Parameter_Of (Index) - 1);
+                  end if;
+                  return;
+               end if;
+               if Float then
+                  if Free then
+                     for Number in Free_Float loop
+                        Try (Number);
+                     end loop;
+                  end if;
+                  if Saving then
+                     for Number in Saved_Float loop
+                        Try (Number);
+                     end loop;
+                  end if;
+               else
+                  if Free and then Parameter_Of (Index) = 0 then
+                     for Number in reverse Argument_Register loop
+                        Try (Number);
+                     end loop;
+                  end if;
+                  if Saving then
+                     for Number in Slot_General loop
+                        Try (Number);
+                     end loop;
+                  end if;
+               end if;
+               if Slot.Register /= No_Register
+                 and then (Span.First > 0 or else Span.Last < Value_Count)
+               then
+                  Slot.From :=
+                    (if Span.First = 0 then Landin.IR.No_Value
+                     else Landin.IR.Value_Id (Sequence (Span.First)));
+                  Slot.Through := Landin.IR.Value_Id (Sequence (Span.Last));
+               end if;
+            end Place;
          begin
             for Index in 1 .. Slot_Count loop
                if Eligible (Index) and then Uses (Index) >= 2
@@ -363,56 +568,32 @@ package body Landin.Backend.Arm64 is
                end if;
             end loop;
             Sort (1, Count);
+            --  A parameter's own argument register first, which no other
+            --  slot may then take from it; then every slot by weight.
             for Position in 1 .. Count loop
-               declare
-                  Index : constant Positive := Interval_Slots (Position);
-                  Span : constant Landin.IR.Liveness.Interval :=
-                    Spans (Index);
-                  Slot : Slot_Location renames Result.Slots (Index);
-               begin
-                  for Number in Slot_Register loop
-                     declare
-                        Below : constant Reservations.Cursor :=
-                          Placed (Number).Floor (Span.Last);
-                     begin
-                        if not Declared_Set (Number)
-                          and then
-                            (not Reservations.Has_Element (Below)
-                             or else Spans (Reservations.Element (Below)).Last
-                               < Span.First)
-                        then
-                           Placed (Number).Insert (Span.First, Index);
-                           Slot.Register := Number;
-                           Result.Saves (Number) := True;
-                           exit;
-                        end if;
-                     end;
-                  end loop;
-                  if Slot.Register /= 0
-                    and then (Span.First > 0 or else Span.Last < Value_Count)
-                  then
-                     Slot.From :=
-                       (if Span.First = 0 then Landin.IR.No_Value
-                        else Landin.IR.Value_Id (Sequence (Span.First)));
-                     Slot.Through :=
-                       Landin.IR.Value_Id (Sequence (Span.Last));
-                  end if;
-               end;
+               Place (Position, Own_Only => True);
+            end loop;
+            for Position in 1 .. Count loop
+               Place (Position, Own_Only => False);
             end loop;
             Interval_Slots := [others => 0];
-            for Number in Slot_Register loop
-               for Cursor in Placed (Number).Iterate loop
-                  Interval_Slots (Reservations.Element (Cursor)) := 1;
-               end loop;
-               Upcoming (Number) := Placed (Number).First;
+            for Number in Argument_Register loop
+               Mark (Number);
+            end loop;
+            for Number in Slot_General loop
+               Mark (Number);
+            end loop;
+            for Number in Float_Register loop
+               Mark (Number);
             end loop;
          end Place_Intervals;
 
          --  The placed intervals opening at Position take their registers
          --  through their last position.
          procedure Open (Position : Natural) is
-         begin
-            for Number in Slot_Register loop
+            procedure Open_One (Number : Register_Number);
+            procedure Open_One (Number : Register_Number) is
+            begin
                if Reservations.Has_Element (Upcoming (Number))
                  and then Reservations.Key (Upcoming (Number)) = Position
                then
@@ -420,6 +601,19 @@ package body Landin.Backend.Arm64 is
                     (Reservations.Element (Upcoming (Number))).Last;
                   Reservations.Next (Upcoming (Number));
                end if;
+            end Open_One;
+         begin
+            for Number in Argument_Register loop
+               Open_One (Number);
+            end loop;
+            for Number in Slot_General loop
+               Open_One (Number);
+            end loop;
+            for Number in Saved_Float loop
+               Open_One (Number);
+            end loop;
+            for Number in Free_Float loop
+               Open_One (Number);
             end loop;
          end Open;
 
@@ -436,13 +630,13 @@ package body Landin.Backend.Arm64 is
          --  The register of the slot a load reads, when the loaded value
          --  dies before the slot is next stored and while the slot still
          --  holds that register: nothing writes it in between, so the
-         --  value may be that register.  Else 0.
+         --  value may be that register.  Else No_Register.
          function Read_In_Place (Value : Positive) return Natural is
          begin
             if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Value))
               /= Landin.IR.Load
             then
-               return 0;
+               return No_Register;
             end if;
             declare
                Slot : constant Positive := Positive (Landin.IR.Slot_Of
@@ -450,13 +644,154 @@ package body Landin.Backend.Arm64 is
             begin
                if Interval_Slots (Slot) /= 0
                  and then Lasts (Value) <= Written_After (Value)
-                 and then Lasts (Value) <= Spans (Slot).Last
+                 and then Lasts (Value) <= Holds_Through (Slot)
                then
                   return Result.Slots (Slot).Register;
                end if;
             end;
-            return 0;
+            return No_Register;
          end Read_In_Place;
+
+         --  The register of the slot a load at Position reads for the last
+         --  time, which the loaded value may go on holding while no
+         --  other interval placed there opens; else No_Register.
+         function Released_By (Value : Positive; Position : Natural)
+            return Natural is
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Value))
+              /= Landin.IR.Load
+            then
+               return No_Register;
+            end if;
+            declare
+               Slot : constant Positive := Positive (Landin.IR.Slot_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Value)));
+               Number : constant Natural := Result.Slots (Slot).Register;
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Holds_Through (Slot) = Position
+                 and then Busy_Until (Number) <= Position
+                 and then
+                   (not Reservations.Has_Element (Upcoming (Number))
+                    or else Lasts (Value)
+                      < Reservations.Key (Upcoming (Number)))
+               then
+                  return Number;
+               end if;
+            end;
+            return No_Register;
+         end Released_By;
+
+         --  The register of the slot whose placed interval opens at the
+         --  store that last uses a value, which the value may hold from
+         --  Position on, so that the store moves nothing; else
+         --  No_Register.
+         function Stored_Into (Value : Positive; Position : Natural)
+            return Natural
+         is
+            User : constant Landin.IR.Value_Id :=
+              Landin.IR.Value_Id (Sequence (Lasts (Value)));
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, User) /= Landin.IR.Store then
+               return No_Register;
+            end if;
+            declare
+               Slot : constant Positive :=
+                 Positive (Landin.IR.Slot_Of (Of_Unit, Item, User));
+               Number : constant Natural := Result.Slots (Slot).Register;
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Spans (Slot).First = Lasts (Value)
+                 and then Busy_Until (Number) < Position
+                 and then Reservations.Has_Element (Upcoming (Number))
+                 and then Reservations.Key (Upcoming (Number))
+                   = Lasts (Value)
+                 and then Reservations.Element (Upcoming (Number)) = Slot
+               then
+                  return Number;
+               end if;
+            end;
+            return No_Register;
+         end Stored_Into;
+
+         --  Whether a value from Position through Last may hold register
+         --  Number as far as calls go.  A float may hold d18-d31 when no
+         --  call lies strictly inside its interval, since one at its last
+         --  position reads it first.  An integer may hold x0-x7 only when
+         --  no call lies after its definition at all: a call's arguments
+         --  overwrite them one by one.  A callee-saved register must pay
+         --  for its save.
+         function Fits (Number, Position, Last : Natural) return Boolean is
+           (if Number in Argument_Register
+            then not Has_Assembly and then not Calls_In (Position + 1, Last)
+            elsif Number in Free_Float
+            then not Has_Assembly
+              and then not Calls_In (Position + 1, Last - 1)
+            else Saving);
+
+         --  The span the store at Position that opens a slot's gives it,
+         --  through the slot's last use: the stored value's own register
+         --  when the value dies there or the slot is never read, so the
+         --  store moves nothing; else the first clear one that fits.
+         procedure Open_Span (Index : Positive; Position : Natural);
+         procedure Open_Span (Index : Positive; Position : Natural) is
+            Slot : Slot_Location renames Result.Slots (Index);
+            Last : constant Natural := Last_Use (Index);
+            Stored : constant Natural := Result.Values (Positive
+              (Landin.IR.Nth_Operand
+                 (Of_Unit, Item, Landin.IR.Value_Id (Sequence (Position)),
+                  1))).Register;
+
+            procedure Take (Number : Register_Number);
+            procedure Take (Number : Register_Number) is
+            begin
+               if Slot.Register = No_Register
+                 and then Fits (Number, Position, Last)
+               then
+                  Slot.Register := Number;
+                  Busy_Until (Number) :=
+                    Natural'Max (Busy_Until (Number), Last);
+                  Result.Held (Number) := True;
+                  if Number in Saved_General | Saved_Float then
+                     Result.Saves (Number) := True;
+                  end if;
+               end if;
+            end Take;
+
+            procedure Take_Clear (First, Through : Register_Number);
+            procedure Take_Clear (First, Through : Register_Number) is
+            begin
+               for Step in 0 .. Through - First loop
+                  if Clear (Order (First, Through, Step), Position, Last)
+                  then
+                     Take (Order (First, Through, Step));
+                  end if;
+               end loop;
+            end Take_Clear;
+         begin
+            if Stored /= No_Register and then not Declared_Set (Stored)
+              and then (Busy_Until (Stored) = Position or else Last = Position)
+              and then
+                (not Reservations.Has_Element (Upcoming (Stored))
+                 or else Last < Reservations.Key (Upcoming (Stored)))
+            then
+               Take (Stored);
+            end if;
+            if Landin.IR.Type_Of (Of_Unit, Item, Landin.IR.Slot_Id (Index))
+              in Landin.Types.Float_Name
+            then
+               Take_Clear (Free_Float'First, Free_Float'Last);
+               Take_Clear (Saved_Float'First, Saved_Float'Last);
+            else
+               Take_Clear (Argument_Register'First, Argument_Register'Last);
+               Take_Clear (Saved_General'First, Saved_General'Last);
+            end if;
+            if Slot.Register /= No_Register then
+               Interval_Slots (Index) := 2;
+               Slot.From := Landin.IR.Value_Id (Sequence (Position));
+               Slot.Through := Landin.IR.Value_Id (Sequence (Last));
+            end if;
+         end Open_Span;
       begin
          for Block_Index in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             declare
@@ -475,13 +810,24 @@ package body Landin.Backend.Arm64 is
                      Sequence (Tick) := Index;
                      Starts (Index) := Tick;
                      Lasts (Index) := Tick;
+                     Calls_Before (Tick + 1) := Calls_Before (Tick)
+                       + (if Landin.IR.Op_Of
+                               (Of_Unit, Item, Landin.IR.Value_Id (Index))
+                             in Landin.IR.Call | Landin.IR.Indirect_Call
+                              | Landin.IR.Assembly
+                          then 1 else 0);
                   end;
                end loop;
             end;
          end loop;
-         --  Speed may hold a scalar slot other than a float in a register.
-         --  A C entry's parameters and the result slot are reached by
-         --  address, as is every slot a frame storage operand names.
+         for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
+            Parameter_Of (Positive
+              (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) := Index;
+         end loop;
+         --  Speed may hold a scalar slot in a register.  A C entry's
+         --  parameters and result slot are reached by address, as is every
+         --  slot a frame storage operand names.  A Landin routine's result
+         --  slot is read by nothing but the leave's own operand.
          if Speed then
             for Index in 1 .. Slot_Count loop
                declare
@@ -490,9 +836,7 @@ package body Landin.Backend.Arm64 is
                begin
                   Eligible (Index) :=
                     not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
-                    and then not Landin.IR.Is_Array (Of_Unit, Item, Slot)
-                    and then Landin.IR.Type_Of (Of_Unit, Item, Slot)
-                      not in Landin.Types.Float_Name;
+                    and then not Landin.IR.Is_Array (Of_Unit, Item, Slot);
                end;
             end loop;
             if C_Entry then
@@ -502,11 +846,11 @@ package body Landin.Backend.Arm64 is
                     (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) :=
                       False;
                end loop;
-            end if;
-            if Landin.IR.Result_Slot (Of_Unit, Item) /= Landin.IR.No_Slot
-            then
-               Eligible
-                 (Positive (Landin.IR.Result_Slot (Of_Unit, Item))) := False;
+               if Landin.IR.Result_Slot (Of_Unit, Item) /= Landin.IR.No_Slot
+               then
+                  Eligible (Positive
+                    (Landin.IR.Result_Slot (Of_Unit, Item))) := False;
+               end if;
             end if;
             for Index in 1 .. Landin.IR.Source_Alias_Count (Of_Unit, Item)
             loop
@@ -531,6 +875,20 @@ package body Landin.Backend.Arm64 is
                  (Index);
                Op : constant Landin.IR.Opcode := Landin.IR.Op_Of
                  (Of_Unit, Item, Value);
+               --  Assembly reads its inputs, and C transport its scalar
+               --  arguments and result, through their frame homes.  A
+               --  native call moves each from wherever it is.
+               Addressed : constant Boolean :=
+                 Op = Landin.IR.Assembly
+                 or else
+                   (Op in Landin.IR.Call | Landin.IR.Indirect_Call
+                    and then Landin.IR.Signature_Uses_C_ABI
+                      (Of_Unit,
+                       (if Op = Landin.IR.Indirect_Call
+                        then Landin.IR.Call_Signature (Of_Unit, Item, Value)
+                        else Landin.IR.Signature_Of
+                          (Of_Unit,
+                           Landin.IR.Callee_Of (Of_Unit, Item, Value)))));
             begin
                if Landin.IR.Result_Of (Of_Unit, Item, Value) in
                  Landin.Types.Scalar_Name
@@ -548,9 +906,7 @@ package body Landin.Backend.Arm64 is
                      Lasts (Operand) := Natural'Max
                        (Lasts (Operand), Starts (Index));
                      Traffic := Traffic + 1;
-                     if Op in Landin.IR.Assembly | Landin.IR.Call
-                       | Landin.IR.Indirect_Call
-                     then
+                     if Addressed then
                         Result.Values (Operand).Address_Required := True;
                      end if;
                   end;
@@ -567,7 +923,7 @@ package body Landin.Backend.Arm64 is
                        (Lasts (Receiver), Starts (Index));
                   end;
                end if;
-               if Op in Landin.IR.Call | Landin.IR.Indirect_Call then
+               if Addressed then
                   Result.Values (Index).Address_Required := True;
                elsif Op = Landin.IR.Leave
                  and then Landin.IR.Signature_Of (Of_Unit, Item)
@@ -636,7 +992,8 @@ package body Landin.Backend.Arm64 is
                end if;
             end;
          end loop;
-         if Speed and then Traffic >= 12 and then not Has_Assembly then
+         Saving := Speed and then Traffic >= 12;
+         if Speed and then not Has_Assembly then
             declare
                Stamp_Data, Next_Data : Count_Buffers.Buffer (Slot_Count);
                Stamp : Counts renames Stamp_Data.Data.all;
@@ -669,7 +1026,39 @@ package body Landin.Backend.Arm64 is
                   end;
                end loop;
             end;
+            --  A parameter is written at entry too, and a Landin routine's
+            --  result slot read at its leave.
+            for Index in 1 .. Slot_Count loop
+               if Parameter_Of (Index) /= 0 then
+                  Uses (Index) := Uses (Index) + 1;
+               end if;
+            end loop;
+            if not C_Entry
+              and then Landin.IR.Result_Slot (Of_Unit, Item)
+                /= Landin.IR.No_Slot
+            then
+               Uses (Positive (Landin.IR.Result_Slot (Of_Unit, Item))) :=
+                 Uses (Positive (Landin.IR.Result_Slot (Of_Unit, Item))) + 1;
+            end if;
             Place_Intervals;
+            --  A slot loaded and stored in one block only, which stores it
+            --  before reading it, and not placed over its interval, is
+            --  dead before that store and after its last use there.  Like
+            --  a value it needs a register only in between, which the scan
+            --  gives it at the store when it can.
+            for Index in 1 .. Slot_Count loop
+               if Eligible (Index) and then Interval_Slots (Index) = 0
+                 and then not Across_Blocks (Index)
+                 and then Parameter_Of (Index) = 0
+                 and then First_Use (Index) /= 0
+                 and then Landin.IR.Op_Of
+                   (Of_Unit, Item,
+                    Landin.IR.Value_Id (Sequence (First_Use (Index))))
+                   = Landin.IR.Store
+               then
+                  Opening (First_Use (Index)) := Index;
+               end if;
+            end loop;
          end if;
          Open (0);
          for Position in 1 .. Value_Count loop
@@ -689,27 +1078,70 @@ package body Landin.Backend.Arm64 is
                   end;
                end loop;
                Open (Position);
-               if Kind in Landin.Types.Scalar_Name then
+               if Opening (Position) /= 0 then
+                  Open_Span (Opening (Position), Position);
+               end if;
+               if Kind in Landin.Types.Scalar_Name
+                 and then not Lives_Nowhere
+                   (Of_Unit, Item, Landin.IR.Value_Id (Index),
+                    Result.Values (Index).Address_Required)
+               then
                   declare
                      Place : Value_Location renames Result.Values (Index);
-                  begin
-                     Place.Size := Size_Of (Kind, Facts);
-                     if Speed and then Traffic >= 12
-                       and then not Place.Address_Required
-                       and then Kind not in Landin.Types.Float_Name
-                       and then Lasts (Index) > Position
-                     then
-                        Place.Register := Read_In_Place (Index);
-                        for Number in Busy_Until'Range loop
-                           exit when Place.Register /= 0;
-                           if Clear (Number, Position, Lasts (Index)) then
-                              Place.Register := Number;
-                              Busy_Until (Number) := Lasts (Index);
+                     Last : constant Natural := Lasts (Index);
+
+                     --  Place takes register Number from Position through
+                     --  Last, if it has none yet and Number fits there.
+                     procedure Share (Number : Natural);
+                     procedure Share (Number : Natural) is
+                     begin
+                        if Place.Register = No_Register
+                          and then Number /= No_Register
+                          and then Fits (Number, Position, Last)
+                        then
+                           Place.Register := Number;
+                           Busy_Until (Number) :=
+                             Natural'Max (Busy_Until (Number), Last);
+                           Result.Held (Number) := True;
+                           if Number in Saved_General | Saved_Float then
                               Result.Saves (Number) := True;
                            end if;
+                        end if;
+                     end Share;
+
+                     --  The first register of First .. Through, in Order,
+                     --  that is clear from Position through Last, if Place
+                     --  has none yet.
+                     procedure Take (First, Through : Register_Number);
+                     procedure Take (First, Through : Register_Number) is
+                     begin
+                        for Step in 0 .. Through - First loop
+                           exit when Place.Register /= No_Register;
+                           if Clear (Order (First, Through, Step), Position,
+                                     Last)
+                           then
+                              Share (Order (First, Through, Step));
+                           end if;
                         end loop;
+                     end Take;
+                  begin
+                     Place.Size := Size_Of (Kind, Facts);
+                     if Speed and then not Place.Address_Required
+                       and then Last > Position
+                     then
+                        Share (Read_In_Place (Index));
+                        Share (Released_By (Index, Position));
+                        Share (Stored_Into (Index, Position));
+                        if Kind in Landin.Types.Float_Name then
+                           Take (Free_Float'First, Free_Float'Last);
+                           Take (Saved_Float'First, Saved_Float'Last);
+                        else
+                           Take (Argument_Register'First,
+                                 Argument_Register'Last);
+                           Take (Saved_General'First, Saved_General'Last);
+                        end if;
                      end if;
-                     if Place.Register = 0 then
+                     if Place.Register = No_Register then
                         if Free_Homes (Place.Size) /= 0 then
                            Place.Home := Free_Homes (Place.Size);
                            Free_Homes (Place.Size) := Next_Free (Place.Home);
@@ -770,7 +1202,8 @@ package body Landin.Backend.Arm64 is
            (1 .. Saves) := [others => (8, 8)];
       begin
          for Index in 1 .. Natural (Plan.Slots.Length) loop
-            Slots_Data.Data (Index) := Plan.Slots (Index).Register = 0;
+            Slots_Data.Data (Index) :=
+              Plan.Slots (Index).Register = No_Register;
          end loop;
          for Index in Values'Range loop
             declare
@@ -825,8 +1258,10 @@ package body Landin.Backend.Arm64 is
       return Frame_For (Of_Unit, Item, Facts, Options, Plan, 16#7fff_ffff#);
    end Debug_Frame;
 
-   --  A slot in x19-x28 is that register, or the address held there for
-   --  an indirect binding; DWARF numbers x0-x30 as 0-30.
+   --  A slot in a general register is that register, or the address held
+   --  there for an indirect binding; DWARF numbers x0-x30 as 0-30.  A
+   --  float slot in a d register is that register, numbered past 31 and
+   --  so named with DW_OP_regx.
    function Debug_Slot
      (Plan : Allocation_Plan; Layout : Frame; Slot : Landin.IR.Slot_Id;
       Indirect, Address_Only : Boolean) return String;
@@ -839,7 +1274,11 @@ package body Landin.Backend.Arm64 is
       LF : constant Character := Character'Val (10);
       Register : constant Natural := Plan.Slots (Positive (Slot)).Register;
    begin
-      if Register /= 0 then
+      if Register in Float_Register then
+         return (if Address_Only then ""
+                 else HT & ".byte 0x90" & LF & HT & ".uleb128 "
+                   & Trimmed (Natural'Image (Register)) & LF);
+      elsif Register /= No_Register then
          if Indirect or else not Address_Only then
             return HT & ".byte " & Trimmed (Natural'Image
               ((if Indirect then 16#70# else 16#50#) + Register)) & LF
@@ -858,12 +1297,13 @@ package body Landin.Backend.Arm64 is
    --  else: the register belongs to other locations before and after.
    --  An interval opening at a store excludes that store's own
    --  instruction, which precedes the write; one open from the entry
-   --  includes everything before its last position.  The register, which
-   --  every call preserves, still holds the slot's value after that
-   --  position, through the rest of its block, until a value writes it:
-   --  that value is the Overwriter, and the encoder describes the slot at
-   --  its first address too.  The next block may be entered from
-   --  elsewhere, where the register is already another location's.
+   --  includes everything before its last position.  The register still
+   --  holds the slot's value after that position, through the rest of its
+   --  block, until a value writes it: that value is the Overwriter, and
+   --  the encoder describes the slot at its first address too.  A call
+   --  writes x0-x7 and d18-d31, which it does not preserve, and a leave
+   --  or failure x0-x7.  The next block may be entered from elsewhere,
+   --  where the register is already another location's.
    procedure Narrow
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Plan : Allocation_Plan; Slot : Landin.IR.Slot_Id;
@@ -884,10 +1324,18 @@ package body Landin.Backend.Arm64 is
       Holding : Boolean := False;
 
       --  Whether Value writes the slot's register: as its own location,
-      --  by storing to another slot held there, or as assembly, which may
-      --  name any register.
+      --  by storing to another slot held there, as assembly, which may
+      --  name any register, or as a call or exit.
       function Writes (Value : Landin.IR.Value_Id) return Boolean is
         (Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Assembly
+         or else
+           (Place.Register in Argument_Register | Free_Float
+            and then Landin.IR.Op_Of (Of_Unit, Item, Value)
+              in Landin.IR.Call | Landin.IR.Indirect_Call)
+         or else
+           (Place.Register in Argument_Register
+            and then Landin.IR.Op_Of (Of_Unit, Item, Value)
+              in Landin.IR.Leave | Landin.IR.Fail)
          or else Plan.Values (Positive (Value)).Register = Place.Register
          or else (Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Store
                   and then Plan.Slots (Positive (Landin.IR.Slot_Of
@@ -1038,6 +1486,10 @@ package body Landin.Backend.Arm64 is
       --  rather than an exclusive-monitor retry loop.
       Has_LSE : constant Boolean :=
         Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Lse);
+      --  Size and speed choose shorter forms the reference profile, whose
+      --  output stays as it is, does not.
+      Reference_Profile : constant Boolean :=
+        Options.Optimize = Landin.Optimization.None;
       --  Instruction selection is one; the object format and the hosted
       --  system decide only the text around it.
       Format : constant Platform.Arm64_Format :=
@@ -1095,6 +1547,9 @@ package body Landin.Backend.Arm64 is
          Offset : Landin.Targets.Byte_Count);
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x15");
+      procedure Base_Memory
+        (Store : Boolean; Size : Held_Size; Register, Base : String;
+         Offset : Landin.Targets.Byte_Count);
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
@@ -1167,6 +1622,8 @@ package body Landin.Backend.Arm64 is
             elsif Mnemonic = "b.gt" then "b.le"
             elsif Mnemonic = "b.vs" then "b.vc"
             elsif Mnemonic = "b.vc" then "b.vs"
+            elsif Mnemonic = "b.mi" then "b.pl"
+            elsif Mnemonic = "b.pl" then "b.mi"
             elsif Mnemonic = "cbz" then "cbnz"
             elsif Mnemonic = "cbnz" then "cbz"
             elsif Mnemonic = "tbz" then "tbnz"
@@ -1202,60 +1659,25 @@ package body Landin.Backend.Arm64 is
       end Emit;
 
 
-      procedure Immediate (Register : String; Value : Pattern) is
-         Zero_Chunks : Natural := 0;
-         Ones_Chunks : Natural := 0;
-         Use_Movn : Boolean;
-         Fill : Pattern;
-         Seeded : Boolean := False;
-      begin
-         for Index in 0 .. 3 loop
-            declare
-               Chunk : constant Pattern :=
-                 Value / 2 ** (Index * 16) and 65535;
-            begin
-               if Chunk = 0 then
-                  Zero_Chunks := Zero_Chunks + 1;
-               elsif Chunk = 65535 then
-                  Ones_Chunks := Ones_Chunks + 1;
-               end if;
-            end;
-         end loop;
+      --  Each line of Selection's text, which has neither branches nor
+      --  labels.
+      procedure Emit_Lines (Text : String);
 
-         --  A move-wide seed supplies every untouched chunk.  Use the
-         --  complement seed only when it leaves fewer chunks for MOVK.
-         Use_Movn := Ones_Chunks > Zero_Chunks;
-         Fill := (if Use_Movn then 65535 else 0);
-         for Index in 0 .. 3 loop
-            declare
-               Chunk : constant Pattern :=
-                 Value / 2 ** (Index * 16) and 65535;
-               Shift : constant String :=
-                 (if Index = 0 then "" else ", lsl #"
-                  & Trimmed (Natural'Image (Index * 16)));
-            begin
-               if Chunk /= Fill then
-                  if not Seeded then
-                     Emit ((if Use_Movn then "movn " else "movz ")
-                           & Register & ", #"
-                           & Trimmed (Pattern'Image
-                             (if Use_Movn then 65535 - Chunk else Chunk))
-                           & Shift);
-                     Seeded := True;
-                  else
-                     Emit ("movk " & Register & ", #"
-                           & Trimmed (Pattern'Image (Chunk)) & Shift);
-                  end if;
-               end if;
-            end;
-         end loop;
-         if not Seeded then
-            if Use_Movn then
-               Emit ("movn " & Register & ", #0");
-            else
-               Emit ("movz " & Register & ", #0");
+      procedure Emit_Lines (Text : String) is
+         First : Positive := Text'First;
+      begin
+         for Index in Text'Range loop
+            if Text (Index) = LF then
+               Emit (Text (First .. Index - 1));
+               First := Index + 1;
             end if;
-         end if;
+         end loop;
+         Emit (Text (First .. Text'Last));
+      end Emit_Lines;
+
+      procedure Immediate (Register : String; Value : Pattern) is
+      begin
+         Emit_Lines (Selection.Immediate (Register, Selection.Word (Value)));
       end Immediate;
 
       procedure Add_Offset
@@ -1294,11 +1716,12 @@ package body Landin.Backend.Arm64 is
          end if;
       end Stack_Address;
 
+      --  Size and speed restore nothing a call did not reserve.
       procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count) is
       begin
          if Bytes > 0 then
             Add_Offset ("sp", Bytes);
-         else
+         elsif Reference_Profile then
             Immediate ("x15", 0);
             Emit ("add sp, sp, x15");
          end if;
@@ -1318,11 +1741,15 @@ package body Landin.Backend.Arm64 is
          end if;
       end Address;
 
+      --  Register is general, named here at Size's width, or a d or s
+      --  register as written; so for Frame_Memory and Base_Memory.
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String)
       is
          Reg : constant String :=
-           (if Size = Landin.Targets.Byte_8 then Register
+           (if Size = Landin.Targets.Byte_8
+              or else Register (Register'First) in 'd' | 's'
+            then Register
             else "w" & Register (Register'First + 1 .. Register'Last));
       begin
          Emit ((if Store then "str" else "ldr")
@@ -1338,7 +1765,9 @@ package body Landin.Backend.Arm64 is
          Offset : Landin.Targets.Byte_Count)
       is
          Reg : constant String :=
-           (if Size = Landin.Targets.Byte_8 then Register
+           (if Size = Landin.Targets.Byte_8
+              or else Register (Register'First) in 'd' | 's'
+            then Register
             else "w" & Register (Register'First + 1 .. Register'Last));
       begin
          if Offset <= 256 then
@@ -1358,12 +1787,62 @@ package body Landin.Backend.Arm64 is
          end if;
       end Frame_Memory;
 
+      --  Size and speed subtract an offset that fits an immediate from
+      --  the frame pointer directly rather than placing it first.
       procedure Frame_Address
-        (Offset : Landin.Targets.Byte_Count; Register : String := "x15") is
+        (Offset : Landin.Targets.Byte_Count; Register : String := "x15")
+      is
+         Operand : constant String :=
+           (if Reference_Profile then ""
+            else Selection.Arithmetic_Immediate (Selection.Word (Offset)));
       begin
-         Immediate (Register, Pattern (Offset));
-         Emit ("sub " & Register & ", x29, " & Register);
+         if Operand /= "" then
+            Emit ("sub " & Register & ", x29, " & Operand);
+         else
+            Immediate (Register, Pattern (Offset));
+            Emit ("sub " & Register & ", x29, " & Register);
+         end if;
       end Frame_Address;
+
+      --  A load or store Offset bytes past the address Base holds: the
+      --  scaled unsigned offset when it fits, else the unscaled signed
+      --  one, else the address formed in x10 first.
+      procedure Base_Memory
+        (Store : Boolean; Size : Held_Size; Register, Base : String;
+         Offset : Landin.Targets.Byte_Count)
+      is
+         Bytes : constant Landin.Targets.Byte_Count :=
+           Landin.Targets.Byte_Count (Landin.Targets.Bytes (Size));
+         Reg : constant String :=
+           (if Size = Landin.Targets.Byte_8
+              or else Register (Register'First) in 'd' | 's'
+            then Register
+            else "w" & Register (Register'First + 1 .. Register'Last));
+         Suffix : constant String :=
+           (case Size is
+               when Landin.Targets.Byte_1 => "b",
+               when Landin.Targets.Byte_2 => "h",
+               when others => "");
+         Where : constant String :=
+           ", [" & Base & ", #"
+           & Trimmed (Landin.Targets.Byte_Count'Image (Offset)) & "]";
+      begin
+         if Offset = 0 then
+            Memory (Store, Size, Register, Base);
+         elsif Offset mod Bytes = 0 and then Offset / Bytes <= 4095 then
+            Emit ((if Store then "str" else "ldr") & Suffix & " " & Reg
+                  & Where);
+         elsif Offset <= 255 then
+            Emit ((if Store then "stur" else "ldur") & Suffix & " " & Reg
+                  & Where);
+         else
+            if Base /= "x10" then
+               Emit ("mov x10, " & Base);
+            end if;
+            Add_Offset ("x10", Offset);
+            Memory (Store, Size, Register, "x10");
+         end if;
+      end Base_Memory;
 
       procedure Reserve (Bytes : Landin.Targets.Byte_Count) is
       begin
@@ -1393,12 +1872,77 @@ package body Landin.Backend.Arm64 is
          end if;
       end Reserve;
 
+      --  Speed spends code on every fixed extent through Speed_Transfer
+      --  bytes, as x86-64 does, wherever a loop would move it: straight
+      --  pairs of words and then the narrower tail, each at its own
+      --  offset from x9 and x10, which stay where they are.  The hosted
+      --  arm64 targets reach normal memory at any alignment, so no test
+      --  of one is needed.
+      Speed_Transfer : constant Landin.Targets.Byte_Count := 64;
+
+      function Speed_Unrolled
+        (Bytes : Landin.Targets.Byte_Count) return Boolean
+        is (Options.Optimize = Landin.Optimization.Speed
+            and then Bytes in 1 .. Speed_Transfer);
+
+      procedure Move_Unrolled
+        (Bytes : Landin.Targets.Byte_Count; Copy : Boolean);
+
+      procedure Move_Unrolled
+        (Bytes : Landin.Targets.Byte_Count; Copy : Boolean)
+      is
+         At_Offset : Landin.Targets.Byte_Count := 0;
+      begin
+         while At_Offset < Bytes loop
+            declare
+               Left : constant Landin.Targets.Byte_Count :=
+                 Bytes - At_Offset;
+               Where : constant String := (if At_Offset = 0 then ""
+                 else ", #" & Trimmed
+                   (Landin.Targets.Byte_Count'Image (At_Offset)));
+            begin
+               if Left >= 16 then
+                  if Copy then
+                     Emit ("ldp x12, x13, [x10" & Where & "]");
+                  end if;
+                  Emit ((if Copy then "stp x12, x13" else "stp xzr, xzr")
+                        & ", [x9" & Where & "]");
+                  At_Offset := At_Offset + 16;
+               else
+                  declare
+                     Width : constant Landin.Targets.Byte_Count :=
+                       (if Left >= 8 then 8 elsif Left >= 4 then 4
+                        elsif Left >= 2 then 2 else 1);
+                     Suffix : constant String :=
+                       (if Width = 2 then "h" elsif Width = 1 then "b"
+                        else "");
+                     Register : constant String :=
+                       (if not Copy then (if Width = 8 then "xzr" else "wzr")
+                        elsif Width = 8 then "x12" else "w12");
+                  begin
+                     if Copy then
+                        Emit ("ldr" & Suffix & " " & Register & ", [x10"
+                              & Where & "]");
+                     end if;
+                     Emit ("str" & Suffix & " " & Register & ", [x9" & Where
+                           & "]");
+                     At_Offset := At_Offset + Width;
+                  end;
+               end if;
+            end;
+         end loop;
+      end Move_Unrolled;
+
       --  x9 destination, x10 source; private scratch leaves argument banks
       --  intact while copying by-value parameters at routine entry.  The
       --  forward direction also preserves the existing exact self-copy.
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
       begin
+         if Speed_Unrolled (Bytes) then
+            Move_Unrolled (Bytes, Copy => True);
+            return;
+         end if;
          if Bytes >= 8 then
             --  A selected field or runtime address need not be word-aligned.
             --  Keep its byte path rather than assuming alignment from size.
@@ -1483,6 +2027,10 @@ package body Landin.Backend.Arm64 is
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Loop_Label : constant String := Fresh;
       begin
+         if Speed_Unrolled (Bytes) then
+            Move_Unrolled (Bytes, Copy => False);
+            return;
+         end if;
          if Bytes >= 8 then
             Emit ("tst x9, #7");
             Emit ("b.ne " & Loop_Label & "_bytes");
@@ -1899,6 +2447,16 @@ package body Landin.Backend.Arm64 is
          Current_Position : Positive := 1;
          Folded : Address_Fold;
          Folded_Base : Unbounded.Unbounded_String;
+         --  The branch a comparison right before it already took, testing
+         --  the comparison's flags rather than a stored verdict.
+         Fused_Branch : Landin.IR.Value_Id := Landin.IR.No_Value;
+         --  D338's choice whose condition a comparison right before it
+         --  left in the flags, and the condition that holds it.
+         Fused_Choice : Landin.IR.Value_Id := Landin.IR.No_Value;
+         Choice_Condition : Unbounded.Unbounded_String;
+         --  An addition that cannot trap whose addend is a choice of one or
+         --  zero right before it, which that choice made as one cinc.
+         Fused_Increment : Landin.IR.Value_Id := Landin.IR.No_Value;
          type Panic_Edge is record
             Reason : Landin.Panics.Kind;
             Site : Landin.Panics.Site_Number;
@@ -1944,42 +2502,235 @@ package body Landin.Backend.Arm64 is
            is (Landin.IR.Result_Of (Of_Unit, Item, Value));
          function Size_Of_Value (Value : Landin.IR.Value_Id) return Held_Size
            is (Size_Of (Kind (Value), Facts));
+
+         --  The register a value lives in, or No_Register for a frame
+         --  home or nowhere, and whether size and speed read and write it
+         --  there as a general register.
+         function Held (Value : Landin.IR.Value_Id) return Natural
+           is (Plan.Values (Positive (Value)).Register);
+         function In_General (Value : Landin.IR.Value_Id) return Boolean
+           is (Optimized and then Held (Value) /= No_Register
+               and then Held (Value) not in Float_Register);
+         --  A float value size and speed hold in a d or s register, and
+         --  that register's name.
+         function In_Float (Value : Landin.IR.Value_Id) return Boolean
+           is (Optimized and then Held (Value) in Float_Register);
+         function Float_Name (Value : Landin.IR.Value_Id) return String
+           is (Name (Held (Value), Size_Of_Value (Value)));
+         --  The same register as its 32-bit view, or the zero register's.
+         function Short (Register : String) return String
+           is ("w" & Register (Register'First + 1 .. Register'Last));
+
+         --  Whether a value is a constant, and the pattern it stores.
+         --  [1770]'s magnitude and [1880]'s minus are carried apart and
+         --  meet here, at the value's own width.
+         function Is_Constant (Value : Landin.IR.Value_Id) return Boolean
+           is (Optimized
+               and then Landin.IR.Op_Of (Of_Unit, Item, Value)
+                 in Landin.IR.Number | Landin.IR.Truth | Landin.IR.Atom);
+         function Constant_Of (Value : Landin.IR.Value_Id) return Pattern;
+
+         function Constant_Of (Value : Landin.IR.Value_Id) return Pattern is
+         begin
+            case Landin.IR.Op_Of (Of_Unit, Item, Value) is
+               when Landin.IR.Truth =>
+                  return (if Landin.IR.Truth_Of (Of_Unit, Item, Value)
+                          then 1 else 0);
+               when Landin.IR.Atom =>
+                  return Pattern (Atom_Code
+                    (Atoms_Ranked, Landin.IR.Atom_Of (Of_Unit, Item, Value)));
+               when others =>
+                  declare
+                     Bits : constant Landin.Targets.Bit_Width :=
+                       (if Kind (Value) in Landin.Types.Float_Name
+                        then Landin.Types.Float_Width (Kind (Value))
+                        else Landin.Types.Width (Kind (Value), Facts));
+                     Number : constant Pattern := Pattern
+                       (Landin.IR.Number_Of (Of_Unit, Item, Value));
+                  begin
+                     if Kind (Value) not in Landin.Types.Float_Name
+                       and then Landin.IR.Is_Negated (Of_Unit, Item, Value)
+                     then
+                        return Mask (0 - Number, Bits);
+                     end if;
+                     return Number;
+                  end;
+            end case;
+         end Constant_Of;
+
+         --  A constant Lives_Nowhere left without a place: every use puts
+         --  it straight into the register it needs, or into the
+         --  instruction itself.
+         function Is_Rematerialized (Value : Landin.IR.Value_Id)
+           return Boolean
+           is (Is_Constant (Value) and then Held (Value) = No_Register
+               and then Plan.Values (Positive (Value)).Home = 0);
+
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9");
          procedure Store_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9";
             Atom_Validated : Boolean := False);
+         procedure Validate_Atoms
+           (Value : Landin.IR.Value_Id; Register : String);
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x9");
          procedure Store_Slot
-           (Slot : Landin.IR.Slot_Id; Register : String := "x9");
+           (Slot : Landin.IR.Slot_Id; Register : String := "x9";
+            Extended : Boolean := False);
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind);
          procedure Check_Fit
            (Register : String; Scalar : Landin.Types.Integer_Name);
          procedure Epilogue;
          procedure Finish_Exit;
 
+         --  A location held in register Held, of Size, read into or
+         --  written from the general Register.  A general register holds
+         --  its value zero-extended, as a load from its frame cell would
+         --  leave it; a float's bits cross banks with fmov.
+         procedure Move_From
+           (Held : Register_Number; Register : String; Size : Held_Size);
+         procedure Move_Into
+           (Held : Register_Number; Register : String; Size : Held_Size);
+
+         procedure Move_From
+           (Held : Register_Number; Register : String; Size : Held_Size) is
+         begin
+            if Held in Float_Register then
+               Emit ("fmov " & (if Size = Landin.Targets.Byte_8 then Register
+                                else "w" & Register
+                                  (Register'First + 1 .. Register'Last))
+                     & ", " & Name (Held, Size));
+            elsif Name (Held) /= Register then
+               Emit ("mov " & Register & ", " & Name (Held));
+            end if;
+         end Move_From;
+
+         procedure Move_Into
+           (Held : Register_Number; Register : String; Size : Held_Size)
+         is
+            Bits : constant Natural :=
+              8 * Natural (Landin.Targets.Bytes (Size));
+         begin
+            if Held in Float_Register then
+               Emit ("fmov " & Name (Held, Size) & ", "
+                     & (if Size = Landin.Targets.Byte_8 then Register
+                        else "w" & Register
+                          (Register'First + 1 .. Register'Last)));
+            elsif Bits < 64 then
+               Emit ("ubfx " & Name (Held) & ", " & Register
+                     & ", #0, #" & Trimmed (Natural'Image (Bits)));
+            elsif Name (Held) /= Register then
+               Emit ("mov " & Name (Held) & ", " & Register);
+            end if;
+         end Move_Into;
+
+         --  Size and speed read an operand where a general register
+         --  holds it and leave a result in the general register it lives
+         --  in: Read names the register holding Value, its own or Scratch
+         --  loaded with it, and Target the register an operation should
+         --  compute Value into, from which Deliver puts it where it lives.
+         --  Extended says the register already holds the value
+         --  zero-extended from its own width, as every value in a general
+         --  register is held.  A float held in a d register crosses into
+         --  Scratch and back.  The reference profile loads each operand
+         --  into Scratch, computes in Scratch and stores from there.
+         function Read
+           (Value : Landin.IR.Value_Id; Scratch : String := "x9")
+            return String;
+         function Target
+           (Value : Landin.IR.Value_Id; Scratch : String := "x9")
+            return String
+           is (if In_General (Value) then Name (Held (Value)) else Scratch);
+         procedure Deliver
+           (Value : Landin.IR.Value_Id; Register : String;
+            Extended : Boolean := False);
+         --  The register a load from memory leaves Value in: a held float
+         --  register itself, which needs no Deliver, or Target.
+         function Load_Target (Value : Landin.IR.Value_Id) return String
+           is (if In_Float (Value) then Float_Name (Value)
+               else Target (Value));
+         procedure Loaded (Value : Landin.IR.Value_Id; Register : String);
+         --  Read, except that a zero constant is the zero register, which
+         --  an instruction may read and store but never use as a base.
+         function Read_Or_Zero
+           (Value : Landin.IR.Value_Id; Scratch : String := "x9")
+            return String
+           is (if Is_Rematerialized (Value) and then Constant_Of (Value) = 0
+               then "xzr" else Read (Value, Scratch));
+
+         --  What a store to memory writes Value from: a held float
+         --  register itself, or Read_Or_Zero's.
+         function Store_Source
+           (Value : Landin.IR.Value_Id; Scratch : String := "x9")
+            return String
+           is (if In_Float (Value) then Float_Name (Value)
+               else Read_Or_Zero (Value, Scratch));
+
+         procedure Loaded (Value : Landin.IR.Value_Id; Register : String) is
+         begin
+            if not In_Float (Value) then
+               Deliver (Value, Register, Extended => True);
+            end if;
+         end Loaded;
+
+         function Read
+           (Value : Landin.IR.Value_Id; Scratch : String := "x9")
+            return String is
+         begin
+            if In_General (Value) then
+               return Name (Held (Value));
+            end if;
+            Load_Value (Value, Scratch);
+            return Scratch;
+         end Read;
+
+         procedure Deliver
+           (Value : Landin.IR.Value_Id; Register : String;
+            Extended : Boolean := False)
+         is
+            Bits : constant Natural := 8 * Natural
+              (Landin.Targets.Bytes (Size_Of_Value (Value)));
+         begin
+            if not In_General (Value) then
+               Store_Value (Value, Register);
+               return;
+            end if;
+            Validate_Atoms (Value, Register);
+            if Register = Name (Held (Value)) then
+               if not Extended and then Bits < 64 then
+                  Emit ("ubfx " & Register & ", " & Register & ", #0, #"
+                        & Trimmed (Natural'Image (Bits)));
+               end if;
+            elsif Extended or else Bits = 64 then
+               Emit ("mov " & Name (Held (Value)) & ", " & Register);
+            else
+               Emit ("ubfx " & Name (Held (Value)) & ", " & Register
+                     & ", #0, #" & Trimmed (Natural'Image (Bits)));
+            end if;
+         end Deliver;
+
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "x9") is
          begin
-            if Plan.Values (Positive (Value)).Register /= 0 then
-               Emit ("mov " & Register & ", x" & Trimmed (Natural'Image
-                 (Plan.Values (Positive (Value)).Register)));
+            if Is_Rematerialized (Value) then
+               Immediate (Register, Constant_Of (Value));
+            elsif Plan.Values (Positive (Value)).Register /= No_Register then
+               Move_From (Plan.Values (Positive (Value)).Register, Register,
+                          Size_Of_Value (Value));
             else
                Frame_Memory (False, Size_Of_Value (Value), Register,
                              Value_Offset (Layout, Value));
             end if;
          end Load_Value;
 
-         procedure Store_Value
-           (Value : Landin.IR.Value_Id; Register : String := "x9";
-            Atom_Validated : Boolean := False)
+         procedure Validate_Atoms
+           (Value : Landin.IR.Value_Id; Register : String)
          is
             Atoms : constant Landin.IR.Atom_Set_Id :=
               Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
          begin
-            if not Atom_Validated
-              and then Atoms /= Landin.IR.No_Atom_Set
+            if Atoms /= Landin.IR.No_Atom_Set
               and then Landin.IR.Op_Of (Of_Unit, Item, Value) in
                 Landin.IR.Load | Landin.IR.Load_Indirect
                 | Landin.IR.Load_Datum | Landin.IR.Load_Field
@@ -2016,61 +2767,58 @@ package body Landin.Backend.Arm64 is
                   Put (Done & ":");
                end;
             end if;
-            if Plan.Values (Positive (Value)).Register /= 0 then
-               declare
-                  Destination : constant String := "x" & Trimmed
-                    (Natural'Image (Plan.Values (Positive (Value)).Register));
-                  Bits : constant Natural := 8 * Natural
-                    (Landin.Targets.Bytes (Size_Of_Value (Value)));
-               begin
-                  if Bits = 64 then
-                     Emit ("mov " & Destination & ", " & Register);
-                  else
-                     Emit ("ubfx " & Destination & ", " & Register
-                           & ", #0, #" & Trimmed (Natural'Image (Bits)));
-                  end if;
-               end;
+         end Validate_Atoms;
+
+         procedure Store_Value
+           (Value : Landin.IR.Value_Id; Register : String := "x9";
+            Atom_Validated : Boolean := False)
+         is
+         begin
+            if not Atom_Validated then
+               Validate_Atoms (Value, Register);
+            end if;
+            if Plan.Values (Positive (Value)).Register /= No_Register then
+               Move_Into (Plan.Values (Positive (Value)).Register, Register,
+                          Size_Of_Value (Value));
             else
                Frame_Memory (True, Size_Of_Value (Value), Register,
                              Value_Offset (Layout, Value));
             end if;
          end Store_Value;
 
-         --  A slot in a register holds its value zero-extended, as a
-         --  load from its frame cell would leave it.
          procedure Load_Slot
-           (Slot : Landin.IR.Slot_Id; Register : String := "x9")
-         is
-            Held : constant Natural := Plan.Slots (Positive (Slot)).Register;
-         begin
-            if Held /= 0 then
-               Emit ("mov " & Register & ", x" & Trimmed (Natural'Image
-                 (Held)));
-            else
-               Frame_Memory (False, Size_Of
-                 (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-                 Register, Slot_Offset (Layout, Slot));
-            end if;
-         end Load_Slot;
-
-         procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x9")
          is
             Held : constant Natural := Plan.Slots (Positive (Slot)).Register;
             Size : constant Held_Size := Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts);
-            Bits : constant Natural :=
-              8 * Natural (Landin.Targets.Bytes (Size));
-            Destination : constant String :=
-              "x" & Trimmed (Natural'Image (Held));
          begin
-            if Held = 0 then
-               Frame_Memory (True, Size, Register, Slot_Offset (Layout, Slot));
-            elsif Bits = 64 then
-               Emit ("mov " & Destination & ", " & Register);
+            if Held /= No_Register then
+               Move_From (Held, Register, Size);
             else
-               Emit ("ubfx " & Destination & ", " & Register
-                     & ", #0, #" & Trimmed (Natural'Image (Bits)));
+               Frame_Memory
+                 (False, Size, Register, Slot_Offset (Layout, Slot));
+            end if;
+         end Load_Slot;
+
+         --  Extended says Register already holds the stored value
+         --  zero-extended from the slot's width, as any value does.
+         procedure Store_Slot
+           (Slot : Landin.IR.Slot_Id; Register : String := "x9";
+            Extended : Boolean := False)
+         is
+            Held : constant Natural := Plan.Slots (Positive (Slot)).Register;
+            Size : constant Held_Size := Size_Of
+              (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts);
+         begin
+            if Held = No_Register then
+               Frame_Memory (True, Size, Register, Slot_Offset (Layout, Slot));
+            elsif Register = Name (Held) then
+               null;
+            elsif Extended and then Held not in Float_Register then
+               Emit ("mov " & Name (Held) & ", " & Register);
+            else
+               Move_Into (Held, Register, Size);
             end if;
          end Store_Slot;
 
@@ -2122,21 +2870,111 @@ package body Landin.Backend.Arm64 is
             return Save_Offset (Layout, Index);
          end Save_Home;
 
+         --  A saved register as a frame directive names it: x19-x28 by
+         --  their names, d8-d15 by their DWARF numbers.
+         function Frame_Name (Number : Register_Number) return String
+           is (if Number in Float_Register
+               then Trimmed (Natural'Image (Number))
+               else "w" & Trimmed (Natural'Image (Number)));
+
          procedure Restore_Saves;
 
-         procedure Restore_Saves is
+         --  Store or reload the declared registers in their homes, in
+         --  register order.  Size and speed move two registers whose homes
+         --  are adjacent with one pair instruction, from the frame pointer
+         --  or from the farthest home.
+         procedure Move_Saves (Store : Boolean);
+
+         procedure Move_Saves (Store : Boolean) is
+            Waiting : Natural := No_Register;
+            --  The farthest home from the frame pointer.  When it is past
+            --  the unscaled range, size and speed address every home from
+            --  x15 set there once, with small positive offsets.
+            Deepest : Landin.Targets.Byte_Count := 0;
+            Based : Boolean := False;
+
+            procedure Note (Number : Natural);
+            procedure Single (Number : Natural);
+            --  The operand reaching the home of register Number.
+            function Home_Operand (Number : Natural) return String;
+
+            procedure Note (Number : Natural) is
+            begin
+               if Debug = null then
+                  return;
+               elsif Store then
+                  --  The CFA is x29 + 16 and the home sits below x29.
+                  Emit (".cfi_offset " & Frame_Name (Number)
+                        & ", -" & Trimmed (Landin.Targets.Byte_Count'Image
+                          (Save_Home (Number) + 16)));
+               else
+                  Emit (".cfi_restore " & Frame_Name (Number));
+               end if;
+            end Note;
+
+            function Home_Operand (Number : Natural) return String is
+              (if Based and then Deepest = Save_Home (Number) then "[x15]"
+               elsif Based
+               then "[x15, #" & Trimmed (Landin.Targets.Byte_Count'Image
+                 (Deepest - Save_Home (Number))) & "]"
+               else "[x29, #-" & Trimmed (Landin.Targets.Byte_Count'Image
+                 (Save_Home (Number))) & "]");
+
+            procedure Single (Number : Natural) is
+            begin
+               if Reference_Profile then
+                  Frame_Address (Save_Home (Number));
+                  Emit ((if Store then "str " else "ldr ") & Name (Number)
+                        & ", [x15]");
+               else
+                  Emit ((if Based then (if Store then "str " else "ldr ")
+                         else (if Store then "stur " else "ldur "))
+                        & Name (Number) & ", " & Home_Operand (Number));
+               end if;
+               Note (Number);
+            end Single;
          begin
             for Number in Saves'Range loop
                if Saves (Number) then
-                  Frame_Address (Save_Home (Number));
-                  Emit ("ldr x" & Trimmed (Natural'Image (Number))
-                        & ", [x15]");
-                  if Debug /= null then
-                     Emit (".cfi_restore w"
-                           & Trimmed (Natural'Image (Number)));
+                  Deepest := Landin.Targets.Byte_Count'Max
+                    (Deepest, Save_Home (Number));
+               end if;
+            end loop;
+            if not Reference_Profile and then Deepest > 256 then
+               Frame_Address (Deepest);
+               Based := True;
+            end if;
+            for Number in Saves'Range loop
+               if Saves (Number) then
+                  --  A pair is two registers of one bank.
+                  if Waiting /= No_Register and then not Reference_Profile
+                    and then (Number in Float_Register)
+                      = (Waiting in Float_Register)
+                    and then Save_Home (Number) = Save_Home (Waiting) + 8
+                    and then Save_Home (Number) mod 8 = 0
+                  then
+                     Emit ((if Store then "stp " else "ldp ")
+                           & Name (Number) & ", " & Name (Waiting) & ", "
+                           & Home_Operand (Number));
+                     Note (Waiting);
+                     Note (Number);
+                     Waiting := No_Register;
+                  else
+                     if Waiting /= No_Register then
+                        Single (Waiting);
+                     end if;
+                     Waiting := Number;
                   end if;
                end if;
             end loop;
+            if Waiting /= No_Register then
+               Single (Waiting);
+            end if;
+         end Move_Saves;
+
+         procedure Restore_Saves is
+         begin
+            Move_Saves (Store => False);
          end Restore_Saves;
 
          procedure Epilogue is
@@ -2219,6 +3057,13 @@ package body Landin.Backend.Arm64 is
             Payload_Field : Natural := 0;
             Nested        : Landin.IR.Path_Step_Array :=
               Landin.IR.No_Path_Steps);
+         procedure Part_Access
+           (Store    : Boolean;
+            Size     : Held_Size;
+            Register : String;
+            Place    : Landin.IR.Storage;
+            Field    : Landin.IR.Element_Total;
+            Nested   : Landin.IR.Path_Step_Array);
          function Whole_Clear_Extent
            (Place  : Landin.IR.Storage;
             Field  : Natural;
@@ -2405,46 +3250,47 @@ package body Landin.Backend.Arm64 is
             return Size;
          end Element_Bytes_Of;
 
-         procedure Part_Address
+         --  How far past the start of its storage a part begins: what
+         --  Part_Address adds to the storage's own address.
+         function Part_Offset
            (Place         : Landin.IR.Storage;
             Field         : Landin.IR.Element_Total;
-            Register      : String;
             Which         : Natural := 0;
             Payload_Field : Natural := 0;
             Nested        : Landin.IR.Path_Step_Array :=
-              Landin.IR.No_Path_Steps)
+              Landin.IR.No_Path_Steps) return Landin.Targets.Byte_Count;
+
+         function Part_Offset
+           (Place         : Landin.IR.Storage;
+            Field         : Landin.IR.Element_Total;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps) return Landin.Targets.Byte_Count
          is
             Offset : Landin.Targets.Byte_Count := 0;
             function Shape return Landin.IR.Field_Shape is
               (if Field = 0 then Root_Shape_Of (Place, 0)
                else Part_Shape_Of (Place, Landin.IR.Part_Position (Field)));
          begin
-            case Place.Kind is
-               when Landin.IR.Module_Datum =>
-                  Address (Register, Symbol (Place.Datum));
-                  if Field > 0 then
+            if Field > 0 then
+               case Place.Kind is
+                  when Landin.IR.Module_Datum =>
                      Offset := Field_Offset
                        (Place.Datum, Landin.IR.Part_Position (Field));
-                  end if;
-               when Landin.IR.Frame_Slot =>
-                  Frame_Address
-                    (Slot_Offset (Layout, Place.Slot), Register);
-                  if Field > 0 then
+                  when Landin.IR.Frame_Slot =>
                      Offset := Slot_Offset (Layout, Place.Slot)
                        - Landin.Backend.Field_Offset
                          (Of_Unit, Item, Layout, Place.Slot,
                           Landin.IR.Part_Position (Field), Facts);
-                  end if;
-               when Landin.IR.Runtime_Address =>
-                  Load_Slot (Place.Address, Register);
-                  if Field > 0 then
+                  when Landin.IR.Runtime_Address =>
                      Offset := Path_Offset
                        (Landin.IR.Address_Shape
                           (Of_Unit, Item, Place.Address),
                         [1 => (Field => Landin.IR.Part_Position (Field),
                                Case_Index => 0)]);
-                  end if;
-            end case;
+               end case;
+            end if;
             if Nested'Length > 0 then
                Offset := Offset
                  + Path_Offset (Shape, Nested);
@@ -2455,8 +3301,69 @@ package body Landin.Backend.Arm64 is
                   Positive (Which), Positive (Payload_Field), Facts,
                   Path_Layouts);
             end if;
-            Add_Offset (Register, Offset);
+            return Offset;
+         end Part_Offset;
+
+         procedure Part_Address
+           (Place         : Landin.IR.Storage;
+            Field         : Landin.IR.Element_Total;
+            Register      : String;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps)
+         is
+         begin
+            case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                  Address (Register, Symbol (Place.Datum));
+               when Landin.IR.Frame_Slot =>
+                  Frame_Address
+                    (Slot_Offset (Layout, Place.Slot), Register);
+               when Landin.IR.Runtime_Address =>
+                  Load_Slot (Place.Address, Register);
+            end case;
+            Add_Offset
+              (Register,
+               Part_Offset (Place, Field, Which, Payload_Field, Nested));
          end Part_Address;
+
+         --  A scalar part's load or store under size and speed, reached
+         --  from its base with the access's own offset: a frame cell from
+         --  the frame pointer, an address slot's part from the register
+         --  holding it or else x10 loaded with it, a datum's from x10.
+         procedure Part_Access
+           (Store    : Boolean;
+            Size     : Held_Size;
+            Register : String;
+            Place    : Landin.IR.Storage;
+            Field    : Landin.IR.Element_Total;
+            Nested   : Landin.IR.Path_Step_Array)
+         is
+            Offset : constant Landin.Targets.Byte_Count :=
+              Part_Offset (Place, Field, Nested => Nested);
+         begin
+            case Place.Kind is
+               when Landin.IR.Frame_Slot =>
+                  Frame_Memory (Store, Size, Register,
+                                Slot_Offset (Layout, Place.Slot) - Offset);
+               when Landin.IR.Module_Datum =>
+                  Address ("x10", Symbol (Place.Datum));
+                  Base_Memory (Store, Size, Register, "x10", Offset);
+               when Landin.IR.Runtime_Address =>
+                  if Plan.Slots (Positive (Place.Address)).Register
+                    /= No_Register
+                  then
+                     Base_Memory
+                       (Store, Size, Register,
+                        Name (Plan.Slots (Positive (Place.Address)).Register),
+                        Offset);
+                  else
+                     Load_Slot (Place.Address, "x10");
+                     Base_Memory (Store, Size, Register, "x10", Offset);
+                  end if;
+            end case;
+         end Part_Access;
 
          procedure Storage_Address
            (Place         : Landin.IR.Storage;
@@ -3011,16 +3918,39 @@ package body Landin.Backend.Arm64 is
 
             procedure FP_Load (Which : Positive; Register : String);
             procedure FP_Save;
+            procedure FP_Finish;
+            function FP_Operand
+              (Which : Positive; Register : String) return String;
+            function FP_Target return String;
+            --  A float register's load or store at a frame home, and a
+            --  float constant put straight into one: fmov's immediate,
+            --  a cleared register, or the pattern through x9.
+            procedure Float_Frame
+              (Store : Boolean; Register : String;
+               Offset : Landin.Targets.Byte_Count);
+            procedure Float_Constant
+              (Register : String; Bits : Pattern; Single : Boolean);
             --  The checked element's address as what goes between an
             --  access's brackets.  Size and speed leave a power-of-two
             --  stride to the access, `[x10, x13, lsl #n]`, when the access
             --  is Width bytes wide and the stride is that or one; any
-            --  other address is formed in x10.  Width zero forms it.
+            --  other address is formed in Into.  Width zero forms it.
+            --  Size and speed read the index, and an address slot holding
+            --  the whole storage, where their registers are.
             function Index_Operand
               (Storage : Landin.IR.Storage; Field : Natural;
                Which, Payload : Natural; Nested : Landin.IR.Path_Step_Array;
                Below : Landin.IR.Path_Step_Array := Landin.IR.No_Path_Steps;
-               Width : Natural := 0) return String;
+               Width : Natural := 0;
+               Into : String := "x10") return String;
+
+            --  The register holding where a part of Storage begins: under
+            --  size and speed the register of an address slot when the
+            --  part is all it addresses, else Register formed with it.
+            function Base_Of
+              (Storage : Landin.IR.Storage; Field : Natural;
+               Register : String; Which, Payload : Natural;
+               Nested : Landin.IR.Path_Step_Array) return String;
 
             --  The access an address this instruction computes folds
             --  into, if any, and how many bytes it moves.
@@ -3028,29 +3958,186 @@ package body Landin.Backend.Arm64 is
             function Folded_Size (Fold : Address_Fold) return Natural;
 
             --  The base an indirect access reads or writes through: the
-            --  address folded into it, or else x10 loaded with its own.
+            --  address folded into it, or else the register holding its
+            --  own, x10 when it has to be loaded.
             function Indirect_Base return String;
 
-            procedure FP_Load (Which : Positive; Register : String) is
+            --  The instruction after this one in its block, if any, and
+            --  the block laid out after this one, which a branch to it
+            --  reaches by falling through.
+            Next_Instruction : constant Landin.IR.Value_Id :=
+              (if Current_Position
+                    < Landin.IR.Length (Of_Unit, Item, Current_Block)
+               then Landin.IR.Nth_Value
+                 (Of_Unit, Item, Current_Block, Current_Position + 1)
+               else Landin.IR.No_Value);
+            Following : constant Landin.IR.Block_Id := Current_Block + 1;
+
+            --  The condition true exactly when Condition is false, over
+            --  the same flags: for fcmp's too, since each comparison's
+            --  condition and its inverse split an unordered pair between
+            --  them as D162 does.
+            function Inverse (Condition : String) return String is
+              (if Condition = "eq" then "ne"
+               elsif Condition = "ne" then "eq"
+               elsif Condition = "lo" then "hs"
+               elsif Condition = "hs" then "lo"
+               elsif Condition = "ls" then "hi"
+               elsif Condition = "hi" then "ls"
+               elsif Condition = "lt" then "ge"
+               elsif Condition = "ge" then "lt"
+               elsif Condition = "le" then "gt"
+               elsif Condition = "gt" then "le"
+               elsif Condition = "mi" then "pl"
+               else "mi");
+
+            --  To Yes when the flags meet Condition and else to No, with
+            --  no branch to the block that follows.
+            procedure Branch_On
+              (Condition : String; Yes, No : Landin.IR.Block_Id);
+
+            --  Size and speed's comparison of the two operands, in the
+            --  flags: an operand where its register is, a constant that
+            --  fits as cmp's or cmn's immediate.  A signed operand
+            --  narrower than 32 bits is sign-extended first.
+            procedure Compare_Integer (Scalar : Landin.Types.Scalar_Name);
+
+            --  Size and speed's integer arithmetic, computed into the
+            --  result's register from its operands' with immediates where
+            --  the encoding allows.  Done is False for a form it leaves
+            --  to the general sequence.
+            procedure Select_Integer (Done : out Boolean);
+
+            procedure Float_Frame
+              (Store : Boolean; Register : String;
+               Offset : Landin.Targets.Byte_Count) is
             begin
-               Load_Value (Operand (Which));
-               Emit ("fmov " & FP (Kind (Operand (Which))) & Register & ", "
-                     & (if Kind (Operand (Which)) = Landin.Types.F32
-                        then "w9" else "x9"));
+               if Offset <= 256 then
+                  Emit ((if Store then "stur " else "ldur ") & Register
+                        & ", [x29, #"
+                        & Trimmed (Integer'Image (-Integer (Offset))) & "]");
+               else
+                  Frame_Address (Offset);
+                  Emit ((if Store then "str " else "ldr ") & Register
+                        & ", [x15]");
+               end if;
+            end Float_Frame;
+
+            procedure Float_Constant
+              (Register : String; Bits : Pattern; Single : Boolean)
+            is
+               Encoded : constant String :=
+                 Selection.Float_Immediate (Selection.Word (Bits), Single);
+            begin
+               if Encoded /= "" then
+                  Emit ("fmov " & Register & ", " & Encoded);
+               elsif Bits = 0 then
+                  Emit ("movi d" & Register (Register'First + 1
+                        .. Register'Last) & ", #0");
+               else
+                  Immediate ("x9", Bits);
+                  Emit ("fmov " & Register & ", "
+                        & (if Single then "w9" else "x9"));
+               end if;
+            end Float_Constant;
+
+            procedure FP_Load (Which : Positive; Register : String) is
+               Source : constant Landin.IR.Value_Id := Operand (Which);
+               Single : constant Boolean :=
+                 Kind (Source) = Landin.Types.F32;
+               Into : constant String := FP (Kind (Source)) & Register;
+            begin
+               if not Optimized then
+                  Load_Value (Source);
+                  Emit ("fmov " & Into & ", "
+                        & (if Single then "w9" else "x9"));
+               elsif Is_Rematerialized (Source) then
+                  Float_Constant (Into, Constant_Of (Source), Single);
+               elsif Held (Source) /= No_Register then
+                  Emit ("fmov " & Into & ", "
+                        & Name (Held (Source), Size_Of_Value (Source)));
+               else
+                  Float_Frame (False, Into, Value_Offset (Layout, Source));
+               end if;
             end FP_Load;
 
-            procedure FP_Save is
+            --  A float operand as an instruction names it: the d or s
+            --  register it is held in, or else that of Register, which it
+            --  is loaded into.
+            function FP_Operand
+              (Which : Positive; Register : String) return String
+            is
+               Held : constant Natural :=
+                 Plan.Values (Positive (Operand (Which))).Register;
             begin
-               Emit ("fmov " & (if Kind (Value) = Landin.Types.F32
-                                then "w9, s16" else "x9, d16"));
-               Store_Value (Value);
+               if Held in Float_Register then
+                  return Name (Held, Size_Of_Value (Operand (Which)));
+               end if;
+               FP_Load (Which, Register);
+               return FP (Kind (Operand (Which))) & Register;
+            end FP_Operand;
+
+            --  Where a float result is computed: the register it is held
+            --  in, or else d16 or s16, which FP_Finish then stores.
+            function FP_Target return String is
+              (if Plan.Values (Positive (Value)).Register in Float_Register
+               then Name (Plan.Values (Positive (Value)).Register,
+                          Size_Of_Value (Value))
+               else FP (Kind (Value)) & "16");
+
+            --  The result in d16 or s16 moved to where it is held.
+            procedure FP_Save is
+               Single : constant Boolean := Kind (Value) = Landin.Types.F32;
+            begin
+               if not Optimized then
+                  Emit ("fmov " & (if Single then "w9, s16" else "x9, d16"));
+                  Store_Value (Value);
+               elsif Held (Value) /= No_Register then
+                  Emit ("fmov " & Name (Held (Value), Size_Of_Value (Value))
+                        & ", " & (if Single then "s16" else "d16"));
+               else
+                  Float_Frame (True, (if Single then "s16" else "d16"),
+                               Value_Offset (Layout, Value));
+               end if;
             end FP_Save;
+
+            --  The result computed at FP_Target moved to where it is held,
+            --  which is nowhere when it is held there.
+            procedure FP_Finish is
+            begin
+               if Plan.Values (Positive (Value)).Register
+                 not in Float_Register
+               then
+                  FP_Save;
+               end if;
+            end FP_Finish;
+
+            function Base_Of
+              (Storage : Landin.IR.Storage; Field : Natural;
+               Register : String; Which, Payload : Natural;
+               Nested : Landin.IR.Path_Step_Array) return String is
+            begin
+               if Optimized
+                 and then Storage.Kind = Landin.IR.Runtime_Address
+                 and then Field = 0 and then Payload = 0
+                 and then Nested'Length = 0
+                 and then Plan.Slots (Positive (Storage.Address)).Register
+                   /= No_Register
+               then
+                  return Name
+                    (Plan.Slots (Positive (Storage.Address)).Register);
+               end if;
+               Storage_Address
+                 (Storage, Field, Register, Which, Payload, Nested);
+               return Register;
+            end Base_Of;
 
             function Index_Operand
               (Storage : Landin.IR.Storage; Field : Natural;
                Which, Payload : Natural; Nested : Landin.IR.Path_Step_Array;
                Below : Landin.IR.Path_Step_Array := Landin.IR.No_Path_Steps;
-               Width : Natural := 0) return String
+               Width : Natural := 0;
+               Into : String := "x10") return String
             is
                Length : constant Landin.IR.Element_Total :=
                  Array_Length_Of (Storage, Field, Which, Payload, Nested);
@@ -3058,11 +4145,22 @@ package body Landin.Backend.Arm64 is
                  Element_Bytes_Of (Storage, Field, Which, Payload, Nested);
                Scale : Landin.Targets.Byte_Count := Stride;
                Shift : Natural := 0;
+               Index : constant String := Read (Operand (1), "x13");
+               Bound : constant String :=
+                 (if Optimized
+                  then Selection.Arithmetic_Immediate
+                    (Selection.Word (Length))
+                  else "");
+               Scaled : Unbounded.Unbounded_String :=
+                 Unbounded.To_Unbounded_String (Index);
             begin
-               Load_Value (Operand (1), "x13");
                if not Unchecked then
-                  Immediate ("x14", Pattern (Length));
-                  Emit ("cmp x13, x14");
+                  if Bound /= "" then
+                     Emit ("cmp " & Index & ", " & Bound);
+                  else
+                     Immediate ("x14", Pattern (Length));
+                     Emit ("cmp " & Index & ", x14");
+                  end if;
                   Emit ("b.hs " & Trap);
                end if;
                while Scale > 1 and then Scale mod 2 = 0 loop
@@ -3071,30 +4169,36 @@ package body Landin.Backend.Arm64 is
                end loop;
                if Scale /= 1 then
                   Immediate ("x14", Pattern (Stride));
-                  Emit ("mul x13, x13, x14");
+                  Emit ("mul x13, " & Index & ", x14");
+                  Scaled := Unbounded.To_Unbounded_String ("x13");
                end if;
-               Storage_Address (Storage, Field, "x10", Which, Payload, Nested);
-               if Optimized and then Width > 0 and then Below'Length = 0
-                 and then Scale = 1
-                 and then (Shift = 0 or else 2 ** Shift = Width)
-               then
-                  return "x10, x13"
-                    & (if Shift > 0
-                       then ", lsl #" & Trimmed (Natural'Image (Shift))
-                       else "");
-               end if;
-               if Scale = 1 and then Shift > 0 then
-                  Emit ("add x10, x10, x13, lsl #"
-                        & Trimmed (Natural'Image (Shift)));
-               else
-                  Emit ("add x10, x10, x13");
-               end if;
+               declare
+                  Base : constant String :=
+                    Base_Of (Storage, Field, "x10", Which, Payload, Nested);
+                  Offset : constant String := Unbounded.To_String (Scaled);
+               begin
+                  if Optimized and then Width > 0 and then Below'Length = 0
+                    and then Scale = 1
+                    and then (Shift = 0 or else 2 ** Shift = Width)
+                  then
+                     return Base & ", " & Offset
+                       & (if Shift > 0
+                          then ", lsl #" & Trimmed (Natural'Image (Shift))
+                          else "");
+                  end if;
+                  if Scale = 1 and then Shift > 0 then
+                     Emit ("add " & Into & ", " & Base & ", " & Offset
+                           & ", lsl #" & Trimmed (Natural'Image (Shift)));
+                  else
+                     Emit ("add " & Into & ", " & Base & ", " & Offset);
+                  end if;
+               end;
                if Below'Length > 0 then
-                  Add_Offset ("x10", Path_Offset
+                  Add_Offset (Into, Path_Offset
                     (Element_Shape_Of (Storage, Field, Which, Payload, Nested),
                      Below));
                end if;
-               return "x10";
+               return Into;
             end Index_Operand;
 
             function Folding return Address_Fold is
@@ -3118,52 +4222,469 @@ package body Landin.Backend.Arm64 is
                   Folded := (others => <>);
                   return Unbounded.To_String (Folded_Base);
                end if;
-               Load_Value (Operand (1), "x10");
-               return "x10";
+               return Read (Operand (1), "x10");
             end Indirect_Base;
+
+            procedure Branch_On
+              (Condition : String; Yes, No : Landin.IR.Block_Id) is
+            begin
+               if Yes = No then
+                  if Yes /= Following then
+                     Emit ("b " & Label (Item, Yes));
+                  end if;
+               elsif Yes = Following then
+                  Emit ("b." & Inverse (Condition) & " " & Label (Item, No));
+               else
+                  Emit ("b." & Condition & " " & Label (Item, Yes));
+                  if No /= Following then
+                     Emit ("b " & Label (Item, No));
+                  end if;
+               end if;
+            end Branch_On;
+
+            procedure Compare_Integer (Scalar : Landin.Types.Scalar_Name) is
+               Signed : constant Boolean :=
+                 Scalar in Landin.Types.Integer_Name
+                 and then Landin.Types.Is_Signed (Scalar);
+               Bits : constant Natural :=
+                 8 * Natural (Landin.Targets.Bytes (Size_Of (Scalar, Facts)));
+               --  A signed 32-bit operand compares in its own 32-bit
+               --  view; any other in all 64 bits, zero- or sign-extended.
+               Narrow : constant Boolean := Signed and then Bits = 32;
+               function View (Register : String) return String is
+                 (if Narrow then Short (Register) else Register);
+               function Operand_Register
+                 (Which : Positive; Scratch : String) return String;
+
+               function Operand_Register
+                 (Which : Positive; Scratch : String) return String
+               is
+                  Held_In : constant String := Read (Operand (Which), Scratch);
+               begin
+                  if Signed and then Bits < 32 then
+                     Emit ((if Bits = 8 then "sxtb " else "sxth ") & Scratch
+                           & ", " & Short (Held_In));
+                     return Scratch;
+                  end if;
+                  return Held_In;
+               end Operand_Register;
+
+               Left : constant String := Operand_Register (1, "x9");
+            begin
+               if Is_Constant (Operand (2)) then
+                  declare
+                     Bits_Value : constant Pattern :=
+                       Constant_Of (Operand (2));
+                     Negative : constant Boolean :=
+                       Signed and then Is_Negative
+                         (Bits_Value, Landin.Targets.Bit_Width (Bits));
+                     Plain : constant String :=
+                       (if Negative then ""
+                        else Selection.Arithmetic_Immediate
+                          (Selection.Word (Bits_Value)));
+                     Negated : constant String :=
+                       (if Negative
+                        then Selection.Arithmetic_Immediate
+                          (Selection.Word
+                             (Mask (0 - Bits_Value,
+                                    Landin.Targets.Bit_Width (Bits))))
+                        else "");
+                  begin
+                     if Plain /= "" then
+                        Emit ("cmp " & View (Left) & ", " & Plain);
+                        return;
+                     elsif Negated /= "" then
+                        Emit ("cmn " & View (Left) & ", " & Negated);
+                        return;
+                     end if;
+                  end;
+               end if;
+               Emit ("cmp " & View (Left) & ", "
+                     & View (Operand_Register (2, "x10")));
+            end Compare_Integer;
+
+            procedure Select_Integer (Done : out Boolean) is
+               Scalar : constant Landin.Types.Integer_Name :=
+                 Landin.Types.Integer_Name (Kind (Value));
+               Signed : constant Boolean := Landin.Types.Is_Signed (Scalar);
+               Bits : constant Natural :=
+                 Natural (Landin.Types.Width (Scalar, Facts));
+               Checked : constant Boolean := not Unchecked and then Op in
+                 Landin.IR.Add | Landin.IR.Subtract | Landin.IR.Multiply;
+               Commutes : constant Boolean := Op in
+                 Landin.IR.Add | Landin.IR.Wrapping_Add
+                 | Landin.IR.Multiply | Landin.IR.Wrapping_Multiply
+                 | Landin.IR.Bitwise_And | Landin.IR.Bitwise_Or
+                 | Landin.IR.Bitwise_Xor;
+               --  A constant left operand of an operation that commutes
+               --  is the right one instead, where an immediate can go.
+               Swapped : constant Boolean :=
+                 Commutes and then Is_Constant (Operand (1))
+                 and then not Is_Constant (Operand (2));
+               Left_Value : constant Landin.IR.Value_Id :=
+                 Operand (if Swapped then 2 else 1);
+               Right_Value : constant Landin.IR.Value_Id :=
+                 Operand (if Swapped then 1 else 2);
+               Known : constant Boolean := Is_Constant (Right_Value);
+               Right_Bits : constant Pattern :=
+                 (if Known then Constant_Of (Right_Value) else 0);
+               --  32-bit and narrower operands compute in their 32-bit
+               --  views, which zero-extend what they write.
+               Wide : constant Boolean := Bits = 64;
+               function View (Register : String) return String is
+                 (if Wide then Register else Short (Register));
+               Into : constant String := Target (Value);
+               Left : Unbounded.Unbounded_String;
+
+               function Right (Immediate_Text : String) return String;
+
+               --  The right operand: Immediate_Text when the constant
+               --  fits there, else its register.
+               function Right (Immediate_Text : String) return String is
+               begin
+                  if Known and then Immediate_Text /= "" then
+                     return Immediate_Text;
+                  end if;
+                  return View (Read (Right_Value, "x10"));
+               end Right;
+
+               function L return String is (View (Unbounded.To_String (Left)));
+            begin
+               Done := True;
+               case Op is
+                  when Landin.IR.Add | Landin.IR.Wrapping_Add
+                     | Landin.IR.Subtract | Landin.IR.Wrapping_Subtract =>
+                     if Signed and then Bits < 32 then
+                        Done := False;
+                        return;
+                     end if;
+                     declare
+                        Adds : constant Boolean :=
+                          Op in Landin.IR.Add | Landin.IR.Wrapping_Add;
+                        --  A negative signed constant is the opposite
+                        --  operation on its magnitude, whose overflow is
+                        --  the same.
+                        Flip : constant Boolean :=
+                          Known and then Signed
+                          and then Is_Negative
+                            (Right_Bits, Landin.Targets.Bit_Width (Bits))
+                          and then Mask (0 - Right_Bits,
+                                         Landin.Targets.Bit_Width (Bits))
+                            /= Right_Bits;
+                        Amount : constant String :=
+                          (if not Known then ""
+                           else Selection.Arithmetic_Immediate
+                             (Selection.Word
+                                (if Flip
+                                 then Mask (0 - Right_Bits,
+                                            Landin.Targets.Bit_Width (Bits))
+                                 else Right_Bits)));
+                        Adding : constant Boolean :=
+                          (if Flip and then Amount /= "" then not Adds
+                           else Adds);
+                        Narrow_Check : constant Boolean :=
+                          Checked and then Bits < 32 and then Adding;
+                     begin
+                        Left := Unbounded.To_Unbounded_String
+                          (Read (Left_Value, "x9"));
+                        Emit ((if Adding then "add" else "sub")
+                              & (if Checked and then not Narrow_Check
+                                 then "s" else "")
+                              & " " & View (Into) & ", " & L & ", "
+                              & Right (Amount));
+                        if Narrow_Check then
+                           --  An unsigned sum wider than its type has a
+                           --  bit set above it.
+                           Emit ("tst " & Short (Into) & ", "
+                                 & Selection.Hexadecimal
+                                     (16#FFFF_FFFF# - (2 ** Bits - 1)));
+                           Emit ("b.ne " & Trap);
+                        elsif Checked then
+                           Emit ((if Signed then "b.vs "
+                                  elsif Adding then "b.cs " else "b.cc ")
+                                 & Trap);
+                        end if;
+                        Deliver (Value, Into,
+                                 Extended => Checked or else Bits >= 32);
+                     end;
+                  when Landin.IR.Bitwise_And | Landin.IR.Bitwise_Or
+                     | Landin.IR.Bitwise_Xor =>
+                     Left := Unbounded.To_Unbounded_String
+                       (Read (Left_Value, "x9"));
+                     Emit ((case Op is
+                              when Landin.IR.Bitwise_And => "and ",
+                              when Landin.IR.Bitwise_Or => "orr ",
+                              when others => "eor ")
+                           & View (Into) & ", " & L & ", "
+                           & Right
+                               (if Known
+                                  and then Selection.Is_Logical_Immediate
+                                    (Selection.Word (Right_Bits),
+                                     (if Wide then 64 else 32))
+                                then Selection.Hexadecimal
+                                  (Selection.Word (Right_Bits))
+                                else ""));
+                     Deliver (Value, Into, Extended => True);
+                  when Landin.IR.Multiply | Landin.IR.Wrapping_Multiply =>
+                     if Bits < 32 then
+                        Done := False;
+                        return;
+                     end if;
+                     Left := Unbounded.To_Unbounded_String
+                       (Read (Left_Value, "x9"));
+                     declare
+                        By : constant String := Right ("");
+                     begin
+                        if not Checked then
+                           Emit ("mul " & View (Into) & ", " & L & ", " & By);
+                           Deliver (Value, Into, Extended => True);
+                        elsif Wide then
+                           Emit ((if Signed then "smulh " else "umulh ")
+                                 & "x11, " & L & ", " & By);
+                           Emit ("mul " & Into & ", " & L & ", " & By);
+                           if Signed then
+                              Emit ("cmp x11, " & Into & ", asr #63");
+                              Emit ("b.ne " & Trap);
+                           else
+                              Emit ("cbnz x11, " & Trap);
+                           end if;
+                           Deliver (Value, Into, Extended => True);
+                        else
+                           --  The whole 64-bit product of two 32-bit
+                           --  operands, which fits when its upper half
+                           --  repeats the sign of, or is clear above, its
+                           --  lower one.
+                           Emit ((if Signed then "smull " else "umull ")
+                                 & Into & ", " & L & ", " & By);
+                           if Signed then
+                              Emit ("cmp " & Into & ", " & Short (Into)
+                                    & ", sxtw");
+                              Emit ("b.ne " & Trap);
+                           else
+                              Emit ("tst " & Into & ", "
+                                    & Selection.Hexadecimal
+                                        (16#FFFF_FFFF_0000_0000#));
+                              Emit ("b.ne " & Trap);
+                           end if;
+                           Deliver (Value, Into, Extended => not Signed);
+                        end if;
+                     end;
+                  when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
+                     if not Known or else Right_Bits >= Pattern (Bits) then
+                        Done := False;
+                        return;
+                     end if;
+                     Left := Unbounded.To_Unbounded_String
+                       (Read (Left_Value, "x9"));
+                     declare
+                        Count : constant String :=
+                          "#" & Trimmed (Pattern'Image (Right_Bits));
+                     begin
+                        if Op = Landin.IR.Shift_Left then
+                           Emit ("lsl " & View (Into) & ", " & L & ", "
+                                 & Count);
+                           Deliver (Value, Into, Extended => Bits >= 32);
+                        elsif not Signed or else Bits >= 32 then
+                           Emit ((if Signed then "asr " else "lsr ")
+                                 & View (Into) & ", " & L & ", " & Count);
+                           Deliver (Value, Into, Extended => True);
+                        else
+                           --  The sign-extended bits above the count.
+                           Emit ("sbfx " & Into & ", "
+                                 & Unbounded.To_String (Left) & ", "
+                                 & Count & ", #" & Trimmed (Natural'Image
+                                   (Bits - Natural (Right_Bits))));
+                           Deliver (Value, Into, Extended => False);
+                        end if;
+                     end;
+                  when Landin.IR.Divide | Landin.IR.Remainder =>
+                     declare
+                        Fixed : constant Boolean :=
+                          Landin.IR.Op_Of (Of_Unit, Item, Operand (2))
+                            = Landin.IR.Number;
+                        Magnitude : constant Selection.Word :=
+                          (if Fixed
+                           then Selection.Word (Landin.IR.Number_Of
+                             (Of_Unit, Item, Operand (2)))
+                           else 0);
+                        Negative : constant Boolean :=
+                          Fixed and then Landin.IR.Is_Negated
+                            (Of_Unit, Item, Operand (2));
+                     begin
+                        if not Fixed
+                          or else not Selection.Divides_By_Constant
+                            (Bits, Signed, Magnitude, Negative,
+                             Reciprocal => Options.Optimize
+                               = Landin.Optimization.Speed)
+                        then
+                           Done := False;
+                           return;
+                        end if;
+                        declare
+                           Lines : Unbounded.Unbounded_String;
+                           Extended : Boolean;
+                        begin
+                           Selection.Divide_By_Constant
+                             (Bits, Signed, Op = Landin.IR.Remainder,
+                              Magnitude, Negative, Read (Operand (1), "x9"),
+                              Into, Lines, Extended);
+                           Emit_Lines (Unbounded.To_String (Lines));
+                           Deliver (Value, Into, Extended);
+                        end;
+                     end;
+                  when others =>
+                     Done := False;
+               end case;
+            end Select_Integer;
+
+            --  Size and speed's negation, complement and logical not, and
+            --  their conversions between integers that keep the value's
+            --  pattern or only extend its sign, and from an integer to a
+            --  float: each from its operand's register into the result's.
+            --  False for a form left to the general sequence.
+            function Negate return Boolean;
+            function Convert return Boolean;
+
+            function Negate return Boolean is
+               Into : constant String := Target (Value);
+            begin
+               if Op = Landin.IR.Logical_Not then
+                  Emit ("eor " & Short (Into) & ", "
+                        & Short (Read (Operand (1))) & ", #1");
+                  Deliver (Value, Into, Extended => True);
+               elsif Op = Landin.IR.Complement then
+                  Emit ("mvn " & Into & ", " & Read (Operand (1)));
+                  Deliver (Value, Into, Extended => False);
+               elsif Kind (Value) in Landin.Types.Float_Name then
+                  Emit ("fneg " & FP_Target & ", " & FP_Operand (1, "16"));
+                  FP_Finish;
+               elsif Landin.Types.Width (Kind (Value), Facts) < 32 then
+                  return False;
+               else
+                  declare
+                     Wide : constant Boolean :=
+                       Landin.Types.Width (Kind (Value), Facts) = 64;
+                     Source : constant String := Read (Operand (1));
+                  begin
+                     Emit ((if Unchecked then "neg " else "negs ")
+                           & (if Wide then Into else Short (Into)) & ", "
+                           & (if Wide then Source else Short (Source)));
+                     if not Unchecked then
+                        Emit ((if Landin.Types.Is_Signed (Kind (Value))
+                               then "b.vs " else "b.cc ") & Trap);
+                     end if;
+                     Deliver (Value, Into, Extended => True);
+                  end;
+               end if;
+               return True;
+            end Negate;
+
+            function Convert return Boolean is
+               From : constant Landin.Types.Scalar_Name :=
+                 Kind (Operand (1));
+               Into_Type : constant Landin.Types.Scalar_Name := Kind (Value);
+               From_Signed : constant Boolean :=
+                 From in Landin.Types.Integer_Name
+                 and then Landin.Types.Is_Signed (From);
+            begin
+               if From not in Landin.Types.Integer_Name then
+                  return False;
+               end if;
+               declare
+                  From_Bits : constant Natural :=
+                    Natural (Landin.Types.Width (From, Facts));
+                  Extension : constant String :=
+                    (case From_Bits is
+                        when 8 => "sxtb ",
+                        when 16 => "sxth ",
+                        when others => "sxtw ");
+               begin
+                  if Into_Type in Landin.Types.Float_Name then
+                     declare
+                        Source : constant String := Read (Operand (1));
+                        Converted : constant String :=
+                          (if not From_Signed or else From_Bits = 64
+                           then Source
+                           elsif From_Bits = 32 then Short (Source)
+                           else "x9");
+                     begin
+                        if From_Signed and then From_Bits < 32 then
+                           Emit (Extension & "x9, " & Short (Source));
+                        end if;
+                        Emit ((if From_Signed then "scvtf " else "ucvtf ")
+                              & FP_Target & ", " & Converted);
+                        FP_Finish;
+                     end;
+                     return True;
+                  elsif Into_Type not in Landin.Types.Integer_Name then
+                     return False;
+                  end if;
+                  declare
+                     Into_Bits : constant Natural :=
+                       Natural (Landin.Types.Width (Into_Type, Facts));
+                     Into_Signed : constant Boolean :=
+                       Landin.Types.Is_Signed (Into_Type);
+                  begin
+                     if Into_Bits < From_Bits
+                       or else (From_Signed and then not Into_Signed)
+                       or else (Into_Signed and then not From_Signed
+                                and then Into_Bits = From_Bits)
+                     then
+                        return False;
+                     end if;
+                     declare
+                        Source : constant String := Read (Operand (1));
+                        Into : constant String := Target (Value);
+                     begin
+                        if From_Signed and then Into_Bits > From_Bits then
+                           --  The sign extended to the new width, which
+                           --  then holds it zero-extended.
+                           Emit (Extension
+                                 & (if Into_Bits = 64 then Into
+                                    else Short (Into))
+                                 & ", " & Short (Source));
+                           Deliver (Value, Into,
+                                    Extended => Into_Bits >= 32);
+                        else
+                           Deliver (Value, Source, Extended => True);
+                        end if;
+                     end;
+                  end;
+               end;
+               return True;
+            end Convert;
          begin
-            if Value = Folded.Store or else Value = Folded.Load then
+            if Value = Folded.Store or else Value = Folded.Load
+              or else Value = Fused_Branch or else Value = Fused_Increment
+            then
                return;
             end if;
             case Op is
                when Landin.IR.Assembly =>
                   Assembly_Block (Value);
-               when Landin.IR.Number =>
-                  declare
-                     Bits : constant Landin.Targets.Bit_Width :=
-                       (if Kind (Value) in Landin.Types.Float_Name
-                        then Landin.Types.Float_Width (Kind (Value))
-                        else Landin.Types.Width (Kind (Value), Facts));
-                     Number : Pattern := Pattern
-                       (Landin.IR.Number_Of (Of_Unit, Item, Value));
-                  begin
-                     if Kind (Value) not in Landin.Types.Float_Name
-                       and then Landin.IR.Is_Negated (Of_Unit, Item, Value)
-                     then
-                        Number := Mask (0 - Number, Bits);
-                     end if;
-                     Immediate ("x9", Number);
-                     Store_Value (Value);
-                  end;
-               when Landin.IR.Truth =>
-                  Immediate ("x9", (if Landin.IR.Truth_Of
-                    (Of_Unit, Item, Value) then 1 else 0));
-                  Store_Value (Value);
-               when Landin.IR.Atom =>
-                  Immediate ("x9", Pattern (Atom_Code
-                    (Atoms_Ranked, Landin.IR.Atom_Of (Of_Unit, Item, Value))));
-                  Store_Value (Value);
-               when Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
-                  declare
-                     Bytes : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
-                  begin
-                     Measurement_Extent
-                       (Of_Unit, Item, Value, Facts, Bytes, Alignment);
-                     Immediate ("x9", (if Op = Landin.IR.Measure_Size
-                       then Pattern (Bytes) else Pattern (Alignment)));
-                     Store_Value (Value);
-                  end;
+               when Landin.IR.Number | Landin.IR.Truth | Landin.IR.Atom
+                  | Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
+                  --  A constant no frame home needs is put where each use
+                  --  wants it instead.
+                  if not Is_Rematerialized (Value) then
+                     declare
+                        Into : constant String := Target (Value);
+                        Bytes : Landin.Targets.Byte_Count;
+                        Alignment : Landin.Targets.Byte_Alignment;
+                     begin
+                        if Op in Landin.IR.Measure_Size
+                          | Landin.IR.Measure_Align
+                        then
+                           Measurement_Extent
+                             (Of_Unit, Item, Value, Facts, Bytes, Alignment);
+                           Immediate (Into, (if Op = Landin.IR.Measure_Size
+                             then Pattern (Bytes) else Pattern (Alignment)));
+                        else
+                           Immediate (Into, Constant_Of (Value));
+                        end if;
+                        Deliver (Value, Into, Extended => True);
+                     end;
+                  end if;
                when Landin.IR.Place_Address | Landin.IR.Storage_Address =>
                   declare
                      Storage : constant Landin.IR.Storage :=
@@ -3179,39 +4700,75 @@ package body Landin.Backend.Arm64 is
                      then
                         declare
                            Fold : constant Address_Fold := Folding;
+                           Into : constant String := Target (Value, "x10");
                            Base : constant String :=
                              Index_Operand (Storage, Field, 0, 0, Nested,
-                                            Width => Folded_Size (Fold));
+                                            Width => Folded_Size (Fold),
+                                            Into => Into);
                         begin
-                           if Base /= "x10" or else Fold.Access_Value
+                           if Base /= Into or else Fold.Access_Value
                              /= Landin.IR.No_Value
                            then
                               Folded := Fold;
                               Folded_Base :=
                                 Unbounded.To_Unbounded_String (Base);
                            else
-                              Store_Value (Value, "x10");
+                              Deliver (Value, Into, Extended => True);
                            end if;
                         end;
                      else
-                        Storage_Address (Storage, Field, "x9", Nested =>
-                          Nested);
-                        Store_Value (Value);
+                        declare
+                           Into : constant String := Target (Value);
+                        begin
+                           Storage_Address (Storage, Field, Into, Nested =>
+                             Nested);
+                           Deliver (Value, Into, Extended => True);
+                        end;
                      end if;
                   end;
                when Landin.IR.Load =>
-                  --  A value that is its slot's register moves nothing,
-                  --  unless its atoms are checked as it is loaded.
-                  if Plan.Values (Positive (Value)).Register = 0
-                    or else Plan.Values (Positive (Value)).Register
-                      /= Plan.Slots (Positive (Landin.IR.Slot_Of
-                           (Of_Unit, Item, Value))).Register
-                    or else Landin.IR.Atom_Set_Of (Of_Unit, Item, Value)
-                      /= Landin.IR.No_Atom_Set
-                  then
-                     Load_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
-                     Store_Value (Value);
-                  end if;
+                  declare
+                     Held_In : constant Natural :=
+                       Plan.Values (Positive (Value)).Register;
+                     Slot : constant Landin.IR.Slot_Id :=
+                       Landin.IR.Slot_Of (Of_Unit, Item, Value);
+                     Source : constant Natural :=
+                       Plan.Slots (Positive (Slot)).Register;
+                     Size : constant Held_Size := Size_Of_Value (Value);
+                  begin
+                     --  A value that is its slot's register moves nothing,
+                     --  unless its atoms are checked as it is loaded; a
+                     --  float moves between its d registers, or between
+                     --  one and a frame cell, directly.
+                     if Held_In /= No_Register and then Held_In = Source
+                       and then Landin.IR.Atom_Set_Of (Of_Unit, Item, Value)
+                         = Landin.IR.No_Atom_Set
+                     then
+                        null;
+                     elsif Held_In in Float_Register
+                       and then Source in Float_Register
+                     then
+                        Emit ("fmov " & Name (Held_In, Size)
+                              & ", " & Name (Source, Size));
+                     elsif Optimized and then Held_In in Float_Register
+                       and then Source = No_Register
+                     then
+                        Float_Frame (False, Name (Held_In, Size),
+                                     Slot_Offset (Layout, Slot));
+                     elsif Optimized and then Source in Float_Register
+                       and then Held_In = No_Register
+                     then
+                        Float_Frame (True, Name (Source, Size),
+                                     Value_Offset (Layout, Value));
+                     else
+                        declare
+                           Into : constant String := Target (Value);
+                        begin
+                           Load_Slot (Slot, Into);
+                           Deliver (Value, Into, Extended => True);
+                        end;
+                     end if;
+                  end;
                when Landin.IR.Store =>
                   declare
                      Pair : constant Address_Fold :=
@@ -3224,14 +4781,57 @@ package body Landin.Backend.Arm64 is
                      --  access through the temporary carrying it without
                      --  a round trip through that temporary.
                      if Pair.Access_Value /= Landin.IR.No_Value then
-                        Load_Value (Operand (1), "x10");
                         Folded := Pair;
-                        Folded_Base := Unbounded.To_Unbounded_String ("x10");
+                        Folded_Base := Unbounded.To_Unbounded_String
+                          (Read (Operand (1), "x10"));
                         return;
                      end if;
                   end;
-                  Load_Value (Operand (1));
-                  Store_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                  declare
+                     Held_In : constant Natural := Plan.Values
+                       (Positive (Operand (1))).Register;
+                     Slot : constant Landin.IR.Slot_Id :=
+                       Landin.IR.Slot_Of (Of_Unit, Item, Value);
+                     Into : constant Natural :=
+                       Plan.Slots (Positive (Slot)).Register;
+                     Size : constant Held_Size := Size_Of_Value (Operand (1));
+                  begin
+                     --  A value held in its slot's register moves nothing;
+                     --  a float moves between its d registers, or between
+                     --  one and a frame cell, directly; a constant goes
+                     --  straight into a slot's register.
+                     if Held_In /= No_Register and then Held_In = Into then
+                        null;
+                     elsif Held_In in Float_Register
+                       and then Into in Float_Register
+                     then
+                        Emit ("fmov " & Name (Into, Size) & ", "
+                              & Name (Held_In, Size));
+                     elsif Is_Rematerialized (Operand (1))
+                       and then Into in Float_Register
+                     then
+                        Float_Constant
+                          (Name (Into, Size), Constant_Of (Operand (1)),
+                           Size = Landin.Targets.Byte_4);
+                     elsif Is_Rematerialized (Operand (1))
+                       and then Into /= No_Register
+                     then
+                        Immediate (Name (Into), Constant_Of (Operand (1)));
+                     elsif Optimized and then Into in Float_Register
+                       and then Held_In = No_Register
+                     then
+                        Float_Frame (False, Name (Into, Size),
+                                     Value_Offset (Layout, Operand (1)));
+                     elsif Optimized and then Held_In in Float_Register
+                       and then Into = No_Register
+                     then
+                        Float_Frame (True, Name (Held_In, Size),
+                                     Slot_Offset (Layout, Slot));
+                     else
+                        Store_Slot (Slot, Read_Or_Zero (Operand (1)),
+                                    Extended => Optimized);
+                     end if;
+                  end;
                when Landin.IR.Memory_Access =>
                   declare
                      use all type Landin.Memory.Operation;
@@ -3329,24 +4929,33 @@ package body Landin.Backend.Arm64 is
                   end;
 
                when Landin.IR.Load_Indirect =>
-                  Memory (False, Size_Of_Value (Value), "x9", Indirect_Base);
-                  Store_Value (Value);
+                  declare
+                     Into : constant String := Load_Target (Value);
+                  begin
+                     Memory (False, Size_Of_Value (Value), Into,
+                             Indirect_Base);
+                     Loaded (Value, Into);
+                  end;
                when Landin.IR.Store_Indirect =>
                   declare
                      Base : constant String := Indirect_Base;
                   begin
-                     Load_Value (Operand (2));
-                     Memory (True, Size_Of_Value (Operand (2)), "x9", Base);
+                     Memory (True, Size_Of_Value (Operand (2)),
+                             Store_Source (Operand (2)), Base);
                   end;
                when Landin.IR.Load_Datum | Landin.IR.Store_Datum =>
                   Address ("x10", Symbol
                     (Landin.IR.Datum_Of (Of_Unit, Item, Value)));
                   if Op = Landin.IR.Load_Datum then
-                     Memory (False, Size_Of_Value (Value), "x9", "x10");
-                     Store_Value (Value);
+                     declare
+                        Into : constant String := Load_Target (Value);
+                     begin
+                        Memory (False, Size_Of_Value (Value), Into, "x10");
+                        Loaded (Value, Into);
+                     end;
                   else
-                     Load_Value (Operand (1));
-                     Memory (True, Size_Of_Value (Operand (1)), "x9", "x10");
+                     Memory (True, Size_Of_Value (Operand (1)),
+                             Store_Source (Operand (1)), "x10");
                   end if;
                when Landin.IR.Load_Field | Landin.IR.Store_Field =>
                   declare
@@ -3390,6 +4999,30 @@ package body Landin.Backend.Arm64 is
                         return;
                      end if;
                   end;
+                  if Optimized then
+                     declare
+                        Field : constant Landin.IR.Element_Total :=
+                          Landin.IR.Element_Total
+                            (Landin.IR.Field_Of (Of_Unit, Item, Value));
+                        Nested : constant Landin.IR.Path_Step_Array :=
+                          Landin.IR.Path_Of (Of_Unit, Item, Value);
+                        Into : constant String :=
+                          (if Op = Landin.IR.Load_Field
+                           then Load_Target (Value) else "");
+                     begin
+                        if Op = Landin.IR.Load_Field then
+                           Part_Access (False, Size_Of_Value (Value), Into,
+                                        Place, Field, Nested);
+                           Loaded (Value, Into);
+                        else
+                           Part_Access
+                             (True, Size_Of_Value (Operand (1)),
+                              Store_Source (Operand (1)), Place, Field,
+                              Nested);
+                        end if;
+                     end;
+                     return;
+                  end if;
                   Part_Address
                     (Place, Landin.IR.Element_Total
                        (Landin.IR.Field_Of (Of_Unit, Item, Value)),
@@ -3468,11 +5101,15 @@ package body Landin.Backend.Arm64 is
                         Width => Landin.Targets.Bytes (Moved));
                   begin
                      if Op = Landin.IR.Load_Element then
-                        Memory (False, Moved, "x9", Base);
-                        Store_Value (Value);
+                        declare
+                           Into : constant String := Load_Target (Value);
+                        begin
+                           Memory (False, Moved, Into, Base);
+                           Loaded (Value, Into);
+                        end;
                      else
-                        Load_Value (Operand (2));
-                        Memory (True, Moved, "x9", Base);
+                        Memory (True, Moved, Store_Source (Operand (2)),
+                                Base);
                      end if;
                   end;
                when Landin.IR.Copy_Array | Landin.IR.Copy_Variant =>
@@ -3621,42 +5258,74 @@ package body Landin.Backend.Arm64 is
                      Field_Extent (Of_Unit,
                        Landin.IR.Slice_Element_Shape (Of_Unit, Item, Value),
                        Facts, Bytes, Alignment);
-                     Load_Value (Operand (4), "x11");
-                     Load_Value (Operand (3), "x10");
-                     if not Unchecked then
-                        Load_Value (Operand (2), "x9");
-                        Emit ("cmp x11, x9");
-                        Emit ((if Landin.IR.Slice_Is_Inclusive
-                          (Of_Unit, Item, Value) then "b.hs " else "b.hi ") &
-                            Trap);
-                        Emit ("cmp x10, x11");
-                        Emit ("b.hi " & Trap);
-                     end if;
                      declare
-                        Fold : constant Address_Fold := Folding;
-                        Moved : constant Natural := Folded_Size (Fold);
+                        Upper : constant String := Read (Operand (4), "x11");
+                        Lower : constant String := Read (Operand (3), "x10");
+                        Scaling : constant String :=
+                          (case Bytes is
+                              when 2 => ", lsl #1",
+                              when 4 => ", lsl #2",
+                              when 8 => ", lsl #3",
+                              when others => "");
                      begin
-                        --  A folded access scales the lower bound itself
-                        --  when the stride is one or the bytes it moves.
-                        if Moved > 0 and then Bytes in 1 | 2 | 4 | 8
-                          and then (Bytes = 1
-                                    or else Natural (Bytes) = Moved)
-                        then
-                           Load_Value (Operand (1), "x11");
-                           Folded := Fold;
-                           Folded_Base := Unbounded.To_Unbounded_String
-                             ("x11, x10" & (case Bytes is
-                                 when 2 => ", lsl #1",
-                                 when 4 => ", lsl #2",
-                                 when 8 => ", lsl #3",
-                                 when others => ""));
+                        if not Unchecked then
+                           Emit ("cmp " & Upper & ", "
+                                 & Read (Operand (2), "x9"));
+                           Emit ((if Landin.IR.Slice_Is_Inclusive
+                             (Of_Unit, Item, Value) then "b.hs " else "b.hi ")
+                               & Trap);
+                           --  Lower and upper read from one place hold one
+                           --  value under size and speed, so the lower
+                           --  edge cannot fail: `a[i..i]`, or two values
+                           --  in one register.  The upper edge above is
+                           --  still checked.
+                           if not Optimized
+                             or else (Operand (3) /= Operand (4)
+                                      and then Lower /= Upper)
+                           then
+                              Emit ("cmp " & Lower & ", " & Upper);
+                              Emit ("b.hi " & Trap);
+                           end if;
+                        end if;
+                        declare
+                           Fold : constant Address_Fold := Folding;
+                           Moved : constant Natural := Folded_Size (Fold);
+                        begin
+                           --  A folded access scales the lower bound
+                           --  itself when the stride is one or the bytes
+                           --  it moves.
+                           if Moved > 0 and then Bytes in 1 | 2 | 4 | 8
+                             and then (Bytes = 1
+                                       or else Natural (Bytes) = Moved)
+                           then
+                              Folded := Fold;
+                              Folded_Base := Unbounded.To_Unbounded_String
+                                (Read (Operand (1), "x11") & ", " & Lower
+                                 & Scaling);
+                              return;
+                           end if;
+                        end;
+                        if Optimized and then Bytes in 1 | 2 | 4 | 8 then
+                           declare
+                              Into : constant String := Target (Value);
+                           begin
+                              Emit ("add " & Into & ", "
+                                    & Read (Operand (1), "x9") & ", "
+                                    & Lower & Scaling);
+                              Deliver (Value, Into, Extended => True);
+                           end;
                            return;
                         end if;
+                        Immediate ("x11", Pattern (Bytes));
+                        declare
+                           Base : constant String := Read (Operand (1));
+                           Into : constant String := Target (Value);
+                        begin
+                           Emit ("madd " & Into & ", " & Lower & ", x11, "
+                                 & Base);
+                           Deliver (Value, Into, Extended => True);
+                        end;
                      end;
-                     Immediate ("x11", Pattern (Bytes));
-                     Load_Value (Operand (1));
-                     Emit ("madd x9, x10, x11, x9");
-                     Store_Value (Value);
                   end;
                when Landin.IR.Empty_Slice_Base =>
                   declare
@@ -3671,6 +5340,9 @@ package body Landin.Backend.Arm64 is
                   end;
                when Landin.IR.Negation | Landin.IR.Complement |
                  Landin.IR.Logical_Not =>
+                  if Optimized and then Negate then
+                     return;
+                  end if;
                   Load_Value (Operand (1));
                   if Op = Landin.IR.Logical_Not then
                      Emit ("eor x9, x9, #1");
@@ -3697,19 +5369,31 @@ package body Landin.Backend.Arm64 is
                   | Landin.IR.Bitwise_Or | Landin.IR.Bitwise_Xor
                   | Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
                   if Kind (Value) in Landin.Types.Float_Name then
-                     FP_Load (1, "16");
-                     FP_Load (2, "17");
-                     Emit ((case Op is
-                       when Landin.IR.Add => "fadd ",
-                       when Landin.IR.Subtract => "fsub ",
-                       when Landin.IR.Multiply => "fmul ",
-                       when Landin.IR.Divide => "fdiv ",
-                       when others => raise Compiler_Defect with
-                         "invalid float operation")
-                       & FP (Kind (Value)) & "16, " & FP (Kind (Value))
-                       & "16, " & FP (Kind (Value)) & "17");
-                     FP_Save;
+                     declare
+                        Left : constant String := FP_Operand (1, "16");
+                        Right : constant String := FP_Operand (2, "17");
+                     begin
+                        Emit ((case Op is
+                          when Landin.IR.Add => "fadd ",
+                          when Landin.IR.Subtract => "fsub ",
+                          when Landin.IR.Multiply => "fmul ",
+                          when Landin.IR.Divide => "fdiv ",
+                          when others => raise Compiler_Defect with
+                            "invalid float operation")
+                          & FP_Target & ", " & Left & ", " & Right);
+                     end;
+                     FP_Finish;
                   else
+                     if Optimized then
+                        declare
+                           Selected : Boolean;
+                        begin
+                           Select_Integer (Selected);
+                           if Selected then
+                              return;
+                           end if;
+                        end;
+                     end if;
                      declare
                         Signed : constant Boolean := Landin.Types.Is_Signed
                           (Kind (Value));
@@ -3830,12 +5514,41 @@ package body Landin.Backend.Arm64 is
                             (if Float or Signed then "ge" else "hs"),
                           when others => raise Compiler_Defect with
                             "invalid comparison");
+                     --  A comparison whose one use is the branch right
+                     --  after it leaves its verdict in the flags, for that
+                     --  branch to test.
+                     Fuses : constant Boolean :=
+                       Optimized and then Uses (Positive (Value)) = 1
+                       and then Next_Instruction /= Landin.IR.No_Value
+                       and then Landin.IR.Op_Of
+                         (Of_Unit, Item, Next_Instruction) = Landin.IR.Branch
+                       and then Landin.IR.Nth_Operand
+                         (Of_Unit, Item, Next_Instruction, 1) = Value;
+                     --  So does one whose one use is the condition of the
+                     --  choice after it, which csel and fcsel test.
+                     Feeds_Choice : constant Boolean :=
+                       Optimized and then Uses (Positive (Value)) = 1
+                       and then Next_Instruction /= Landin.IR.No_Value
+                       and then Landin.IR.Op_Of
+                         (Of_Unit, Item, Next_Instruction) = Landin.IR.Choose
+                       and then Landin.IR.Nth_Operand
+                         (Of_Unit, Item, Next_Instruction, 1) = Value;
                   begin
                      if Float then
-                        FP_Load (1, "16");
-                        FP_Load (2, "17");
-                        Emit ("fcmp " & FP (Scalar) & "16, " & FP (Scalar) &
-                          "17");
+                        declare
+                           Left : constant String := FP_Operand (1, "16");
+                        begin
+                           if Optimized and then Is_Constant (Operand (2))
+                             and then Constant_Of (Operand (2)) = 0
+                           then
+                              Emit ("fcmp " & Left & ", #0.0");
+                           else
+                              Emit ("fcmp " & Left & ", "
+                                    & FP_Operand (2, "17"));
+                           end if;
+                        end;
+                     elsif Optimized then
+                        Compare_Integer (Scalar);
                      else
                         Load_Value (Operand (1));
                         Load_Value (Operand (2), "x10");
@@ -3843,10 +5556,192 @@ package body Landin.Backend.Arm64 is
                         Extend ("x10", Scalar);
                         Emit ("cmp x9, x10");
                      end if;
-                     Emit ("cset w9, " & Condition);
-                     Store_Value (Value);
+                     if Fuses then
+                        --  fcmp leaves an unordered pair's flags so that
+                        --  each condition here is false for it but `ne`,
+                        --  as D162 has it, and Branch_On's inverse keeps
+                        --  that.
+                        Branch_On
+                          (Condition,
+                           Landin.IR.Target_Of
+                             (Of_Unit, Item, Next_Instruction),
+                           Landin.IR.Alternative_Of
+                             (Of_Unit, Item, Next_Instruction));
+                        Fused_Branch := Next_Instruction;
+                     elsif Feeds_Choice then
+                        Choice_Condition :=
+                          Unbounded.To_Unbounded_String (Condition);
+                        Fused_Choice := Next_Instruction;
+                     else
+                        declare
+                           Into : constant String := Target (Value);
+                        begin
+                           Emit ("cset " & Short (Into) & ", " & Condition);
+                           Deliver (Value, Into, Extended => True);
+                        end;
+                     end if;
+                  end;
+               when Landin.IR.Choose =>
+                  --  D338: csel or fcsel on the flags a comparison right
+                  --  before left, or else on the stored bool.  Every
+                  --  condition fcmp leaves is already false for an
+                  --  unordered pair but `ne`.  A choice between one and
+                  --  zero is cset.  Loading an operand moves no flag.
+                  declare
+                     Fused : constant Boolean := Value = Fused_Choice;
+
+                     function Is_Number
+                       (Which : Landin.IR.Value_Id; Of_Value : Pattern)
+                        return Boolean
+                       is (Is_Constant (Which)
+                           and then Kind (Value) in Landin.Types.Integer_Name
+                           and then Constant_Of (Which) = Of_Value);
+
+                     Counts_Up : constant Boolean :=
+                       Is_Number (Operand (2), 1)
+                       and then Is_Number (Operand (3), 0);
+                     Counts_Down : constant Boolean :=
+                       Is_Number (Operand (2), 0)
+                       and then Is_Number (Operand (3), 1);
+                     Condition : constant String :=
+                       (if Fused then Unbounded.To_String (Choice_Condition)
+                        else "ne");
+                  begin
+                     if not Fused then
+                        Emit ("cmp " & Short (Read (Operand (1))) & ", #0");
+                     end if;
+                     if (Counts_Up or else Counts_Down)
+                       and then Optimized and then Uses (Positive (Value)) = 1
+                       and then Next_Instruction /= Landin.IR.No_Value
+                       and then
+                         (Landin.IR.Op_Of (Of_Unit, Item, Next_Instruction)
+                            = Landin.IR.Wrapping_Add
+                          or else
+                            (Landin.IR.Op_Of
+                               (Of_Unit, Item, Next_Instruction)
+                               = Landin.IR.Add
+                             and then Landin.IR.Is_Unchecked
+                               (Of_Unit, Item, Next_Instruction)))
+                       and then
+                         (Landin.IR.Nth_Operand
+                            (Of_Unit, Item, Next_Instruction, 1) = Value)
+                         /= (Landin.IR.Nth_Operand
+                               (Of_Unit, Item, Next_Instruction, 2) = Value)
+                     then
+                        --  The addition that takes the one or zero, which
+                        --  cannot trap, is the other addend incremented on
+                        --  the condition; a narrow sum is then masked.
+                        declare
+                           Sum : constant Landin.IR.Value_Id :=
+                             Next_Instruction;
+                           Other : constant Landin.IR.Value_Id :=
+                             Landin.IR.Nth_Operand
+                               (Of_Unit, Item, Sum,
+                                (if Landin.IR.Nth_Operand
+                                      (Of_Unit, Item, Sum, 1) = Value
+                                 then 2 else 1));
+                           Source : constant String := Read (Other, "x10");
+                           Into : constant String := Target (Sum);
+                        begin
+                           Emit ("cinc " & Into & ", " & Source & ", "
+                                 & (if Counts_Up then Condition
+                                    else Inverse (Condition)));
+                           Deliver (Sum, Into);
+                           Fused_Increment := Sum;
+                        end;
+                     elsif Counts_Up or else Counts_Down then
+                        declare
+                           Into : constant String := Target (Value);
+                        begin
+                           Emit ("cset " & Short (Into) & ", "
+                                 & (if Counts_Up then Condition
+                                    else Inverse (Condition)));
+                           Deliver (Value, Into, Extended => True);
+                        end;
+                     elsif Kind (Value) in Landin.Types.Float_Name then
+                        declare
+                           If_True : constant String := FP_Operand (2, "16");
+                           If_False : constant String := FP_Operand (3, "17");
+                        begin
+                           Emit ("fcsel " & FP_Target & ", " & If_True
+                                 & ", " & If_False & ", " & Condition);
+                           FP_Finish;
+                        end;
+                     else
+                        declare
+                           If_True : constant String :=
+                             Read_Or_Zero (Operand (2), "x10");
+                           If_False : constant String :=
+                             Read_Or_Zero (Operand (3), "x11");
+                           Into : constant String := Target (Value);
+                        begin
+                           Emit ("csel " & Into & ", " & If_True & ", "
+                                 & If_False & ", " & Condition);
+                           Deliver (Value, Into, Extended => True);
+                        end;
+                     end if;
                   end;
                when Landin.IR.Range_Check =>
+                  if Optimized then
+                     declare
+                        Signed : constant Boolean :=
+                          Landin.Types.Is_Signed (Kind (Value));
+                        Bits : constant Natural :=
+                          Natural (Landin.Types.Width (Kind (Value), Facts));
+                        Source : constant String := Read (Operand (1));
+                        Tested : constant String :=
+                          (if Signed and then Bits < 64 then "x10"
+                           else Source);
+
+                        procedure Bound
+                          (Edge : Landin.Types.Folded; Failing : String);
+
+                        --  Trap when the operand is beyond Edge; an
+                        --  unsigned operand is never below zero.
+                        procedure Bound
+                          (Edge : Landin.Types.Folded; Failing : String)
+                        is
+                           Plain : constant String :=
+                             (if Edge >= 0
+                              then Selection.Arithmetic_Immediate
+                                (Selection.Word (To_Pattern (Edge, 64)))
+                              else "");
+                           Negated : constant String :=
+                             (if Edge in -16_773_120 .. -1
+                              then Selection.Arithmetic_Immediate
+                                (Selection.Word (To_Pattern (-Edge, 64)))
+                              else "");
+                        begin
+                           if not Signed and then Edge = 0
+                             and then Failing = "lo"
+                           then
+                              return;
+                           elsif Plain /= "" then
+                              Emit ("cmp " & Tested & ", " & Plain);
+                           elsif Negated /= "" then
+                              Emit ("cmn " & Tested & ", " & Negated);
+                           else
+                              Immediate ("x11", To_Pattern (Edge, 64));
+                              Emit ("cmp " & Tested & ", x11");
+                           end if;
+                           Emit ("b." & Failing & " " & Trap);
+                        end Bound;
+                     begin
+                        if Tested /= Source then
+                           Emit ((case Bits is
+                                     when 8 => "sxtb ",
+                                     when 16 => "sxth ",
+                                     when others => "sxtw ")
+                                 & Tested & ", " & Short (Source));
+                        end if;
+                        Bound (Landin.IR.Range_Lower (Of_Unit, Item, Value),
+                               (if Signed then "lt" else "lo"));
+                        Bound (Landin.IR.Range_Upper (Of_Unit, Item, Value),
+                               (if Signed then "gt" else "hi"));
+                        Deliver (Value, Source, Extended => True);
+                     end;
+                     return;
+                  end if;
                   Load_Value (Operand (1));
                   Extend ("x9", Kind (Value));
                   Immediate ("x10", To_Pattern
@@ -3873,6 +5768,9 @@ package body Landin.Backend.Arm64 is
                        Landin.Types.Float_Name;
                      Done : constant String := Fresh;
                   begin
+                     if Optimized and then Convert then
+                        return;
+                     end if;
                      Load_Value (Operand (1));
                      Extend ("x9", From);
                      if From_Float then
@@ -3985,15 +5883,20 @@ package body Landin.Backend.Arm64 is
                   declare
                      Callee : constant Landin.IR.Item_Id :=
                        Landin.IR.Callee_Of (Of_Unit, Item, Value);
+                     Into : constant String := Target (Value);
                   begin
-                     Address ("x9", Symbol (Callee), Landin.IR.Is_External
+                     Address (Into, Symbol (Callee), Landin.IR.Is_External
                        (Of_Unit, Callee));
-                     Store_Value (Value);
+                     Deliver (Value, Into, Extended => True);
                   end;
                when Landin.IR.Evidence_Address =>
-                  Address ("x9", Evidence_Symbol
-                    (Landin.IR.Evidence_Of (Of_Unit, Item, Value)));
-                  Store_Value (Value);
+                  declare
+                     Into : constant String := Target (Value);
+                  begin
+                     Address (Into, Evidence_Symbol
+                       (Landin.IR.Evidence_Of (Of_Unit, Item, Value)));
+                     Deliver (Value, Into, Extended => True);
+                  end;
                when Landin.IR.Evidence_Function =>
                   Load_Value (Operand (1));
                   if Landin.IR.Evidence_Is_Erased
@@ -4081,9 +5984,35 @@ package body Landin.Backend.Arm64 is
                      Restore_Stack (Bytes);
                   end;
                when Landin.IR.Jump =>
-                  Emit ("b " & Label (Item, Landin.IR.Target_Of (Of_Unit,
-                    Item, Value)));
+                  --  Size and speed fall through to the block that follows.
+                  if not Optimized
+                    or else Landin.IR.Target_Of (Of_Unit, Item, Value)
+                      /= Following
+                  then
+                     Emit ("b " & Label (Item, Landin.IR.Target_Of (Of_Unit,
+                       Item, Value)));
+                  end if;
                when Landin.IR.Branch =>
+                  if Optimized then
+                     declare
+                        Truth : constant String :=
+                          Short (Read (Operand (1)));
+                        Yes : constant Landin.IR.Block_Id :=
+                          Landin.IR.Target_Of (Of_Unit, Item, Value);
+                        No : constant Landin.IR.Block_Id :=
+                          Landin.IR.Alternative_Of (Of_Unit, Item, Value);
+                     begin
+                        if Yes = Following and then No /= Following then
+                           Emit ("cbz " & Truth & ", " & Label (Item, No));
+                        else
+                           Emit ("cbnz " & Truth & ", " & Label (Item, Yes));
+                           if No /= Following then
+                              Emit ("b " & Label (Item, No));
+                           end if;
+                        end if;
+                     end;
+                     return;
+                  end if;
                   Load_Value (Operand (1));
                   Emit ("cbnz w9, " & Label (Item, Landin.IR.Target_Of
                     (Of_Unit, Item, Value)));
@@ -4227,18 +6156,7 @@ package body Landin.Backend.Arm64 is
             Emit ("bl " & Symbol (Initializer));
          end if;
          Reserve (Extent (Layout));
-         for Number in Saves'Range loop
-            if Saves (Number) then
-               Frame_Address (Save_Home (Number));
-               Emit ("str x" & Trimmed (Natural'Image (Number)) & ", [x15]");
-               if Debug /= null then
-                  --  The CFA is x29 + 16 and the home sits below x29.
-                  Emit (".cfi_offset w" & Trimmed (Natural'Image (Number))
-                        & ", -" & Trimmed (Landin.Targets.Byte_Count'Image
-                          (Save_Home (Number) + 16)));
-               end if;
-            end if;
-         end loop;
+         Move_Saves (Store => True);
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
             declare
@@ -4263,8 +6181,45 @@ package body Landin.Backend.Arm64 is
                   Aggregate : constant Boolean := Landin.IR.Is_Aggregate
                     (Of_Unit, Item, Slot)
                     or else Landin.IR.Is_Array (Of_Unit, Item, Slot);
+                  --  A parameter held in a register moves there straight
+                  --  from the one it arrives in, or stays where it is.
+                  Direct : constant Boolean := Index <= 8
+                    and then not Aggregate
+                    and then Plan.Slots (Positive (Slot)).Register
+                      /= No_Register;
+                  Home : constant Landin.IR.Slot_Id :=
+                    Landin.IR.In_Place_Home (Of_Unit, Item, Slot);
+
+                  --  The unit a shaped slot moves by.  The carrier
+                  --  addresses storage aligned for this shape (docs/ir.md)
+                  --  and the slot is fresh, so an aligned whole-unit
+                  --  extent needs no runtime alignment test.
+                  function Width_Of
+                    (Shaped : Landin.IR.Slot_Id;
+                     Bytes : Landin.Targets.Byte_Count)
+                     return Landin.Targets.Byte_Count;
+
+                  function Width_Of
+                    (Shaped : Landin.IR.Slot_Id;
+                     Bytes : Landin.Targets.Byte_Count)
+                     return Landin.Targets.Byte_Count
+                  is
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Aggregate_Extent
+                       (Of_Unit, Item, Shaped, Facts, Size, Alignment);
+                     if Alignment >= 8 and then Bytes mod 8 = 0 then
+                        return 8;
+                     elsif Alignment >= 4 and then Bytes mod 4 = 0 then
+                        return 4;
+                     end if;
+                     return 1;
+                  end Width_Of;
                begin
-                  if Index <= 8 then
+                  if Direct then
+                     null;
+                  elsif Index <= 8 then
                      Emit ("mov x10, x" & Trimmed (Natural'Image (Index - 1)));
                   else
                      Emit ("mov x10, x29");
@@ -4280,21 +6235,9 @@ package body Landin.Backend.Arm64 is
                           Whole_Clear_Extent
                             ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
                              Landin.IR.No_Path_Steps);
-                        Size : Landin.Targets.Byte_Count;
-                        Alignment : Landin.Targets.Byte_Alignment;
-                        Width : Landin.Targets.Byte_Count := 1;
+                        Width : constant Landin.Targets.Byte_Count :=
+                          Width_Of (Slot, Bytes);
                      begin
-                        Landin.Backend.Aggregate_Extent
-                          (Of_Unit, Item, Slot, Facts, Size, Alignment);
-                        --  The carrier addresses storage aligned for this
-                        --  shape (docs/ir.md) and the slot is fresh, so an
-                        --  aligned whole-unit extent needs no runtime
-                        --  alignment test.
-                        if Alignment >= 8 and then Bytes mod 8 = 0 then
-                           Width := 8;
-                        elsif Alignment >= 4 and then Bytes mod 4 = 0 then
-                           Width := 4;
-                        end if;
                         Frame_Address (Slot_Offset (Layout, Slot), "x9");
                         Emit ("cbz x10, " & Zero_Label);
                         if Width > 1 then
@@ -4311,8 +6254,44 @@ package body Landin.Backend.Arm64 is
                         end if;
                         Put (Done_Label & ":");
                      end;
+                  elsif Direct then
+                     Store_Slot
+                       (Slot, "x" & Trimmed (Natural'Image (Index - 1)));
                   else
                      Store_Slot (Slot, "x10");
+                  end if;
+
+                  --  Landin.IR.In_Place's parameter is an address slot,
+                  --  stored above like a scalar, through which the body
+                  --  reads its caller's storage.  D97's zero carrier still
+                  --  clears the parameter's own home, which the parameter
+                  --  then addresses.  A direct parameter's carrier is still
+                  --  in the register it arrived in; x10 holds no carrier.
+                  if Home /= Landin.IR.No_Slot then
+                     declare
+                        Carrier : constant String :=
+                          (if Direct
+                           then "x" & Trimmed (Natural'Image (Index - 1))
+                           else "x10");
+                        Done_Label : constant String := Fresh;
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Whole_Clear_Extent
+                            ((Kind => Landin.IR.Frame_Slot, Slot => Home), 0,
+                             Landin.IR.No_Path_Steps);
+                        Width : constant Landin.Targets.Byte_Count :=
+                          Width_Of (Home, Bytes);
+                     begin
+                        Emit ("cbnz " & Carrier & ", " & Done_Label);
+                        Frame_Address (Slot_Offset (Layout, Home), "x9");
+                        if Width > 1 then
+                           Move_Units (Bytes, Width, Copy => False);
+                        else
+                           Zero_Bytes (Bytes);
+                        end if;
+                        Frame_Address (Slot_Offset (Layout, Home), "x10");
+                        Store_Slot (Slot, "x10");
+                        Put (Done_Label & ":");
+                     end;
                   end if;
                end;
             end loop;
@@ -4368,7 +6347,7 @@ package body Landin.Backend.Arm64 is
              (Item => Item, Frame_Bytes => Extent (Layout),
               Spill_Bytes => Spill_Bytes (Layout),
               Save_Bytes => Save_Bytes (Layout),
-              Register_Count => Save_Count (Plan.Saves),
+              Register_Count => Save_Count (Plan.Saves or Plan.Held),
               Spill_Count => Plan.Homes, others => <>));
       end Emit_Routine;
 
@@ -4859,6 +6838,7 @@ package body Landin.Backend.Arm64 is
                         | Landin.IR.Load_Variant_Field
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
+                        | Landin.IR.Choose
                         | Landin.IR.Jump | Landin.IR.Branch
                         | Landin.IR.Fail | Landin.IR.Halt =>
                         --  [1940] admits none of these in a module value,

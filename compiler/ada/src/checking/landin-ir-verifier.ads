@@ -97,6 +97,7 @@ package Landin.IR.Verifier is
       Unchecked_Not_Removable,
       --  Places [1900] and module values [1940].
       Slot_Out_Of_Range,
+      Pieces_Disagree,
       Store_Disagrees_With_Slot,
       Store_To_A_Parameter,
       Named_Item_Is_Not_A_Datum,
@@ -142,6 +143,7 @@ package Landin.IR.Verifier is
       --  Calls [1920].
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,
+      Choice_Inside_A_Datum,
       Call_Failure_Slot_Disagrees,
       --  [1630]'s blocks.
       Assembly_Operand_Malformed,

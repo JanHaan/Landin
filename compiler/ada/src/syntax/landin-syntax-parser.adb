@@ -395,6 +395,45 @@ package body Landin.Syntax.Parser is
                 [for T in Text_Name =>
                    Landin.Source.Names.Intern (Names, Spelling (T))];
 
+            --  Which tokens are the first on their line, found in one pass
+            --  over the tokens and the space between them, both of which are
+            --  in byte order.  Asking Tok.Leading instead costs two binary
+            --  searches a question, and the indentation and fence questions
+            --  ask it many times a line.  Linear in the file, and packed, so
+            --  a file of a million tokens takes 125 KB of stack.
+            type Line_Start_Table is
+              array (Tok.Token_Index range <>) of Boolean
+              with Pack;
+
+            function Line_Starts_Of return Line_Start_Table;
+
+            function Line_Starts_Of return Line_Start_Table is
+               Result : Line_Start_Table (1 .. Tok.Count (From)) :=
+                 [others => False];
+               Piece  : Positive := 1;
+               Pieces : constant Natural := Tok.Space_Count (From);
+            begin
+               for Position in Result'Range loop
+                  --  The pieces that end by this token's start lead it, as
+                  --  Tok.Leading says; the earlier ones led the tokens
+                  --  before it and were consumed for them.
+                  Result (Position) := Position = 1;
+                  while Piece <= Pieces
+                    and then Tok.Where (Tok.Nth_Space (From, Piece)).Last
+                      <= Tok.Where (From, Position).First
+                  loop
+                     if Tok.Kind (Tok.Nth_Space (From, Piece)) = Tok.Line_End
+                     then
+                        Result (Position) := True;
+                     end if;
+                     Piece := Piece + 1;
+                  end loop;
+               end loop;
+               return Result;
+            end Line_Starts_Of;
+
+            Line_Starts : constant Line_Start_Table := Line_Starts_Of;
+
             ------------------------------------------------------------
             --  Reading the stream
             ------------------------------------------------------------
@@ -1367,6 +1406,7 @@ package body Landin.Syntax.Parser is
                    Fill       => Fills,
                    Propagates => Propagates,
                    Recovery   => Recovers));
+               Result.Kinds.Append (Of_Kind);
 
                return Node_Id (Result.Items.Last_Index);
             end Add;
@@ -1987,20 +2027,7 @@ package body Landin.Syntax.Parser is
             --  the one place [1750] names a line end: a destructuring that
             --  begins a line, which Opens_Destructuring answers for.
             function Begins_Line (At_Index : Tok.Token_Index) return Boolean
-            is
-               Pieces : constant Tok.Space_Range :=
-                 Tok.Leading (From, At_Index);
-            begin
-               if At_Index = 1 then
-                  return True;
-               end if;
-               for Piece in Pieces.First .. Pieces.Last loop
-                  if Tok.Kind (Tok.Nth_Space (From, Piece)) = Tok.Line_End then
-                     return True;
-                  end if;
-               end loop;
-               return False;
-            end Begins_Line;
+              is (Line_Starts (At_Index));
 
             --  Whether the token in hand is the first on its line.
             function Here_Begins_Line return Boolean

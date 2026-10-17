@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: mem.resize through an arena grows and shrinks its latest block in place, giving the tail back, and moves any other with its bytes; a zero extent is an ordinary block, more than the backing holds is refused with the block and arena as they were, and an injector spends its budget on a resize
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0940, 1230, 1360
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

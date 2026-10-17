@@ -139,11 +139,12 @@ still succeed. The linked full run contains the target-test results.
 | `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full main pass for a declared explanatory edit |
 | `documents` | `ubuntu-24.04` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, and the determinism, quality and debugging controls |
-| `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks` and the Linux x86-64 determinism manifest |
+| `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
 | `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
-| `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, Cortex-M and scaling jobs |
+| `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, build-modes, Cortex-M and scaling jobs |
 | `release` | `ubuntu-24.04` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
+| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2` |
 | `bindings` | `ubuntu-24.04` | the C binding generator against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
 | `cortex-m` | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |

@@ -16,9 +16,12 @@ end system_value
 
 --- Host-heap allocator capability, as a handle that borrows nothing: the heap
 --- belongs to the process, and copies share it.  Allocates and frees through
---- size classes over memory it maps through platform/posix; does not grow
---- allocations in place.  Available only on hosted targets.  It is
---- single-threaded: two threads may not use it at once.
+--- size classes over memory it maps through platform/posix.  A block grows
+--- in place when its slot or mapping holds the new extent or its mapping
+--- can grow where it is, and a resize that cannot moves a mapping's pages
+--- with Linux's `mremap` or otherwise copies the block.  Available only on
+--- hosted targets.  It is single-threaded: two threads may not use it at
+--- once.
 ---
 --- Every usize alignment is accepted.  Zero and one mean no stricter than
 --- byte alignment.  A zero-byte request still returns a distinct, non-null,
@@ -172,15 +175,26 @@ end host_free
 --  page is at most 64 KiB on every hosted system.
 rounding: usize = 65535
 
+--  The alignment of a request for `size` bytes as a unit of at least one,
+--  or zero when the request is refused before the host is asked: the host
+--  takes no extent above PTRDIFF_MAX, and no addition may wrap.
+unit_for: (size: usize, alignment: usize) -> (unit: usize) =
+    unit = if alignment > 1 then alignment else 1 end if
+    if unit - 1 > largest - header - rounding then
+        unit = 0
+        return
+    end if
+    padding: usize = unit - 1 + header + rounding
+    if size > largest - padding then
+        unit = 0
+    end if
+end unit_for
+
 system_alloc: (self: system, size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =
     _ = self.reserved
-    unit: usize = if alignment > 1 then alignment else 1 end if
-    --  The host takes no extent above PTRDIFF_MAX, and no addition may
-    --  wrap: refuse both before asking it.
-    fail mem.out_of_memory when unit - 1 > largest - header - rounding
-    padding: usize = unit - 1 + header + rounding
-    fail mem.out_of_memory when size > largest - padding
+    unit: usize = unit_for(size, alignment)
+    fail mem.out_of_memory when unit == 0
     address: usize = host_alloc(size, unit)
     fail mem.out_of_memory when address == 0
     block = ptr(address)
@@ -192,19 +206,129 @@ system_free: (self: system, block: ptr mut u8, size: usize) -> none =
     host_free(usize(block))
 end system_free
 
+--  Where a block's slot or mapping is: the address of the block's two
+--  words, and the slot's or mapping's start and extent, which they hold.
+place: type = struct
+    at: usize
+    origin: usize
+    held: usize
+end place
+
+place_of: (block: usize) -> (where: place) =
+    at: usize = header_at(block)
+    where = (at: at, origin: load_word(at), held: load_word(at + word))
+end place_of
+
+--  Grow the mapping `where` describes where it is, to hold `ends` bytes
+--  from its start, or report that it is a slot or that the pages after
+--  it are taken.
+extend_mapping: (where: place, ends: usize) -> (grown: bool) =
+    grown = false
+    return when where.held <= largest_class
+    wanted: usize = align_up(ends, posix.page_size())
+    base: ptr mut u8 = ptr(where.origin)
+    posix.extend(base, where.held, wanted) else (problem)
+        _ = problem
+        return
+    end
+    store_word(where.at + word, wanted)
+    grown = true
+end extend_mapping
+
+--  Make the mapping `where` describes, which holds the block at `block`,
+--  hold `ends` bytes from its start, in place or with its pages moved where
+--  the system can move them: the block's address afterwards, or zero.
+remap_mapping: (block: usize, where: place, ends: usize) -> (moved: usize) =
+    moved = 0
+    wanted: usize = align_up(ends, posix.page_size())
+    base: ptr mut u8 = ptr(where.origin)
+    origin: ptr mut u8 = posix.remap(base, where.held, wanted)
+        else (problem)
+        _ = problem
+        return
+    end
+    moved = usize(origin) + (block - where.origin)
+    at: usize = header_at(moved)
+    store_word(at, usize(origin))
+    store_word(at + word, wanted)
+end remap_mapping
+
+--  Give the pages of the mapping `where` describes past `ends` bytes from
+--  its start back, keeping it larger than the largest class so that it is
+--  still freed as a mapping.  A refusal keeps them, which costs memory and
+--  nothing else.
+trim_mapping: (where: place, ends: usize) -> none =
+    return when where.held <= largest_class
+    least: usize = if ends > largest_class then ends else largest_class + 1
+                   end if
+    kept: usize = align_up(least, posix.page_size())
+    return when kept >= where.held
+    tail: ptr mut u8 = ptr(where.origin + kept)
+    posix.unmap(tail, where.held - kept) else (problem)
+        _ = problem
+        return
+    end
+    store_word(where.at + word, kept)
+end trim_mapping
+
+--  Whether the block at `block` can hold `size` bytes where it is: in its
+--  slot or mapping, or in its mapping grown in place.
+host_grow: (block: usize, size: usize) -> (grown: bool) =
+    where: place = place_of(block)
+    ends: usize = block - where.origin + size
+    grown = ends <= where.held or extend_mapping(where, ends)
+end host_grow
+
+--  The block at `block` made `new_size` bytes long with `unit`'s alignment
+--  without copying its bytes, or zero when that cannot be done: in its slot
+--  or mapping when that holds it, or its mapping grown or moved by the
+--  system.  The system puts a mapping at a page, so a moved one keeps the
+--  block's alignment only when a page has it too.
+host_resize: (block: usize, new_size: usize, unit: usize)
+             -> (resized: usize) =
+    resized = block
+    where: place = place_of(block)
+    ends: usize = block - where.origin + new_size
+    if ends <= where.held then
+        trim_mapping(where, ends)
+        return
+    end if
+    if where.held > largest_class then
+        if posix.page_size() % unit == 0 then
+            resized = remap_mapping(block, where, ends)
+            return when resized <> 0
+        else
+            return when extend_mapping(where, ends)
+        end if
+    end if
+    resized = 0
+end host_resize
+
 system_grow: (self: system, block: ptr mut u8,
               old_size: usize, new_size: usize, alignment: usize)
              -> (grown: bool) =
     _ = self.reserved
-    _ = block
-    _ = old_size
-    _ = new_size
-    _ = alignment
     grown = false
+    return when new_size <= old_size or unit_for(new_size, alignment) == 0
+    grown = host_grow(usize(block), new_size)
 end system_grow
 
+system_resize: (self: system, block: ptr mut u8,
+                old_size: usize, new_size: usize, alignment: usize)
+               -> (moved: ptr mut u8) ! mem.out_of_memory =
+    _ = self.reserved
+    unit: usize = unit_for(new_size, alignment)
+    fail mem.out_of_memory when unit == 0
+    address: usize = host_resize(usize(block), new_size, unit)
+    if address <> 0 then
+        moved = ptr(address)
+        return
+    end if
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end system_resize
+
 system is mem.allocator (alloc: system_alloc, grow: system_grow,
-                         free: system_free)
+                         resize: system_resize, free: system_free)
 
 --- Return a handle to the host heap. Making one does not allocate; callers
 --- retain and free each successful allocation explicitly.

@@ -1179,6 +1179,35 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Retained_Facts_On_Failure;
 
+   --  The location list a variable named Name refers to, through the
+   --  list's terminating entry; "" when there is none.
+   function List_Of (Text, Name : String) return String;
+
+   function List_Of (Text, Name : String) return String is
+      Named : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, ".asciz """ & Name & """" & LF);
+      Reference : constant Natural :=
+        (if Named = 0 then 0
+         else Ada.Strings.Fixed.Index (Text, ".long .Ldebug_loc_", Named));
+      Line_End : constant Natural :=
+        (if Reference = 0 then 0
+         else Ada.Strings.Fixed.Index (Text, [1 => LF], Reference));
+   begin
+      if Line_End = 0 then
+         return "";
+      end if;
+      declare
+         Label : constant String :=
+           Text (Reference + 6 .. Line_End - 1) & ":" & LF;
+         First : constant Natural := Ada.Strings.Fixed.Index (Text, Label);
+         Last : constant Natural :=
+           (if First = 0 then 0
+            else Ada.Strings.Fixed.Index (Text, ".quad 0,0" & LF, First));
+      begin
+         return (if Last = 0 then "" else Text (First .. Last));
+      end;
+   end List_Of;
+
    --  At speed a variable's register still holds it after its last use,
    --  until a value writes over it there.  `held` is stored and never
    --  read again, since the add reads the stored value itself, so it holds
@@ -1200,35 +1229,6 @@ package body Landin.Tests.Debugging_Suite is
         & "if argument > 100 then chosen = 0 end if" & LF
         & "picked: i32 = chosen result = inner(picked) - 1 end pick" & LF
         & "public main: () -> (code: i32) = code = pick(40) end main";
-
-      --  The location list a variable named Name refers to, through the
-      --  list's terminating entry; "" when there is none.
-      function List_Of (Text, Name : String) return String;
-
-      function List_Of (Text, Name : String) return String is
-         Named : constant Natural :=
-           Ada.Strings.Fixed.Index (Text, ".asciz """ & Name & """" & LF);
-         Reference : constant Natural :=
-           (if Named = 0 then 0
-            else Ada.Strings.Fixed.Index (Text, ".long .Ldebug_loc_", Named));
-         Line_End : constant Natural :=
-           (if Reference = 0 then 0
-            else Ada.Strings.Fixed.Index (Text, [1 => LF], Reference));
-      begin
-         if Line_End = 0 then
-            return "";
-         end if;
-         declare
-            Label : constant String :=
-              Text (Reference + 6 .. Line_End - 1) & ":" & LF;
-            First : constant Natural := Ada.Strings.Fixed.Index (Text, Label);
-            Last : constant Natural :=
-              (if First = 0 then 0
-               else Ada.Strings.Fixed.Index (Text, ".quad 0,0" & LF, First));
-         begin
-            return (if Last = 0 then "" else Text (First .. Last));
-         end;
-      end List_Of;
 
       procedure Check (Target : String);
 
@@ -1268,11 +1268,170 @@ package body Landin.Tests.Debugging_Suite is
       Check ("linux-arm64");
    end Registers_Outlast_Last_Use;
 
+   --  At speed arm64 holds a float variable in a d register, which DWARF
+   --  numbers past 31 and so names with DW_OP_regx: `kept` lives across
+   --  the call to `scale` in d8, which `grow` saves and its frame
+   --  information describes; `twice` calls nothing in its interval and
+   --  holds one of d18-d31.
+   procedure Arm64_Float_Registers_Are_Described
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Float_Registers_Are_Described
+     (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+      Source : constant String :=
+        "scale: (a: f64) -> (r: f64) =" & LF
+        & "twice: f64 = a * 2.0 r = twice * twice end scale" & LF
+        --  Through a function value, so that D339 leaves the call a call.
+        & "grow: (a: f64) -> (r: f64) =" & LF
+        & "kept: f64 = a + 1.0 apply := scale" & LF
+        & "r = apply(kept) + kept end grow" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "code = i32(grow(1.0)) - 18 end main";
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Args.Append ("--target=linux-arm64");
+      Args.Append ("main.ldn");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("out.s");
+      Args.Append ("--debug=full");
+      Args.Append ("--optimize=speed");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, 0, "arm64 speed debug emission");
+      declare
+         Text : constant String := Host.Written ("out.s");
+         Kept : constant String := List_Of (Text, "kept");
+         Twice : constant String := List_Of (Text, "twice");
+         Regx : constant String := ".byte 0x90" & LF & HT & ".uleb128 ";
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Kept, Regx & "72" & LF),
+            "a float across a call is described in d8");
+         Landin.Testing.Check
+           (Item, Contains (Text, "stur d8, [x29, #-")
+              and then Contains (Text, ".cfi_offset 72, -"),
+            "the routine saves d8 and its frame information says where");
+         Landin.Testing.Check
+           (Item, Contains (Twice, Regx & "8")
+              or else Contains (Twice, Regx & "9"),
+            "a float no call disturbs is described in one of d18-d31");
+      end;
+   end Arm64_Float_Registers_Are_Described;
+
+   --  At speed scalar replacement gives each part of the local slice
+   --  `rest` a scalar slot of its own, so the variable lives in two places
+   --  at once: its location is each piece's followed by DW_OP_piece (0x93)
+   --  with the piece's eight bytes.  At size a declared variable keeps its
+   --  frame cell and is described there.
+   procedure Split_Variables_Are_Pieces
+     (Item : in out Landin.Testing.Context);
+
+   procedure Split_Variables_Are_Pieces
+     (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+      Source : constant String :=
+        "tail: (bytes: []u8) -> (total: u64) =" & LF
+        & "mut rest: []u8 = bytes total = 0 first: usize = 0" & LF
+        & "while lenof rest > 1 do total += u64(rest[first])" & LF
+        & "rest = rest[1..<lenof rest] end while end tail" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "data: [3]u8 = [1, 2, 3]" & LF
+        & "code = i32(tail(data[0..<3])) end main";
+      Piece : constant String := ".byte 0x93" & LF & HT & ".uleb128 8" & LF;
+
+      procedure Check (Target, Objective : String; Split : Boolean);
+
+      procedure Check (Target, Objective : String; Split : Boolean) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("--target=" & Target);
+         Args.Append ("main.ldn");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("out.s");
+         Args.Append ("--debug=full");
+         Args.Append ("--optimize=" & Objective);
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0,
+            Target & " " & Objective & " debug emission");
+         declare
+            Rest : constant String :=
+              List_Of (Host.Written ("out.s"), "rest");
+         begin
+            Landin.Testing.Check
+              (Item, Rest /= "", Target & " " & Objective
+               & ": the slice has a location list");
+            --  Every expression in the list ends at an `_end:` label.
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Count (Rest, Piece)
+                 = (if Split then 2 * Ada.Strings.Fixed.Count (Rest, "_end:")
+                    else 0)
+               and then Contains (Rest, Piece) = Split,
+               Target & " " & Objective
+               & ": a split slice is described by its two pieces");
+         end;
+      end Check;
+   begin
+      Check ("linux-x86-64", "speed", True);
+      Check ("linux-arm64", "speed", True);
+      Check ("linux-x86-64", "size", False);
+      --  A split variable no later load reads keeps its pieces' stores as
+      --  its home, as a declared scalar keeps its own: here in the copy
+      --  of `swap` the inliner puts in `main`.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File
+           ("main.ldn",
+            "point: type = struct x: i64 y: i64 end point" & LF
+            & "swap: (p: point) -> (q: point) =" & LF
+            & "mut t: point = p t.x = p.y t.y = p.x q = t end swap" & LF
+            & "public main: () -> (code: i32) =" & LF
+            & "q := swap((x: 1, y: 2)) code = i32(q.x) end main");
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("main.ldn");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("out.s");
+         Args.Append ("--debug=full");
+         Args.Append ("--optimize=speed");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "inlined speed debug emission");
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("out.s"), Piece),
+            "a split variable in an inlined copy is described by pieces");
+      end;
+   end Split_Variables_Are_Pieces;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
+        (Into, "debugging", "split variables are pieces",
+         Split_Variables_Are_Pieces'Access);
+      Landin.Testing.Register
         (Into, "debugging", "registers outlast their last use at speed",
          Registers_Outlast_Last_Use'Access);
+      Landin.Testing.Register
+        (Into, "debugging", "arm64 float registers are described",
+         Arm64_Float_Registers_Are_Described'Access);
       Landin.Testing.Register
         (Into, "debugging", "module data and slices are described",
          Module_Data_And_Slices_Are_Described'Access);

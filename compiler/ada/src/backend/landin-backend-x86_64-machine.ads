@@ -39,9 +39,12 @@ package Landin.Backend.X86_64.Machine is
 private
 
    type Token_Kind is (Mnemonic, Operand, Punctuation, Definition, Local);
+   --  A token's text is First .. Last of its stream's Spelled, so recording
+   --  one allocates nothing of its own; Last < First is no text.
    type Token is record
       Kind : Token_Kind := Operand;
-      Text : Ada.Strings.Unbounded.Unbounded_String;
+      First : Positive := 1;
+      Last : Natural := 0;
       Identity : Natural := 0;
    end record;
    package Token_Vectors is new Ada.Containers.Vectors
@@ -52,6 +55,8 @@ private
       "=" => Ada.Strings.Unbounded."=");
    type Stream is record
       Tokens : Token_Vectors.Vector;
+      --  Every recorded token's text, end to end.
+      Spelled : Ada.Strings.Unbounded.Unbounded_String;
       Labels : Name_Vectors.Vector;
       Counts : Landin.Build_Reports.Routine_Statistics;
       Recording : Boolean := True;

@@ -1,0 +1,29 @@
+ordered: type = concept (t: type)
+    less: (a: t, b: t) -> (yes: bool)
+end ordered
+
+less_i32: (a: i32, b: i32) -> (yes: bool) = a < b end less_i32
+less_u32: (a: u32, b: u32) -> (yes: bool) = a < b end less_u32
+i32 is ordered (less: less_i32)
+u32 is ordered (less: less_u32)
+
+--  One proved entry call, outside any loop, in a body of many other
+--  operations: its benefit is below the body's weighted growth.
+score: (t: type is ordered, a: t, b: t, seed: u32) -> (total: u32) =
+    total = seed * 3 + 1
+    total = total * 5 + 7
+    total = total % 1000 + seed
+    total = total * 3 + 11
+    total = total % 1000 + seed * 2
+    total = total * 7 + 13
+    total = total % 1000 + seed * 3
+    if t.less(a, b) then
+        total += 1
+    end if
+end score
+
+public main: () -> (code: i32) =
+    first := score(t: i32, a: -1, b: 1, seed: u32(2))
+    second := score(t: u32, a: u32(2), b: u32(1), seed: u32(3))
+    code = if first == 49 and second == 401 then 0 else 1 end if
+end main

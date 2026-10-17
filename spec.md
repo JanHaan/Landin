@@ -6995,9 +6995,11 @@ swap, leave `addr` of the field an ordinary `ptr u16` that reads the wrong
 value, so that addressability would need the refusals packed fields have,
 put static images through a second byte order, and need DWARF's
 `DW_AT_endianity` for a debugger to show the value, a presentation this
-compiler has produced for neither native debugger. The compiler has no
-inliner: no IR pass inlines a call, so `inline` could only be a promise D211
-would then have to keep. Weak linkage matters where separately compiled
+compiler has produced for neither native debugger. The compiler had no
+inliner then: no IR pass inlined a call, so `inline` could only have been a
+promise D211 would then have had to keep. D339's inliner, added since,
+decides from a routine's size and the objective alone, as this decision
+left it to. Weak linkage matters where separately compiled
 objects compete for a name, and this compiler sees the whole program.
 
 **The alternatives:** a per-field storage order with addressability limits
@@ -12892,7 +12894,7 @@ classified failure boundary before the repository gate can pass.
 | `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-fault-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302, L0327, L0331, L0343 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition`, `runtime/r480-generic-provider-entry` |
-| `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |
+| `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/specialization-speed-growth`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0339 rejects an invalid site type, L0301 a different signature, L0327 an extra positional argument or invalid forwarding source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 0570, 0750, 0920, 1000, 1570, 1580, 1600, 1975 | C convention and variadicness remain recursively distinct from the Landin convention; fixed positions at the selected boundary admit integers, bool, pointers, f32/f64, fixed C callbacks and compatible nonempty `layout(c)` structs, while L0346 refuses an ordinary Landin struct, a slice, a Landin error channel or a native-convention callback even when its machine shape matches | `positive/external-scalar-c-boundary`, `positive/r440-external-float`, `positive/r440-c-signatures`, `negative/external-aggregate-boundary`, `negative/r440-c-slice-parameter`, `negative/r440-c-error-channel`, `negative/r440-c-native-callback` |
 | `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, L0347 refuses an assembly expression, incompatible declarations or multiple definitions, and L0301 refuses treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
@@ -15230,9 +15232,14 @@ is not permission to fold different code.
 Profitability uses `E = min(32, proved entry-call sites)` and
 `L = min(4, maximum source nesting depth at those sites)`. Let
 `T = min(16, ceil(sum of represented target bytes / target pointer bytes))`.
-The benefit score is `B = 8 * E * (1 + L) + T`. Growth `G` is the sum of
-weighted IR operations: calls cost 6, other memory/control operations 2 and
-other scalar operations 1. These are policy estimates, not machine bytes.
+The benefit score is `B = 8 * E * (1 + L) + T`. Under size and none, growth
+`G` is the sum of the instance's weighted IR operations: calls cost 6, other
+memory/control operations 2 and other scalar operations 1. These are policy
+estimates, not machine bytes. Under speed `G = 0`: the rewrite only turns an
+evidence load and its indirect call into a direct call inside an instance
+that exists either way, and adds no operation. Size and none keep the charge
+because there the unspecialized instances of a template may share one
+evidence-driven body, which specializing them splits into one body each.
 For multiple eligible normalized instances of one template, speed requires
 `B >= G`; size and none require `B >= 4 * G`. One eligible normalized instance
 bypasses profitability, never proof. `all` bypasses profitability for every
@@ -15281,13 +15288,109 @@ a profile-guided runtime, erasure of evidence used by the checked body, or new
 optimizer freedom inside `unchecked`. They respectively make code duplication semantic,
 confuse expected and incoming evidence, add target machinery, break indirect
 and aggregate calls, or change existing programs' outcomes. All are rejected.
+Charging no growth at every objective was also rejected: at size and none it
+would give up the one shared body the unspecialized instances can use, for a
+direct call the objective did not ask to buy. Charging the whole instance at
+speed, as the bootstrap first did, declined every template used at two or
+more types whose entry calls were few, although the rewrite there grows
+nothing.
 
 **Pinned by** `runtime/generic-evidence-indirect`,
+`runtime/specialization-speed-growth`,
 `runtime/generic-composed-evidence`, `runtime/generic-erased-aggregate-try`,
 `runtime/any-generic-storage`, the `opt driver` fake-platform cases and
 `compiler/tests/quality/check.py`. The fixture harness requires each original
 runtime and ABI oracle under none/off, size/off, size/auto and speed/auto;
 focused generic/erased cases additionally run none/all and speed/all.
+
+### D339 — At speed a small direct call is a copy of its routine
+
+**The tour said** at [1550] that the compiler optimizes a verified,
+target-neutral representation, and D239 left inlining to D211's optimizer,
+with nothing in source to ask for it or refuse it, at a time when no pass
+inlined a call. Copying small routines into their callers by hand, with
+every check kept, then took a fifth to a third of the time of programs that
+spend it in calls: binary-trees' allocator chain and its child count, a word
+counter's three-line test of a byte, a map's lookups.
+
+**Chosen:** at `--optimize speed`, before simplification, a direct call is
+replaced by a copy of the routine it names when that routine has a body in
+the program and nothing takes its address (no function value, image or
+evidence entry names it, and it is not an entry, an import or an export),
+it is not the routine making the call, it uses the ordinary convention and
+Landin's own transport, it returns, it is not variadic, it has no placement
+and no assembly block, every aggregate it is passed or returns has a
+nominal shape, and it weighs at most 64 of D211's weighted operations as
+lowering made it. The copy's own calls stay calls: one level. A routine
+grows by at most the larger of 512 and its own weight; calls inside loops
+are copied first, then the lightest. `none` and `size` copy nothing, and
+neither does Cortex-M0, whose backend does not read the objective. One
+pass measures every routine and one copies, so the work is linear but for
+ordering each caller's calls.
+
+A copy does what the call did. Its arguments were evaluated where the call
+stands, left to right; each is stored into the copy of its parameter, and a
+by-value aggregate is copied, or cleared for D97's zero carrier, as the
+routine's entry would have done it. When the routine only reads the
+aggregate and nothing could write the caller's storage while the copy runs
+(no `addr` of it is kept, no slice is over it, and no address of it reaches
+a parameter that may escape), the copy reads it where the caller keeps it,
+as `Landin.IR.In_Place` would have the routine read it. A parameter given a
+constant is read as that constant. Each `return` copies a stored result to
+the storage the call named, as the routine's way out does, and goes on with
+the rest of the caller's block; the caller's values that crossed the call
+wait in slots, or are made again when they are constants. A routine that
+can fail is copied only where its call is followed by lowering's failure
+test, nothing else reads the call's status, and the value the call stored
+is read only on the succeeding way: each `fail` stores its atom
+and goes the test's failing way, and each return the other way, which is
+the choice the test would have made, so propagation and call-site recovery
+are unchanged; a routine that declares errors and never fails stays a call.
+Every operation of a copy is the routine's own, with its source site and its
+check, in the order the routine ran them, so each trap is where and when
+the call's would have been and D232's site is the routine's; a check is
+removed only when, as anywhere, it is proved unable to fail. Cleanup is the
+routine's own code and runs where it ran, before the caller's recovery.
+
+Each copied block, slot and source alias names the copy it belongs to,
+which names the routine, the call it replaced and that call's scope. A
+native debugger reads it as DWARF4's `DW_TAG_inlined_subroutine`: the
+routine is described once more, abstractly, with `DW_AT_inline`, its
+parameters, locals and lexical blocks; each copy, inside the caller's
+lexical block that held the call, has that abstract origin, its address
+ranges and the call's file, line and column, and its own parameters,
+locals and blocks with locations in the caller's frame. A stop in a copy is
+a frame of the routine inlined into its caller's frame, which shows its own
+variables as it would across a call; a backtrace has both frames; a
+breakpoint on one of the routine's lines can stop in a copy, and a step
+enters and leaves one as it would a call. The routine's own out-of-line
+description is unchanged, and at `none` and `size`, where nothing is
+copied, so is every debugger session.
+
+**The alternatives:** copying at `size`, which grows the code an objective
+asked to keep small, for gains measured at speed, and would change the size
+debugger sessions; copying through the copies' own calls, more than one
+level, which compounds growth and compile time and nests inlined frames,
+for gains the measurements credit to the first level; and a source
+annotation, `inline` or `noinline`, which D239 withdrew and which stays
+withdrawn, the choice being the optimizer's from size and objective. Also
+declined: copying a routine whose address is taken, D211's exposure rule;
+merging a copy's first block into its caller's, so that forwarding could
+reach across it, because a block's scope is how a debugger tells which
+routine an address belongs to, and constants reach the copy as constants
+instead; and a bound measured after simplification, which would need the
+routines simplified first. The bound was measured: 40 left part of
+binary-trees' allocator and a word counter's test calls, and 96 began to
+copy routines with loops whose branches then predicted worse, slowing
+fannkuch-redux and a map's lookups; 64 kept the first gains without the
+second losses, and the few per cent it costs elsewhere come with fewer
+instructions run, from where code now sits.
+
+**Pinned by** `runtime/inline-copies-fail-and-clean-up`,
+`runtime/inline-copies-trap-in-place` at every profile, the `ir opt`
+inlining cases, the `leaf-ready` stop in
+`compiler/tests/debugging/registers.ldn` through GDB on Linux and LLDB on
+Darwin at speed, and the scaling measure's speed lane.
 
 ### D226 — Darwin C transport is a separate platform contract
 
@@ -16401,6 +16504,59 @@ the driver and the refusal of a host with none, and
 `compiler/tests/test_default_target.py`, which every gate host runs against
 its own `refine`.
 
+### D338 — A branch whose arms only compute is a choice
+
+**The tour said** at [1550] that the IR is verified and target-neutral, and
+D211 that an optimization keeps every trap, effect and order. Neither said
+whether the IR may compute both arms of an `if` and keep one, and the IR had
+no operation that chooses: every `if` stayed a branch, and a branch on data
+the processor cannot predict is mispredicted about half the time.
+
+**Chosen:** the IR has `Choose`, whose bool operand picks one of two scalar
+values of its result's type, neither carrying a function, atom set or
+pointee, in routines only. Lowering never makes one. Under size and speed,
+`Landin.IR.If_Conversion` rewrites a block that ends in a branch whose two
+sides meet again, each side at most one block that ends in a jump, when
+neither arm can do anything a program could observe if the other arm were
+taken: it loads and stores only private slots, scalars that nothing names
+but their own loads and stores, and otherwise computes with operations that
+cannot trap — constants, comparisons, bitwise and wrapping arithmetic, float
+arithmetic, total conversions, and integer operations whose checks were
+proved or lie in an `unchecked` region. Integer division never qualifies,
+because x86-64 refuses a zero divisor in the hardware itself. The block then computes
+both arms, chooses each stored slot's value and jumps to where the arms met.
+One trapping operation qualifies: a checked integer addition or subtraction
+that updates a slot from the value it had before the arm, `x = x + k` or
+`x = x - k`, when the other arm leaves the slot alone. It becomes
+`x + (if c then k else 0)`, which traps exactly when the arm would have and
+at the same point in the program's order, since nothing observable lies
+between the branch and the arm or the arm and its end; an update that
+cannot trap takes the same form. Each arm is held to six operations besides
+its constants, loads and stores, and a conversion to four chosen slots. A
+branch whose condition is computed from a slot an arm stores stays a branch:
+the choice would wait for a comparison that waits for the choice before it,
+a chain a predicted branch does not wait on. x86-64 selects `cmov` or `setcc`, arm64 `csel`, `fcsel`
+or `cset`, both testing the flags of a comparison right before the choice
+when it has no other use; RV64 and Cortex-M0, which have no conditional
+move, use the condition's own zero or one for a choice of one or zero and
+otherwise branch around one load inside the choice.
+
+**The alternatives:** leaving every `if` a branch, which makes a count such
+as the Benchmark Game's fasta lookup pay a mispredicted branch for almost
+every element; converting arms that contain a check, a call or a memory
+access, which speculates a trap or an effect D211 forbids; and a target
+query in the IR pass that keeps the branch where the target has no
+conditional move, which makes the IR depend on the machine when the backend
+can branch inside the choice instead.
+
+**Pinned by** `runtime/choices-over-nan-comparisons` on every target at the
+six profiles, `runtime/benchmark-game-fasta`, the `ir opt` cases
+`if-conversion chooses between arms that only compute` and
+`if-conversion keeps a branch whose arm could be observed`, the `verifier`
+case `a choice is held to its operands`, and the `x86 opt` and
+`arm64 selection` cases `a counted comparison is a flag add` and `a choice is
+a conditional move`.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most
@@ -16516,7 +16672,8 @@ entries. `grow` may extend the same block from an old byte extent to a larger
 one; it returns false without changing the block or provider when it cannot.
 Callers fall back to allocation, transfer and free after a refusal. This
 addition lets a monotonic arena extend its current top allocation without
-spending the old extent again; other providers may always refuse.
+spending the old extent again; other providers may always refuse. D337 adds a
+fourth entry, `resize`, which may move the block.
 Allocation reports the declared `out_of_memory` atom. `arena_over` builds a
 monotonic allocator over a caller-supplied pointer and byte extent, aligning
 each successful result and refusing a result that does not fit; `core/fault`
@@ -18884,7 +19041,9 @@ union from `find`.
 **Pinned by** `runtime/core-mem-blocks`, both overlaps among its oracles, on
 every target, and `runtime/core-mem-blocks-alignment`, which holds copy, fill
 and find to a byte-at-a-time model at every alignment: their word loops on
-hosted targets, and the byte loops firmware keeps for its flash.
+hosted targets, which copy up and search a word at any address on x86-64 and
+arm64 and only at a multiple of the word on RV64, and the byte loops firmware
+keeps for its flash.
 
 ### D305 — A text builder writes whole pieces into the caller's buffer
 
@@ -18895,8 +19054,8 @@ program kept its own offsets and appended byte strings by hand.
 **Chosen:** `text.builder` is a value the caller edits `inout`.
 `text.over(buffer)` makes one bounded by the caller's buffer, and
 `text.growing(allocator)` one that starts empty and doubles through an
-erased `mem.allocator`, growing in place where it can and given back with
-`text.release`. Bytes, a byte, `utf8`, host strings, signed and unsigned
+erased `mem.allocator`, resizing its storage through the allocator, which
+grows it in place or moves it (D337), and given back with `text.release`. Bytes, a byte, `utf8`, host strings, signed and unsigned
 decimals of every width and lower-case hexadecimal are appended; each piece
 is written whole or not at all, failing `no_space` with the builder unchanged,
 which is also a growing builder's answer when its allocator refuses.
@@ -19638,3 +19797,48 @@ builds, calls into them and back, and holds a missing library, a missing
 symbol, reopening and both scopes to their answers;
 `end-to-end/link-static-loads-a-library`; and `abi/libc-loading-facts`, which
 holds the flags to each system's `dlfcn.h`.
+### D337 — An allocator resizes a block, moving it when it must
+
+**The tour said** at [1360] that one allocator concept serves heap, arena and
+fixed-buffer providers, and D152 gave it `grow`, which extends a block only
+where it is. A container that outgrew its block allocated another, copied
+its bytes and freed the old one itself, so a heap that could have moved a
+mapping's pages, or grown it in place, copied them instead, and every
+container wrote the copy again.
+
+**Chosen:** `mem.allocator` has a fourth entry, `resize(self, block,
+old_size, new_size, alignment) -> (moved: ptr mut u8) ! out_of_memory`, and
+`mem.resize` calls it. The result holds the block's first `min(old_size,
+new_size)` bytes, honours the same alignment and is freed with `new_size`;
+when it moved, the old address is given back. A refusal leaves the block, its
+bytes and the provider as they were. A concept entry has no default, so the
+default is a function: `mem.relocate` allocates, copies and frees through the
+provider, and a provider that cannot resize in place calls it from its own
+entry once any in-place change has been refused. The arena keeps a smaller
+block where it is, gives the latest block's tail back, grows the latest block
+in place and moves any other; a pool keeps a block in its slot to any extent
+the slot holds and refuses a larger one; an injector spends its budget on a
+resize as on an allocation and delegates it; and a region resizes the block
+its newest record holds through its parent, updating the record, and moves
+any other into a record of its own, the old one freed at `release` as a freed
+block is. The hosted heap resizes in place when the block's slot or mapping
+holds the new extent, giving a shrunk mapping's whole pages back, and
+otherwise grows a mapping where the pages after it are free; on Linux
+`posix.remap`, `mremap` with `MREMAP_MAYMOVE`, moves its pages when they are
+not, provided a page has the block's alignment, and anything else is copied by
+`mem.relocate`. Darwin and FreeBSD have no `mremap`: `posix.extend` asks for the
+pages after the mapping without `MAP_FIXED` and keeps them only where the
+system put them. Its `grow` now extends in place by the same means.
+`text.growing` doubles through `resize`.
+
+**The alternatives:** a default entry in the concept, which a concept cannot
+declare; keeping the copy in each container, which keeps the heap from moving
+pages; `realloc`'s convention that a zero extent frees the block, which would
+give one call two meanings and make a zero-byte request unlike any other; and
+a region that searches its ledger for the block, which costs a walk of every
+record for each resize.
+
+**Pinned by** `runtime/core-mem-resize`, `runtime/core-pool-resize` and
+`runtime/core-region-resize` on every target, Cortex-M0 among them,
+`runtime/hosted-heap-resize` on every hosted target and
+`runtime/core-text-builder`.

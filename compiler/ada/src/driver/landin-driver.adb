@@ -13,6 +13,9 @@ with Landin.Build_Reports.Sources;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Debugging;
+with Landin.IR.If_Conversion;
+with Landin.IR.In_Place;
+with Landin.IR.Inlining;
 with Landin.IR.Simplification;
 with Landin.IR.Specialization;
 with Landin.Optimization;
@@ -1660,7 +1663,16 @@ package body Landin.Driver is
             Landin.IR.Specialization.Run_On_Verified
               (Landin.Stages.Code (Context).all, Facts,
                Optimization, Evidence);
+            Landin.IR.Inlining.Run_On_Verified
+              (Landin.Stages.Code (Context).all, Facts,
+               Optimization.Optimize);
             Landin.IR.Simplification.Run_On_Verified
+              (Landin.Stages.Code (Context).all, Facts,
+               Optimization.Optimize);
+            Landin.IR.If_Conversion.Run_On_Verified
+              (Landin.Stages.Code (Context).all, Facts,
+               Optimization.Optimize);
+            Landin.IR.In_Place.Run_On_Verified
               (Landin.Stages.Code (Context).all, Facts,
                Optimization.Optimize);
 

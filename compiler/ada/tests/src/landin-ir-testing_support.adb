@@ -89,6 +89,34 @@ package body Landin.IR.Testing_Support is
       Into.Slots (Position) := Held;
    end Overwrite_Slot_Nominal;
 
+   procedure Overwrite_In_Place_Home
+     (Into : in out Unit;
+      Item : Item_Id;
+      Slot : Slot_Id;
+      Home : Slot_Id)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Slots.First + Positive (Slot);
+      Held : Slot_Record := Into.Slots (Position);
+   begin
+      Held.Home := Home;
+      Into.Slots (Position) := Held;
+   end Overwrite_In_Place_Home;
+
+   procedure Overwrite_First_Piece
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Slot   : Slot_Id;
+      Piece  : Slot_Id)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Slots.First + Positive (Slot);
+      Held : Slot_Record := Into.Slots (Position);
+   begin
+      Held.First_Piece := Piece;
+      Into.Slots (Position) := Held;
+   end Overwrite_First_Piece;
+
    procedure Overwrite_Value_Evidence
      (Into     : in out Unit;
       Item     : Item_Id;

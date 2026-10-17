@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: mem.resize through a region over a counting parent resizes the newest record's block through the parent and moves any other into a record of its own; a full ledger refuses the move with the block as it was, and release frees every block with the extent it ended with
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0940, 1230, 1360
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

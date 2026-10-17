@@ -34,6 +34,9 @@ abstract project Landin_Common is
 
    package Compiler is
       for Default_Switches ("Ada") use Common_Switches & Mode_Switches;
+      --  Restrictions on constructs no unit uses, in every mode; the file
+      --  says which, and TOOLCHAIN.md why.
+      for Local_Configuration_Pragmas use "landin.adc";
       --  Only host POSIX adapters are C. Their structures come from the host
       --  headers; all compiler stages and emitted-code decisions remain Ada.
       for Default_Switches ("C") use

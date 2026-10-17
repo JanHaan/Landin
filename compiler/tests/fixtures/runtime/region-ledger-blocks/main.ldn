@@ -51,8 +51,16 @@ tally_grow: (self: tally, block: ptr mut u8,
     grown = false
 end tally_grow
 
+--  Resizing moves the block, through this provider's own allocation
+--  and free.
+tally_resize: (self: tally, block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (moved: ptr mut u8) ! mem.out_of_memory =
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end tally_resize
+
 tally is mem.allocator (alloc: tally_alloc, grow: tally_grow,
-                        free: tally_free)
+                        resize: tally_resize, free: tally_free)
 
 --  Ask a region over the tally for `count` one-byte payloads, with
 --  `core/fault` letting `budget` attempts through, then release it: how

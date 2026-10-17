@@ -12,10 +12,13 @@ with Landin.Panics;
 --  frame cell per scalar value.  Explicit size/speed emission uses a typed,
 --  deterministic GP allocation plan with block-local intervals, reused spill
 --  homes, eligible cross-block scalar slots and spans of single-block ones.
---  Speed emission also keeps eligible float slots and values in
---  XMM8..XMM15 wherever no call falls inside their interval.
---  Scratch/argument registers and failure transport remain reserved; only
---  used GP callee saves get homes.
+--  A location holds a caller-saved register where nothing in its interval
+--  writes that register, a parameter the one it arrives in, and a small
+--  routine no callee-saved register at all.  Speed emission also keeps
+--  eligible float slots and values in XMM8..XMM15 wherever no call falls
+--  inside their interval, and aligns the head of each loop.
+--  Scratch registers and failure transport remain reserved; only used GP
+--  callee saves get homes.
 --  The same allocation and target-byte frame planner serve preflight and
 --  emission.  Final selected instruction evidence controls body sharing and
 --  reports actual emitted sites.  Nothing reads a clock, hash iteration order
@@ -45,8 +48,9 @@ with Landin.Panics;
 --  cannot leave their own type and so carry no edge at all, and [0340]'s
 --  `not` flips the low bit alone rather than the byte, because [1870] fixes
 --  a bool at zero or one.
---  Comparisons load their left operand, compare the right at that operand's
---  width, and materialize a one-byte bool with the signed or unsigned
+--  Comparisons load their left operand, where size and speed do not hold
+--  it in a register, compare the right at that operand's width, and
+--  materialize a one-byte bool with the signed or unsigned
 --  condition [1890] requires.  Optimized, a comparison whose one use is the
 --  branch after it jumps on the flags instead, a float one in an operand
 --  order that sends an unordered NaN where D162 says.

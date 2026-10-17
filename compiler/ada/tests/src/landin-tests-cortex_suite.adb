@@ -1328,7 +1328,8 @@ package body Landin.Tests.Cortex_Suite is
                   U.Append (Source, "r = r + x ");
                end loop;
             else
-               U.Append (Source, "r = 3 ");
+               --  A checked product, so that D338 keeps the branch.
+               U.Append (Source, "r = r * 3 ");
             end if;
             U.Append (Source, "else r = 2 end if end main");
             Host.Add_File ("p.ldn", U.To_String (Source));

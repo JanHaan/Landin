@@ -467,6 +467,8 @@ def register_gdb_script(start_commands: list[str],
             emit_values(lines, scope + "-caller", tuple(
                 (name, name) for name in expected["caller_values"]))
             lines.append("down")
+        if "backtrace" in expected:
+            emit_section(lines, scope + "-backtrace", ["backtrace"])
     lines.append("delete breakpoints")
     emit_section(lines, "inferior-exit", ["continue"])
     return "\n".join(lines) + "\n"
@@ -509,6 +511,13 @@ def check_register_transcript(transcript: str,
                     f"{scope} has no {expected['caller']} caller: {caller!r}")
             for name, value in expected["caller_values"].items():
                 expect_value(transcript, f"{scope}-caller.{name}", value)
+        if "backtrace" in expected:
+            frames = re.findall(r"^#\d+\s+(?:0x[0-9a-f]+ in )?(\w+) ",
+                                marker_section(transcript, scope + "-backtrace"),
+                                re.MULTILINE)
+            require(frames[:len(expected["backtrace"])] == expected["backtrace"],
+                    f"{scope} backtrace is {frames!r},"
+                    f" not {expected['backtrace']!r}")
     inferior_exit = marker_section(transcript, "inferior-exit")
     require(re.search(r"exited with code (?:052|42)\b", inferior_exit) is not None,
             f"debugged registers program did not return 42: {inferior_exit!r}")
@@ -1366,11 +1375,20 @@ REGISTER_STOPS = {
                     "registers": [],
                     "caller": "register_pick",
                     "caller_values": {"picked": 41}},
+    #  D339: inside `inline_leaf`'s copy in `inline_outer`, an inlined
+    #  frame with its own values above its caller's.
+    "leaf-ready": {"function": "inline_leaf",
+                   "values": {"base": 2, "doubled": 4},
+                   "registers": [],
+                   "caller": "inline_outer",
+                   "caller_values": {"first": 2},
+                   "backtrace": ["inline_leaf", "inline_outer", "main"]},
 }
 REGISTER_LINES = {
     "pick-ready": source_line(REGISTER_SOURCE,
                               "result = register_inner(picked)"),
     "inner-ready": source_line(REGISTER_SOURCE, "result = held + 1"),
+    "leaf-ready": source_line(REGISTER_SOURCE, "total = doubled + 1"),
 }
 CALLER_LINE = source_line(ODD_SOURCE, "code = debug_outer(")
 CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in

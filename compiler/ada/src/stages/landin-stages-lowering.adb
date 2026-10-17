@@ -6987,13 +6987,18 @@ package body Landin.Stages.Lowering is
          --  from each continuation byte.  The lead's address was checked,
          --  and D181 validation makes a utf8 leading byte begin a complete
          --  scalar, so a continuation byte is read beside it unchecked.
+         --  Emission assigns IR identities and Ada evaluates actuals in an
+         --  arbitrary order, so no two emitting calls share one call's
+         --  actuals: each is a declared constant, elaborated in order.
          function Decoded return IR.Value_Id is
             Before : constant IR.Value_Id := IR.Emit_Load
               (Unit.all, Filling, Offset_Slot, Site);
+            Base : constant IR.Value_Id := IR.Emit_Load
+              (Unit.all, Filling, Base_Slot, Site);
+            Length : constant IR.Value_Id := IR.Emit_Load
+              (Unit.all, Filling, Length_Slot, Site);
             Address : constant IR.Value_Id := IR.Emit_Slice_Address
-              (Unit.all, Filling,
-               IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
-               IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
+              (Unit.all, Filling, Base, Length,
                Before, Before, Bytes, True, Site, Required => True);
             Fold_Test, Fold, Done : IR.Block_Id;
 
@@ -7028,14 +7033,18 @@ package body Landin.Stages.Lowering is
                      Ty.U8, Site),
                   True),
                Site);
-            IR.Emit_Store
-              (Unit.all, Filling, Value_Slot,
-               IR.Emit_Binary
-                 (Unit.all, Filling, IR.Bitwise_And,
-                  Byte (Number (Ty.Usize, 0)),
-                  IR.Emit_Load (Unit.all, Filling, Mask_Slot, Site),
-                  Ty.U32, Site),
-               Site);
+            declare
+               Lead : constant IR.Value_Id := Byte (Number (Ty.Usize, 0));
+               Mask : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Mask_Slot, Site);
+            begin
+               IR.Emit_Store
+                 (Unit.all, Filling, Value_Slot,
+                  IR.Emit_Binary
+                    (Unit.all, Filling, IR.Bitwise_And, Lead, Mask,
+                     Ty.U32, Site),
+                  Site);
+            end;
             IR.Emit_Store
               (Unit.all, Filling, Next_Slot, Number (Ty.Usize, 1), Site);
             Fold_Test := Fresh (Of_Tree, Node, Scope);
@@ -7044,27 +7053,37 @@ package body Landin.Stages.Lowering is
             Close_With_Jump (Fold_Test, Site);
 
             Open (Fold_Test);
-            IR.Emit_Branch
-              (Unit.all, Filling,
-               IR.Emit_Binary
-                 (Unit.all, Filling, IR.Less_Than,
-                  IR.Emit_Load (Unit.all, Filling, Next_Slot, Site),
-                  IR.Emit_Load (Unit.all, Filling, Width_Held, Site),
-                  Ty.Bool, Site),
-               Fold, Done, Site);
+            declare
+               Next : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Next_Slot, Site);
+               Width : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Width_Held, Site);
+            begin
+               IR.Emit_Branch
+                 (Unit.all, Filling,
+                  IR.Emit_Binary
+                    (Unit.all, Filling, IR.Less_Than, Next, Width,
+                     Ty.Bool, Site),
+                  Fold, Done, Site);
+            end;
             IR.Leave_Block (Unit.all, Filling);
             Current := IR.No_Block;
 
             Open (Fold);
             declare
+               Value : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Value_Slot, Site);
+               Six : constant IR.Value_Id := Number (Ty.U32, 6);
                Shifted : constant IR.Value_Id := IR.Emit_Binary
-                 (Unit.all, Filling, IR.Shift_Left,
-                  IR.Emit_Load (Unit.all, Filling, Value_Slot, Site),
-                  Number (Ty.U32, 6), Ty.U32, Site);
+                 (Unit.all, Filling, IR.Shift_Left, Value, Six,
+                  Ty.U32, Site);
+               Continuation : constant IR.Value_Id :=
+                 Byte (IR.Emit_Load (Unit.all, Filling, Next_Slot, Site));
+               Payload_Bits : constant IR.Value_Id :=
+                 Number (Ty.U32, 16#3F#);
                Payload : constant IR.Value_Id := IR.Emit_Binary
                  (Unit.all, Filling, IR.Bitwise_And,
-                  Byte (IR.Emit_Load (Unit.all, Filling, Next_Slot, Site)),
-                  Number (Ty.U32, 16#3F#), Ty.U32, Site);
+                  Continuation, Payload_Bits, Ty.U32, Site);
             begin
                IR.Emit_Store
                  (Unit.all, Filling, Value_Slot,
@@ -7072,13 +7091,18 @@ package body Landin.Stages.Lowering is
                     (Unit.all, Filling, IR.Bitwise_Or, Shifted, Payload,
                      Ty.U32, Site),
                   Site);
-               IR.Emit_Store
-                 (Unit.all, Filling, Next_Slot,
-                  IR.Emit_Binary
-                    (Unit.all, Filling, IR.Add,
-                     IR.Emit_Load (Unit.all, Filling, Next_Slot, Site),
-                     Number (Ty.Usize, 1), Ty.Usize, Site),
-                  Site);
+               declare
+                  Next : constant IR.Value_Id := IR.Emit_Load
+                    (Unit.all, Filling, Next_Slot, Site);
+                  One : constant IR.Value_Id := Number (Ty.Usize, 1);
+               begin
+                  IR.Emit_Store
+                    (Unit.all, Filling, Next_Slot,
+                     IR.Emit_Binary
+                       (Unit.all, Filling, IR.Add, Next, One,
+                        Ty.Usize, Site),
+                     Site);
+               end;
             end;
             Close_With_Jump (Fold_Test, Site);
 
@@ -15243,8 +15267,15 @@ package body Landin.Stages.Lowering is
             elsif Owner = Res.No_Declaration
             then Anonymous_Item (Of_Tree, Node)
             else IR.Item_For (Unit.all, Owner));
+         --  A public routine is an export.  A generic instance is not,
+         --  whatever its template says: it has no declaration of its own,
+         --  so no symbol, link name or other program names it, and its
+         --  address escapes only as a function value, an image or an
+         --  evidence entry, which IR.Visit_Address_Exposures finds itself.
          if Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration
            and then Syn.Is_Public (Of_Tree, Node)
+           and then IR.Generic_Template_Of (Unit.all, Filling)
+             = Res.No_Declaration
          then
             IR.Mark_Address_Exposed (Unit.all, Filling);
          end if;

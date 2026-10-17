@@ -1,0 +1,15 @@
+--  Configuration pragmas for every Landin unit, in both build modes.
+--
+--  Each is a restriction: it forbids a construct the compiler does not
+--  use, so the binder refuses a unit that starts using it, and GNAT may
+--  then leave out the support the construct would need.  None suppresses
+--  a check.  compiler/ada/TOOLCHAIN.md says why each is here.
+
+--  No task is ever aborted, so finalizing a controlled object, which every
+--  container reference and tampering lock is, need not defer abort.
+pragma Restrictions (No_Abort_Statements);
+pragma Restrictions (Max_Asynchronous_Select_Nesting => 0);
+
+--  Nothing maps an external tag back to a type, so a tagged type need not
+--  enter the runtime's tag table when its unit is elaborated.
+pragma Restrictions (No_Tagged_Type_Registration);

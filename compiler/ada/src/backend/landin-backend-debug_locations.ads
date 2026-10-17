@@ -44,6 +44,17 @@ package Landin.Backend.Debug_Locations is
       Slot : Landin.IR.Slot_Id;
       Parameter : Boolean) return Flags.Vector;
 
+   --  One piece of a variable scalar replacement split (Landin.IR's
+   --  First_Piece): the piece's own writes make it available, within the
+   --  scope and after the declaration of the variable Slot.
+   function Available_Piece
+     (Work : in out Analysis;
+      Of_Unit : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Info : Landin.Debugging.Information;
+      Item : Landin.IR.Item_Id;
+      Slot, Piece : Landin.IR.Slot_Id) return Flags.Vector;
+
    function Available_Alias
      (Work : in out Analysis;
       Of_Unit : Landin.IR.Unit;

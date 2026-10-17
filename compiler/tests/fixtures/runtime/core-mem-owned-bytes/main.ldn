@@ -86,8 +86,16 @@ checked_grow: (self: audit, block: ptr mut u8,
     grown = false
 end checked_grow
 
+--  Resizing moves the block, through this provider's own allocation
+--  and free.
+checked_resize: (self: audit, block: ptr mut u8,
+                 old_size: usize, new_size: usize, alignment: usize)
+                -> (moved: ptr mut u8) ! mem.out_of_memory =
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end checked_resize
+
 audit is mem.allocator (alloc: checked_alloc, grow: checked_grow,
-                        free: checked_free)
+                        resize: checked_resize, free: checked_free)
 
 byte_release_case: () -> (ok: bool) =
     mut bytes: [8]u8 = zeroed

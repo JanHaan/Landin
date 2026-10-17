@@ -139,8 +139,47 @@ region_grow: (provider: type,
     grown = false
 end region_grow
 
+--  Where the newest record is, or zero when there is none: the last of a
+--  bounded ledger's records, or the last in a growing ledger's newest
+--  block.
+newest_record: (provider: type, self: region(provider))
+               -> (address: usize) =
+    book: ptr mut book_value = self.book
+    records: []mut allocation = self.records
+    address = 0
+    return when book.val.used == 0
+    if lenof records > 0 then
+        address = usize(addr records[book.val.used - 1])
+    else
+        address = book.val.address + book.val.used * record_size
+    end if
+end newest_record
+
+--  The block the newest record holds is resized through the parent, which
+--  may resize it in place or move it, and its record follows it.  Any other
+--  block is moved into a fresh allocation, which takes a record of its own,
+--  while the old one stays recorded until `release`, as a freed one does.
+region_resize: (provider: type is mem.allocator,
+                self: region(provider), block: ptr mut u8,
+                old_size: usize, new_size: usize, alignment: usize)
+               -> (moved: ptr mut u8) ! mem.out_of_memory =
+    newest: usize = newest_record(self)
+    if newest <> 0 then
+        record: ptr mut allocation = ptr(newest)
+        if record.val.address == usize(block)
+          and record.val.extent == old_size then
+            moved = try mem.resize(self.parent, block, old_size, new_size,
+                                   alignment)
+            record.val = (address: usize(moved), extent: new_size)
+            return
+        end if
+    end if
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end region_resize
+
 (provider: type is mem.allocator) region_value(provider) is mem.allocator
-    (alloc: region_alloc, grow: region_grow, free: region_free)
+    (alloc: region_alloc, grow: region_grow, resize: region_resize,
+     free: region_free)
 
 --- Free recorded payloads in reverse order through `parent`, which must be
 --- the parent the region was made over, and give a growing ledger's blocks

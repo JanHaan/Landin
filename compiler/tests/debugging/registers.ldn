@@ -18,6 +18,27 @@ register_pick: (argument: i32) -> (result: i32) =
     result = register_inner(picked) - 1
 end register_pick
 
+--  D339 copies `inline_leaf` into `inline_outer` at speed, in place of
+--  its call.  The stop inside the copy is `inline_leaf`'s frame, with its
+--  own parameter and local, inlined into `inline_outer`'s, which still
+--  shows its own; without the inlined-subroutine records it would be
+--  `inline_outer`'s frame alone.
+inline_leaf: (base: i32) -> (total: i32) =
+    doubled: i32 = base * 2
+    total = doubled + 1
+end inline_leaf
+
+inline_outer: (start: i32) -> (result: i32) =
+    first: i32 = start + 1
+    result = inline_leaf(first) - first
+end inline_outer
+
+--  Through function values: D339 copies no routine whose address is taken,
+--  so the three routines called here keep their own frames and the stops
+--  above stay where they were.
 public main: () -> (code: i32) =
-    code = register_pick(40)
+    pick := register_pick
+    inner := register_inner
+    outer := inline_outer
+    code = pick(40) + outer(1) - inner(1)
 end main

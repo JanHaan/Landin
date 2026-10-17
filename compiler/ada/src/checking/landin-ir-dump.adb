@@ -1406,6 +1406,35 @@ package body Landin.IR.Dump is
                      Unbounded.Append (Marks, " return");
                   end if;
 
+                  if Inlined_At (Of_Unit, Id, Slot) /= 0 then
+                     Unbounded.Append
+                       (Marks,
+                        " inline "
+                        & Trimmed (Natural'Image
+                            (Inlined_At (Of_Unit, Id, Slot)))
+                        & (if Inlined_Origin (Of_Unit, Id, Slot) = No_Slot
+                           then ""
+                           else " from "
+                             & Trimmed (Slot_Id'Image
+                                 (Inlined_Origin (Of_Unit, Id, Slot)))));
+                  end if;
+
+                  if First_Piece (Of_Unit, Id, Slot) /= No_Slot then
+                     Unbounded.Append
+                       (Marks,
+                        " pieces from slot "
+                        & Trimmed (Slot_Id'Image
+                            (First_Piece (Of_Unit, Id, Slot))));
+                  end if;
+
+                  if In_Place_Home (Of_Unit, Id, Slot) /= No_Slot then
+                     Unbounded.Append
+                       (Marks,
+                        " home "
+                        & Trimmed (Slot_Id'Image
+                            (In_Place_Home (Of_Unit, Id, Slot))));
+                  end if;
+
                   if Is_Aggregate (Of_Unit, Id, Slot) then
                      for Field in
                        1 .. Slot_Field_Count (Of_Unit, Id, Slot)
@@ -1453,6 +1482,16 @@ package body Landin.IR.Dump is
                end;
             end loop;
 
+            --  D339's copies say where they came from; lowering makes none.
+            for Site in 1 .. Inline_Site_Count (Of_Unit, Id) loop
+               Put ("  inline " & Trimmed (Natural'Image (Site))
+                    & " callee "
+                    & Trimmed (Item_Id'Image
+                        (Nth_Inline_Site (Of_Unit, Id, Site).Callee))
+                    & " " & Item_Named
+                      (Nth_Inline_Site (Of_Unit, Id, Site).Callee));
+            end loop;
+
             for B in 1 .. Block_Count (Of_Unit, Id) loop
                declare
                   Block : constant Block_Id := Block_Id (B);
@@ -1469,7 +1508,10 @@ package body Landin.IR.Dump is
                           else "-")
                        & " length "
                        & Trimmed
-                           (Natural'Image (Length (Of_Unit, Id, Block))));
+                           (Natural'Image (Length (Of_Unit, Id, Block)))
+                       & (if Inlined_At (Of_Unit, Id, Block) = 0 then ""
+                          else " inline " & Trimmed (Natural'Image
+                            (Inlined_At (Of_Unit, Id, Block)))));
 
                   for Position in 1 .. Length (Of_Unit, Id, Block) loop
                      declare

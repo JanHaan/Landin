@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: an if whose arms only compute a value chooses it without branching at size and speed, counting and choosing integers, floats and bools on float comparisons that an unordered NaN makes false but for inequality, while an arm that could trap keeps its branch
+constructs: 0170, 0240, 0400, 0410, 0520, 0570, 1050, 1810, 1890, 1950
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

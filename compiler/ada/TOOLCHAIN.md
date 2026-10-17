@@ -128,6 +128,21 @@ Debug mode adds `-O0 -g -gnata -gnatVa -fstack-check`: assertions, contracts
 and validity checks are on while the compiler is being written. Release mode
 uses `-O2 -g -gnatn` and keeps debug information.
 
+Every unit of both projects is also compiled under `compiler/ada/landin.adc`,
+in both modes, as the projects' local configuration pragmas. It holds
+restrictions, never check suppression: each forbids a construct no unit uses,
+so a unit that starts using one is refused rather than silently paid for.
+
+| restriction | why |
+|---|---|
+| `No_Abort_Statements`, `Max_Asynchronous_Select_Nesting => 0` | the compiler aborts no task, so finalizing a controlled object — every container reference and tampering lock — need not defer abort around itself |
+| `No_Tagged_Type_Registration` | nothing maps an external tag back to a type (no `Ada.Tags.Internal_Tag`, `Descendant_Tag` or class-wide stream input), so no tagged type enters the runtime's tag table during elaboration |
+
+Measured on 2026-10-16 when they were introduced, with the parser and syntax
+tree changes of the same round, checking hello-world fell by about a quarter.
+`scripts/build.sh` counts the file among the project files, so editing it
+rebuilds from clean.
+
 The shared library also compiles `src/platform/landin_file_identity.c`,
 `src/platform/landin_tool_process.c`, `src/platform/landin_resource_usage.c`
 and `src/platform/landin_channel.c` with the pinned toolchain's host C compiler and the host's system headers. These small POSIX adapters keep host-specific

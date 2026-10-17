@@ -209,6 +209,9 @@ package body Landin.Backend.Cortex_M is
       begin
          for Index in 1 .. IR.Parameter_Count (Of_Unit, Item) loop
             Mark (IR.Nth_Parameter (Of_Unit, Item, Index));
+            --  A zero carrier clears an in-place parameter's home.
+            Mark (IR.In_Place_Home
+              (Of_Unit, Item, IR.Nth_Parameter (Of_Unit, Item, Index)));
          end loop;
          Mark (IR.Result_Slot (Of_Unit, Item));
          for Index in 1 .. IR.Value_Count (Of_Unit, Item) loop
@@ -2893,6 +2896,42 @@ package body Landin.Backend.Cortex_M is
             case Op is
                when Landin.IR.Assembly =>
                   Assembly_Block (Value);
+               when Landin.IR.Choose =>
+                  --  D338.  Thumb-1 has no conditional move: a choice of one
+                  --  or zero is the condition's own zero or one, and any
+                  --  other keeps a branch around one load.
+                  declare
+                     use type Landin.Types.Magnitude;
+
+                     function Is_Number
+                       (Which : Landin.IR.Value_Id;
+                        Of_Value : Landin.Types.Magnitude) return Boolean
+                       is (Landin.IR.Op_Of (Of_Unit, Item, Which)
+                             = Landin.IR.Number
+                           and then Kind (Value) in Landin.Types.Integer_Name
+                           and then Size_Of_Value (Value)
+                             /= Landin.Targets.Byte_8
+                           and then Landin.IR.Number_Of
+                             (Of_Unit, Item, Which) = Of_Value
+                           and then (Of_Value = 0
+                                     or else not Landin.IR.Is_Negated
+                                       (Of_Unit, Item, Which)));
+                     Done : constant String := Fresh;
+                  begin
+                     if Is_Number (Operand (2), 1)
+                       and then Is_Number (Operand (3), 0)
+                     then
+                        Load_Value (Operand (1));
+                     else
+                        Load_Value (Operand (2));
+                        Load_Value (Operand (1), "r2");
+                        Emit ("cmp r2, #0");
+                        Branch ("ne", Done);
+                        Load_Value (Operand (3));
+                        Put (Done & ":");
+                     end if;
+                     Store_Value (Value);
+                  end;
                when Landin.IR.Range_Check =>
                   declare
                      Signed : constant Boolean :=
@@ -4307,6 +4346,8 @@ package body Landin.Backend.Cortex_M is
                Aggregate : constant Boolean := Landin.IR.Is_Aggregate
                  (Of_Unit, Item, Slot)
                  or else Landin.IR.Is_Array (Of_Unit, Item, Slot);
+               Home : constant Landin.IR.Slot_Id :=
+                 Landin.IR.In_Place_Home (Of_Unit, Item, Slot);
             begin
                if Arg.Core_Count > 0 then
                   Frame_Address (Homes - Landin.Targets.Byte_Count
@@ -4365,6 +4406,37 @@ package body Landin.Backend.Cortex_M is
                     (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
                     "r0", "r6");
                   Store_Slot (Slot);
+               end if;
+
+               --  Landin.IR.In_Place's parameter is an address slot,
+               --  stored above like a scalar, through which the body reads
+               --  its caller's storage.  D97's zero carrier still clears
+               --  the parameter's own home, which the parameter then
+               --  addresses.
+               if Home /= Landin.IR.No_Slot then
+                  declare
+                     Done_Label : constant String := Fresh;
+                     Bytes : constant Landin.Targets.Byte_Count :=
+                       Whole_Clear_Extent
+                         ((Kind => Landin.IR.Frame_Slot, Slot => Home), 0,
+                           Landin.IR.No_Path_Steps);
+                     Alignment : constant Landin.Targets.Byte_Alignment :=
+                       Clear_Alignment
+                         ((Kind => Landin.IR.Frame_Slot, Slot => Home), 0,
+                           Landin.IR.No_Path_Steps);
+                  begin
+                     Emit ("cmp r0, #0");
+                     Branch ("ne", Done_Label);
+                     Frame_Address (Slot_Offset (Layout, Home), "r0");
+                     if Alignment >= 4 and then Bytes mod 4 = 0 then
+                        Zero_Words (Bytes);
+                     else
+                        Zero_Bytes (Bytes, Alignment);
+                     end if;
+                     Frame_Address (Slot_Offset (Layout, Home), "r0");
+                     Store_Slot (Slot);
+                     Put (Done_Label & ":");
+                  end;
                end if;
             end;
          end loop;
@@ -4963,6 +5035,7 @@ package body Landin.Backend.Cortex_M is
                         | Landin.IR.Load_Variant_Field
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
+                        | Landin.IR.Choose
                         | Landin.IR.Jump | Landin.IR.Branch
                         | Landin.IR.Fail | Landin.IR.Halt =>
                         --  [1940] admits none of these in a module value,

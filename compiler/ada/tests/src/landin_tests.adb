@@ -14,7 +14,9 @@ with Ada.Text_IO;
 
 with Landin.Testing;
 with Landin.Testing.Lanes;
+with Landin.Tests.Arm64_Selection_Suite;
 with Landin.Tests.Array_Layout_Suite;
+with Landin.Tests.IR_Inlining_Suite;
 with Landin.Tests.IR_Optimization_Suite;
 with Landin.Tests.Backend_Plans_Suite;
 with Landin.Tests.Backend_Scale_Suite;
@@ -85,7 +87,8 @@ procedure Landin_Tests is
    subtype Suite_Name is String (1 .. 17);
 
    Expected_Suites : constant array (Positive range <>) of Suite_Name :=
-     ["array layout     ",
+     ["arm64 selection  ",
+      "array layout     ",
       "backend          ",
       "backend plans    ",
       "backend scale    ",
@@ -409,7 +412,9 @@ begin
         (Unbounded.To_String (Fixture));
    end if;
 
+   Landin.Tests.Arm64_Selection_Suite.Register (Cases);
    Landin.Tests.Array_Layout_Suite.Register (Cases);
+   Landin.Tests.IR_Inlining_Suite.Register (Cases);
    Landin.Tests.IR_Optimization_Suite.Register (Cases);
    Landin.Tests.Backend_Plans_Suite.Register (Cases);
    Landin.Tests.Backend_Scale_Suite.Register (Cases);

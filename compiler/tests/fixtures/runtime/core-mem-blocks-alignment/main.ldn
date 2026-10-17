@@ -4,7 +4,11 @@
 --  offset from 0 to 7, copies within one array between every pair of
 --  offsets from 0 to 11, so that they overlap up and down by every distance
 --  shorter than the copy, fills, finds and zeroed byte buffers, each at
---  every length from 0 to 40.  Every check reads the whole array, so a byte
+--  every length from 0 to 40.  Copies and finds of 64 to 71 bytes and of
+--  200 take every word loop through many words, the word loops x86-64 and
+--  arm64 run from any address as well as the ones RV64 runs from a multiple
+--  of the word, a source a word behind or ahead of its destination's
+--  alignment among them.  Every check reads the whole array, so a byte
 --  written outside the bytes named fails it as a wrong one does.  The
 --  patterns are built once, so that the checks run within a Cortex-M0
 --  emulator's time.
@@ -184,6 +188,97 @@ zeroes: () -> (ok: bool) =
     ok = true
 end zeroes
 
+--  The lengths of the long copies and finds: every remainder after whole
+--  words, and one of many words.
+lengths: [9]usize = [64, 65, 66, 67, 68, 69, 70, 71, 200]
+
+--  A long copy of `source` from `start` to `to` within `room`, which held
+--  `before`: the bytes copied and nothing else changed.
+copied_long: (room: [256]u8, before: [256]u8, source: [256]u8, start: usize,
+              to: usize, count: usize) -> (ok: bool) =
+    ok = false
+    for at in usize(0)..<256 do
+        mut expected: u8 = before[at]
+        if at >= to and at < to + count then
+            expected = source[start + at - to]
+        end if
+        return when room[at] <> expected
+    end for
+    ok = true
+end copied_long
+
+long_copies: () -> (ok: bool) =
+    ok = false
+    mut source: [256]u8 = zeroed
+    mut background: [256]u8 = zeroed
+    for at in usize(0)..<256 do
+        source[at] = u8(at % 127 + 1)
+        background[at] = u8(255 - at % 127)
+    end for
+    mut room: [256]u8 = background
+    for which in usize(0)..<9 do
+        count: usize = lengths[which]
+        for start in usize(0)..<8 do
+            for to in usize(0)..<8 do
+                room = background
+                mem.copy(room[to..<256], source[start..<start + count])
+                    else (problem)
+                    _ = problem
+                    return
+                end
+                return when not copied_long(room, background, source, start,
+                                            to, count)
+            end for
+        end for
+        for start in usize(0)..<10 do
+            for to in usize(0)..<10 do
+                room = source
+                mem.copy(room[to..<256], room[start..<start + count])
+                    else (problem)
+                    _ = problem
+                    return
+                end
+                return when not copied_long(room, source, source, start, to,
+                                            count)
+            end for
+        end for
+    end for
+    ok = true
+end long_copies
+
+--  Long finds over decoys: `value` at each of the positions named, and
+--  again three bytes later, and nowhere before.
+long_found: () -> (ok: bool) =
+    ok = false
+    positions: [11]usize = [0, 1, 7, 8, 9, 63, 64, 65, 191, 199, 200]
+    values: [2]u8 = [10, 128]
+    for which in usize(0)..<2 do
+        value: u8 = values[which]
+        mut decoyed: [256]u8 = zeroed
+        for at in usize(0)..<256 do
+            decoyed[at] = decoys[at % 10]
+            if decoyed[at] == value then
+                decoyed[at] = value ^ 1
+            end if
+        end for
+        for start in usize(0)..<8 do
+            for one in usize(0)..<11 do
+                position: usize = positions[one]
+                mut hay: [256]u8 = decoyed
+                hay[start + position] = value
+                hay[start + position + 3] = value
+                for count in usize(199)..200 do
+                    searched: []u8 = hay[start..<start + count]
+                    wanted: usize = if position < count then position
+                                    else count end if
+                    return when mem.find(searched, value) <> wanted
+                end for
+            end for
+        end for
+    end for
+    ok = true
+end long_found
+
 public main: () -> (code: i32) =
     code = 1
     return when not between()
@@ -195,5 +290,9 @@ public main: () -> (code: i32) =
     return when not found()
     code = 5
     return when not zeroes()
+    code = 6
+    return when not long_copies()
+    code = 7
+    return when not long_found()
     code = 42
 end main

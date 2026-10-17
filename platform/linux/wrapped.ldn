@@ -14,6 +14,7 @@ fixed if compiler.os == linux then
         ioctl_number: i64 = 16
         pread64_number: i64 = 17
         pwrite64_number: i64 = 18
+        mremap_number: i64 = 25
         socket_number: i64 = 41
         connect_number: i64 = 42
         sendto_number: i64 = 44
@@ -111,6 +112,7 @@ fixed if compiler.os == linux then
         getsockopt_number: i64 = 209
         shutdown_number: i64 = 210
         munmap_number: i64 = 215
+        mremap_number: i64 = 216
         clone_number: i64 = 220
         execve_number: i64 = 221
         mmap_number: i64 = 222
@@ -169,6 +171,7 @@ fixed if compiler.os == linux then
         getsockopt_number: i64 = 209
         shutdown_number: i64 = 210
         munmap_number: i64 = 215
+        mremap_number: i64 = 216
         clone_number: i64 = 220
         execve_number: i64 = 221
         mmap_number: i64 = 222

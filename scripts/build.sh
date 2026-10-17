@@ -52,16 +52,17 @@ python3 "$LANDIN_ROOT/scripts/build_identity.py" \
     --root "$LANDIN_ROOT" --mode "$LANDIN_BUILD_MODE" \
     --output "$Identity_Source"
 
-#  Everything that invalidates an object: the sources and project files,
-#  the compiler and builder actually on PATH, the mode and tag, and the
-#  scripts that decide all of this.  A pin file names what should be on
-#  PATH; the tools themselves say what is.
+#  Everything that invalidates an object: the sources, the project files
+#  and their configuration pragmas, the compiler and builder actually on
+#  PATH, the mode and tag, and the scripts that decide all of this.  A pin
+#  file names what should be on PATH; the tools themselves say what is.
 landin_manifest() {
     Source_Rows="$(find "$LANDIN_ADA_DIR/src" "$LANDIN_ADA_DIR/tests/src" \
          -type f \( -name '*.ad[bs]' -o -name '*.c' -o -name '*.h' \) \
          -exec cksum {} +)" || return
     printf '%s\n' "$Source_Rows" | sort || return
-    Project_Rows="$(cksum "$LANDIN_ADA_DIR"/*.gpr)" || return
+    Project_Rows="$(find "$LANDIN_ADA_DIR" -maxdepth 1 -type f \
+         \( -name '*.gpr' -o -name '*.adc' \) -exec cksum {} +)" || return
     printf '%s\n' "$Project_Rows" | sort || return
     Script_Rows="$(cksum "$LANDIN_ROOT/scripts/build.sh" \
         "$LANDIN_ROOT/scripts/env.sh" \
@@ -88,7 +89,7 @@ landin_manifest() {
 #  status.  These functions also fail when used in a guarded substitution,
 #  where POSIX shells need not apply errexit to commands inside the function.
 landin_paths() {
-    Paths="$(awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh|py)$/ {print $NF}' <<EOF
+    Paths="$(awk '$NF ~ /[.](ad[bcs]|c|h|gpr|sh|py)$/ {print $NF}' <<EOF
 $1
 EOF
 )" || return
@@ -96,7 +97,7 @@ EOF
 }
 
 landin_fixed() {
-    grep -E '^(mode |gnat |gprbuild |toolchain )|[.](gpr|sh|py)$' <<EOF
+    grep -E '^(mode |gnat |gprbuild |toolchain )|[.](adc|gpr|sh|py)$' <<EOF
 $1
 EOF
 }

@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: a check copied into its caller at speed still traps at its own operation
+program: main.ldn
+traps: yes
+constructs: 0300, 1960
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: two concrete evidence instances whose one entry call is worth less than the body around it, at every optimization profile
+program: main.ldn
+status: 0
+constructs: 0810, 1230, 1240, 1260, 1290, 1310
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

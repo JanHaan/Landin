@@ -188,6 +188,8 @@ fixed if compiler.os == linux then
     public map_private: i32 = 2
     --- `mmap` flag: the mapping is backed by no file and starts zeroed.
     public map_anonymous: i32 = 32
+    --- `mremap` flag: the mapping may move when it cannot grow in place.
+    public mremap_maymove: i32 = 1
 
     --- `statx` mask: the file's type, in `mode`'s top bits.
     public statx_type: u32 = 1
@@ -328,6 +330,17 @@ fixed if compiler.os == linux then
         result = i32(system_call(munmap_number, i64(address), i64(length), 0,
                                  0, 0, 0))
     end munmap
+
+    --- Make the mapping of `length` bytes at `address` `new_length` bytes
+    --- long: where it is, or with `mremap_maymove` wherever the kernel
+    --- finds room, its pages moved rather than copied.  The mapping's
+    --- address, or minus the errno.
+    public link(symbol: "_landin_linux_mremap") mremap:
+        (address: usize, length: usize, new_length: usize, flags: i32)
+        -> (result: i64) =
+        result = system_call(mremap_number, i64(address), i64(length),
+                             i64(new_length), i64(flags), 0, 0)
+    end mremap
 
     --- One record `ppoll` reads and fills, the kernel's `struct pollfd`:
     --- the descriptor to watch, the events asked about and the events that

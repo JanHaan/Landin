@@ -20,16 +20,21 @@ package body Landin.Backend.X86_64.Dwarf is
      renames Landin.Backend.Dwarf.Label_Name;
 
    function Register_Number
-     (Register : Allocation.Saved_Register) return Natural
+     (Register : Allocation.General_Register) return Natural
    is (case Register is
           when Allocation.RBX => 3,
+          when Allocation.RSI => 4,
+          when Allocation.RDI => 5,
+          when Allocation.R8 => 8,
+          when Allocation.R9 => 9,
           when Allocation.R12 => 12,
           when Allocation.R13 => 13,
           when Allocation.R14 => 14,
           when Allocation.R15 => 15);
 
    function Register_Location
-     (Register : Allocation.Saved_Register; Indirect : Boolean) return String
+     (Register : Allocation.General_Register; Indirect : Boolean)
+      return String
    is
      (HT & ".byte " & N ((if Indirect then 16#70# else 16#50#)
                         + Register_Number (Register)) & LF
@@ -107,13 +112,10 @@ package body Landin.Backend.X86_64.Dwarf is
       Closed : Boolean := False;
       --  Whether the interval has closed in this block and nothing has
       --  written the register since.  Only selection's own discipline
-      --  promises that: a callee-saved register outlives every call, and
-      --  an XMM register any operation but a call.  A caller-saved one
-      --  is touched by the operations Allocation.Untouched names.
-      Keeps : constant Boolean :=
-        Place.Kind = Allocation.SSE
-        or else (Place.Kind = Allocation.GP
-                 and then Place.Register in Allocation.Saved_Register);
+      --  promises that: a callee-saved register outlives every call, an
+      --  XMM register any operation but a call, and a caller-saved one
+      --  any operation but those Allocation.Touches names.
+      Keeps : constant Boolean := Place.Kind in Allocation.SSE | Allocation.GP;
       Holding : Boolean := False;
 
       function Same (Other : Allocation.Location) return Boolean is
@@ -122,15 +124,35 @@ package body Landin.Backend.X86_64.Dwarf is
                    then Other.Float_Register = Place.Float_Register
                    else Other.Register = Place.Register));
 
+      --  Whether Value is the slot's own bits: a load of it, or the
+      --  address a loaded pointer holds.
+      function Copies (Value : Value_Id) return Boolean is
+        ((Op_Of (Of_Unit, Item, Value) = Load
+          and then Slot_Of (Of_Unit, Item, Value) = Slot)
+         or else
+           (Op_Of (Of_Unit, Item, Value) = Pointer_Address
+            and then Op_Of
+              (Of_Unit, Item, Nth_Operand (Of_Unit, Item, Value, 1)) = Load
+            and then Slot_Of
+              (Of_Unit, Item, Nth_Operand (Of_Unit, Item, Value, 1))
+              = Slot));
+
       --  Whether Value writes the slot's register: as its own location,
-      --  by storing to another slot held there, as assembly, which may
-      --  name any register, or, for an XMM register, by calling.
+      --  unless it copies the slot, by storing to another slot held
+      --  there, as assembly, which may name any register, for an XMM
+      --  register by calling, or for a caller-saved one as selection's
+      --  own scratch.
       function Writes (Value : Value_Id) return Boolean is
         (Op_Of (Of_Unit, Item, Value) = Assembly
          or else (Place.Kind = Allocation.SSE
                   and then Op_Of (Of_Unit, Item, Value)
                     in Call | Indirect_Call)
-         or else Same (Plan.Value (Positive (Value)))
+         or else (Place.Kind = Allocation.GP
+                  and then Place.Register in Allocation.Caller_Saved
+                  and then Allocation.Touches
+                    (Of_Unit, Item, Value, Place.Register))
+         or else (Same (Plan.Value (Positive (Value)))
+                  and then not Copies (Value))
          or else (Op_Of (Of_Unit, Item, Value) = Store
                   and then Same (Plan.Slot
                     (Positive (Slot_Of (Of_Unit, Item, Value))))));

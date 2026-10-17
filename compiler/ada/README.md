@@ -134,12 +134,17 @@ different responsibilities.
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
 | `Landin.IR` | the target-neutral instructions, shapes, descriptors, images, paths and source aliases into existing storage; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
 | `Landin.IR.Control_Flow` | linear-space adjacency and entry reachability of structurally checked IR | assume reachability or store represented object bytes |
+| `Landin.IR.If_Conversion` | under size and speed, D338's proof that neither arm of a two-armed `if` can trap, call or touch anything but a private slot, or that its one trapping operation is a checked update `x = x + k` the other arm leaves alone, and the rewrite of its branch to choices and stores | speculate a trap, a call, a memory access or a store outside a private slot, or convert at `--optimize none` |
+| `Landin.IR.In_Place` | under size and speed, the proof that a D94/D95 callee cannot tell its `in` aggregate from its caller's storage, a whole-unit summary of which routines may write outside their frame, and the rewrite to an address parameter with a zero-carrier home; dropping a caller's slice or `any` temporary nothing can change before its call | revise the convention, read a parameter in place across a possible write outside the frame, or touch a C or machine-convention entry |
+| `Landin.IR.Inlining` | D339's copies, at speed only: which direct calls are copied into their callers, the copy of each body with its arguments stored into copied parameters, its returns and failures rejoining the caller, values that cross it carried in slots, and each copied block, slot and alias recording the call it came from | copy a routine whose address is taken, copy a copy's own calls, change a trap's site or order, grow a routine past its bound, or run on Cortex-M0 |
+| `Landin.IR.Dominance` | a routine's dominator tree from its control-flow graph, in O(E log V) work and linear space, with constant-time dominance questions | assume reachability, or say what holds in a block |
 | `Landin.IR.Liveness` | each slot's live interval over the laid-out order of a routine's values, in work bounded linearly in the routine, and each block's loop depth | choose a location, a register or which slots one may hold |
 | `Landin.Panics` | canonical entry-hook validation, source-byte site spaces and final nonzero atom codes | runtime reporting or allocation |
 | `Landin.IR.Effects` | conservative opcode effects and policy weights, including observable traps | infer alias permissions from unchecked regions |
 | `Landin.IR.Rewriting` | shared arena compaction for verified transforms | change slot, signature, shape, image or semantic instance identities |
+| `Landin.IR.Scalar_Replacement` | splitting small scalar-part slots into one scalar slot per part, as simplification's first step and verified with its output: at speed, entry copies of the parameter parts a loop reads, rewritten part accesses, whole copies and clears, and the piece record a debugger reads | split a slot whose address is taken, a partial copy, a routine result or a part whose load checks, or move a trap |
 | `Landin.IR.Shape_Measurement` | memoized represented extents under target facts and an explicit size limit | choose machine placement or allocate work per represented array element |
-| `Landin.IR.Simplification` | verified local simplification under the selected objective | reassociate floating arithmetic, create cross-block values or infer unchecked alias facts |
+| `Landin.IR.Simplification` | verified simplification under the selected objective: local rewrites, reads of immutable module values as their images, and checks a dominating comparison, a type's range or a passed check proves | reassociate floating arithmetic, create cross-block values, or infer a fact or alias from an unchecked region |
 | `Landin.IR.Specialization` | whole-program static-evidence devirtualization with retained instance entries and indirect fallbacks | create semantic instances or specialize exposed or unknown entries without proof |
 | `Landin.IR.Specialization_Policy` | bounded benefit and profitability estimates | claim assembled-byte costs or depend on host word width |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
@@ -156,6 +161,7 @@ different responsibilities.
 | `Landin.Backend.RiscV_Instructions` | native XLEN-parametric integer immediate, memory and indexed-address instruction selection, with independent Zba and XTheadBa capabilities | infer a width from the host, rank extension sets, choose an ABI, access files or invoke tools |
 | `Landin.Backend.Arm64` | arm64 instruction selection, stack homes, frame records, native/C calls, the hosted entry's initializer call and data images, for every arm64 description | parse/check source, put physical transport in IR, spell an object format's directives, write files or run tools |
 | `Landin.Backend.Arm64.Platform` | what arm64 assembly spells per object format: page relocations, read-only sections, symbol types and sizes, the local-label seed and the unit's trailer | select instructions, choose a C convention or name a libc function |
+| `Landin.Backend.Arm64.Selection` | which constants an arm64 instruction can carry, the move-wide lines for any pattern, the shift, mask or reciprocal sequence that divides by a known divisor, and the scratch registers selection writes, which allocation leaves alone | read IR, choose a location or ask the host a width |
 | `Landin.Backend.ELF` | the ELF directive spellings every ELF backend shares: symbol types and sizes, the read-only, relocated read-only, data and zero sections, the panic flag's section and the non-executable stack note | own a backend's line discipline, choose which section a datum belongs in, or spell ARM's `%` section types |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry's initializer call, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
@@ -294,12 +300,20 @@ from `--link`; the configuration stage reads the target's half.
 
 D209--D211 add independent `--optimize=none|size|speed` (default size) and
 `--specialize=off|auto|all` (default auto) controls. The driver runs verified
-specialization, then verified simplification, then option-aware frame preflight
-and selected-target emission. Legacy backend `Text` callers explicitly retain none/off;
+specialization, then, at speed, verified inlining (D339), then scalar
+replacement and simplification verified together, then verified
+if-conversion, then verified in-place parameter reads, then option-aware frame
+preflight and selected-target emission. Legacy
+backend `Text` callers explicitly retain none/off;
 the command-line default never inherits that reference convenience.
 `Landin.Optimization` owns typed controls; `Landin.IR.Specialization` owns
-incoming-evidence proof and profitability, `Landin.IR.Simplification` owns
-conservative neutral rewrites, and each native backend owns allocation and selection.
+incoming-evidence proof and profitability, `Landin.IR.Inlining` owns which
+calls are copied into their callers, `Landin.IR.Scalar_Replacement` owns
+which slots become one scalar slot per part, `Landin.IR.Simplification` owns
+conservative neutral rewrites, `Landin.IR.If_Conversion` owns which branches
+become choices, `Landin.IR.In_Place` owns which `in` aggregates
+a callee reads where its caller keeps them, and each native backend owns
+allocation and selection.
 Call verification checks the addressed storage shape of every aggregate or
 array argument and hidden result, for direct calls, ordinary function values
 and erased dispatch. A usize carrier alone does not establish an extent,

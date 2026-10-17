@@ -9239,10 +9239,16 @@ package body Landin.Tests.Backend_Suite is
            + Occurrences (Source, HT & "stur ");
       end Traffic;
    begin
+      --  f calls nothing, so its values may hold argument registers; g's
+      --  y lives across its call to f, so it takes a callee-saved one.
       Lower
         (Work, "public f: (x: i32) -> (result: i32) =" & LF
          & "    result = (((((((x + 1) + 1) + 1) + 1) + 1) + 1) + 1)"
-         & LF & "end f" & LF, Ran);
+         & LF & "end f" & LF
+         & "public g: (x: i32) -> (result: i32) =" & LF
+         & "    y: i32 = ((x + 1) + 1) + 1" & LF
+         & "    result = ((f(y) + y) + 1) + 1" & LF
+         & "end g" & LF, Ran);
       Landin.Testing.Check_Equal (Item, Ran, 5, "scalar chain lowers");
       if Landin.Stages.Failed (Work) then
          return;
@@ -9272,19 +9278,145 @@ package body Landin.Tests.Backend_Suite is
              (Speed_Report, 1).Register_Count > 0,
          "the build report names reused spills and promoted registers");
       Landin.Testing.Check
+        (Item, Landin.Build_Reports.Nth_Routine
+           (Speed_Report, 1).Save_Bytes = 0
+           and then Landin.Build_Reports.Nth_Routine
+             (Speed_Report, 1).Spill_Count = 0,
+         "a routine without calls holds its values in argument registers");
+      Landin.Testing.Check
         (Item, Contains
-           (Ada.Strings.Unbounded.To_String (Speed_Text), "str x19, [x15]")
+           (Ada.Strings.Unbounded.To_String (Speed_Text),
+            "stur x19, [x29, #-")
            and then Contains
              (Ada.Strings.Unbounded.To_String (Speed_Text),
-              "ldr x19, [x15]"),
-         "promoted values preserve the callee-saved register");
+              "ldur x19, [x29, #-"),
+         "promoted values preserve the callee-saved register, reached"
+         & " from the frame pointer directly");
    end Arm64_Scalar_Homes_Reuse_And_Promote;
+
+   --  At speed arm64 gives a routine that calls nothing x0-x7 for its
+   --  values, its slots and the parameters already in them, and keeps
+   --  floats in d registers: d18-d31 where no call intervenes, else the
+   --  d8-d15 a routine saves.  The reference profile keeps every one of
+   --  them in its frame home.
+   procedure Arm64_Speed_Holds_Argument_And_Float_Registers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Speed_Holds_Argument_And_Float_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_Arm64);
+      Ran : Natural;
+      Reference_Text, Speed_Text : Ada.Strings.Unbounded.Unbounded_String;
+      Reference_Report, Speed_Report : Landin.Build_Reports.Report;
+
+      procedure Build
+        (Mode : Landin.Optimization.Objective;
+         Text : out Ada.Strings.Unbounded.Unbounded_String;
+         Report : in out Landin.Build_Reports.Report);
+
+      procedure Build
+        (Mode : Landin.Optimization.Objective;
+         Text : out Ada.Strings.Unbounded.Unbounded_String;
+         Report : in out Landin.Build_Reports.Report)
+      is
+      begin
+         Landin.Backend.Arm64.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Landin.Stages.Target (Work),
+            (Optimize => Mode, Specialize => Landin.Optimization.Off),
+            Text, Report);
+      end Build;
+
+      --  One routine's text, from its label to its size directive.
+      function Routine
+        (Text : Ada.Strings.Unbounded.Unbounded_String; Name : String)
+         return String;
+
+      function Routine
+        (Text : Ada.Strings.Unbounded.Unbounded_String; Name : String)
+         return String
+      is
+         Source : constant String := Ada.Strings.Unbounded.To_String (Text);
+         First : constant Natural := Index (Source, LF & Name & ":" & LF);
+         Last : constant Natural :=
+           (if First = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Source, HT & ".size " & Name & ",", First));
+      begin
+         return (if Last = 0 then "" else Source (First .. Last));
+      end Routine;
+
+      function Frame_Traffic (Text : String) return Natural is
+        (Occurrences (Text, HT & "ldur") + Occurrences (Text, HT & "stur"));
+   begin
+      Lower
+        (Work, "public area: (width: i64, height: i64) -> (value: i64) ="
+         & LF & "    value = width * height" & LF & "end area" & LF
+         & "public settle: (a: f64, b: f64) -> (r: f64) =" & LF
+         & "    mut x: f64 = a" & LF
+         & "    mut i: u32 = 0" & LF
+         & "    while i < 10 do" & LF
+         & "        x = x * b + a" & LF
+         & "        inc i" & LF
+         & "    end while" & LF
+         & "    r = x" & LF
+         & "end settle" & LF
+         & "public spread: (a: f64) -> (r: f64) =" & LF
+         & "    y: f64 = a * a" & LF
+         & "    r = settle(y, a) + y" & LF
+         & "end spread" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "registers source lowers");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Build (Landin.Optimization.None, Reference_Text, Reference_Report);
+      Build (Landin.Optimization.Speed, Speed_Text, Speed_Report);
+      declare
+         Area : constant String := Routine (Speed_Text, "area");
+         Settle : constant String := Routine (Speed_Text, "settle");
+         Spread : constant String := Routine (Speed_Text, "spread");
+      begin
+         Landin.Testing.Check
+           (Item, Frame_Traffic (Routine (Reference_Text, "area")) > 0
+              and then Frame_Traffic
+                (Routine (Reference_Text, "settle")) > 0
+              and then Contains
+                (Routine (Reference_Text, "settle"), "fmov x9, d16"),
+            "the reference profile keeps every scalar in its frame home");
+         Landin.Testing.Check
+           (Item, Area /= "" and then Frame_Traffic (Area) = 0
+              and then not Contains (Area, "x19")
+              and then Landin.Build_Reports.Nth_Routine
+                (Speed_Report, 1).Save_Bytes = 0,
+            "a routine without calls keeps its parameters, values and"
+            & " result in argument registers and saves nothing");
+         Landin.Testing.Check
+           (Item, Settle /= "" and then Frame_Traffic (Settle) = 0
+              and then Contains (Settle, "fmul d")
+              and then Contains (Settle, "fadd d")
+              and then not Contains (Settle, "fmov x9, d16"),
+            "float slots and values hold d registers, and arithmetic"
+            & " reads and writes them in place");
+         Landin.Testing.Check
+           (Item, Contains (Spread, "stur d8, [x29, #-")
+              and then Contains (Spread, "ldur d8, [x29, #-")
+              and then not Contains (Settle, " d8, [x29"),
+            "a float live across a call holds d8, which its routine saves");
+      end;
+   end Arm64_Speed_Holds_Argument_And_Float_Registers;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "backend", "arm64 scalar homes reuse and promote",
          Arm64_Scalar_Homes_Reuse_And_Promote'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 speed holds argument and float registers",
+         Arm64_Speed_Holds_Argument_And_Float_Registers'Access);
       Landin.Testing.Register
         (Into, "backend", "size float conversions share decode",
          Size_Float_Conversions_Share_Decode'Access);

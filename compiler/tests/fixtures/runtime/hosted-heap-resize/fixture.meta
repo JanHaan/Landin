@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the hosted heap resizes a block in its slot, from a slot to a mapping, and a mapping in place, by the system moving its pages or by copying, keeping its bytes and every alignment; grow extends only in place, a zero extent is an ordinary block and a refused resize leaves the block as it was; a region over the heap and a growing builder resize through it
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0940, 1230, 1360
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

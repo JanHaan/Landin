@@ -40,7 +40,8 @@ end fixed_pool
 --- Reclaiming allocator over uniform slots in caller storage, as a handle:
 --- copies share one pool. Reuses the lowest free index, never grows in place,
 --- and uses no fallback allocator. Even a zero-byte allocation occupies a
---- slot.
+--- slot. A resize keeps the block in its slot, to any extent the slot holds,
+--- and refuses a larger one.
 public provider: type = fixed_pool
 
 slot_stride: (size: usize, alignment: usize)
@@ -239,8 +240,34 @@ pool_grow: (self: fixed_pool, block: ptr mut u8,
     grown = false
 end pool_grow
 
+--  Every slot has the same size, so a block is resized in its own slot or
+--  not at all: an extent the slot holds is recorded for the block's free,
+--  and a larger one, or a block that is not a live slot of `old_size`, is
+--  refused with the pool unchanged.
+pool_resize: (self: fixed_pool, block: ptr mut u8,
+              old_size: usize, new_size: usize, alignment: usize)
+             -> (moved: ptr mut u8) ! mem.out_of_memory =
+    _ = alignment
+    state: ptr mut pool_state = self.state
+    fail mem.out_of_memory when new_size > state.val.slot_size
+      or state.val.slot_count == 0
+    first_address: usize = usize(self.base) + state.val.first_offset
+    address: usize = usize(block)
+    fail mem.out_of_memory when address < first_address
+    distance: usize = address - first_address
+    fail mem.out_of_memory when distance % state.val.stride <> 0
+    index: usize = distance / state.val.stride
+    fail mem.out_of_memory when index >= state.val.slot_count
+    selected: ptr mut slot = addr self.bookkeeping[index]
+    fail mem.out_of_memory when selected.val.size == 0 -% 1
+      or selected.val.size <> old_size
+    selected.val.size = new_size
+    --  [0810]: the block borrows nothing, as an allocation does.
+    moved = ptr(usize(block))
+end pool_resize
+
 fixed_pool is mem.allocator (alloc: pool_alloc, grow: pool_grow,
-                             free: pool_free)
+                             resize: pool_resize, free: pool_free)
 
 --- Return the configured number of allocatable slots.
 public capacity: (memory: provider) -> (count: usize) =

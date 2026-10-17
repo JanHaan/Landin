@@ -301,9 +301,9 @@ A variant is a truthful tag plus named payload overlays; users select the
 active payload using the tag. LLDB canonicalizes scalar display names, such as
 `i32` to `int`. It does not evaluate Landin expressions. Source aliases from
 matches, named-result destructuring and loops remain inspectable in their
-live scopes. Source slots keep stack homes in every optimization mode;
-arm64 may reuse scalar temporary homes or promote eligible temporaries into
-x19-x28 without changing those source locations. Uninitialized
+live scopes. On arm64 source slots keep stack homes without optimization
+and at size; at speed a slot may hold a general or d register, and its
+location follows that register over its interval. Uninitialized
 or unavailable variables have no valid location, and ranges end before frame
 restoration. The complete parser, containers and hosted application run in the
 native LLDB matrix, using the existing Linux source/value oracles.
@@ -697,10 +697,12 @@ names or overwrites, which is what lets inputs and outputs move directly.
 ## arm64 assembly implementation
 
 `Backend.Arm64` keeps assembly operands in frame homes, and source slots too
-except at speed in a routine without assembly, where an eligible
-nonfloating scalar slot may hold one of x19-x24 over its live interval.
-Its optimized value plan reuses nonoverlapping scalar homes and may promote
-eligible nonfloating temporaries into otherwise unused x19-x28 registers.
+except at speed in a routine without assembly, where an eligible scalar
+slot may hold a register over its live interval: x0-x7, or d18-d31 for a
+float, where no call crosses it, else x19-x24 or d8-d15. Its optimized
+value plan reuses nonoverlapping scalar homes and at speed may hold
+eligible values in the same registers, x19-x28 standing for x19-x24;
+assembly leaves values only x19-x28 and d8-d15, which no block may name.
 A block's declared registers are excluded from that plan. Each input is loaded
 through its own register, which addresses its home first, and extended to the
 whole register (`sxtb`, `sxth`, `sxtw`); the text is emitted as written; and

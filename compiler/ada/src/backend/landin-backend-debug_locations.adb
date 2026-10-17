@@ -26,6 +26,29 @@ package body Landin.Backend.Debug_Locations is
       return False;
    end Within;
 
+   --  D339: the scope a variable of Site's scope tree (zero: the routine's
+   --  own) sees Block in.  A block of its own copy, or of the routine
+   --  itself, is in its own scope; to the routine's own variables a copied
+   --  block stands where the call it replaced stood, as a callee's code
+   --  does for its caller; and a copy's variables are nowhere else.
+   function Seen_Scope
+     (Of_Unit : Unit; Item : Item_Id; Block : Block_Id; Site : Natural)
+      return Landin.Resolution.Scope_Id;
+   function Seen_Scope
+     (Of_Unit : Unit; Item : Item_Id; Block : Block_Id; Site : Natural)
+      return Landin.Resolution.Scope_Id
+   is
+      Block_Site : constant Natural := Inlined_At (Of_Unit, Item, Block);
+   begin
+      if Block_Site = Site then
+         return Scope_Of (Of_Unit, Item, Block);
+      elsif Site = 0 then
+         return Nth_Inline_Site (Of_Unit, Item, Block_Site).Scope;
+      else
+         return Landin.Resolution.No_Scope;
+      end if;
+   end Seen_Scope;
+
    --  These are logical leaves, not bytes: a scalar is one leaf, arrays
    --  repeat their element run, and variants have a tag followed by disjoint
    --  case runs.  Intervals keep even a target-sized array compact.  No
@@ -144,7 +167,8 @@ package body Landin.Backend.Debug_Locations is
       Item : Item_Id;
       Slot : Slot_Id;
       Parameter : Boolean;
-      Alias_Index : Natural := 0) return Flags.Vector;
+      Alias_Index : Natural := 0;
+      Named : Slot_Id := No_Slot) return Flags.Vector;
 
    function Analyze
      (Work : in out Analysis;
@@ -154,14 +178,18 @@ package body Landin.Backend.Debug_Locations is
       Item : Item_Id;
       Slot : Slot_Id;
       Parameter : Boolean;
-      Alias_Index : Natural := 0) return Flags.Vector
+      Alias_Index : Natural := 0;
+      Named : Slot_Id := No_Slot) return Flags.Vector
    is
       pragma Unreferenced (Info);
+      --  A piece is born and scoped as the variable it is part of.
+      Variable : constant Slot_Id :=
+        (if Named = No_Slot then Slot else Named);
       Binding : constant Declaration_Id :=
-        (if Alias_Index = 0 then Declares (Of_Unit, Item, Slot)
+        (if Alias_Index = 0 then Declares (Of_Unit, Item, Variable)
          else Nth_Source_Alias (Of_Unit, Item, Alias_Index).Binding);
       Born : constant Landin.Provenance.Origin :=
-        (if Alias_Index = 0 then Origin_Of (Of_Unit, Item, Slot)
+        (if Alias_Index = 0 then Origin_Of (Of_Unit, Item, Variable)
          else Nth_Source_Alias (Of_Unit, Item, Alias_Index).Site);
       Result : Flags.Vector;
       type States is array (Positive range <>) of Intervals.Vector;
@@ -170,6 +198,32 @@ package body Landin.Backend.Debug_Locations is
       Birth : Value_Id := No_Value;
       Changed : Boolean := True;
       Key : Positive range 1 .. 3;
+      --  D339: the copy the variable belongs to, zero for the routine's own.
+      Own_Site : constant Natural :=
+        (if Alias_Index = 0 then Inlined_At (Of_Unit, Item, Variable)
+         else Alias_Inlined_At (Of_Unit, Item, Alias_Index));
+
+      --  A copied parameter is born where the call stored its argument,
+      --  outside the copy, as a parameter is on entry.
+      Copied_Parameter : constant Boolean :=
+        Alias_Index = 0 and then Own_Site /= 0
+        and then
+          (for some Index in 1 .. Parameter_Count
+             (Of_Unit, Nth_Inline_Site (Of_Unit, Item, Own_Site).Callee) =>
+             Nth_Parameter
+               (Of_Unit, Nth_Inline_Site (Of_Unit, Item, Own_Site).Callee,
+                Index) = Inlined_Origin (Of_Unit, Item, Variable));
+
+      function Site_Of (Value : Value_Id) return Natural is
+        (Inlined_At (Of_Unit, Item, Block_Of (Of_Unit, Item, Value)));
+
+      --  Where an instruction stands in the variable's source: its own
+      --  origin, except that to the routine's own variable a copied
+      --  instruction stands where the call it replaced was written.
+      function Standing (Value : Value_Id) return Landin.Provenance.Origin is
+        (if Own_Site = 0 and then Site_Of (Value) /= 0
+         then Nth_Inline_Site (Of_Unit, Item, Site_Of (Value)).Call
+         else Origin_Of (Of_Unit, Item, Value));
 
       type Selection is record
          Known : Boolean := False;
@@ -580,13 +634,15 @@ package body Landin.Backend.Debug_Locations is
             end if;
          end;
       end if;
-      if not Parameter and then Alias_Index = 0 then
+      if not Parameter and then Alias_Index = 0 and then not Copied_Parameter
+      then
          for V in 1 .. Value_Count (Of_Unit, Item) loop
             declare
                Site : constant Landin.Provenance.Origin :=
                  Origin_Of (Of_Unit, Item, Value_Id (V));
             begin
-               if Site.Source = Born.Source
+               if Site_Of (Value_Id (V)) = Own_Site
+                 and then Site.Source = Born.Source
                  and then Site.Where.First >= Born.Where.First
                then
                   Birth := Value_Id (V);
@@ -658,15 +714,21 @@ package body Landin.Backend.Debug_Locations is
             Block : constant Block_Id := Block_Id (B);
             State : Intervals.Vector := Inputs (B);
             Visible : constant Boolean := Binding /= No_Declaration
-              and then Within (Meanings, Scope_Of (Of_Unit, Item, Block),
-                Landin.Resolution.Scope_Of (Meanings, Binding));
+              and then Within
+                (Meanings,
+                 Seen_Scope
+                   (Of_Unit, Item, Block,
+                    (if Alias_Index = 0
+                     then Inlined_At (Of_Unit, Item, Variable)
+                     else Alias_Inlined_At (Of_Unit, Item, Alias_Index))),
+                 Landin.Resolution.Scope_Of (Meanings, Binding));
          begin
             for P in 1 .. Length (Of_Unit, Item, Block) loop
                declare
                   Value : constant Value_Id :=
                     Nth_Value (Of_Unit, Item, Block, P);
                   Site : constant Landin.Provenance.Origin :=
-                    Origin_Of (Of_Unit, Item, Value);
+                    Standing (Value);
                begin
                   Result (Positive (Value)) := Meet (State, Wanted) = Wanted
                     and then Value /= Birth and then Visible
@@ -710,6 +772,16 @@ package body Landin.Backend.Debug_Locations is
                         Slot, Parameter);
    end Available;
 
+   function Available_Piece
+     (Work : in out Analysis;
+      Of_Unit : Unit;
+      Meanings : Landin.Resolution.Table;
+      Info : Landin.Debugging.Information;
+      Item : Item_Id;
+      Slot, Piece : Slot_Id) return Flags.Vector
+   is (Analyze (Work, Of_Unit, Meanings, Info, Item, Piece, False,
+                Named => Slot));
+
    function Available_Alias
      (Work : in out Analysis;
       Of_Unit : Unit;
@@ -739,8 +811,9 @@ package body Landin.Backend.Debug_Locations is
          when Module_Datum =>
             for V in 1 .. Value_Count (Of_Unit, Item) loop
                Result.Append (Alias.Initialized_On_Entry
-                 and then Within (Meanings, Scope_Of
-                   (Of_Unit, Item, Block_Of (Of_Unit, Item, Value_Id (V))),
+                 and then Within (Meanings, Seen_Scope
+                   (Of_Unit, Item, Block_Of (Of_Unit, Item, Value_Id (V)),
+                    Alias_Inlined_At (Of_Unit, Item, Index)),
                    Landin.Resolution.Scope_Of (Meanings, Alias.Binding)));
             end loop;
             return Result;

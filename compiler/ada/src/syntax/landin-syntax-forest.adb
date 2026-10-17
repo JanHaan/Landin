@@ -70,6 +70,7 @@ package body Landin.Syntax.Forest is
         (new Tree'(Source => Landin.Source.Source_Id (Count (Into) + 1),
                    Serial => Landin.Serials.Next,
                    Items  => Nodes,
+                   Kinds  => Original.Kinds,
                    Links  => Original.Links,
                    Signature_Links => Original.Signature_Links,
                    Line_Facts => Original.Line_Facts,

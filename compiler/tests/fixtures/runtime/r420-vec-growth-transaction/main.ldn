@@ -85,8 +85,16 @@ audit_grow: (self: audit, block: ptr mut u8,
     grown = false
 end audit_grow
 
+--  Resizing moves the block, through this provider's own allocation
+--  and free.
+audit_resize: (self: audit, block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (moved: ptr mut u8) ! mem.out_of_memory =
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end audit_resize
+
 audit is mem.allocator (alloc: audit_alloc, grow: audit_grow,
-                        free: audit_free)
+                        resize: audit_resize, free: audit_free)
 
 before_contents: (values: vec.list(ptr node)) -> (ok: bool) =
     first_index: usize = 0

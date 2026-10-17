@@ -9,6 +9,11 @@ emission.  The compiler's own `--stage-report` says how much processor time
 each stage took, which leaves out process start, reading the sources and
 the harness.  Five runs per input give median times and the largest peak.
 
+Every family runs at two objectives, `--optimize=size`, the default, and
+`--optimize=speed`, each with its own ratios: speed copies small routines
+into their callers (D339), and a copy is work emission does again, so the
+bound has to hold for it too.  `--optimize` measures one objective alone.
+
 The verdict compares every doubling in every family.  Frontend and emission
 use the median processor time; peak memory uses the largest reported peak
 among the runs at each size.  Each has its own ratio and a ratio above its
@@ -60,6 +65,9 @@ SIZES = (1000, 2000, 4000, 8000, 16000)
 RUNS = 5
 LIMIT = 2.5
 MEMORY_LIMIT = 2.5
+#  The objectives every family runs at; the first is the default, whose
+#  measurements keep each family's own name in the JSON record.
+OBJECTIVES = ("size", "speed")
 
 #  The stages the ratios are taken over: everything that reads the source,
 #  and everything that turns the verified IR into assembly.
@@ -295,12 +303,14 @@ def valid_peak(value) -> bool:
 
 
 def measure(refine: str, root: str, entry: str, report: str,
-            timeout: float, launcher: str | None = None) -> dict:
+            timeout: float, launcher: str | None = None,
+            objective: str = OBJECTIVES[0]) -> dict:
     """One compilation; the frontend's and emission's processor seconds, the
     peak resident set in KiB and the compilation's sizes, from the
     compiler's own report."""
     command = [refine, "--root=" + root, "--stage-report=" + report,
-               "--emit=asm", "-o", report + ".s", entry]
+               "--emit=asm", "--optimize=" + objective, "-o", report + ".s",
+               entry]
     try:
         os.unlink(report)
     except FileNotFoundError:
@@ -340,9 +350,11 @@ def measure(refine: str, root: str, entry: str, report: str,
 
 
 def median_of(refine: str, root: str, entry: str, work: str, runs: int,
-              timeout: float, launcher: str | None = None) -> dict:
+              timeout: float, launcher: str | None = None,
+              objective: str = OBJECTIVES[0]) -> dict:
     samples = [measure(refine, root, entry,
-                       os.path.join(work, "stages.json"), timeout, launcher)
+                       os.path.join(work, "stages.json"), timeout, launcher,
+                       objective)
                for _ in range(runs)]
     if any(not valid_peak(sample.get("peak_kib")) for sample in samples):
         raise RuntimeError("no positive peak memory measurement in a sample")
@@ -385,6 +397,10 @@ def main(argv: list[str]) -> int:
                              " verdict needs the whole range)")
     parser.add_argument("--family", action="append", default=None,
                         help="measure only this family; repeatable")
+    parser.add_argument("--optimize", action="append", default=None,
+                        choices=OBJECTIVES,
+                        help="measure only at this objective; repeatable"
+                             " (default: size and speed)")
     parser.add_argument("--no-derived", action="store_true")
     parser.add_argument("--timeout", type=float, default=900.0,
                         help="seconds one compilation may take")
@@ -411,6 +427,8 @@ def main(argv: list[str]) -> int:
         parser.error(f"--largest must be at least {SIZES[0]}")
     families = [(name, build) for name, build in FAMILIES
                 if not arguments.family or name in arguments.family]
+    objectives = [objective for objective in OBJECTIVES
+                  if not arguments.optimize or objective in arguments.optimize]
 
     record = {"refine": refine, "runs": arguments.runs,
               "limit": arguments.limit,
@@ -423,15 +441,21 @@ def main(argv: list[str]) -> int:
         except (OSError, RuntimeError) as error:
             print(f"scaling: {error}", file=sys.stderr)
             return 2
-        for name, build in families:
+        for objective, (family, build) in (
+                (objective, family) for objective in objectives
+                for family in families):
+            #  The default objective keeps the family's own name.
+            name = (family if objective == OBJECTIVES[0]
+                    else f"{family} at {objective}")
             rows = []
             print(f"{name}:")
             for size in sizes:
-                directory = os.path.join(work, f"{name}-{size}")
+                directory = os.path.join(work, f"{family}-{size}")
                 write_program(directory, build(size))
                 try:
                     result = median_of(refine, directory, directory, work,
-                                       arguments.runs, arguments.timeout, launcher)
+                                       arguments.runs, arguments.timeout,
+                                       launcher, objective)
                 except (RuntimeError, subprocess.TimeoutExpired) as error:
                     failures.append(f"{name} at {size}: {error}")
                     print(f"  {size:>6}  failed")
@@ -476,17 +500,22 @@ def main(argv: list[str]) -> int:
 
         if not arguments.no_derived:
             print("derived programs:")
-            for name, relative in DERIVED:
+            for objective, (family, relative) in (
+                    (objective, derived) for objective in objectives
+                    for derived in DERIVED):
+                name = (family if objective == OBJECTIVES[0]
+                        else f"{family} at {objective}")
                 try:
                     result = median_of(refine, ROOT,
                                        os.path.join(ROOT, relative), work,
-                                       arguments.runs, arguments.timeout, launcher)
+                                       arguments.runs, arguments.timeout,
+                                       launcher, objective)
                 except (RuntimeError, subprocess.TimeoutExpired) as error:
                     failures.append(f"{name}: {error}")
-                    print(f"  {name:<22}  failed")
+                    print(f"  {name:<31}  failed")
                     continue
                 record["derived"][name] = result
-                print(f"  {name:<22}  frontend {result['frontend']:8.3f}s"
+                print(f"  {name:<31}  frontend {result['frontend']:8.3f}s"
                       f"  emission {result['emission']:8.3f}s"
                       f"  {result['peak_kib'] / 1024:8.1f} MiB")
 

@@ -1,0 +1,9 @@
+class: runtime
+profiles: specialization
+summary: a call copied at speed fails, cleans up and recovers exactly as the call did
+program: main.ldn
+run_expect: output.txt
+stream: output
+status: 122
+constructs: 0940, 0960, 1030, 1100
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

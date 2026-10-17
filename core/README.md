@@ -250,7 +250,7 @@ allocator is hidden in a container or selected implicitly by the target.
 
 | Module | Interface and boundary |
 |---|---|
-| `core/mem` | `allocator` with `alloc`/`grow`/`free` taking the handle by value, `allocate`/`free`, the caller-backed `arena` over an `arena_space` and the `aligned_offset` it bumps with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing, the arena's state and their lifetime belong to the caller. |
+| `core/mem` | `allocator` with `alloc`/`grow`/`resize`/`free` taking the handle by value, `allocate`/`resize`/`free`, `relocate` for a provider that resizes by moving, the caller-backed `arena` over an `arena_space` and the `aligned_offset` it bumps with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing, the arena's state and their lifetime belong to the caller. |
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
@@ -272,6 +272,8 @@ freed with its original size. `new_bytes(0)` instead returns an empty descriptor
 without asking the provider. These are deliberately distinct contracts.
 An arena can extend its current top allocation if the larger extent fits;
 other allocations between vector growths force the normal replacement path.
+An arena resize keeps a smaller block where it is, giving the top
+allocation's tail back, and moves a block it cannot grow in place to the top.
 
 Zero-sized vector elements retain logical capacity in `usize`; it is not
 silently truncated to a physical byte count. Nonzero byte-count overflow is
@@ -564,6 +566,13 @@ neither storage nor provider state. Success retains the address and existing
 bytes and transfers ownership of the enlarged extent to the caller, which
 later frees that exact extent. Zero-byte vectors retain allocation and free
 calls rather than using this extension path.
+
+Allocator conformances now also provide `resize(self, block, old_size,
+new_size, alignment) -> (moved: ptr mut u8) ! out_of_memory`, which may move
+the block and keeps the bytes the two extents share. A provider that cannot
+resize in place calls `mem.relocate(self, block, old_size, new_size,
+alignment)` from it, which allocates, copies and frees through the provider.
+`text.growing` now resizes through it rather than allocating and copying.
 
 `pool.slot` no longer has `occupied`. Its `size` is the maximum `usize` for a
 vacant slot, including after a successful free; zero denotes an occupied

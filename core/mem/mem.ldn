@@ -54,6 +54,16 @@ public allocator: type = concept (provider: type)
     grow: (self: provider, block: ptr mut u8,
            old_size: usize, new_size: usize, alignment: usize)
           -> (grown: bool)
+    --- Give a successful block a new byte extent, larger or smaller, in place
+    --- or by moving it, and return where it now is. Its first
+    --- min(old_size, new_size) bytes are the ones it held, it honors the same
+    --- alignment, and it is freed with `new_size`; a moved block's old
+    --- address is given back and is not used again. Report out_of_memory
+    --- with the block and provider unchanged when there is no room for it.
+    --- A provider that cannot resize in place answers with `relocate`.
+    resize: (self: provider, block: ptr mut u8,
+             old_size: usize, new_size: usize, alignment: usize)
+            -> (moved: ptr mut u8) ! out_of_memory
     --- Return a successful block with its current extent. The caller ends all
     --- uses first and must use the original provider.
     free: (self: provider, block: ptr mut u8, size: usize) -> none
@@ -67,6 +77,50 @@ public allocate: (provider: type is allocator, memory: provider,
                  -> (block: ptr mut u8) ! out_of_memory =
     block = try provider.alloc(memory, size, alignment)
 end allocate
+
+--- Give a block of `old_size` bytes the extent `new_size` through the
+--- provider, which may move it: the result holds the block's first
+--- min(old_size, new_size) bytes and is freed with `new_size`. Propagates
+--- `out_of_memory`, after which the old block is still the caller's.
+public resize: (provider: type is allocator, memory: provider,
+                block: ptr mut u8, old_size: usize, new_size: usize,
+                alignment: usize)
+               -> (moved: ptr mut u8) ! out_of_memory =
+    moved = try provider.resize(memory, block, old_size, new_size, alignment)
+end resize
+
+--  A writable view of `size` bytes at `block`, which a provider returned.
+--  The block borrows nothing [0810], so neither does the view.
+block_bytes: (block: ptr mut u8, size: usize) -> (view: []mut u8) =
+    view = []
+    return when size == 0
+    first: ptr mut [1]u8 = ptr(usize(block))
+    view = first.val[0..<1]
+    unchecked begin
+        --  The provider's block holds `size` bytes, at least one.
+        view = view[0..<size]
+    end unchecked
+end block_bytes
+
+--- Resize by moving, the `resize` of a provider that cannot resize in
+--- place: allocate `new_size` bytes with `alignment`, copy the first
+--- min(old_size, new_size) bytes there and free the old block with
+--- `old_size`. A refused allocation reports `out_of_memory` with the old
+--- block untouched. A provider's own `resize` entry calls it once any
+--- in-place change it can make has been refused.
+public relocate: (provider: type is allocator, memory: provider,
+                  block: ptr mut u8, old_size: usize, new_size: usize,
+                  alignment: usize)
+                 -> (moved: ptr mut u8) ! out_of_memory =
+    moved = try provider.alloc(memory, new_size, alignment)
+    kept: usize = if new_size < old_size then new_size else old_size end if
+    --  Two live blocks of at least `kept` bytes: the copy always fits.
+    into: []mut u8 = block_bytes(moved, kept)
+    copy(into, block_bytes(block, kept)) else (problem)
+        _ = problem
+    end
+    provider.free(memory, block, old_size)
+end relocate
 
 --- Return a block to its provider using the allocation's current extent. The
 --- caller must end all uses first; no item cleanup runs.
@@ -347,9 +401,12 @@ end arena_value
 
 --- Monotonic allocator over caller-owned bytes, as a handle: copies share one
 --- arena. Individual frees do not reclaim space; only the most recent
---- allocation can grow in place. Zero-byte requests may consume alignment
---- padding. There is no reset: every allocation ends with the backing, and a
---- fresh arena over the same bytes starts again once all of them have ended.
+--- allocation can grow in place, or give back its tail when it is resized
+--- smaller, and a resize that cannot grow in place moves the block to a new
+--- allocation, leaving the old bytes spent. Zero-byte requests may consume
+--- alignment padding. There is no reset: every allocation ends with the
+--- backing, and a fresh arena over the same bytes starts again once all of
+--- them have ended.
 public arena: type = arena_value
 
 --- Fill `state` for an arena over retainable backing and return its handle,
@@ -422,4 +479,29 @@ arena_grow: (self: arena, block: ptr mut u8,
     grown = true
 end arena_grow
 
-arena is allocator (alloc: arena_alloc, grow: arena_grow, free: arena_free)
+--  A smaller extent keeps the block where it is, and the latest allocation
+--  gives its tail back; a larger one grows in place when `arena_grow` can,
+--  and otherwise moves the block to the top.
+arena_resize: (self: arena, block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (moved: ptr mut u8) ! out_of_memory =
+    --  [0810]: the block borrows nothing, as an allocation does.
+    moved = ptr(usize(block))
+    if new_size <= old_size then
+        state: ptr mut arena_state = self.state
+        base_address: usize = usize(self.base)
+        block_address: usize = usize(block)
+        return when block_address < base_address
+        offset: usize = block_address - base_address
+        if offset <= state.val.used and old_size == state.val.used - offset
+        then
+            state.val.used = offset + new_size
+        end if
+        return
+    end if
+    return when arena_grow(self, block, old_size, new_size, alignment)
+    moved = try relocate(self, block, old_size, new_size, alignment)
+end arena_resize
+
+arena is allocator (alloc: arena_alloc, grow: arena_grow,
+                    resize: arena_resize, free: arena_free)

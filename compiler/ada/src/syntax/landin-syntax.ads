@@ -1672,11 +1672,18 @@ private
    package Slot_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Node_Id);
 
+   --  Each node's kind again, at the node's own index.  Kind is the query
+   --  every stage asks most, and reading it out of Items copied the whole
+   --  node first; a node's kind never changes once the parser adds it.
+   package Kind_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Node_Kind);
+
    --  The queries in the body read these vectors with Element rather than
    --  by indexing.  An indexed read elaborates a Constant_Reference, whose
-   --  controlled finalization defers abort and looks up the current
-   --  exception on every read; Element is a plain copy, which the
-   --  optimizer reduces to the component the query names.
+   --  controlled finalization looks up the current exception on every
+   --  read; Element is a plain copy, which the optimizer can reduce to the
+   --  component the query names.
+
    type Line_Fact_Kind is (Continues_Line, Leaves_Else);
 
    --  Sparse, beside the nodes: a parser records one only where a line
@@ -1695,6 +1702,7 @@ private
       Source : Landin.Source.Source_Id := Landin.Source.No_Source;
       Serial : Landin.Serials.Serial := Landin.Serials.Next;
       Items  : Node_Vectors.Vector;
+      Kinds  : Kind_Vectors.Vector;
       Links  : Slot_Vectors.Vector;
       Signature_Links : Slot_Vectors.Vector;
       Line_Facts : Line_Fact_Vectors.Vector;

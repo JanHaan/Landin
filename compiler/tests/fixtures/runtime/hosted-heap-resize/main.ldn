@@ -1,0 +1,167 @@
+--  The hosted heap's resize.  A block grows and shrinks in its size-class
+--  slot while the slot holds it, moves from a slot to a mapping of its own,
+--  and a mapping grows where it is, has its pages moved by the system, or
+--  is copied, each keeping the block's bytes and its alignment, whether a
+--  page has that alignment or not.  A mapping shrinks where it is.  `grow`
+--  extends a block only in place.  A zero extent is an ordinary block, and
+--  a refused resize leaves the block and its bytes as they were.  A region
+--  over the heap resizes its newest block through it, and a growing builder
+--  over the heap doubles through it.
+import core/mem
+import core/region
+import core/text
+import hosted/heap
+
+--  The first `count` bytes at `block` set to a pattern that repeats every
+--  251 bytes: what a resize must keep.
+ramp: (block: ptr mut u8, count: usize) -> none =
+    for at in usize(0)..<count do
+        cell: ptr mut u8 = ptr(usize(block) + at)
+        cell.val = u8(at % 251)
+    end for
+end ramp
+
+holds_ramp: (block: ptr mut u8, count: usize) -> (yes: bool) =
+    yes = false
+    for at in usize(0)..<count do
+        cell: ptr u8 = ptr(usize(block) + at)
+        return when cell.val <> u8(at % 251)
+    end for
+    yes = true
+end holds_ramp
+
+--  Ask the provider to extend a block in place.
+grows: (provider: type is mem.allocator, memory: provider, block: ptr mut u8,
+        old_size: usize, new_size: usize) -> (grown: bool) =
+    grown = provider.grow(memory, block, old_size, new_size, 1)
+end grows
+
+--  A block of `size` bytes at `alignment` with the pattern in it, resized
+--  to `larger` and back to `size`: the bytes and the alignment are kept.
+round_trip: (memory: heap.system, size: usize, larger: usize,
+             alignment: usize) -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    block := try mem.allocate(memory, size, alignment)
+    ramp(block, size)
+    grown := try mem.resize(memory, block, size, larger, alignment)
+    return when usize(grown) % alignment <> 0 or not holds_ramp(grown, size)
+    ramp(grown, larger)
+    shrunk := try mem.resize(memory, grown, larger, size, alignment)
+    return when usize(shrunk) <> usize(grown) or not holds_ramp(shrunk, size)
+    mem.free(memory, shrunk, size)
+    ok = true
+end round_trip
+
+slots_and_mappings: (memory: heap.system) -> (ok: bool)
+                    ! mem.out_of_memory =
+    ok = false
+    --  Ten bytes and the header fill 26 of a 32-byte slot: fourteen still
+    --  fit, in place, and `grow` says so; twenty do not.
+    small := try mem.allocate(memory, usize(10), usize(1))
+    ramp(small, 10)
+    return when not grows(memory, small, usize(10), usize(14))
+    return when grows(memory, small, usize(14), usize(20))
+    same := try mem.resize(memory, small, usize(14), usize(12), usize(1))
+    return when usize(same) <> usize(small) or not holds_ramp(same, 10)
+    --  From the slot to a mapping of its own: the bytes are copied.
+    ramp(same, 12)
+    mapped := try mem.resize(memory, same, usize(12), usize(20000),
+                             usize(1))
+    return when not holds_ramp(mapped, 12)
+    ramp(mapped, 20000)
+    --  The mapping grows, in place or moved, with every byte.
+    larger := try mem.resize(memory, mapped, usize(20000), usize(300000),
+                             usize(1))
+    return when not holds_ramp(larger, 20000)
+    --  It shrinks where it is, and back into a slot's size.
+    smaller := try mem.resize(memory, larger, usize(300000), usize(100),
+                              usize(1))
+    return when usize(smaller) <> usize(larger) or not holds_ramp(smaller, 100)
+    --  More than any host holds is refused, the block as it was.
+    maximum: usize = 0 -% 1
+    mut refused: bool = false
+    left: ptr mut u8 = mem.resize(memory, smaller, usize(100), maximum,
+                                  usize(1)) else (problem)
+        _ = problem
+        refused = true
+        smaller
+    end
+    return when not refused or usize(left) <> usize(smaller)
+      or not holds_ramp(smaller, 100)
+    mem.free(memory, smaller, usize(100))
+    --  A zero extent is a block like any other, grown and shrunk again.
+    nothing := try mem.allocate(memory, usize(0), usize(1))
+    some := try mem.resize(memory, nothing, usize(0), usize(40), usize(1))
+    ramp(some, 40)
+    none_again := try mem.resize(memory, some, usize(40), usize(0), usize(1))
+    mem.free(memory, none_again, usize(0))
+    --  A page's alignment, which moving a mapping keeps, and 24, which it
+    --  may not: both are kept, from a slot and from a mapping.
+    return when not (try round_trip(memory, usize(9), usize(5000),
+                                    usize(4096)))
+    return when not (try round_trip(memory, usize(30000), usize(200000),
+                                    usize(4096)))
+    return when not (try round_trip(memory, usize(9), usize(5000),
+                                    usize(24)))
+    return when not (try round_trip(memory, usize(30000), usize(200000),
+                                    usize(24)))
+    ok = true
+end slots_and_mappings
+
+--  A region over the heap: its newest block is resized through the heap,
+--  and a block behind a newer one moves into a record of its own.
+regions: (memory: heap.system) -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut records: region.space(0) = zeroed
+    scratch := region.over(records, memory)
+    first := try mem.allocate(scratch, usize(100), usize(1))
+    ramp(first, 100)
+    grown := try mem.resize(scratch, first, usize(100), usize(100000),
+                            usize(1))
+    return when not holds_ramp(grown, 100)
+    ramp(grown, 100000)
+    second := try mem.allocate(scratch, usize(8), usize(1))
+    moved := try mem.resize(scratch, grown, usize(100000), usize(200000),
+                            usize(1))
+    return when not holds_ramp(moved, 100000)
+    ramp(second, 8)
+    region.release(records, memory)
+    ok = true
+end regions
+
+--  A growing builder over the heap doubles past a mapping of its own,
+--  keeping every byte appended.
+builds: (memory: heap.system) -> (ok: bool) =
+    ok = false
+    mut out := text.growing(any(addr memory))
+    defer text.release(out)
+    mut piece: [61]u8 = zeroed
+    mut written: usize = 0
+    while written < 400000 do
+        for at in usize(0)..<61 do
+            piece[at] = u8((written + at) % 251)
+        end for
+        text.append(out, piece[0..<61]) else (problem)
+            _ = problem
+            return
+        end
+        written += 61
+    end while
+    held := text.used(out)
+    return when lenof held <> written
+    for at in usize(0)..<written do
+        return when held[at] <> u8(at % 251)
+    end for
+    ok = true
+end builds
+
+public main: () -> (code: i32) =
+    memory := heap.host()
+    code = 1
+    return when not (slots_and_mappings(memory) else false)
+    code = 2
+    return when not (regions(memory) else false)
+    code = 3
+    return when not builds(memory)
+    code = 42
+end main

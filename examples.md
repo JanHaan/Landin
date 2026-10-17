@@ -877,7 +877,11 @@ takes the sequence length as its argument; for the official correctness input,
 human-frequency symbols in 60-byte lines, and the fixture holds the exact
 10,245-byte output. It builds both cumulative-probability tables at runtime,
 lending the arrays whole to slice parameters [0570], and uses the specified
-naïve LCG once per random nucleotide. The lines gather in a 16 KiB buffered
+naïve LCG once per random nucleotide. Each random symbol is found as the
+Benchmark Game's C program finds it, by counting the cumulative probabilities
+the random number reaches instead of stopping at the first it does not: an
+early exit at a random place is a branch the processor mispredicts about
+once a symbol, and the count needs none. The lines gather in a 16 KiB buffered
 writer, so the performance input, 25,000,000, writes its 254 MB in large
 pieces rather than four million lines.
 
@@ -885,8 +889,11 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn`.
 
 ```landin
 --  The sequence length is the program's argument: 1000 for the correctness
---  output, 25000000 for the performance run.  The probability search remains
---  linear and the naïve LCG advances once for every random nucleotide.
+--  output, 25000000 for the performance run.  A symbol is chosen as the
+--  Benchmark Game's C program chooses it, by counting the cumulative
+--  probabilities the random number reaches rather than stopping at the
+--  first it does not, and the naïve LCG advances once for every random
+--  nucleotide.
 import core/io
 import core/text
 import hosted/io as hosted
@@ -926,16 +933,19 @@ next_random: (inout seed: u32) -> (value: f64) =
     value = f64(seed) / 139968.0
 end next_random
 
+--  The first symbol whose cumulative probability exceeds RANDOM, or the
+--  last.  Every comparison is made, so the loop has no exit that depends
+--  on the random number.
 select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
                -> (selected: u8) =
-    selected = symbols[lenof symbols - 1]
+    mut index: usize = 0
     first: usize = 0
-    for index in first..<lenof cumulative do
-        if random < cumulative[index] then
-            selected = symbols[index]
-            return
+    for at in first..<lenof cumulative - 1 do
+        if random >= cumulative[at] then
+            inc index
         end if
     end for
+    selected = symbols[index]
 end select_symbol
 
 write_repeated: (inout out: io.buffered_writer(hosted.system),

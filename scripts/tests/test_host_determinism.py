@@ -260,5 +260,72 @@ class Emission(unittest.TestCase):
                                     controls.encode()).hexdigest())
 
 
+def modes(debug_body, release_body):
+    """Run `modes` over a small corpus with two stub compilers."""
+    with tempfile.TemporaryDirectory() as tmp:
+        area = Path(tmp)
+        tests = area / "compiler/tests"
+        positive = tests / "fixtures/positive/example"
+        runtime = tests / "fixtures/runtime/hosted"
+        case = tests / "cortex-m/cases/counterpart"
+        for directory in (positive, runtime, case):
+            directory.mkdir(parents=True)
+            (directory / "main.ldn").write_text("unused by the stub\n")
+        (positive / "fixture.meta").write_text("program: main.ldn\n")
+        (runtime / "fixture.meta").write_text(
+            "program: main.ldn\ntargets: linux-x86-64, linux-rv64\n")
+        stubs = []
+        for name, body in (("debug", debug_body), ("release", release_body)):
+            refine = area / name
+            refine.write_text(
+                "#!" + sys.executable + "\n"
+                "import pathlib, sys\n"
+                "args = sys.argv[1:]\n"
+                "out = pathlib.Path(args[args.index('-o') + 1])\n"
+                "where = pathlib.Path.cwd().name\n" + body)
+            refine.chmod(0o755)
+            stubs.append(str(refine))
+        return subprocess.run(
+            [sys.executable, str(CHECK), "modes"] + stubs + [str(area)],
+            capture_output=True, text=True)
+
+
+class BuildModes(unittest.TestCase):
+    """The debug and release builds of one tree emit the same bytes."""
+
+    SAME = "out.write_text(' '.join(args[:4]) + where)\n"
+
+    def test_agreeing_builds_pass_over_every_source_and_profile(self):
+        result = modes(self.SAME, self.SAME)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        #  The positive fixture on three targets, the runtime fixture on
+        #  the one of them its record names, the counterpart on Cortex-M;
+        #  each at the four standard profiles.
+        self.assertIn("sources 3  requests 20  emitted 20", result.stdout)
+
+    def test_one_differing_emission_fails_and_is_named(self):
+        result = modes(self.SAME, self.SAME.replace(
+            "out.write_text(", "out.write_text('x' * ("
+            "where == 'hosted' and '--optimize=none' in args) + "))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("do not emit the same bytes: 1 fault", result.stderr)
+        self.assertIn("runtime/hosted|linux-x86-64|optimize=none|specialize=off",
+                      result.stderr)
+
+    def test_a_refusal_must_be_said_the_same_way(self):
+        refuse = "if where == 'counterpart':\n    print('%s'); sys.exit(1)\n"
+        result = modes(refuse % "no" + self.SAME, refuse % "no" + self.SAME)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("refused alike 4", result.stdout)
+        result = modes(refuse % "no" + self.SAME, refuse % "not so" + self.SAME)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("cortex-m/counterpart|cortex-m0", result.stderr)
+
+    def test_builds_that_refuse_everything_alike_fail(self):
+        result = modes("sys.exit(1)\n", "sys.exit(1)\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no assembly digest was emitted", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

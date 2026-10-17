@@ -1,0 +1,67 @@
+--  D339 copies a small routine into its caller at speed.  These can fail,
+--  and the copies have to fail, clean up and recover exactly as the calls
+--  did: the routine's cleanup runs before the caller sees the failure, a
+--  failure passes through a copy's own call, and recovery takes the value
+--  or the atom the call would have given it.  Every profile runs this.
+import core/io
+import hosted/io as hosted
+
+odd: atom
+large: atom
+
+say: (host: hosted.system, text: []u8) -> none =
+    io.write(host, io.out(host), text) else (ignored)
+        _ = ignored
+    end
+end say
+
+half: (value: u32) -> (result: u32) ! odd =
+    fail odd when value % 2 == 1
+    result = value / 2
+end half
+
+--  A failure from the copy's own call, which is not copied again.
+quarter: (value: u32) -> (result: u32) ! odd | large =
+    fail large when value > 1000
+    result = try half(try half(value))
+end quarter
+
+--  Cleanup that runs on both of the copy's ways out.
+counted_half: (host: hosted.system, inout count: u32, value: u32)
+              -> (result: u32) ! odd =
+    defer say(host, "cleanup\n")
+    inc count
+    result = try half(value)
+end counted_half
+
+--  Propagation through a caller's own `try`, past its own cleanup.
+halves: (host: hosted.system, value: u32) -> (result: u32) ! odd | large =
+    defer say(host, "halves done\n")
+    result = try quarter(value) + try half(value)
+end halves
+
+public main: () -> (code: i32) =
+    host := hosted.host()
+    mut count: u32 = 0
+    code = 1
+    a: u32 = half(10) else 99
+    b: u32 = half(7) else 90
+    c: u32 = counted_half(host, count, 8) else 0
+    mut d: u32 = 0
+    d = counted_half(host, count, 9) else (problem)
+        say(host, if problem == odd then "recovered odd\n"
+                  else "recovered other\n" end if)
+        return when problem <> odd
+        7
+    end
+    e: u32 = halves(host, 12) else 1
+    f: u32 = halves(host, 6) else (problem)
+        say(host, if problem == odd then "halves odd\n"
+                  else "halves other\n" end if)
+        2
+    end
+    g: u32 = quarter(4000) else (problem)
+        if problem == large then 3 else 4 end if
+    end
+    code = i32(a + b + c + d + count + e + f + g)
+end main

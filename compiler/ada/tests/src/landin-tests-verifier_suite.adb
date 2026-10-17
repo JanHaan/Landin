@@ -484,6 +484,62 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Nominal_Root_Metadata_Is_Checked;
 
+   --  A split slot's pieces are one scalar slot per part, of that part's
+   --  type, inside the item's own slots.
+   procedure Split_Slot_Pieces_Are_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Split_Slot_Pieces_Are_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Slot_Id;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit : IR.Unit;
+         Routine : IR.Item_Id;
+         Whole, Low, High, Narrow : IR.Slot_Id;
+      begin
+         IR.Prepare (Unit, Meanings.all);
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+         Whole := IR.Add_Array_Slot
+           (Unit, Routine, Landin.Types.Usize, 2, 2, Site);
+         Low := IR.Add_Slot
+           (Unit, Routine, Landin.Types.Usize, IR.No_Declaration, Site);
+         High := IR.Add_Slot
+           (Unit, Routine, Landin.Types.Usize, IR.No_Declaration, Site);
+         Narrow := IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, IR.No_Declaration, Site);
+         pragma Assert (High = Low + 1);
+
+         Landin.IR.Testing_Support.Overwrite_First_Piece
+           (Unit, Routine, Whole, High);
+         Expect
+           (Item, V.Check (Unit), V.Pieces_Disagree,
+            "a piece of a usize part cannot be a u32 slot");
+
+         Landin.IR.Testing_Support.Overwrite_First_Piece
+           (Unit, Routine, Whole, Narrow);
+         Expect
+           (Item, V.Check (Unit), V.Pieces_Disagree,
+            "the pieces of every part lie inside the item's slots");
+
+         Landin.IR.Testing_Support.Overwrite_First_Piece
+           (Unit, Routine, Whole, IR.No_Slot);
+         Landin.IR.Testing_Support.Overwrite_First_Piece
+           (Unit, Routine, Low, High);
+         Expect
+           (Item, V.Check (Unit), V.Pieces_Disagree,
+            "a scalar slot has no parts to split");
+      end;
+   end Split_Slot_Pieces_Are_Checked;
+
    --  [0480]/[1870]: a union of several atoms and one pointer is exactly its
    --  atom code cell and one pointer cell; only that code cell's direct
    --  slot-field load may observe the reserved zero.
@@ -2016,6 +2072,108 @@ package body Landin.Tests.Verifier_Suite is
          end;
       end loop;
    end Malformed_Shapes_Are_Rejected;
+
+   --  D338: a choice takes a bool and two plain values of its result's
+   --  scalar type, and only where code executes.
+   procedure Choices_Are_Held_To_Operands
+     (Item : in out Landin.Testing.Context);
+
+   procedure Choices_Are_Held_To_Operands
+     (Item : in out Landin.Testing.Context)
+   is
+      type Damage is
+        (Sound, Condition_Is_A_Number, Values_Disagree, Result_Disagrees,
+         Inside_A_Datum);
+
+      function Built
+        (Unit : in out IR.Unit;
+         Site : Landin.Provenance.Origin;
+         Harm : Damage) return V.Fault;
+
+      function Built
+        (Unit : in out IR.Unit;
+         Site : Landin.Provenance.Origin;
+         Harm : Damage) return V.Fault
+      is
+         Routine : constant IR.Item_Id :=
+           IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         Result : constant IR.Slot_Id :=
+           IR.Add_Slot (Unit, Routine, Landin.Types.U32, 1, Site);
+         Block : IR.Block_Id;
+         Yes, No, Condition, Chosen : IR.Value_Id;
+      begin
+         IR.Set_Result_Slot (Unit, Routine, Result);
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Yes := IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 1, False, Site);
+         No := IR.Emit_Number
+           (Unit, Routine,
+            (if Harm = Values_Disagree then Landin.Types.U16
+             else Landin.Types.U32),
+            2, False, Site);
+         Condition :=
+           (if Harm = Condition_Is_A_Number then Yes
+            else IR.Emit_Binary
+              (Unit, Routine, IR.Less_Than, Yes, Yes, Landin.Types.Bool,
+               Site));
+         Chosen := IR.Emit_Choose
+           (Unit, Routine, Condition, Yes, No,
+            (if Harm = Result_Disagrees then Landin.Types.U64
+             else Landin.Types.U32),
+            Site);
+         IR.Emit_Store (Unit, Routine, Result, Chosen, Site);
+         IR.Emit_Leave (Unit, Routine, Chosen, Site);
+         IR.Leave_Block (Unit, Routine);
+
+         if Harm = Inside_A_Datum then
+            declare
+               Datum : constant IR.Item_Id :=
+                 IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
+            begin
+               Block := IR.Add_Block
+                 (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Datum, Block);
+               Yes := IR.Emit_Number
+                 (Unit, Datum, Landin.Types.U32, 1, False, Site);
+               Condition := IR.Emit_Truth (Unit, Datum, True, Site);
+               Chosen := IR.Emit_Choose
+                 (Unit, Datum, Condition, Yes, Yes, Landin.Types.U32, Site);
+               IR.Emit_Leave (Unit, Datum, Chosen, Site);
+               IR.Leave_Block (Unit, Datum);
+            end;
+         end if;
+         return V.Check (Unit);
+      end Built;
+
+      type Row is record
+         Harm : Damage;
+         Kind : V.Fault_Kind;
+      end record;
+      Wanted : constant array (Positive range <>) of Row :=
+        [(Sound, V.Nothing_Wrong),
+         (Condition_Is_A_Number, V.Condition_Is_Not_A_Bool),
+         (Values_Disagree, V.Operands_Disagree),
+         (Result_Disagrees, V.Operands_Disagree),
+         (Inside_A_Datum, V.Choice_Inside_A_Datum)];
+   begin
+      for Each of Wanted loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Site : Landin.Provenance.Origin;
+            Unit : IR.Unit;
+         begin
+            Ready (Work, Site);
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Expect
+              (Item, Built (Unit, Site, Each.Harm), Each.Kind,
+               Damage'Image (Each.Harm) & " is "
+               & (if Each.Harm = Sound then "accepted" else "rejected"));
+         end;
+      end loop;
+   end Choices_Are_Held_To_Operands;
 
    --  D76's release checks walk storage, field, case and payload in that
    --  order.  Each malformed identity is constructible through the public
@@ -8462,6 +8620,9 @@ package body Landin.Tests.Verifier_Suite is
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
+        (Into, "verifier", "split slot pieces are checked",
+         Split_Slot_Pieces_Are_Checked'Access);
+      Landin.Testing.Register
         (Into, "verifier", "scratch arithmetic and zero uses",
          Scratch_Arithmetic_And_Zero_Uses'Access);
       Landin.Testing.Register
@@ -8596,6 +8757,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed variant operations are rejected",
          Malformed_Variant_Operations_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "a choice is held to its operands",
+         Choices_Are_Held_To_Operands'Access);
       Landin.Testing.Register
         (Into, "verifier", "malformed image values are rejected",
          Malformed_Image_Values_Are_Rejected'Access);

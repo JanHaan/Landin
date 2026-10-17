@@ -1,0 +1,12 @@
+--  D339 copies `grow` into `main` at speed.  The first copy's sum fits and
+--  folds; the second's addition still traps at its own operation, as the
+--  call's would have, at every profile.
+grow: (value: u8) -> (result: u8) =
+    result = value + 200
+end grow
+
+public main: () -> (code: i32) =
+    small: u8 = grow(50)
+    large: u8 = grow(small)
+    code = i32(large)
+end main

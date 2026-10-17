@@ -191,6 +191,20 @@ fixed if compiler.os == linux then
         fail errno_of(-result) when result < 0
     end system_unmap
 
+    system_extend: (base: ptr mut u8, length: usize, new_length: usize)
+                   -> none ! errno =
+        result: i64 = linux.mremap(usize(base), length, new_length, 0)
+        fail errno_of(i32(-result)) when result < 0
+    end system_extend
+
+    system_remap: (base: ptr mut u8, length: usize, new_length: usize)
+                  -> (moved: ptr mut u8) ! errno =
+        result: i64 = linux.mremap(usize(base), length, new_length,
+                                   linux.mremap_maymove)
+        fail errno_of(i32(-result)) when result < 0
+        moved = ptr(usize(result))
+    end system_remap
+
     system_page_size: () -> (bytes: usize) =
         bytes = linux.page_size()
     end system_page_size

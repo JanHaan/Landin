@@ -69,7 +69,7 @@ jobs:
             arm64-compiler-checks arm64-release \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime-1 freebsd-arm64-runtime-2 \
-            freebsd-arm64-debugger freebsd-arm64-abi \
+            freebsd-arm64-debugger freebsd-arm64-abi build-modes-1 build-modes-2 \
             'determinism / manifest (x86_64-linux 1)' \
             'determinism / manifest (x86_64-linux 2)' \
             'determinism / manifest (aarch64-linux 1)' \
@@ -115,8 +115,8 @@ jobs:
           python3 compiler/tests/quality/test_check.py
           python3 compiler/tests/debugging/test_check.py
 
-  #  Compile the debug executables once on Linux x86-64 for the debug suite
-  #  and for determinism.  A job cannot wait on another job's step, so
+  #  Compile the debug executables once on Linux x86-64 for the debug suite,
+  #  build-modes and determinism.  A job cannot wait on another job's step, so
   #  while the build was the suite's first step the manifests waited for
   #  the whole suite.  A compile error is reported here.
   #  Four units at once on the hosted runner's four CPUs.
@@ -264,8 +264,8 @@ jobs:
           --refine "$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
           --out "$RUNNER_TEMP/fuzz"
 
-  #  Compile the release executables once on Linux for the corpus, Cortex-M
-  #  and scaling lanes.  The archive preserves executable permissions.
+  #  Compile the release executables once on Linux for the corpus,
+  #  build-modes, Cortex-M and scaling lanes.  The archive preserves executable permissions.
   linux-release-build:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
@@ -380,6 +380,62 @@ jobs:
         run: |
           PATH="$LANDIN_GNAT_HOME/bin:$PATH"
           ./scripts/debug.sh
+
+  #  The determinism manifests compare hosts with their debug compilers, but
+  #  people run the release one: here both builds of this tree compile the
+  #  positive and runtime corpora and the Cortex-M counterparts at the four
+  #  standard profiles, and must emit the same bytes.  Emission needs no
+  #  assembler; the debug compiler is most of the cost, so the targets are
+  #  dealt across two runners.
+  build-modes:
+    name: build-modes-${{ matrix.part }}
+    needs: [inputs, linux-debug-build, linux-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: 1
+            targets: linux-x86-64
+          - part: 2
+            targets: linux-arm64,cortex-m0
+    env:
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-amd64-debug
+          path: ${{ runner.temp }}/linux-amd64-debug
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+
+      - name: Restore and verify both compilers
+        run: |
+          set -eu
+          mkdir -p compiler/ada/build/linux-amd64/debug compiler/ada/build/linux-amd64/release
+          tar -xzf "$RUNNER_TEMP/linux-amd64-debug/linux-amd64-debug.tar.gz" \
+            -C compiler/ada/build/linux-amd64/debug
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
+            -C compiler/ada/build/linux-amd64/release
+          ./scripts/build.sh -q
+          LANDIN_BUILD_MODE=release ./scripts/build.sh -q
+
+      - name: Both builds emit the same bytes, part ${{ matrix.part }}
+        run: >-
+          python3 scripts/emit_manifest.py modes
+          compiler/ada/build/linux-amd64/debug/bin/refine
+          compiler/ada/build/linux-amd64/release/bin/refine
+          . ${{ matrix.targets }}
 
   #  The C binding generator against its pinned Clang, including the
   #  byte-for-byte regeneration of the committed fixture.  47 s.
@@ -1257,8 +1313,8 @@ jobs:
   gate:
     if: always()
     needs: [inputs, documents, scripts, linux-debug-build, compiler,
-            compiler-checks, linux-release-build, release, bindings,
-            editor-grammar, cortex-m, scaling, darwin-debug-build,
+            compiler-checks, linux-release-build, release, build-modes,
+            bindings, editor-grammar, cortex-m, scaling, darwin-debug-build,
             darwin-release-build, darwin-host, darwin-host-release,
             darwin-parity, lldb, arm64-debug-build, arm64-compiler,
             arm64-compiler-checks, arm64-release, freebsd, determinism]

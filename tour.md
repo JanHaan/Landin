@@ -2893,7 +2893,8 @@ value parameter may appear among them.
                                item:  list_item,  next:   list_next)
 
 (provider: type is allocator) counted(provider) is allocator
-    (alloc: counted_alloc, grow: counted_grow, free: counted_free)
+    (alloc: counted_alloc, grow: counted_grow, resize: counted_resize,
+     free: counted_free)
 ```
 
 The functions supplying the entries are generic themselves.
@@ -3079,7 +3080,8 @@ source type is known.
 
 The deterministic policy counts proved entry-call sites and their source loop
 depth, represented target bytes and weighted IR growth. D211 states the caps,
-weights and thresholds: size raises the bar and speed lowers it. `none` turns
+weights and thresholds: size raises the bar and speed lowers it, and at speed
+a rewrite inside an instance that exists anyway counts no growth. `none` turns
 off simplification and allocation, not independently requested specialization;
 its automatic specialization uses the size threshold. Identical emitted bodies
 may share only when their complete machine meaning and address identity permit
@@ -3269,6 +3271,9 @@ allocator: type = concept (provider: type)
            -> (p: ptr mut u8) ! out_of_memory
     grow: (self: provider, p: ptr mut u8, old_size: usize,
            new_size: usize, alignment: usize) -> (grown: bool)
+    resize: (self: provider, p: ptr mut u8, old_size: usize,
+             new_size: usize, alignment: usize)
+            -> (moved: ptr mut u8) ! out_of_memory
     free:  (self: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
@@ -3292,6 +3297,12 @@ and costs one argument at every call that can allocate.
 A refusal returns `false` with the block and provider unchanged, so a container
 can try a fresh allocation. An arena can use this when the block is its latest
 allocation; providers without in-place growth return `false`.
+`resize` gives a block a new extent, larger or smaller, and may move it: the
+result keeps the bytes the two extents share, and a refusal reports
+`out_of_memory` with the block as it was. A concept entry has no default, so a
+provider that can only move a block calls `mem.relocate`, which allocates,
+copies and frees through it; a heap that can move a mapping's pages does
+better than that copy.
 
 The parser-support modules use this exact interface. `core/mem.arena` is a
 monotonic provider over an explicit extent. The separately imported
