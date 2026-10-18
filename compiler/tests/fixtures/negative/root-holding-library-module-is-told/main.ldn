@@ -1,0 +1,7 @@
+--  D366: the import is read from the compiler's library, and the root's own
+--  `core/cmp`, which D275 does not read, is named with `--library`.
+import core/cmp
+
+public main: () -> (code: i32) =
+    code = 0
+end main

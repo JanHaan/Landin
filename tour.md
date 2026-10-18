@@ -64,6 +64,8 @@ decisions taken while implementing them. Where the two could be read
 differently, `spec.md` decides. Everything still open, every
 implementation dependency and every disposition is owned by ROADMAP.md,
 not by a second list here.
+A C programmer finds the Landin form of each familiar habit, and the
+habits with none yet, in [Landin for C programmers](docs/from-c.md).
 
 *32 TB is an unverified goal. What it measures at the hosted end, and what
 evidence would prove it, are still open, and nothing hosted today
@@ -104,7 +106,6 @@ Full form: name, type, value. Immutable by default.
 
 ```landin
 greeting: utf8 = "hello"
-
 ```
 
 ### [0050] Type inferred from the value
@@ -113,7 +114,6 @@ Type inferred from the value.
 
 ```landin
 count := 7
-
 ```
 
 ### [0060] Mutable binding
@@ -122,7 +122,6 @@ Mutable binding.
 
 ```landin
 mut total: u32 = 0
-
 ```
 
 ### [0070] Two questions about a reference
@@ -134,10 +133,9 @@ The type answers the second, with mut inside it, as the
 POINTERS section shows — and nothing else answers either.
 
 ```landin
-mut cursor: ptr u32 = addr first                 -- re-pointable, reads
-knob:  ptr mut u32 = addr setting                -- fixed, writes
-gpioa: ptr mut u32 = ptr(0x4002_0000)            -- fixed, writes
-
+mut cursor: ptr u32 = addr first -- re-pointable, reads
+knob: ptr mut u32 = addr setting -- fixed, writes
+gpioa: ptr mut u32 = ptr(0x4002_0000) -- fixed, writes
 ```
 
 ### [0080] Declaration only
@@ -146,7 +144,6 @@ Declaration only. Must be assigned before use.
 
 ```landin
 mut result: u32
-
 ```
 
 ### [0090] Exported from the module
@@ -155,7 +152,6 @@ Exported from the module. Without it, module-internal.
 
 ```landin
 public version: u32 = 3
-
 ```
 
 ### [0100] Several names may share one declaration
@@ -166,7 +162,6 @@ form field lists already use.
 ```landin
 public red, green, blue: u8
 north, south, east, west: atom
-
 ```
 
 It means the declarations written one per name, in order: each name gets its
@@ -178,7 +173,7 @@ written type, because `low, high := bounds()` would read as a destructuring
 condition bindings keep one name each (D233).
 
 ```landin
-mut low, high: u32 = next_seed()     -- one call; high starts equal to low
+mut low, high: u32 = next_seed() -- one call; high starts equal to low
 clamp: (inout low, high: i32, value: i32) -> (result: i32) = ... end
 ```
 
@@ -208,7 +203,6 @@ point: type = struct
     x: f32
     y: f32
 end point
-
 ```
 
 ### [0130] Module names do not depend on declaration order
@@ -261,7 +255,7 @@ Integer literals are untyped. They take the type of their
 context, and are checked at that point.
 
 ```landin
-tiny:  u8  = 5
+tiny: u8 = 5
 large: u64 = 5
 -- bad: u8 = 300      is a compile error
 ```
@@ -272,7 +266,6 @@ With no context, an integer literal defaults to i32.
 
 ```landin
 plain := 5
-
 ```
 
 ### [0210] Float literals are always recognisable as such
@@ -283,9 +276,8 @@ silent slide between the two classes.
 ```landin
 ratio: f32 = 5.0
 -- wrong: f32 = 5     is a compile error
-half := 1.0 / 2.0     -- 0.5
-zero := 1 / 2         -- 0, integer division
-
+half := 1.0 / 2.0 -- 0.5
+zero := 1 / 2 -- 0, integer division
 ```
 
 ### [0220] Bases, separators, exponents
@@ -304,8 +296,7 @@ bin_value := 0b1010_0101
 oct_value := 0o755
 big_value := 1_000_000
 sci_value := 1.5e10
-neg_exp   := 1.0e-6
-
+neg_exp := 1.0e-6
 ```
 
 ### [0230] Hex float literals express every representable value exactly
@@ -317,7 +308,6 @@ including subnormals.
 pi_exact: f64 = 0x1.921fb54442d18p+1
 smallest_subnormal: f32 = 0x1.0p-149
 smallest_normal: f32 = 0x1.0p-126
-
 ```
 
 ### [0240] IEEE special values
@@ -327,12 +317,11 @@ constant folding. The sign of a NaN produced by arithmetic
 is not specified.
 
 ```landin
-neg_zero:  f64 = -0.0
-pos_inf:   f64 = f64.infinity
-neg_inf:   f64 = -f64.infinity
+neg_zero: f64 = -0.0
+pos_inf: f64 = f64.infinity
+neg_inf: f64 = -f64.infinity
 quiet_nan: f64 = f64.nan
-neg_nan:   f64 = -f64.nan
-
+neg_nan: f64 = -f64.nan
 ```
 
 ### [0250] Character literal is a codepoint, typed u32
@@ -341,7 +330,6 @@ Character literal is a codepoint, typed u32.
 
 ```landin
 letter_a := 'a'
-
 ```
 
 ### [0260] Text literals are untyped too
@@ -352,7 +340,7 @@ Every literal carries a trailing NUL that the length does
 not count, so passing one to C costs nothing.
 
 ```landin
-name:  utf8    = "hello"
+name: utf8 = "hello"
 cname: cstring = "hello"
 ```
 
@@ -379,10 +367,9 @@ escape is a compile error, never silently the character.
 text is meant, so a literal can never be invalid UTF-8.
 
 ```landin
-line  := "col\tsep\n"
+line := "col\tsep\n"
 smile := "\u{1F600}"
-byte: []u8 = "\xFF"      -- byte escapes require []u8 context
-
+byte: []u8 = "\xFF" -- byte escapes require []u8 context
 ```
 
 ### [0280] Raw literals: N quotes on each side, N at least three
@@ -402,7 +389,20 @@ help := """
         usage: tool [options]
           -v    verbose
         """
+```
 
+Every line end between the quotes is content, the one just after the opening
+quotes and the one before a closer on a line of its own among them, so `help`
+begins with a line end and ends with one:
+`"\nusage: tool [options]\n  -v    verbose\n"`. Text that should begin with
+its first line, as an expected output usually should, begins on the opener's
+line; nothing is stripped from that line, and the closer's indentation is
+still stripped from the lines after it.
+
+```landin
+expected := """usage: tool [options]
+            -v verbose
+            """
 ```
 
 ## OPERATORS
@@ -414,9 +414,8 @@ Integer division truncates toward zero; the remainder takes
 the sign of the dividend.
 
 ```landin
-q := -7 / 2      -- -3
-r := -7 % 2      -- -1
-
+q := -7 / 2 -- -3
+r := -7 % 2 -- -1
 ```
 
 ### [0300] Overflow traps
@@ -447,9 +446,8 @@ that type would; it can extract the exact pointer base of a distinct value
 
 ```landin
 -- bad: u8 = u8(300)        compile error
-runtime_narrow := u8(measured)   -- traps if out of range
-text_bytes: []u8 = []u8(text)    -- keeps text's storage and origin
-
+runtime_narrow := u8(measured) -- traps if out of range
+text_bytes: []u8 = []u8(text) -- keeps text's storage and origin
 ```
 
 ### [0320] Shifts fill with zeros beyond the width, for any amount
@@ -459,7 +457,6 @@ Signed >> keeps the sign. One form only.
 
 ```landin
 z: u32 = 1 << 40 -- 0 in a u32 context
-
 ```
 
 ### [0330] Bitwise
@@ -468,8 +465,7 @@ Bitwise: & | ^ ~ << >>
 These bind TIGHTER than comparisons, unlike C.
 
 ```landin
-flag := status & 1 == 0     -- means (status & 1) == 0
-
+flag := status & 1 == 0 -- means (status & 1) == 0
 ```
 
 ### [0340] Logical: and, or, not
@@ -479,7 +475,6 @@ error channel.
 
 ```landin
 ok := a < b and not done
-
 ```
 
 ### [0350] Comparison
@@ -512,9 +507,8 @@ w1 := sizeof u32
 a1 := alignof u64
 n1 := lenof grid
 n2 := lenof ([next(), next(), next()]) -- 3; next is not called
-n3 := lenof table.keys                 -- a field
-n4 := lenof read_all(source)           -- read_all is called
-
+n3 := lenof table.keys -- a field
+n4 := lenof read_all(source) -- read_all is called
 ```
 
 ### [0380] addr takes an address
@@ -536,7 +530,6 @@ No `++` and no `--`. There are inc and dec statements, though
 ```landin
 inc total
 dec total
-
 ```
 
 ### [0410] Evaluation order is fixed
@@ -578,7 +571,7 @@ mut value: u32 = 42
 p: ptr mut u32 = addr value
 v := p.val
 p.val = 43
-ro: ptr u32 = addr value         -- same address, read-only through ro
+ro: ptr u32 = addr value -- same address, read-only through ro
 -- ro.val = 1              -- error
 ```
 
@@ -596,8 +589,7 @@ and it is what makes a read-only parameter usable at all.
 
 ```landin
 add_up: (xs: []i32) -> (total: i32) = ... end
-add_up(writable_slice)           -- fine, []mut i32 relaxes to []i32
-
+add_up(writable_slice) -- fine, []mut i32 relaxes to []i32
 ```
 
 ### [0450] Permission is shallow
@@ -623,7 +615,6 @@ operation that performs it [0850], not the pointer's type.
 
 ```landin
 gpio: ptr mut u32 = ptr(0x4001_0000)
-
 ```
 
 ### [0470] Both directions between a pointer and an integer are the
@@ -672,7 +663,7 @@ end lookup
 read: (m: maybe_ptr, fallback: u32) -> (value: u32) =
     match m
         none_found: value = fallback
-        ptr (p):    value = p.val
+        ptr (p): value = p.val
     end match
 end read
 ```
@@ -697,9 +688,9 @@ Three operations were proposed between pointers and slices, in core where
 system-tool policy belongs:
 
 ```landin
-mem.offset:     (p: ptr mut u8, n: usize) -> (q: ptr mut u8)
-mem.base_of:    (t: type, s: []t) -> (p: ptr u8)
-mem.base_of:    (t: type, s: []mut t) -> (p: ptr mut u8)
+mem.offset: (p: ptr mut u8, n: usize) -> (q: ptr mut u8)
+mem.base_of: (t: type, s: []t) -> (p: ptr u8)
+mem.base_of: (t: type, s: []mut t) -> (p: ptr mut u8)
 mem.slice_from: (t: type, p: ptr mut u8, n: usize) -> (s: []mut t)
 ```
 
@@ -811,7 +802,6 @@ the same direct formation and ordering apply.
 grid: [4]f32 = [1.0, 2.0, 3.0, 4.0]
 mut next: [4]f32
 next = [grid[0], grid[1], grid[2], grid[3]]
-
 ```
 
 ### [0530] The length may be inferred from the literal
@@ -819,8 +809,7 @@ next = [grid[0], grid[1], grid[2], grid[3]]
 The length may be inferred from the literal.
 
 ```landin
-triple := [1.0, 2.0, 3.0]        -- [3]f32
-
+triple := [1.0, 2.0, 3.0] -- [3]f32
 ```
 
 The first element supplies the element type, whether it is a number, a slice,
@@ -851,8 +840,8 @@ Reading that field then traps; copying the image preserves its bits.
 
 ```landin
 mut buffer: [256]u8 = zeroed
-buffer = zeroed                 -- clear the existing array as a whole
-irqs:   irq_set  = zeroed       -- fine: a set is bools, see [0730]
+buffer = zeroed -- clear the existing array as a whole
+irqs: irq_set = zeroed -- fine: a set is bools, see [0730]
 -- mode: clock_mode = zeroed    -- error, write 'internal'
 -- p:    ptr u32     = zeroed   -- error, no zero image
 ```
@@ -870,7 +859,6 @@ signature is:
 -- compiler-owned; a program does not repeat this declaration
 zeroable: type = concept (t: type)
 end zeroable
-
 ```
 
 A program cannot declare a `zeroable` conformance. The supplied family contains
@@ -889,12 +877,11 @@ Repetition, for static patterns that live in flash.
 
 ```landin
 pattern: [256]u8 = [256 of 0xFF]
-filled:  [256]u8 = [of 0xFF]         -- length from the type
+filled: [256]u8 = [of 0xFF] -- length from the type
 
 read_header: () -> none =
     header: [8]u8 = [0x7F, 0x45, of 0]
 end read_header
-
 ```
 
 The repeated expression runs once, not once for every element. In the mixed form
@@ -920,9 +907,8 @@ flash: [4]u32 = [of 0xFFFF_FFFF]
 header_image: [8]u8 = [0x7F, 0x45, of 0]
 mut row: [4]u32 = [of next()]
 inferred := [4 of next()]
-row = [of next()]                 -- each call to next happens once
-row = [header(), of padding()]     -- prefix first, then one padding call
-
+row = [of next()] -- each call to next happens once
+row = [header(), of padding()] -- prefix first, then one padding call
 ```
 
 A zero contextual length and a zero count in the inferred form remain refused:
@@ -942,9 +928,8 @@ Slice: a view. Pointer plus length. Copies nothing. mut
 inside the type says the elements may be written.
 
 ```landin
-view:  []f32     = grid[0..<2]      -- read-only elements
-edit:  []mut f32 = grid[0..<2]      -- writable, since grid is mut
-
+view: []f32 = grid[0..<2] -- read-only elements
+edit: []mut f32 = grid[0..<2] -- writable, since grid is mut
 ```
 
 An array passed where a slice parameter is wanted lends a slice of the whole
@@ -961,7 +946,6 @@ added: (values: []f32) -> (sum: f32) =
 end added
 
 both := added(grid) + added([1.0, 2.0])
-
 ```
 
 ### [0580] An empty slice still has a base
@@ -990,8 +974,8 @@ end sum_four
 array_example: () -> (sc: [4]f32, s: f32) =
     va: [4]f32 = [1.0, 1.0, 1.0, 1.0]
     vb := va * va
-    sc = va * 2.0        -- a scalar on either side is fine
-    s = sum_four(vb)     -- ordinary function, not a reduction builtin
+    sc = va * 2.0 -- a scalar on either side is fine
+    s = sum_four(vb) -- ordinary function, not a reduction builtin
 end array_example
 ```
 
@@ -1076,10 +1060,9 @@ integer conversion.
 
 ```landin
 word: utf8 = "\u{e9}t\u{e9}"
-last := word[2]               -- 233, the u32 of é, found by scanning
-same := last == '\u{e9}'      -- true
-bytes: utf8 = word[3..3]      -- é again, at byte 3: two bytes, no copy
-
+last := word[2] -- 233, the u32 of é, found by scanning
+same := last == '\u{e9}' -- true
+bytes: utf8 = word[3..3] -- é again, at byte 3: two bytes, no copy
 ```
 
 The codepoint is decoded, so it is a value and not a place: `addr word[2]`
@@ -1119,7 +1102,7 @@ advance: (inout w: world, dt: f32) -> none =
     xs: []f32 = w.items.x
     shift_all(xs, dt)
 
-    first := w.items[0]          -- a copy
+    first := w.items[0] -- a copy
     --  p := addr w.items[0]     -- error: the fields are apart
 end advance
 ```
@@ -1140,7 +1123,6 @@ atom sets; no ordering or numeric conversion is implied.
 ```landin
 not_found: atom
 no_access: atom
-
 ```
 
 ### [0640] An enumeration is a union of atoms
@@ -1153,7 +1135,6 @@ it back grants no integer operations or conversions.
 
 ```landin
 compass: type = north | south | east | west
-
 ```
 
 A binding, a parameter, a return or a field may write the union in place,
@@ -1167,7 +1148,7 @@ Distinct type: same representation, different type, no
 operations inherited.
 
 ```landin
-meter:  type = distinct f32
+meter: type = distinct f32
 second: type = distinct f32
 ```
 
@@ -1199,7 +1180,6 @@ Range subtype: checked at assignment and conversion.
 
 ```landin
 percent: type = u8 range 0..100
-
 ```
 
 A range subtype constrains the places a value is checked on its way in: a
@@ -1225,7 +1205,6 @@ form is also the parameter, return and payload list.
 
 ```landin
 size2: type = (w: u32, h: u32)
-
 ```
 
 Both declared forms may take type and fixed parameters. An inline body is
@@ -1243,13 +1222,12 @@ Struct with a variant part. Common fields need no ceremony.
 ```landin
 figure: type = struct
     label: utf8
-    area:  f32
+    area: f32
     kind: variant
-        circle:    (radius: f32) |
+        circle: (radius: f32) |
         rectangle: (width: f32, height: f32)
     end kind
 end figure
-
 ```
 
 ### [0690] A case with no payload is written bare
@@ -1265,7 +1243,6 @@ node_kind: type = struct
         branch: (first: node_id, count: u32)
     end kind
 end node_kind
-
 ```
 
 A case is written where its variant part is the context: constructing into
@@ -1296,7 +1273,6 @@ before it showed one being built.
 ```landin
 mut f: figure = (label: "disc", area: 0.0, kind: circle(radius: 2.0))
 f.kind = rectangle(width: 3.0, height: 4.0)
-
 ```
 
 ### [0710] A struct literal is untyped
@@ -1364,7 +1340,6 @@ loudly.
 
 ```landin
 cfg: control = (enable: true, mode: external, of zeroed)
-
 ```
 
 ### [0730] A register has three kinds of field
@@ -1379,14 +1354,13 @@ numbered bank of lines does not: sixteen output pins are
 [16]bool at 0..15, not sixteen invented atoms.
 
 ```landin
-irq_rx:  atom
-irq_tx:  atom
+irq_rx: atom
+irq_tx: atom
 irq_err: atom
 
 internal: atom
 external: atom
-pll:      atom
-
+pll: atom
 ```
 
 The encoding belongs to the union, not to the atom, so the
@@ -1396,10 +1370,9 @@ so it is usually left out; a base type is written only when
 the datasheet gives the field more room than it needs.
 
 ```landin
-polarity: type = (active_low = 0 | active_high = 1)   -- one bit
+polarity: type = (active_low = 0 | active_high = 1) -- one bit
 clock_mode: type = (internal = 0 | external = 1 | pll = 4)
-divider_sel: type = u4 (by_1 = 0 | by_2 = 1)   -- four bits, as given
-
+divider_sel: type = u4 (by_1 = 0 | by_2 = 1) -- four bits, as given
 ```
 
 A set is not a kind of its own. It is a packed struct of
@@ -1426,18 +1399,18 @@ raw-image or validation contract.
 irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)
 
 irq_set: type = layout(packed, u32) struct
-    irq_rx:  bool at 0
-    irq_tx:  bool at 1
+    irq_rx: bool at 0
+    irq_tx: bool at 1
     irq_err: bool at 2
 end irq_set
 
 control: type = layout(packed) struct
-    enable:  bool        at 0
-    mode:    clock_mode  at 4..6
-    irq_rx:  bool        at 8      -- irq's encodings, from bit 8
-    irq_tx:  bool        at 9
-    irq_err: bool        at 10
-    divider: u12         at 16..27
+    enable: bool at 0
+    mode: clock_mode at 4..6
+    irq_rx: bool at 8 -- irq's encodings, from bit 8
+    irq_tx: bool at 9
+    irq_err: bool at 10
+    divider: u12 at 16..27
 end control
 ```
 
@@ -1475,7 +1448,6 @@ for the reason [0740] gives.
 set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
     m.pins[n] = mode
 end set_pin
-
 ```
 
 D228 makes the distinction precise: the packed struct is a raw image and
@@ -1516,7 +1488,6 @@ clear_events: (base: usize, events: u32) -> none =
     compiler.register_write(port, events, compiler.one_clears,
                             compiler.write_zero, 0x0000_0007)
 end clear_events
-
 ```
 
 The access behaviour is checked exactly there: a register
@@ -1554,13 +1525,12 @@ end reset_flags
 read_modify_write: (base: usize, n: u32) -> none =
     port: ptr mut u32 = ptr(base)
     mut image := control_decode(compiler.register_read(port,
-                                compiler.normal_read))
+                                                       compiler.normal_read))
     image.divider = n
     compiler.register_write(port, control_encode(image),
                             compiler.normal_write, compiler.preserve,
                             control_named_mask)
 end read_modify_write
-
 ```
 
 ### [0750] Fields keep the order you wrote them
@@ -1590,15 +1560,14 @@ two native debuggers do not share.
 
 ```landin
 packet: type = layout(c) struct
-    kind:   u8
-    length: u16          -- big-endian as the wire sent it
-    id:     u32
+    kind: u8
+    length: u16 -- big-endian as the wire sent it
+    id: u32
 end packet
 
 from_big_u16: (wire: u16) -> (value: u16) =
-    value = (wire << 8) | (wire >> 8)    -- on a little-endian target
+    value = (wire << 8) | (wire >> 8) -- on a little-endian target
 end from_big_u16
-
 ```
 
 ### [0760] Attributes are prefix words, from a closed set
@@ -1647,9 +1616,8 @@ stored where something longer-lived keeps it.
 ```landin
 bad: () -> (p: ptr u32) =
     x := 42
-    p = addr x           -- error: a frame origin escapes
+    p = addr x -- error: a frame origin escapes
 end bad
-
 ```
 
 ### [0780] Parameters are non-escaping by default
@@ -1673,12 +1641,11 @@ build: (provider: type is mem.allocator, memory: provider,
        -> (head: ptr mut node) ! mem.out_of_memory =
     head = seed
     n := try mem.new(memory: memory, value: seed.val)
-    push_front(head, n)             -- allocated, fine
+    push_front(head, n) -- allocated, fine
 
     mut local: node = seed.val
-    push_front(head, addr local)    -- error: a frame origin escapes
+    push_front(head, addr local) -- error: a frame origin escapes
 end build
-
 ```
 
 ### [0790] The other direction
@@ -1772,7 +1739,7 @@ fix is the same one: take the view again afterwards.
 
 ```landin
 xs := vec.used(numbers)
-try vec.push(numbers, a, 5)     -- error: numbers is borrowed by xs
+try vec.push(numbers, a, 5) -- error: numbers is borrowed by xs
 use(xs)
 ```
 
@@ -1795,11 +1762,10 @@ obligations [1720]. No special compiler privilege belongs to `core`.
 
 ```landin
 address: usize = usize(self.base) + offset
-block: ptr mut u8 = ptr(address)  -- no tracked derivation survives
-
+block: ptr mut u8 = ptr(address) -- no tracked derivation survives
 ```
 
-This is the address conversion used by `core/mem.arena_alloc` after checking
+This is the address conversion `core/arena`'s allocation uses after checking
 its arithmetic. [0500] records the omitted `offset` and `base_of` conveniences
 and the rejected `slice_from`; none supplies another derivation rule. The
 initialized-prefix state machine remains responsible for exposing only values
@@ -1808,15 +1774,15 @@ that have actually been stored [0510].
 ### [0820] Arenas are ordinary allocators with explicit backing
 
 An arena is an ordinary library value, not a builtin type or lexical region.
-Import `core/mem` and write `mem.arena`, or accept any provider satisfying
-`mem.allocator`. Both formerly promised forms, `arena name do` and the
+Import `core/arena` and write `arena.arena`, or accept any provider satisfying
+`core/mem`'s `mem.allocator`. Both formerly promised forms, `arena name do` and the
 otherwise-undeclared builtin type `arena`, are withdrawn by D212. Their named
 diagnostics explain the change; a declared type or ordinary identifier named
 `arena` remains valid.
 
-`mem.arena_over(state, base, size)` supplies the backing address and byte
-capacity explicitly, and the arena's state: a `mem.arena_space` the caller
-declares `zeroed` beside the backing, which `arena_over` fills before returning
+`arena.over(state, base, size)` supplies the backing address and byte
+capacity explicitly, and the arena's state: an `arena.space` the caller
+declares `zeroed` beside the backing, which `over` fills before returning
 the arena's handle `from` it. Its `escaping base` parameter accepts backing
 that the caller may retain, including module storage and independently
 acquired storage; it rejects a frame array. The arena representation is
@@ -1826,17 +1792,18 @@ absolute address and advances a monotonic offset; individual frees do nothing.
 A caller can supply a fixed array on a constrained target or explicitly
 acquired hosted storage, choosing the actual capacity rather than a hidden
 frame buffer. Overflow or an extent that does not fit reports
-`mem.out_of_memory` before changing the offset. `mem.arena_used` reports the
+`mem.out_of_memory` before changing the offset. `arena.used` reports the
 consumed bytes without exposing the private state, and `core/fault` wraps an
 arena, or any provider, with an explicit allocation budget [1360].
 
 ```landin
+import core/arena
 import core/mem
 
 mut backing: [1024]u8 = zeroed
 report: () -> (code: i32) =
-    mut space: mem.arena_space = zeroed
-    scratch := mem.arena_over(space, addr backing[0], 1024)
+    mut space: arena.space = zeroed
+    scratch := arena.over(space, addr backing[0], 1024)
     code = 1
     first := mem.new(scratch, u8(7)) else (problem)
         _ = problem
@@ -1872,7 +1839,7 @@ called inside a block. In particular, a helper can store an allocated result
 in module storage without returning it through that block. A checked arena
 therefore cannot take frame backing.
 For a local buffer whose use the programmer can keep entirely within its
-frame, `mem.arena_over_unchecked` makes the
+frame, `arena.over_unchecked` makes the
 lifetime opt-out explicit at construction. Its allocation results remain
 independent, even through helpers; the caller must ensure every result stops
 being used before the buffer ends. A result borrowed from the arena's handle
@@ -1909,10 +1876,9 @@ checks that stay.
 ```landin
 grow_and_use: (inout l: list, v: i32) -> none =
     xs := l.items
-    push(l, v)           -- error: l is borrowed by xs
+    push(l, v) -- error: l is borrowed by xs
     use(xs)
 end grow_and_use
-
 ```
 
 ### [0840] Origins join to the shortest-lived part
@@ -1980,7 +1946,6 @@ A function is a value of a function type. No 'fn' keyword.
 double: (x: i32) -> (r: i32) =
     r = x * 2
 end double
-
 ```
 
 ### [0880] A single-expression body still takes an end
@@ -1990,7 +1955,6 @@ fills the named return.
 
 ```landin
 triple_it: (x: i32) -> (r: i32) = x * 3 end
-
 ```
 
 ### [0890] Nothing returned
@@ -1998,9 +1962,8 @@ triple_it: (x: i32) -> (r: i32) = x * 3 end
 Nothing returned, and never returns:
 
 ```landin
-log_it:  (m: utf8) -> none = ... end
+log_it: (m: utf8) -> none = ... end
 halt_it: () -> noreturn = loop do end loop end halt_it
-
 ```
 
 `none` returns normally without a value. `noreturn` never returns normally
@@ -2025,7 +1988,6 @@ on functions: the type is written the way the signature is.
 ```landin
 handler: type = () -> none
 mut current: handler = default_handler
-
 ```
 
 The names written inside the signature describe its parameter and return
@@ -2045,10 +2007,9 @@ written out because nothing is captured.
 
 ```landin
 on_byte: type = struct
-    call:  (state: ptr u8, b: u8) -> none
+    call: (state: ptr u8, b: u8) -> none
     state: ptr u8
 end on_byte
-
 ```
 
 A function-valued field is called through its ordinary selection:
@@ -2068,7 +2029,6 @@ body.
 
 ```landin
 less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
-
 ```
 
 ### [0900] Three parameter conventions
@@ -2110,7 +2070,6 @@ process: (source: []u8, inout target: []u8, sink owned: buffer)
          -> (written: u32) =
     written = 0
 end process
-
 ```
 
 ### [0910] sink takes a place
@@ -2159,11 +2118,10 @@ no successful named result under [0930], but it still hands back `inout` storage
 consume: (t: type, sink items: []t) -> none = ... end consume
 
 reset: (t: type, inout l: list(t)) -> none =
-    consume(l.items)              -- l.items is dead from here
-    l.items = []                  -- and live again from here
-    l.len   = 0
+    consume(l.items) -- l.items is dead from here
+    l.items = [] -- and live again from here
+    l.len = 0
 end reset
-
 ```
 
 ### [1040] A caller parameter is filled in by the compiler with the call site
@@ -2217,9 +2175,8 @@ Multiple named returns.
 ```landin
 divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
     quot = a / b
-    rem  = a % b
+    rem = a % b
 end divide
-
 ```
 
 Two or more returns travel as one anonymous structural result aggregate. Their
@@ -2238,12 +2195,11 @@ bound whole and read by field, or destructured. Binding by
 name, never by position.
 
 ```landin
-whole       := divide(10, 3)
-sum         := whole.quot + whole.rem
+whole := divide(10, 3)
+sum := whole.quot + whole.rem
 (quot, rem) := divide(10, 3)
-(quot: q2)  := divide(20, 3)
-(quot, _)   := divide(30, 3)
-
+(quot: q2) := divide(20, 3)
+(quot, _) := divide(30, 3)
 ```
 
 The call is evaluated once. Names may be selected in any order, omitted, or
@@ -2262,7 +2218,6 @@ open_file: (path: utf8) -> (handle: u32) ! not_found | no_access =
     fail no_access when lenof path == 0
     handle = 1
 end open_file
-
 ```
 
 Atom and error sets are structural declaration-identity sets: aliases flatten,
@@ -2304,7 +2259,6 @@ know which retention or delivery policy its caller selected.
 ```landin
 parse: (src: utf8, inout d: diagnostics)
        -> (tree: ptr node) ! out_of_memory | too_deep = ... end
-
 ```
 
 ### [0960] Propagating: try, visible at the call or traversal site
@@ -2334,7 +2288,6 @@ read_config: (path: utf8) -> (data: []u8) ! ... =
     h := try open_file(path)
     data = []
 end read_config
-
 ```
 
 `try for item in source do ... end for` propagates a declared failure
@@ -2354,7 +2307,7 @@ h2 := open_file(path) else (e) fail e end
 h3 := open_file(path) else (e)
     match e
         not_found: create(path)
-        _:         fail e
+        _: fail e
     end match
 end
 ```
@@ -2392,6 +2345,20 @@ A call that can fail and whose result is discarded is an
 error. Write 'try f()' or discard through an else.
 else is for the error channel only, not for unions.
 
+A call that returns nothing, and whose failure does not matter
+where it is made, says so in one word:
+
+```landin
+flush(out) else none
+```
+
+`else none` is the bound block with nothing in it, without the
+name nobody would read: what the call did before it failed
+stays done, and the next statement runs. A call that returns a
+value does not take it, because a failure is never ignored by
+leaving a result unset; give that call `else value`, a block,
+or `try` (D376).
+
 ### [0970] Early exit
 
 Early exit: return and fail, each with an optional
@@ -2416,7 +2383,6 @@ promotions; this does not add optional or defaulted fixed parameters.
 ```landin
 r1 := divide(10, 3)
 r2 := process(source: src, target: dst, owned: buf)
-
 ```
 
 ### [1020] Discarding a result must be explicit
@@ -2425,7 +2391,6 @@ Discarding a result must be explicit.
 
 ```landin
 _ = double(5)
-
 ```
 
 ## CONTROL FLOW
@@ -2433,7 +2398,6 @@ _ = double(5)
 ```landin
 demo_flow: (x: i32, items: []i32) -> (out: i32) =
     out = 0
-
 ```
 
 ### [1050] Branch
@@ -2448,7 +2412,6 @@ Branch. 'then' closes the condition, which must be bool.
     else
         out = 0
     end if
-
 ```
 
 ### [1060] Every construct has a one-line form
@@ -2458,7 +2421,6 @@ required; 'end' closes.
 
 ```landin
     if x > 0 then out = 1 end if
-
 ```
 
 ### [1070] A declaration is allowed in a condition
@@ -2479,7 +2441,6 @@ binding again before every iteration.
         consume_next()
         more = false
     end while
-
 ```
 
 ### [1080] A block has the value of its last expression
@@ -2504,7 +2465,6 @@ after an `if` condition or `match` subject and only in the selected arm.
         a := expensive()
         a * 2
     end
-
 ```
 
 ### [1090] Bare block, for scoping
@@ -2518,7 +2478,6 @@ run as a loop's are [1180].
         tmp := x * 2
         out = out + tmp
     end
-
 ```
 
 ### [1100] defer runs at the end of its block, in reverse order
@@ -2538,7 +2497,6 @@ evaluates no callee or argument, costs nothing and reserves nothing.
 
 ```landin
     defer cleanup()
-
 ```
 
 ### [1110] undo is the same machinery under a condition
@@ -2563,7 +2521,6 @@ calls it a contingency, or a compensating action.
 
 ```landin
     undo release(handle)
-
 ```
 
 ### [1200] Because entries are registered where control reaches
@@ -2617,7 +2574,6 @@ Checks may be switched off for a region, visibly.
     unchecked begin
         out = out + items[0]
     end unchecked
-
 ```
 
 The region is a statement and an ordinary block: it has its own scope,
@@ -2643,7 +2599,6 @@ Unconditional loop.
     counter: loop do
         break when x == 0
     end counter
-
 ```
 
 ### [1140] Conditional loop
@@ -2656,7 +2611,6 @@ Conditional loop.
         inc i
         continue when i == 3
     end while
-
 ```
 
 ### [1150] Traversal
@@ -2696,13 +2650,12 @@ transfers are the same as for ordinary iterable evidence.
     end for
 
     for item, idx in items do
-        item = item + i32(idx)      -- items is []mut i32, so this writes
+        item = item + i32(idx) -- items is []mut i32, so this writes
     end for
 
     for k in 0..<10 do
         out += k
     end for
-
 ```
 
 ### [1160] There is no marker on a loop binding
@@ -2724,11 +2677,10 @@ follows this same rule. Writing through a slice element still follows the
 erased value and evidence pair; it is not a slice.
 
 ```landin
-    xs := vec.used(l)               -- []mut i32
+    xs := vec.used(l) -- []mut i32
     for k in 0..<lenof xs do
         xs[k] = xs[k] * 2
     end for
-
 ```
 
 ### [1170] complete runs when the loop finished without break
@@ -2741,7 +2693,6 @@ complete runs when the loop finished without break.
     complete
         out = -1
     end for
-
 ```
 
 ### [1180] Labels use the ordinary name form
@@ -2755,7 +2706,6 @@ blocks only. break and continue take one.
             break outer when a == b
         end for
     end outer
-
 ```
 
 A `break` naming a bare block leaves it and whatever loops it crosses, running
@@ -2770,7 +2720,6 @@ value, so `continue` and `break with` still name loops, and an unlabelled
         end for
         all_nonzero = true
     end search
-
 ```
 
 ### [1190] break carries a value with 'with'
@@ -2794,7 +2743,6 @@ could otherwise be either a label or a value.
     end for
     out += found
 end demo_flow
-
 ```
 
 ### [1210] Pattern matching
@@ -2811,13 +2759,12 @@ matched (D241).
 area: (f: figure) -> (a: f32) =
     a = 0.0
     match f.kind
-        circle (radius):
+        circle(radius):
             a = 3.14159 * radius * radius
-        rectangle (width, height):
+        rectangle(width, height):
             a = width * height
     end match
 end area
-
 ```
 
 ### [1220] A pattern binding carries a parameter convention
@@ -2842,18 +2789,17 @@ construction, save needed scalar values before starting the construction too.
 ```landin
 spill: (inout s: store, v: i32) -> none =
     match s.kind
-        inline (inout buf): buf[0] = v
-        spilled (heap):     use(heap)
+        inline(inout buf): buf[0] = v
+        spilled(heap): use(heap)
     end match
 end spill
 
 describe: (c: compass) -> (name: utf8) =
     match c
         north, south: name = "along"
-        _:            name = "across"
+        _: name = "across"
     end match
 end describe
-
 ```
 
 ## CONCEPTS AND GENERIC CODE
@@ -2866,7 +2812,6 @@ A concept names a bundle of requirements on a type.
 ordered: type = concept (t: type)
     less: (a: t, b: t) -> (yes: bool)
 end ordered
-
 ```
 
 ### [1240] A conformance registers one type against one concept
@@ -2875,7 +2820,6 @@ A conformance registers one type against one concept.
 
 ```landin
 i32 is ordered (less: less_i32)
-
 ```
 
 ### [1250] A conformance for a parameterised type binds its variables
@@ -2890,7 +2834,7 @@ value parameter may appear among them.
 ```landin
 (t: type) list(t) is iterable (cur: usize, item_type: t,
                                first: list_first, at_end: list_at_end,
-                               item:  list_item,  next:   list_next)
+                               item: list_item, next: list_next)
 
 (provider: type is allocator) counted(provider) is allocator
     (alloc: counted_alloc, grow: counted_grow, resize: counted_resize,
@@ -2939,9 +2883,8 @@ indexable: type = concept (t: type, idx: type, item_type: type)
     get: (s: t, i: idx) -> (item: item_type)
 end indexable
 
-utf8 is indexable (idx: usize,    item_type: u32, get: utf8_nth)
+utf8 is indexable (idx: usize, item_type: u32, get: utf8_nth)
 utf8 is indexable (idx: position, item_type: u32, get: utf8_at_pos)
-
 ```
 
 ### [1280] Conformances may be declared anywhere
@@ -3028,14 +2971,13 @@ sort: (t: type is ordered, data: []mut t) -> none =
     for k in 1..<lenof data do
         mut j := k
         while j > 0 and t.less(data[j], data[j - 1]) do
-            tmp        := data[j]
-            data[j]     = data[j - 1]
+            tmp := data[j]
+            data[j] = data[j - 1]
             data[j - 1] = tmp
             dec j
         end while
     end for
 end sort
-
 ```
 
 ### [1300] At the call site the type is inferred from the arguments
@@ -3051,7 +2993,6 @@ sort_demo: (values: []mut i32) -> none =
     sort(values)
     sort(t: i32, data: values)
 end sort_demo
-
 ```
 
 ### [1310] Evidence is the foundation; specialization is optional
@@ -3124,12 +3065,11 @@ Traversal is a concept. This is what 'for x in s' uses.
 
 ```landin
 iterable: type = concept (t: type, cur: type, item_type: type)
-    first:  (s: ptr t) -> (c: cur)
+    first: (s: ptr t) -> (c: cur)
     at_end: (s: ptr t, c: cur) -> (yes: bool)
-    item:   (s: ptr t, c: cur) -> (v: item_type)
-    next:   (s: ptr t, c: cur) -> (c2: cur)
+    item: (s: ptr t, c: cur) -> (v: item_type)
+    next: (s: ptr t, c: cur) -> (c2: cur)
 end iterable
-
 ```
 
 The conformance supplies `cur` and `item_type` as associated type inputs.
@@ -3141,10 +3081,10 @@ A streaming source supplies an error atom type as a third associated input:
 ```landin
 fallible_iterable: type = concept
     (t: type, cur: type, item_type: type, errors: type)
-    first:  (s: ptr t) -> (c: cur) ! errors
+    first: (s: ptr t) -> (c: cur) ! errors
     at_end: (s: ptr t, c: cur) -> (yes: bool) ! errors
-    item:   (s: ptr t, c: cur) -> (v: item_type) ! errors
-    next:   (s: ptr t, c: cur) -> (c2: cur) ! errors
+    item: (s: ptr t, c: cur) -> (v: item_type) ! errors
+    next: (s: ptr t, c: cur) -> (c2: cur) ! errors
 end fallible_iterable
 ```
 
@@ -3194,9 +3134,9 @@ widget: type = concept (t: type) is drawable, clickable
     focus: (self: ptr mut t) -> none
 end widget
 
-button is drawable  (draw:  button_draw)
+button is drawable (draw: button_draw)
 button is clickable (click: button_click)
-button is widget    (focus: button_focus)
+button is widget (focus: button_focus)
 ```
 
 All three, because the composed declaration supplies only
@@ -3212,9 +3152,8 @@ have. Substitution, not execution.
 ```landin
 list: type (t: type) = struct
     items: []t
-    len:   usize
+    len: usize
 end list
-
 ```
 
 An alias body may also unite atom sets after substitution. Declared atom names
@@ -3238,7 +3177,6 @@ condition; none of the three mechanisms executes user code.
 ```landin
 map: type (key_type: type is hashable, value_type: type) = struct ... end map
 cleared: type (t: type is zeroable, fixed capacity: u32) = struct ... end cleared
-
 ```
 
 The two constrained examples above use D142's enabled direct constraints. The
@@ -3274,7 +3212,7 @@ allocator: type = concept (provider: type)
     resize: (self: provider, p: ptr mut u8, old_size: usize,
              new_size: usize, alignment: usize)
             -> (moved: ptr mut u8) ! out_of_memory
-    free:  (self: provider, p: ptr mut u8, size: usize) -> none
+    free: (self: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
 push: (t: type, provider: type is allocator, inout l: list(t), memory: provider,
@@ -3304,8 +3242,8 @@ provider that can only move a block calls `mem.relocate`, which allocates,
 copies and frees through it; a heap that can move a mapping's pages does
 better than that copy.
 
-The parser-support modules use this exact interface. `core/mem.arena` is a
-monotonic provider over an explicit extent. The separately imported
+The parser-support modules use this exact interface. `core/arena`'s arena is
+a monotonic provider over an explicit extent. The separately imported
 `core/pool` provider divides caller backing into uniform aligned slots and
 uses a caller-supplied initialized metadata slice as its explicit finite
 bookkeeping capacity. Exact frees reclaim slots for lowest-index-first reuse;
@@ -3469,7 +3407,6 @@ make_widget: (provider: type is mem.allocator, memory: provider)
     b := try mem.new(memory: memory, value: initial)
     item = any(b)
 end make_widget
-
 ```
 
 ### [1390] Calls go through the table
@@ -3484,7 +3421,6 @@ paint: (items: []any widget, target: ptr mut canvas) -> none =
         w.draw(target)
     end for
 end paint
-
 ```
 
 The enabled form reserves `any` and gives `any C` the identity of that
@@ -3498,6 +3434,12 @@ entry's runtime signature. Construction from a read-only pointer therefore
 cannot make a table that exposes mutable `self`. Once made, binding mutability
 controls replacing the two-word pair, not the authority already carried by its
 pointer.
+
+A call through `any C` is checked against C's entry whether or not the
+program has a conformance of C. With none, no `any C` can be made, so no
+value reaches the call, and it is a trap the program never meets (D377): a
+library routine that takes an erased capability builds in a program that
+supplies none.
 
 Composition keeps its separate conformances while the erased physical table
 flattens their object-safe function words in deterministic declaration order.
@@ -3567,7 +3509,6 @@ namespace itself is not a value, type, place or first-class object.
 
 ```landin
 import net/http
-
 ```
 
 ### [1430] Alias, for collisions
@@ -3576,7 +3517,6 @@ Alias, for collisions.
 
 ```landin
 import net/http as h
-
 ```
 
 The alias replaces the last segment as this file's namespace name: this
@@ -3589,7 +3529,6 @@ Pull selected names into scope, by name. No wildcard.
 
 ```landin
 import net/http (get, post)
-
 ```
 
 This import binds only `get` and `post`, not the `http` namespace. Every
@@ -3626,7 +3565,6 @@ addition overflows and traps before the subtraction.
 ```landin
 table: [4]u32 = [1, 2, 4, 8]
 mut call_count: u32 = 0
-
 ```
 
 A value another module exports is known in the same way, named through that
@@ -3675,9 +3613,9 @@ of `landin/compiler`, `landin/assembler` or `landin/linker` is refused by
 name before searching roots. core is
 the shared freestanding library: core/mem, core/text, core/vec. Every core
 module and its public interface is available on every target. hosted holds
-hosted providers such as hosted/heap and hosted/io. platform holds scoped
+hosted providers such as hosted/heap and hosted/system. platform holds scoped
 freestanding interfaces: platform/c currently requires an enabled LP64 C ABI,
-and platform/cpu requires an M-profile target, including supported higher
+and platform/cortex_m requires an M-profile target, including supported higher
 feature levels. Imports outside those scopes are refused by name at target
 checking (D267).
 These source namespace names remain ordinary identifiers. landin
@@ -3719,7 +3657,6 @@ fixed if compiler.arch == arm64 then
 elsif compiler.arch == cortex_m0 then
     word_bits: u32 = 32
 end if
-
 ```
 
 The compiler exposes `compiler.arch`, whose compiler-owned values are
@@ -3780,7 +3717,6 @@ library function at [1040] where it belongs.
 
 ```landin
 compiler.assert(sizeof usize == 8)
-
 ```
 
 An assertion is a module directive, also permitted in a selected `fixed if`
@@ -3793,7 +3729,6 @@ A compile-time value parameter.
 
 ```landin
 make_buffer: (fixed capacity: u32, t: type) -> (b: [capacity]t) = ... end
-
 ```
 
 ### [1530] Your own build switches
@@ -3805,7 +3740,6 @@ each is declared exactly once.
 
 ```landin
 option log_level: u32 = 0
-
 ```
 
 Options inhabit a program-wide configuration namespace, visible by bare name
@@ -3904,7 +3838,7 @@ has to know it. Atomics are, because opaque assembly in a
 hot loop wrecks the register allocation around it. Masking
 interrupts is not, because being opaque is exactly right
 there — a critical section wants nothing reordered across
-it. So cpu.disable_interrupts and its kin are an ordinary
+it. So cortex_m.disable_interrupts and its kin are an ordinary
 core module per target, written with assembler.block behind
 a fixed if and inlined, not a fourth builtin module whose
 contents would change with the target.
@@ -3957,7 +3891,7 @@ costs no extra bits. A small declaration illustrates the generated shape:
 none_returned: atom
 allocation: type = none_returned | ptr mut u8
 extern(c) malloc: (n: usize) -> (p: allocation)
-extern(c) free:   (p: ptr mut u8) -> none
+extern(c) free: (p: ptr mut u8) -> none
 ```
 
 Match the result before using the pointer. `ptr(0)` is refused, including a
@@ -4012,7 +3946,6 @@ need it rather than in a separate build file.
 
 ```landin
 linker.library("m")
-
 ```
 
 The module directive takes a fixed text literal naming an archive. Names use
@@ -4046,7 +3979,6 @@ exception unwinding nor `longjmp` across Landin frames is promised.
 public extern(c) my_add: (a: i32, b: i32) -> (r: i32) =
     r = a + b
 end my_add
-
 ```
 
 ### [1610] A symbol name the language's identifiers cannot spell
@@ -4061,7 +3993,6 @@ link(symbol: "native_identity") identity: (value: i32) -> (result: i32) =
 end identity
 
 extern(c) link(symbol: "foreign_add") add: (a: i32, b: i32) -> (r: i32)
-
 ```
 
 The standalone form still requires the ordinary `= body end` and keeps the
@@ -4097,7 +4028,6 @@ needs one (D240).
 bump: (p: ptr mut u32) -> none =
     _ = compiler.atomic_add(p, 1, compiler.acq_rel)
 end bump
-
 ```
 
 D227 in `spec.md` defines the supported scalar operations, exact orderings,
@@ -4160,7 +4090,7 @@ programmer's obligations; D248 records the design.
 The earlier Cortex-M0 form stays as a shorthand: `assembler.block(text, value)`
 passes one `u32` in and out of r0, and the text names r0 itself.
 
-`platform/cpu.disable_interrupts()` returns the prior PRIMASK value;
+`platform/cortex_m.disable_interrupts()` returns the prior PRIMASK value;
 `restore_interrupts(previous)` restores it, so nested critical sections do not
 enable interrupts prematurely. These functions can run in thread or handler
 mode. They do not stop DMA or mask NMI/HardFault. `wait_for_interrupt()` issues
@@ -4228,7 +4158,7 @@ Entry point. Hosted, `main` follows the system C ABI at the machine boundary.
 The no-argument Landin form is the ordinary one, because `argc` and `argv` in
 the C shape cannot be indexed without `slice_from`, which is not enabled — so
 the hosted world retains the argument table and lends each argument as a
-host string instead. When the program imports `hosted/io`, and so
+host string instead. When the program imports `hosted/system`, and so
 `platform/posix`, the hosted entry calls the latter's C-callable
 `void _landin_host_initialize_arguments(int argc, char **argv, char **envp);`
 with the real incoming carriers before that no-argument source body begins,
@@ -4238,7 +4168,7 @@ which calls `main` with the process's arguments, and `--link=libc` links the
 C runtime instead.
 
 A C-owned `main` that drives exported Landin routines calls the same entry
-explicitly, with its own `envp` or C's `environ`, before `hosted.host()`
+explicitly, with its own `envp` or C's `environ`, before `system.new()`
 acquires an argument capability and before starting a thread that may acquire
 one. It need not do so for file, stream and heap
 work, which needs no argument root, merely because `core/io` is linked, and no ordinary export or callback
@@ -4258,16 +4188,16 @@ The entry point is a usual place to mint roots and pass
 them down — an allocator, an Io, a diagnostics log. The
 language does not reserve host constructors for the entry
 point: another routine can call them too [1680]. The hosted
-root imports `hosted/io as hosted`; a caller-backed root needs only
+root imports `hosted/system`; a caller-backed root needs only
 `core/io`. The derived hosted example's `main` delegates to
 `app.entry`, whose essential flow is:
 
 ```landin
 public entry: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     world: any io.world = any(addr host)
-    heap := heap.host()
-    mut ledger: region.space(0) = zeroed
+    heap := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, heap)
     defer region.release(ledger, heap)
     writer: any io.writer = any(addr host)
@@ -4288,7 +4218,7 @@ status. `build_logged`, called by `run_logged`, copies the world's arguments
 into the supplied program allocator before retaining configuration.
 
 Each root here is a handle: a small copyable value, passed by value, that
-refers to its state. `hosted.host()` and `heap.host()` make handles that borrow
+refers to its state. `system.new()` and `heap.new()` make handles that borrow
 nothing, because what they refer to, the argument root, the descriptors, the
 last errno and the heap, belongs to the process. A caller-owned provider is
 made from state the caller declares, as the region is from `ledger`; the
@@ -4298,7 +4228,7 @@ handle binding, and its dispatch copies the handle from there, so `world`,
 `writer` and `host` itself are used side by side: a write through `host`, an
 argument lent from it and a note through the logger lock nothing.
 
-`hosted.host()` acquires the real argument-table capability; it does not create or
+`system.new()` acquires the real argument-table capability; it does not create or
 copy that storage. The first nonnegative-count, non-null-table startup call
 establishes one exact `(argc, argv, envp)` root, a null environment being an
 empty one. Repeating that exact triple is harmless;
@@ -4322,8 +4252,8 @@ test_drops_debug: () -> (ok: bool) =
     mut data: [16]u8 = zeroed
     for at in usize(0)..<lenof source do data[at] = source[at] end for
     file: io.memory_file =
-      (name: "in.log", contents: data[0..<16], length: lenof source, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+        (name: "in.log", contents: data[0..<16], length: lenof source, cursor: 0,
+         readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     arguments: [3][]u8 = ["--level", "ERROR", "in.log"]
@@ -4333,8 +4263,8 @@ test_drops_debug: () -> (ok: bool) =
     memory := io.memory_over(state, files[0..<1], arguments[0..<3], "",
                              output[0..<128], errors[0..<128])
     world: any io.world = any(addr memory)
-    heap := heap.host()
-    mut ledger: region.space(0) = zeroed
+    heap := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, heap)
     defer region.release(ledger, heap)
     mut logger := diag.new(capacity: 4)
@@ -4343,7 +4273,7 @@ test_drops_debug: () -> (ok: bool) =
         _ = problem
         return
     end
-    ok = kept == 1 and not files[0].opened
+    ok = kept == 1 and files[0].state == io.closed_slot
 end test_drops_debug
 ```
 
@@ -4373,8 +4303,8 @@ minus a Linux system call's result, or as C's errno through `platform/libc`,
 which names each system's accessor, on Darwin and FreeBSD; `platform/posix`
 hands it on as an atom whose number it keeps, and the provider keeps that
 exact terminal value in the handle's last-error cell, available through
-`hosted.last_errno`. A handle from `hosted.host()` shares the process's
-cell; one from `hosted.over(space)` keeps it in a `hosted.space` the caller
+`system.last_errno`. A handle from `system.new()` shares the process's
+cell; one from `system.over(space)` keeps it in a `system.space` the caller
 declares, which is how two C threads calling into Landin keep theirs apart.
 Success clears it; a local refusal fabricates no host errno. Open/read/write
 retry EINTR only when the selected host guarantees that attempt made no
@@ -4452,7 +4382,6 @@ public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
     loop do
     end loop
 end panic_handler
-
 ```
 
 The entry module's public ordinary `panic_handler` replaces the compiler's
@@ -4462,7 +4391,10 @@ unwind the failed computation's cleanup. A second handler entry traps, including
 a check inside the handler. `--panic-map` emits a build-bound source map;
 `source-location.py --panic-site` requires matching artifact identity. Caller
 coordinates remain a separate value. Hardware faults and naked assembly retain
-their machine obligations.
+their machine obligations. With no handler, a hosted program's default writes
+one line naming the failed check's file, line, column and kind to standard
+error before its terminal instruction, and firmware's default is the bare
+instruction (D361).
 
 ## THE PRINCIPLES BEHIND THE DECISIONS
 

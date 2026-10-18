@@ -1,12 +1,14 @@
-import core/io
-import hosted/heap
-import core/region
-import core/fault
-import core/mem
-import core/vec
+import core/arena
 import core/diag
+import core/fault
+import core/io
+import core/io/fake
+import core/mem
+import core/region
 import core/text
+import core/vec
 import examples/derived_hosted/app
+import hosted/heap
 
 mut input: [32]u8 = zeroed
 mut destination: [64]u8 = zeroed
@@ -30,10 +32,10 @@ public main: () -> (code: i32) =
     for at in usize(0)..<lenof source do input[at] = source[at] end for
     first: io.memory_file =
         (name: "in", contents: input[0..<32], length: lenof source, cursor: 0,
-         readable: true, writable: false, opened: false, writing: false)
+         readable: true, writable: false, state: io.closed_slot)
     second: io.memory_file =
         (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
-         readable: true, writable: true, opened: false, writing: false)
+         readable: true, writable: true, state: io.closed_slot)
     mut files: [2]io.memory_file
     files[0] = first
     files[1] = second
@@ -50,19 +52,19 @@ public main: () -> (code: i32) =
             _ = problem
             return
         end
-    return when empty_count <> 0 or state.write_calls <> 0
+    return when empty_count <> 0 or state.writes <> 0
     world: any io.world = any(addr memory)
-    heap := heap.host()
-    mut ledger: region.space(0) = zeroed
+    heap := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, heap)
     defer region.release(ledger, heap)
     kept: usize = app.run(program, world, usize(3)) else (problem) _ = problem
         return end
     expected: []u8 = "ERROR keep\n"
     return when kept <> 1 or files[1].length <> lenof expected
-      or files[0].opened or files[1].opened
+      or files[0].state <> io.closed_slot or files[1].state <> io.closed_slot
       or not app.equal(destination[0..<lenof expected], expected)
-      or state.close_calls <> 2 or state.write_calls <> 7
+      or state.closes <> 2 or state.writes <> 7
     code = 2
     return when not long_lines()
     code = 11
@@ -122,7 +124,7 @@ end clear_reuses_storage
 --  final line all pass through the same application and count destination.
 long_lines: () -> (ok: bool) =
     ok = false
-    backing_host := heap.host()
+    backing_host := heap.new()
     mut backing := mem.new_bytes(backing_host, usize(10000)) else (problem) _ = problem
         return
     end
@@ -137,7 +139,7 @@ long_lines_in: (data: []mut u8) -> (ok: bool) =
     data[9999] = 10
     file: io.memory_file =
         (name: "in", contents: data[0..<10000], length: 10000, cursor: 0,
-         readable: true, writable: false, opened: false, writing: false)
+         readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     args: [1][]u8 = [arg8]
@@ -147,14 +149,14 @@ long_lines_in: (data: []mut u8) -> (ok: bool) =
     world_state := io.memory_over(world_space, files[0..<1], args[0..<1], "", out[0..<128], err[0..<128])
     world_space.read_limit = 1
     world: any io.world = any(addr world_state)
-    host := heap.host()
-    mut ledger: region.space(0) = zeroed
+    host := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, host)
     defer region.release(ledger, host)
     kept: usize = app.run(program, world, usize(7)) else (problem) _ = problem
         return end
     expected: []u8 = "0: 2\n1: 0\n2: 0\n3: 0\n4: 0\n5: 0\n6: 0\n7: 0\n"
-    return when kept <> 2 or files[0].opened
+    return when kept <> 2 or files[0].state <> io.closed_slot
       or not app.equal(out[0..<world_space.output_used], expected)
     --  No phantom third line after trailing LF. Removing that LF keeps two
     --  lines, with the complete final 9998-byte line delivered exactly once.
@@ -162,12 +164,12 @@ long_lines_in: (data: []mut u8) -> (ok: bool) =
     world_space.output_used = 0
     kept_again: usize = app.run(program, world, usize(3)) else (problem) _ = problem
         return end
-    return when kept_again <> 2 or files[0].opened
+    return when kept_again <> 2 or files[0].state <> io.closed_slot
     files[0].length = 0
     world_space.output_used = 0
     empty: usize = app.run(program, world, usize(3)) else (problem) _ = problem
         return end
-    ok = empty == 0 and not files[0].opened
+    ok = empty == 0 and files[0].state == io.closed_slot
 end long_lines_in
 
 --  The reader can hold this line in a finite arena. Count delivery must use
@@ -180,7 +182,7 @@ count_finite_region: () -> (ok: bool) =
     for at in lenof prefix..<usize(1024) do source[at] = 120 end for
     file: io.memory_file =
         (name: "in", contents: source[0..<1024], length: 1024, cursor: 0,
-         readable: true, writable: false, opened: false, writing: false)
+         readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     args: [1][]u8 = [arg8]
@@ -192,24 +194,24 @@ count_finite_region: () -> (ok: bool) =
     world: any io.world = any(addr world_state)
     mut backing: [512]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, base, usize(4096))
-    mut ledger: region.space(0) = zeroed
-    program := region.over(ledger, arena)
-    defer region.release(ledger, arena)
+    mut arena_space: arena.space = zeroed
+    bump := arena.over_unchecked(arena_space, base, usize(4096))
+    mut ledger: region.growing_space = zeroed
+    program := region.over(ledger, bump)
+    defer region.release(ledger, bump)
     kept: usize = app.run(program, world, usize(32)) else (problem)
         _ = problem
         return
     end
     expected: []u8 = "0: 0\n1: 0\n2: 0\n3: 0\n4: 1\n5: 0\n6: 0\n7: 0\n"
-    ok = kept == 1 and not files[0].opened
+    ok = kept == 1 and files[0].state == io.closed_slot
          and app.equal(out[0..<world_space.output_used], expected)
 end count_finite_region
 --  A leading level filter discards long lines, including an unterminated
 --  final one, without needing allocator space proportional to their length.
 skipped_long_lines: () -> (ok: bool) =
     ok = false
-    host := heap.host()
+    host := heap.new()
     mut source := mem.new_bytes(host, usize(20011)) else (problem) _ = problem
         return
     end
@@ -232,10 +234,10 @@ skipped_long_lines_in: (data: []mut u8) -> (ok: bool) =
     mut files: [2]io.memory_file
     files[0] = (name: "in", contents: data[0..<20011], length: 20011,
                 cursor: 0, readable: true, writable: false,
-                opened: false, writing: false)
+                state: io.closed_slot)
     files[1] = (name: "out", contents: destination[0..<32], length: 0,
                 cursor: 0, readable: true, writable: true,
-                opened: false, writing: false)
+                state: io.closed_slot)
     args: [7][]u8 = [arg0, arg_debug, arg0, arg_error, arg6, arg7, arg8]
     mut state: io.memory_space = zeroed
     memory := io.memory_over(state, files[0..<2], args[0..<7], "",
@@ -244,19 +246,19 @@ skipped_long_lines_in: (data: []mut u8) -> (ok: bool) =
     world: any io.world = any(addr memory)
     mut backing: [1024]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, base, usize(8192))
-    mut ledger: region.space(0) = zeroed
-    program := region.over(ledger, arena)
+    mut arena_space: arena.space = zeroed
+    bump := arena.over_unchecked(arena_space, base, usize(8192))
+    mut ledger: region.growing_space = zeroed
+    program := region.over(ledger, bump)
     kept: usize = app.run(program, world, usize(7)) else (problem)
         _ = problem
-        region.release(ledger, arena)
+        region.release(ledger, bump)
         return
     end
-    region.release(ledger, arena)
+    region.release(ledger, bump)
     ok = kept == 1 and files[1].length == lenof selected
       and app.equal(destination[0..<lenof selected], selected)
-      and not files[0].opened and not files[1].opened
+      and files[0].state == io.closed_slot and files[1].state == io.closed_slot
 end skipped_long_lines_in
 
 --  Walk every allocation boundary until one complete run succeeds. The
@@ -267,10 +269,10 @@ failure_sweep: () -> (ok: bool) =
     while budget < 200 do
         first: io.memory_file =
             (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-             readable: true, writable: false, opened: false, writing: false)
+             readable: true, writable: false, state: io.closed_slot)
         second: io.memory_file =
             (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
-             readable: true, writable: true, opened: false, writing: false)
+             readable: true, writable: true, state: io.closed_slot)
         mut files: [2]io.memory_file
         files[0] = first
         files[1] = second
@@ -278,10 +280,10 @@ failure_sweep: () -> (ok: bool) =
         mut world_space: io.memory_space = zeroed
         world_state := io.memory_over(world_space, files[0..<2], args[0..<3], "", output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
-        host := heap.host()
+        host := heap.new()
         mut counted_space: fault.space = zeroed
         counted := fault.over(counted_space, host, budget)
-        mut ledger: region.space(0) = zeroed
+        mut ledger: region.growing_space = zeroed
         program := region.over(ledger, counted)
         mut succeeded: bool = true
         _ = app.run(program, world, usize(3)) else (problem)
@@ -293,7 +295,7 @@ failure_sweep: () -> (ok: bool) =
             0
         end
         region.release(ledger, counted)
-        return when fault.live(counted) <> 0 or files[0].opened or files[1].opened
+        return when fault.live(counted) <> 0 or files[0].state <> io.closed_slot or files[1].state <> io.closed_slot
           or fault.successes(counted) <> fault.frees(counted)
         if succeeded then
             ok = budget > 0 and budget == fault.attempts(counted)
@@ -310,12 +312,12 @@ retained_arguments: () -> (ok: bool) =
     args: [3][]u8 = [arg2, needle[0..<4], name[0..<2]]
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-                readable: true, writable: false, opened: false, writing: false)
+                readable: true, writable: false, state: io.closed_slot)
     mut world_space: io.memory_space = zeroed
     world_state := io.memory_over(world_space, files[0..<1], args[0..<3], "", output[0..<128], errors[0..<128])
     world: any io.world = any(addr world_state)
-    host := heap.host()
-    mut ledger: region.space(0) = zeroed
+    host := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, host)
     defer region.release(ledger, host)
     mut cfg := app.build(program, world) else (problem) _ = problem
@@ -326,19 +328,19 @@ retained_arguments: () -> (ok: bool) =
         return end
     kept: usize = app.process(program, world, cfg, reader) else (problem)
         _ = problem
-        app.shut_reader(program, world, reader) else (close_problem) _ = close_problem end
+        app.shut_reader(program, world, reader) else none
         return
     end
     app.shut_reader(program, world, reader) else (problem) _ = problem
         return end
     app.close_config(world, cfg) else (problem) _ = problem
         return end
-    ok = kept == 3 and not files[0].opened
+    ok = kept == 3 and files[0].state == io.closed_slot
 end retained_arguments
 
 messages: () -> (ok: bool) =
     ok = false
-    backing_host := heap.host()
+    backing_host := heap.new()
     mut source_owner := mem.new_bytes(backing_host, usize(700)) else (problem)
         _ = problem
         return
@@ -360,7 +362,7 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     mut world_space: io.memory_space = zeroed
     world_state := io.memory_over(world_space, files, args, "", out[0..<800], err[0..<1])
     world: any io.world = any(addr world_state)
-    host := heap.host()
+    host := heap.new()
     maximum: usize = 100
     mut counted_space: fault.space = zeroed
     counted := fault.over(counted_space, host, maximum)
@@ -375,11 +377,11 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     app.deliver(pending, world, world.out()) else (problem) _ = problem
         return end
     return when pending.delivered <> 700 or world_space.output_used <> 700
-      or world_space.write_calls <> 1
+      or world_space.writes <> 1
     for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
     pending.delivered = 0
     world_space.output_used = 0
-    world_space.write_calls = 0
+    world_space.writes = 0
     world_space.write_limit = 128
     world_space.fail_write_at = 4
     --  Three short writes commit 384 bytes before failure; retry resumes
@@ -392,7 +394,7 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     app.deliver(pending, world, world.out()) else (problem) _ = problem
         return end
     return when pending.delivered <> 700 or world_space.output_used <> 700
-      or world_space.write_calls <> 7
+      or world_space.writes <> 7
     for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
     zero: usize = 0
     fault.permit(counted, zero)
@@ -408,7 +410,7 @@ end messages_in
 --  Appending LF must fit the capacity reserved for the whole record.
 message_growth: () -> (ok: bool) =
     ok = false
-    host := heap.host()
+    host := heap.new()
     mut counted_space: fault.space = zeroed
     counted := fault.over(counted_space, host, usize(100))
     mut pending := app.new_message()
@@ -442,28 +444,28 @@ finite_regions: () -> (ok: bool) =
     ok = false
     mut backing: [128]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, base, usize(1024))
-    mut outer_ledger: region.space(0) = zeroed
-    outer := region.over(outer_ledger, arena)
-    mut inner_ledger: region.space(0) = zeroed
+    mut arena_space: arena.space = zeroed
+    bump := arena.over_unchecked(arena_space, base, usize(1024))
+    mut outer_ledger: region.growing_space = zeroed
+    outer := region.over(outer_ledger, bump)
+    mut inner_ledger: region.growing_space = zeroed
     inner := region.over(inner_ledger, outer)
     one: usize = 1
     align: usize = 1
     object: ptr mut u8 = mem.allocate(inner, one, align) else (problem) _ = problem
         return end
     object.val = 42
-    before: usize = mem.arena_used(arena)
+    before: usize = arena.used(bump)
     maximum: usize = 0 -% 1
     mut refused: bool = false
     _ = mem.allocate(inner, maximum, align) else (problem)
         refused = problem == mem.out_of_memory
         object
     end
-    return when not refused or mem.arena_used(arena) <> before or object.val <> 42
+    return when not refused or arena.used(bump) <> before or object.val <> 42
     region.release(inner_ledger, outer)
-    region.release(outer_ledger, arena)
-    ok = mem.arena_used(arena) == before
+    region.release(outer_ledger, bump)
+    ok = arena.used(bump) == before
 end finite_regions
 
 io_failures: () -> (ok: bool) =
@@ -471,10 +473,10 @@ io_failures: () -> (ok: bool) =
     for scenario in usize(0)..<usize(6) do
         first: io.memory_file =
             (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-             readable: true, writable: false, opened: false, writing: false)
+             readable: true, writable: false, state: io.closed_slot)
         second: io.memory_file =
             (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
-             readable: true, writable: true, opened: false, writing: false)
+             readable: true, writable: true, state: io.closed_slot)
         mut files: [2]io.memory_file
         files[0] = first
         files[1] = second
@@ -488,11 +490,11 @@ io_failures: () -> (ok: bool) =
         if scenario == 1 then world_space.fail_close_at = 1 end if
         if scenario == 2 then world_space.fail_close_at = 2 end if
         world: any io.world = any(addr world_state)
-        host := heap.host()
+        host := heap.new()
         budget: usize = 500
         mut counted_space: fault.space = zeroed
         counted := fault.over(counted_space, host, budget)
-        mut ledger: region.space(0) = zeroed
+        mut ledger: region.growing_space = zeroed
         program := region.over(ledger, counted)
         mut chunk: usize = 3
         if scenario == 5 then chunk = 0 end if
@@ -502,14 +504,14 @@ io_failures: () -> (ok: bool) =
             0
         end
         region.release(ledger, counted)
-        return when not refused or files[0].opened or files[1].opened
+        return when not refused or files[0].state <> io.closed_slot or files[1].state <> io.closed_slot
           or fault.live(counted) <> 0
         if scenario == 3 then
-            return when files[1].length <> 3 or world_space.write_calls <> 3
+            return when files[1].length <> 3 or world_space.writes <> 3
               or not app.equal(destination[0..<3], "DEB")
         end if
-        if scenario == 4 then return when world_space.open_calls <> 0 end if
-        if scenario == 5 then return when world_space.close_calls <> 0 end if
+        if scenario == 4 then return when world_space.opens <> 0 end if
+        if scenario == 5 then return when world_space.closes <> 0 end if
     end for
     ok = true
 end io_failures
@@ -522,7 +524,7 @@ missing_input_preserves_output: () -> (ok: bool) =
     mut files: [1]io.memory_file
     files[0] = (name: "out", contents: contents[0..<32],
                 length: lenof previous, cursor: 0, readable: true, writable: true,
-                opened: false, writing: false)
+                state: io.closed_slot)
     missing: []u8 = "missing"
     args: [3][]u8 = [arg6, arg7, missing]
     mut out: [32]u8 = zeroed
@@ -531,8 +533,8 @@ missing_input_preserves_output: () -> (ok: bool) =
     world_state := io.memory_over(world_space, files[0..<1], args[0..<3], "",
                                   out[0..<32], err[0..<32])
     world: any io.world = any(addr world_state)
-    host := heap.host()
-    mut ledger: region.space(0) = zeroed
+    host := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, host)
     defer region.release(ledger, host)
     mut refused: bool = false
@@ -542,8 +544,8 @@ missing_input_preserves_output: () -> (ok: bool) =
     end
     ok = refused and files[0].length == lenof previous
          and app.equal(contents[0..<lenof previous], previous)
-         and not files[0].opened and world_space.open_calls == 1
-         and world_space.close_calls == 0
+         and files[0].state == io.closed_slot and world_space.opens == 1
+         and world_space.closes == 0
 end missing_input_preserves_output
 
 diagnostics: () -> (ok: bool) =
@@ -555,12 +557,12 @@ diagnostics: () -> (ok: bool) =
                      bad_number, arg8]
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
-                readable: true, writable: false, opened: false, writing: false)
+                readable: true, writable: false, state: io.closed_slot)
     mut world_space: io.memory_space = zeroed
     world_state := io.memory_over(world_space, files[0..<1], args[0..<7], "", output[0..<128], errors[0..<128])
     world: any io.world = any(addr world_state)
-    host := heap.host()
-    mut ledger: region.space(0) = zeroed
+    host := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, host)
     defer region.release(ledger, host)
     mut logger := diag.new(capacity: 4)
@@ -569,7 +571,7 @@ diagnostics: () -> (ok: bool) =
         return
     end
     return when kept <> 3 or not log.failed() or diag.length(addr logger) <> 3
-      or diag.dropped(addr logger) <> 0 or world_space.errors_used <> 0 or files[0].opened
+      or diag.dropped(addr logger) <> 0 or world_space.errors_used <> 0 or files[0].state <> io.closed_slot
     first: diag.entry = diag.get(addr logger, usize(0)) else (problem) _ = problem
         return
     end
@@ -584,13 +586,13 @@ diagnostics: () -> (ok: bool) =
       or not exact_note(third, "--every wants a positive number, using 1\n")
     --  Streaming diagnostics fail before input acquisition; the same core
     --  routine reports the delivery failure, with no implicit retry.
-    world_space.fail_write_at = world_space.write_calls + 1
+    world_space.fail_write_at = world_space.writes + 1
     mut refused: bool = false
     _ = app.run(program, world, usize(3)) else (problem)
         refused = problem == io.io_failed
         0
     end
-    ok = refused and not files[0].opened and world_space.open_calls == 1
+    ok = refused and files[0].state == io.closed_slot and world_space.opens == 1
 end diagnostics
 
 exact_note: (entry: diag.entry, expected: []u8) -> (ok: bool) =
@@ -616,12 +618,12 @@ bare_levels: () -> (ok: bool) =
     for length in usize(10)..<usize(12) do
         mut files: [1]io.memory_file
         files[0] = (name: "in", contents: data[0..<11], length: length, cursor: 0,
-                    readable: true, writable: false, opened: false, writing: false)
+                    readable: true, writable: false, state: io.closed_slot)
         mut world_space: io.memory_space = zeroed
         world_state := io.memory_over(world_space, files[0..<1], args[0..<3], "", output[0..<128], errors[0..<128])
         world: any io.world = any(addr world_state)
-        host := heap.host()
-        mut ledger: region.space(0) = zeroed
+        host := heap.new()
+        mut ledger: region.growing_space = zeroed
         program := region.over(ledger, host)
         mut good: bool = true
         kept: usize = app.run(program, world, usize(3)) else (problem)
@@ -630,7 +632,7 @@ bare_levels: () -> (ok: bool) =
             0
         end
         region.release(ledger, host)
-        return when not good or kept <> 2 or files[0].opened
+        return when not good or kept <> 2 or files[0].state <> io.closed_slot
           or not app.equal(output[0..<world_space.output_used], expected)
     end for
     ok = true
@@ -649,7 +651,7 @@ repeated_matches: () -> (ok: bool) =
     for at in usize(0)..<lenof rest do data[11 + at] = rest[at] end for
     mut files: [1]io.memory_file
     files[0] = (name: "in", contents: data[0..<31], length: 31, cursor: 0,
-                readable: true, writable: false, opened: false, writing: false)
+                readable: true, writable: false, state: io.closed_slot)
     every: []u8 = "2"
     args: [7][]u8 = [arg2, arg1, arg4, every, arg2, arg3, arg8]
     mut out: [128]u8 = zeroed
@@ -658,8 +660,8 @@ repeated_matches: () -> (ok: bool) =
     world_state := io.memory_over(world_space, files[0..<1], args[0..<7], "",
                                   out[0..<128], err[0..<128])
     world: any io.world = any(addr world_state)
-    host := heap.host()
-    mut ledger: region.space(0) = zeroed
+    host := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, host)
     defer region.release(ledger, host)
     kept: usize = app.run(program, world, usize(3)) else (problem)
@@ -667,7 +669,7 @@ repeated_matches: () -> (ok: bool) =
         return
     end
     expected: []u8 = "0: 0\n1: 0\n2: 1\n3: 0\n4: 0\n5: 0\n6: 0\n7: 0\n"
-    ok = kept == 1 and not files[0].opened
+    ok = kept == 1 and files[0].state == io.closed_slot
          and app.equal(out[0..<world_space.output_used], expected)
 end repeated_matches
 
@@ -675,13 +677,13 @@ metadata_exhaustion: () -> (ok: bool) =
     ok = false
     mut backing: [1]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, base, usize(8))
-    mut ledger: region.space(0) = zeroed
+    mut arena_space: arena.space = zeroed
+    bump := arena.over_unchecked(arena_space, base, usize(8))
+    mut ledger: region.growing_space = zeroed
     --  An empty ledger releases without allocating and remains reusable.
-    region.release(ledger, arena)
-    return when mem.arena_used(arena) <> 0
-    program := region.over(ledger, arena)
+    region.release(ledger, bump)
+    return when arena.used(bump) <> 0
+    program := region.over(ledger, bump)
     mut refused: bool = false
     _ = mem.allocate(program, usize(1), usize(1)) else (problem)
         refused = problem == mem.out_of_memory
@@ -689,6 +691,6 @@ metadata_exhaustion: () -> (ok: bool) =
     end
     --  The payload fitted; recording its extent did not. Region returned the
     --  payload to its parent, whose monotonic free deliberately keeps it used.
-    region.release(ledger, arena)
-    ok = refused and mem.arena_used(arena) == 1
+    region.release(ledger, bump)
+    ok = refused and arena.used(bump) == 1
 end metadata_exhaustion

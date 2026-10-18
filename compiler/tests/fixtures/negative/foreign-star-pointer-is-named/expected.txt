@@ -1,0 +1,11 @@
+error[L0101]: Landin writes a pointer type as `ptr T`, not `*T`
+  --> ../tests/fixtures/negative/foreign-star-pointer-is-named/program.ldn:1:12
+  |
+1 | first: (p: *u8) -> (b: u8) =
+  |            ^
+  --> ../tests/fixtures/negative/foreign-star-pointer-is-named/program.ldn:1:9
+  |
+1 | first: (p: *u8) -> (b: u8) =
+  |         ^ declared here
+  = note: [0430]: `ptr T` points at a `T` it may read, and `ptr mut T` at one it may also write
+  = help: write `ptr`

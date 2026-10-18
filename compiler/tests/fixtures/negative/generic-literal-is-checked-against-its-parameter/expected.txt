@@ -1,0 +1,6 @@
+error[L0300]: `300` does not fit `u8`
+  --> ../tests/fixtures/negative/generic-literal-is-checked-against-its-parameter/program.ldn:7:27
+  |
+7 |     code = i32(pick(true, 300))
+  |                           ^^^
+  = note: [1880]: a literal takes the type of its context and is checked there

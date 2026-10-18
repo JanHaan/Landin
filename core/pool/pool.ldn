@@ -1,4 +1,4 @@
---  A caller-backed reclaiming allocator.  Unlike core/mem's arena, every
+--  A caller-backed reclaiming allocator.  Unlike core/arena's arena, every
 --  successful allocation owns one uniform slot. Free indices form a min heap
 --  in caller-supplied metadata for lowest-index reuse. No operation imports
 --  or falls back to a backing allocator.

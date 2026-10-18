@@ -118,8 +118,8 @@ class Lane(SHARED.Lane):
         else:
             # The compiler's toolchain adapter owns linker.library discovery,
             # level arguments and startup policy; reuse that boundary here.
-            self.command([*argv, '--toolchain=' + str(self.driver), '--emit=exe', '-o', executable],
-                         label + '-link')
+            self.command([*argv, '--toolchain=' + str(self.driver), '--emit=exe', '--keep-asm',
+                          '-o', executable], label + '-link')
         # `c-shared:` sources become shared objects the program loads, which
         # the bundle carries beside it; their paths there are its first
         # arguments (compiler/tests/README.md).
@@ -275,13 +275,24 @@ def execute(args, manifest):
         (args.output / (label + '.stderr')).write_bytes(completed.stderr or b'')
         (args.output / (label + '.status')).write_text(str(completed.returncode))
         status = -4 if meta.get('traps') == 'yes' else int(meta['status'])
-        if result['case'] == 'runtime/rv64-feature-fact':
-            status = 43 if result['level'] == LEVELS[1] else 42
+        #  `level_status:` gives a level's own status, LEVEL=STATUS, as
+        #  the test program reads it.
+        for entry in meta.get('level_status', '').split(','):
+            level, _, value = entry.strip().partition('=')
+            if level and level == result['level']:
+                status = int(value)
         require(completed.returncode == status, f'{label}: status {completed.returncode}, expected {status}')
         base = ROOT / 'compiler/tests/fixtures' / result['case']
         expected = (base / meta['run_expect']).read_bytes() if meta.get('run_expect') else meta.get('stdout', '').encode()
         actual = completed.stdout
         require(actual == expected, label + ': output mismatch ' + repr(actual[:500]))
+        if meta.get('trap_report'):
+            #  D361: the line the trap wrote before it ended, named by the
+            #  file's base name wherever this lane put the fixture.
+            wanted = meta['trap_report'].encode()
+            require(any(line == wanted or line.endswith(b'/' + wanted)
+                        for line in (completed.stdout + (completed.stderr or b'')).split(b'\n')),
+                    f'{label}: trap report missing: {wanted!r}')
         if meta.get('stream', 'merged') != 'merged':
             require(not completed.stderr, label + ': unexpected stderr')
         result['status'] = 'passed'

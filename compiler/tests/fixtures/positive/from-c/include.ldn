@@ -1,0 +1,6 @@
+import core/text (host_over, host_string)
+
+--- Where the tool reads its settings.
+public config_path: () -> (path: host_string) =
+    path = host_over("/etc/tool.conf")
+end config_path

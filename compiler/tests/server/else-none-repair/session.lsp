@@ -1,0 +1,16 @@
+# D376: a call that returns none takes `else none` without a diagnostic,
+# and a value written after such a call's `else` is refused with D310's
+# L0331 and offered `none` in its place, a likely repair and not preferred:
+# the person may have meant to handle the error instead.
+-> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}
+-> {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///workspace/ignore.ldn","languageId":"landin","version":1,"text":"refused: atom\n\nattempt: (flag: bool) -> none ! refused =\n    fail refused when flag\nend attempt\n\nhandled: () -> none =\n    attempt(false) else none\n    attempt(true) else 0\nend handled\n"}}}
+-> {"jsonrpc":"2.0","id":2,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"file:///workspace/ignore.ldn"},"range":{"start":{"line":8,"character":23},"end":{"line":8,"character":23}},"context":{"diagnostics":[]}}}
+-> {"jsonrpc":"2.0","id":3,"method":"textDocument/codeAction","params":{"textDocument":{"uri":"file:///workspace/ignore.ldn"},"range":{"start":{"line":7,"character":19},"end":{"line":7,"character":28}},"context":{"diagnostics":[]}}}
+-> {"jsonrpc":"2.0","id":4,"method":"shutdown"}
+-> {"jsonrpc":"2.0","method":"exit"}
+<- {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":2},"definitionProvider":true,"hoverProvider":true,"documentFormattingProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"]}},"serverInfo":{"name":"refine"}}}
+<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/ignore.ldn","version":1,"diagnostics":[{"range":{"start":{"line":8,"character":23},"end":{"line":8,"character":24}},"severity":1,"code":"L0331","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0331"},"source":"refine","message":"this call returns nothing, so its `else` has no result to stand in for\nnote: [1030]: `else none` ignores the error, and `else (problem) ... end` handles it in a block; neither yields a value","relatedInformation":[{"location":{"uri":"file:///workspace/ignore.ldn","range":{"start":{"line":2,"character":0},"end":{"line":4,"character":11}}},"message":"this signature returns none"}]}]}}
+<- {"jsonrpc":"2.0","id":2,"result":[{"title":"ignore the failure with `else none`","kind":"quickfix","diagnostics":[{"range":{"start":{"line":8,"character":23},"end":{"line":8,"character":24}},"severity":1,"code":"L0331","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0331"},"source":"refine","message":"this call returns nothing, so its `else` has no result to stand in for\nnote: [1030]: `else none` ignores the error, and `else (problem) ... end` handles it in a block; neither yields a value","relatedInformation":[{"location":{"uri":"file:///workspace/ignore.ldn","range":{"start":{"line":2,"character":0},"end":{"line":4,"character":11}}},"message":"this signature returns none"}]}],"isPreferred":false,"edit":{"changes":{"file:///workspace/ignore.ldn":[{"range":{"start":{"line":8,"character":23},"end":{"line":8,"character":24}},"newText":"none"}]}}}]}
+<- {"jsonrpc":"2.0","id":3,"result":[]}
+<- {"jsonrpc":"2.0","id":4,"result":null}
+exit: 0

@@ -137,9 +137,9 @@ public main: () -> (code: i32) =
     f0: callback = select(false) else add_two
     f1: callback = select(true) else add_two
     recursive := left(0) else 0
-    probe(false) else (ignored) _ = ignored end
-    guarded_fail() else (ignored) _ = ignored end
-    cleanup_wrap() else (ignored) _ = ignored end
+    probe(false) else none
+    guarded_fail() else none
+    cleanup_wrap() else none
     mut placed: holder = zeroed
     placed.child = pair_forward(true) else
         if true then pair(x: 20, y: 22)

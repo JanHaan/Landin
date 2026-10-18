@@ -1,8 +1,8 @@
 -- Executable client of the actual public driver. Host commands and assertions
 -- are test transport only; they never compute producer/consumer state.
 import drivers/uart
+import platform/cortex_m
 import rp2040/dma
-import platform/cpu
 
 link(align: 256)
 mut storage: [512]u8 = zeroed
@@ -26,7 +26,7 @@ extern(interrupt) irq: () -> none =
     pending := dma.intr_read(uart.dma_base)
     events += 1
     dma.intr_write(uart.dma_base, pending & 1)
-    cpu.completion_barrier()
+    cortex_m.completion_barrier()
 end irq
 
 record: (problem: uart.receive_error) -> none =
@@ -40,7 +40,7 @@ end record
 
 start: () -> noreturn =
     stage = 1
-    while command == 0 do cpu.compiler_barrier() end while
+    while command == 0 do cortex_m.compiler_barrier() end while
     mut receiver := uart.open(rate, budget, storage[usize(offset)..<usize(offset + capacity)]) else (problem)
         match problem
             uart.busy: outcome = 1
@@ -50,14 +50,14 @@ start: () -> noreturn =
             uart.bad_buffer: outcome = 5
         end match
         stage = 99
-        loop do cpu.wait_for_interrupt() end loop
+        loop do cortex_m.wait_for_interrupt() end loop
     end
     enable: ptr mut u32 = ptr(0xe000e100)
     compiler.volatile_store(enable, 1)
     command = 0
     stage = 2
     loop do
-        while command == 0 do cpu.compiler_barrier() end while
+        while command == 0 do cortex_m.compiler_barrier() end while
         operation := command
         outcome = 0
         result = 0
@@ -80,9 +80,9 @@ start: () -> noreturn =
                 record(problem)
             end
         elsif operation == 5 then
-            saved_mask = cpu.disable_interrupts()
+            saved_mask = cortex_m.disable_interrupts()
         elsif operation == 6 then
-            cpu.restore_interrupts(saved_mask)
+            cortex_m.restore_interrupts(saved_mask)
         elsif operation == 7 then
             if receiver.quiet then
                 -- Explicit origin erasure in this lifetime control only.

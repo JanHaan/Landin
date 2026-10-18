@@ -119,6 +119,37 @@ package Landin.Backend is
      with Pre => Landin.IR.Holds (Of_Unit, Direct)
                  and then Landin.IR.Holds (Of_Unit, Erased);
 
+   --  D374: which evidence-table entries an emitted table names.  Entry N
+   --  of a table is kept when code that can run projects entry N from a
+   --  table of the same family (Landin.IR.Evidence_Family), direct and
+   --  erased families apart, since a projection's table at runtime may be
+   --  any table of its concept.  A routine that can run is a root or one
+   --  that a routine that can run calls, takes the address of, or names
+   --  in a kept entry.  A root has a reference no call makes: an image, an
+   --  exposure, an import or export, a link name, a placement, a
+   --  non-ordinary convention or the C ABI; or it has no parameters, as a
+   --  firmware entry has; or it is Handler, the panic handler the backend
+   --  calls.  A routine only another routine calls is no root, so one that
+   --  only a left-out entry's target calls cannot run and projects
+   --  nothing.  With any `assembler.block` in the unit, whose text may
+   --  name anything, every routine can run.  A table without a family
+   --  keeps every entry.  An entry
+   --  left out is a zero word in its place, so a table's layout never
+   --  changes, and the routine it named is linked only if something else
+   --  reaches it.  The two identities of one physical table (see
+   --  Shares_Evidence_Table) answer alike.  Every target asks this, so
+   --  every target links the same routines.
+   type Kept_Entries is private;
+
+   function Kept_Evidence_Entries
+     (Of_Unit : Landin.IR.Unit;
+      Handler : Landin.IR.Item_Id) return Kept_Entries;
+
+   function Is_Kept
+     (Of_Kept : Kept_Entries;
+      Id      : Landin.IR.Evidence_Id;
+      Which   : Positive) return Boolean;
+
    function Slot_Offset
      (Of_Frame : Frame; Slot : Landin.IR.Slot_Id)
      return Landin.Targets.Byte_Count;
@@ -468,6 +499,13 @@ private
    --  Indexed by declaration identity; zero for one no set names.
    type Atom_Codes is record
       Codes : Code_Vectors.Vector;
+   end record;
+
+   --  First (T) is how many entries the tables before T hold; Kept is
+   --  indexed by that count plus the entry's position.
+   type Kept_Entries is record
+      First : Code_Vectors.Vector;
+      Kept  : Home_Vectors.Vector;
    end record;
 
    type Frame is record

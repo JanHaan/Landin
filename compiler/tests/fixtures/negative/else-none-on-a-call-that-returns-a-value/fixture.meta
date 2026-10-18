@@ -1,0 +1,9 @@
+class: negative
+summary: D376 refuses `else none` on a call that returns a value, direct, labelled, erased, through a function value, generic or discarded, once each, naming the forms that work
+program: program.ldn
+codes: L0331, L0331, L0331, L0331, L0331, L0331
+constructs: 0940, 1030, 1370, 1390
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn
+status: 1

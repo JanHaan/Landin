@@ -13,8 +13,8 @@ status 42 is its complete oracle.
 | Prototype section or pressure | Executable evidence |
 |---|---|
 | Opening parameterization, allocator, escape and specialization pressure | One `containers_run` composes the repository `core` modules without copying them. `evidence_less` is a constrained generic routine called with `i32` and `u32`; both calls execute the selected `cmp.ordered.less` entry. The heterogeneous drawable list retains genuinely runtime-selected evidence. |
-| `core/mem` — allocation as a capability | Every allocating container receives its provider explicitly. The workload uses `heap.system`, `mem.arena`, `pool.provider`, and the generic `fault.injector(pool.provider)`/`fault.injector(heap.system)` conformances. No container stores a provider or imports a hidden heap. |
-| `core/mem` — bump allocator over borrowed storage | `map_operations` runs over an explicit caller-backed `mem.arena`. Its no-op `free` is used only for ordinary arena composition, never as evidence that failure rollback reclaimed storage. |
+| `core/mem` — allocation as a capability | Every allocating container receives its provider explicitly. The workload uses `heap.heap`, `arena.arena`, `pool.provider`, and the generic `fault.injector(pool.provider)`/`fault.injector(heap.heap)` conformances. No container stores a provider or imports a hidden heap. |
+| `core/mem` — bump allocator over borrowed storage | `map_operations` runs over an explicit caller-backed `arena.arena`, `core/arena`'s. Its no-op `free` is used only for ordinary arena composition, never as evidence that failure rollback reclaimed storage. |
 | `core/mem` — allocator that fails on purpose | Vector, spill-list, map, and tree failures use `fault.over` over a reclaiming fixed pool. Each path checks attempts, delegated calls, injected failures, frees, live extents, and the pool's accepted/rejected free counts. |
 | `core/mem` — slices from an allocator | `raw_reference_prefix` obtains one exact provider extent, creates private typed storage with `mem.storage_over`, publishes two pointer values with `mem.admit`, exposes only the initialized prefix, releases both values, disposes empty storage, and frees the original byte extent. It never fabricates a typed spare-capacity slice. |
 | `core/vec` — growing array | The application reverses a fixed array into the prototype's 20 descending numbers, pushes all 20 into a list, sorts its initialized view, observes 1 and 20 at the ends, pops and restores the tail, then explicitly releases it. A separate pointer list injects replacement failure at length eight, proves the old first/eighth values and allocation remain intact, retries growth, and finishes with zero live pool extents. |
@@ -104,8 +104,9 @@ copies under a new prefix would:
 - missing composed evidence: `negative/core-map-missing-parent-conformance`
 - live initialized views: `negative/core-vec-used-live-growth`,
   `negative/core-vec-used-live-release`, and `negative/core-spill-live-view`
-- frame-backed raw/list views: `negative/core-mem-used-frame` and
-  `negative/core-vec-used-frame`
+- frame-backed raw views: `negative/core-mem-used-frame`; a list over
+  frame storage can no longer be built, `negative/core-vec-used-frame`
+  (D345)
 - retained map key/value frame escape: `negative/core-map-key-frame-escape` and
   `negative/core-map-value-frame-escape`
 - retained tree names/nodes: `negative/core-tree-frame-name` and

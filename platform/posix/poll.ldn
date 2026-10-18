@@ -1,0 +1,114 @@
+--  Waiting for descriptors to be ready: POSIX's `poll`, its records and
+--  the events it reports.
+
+import platform/libc
+import platform/linux
+
+events_value: type = distinct u16
+
+--- Poll events, POSIX's `poll` bits as a set: a value combines with `|`,
+--- `&` and `~` and compares with `==` and `<>`.  `poll_input`,
+--- `poll_output` and `poll_urgent` are what an entry can ask about;
+--- `poll_error`, `poll_hung_up` and `poll_invalid` are only ever
+--- reported.  The bits are the same on Linux,
+--- Darwin and FreeBSD.
+public poll_events: type = events_value
+
+--- No event.
+public poll_no_events: poll_events = events_value(0)
+
+--- Data to read, or the end of a file.
+public poll_input: poll_events = events_value(1)
+
+--- Out-of-band data to read.
+public poll_urgent: poll_events = events_value(2)
+
+--- Room to write.
+public poll_output: poll_events = events_value(4)
+
+--- An error on the file.
+public poll_error: poll_events = events_value(8)
+
+--- The peer has gone.
+public poll_hung_up: poll_events = events_value(16)
+
+--- A descriptor that is not open.
+public poll_invalid: poll_events = events_value(32)
+
+--  C's `struct pollfd`, the same on all three systems, so a slice of
+--  entries is what the system reads and fills: `short` fields, whose bits
+--  these are.
+poll_record: type = struct
+    descriptor: descriptor
+    events: poll_events
+    returned: poll_events
+end poll_record
+
+--- One descriptor for `poll` to watch and the events asked about, made by
+--- `watch`, and after the call what happened, which `happened` reads.
+public poll_entry: type = poll_record
+
+--- An entry watching `watched` for the events `wanted` asks about; its
+--- `poll_error`, `poll_hung_up` and `poll_invalid` are reported whether
+--- asked or not.
+public link(symbol: "_landin_posix_watch") watch:
+    (watched: descriptor, wanted: poll_events)
+    -> (entry: poll_entry) =
+    asked: poll_events = poll_input | poll_urgent | poll_output
+    entry = (descriptor: watched, events: wanted & asked,
+             returned: poll_no_events)
+end watch
+
+--- What happened to an entry's descriptor in the last `poll`; nothing,
+--- before one.
+public link(symbol: "_landin_posix_happened") happened:
+    (entry: poll_entry) -> (events: poll_events) =
+    events = entry.returned
+end happened
+
+--- Wait until an event happens to one of `entries`' descriptors, or
+--- `milliseconds` pass, waiting indefinitely when it is negative and not
+--- at all when it is zero, POSIX's `poll`: how many entries had an event,
+--- each of which `happened` reads, zero when the time passed first, or
+--- the errno, `eintr` when a signal came first.
+public link(symbol: "_landin_posix_poll") poll:
+    (entries: []mut poll_entry, milliseconds: i32)
+    -> (ready: usize) ! errno =
+    ready = try system_poll(entries, milliseconds)
+end poll
+
+--  The system's own calls beneath the facility above: Linux's system
+--  calls through platform/linux, and the C library through
+--  platform/libc on Darwin and FreeBSD, whose system interface it is.
+
+fixed if compiler.os == linux then
+    --  arm64 and RV64 have no `poll` call, so every architecture makes
+    --  `ppoll`, with the milliseconds as its time limit.
+    system_poll: (entries: []mut poll_entry, milliseconds: i32)
+                 -> (ready: usize) ! errno =
+        mut spare: linux.poll_record = zeroed
+        records: ptr mut linux.poll_record =
+            if lenof entries > 0 then ptr(usize(addr entries[0]))
+            else addr spare end if
+        mut limit: linux.timespec = zeroed
+        limit.seconds = i64(milliseconds / 1000)
+        limit.nanoseconds = i64(milliseconds % 1000) * 1000000
+        bound: linux.poll_limit = if milliseconds < 0 then linux.no_limit
+                                  else addr limit end if
+        result: i32 = linux.ppoll(records, lenof entries, bound)
+        fail errno_of(-result) when result < 0
+        ready = usize(result)
+    end system_poll
+elsif compiler.os == darwin or compiler.os == freebsd then
+    system_poll: (entries: []mut poll_entry, milliseconds: i32)
+                 -> (ready: usize) ! errno =
+        mut spare: libc.poll_record = zeroed
+        records: ptr mut libc.poll_record =
+            if lenof entries > 0 then ptr(usize(addr entries[0]))
+            else addr spare end if
+        result: i32 = libc.poll(records, libc.poll_count(lenof entries),
+                                milliseconds)
+        fail failure() when result < 0
+        ready = usize(result)
+    end system_poll
+end if

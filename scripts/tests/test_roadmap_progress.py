@@ -57,7 +57,10 @@ HOSTED = ("Standard input, files and directories",
           "The environment and processes", "Time and randomness", "Sockets",
           "The rest of the file system", "The recurring parser frictions",
           "Closing the gap the measurements found", "Dynamic loading",
-          "The newcomer's path")
+          "The newcomer's path",
+          "What the newcomer's path met")
+CONCURRENCY = ("Prototype 5", "Stackful fibres", "A second Io",
+               "Threads and the atomic wrapper")
 
 
 class RoadmapProgress(unittest.TestCase):
@@ -219,6 +222,10 @@ Depends on: none
         for identity, title in zip(hosted, HOSTED):
             assert_next(identity, title)
             complete([identity])
+        #  The hosted concurrency items come before the devices.
+        for title in CONCURRENCY:
+            assert_next(headings[title], title)
+            complete([headings[title]])
         assert_next(devices, "Describe devices")
         complete([devices, headings["The first board"],
                   headings["Thumb-2, Cortex-M33 and M4F"]])

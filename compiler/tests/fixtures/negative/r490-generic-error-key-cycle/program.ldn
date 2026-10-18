@@ -7,6 +7,6 @@ cycle: (stop: bool) -> none ! ... =
     end
 end cycle
 public main: () -> (code: i32) =
-    cycle(false) else (error) _ = error end
+    cycle(false) else none
     code = 42
 end main

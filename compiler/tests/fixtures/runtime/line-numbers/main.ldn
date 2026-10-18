@@ -5,7 +5,7 @@
 --  output goes through a buffered writer, flushed on every way out.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 --  Write every line of INPUT to OUT, numbered.
 numbered: (provider: type is io.world, host: provider,
@@ -20,8 +20,8 @@ numbered: (provider: type is io.world, host: provider,
         inc number
         text.clear(prefix)
         try text.append_u64(prefix, number)
-        try text.align_right(prefix, 0, 6, 32)
-        try text.append_byte(prefix, 9)
+        try text.align_right(prefix, 0, 6, u8(' '))
+        try text.append_byte(prefix, u8('\t'))
         item: io.line = io.read_line(lines) else (problem)
             fail problem when problem <> io.line_too_long
             try io.put(out, text.used(prefix))
@@ -36,12 +36,10 @@ numbered: (provider: type is io.world, host: provider,
 end numbered
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<256])
-    defer io.flush(out) else (problem)
-        _ = problem
-    end
+    defer io.flush(out) else none
     code = 1
     numbered(host, out) else (problem)
         _ = problem

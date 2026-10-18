@@ -5,17 +5,17 @@
 --  monotonic clock never goes back, a sleep lasts at least what was
 --  asked, and the wall clock reads a time after this item was written.
 --  Each check that fails returns its own code.
-import core/io
-import hosted/io as hosted
-import platform/linux
+import core/time
+import hosted/system
+import platform/linux/vdso
 
 --  Whether a thousand readings of the monotonic clock never go back.
-in_order: (host: hosted.system) -> (yes: bool) =
+in_order: (host: system.host) -> (yes: bool) =
     yes = false
-    mut last: io.instant = io.now(host)
+    mut last: time.instant = time.now(host)
     for round in usize(0)..<1000 do
         _ = round
-        reading: io.instant = io.now(host)
+        reading: time.instant = time.now(host)
         return when reading < last
         last = reading
     end for
@@ -24,24 +24,24 @@ end in_order
 
 --  Whether the vDSO's clock_gettime is found after the C runtime's start.
 vdso_found: () -> (yes: bool) =
-    (found, address) := linux.vdso_symbol(linux.vdso_clock_name,
-                                          linux.vdso_version)
+    (found, address) := vdso.symbol(vdso.clock_symbol,
+                                    vdso.clock_version)
     yes = found and address <> 0
 end vdso_found
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     return when not vdso_found()
     code = 2
     return when not in_order(host)
     code = 3
-    start: io.instant = io.now(host)
-    io.sleep(host, io.milliseconds(20))
-    took: io.duration = io.elapsed(start, io.now(host))
-    return when took < io.milliseconds(20)
+    start: time.instant = time.now(host)
+    time.sleep(host, time.milliseconds(20))
+    took: time.duration = time.elapsed(start, time.now(host))
+    return when took < time.milliseconds(20)
     code = 4
-    wall: io.wall_time = io.wall_now(host)
+    wall: time.wall_time = time.wall_now(host)
     return when wall.seconds < 1767225600 or wall.nanoseconds >= 1000000000
     code = 42
 end main

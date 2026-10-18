@@ -1,24 +1,19 @@
 import core/mem
 
-exercise: () -> (ok: bool) ! mem.out_of_memory =
-    ok = false
-    mut backing: [32]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 32)
-    address := try mem.allocate(arena, usize(4), usize(1))
-    address.val = 42
-    return when address.val <> 42
-    _ = mem.allocate(arena, usize(64), usize(1)) else (problem)
-        _ = problem
-        ok = mem.arena_used(arena) == 4
-        return
-    end
-end exercise
-
 public main: () -> (code: i32) =
     code = 1
-    ok := exercise() else false
-    if ok then
+    mut bytes: [8]u8 = zeroed
+    mem.fill(bytes[0..<8], u8('.'))
+    mem.copy(bytes[2..<8], "mem") else none
+    mem.copy(bytes[0..<2], "long") else none
+    return when mem.find(bytes[0..<8], u8('m')) <> 2
+      or bytes[0] <> u8('.') or bytes[5] <> u8('.')
+    mut slots: [4]u8 = zeroed
+    mut store := mem.storage_over(item: u8, base: addr slots[0], slots: 4)
+    _ = mem.admit(store, bytes[3]) else 9
+    first := mem.get(store, 0) else u8(0)
+    missing := mem.get(store, 1) else u8(0)
+    if first == u8('e') and missing == 0 and mem.length(store) == 1 then
         code = 42
     end if
 end main

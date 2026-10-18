@@ -1,0 +1,67 @@
+==================
+A call's failure ignored with else none
+==================
+
+f: (c: bool) -> none =
+    g() else none
+    if c then g() else none end if
+end f
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (scalar_type)))
+        (arrow)
+        (returns))
+      (block
+        (call_expression
+          (indexed_expression
+            (identifier))
+          (recovery_clause))
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (if_expression
+                              (logical_or_expression
+                                (logical_and_expression
+                                  (comparison_expression
+                                    (alternation_expression
+                                      (exclusion_expression
+                                        (conjunction_expression
+                                          (shift_expression
+                                            (sum_expression
+                                              (product_expression
+                                                (unary_expression
+                                                  (indexed_expression
+                                                    (identifier))))))))))))
+                              (block
+                                (logical_or_expression
+                                  (logical_and_expression
+                                    (comparison_expression
+                                      (alternation_expression
+                                        (exclusion_expression
+                                          (conjunction_expression
+                                            (shift_expression
+                                              (sum_expression
+                                                (product_expression
+                                                  (unary_expression
+                                                    (call_expression
+                                                      (indexed_expression
+                                                        (identifier))
+                                                      (recovery_clause)))))))))))))))))))))))))
+      (identifier))))

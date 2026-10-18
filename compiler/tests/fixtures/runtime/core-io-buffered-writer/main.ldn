@@ -2,15 +2,15 @@
 --  can be shortened and made to fail at a chosen call.  Every count below
 --  is of the provider's write calls, so it says when the buffer reached
 --  the writer and in how many pieces.
+import core/cmp
 import core/io
-import core/mem
 
 mut output: [64]u8 = zeroed
 mut errors: [1]u8 = zeroed
 mut unused: [1]u8 = zeroed
 
 wrote: (state: io.memory_space, expected: []u8) -> (yes: bool) =
-    yes = mem.compare(output[0..<state.output_used], expected) == mem.equal
+    yes = cmp.compare(output[0..<state.output_used], expected) == cmp.equal
 end wrote
 
 --  Writes that fit wait for the flush; one that does not flushes first;
@@ -23,17 +23,17 @@ gathered: (host: io.memory, inout state: io.memory_space)
     try io.put(out, "ab")
     try io.put(out, "cde")
     try io.put(out, "")
-    return when state.write_calls <> 0 or io.pending(out) <> 5
+    return when state.writes <> 0 or io.pending(out) <> 5
     try io.put(out, "fghi")
-    return when state.write_calls <> 1 or io.pending(out) <> 4
+    return when state.writes <> 1 or io.pending(out) <> 4
     return when not wrote(state, "abcde")
     try io.put(out, "12345678")
-    return when state.write_calls <> 3 or io.pending(out) <> 0
+    return when state.writes <> 3 or io.pending(out) <> 0
     return when not wrote(state, "abcdefghi12345678")
     try io.put(out, "xyz")
     try io.flush(out)
     try io.flush(out)
-    return when state.write_calls <> 4 or io.pending(out) <> 0
+    return when state.writes <> 4 or io.pending(out) <> 0
     ok = wrote(state, "abcdefghi12345678xyz")
 end gathered
 
@@ -48,12 +48,12 @@ failing: (host: io.memory, inout state: io.memory_space) -> (ok: bool) =
         _ = problem
         return
     end
-    state.fail_write_at = state.write_calls + 1
+    state.fail_write_at = state.writes + 1
     io.flush(out) else (problem)
         return when problem <> io.io_failed or io.pending(out) <> 7
         return when state.output_used <> 0
         state.write_limit = 3
-        state.fail_write_at = state.write_calls + 2
+        state.fail_write_at = state.writes + 2
         io.flush(out) else (again)
             return when again <> io.io_failed or io.pending(out) <> 4
             return when not wrote(state, "123")
@@ -79,7 +79,7 @@ direct: (host: io.memory, inout state: io.memory_space) -> (ok: bool) =
         _ = problem
         return
     end
-    state.fail_write_at = state.write_calls + 1
+    state.fail_write_at = state.writes + 1
     io.put(out, "abcdef") else (problem)
         ok = problem == io.io_failed and io.pending(out) == 2
         return
@@ -90,7 +90,7 @@ public main: () -> (code: i32) =
     name: []u8 = "unused"
     file: io.memory_file =
         (name: name, contents: unused[0..<1], length: 0, cursor: 0,
-         readable: false, writable: false, opened: false, writing: false)
+         readable: false, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     no_arguments: [][]u8 = []

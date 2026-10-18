@@ -1,0 +1,140 @@
+--  Memory the system maps for the process: anonymous, zeroed, readable
+--  and writable pages, given back, grown where they are and, on Linux,
+--  moved; and the page size.
+
+import platform/libc
+import platform/linux
+
+--- Map `length` bytes of fresh, zeroed memory that this process alone may
+--- read and write, POSIX's anonymous private `mmap`: its first byte, which
+--- is aligned to a page, or the errno, `enomem` when the system has no
+--- room.
+public link(symbol: "_landin_posix_map") map:
+    (length: usize) -> (base: ptr mut u8) ! errno =
+    base = try system_map(length)
+end map
+
+--- Give back the `length` bytes mapped at `base`, POSIX's `munmap`.
+public link(symbol: "_landin_posix_unmap") unmap:
+    (base: ptr mut u8, length: usize) -> none ! errno =
+    try system_unmap(base, length)
+end unmap
+
+--- Make the `length` bytes `map` mapped at `base` `new_length` bytes long,
+--- at least `length`, where they are: the pages after them must be free,
+--- or it fails with `enomem` and the mapping is as it was.  Linux's
+--- `mremap` without `MREMAP_MAYMOVE`.  Darwin and FreeBSD have no `mremap`:
+--- there the pages after the mapping are asked for, and kept only when the
+--- system puts them there.  A shorter `new_length` fails with `einval`;
+--- give a mapping's tail back with `unmap`.
+public link(symbol: "_landin_posix_extend") extend:
+    (base: ptr mut u8, length: usize, new_length: usize) -> none ! errno =
+    fail einval when new_length < length
+    return when new_length == length
+    try system_extend(base, length, new_length)
+end extend
+
+--- Make the `length` bytes `map` mapped at `base` `new_length` bytes long,
+--- at least `length`, and return where they now are: in place, as `extend`
+--- does, or else at an address with room, the pages moved rather than their
+--- bytes copied, which is Linux's `mremap` with `MREMAP_MAYMOVE`.  Darwin
+--- and FreeBSD cannot move a mapping, so there it is `extend`.  A failure
+--- leaves the mapping as it was; a shorter `new_length` fails with
+--- `einval`.
+public link(symbol: "_landin_posix_remap") remap:
+    (base: ptr mut u8, length: usize, new_length: usize)
+    -> (moved: ptr mut u8) ! errno =
+    fail einval when new_length < length
+    moved = ptr(usize(base))
+    return when new_length == length
+    moved = try system_remap(base, length, new_length)
+end remap
+
+--- The size of the system's pages in bytes, which `map` aligns to: 16 KiB
+--- on Darwin arm64 and 4 KiB on the others.  On Linux it is what the
+--- kernel told a static executable's entry or, under `--link=libc`, what
+--- the auxiliary vector after C `main`'s `envp` says, and 4096 when no
+--- vector was found.
+public link(symbol: "_landin_posix_page_size") page_size:
+    () -> (bytes: usize) =
+    bytes = system_page_size()
+end page_size
+
+--  The system's own calls beneath the facility above: Linux's system
+--  calls through platform/linux, and the C library through
+--  platform/libc on Darwin and FreeBSD, whose system interface it is.
+
+fixed if compiler.os == linux then
+    system_map: (length: usize) -> (base: ptr mut u8) ! errno =
+        result: i64 = linux.mmap(0, length, linux.prot_read | linux.prot_write,
+                                 linux.map_private | linux.map_anonymous, -1,
+                                 0)
+        fail errno_of(i32(-result)) when result < 0
+        base = ptr(usize(result))
+    end system_map
+
+    system_unmap: (base: ptr mut u8, length: usize) -> none ! errno =
+        result: i32 = linux.munmap(usize(base), length)
+        fail errno_of(-result) when result < 0
+    end system_unmap
+
+    system_extend: (base: ptr mut u8, length: usize, new_length: usize)
+                   -> none ! errno =
+        result: i64 = linux.mremap(usize(base), length, new_length, 0)
+        fail errno_of(i32(-result)) when result < 0
+    end system_extend
+
+    system_remap: (base: ptr mut u8, length: usize, new_length: usize)
+                  -> (moved: ptr mut u8) ! errno =
+        result: i64 = linux.mremap(usize(base), length, new_length,
+                                   linux.mremap_maymove)
+        fail errno_of(i32(-result)) when result < 0
+        moved = ptr(usize(result))
+    end system_remap
+
+    system_page_size: () -> (bytes: usize) =
+        bytes = linux.page_size()
+    end system_page_size
+elsif compiler.os == darwin or compiler.os == freebsd then
+    system_map: (length: usize) -> (base: ptr mut u8) ! errno =
+        result: usize = libc.mmap(0, length, libc.prot_read | libc.prot_write,
+                                  libc.map_private | libc.map_anonymous, -1,
+                                  0)
+        fail failure() when result == libc.map_failed
+        base = ptr(result)
+    end system_map
+
+    system_unmap: (base: ptr mut u8, length: usize) -> none ! errno =
+        fail failure() when libc.munmap(usize(base), length) <> 0
+    end system_unmap
+
+    --  The pages after the mapping, asked for at its end without
+    --  `MAP_FIXED`, which would replace whatever is mapped there: a system
+    --  that puts them elsewhere has none free there, and they are given
+    --  back.
+    system_extend: (base: ptr mut u8, length: usize, new_length: usize)
+                   -> none ! errno =
+        wanted: usize = usize(base) + length
+        extra: usize = new_length - length
+        result: usize = libc.mmap(wanted, extra,
+                                  libc.prot_read | libc.prot_write,
+                                  libc.map_private | libc.map_anonymous, -1,
+                                  0)
+        fail failure() when result == libc.map_failed
+        if result <> wanted then
+            _ = libc.munmap(result, extra)
+            fail enomem
+        end if
+    end system_extend
+
+    --  A mapping cannot move here, so it grows where it is or not at all.
+    system_remap: (base: ptr mut u8, length: usize, new_length: usize)
+                  -> (moved: ptr mut u8) ! errno =
+        try system_extend(base, length, new_length)
+        moved = ptr(usize(base))
+    end system_remap
+
+    system_page_size: () -> (bytes: usize) =
+        bytes = usize(libc.getpagesize())
+    end system_page_size
+end if

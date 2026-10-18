@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: on FreeBSD platform/posix asks posix_openpt for O_CLOEXEC, so the pseudo-terminal controller is closed on exec from the moment it exists rather than from a later fcntl; a C posix_openpt of the program's own records the flags it is given and makes the system call
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 0940, 1030, 1650, 1975
+targets: freebsd-x86-64, freebsd-arm64

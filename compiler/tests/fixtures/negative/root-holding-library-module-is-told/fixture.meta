@@ -1,0 +1,8 @@
+class: negative
+summary: a root holding a module the library supplies is warned that the library's was read, and told about --library
+program: main.ldn
+root: root
+codes: L0016
+status: 0
+constructs: 1420, 1480
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

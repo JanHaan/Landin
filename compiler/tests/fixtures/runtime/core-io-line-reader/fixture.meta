@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: core/io's line reader lends each line of core/io.memory's standard input without its ending, reading \r\n as \n and keeping a lone \r, gives empty lines and an unterminated last line, reports a line longer than its buffer as line_too_long and gives the line after it next, reads the same lines when every read is three bytes and a \r\n is split between reads, and keeps what it read across an injected read failure; the end of input is a finished line, every time it is asked again
+summary: core/io's line reader lends each line of core/io.memory's standard input without its ending, reading \r\n as \n and keeping a lone \r, gives empty lines and an unterminated last line, reports a line longer than its buffer as line_too_long and gives the line after it next, reads the same lines when every read is three bytes and a \r\n is split between reads, keeps what it read across an injected read failure, and over an empty buffer reports every line line_too_long without reading rather than the end of input; the end of input is a finished line, every time it is asked again
 program: main.ldn
 root: ../../../../..
 status: 42

@@ -4,7 +4,7 @@
 --  record sizes, the time limit's and the signal action's layouts, and the
 --  address records platform/posix lays out, which the peer reads as C's
 --  own and builds for platform/posix to read back.
-import core/io
+import core/net
 import core/text
 import platform/libc
 import platform/linux
@@ -126,10 +126,10 @@ end l_offset
 public extern(c) l_encoded: (index: i32, into: ptr mut u8) -> (length: u32) =
     groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]
     record: posix.socket_address =
-        if index == 0 then posix.internet_address(io.ipv4_address(192, 0, 2,
-                                                                  1, 8080))
-        elsif index == 1 then posix.internet_address(io.ipv6_address(groups,
-                                                                     443))
+        if index == 0 then posix.internet_address(net.ipv4_address(192, 0, 2,
+                                                                   1, 8080))
+        elsif index == 1 then posix.internet_address(net.ipv6_address(groups,
+                                                                      443))
         else unix_record() end if
     length = record.length
     for at in usize(0)..<usize(length) do
@@ -141,7 +141,7 @@ end l_encoded
 unix_record: () -> (record: posix.socket_address) =
     record = posix.unix_address(text.host_over("/tmp/landin.sock")) else (problem)
         _ = problem
-        posix.internet_address(io.unspecified(io.ipv4, 0))
+        posix.internet_address(net.unspecified(net.ipv4, 0))
     end
 end unix_record
 
@@ -155,12 +155,12 @@ public extern(c) l_decoded: (source: ptr u8, length: u32) -> (summary: i64) =
         record.bytes[at] = slot.val
     end for
     summary = -1
-    at: io.address = posix.address_of(record) else (problem)
+    at: net.address = posix.address_of(record) else (problem)
         _ = problem
         return
     end
-    last: u8 = if at.family == io.ipv4 then at.octets[3] else at.octets[15]
+    last: u8 = if at.family == net.ipv4 then at.octets[3] else at.octets[15]
                end if
-    summary = (if at.family == io.ipv6 then i64(1) << 32 else i64(0) end if)
+    summary = (if at.family == net.ipv6 then i64(1) << 32 else i64(0) end if)
                | (i64(at.port) << 8) | i64(last)
 end l_decoded

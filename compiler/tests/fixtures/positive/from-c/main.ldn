@@ -1,0 +1,17 @@
+import core/io
+import hosted/system
+
+public main: () -> (code: i32) =
+    host := system.new()
+    code = 2
+    if io.argument_count(host) == 0 then
+        io.write(host, io.err(host), "usage: tool FILE...\n") else none
+        return
+    end if
+    print_arguments(host) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    code = 0
+end main

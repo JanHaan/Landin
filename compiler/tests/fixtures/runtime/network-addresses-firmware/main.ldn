@@ -2,24 +2,24 @@
 --  text and written back, text that is no address refused, and an address
 --  written with its port, within a Cortex-M0 image.
 --  runtime/network-addresses holds every form on the hosted targets.
-import core/io
-import core/mem
+import core/cmp
+import core/net
 import core/text
 
 --  Whether SOURCE reads as an address that is written back as itself.
 round_trip: (source: []u8) -> (yes: bool) ! ... =
-    at: io.address = try io.parse_ip(source)
+    at: net.address = try net.parse_ip(source)
     mut room: [48]u8 = zeroed
     mut line := text.over(room[0..<48])
-    try io.append_ip(line, at)
-    yes = mem.compare(text.used(line), source) == mem.equal
+    try net.append_ip(line, at)
+    yes = cmp.compare(text.used(line), source) == cmp.equal
 end round_trip
 
 --  Whether SOURCE is refused as no address.
 refused: (source: []u8) -> (yes: bool) =
     yes = false
-    at: io.address = io.parse_ip(source) else (problem)
-        yes = problem == io.invalid_address
+    at: net.address = net.parse_ip(source) else (problem)
+        yes = problem == net.invalid_address
         return
     end
     _ = at
@@ -29,8 +29,8 @@ end refused
 with_port: () -> (yes: bool) ! ... =
     mut room: [48]u8 = zeroed
     mut line := text.over(room[0..<48])
-    try io.append_address(line, io.ipv4_address(192, 0, 2, 1, 80))
-    yes = mem.compare(text.used(line), "192.0.2.1:80") == mem.equal
+    try net.append_address(line, net.ipv4_address(192, 0, 2, 1, 80))
+    yes = cmp.compare(text.used(line), "192.0.2.1:80") == cmp.equal
 end with_port
 
 public main: () -> (code: i32) =

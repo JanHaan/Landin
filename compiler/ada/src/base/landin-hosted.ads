@@ -1,7 +1,7 @@
 --  The one hosted name the compiler still owns.
 --
 --  The hosted operating-system boundary is library source: `platform/libc`
---  declares the C library and `hosted/io` keeps the argument root.  The
+--  declares the C library and `hosted/system` keeps the argument root.  The
 --  compiler's hosted entry is C's `main`, and before its source body runs
 --  it calls the program's C-callable definition of this routine with the
 --  incoming `argc`, `argv` and `envp`, when the program defines one: they

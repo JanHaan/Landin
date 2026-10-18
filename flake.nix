@@ -264,6 +264,103 @@
                 done
               '';
             });
+
+          #  The cross lane: every other Linux target's executables built
+          #  with a cross driver and run under QEMU's user emulation, which
+          #  is evidence about the emitted code and none about the pinned
+          #  toolchain on its own host.  The drivers and binutils are named
+          #  with the triplet refine asks for -- `aarch64-linux-gnu-gcc`,
+          #  `riscv64-linux-gnu-gcc`, `x86_64-pc-linux-gnu-gcc` -- which is
+          #  also what Ubuntu's cross packages install, so `refine
+          #  --target=linux-arm64` links in this shell with no --toolchain
+          #  and the gate's commands work here unchanged.
+          #
+          #  They come from flake.lock's nixpkgs, not from an archive, so
+          #  environments/pins.sh pins the versions that revision has and
+          #  this refuses to build a shell from another: a changed lock is a
+          #  changed cross lane, and that is a pin to move on purpose.
+          crossQemuVersion = pin "LANDIN_CROSS_QEMU_NIX";
+          crossGccVersion = pin "LANDIN_CROSS_GCC_NIX";
+
+          crossLane =
+            { cpu, triplet, cross }:
+            let
+              cc = cross.buildPackages.gcc;
+              prefix = cc.targetPrefix;
+              #  A `linker.library` request for a static archive links
+              #  `-l:libm.a`, and nixpkgs keeps glibc's archives in a
+              #  separate output that no wrapper searches.  The driver gets
+              #  a directory holding only the maths archives: a user -L
+              #  precedes the cross compiler's own libc directory, and with
+              #  the whole static output there the driver's own -lc found
+              #  libc.a, and libgcc's LSE initialiser lost getauxval.
+              static = cross.glibc.static;
+            in
+            if cc.version != crossGccVersion then
+              throw "landin: nixpkgs' ${prefix}gcc is ${cc.version} and environments/pins.sh pins LANDIN_CROSS_GCC_NIX=${crossGccVersion}; move the pin with flake.lock"
+            else
+              pkgs.runCommand "landin-cross-${triplet}" { } ''
+                mkdir -p "$out/bin"
+                for tool in ${cc}/bin/${prefix}*; do
+                  name="''${tool##*/${prefix}}"
+                  [ "$name" = gcc ] && continue
+                  ln -s "$tool" "$out/bin/${triplet}-$name"
+                done
+                mkdir -p "$out/lib/static"
+                for archive in ${static}/lib/libm.a ${static}/lib/libm-*.a \
+                    ${static}/lib/libmvec.a; do
+                  [ -e "$archive" ] && ln -s "$archive" "$out/lib/static/"
+                done
+                printf '#!%s\nexec "%s" "$@" -L"%s"\n' \
+                  "${pkgs.runtimeShell}" \
+                  "${cc}/bin/${prefix}gcc" \
+                  "$out/lib/static" \
+                  > "$out/bin/${triplet}-gcc"
+                chmod +x "$out/bin/${triplet}-gcc"
+              '';
+
+          crossLanes = builtins.filter (lane: lane.cpu != pkgs.stdenv.hostPlatform.parsed.cpu.name) [
+            {
+              cpu = "x86_64";
+              triplet = "x86_64-pc-linux-gnu";
+              cross = pkgs.pkgsCross.gnu64;
+            }
+            {
+              cpu = "aarch64";
+              triplet = "aarch64-linux-gnu";
+              cross = pkgs.pkgsCross.aarch64-multiplatform;
+            }
+            {
+              cpu = "riscv64";
+              triplet = "riscv64-linux-gnu";
+              cross = pkgs.pkgsCross.riscv64;
+            }
+          ];
+
+          qemuUser =
+            if pkgs.qemu-user.version != crossQemuVersion then
+              throw "landin: nixpkgs' qemu-user is ${pkgs.qemu-user.version} and environments/pins.sh pins LANDIN_CROSS_QEMU_NIX=${crossQemuVersion}; move the pin with flake.lock"
+            else
+              pkgs.qemu-user;
+
+          #  The GNAT archive bundles a GDB for its own architecture, and
+          #  it comes first on PATH, so the multi-target GDB a cross lane
+          #  debugs through QEMU's stub is named as Debian names it.
+          #  nixpkgs' `<triplet>-gdb` is not that debugger: it refuses the
+          #  sessions' `set disable-randomization off`.
+          gdbMultiarch = pkgs.runCommand "landin-gdb-multiarch" { } ''
+            mkdir -p "$out/bin"
+            ln -s ${pkgs.gdb}/bin/gdb "$out/bin/gdb-multiarch"
+          '';
+
+          crossTools = lib.optionals pkgs.stdenv.hostPlatform.isLinux (
+            [
+              qemuUser
+              gdbMultiarch
+            ]
+            ++ map crossLane crossLanes
+          );
+
         in
         {
           #  The published compiler, fetched rather than built.
@@ -421,7 +518,7 @@
               #  than following nixpkgs' moving default Clang.
               pkgs.llvmPackages_19.clang
               pkgs.gdb #  scripts/debug.sh; native Linux source debugging
-            ];
+            ] ++ crossTools;
 
             #  The binding generator's Linux C model comes from the same
             #  package-set pin as Clang, rather than from host Darwin headers.

@@ -1,3 +1,4 @@
+import core/arena
 import core/fault
 import core/mem
 import core/vec
@@ -7,10 +8,10 @@ mut observed: u32 = 0
 
 exercise: () -> (result: u32) ! mem.out_of_memory =
     result = 1
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over(arena_space, addr backing[0], lenof backing)
+    mut arena_space: arena.space = zeroed
+    memory := arena.over(arena_space, addr backing[0], lenof backing)
     mut space: fault.space = zeroed
-    counted := fault.over(space, arena, usize(1))
+    counted := fault.over(space, memory, usize(1))
     mut values := vec.new(item: u32)
     try vec.reserve(values, counted, usize(2))
     try vec.push(values, counted, u32(17))

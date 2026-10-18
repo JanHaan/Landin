@@ -14,7 +14,7 @@ import time
 from models import EncodingPeripheral
 from packed import TRACE
 from run import Run, require, stop
-from setup import DEFAULT, HERE, inventory, sha, supported_host
+from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'),
             ('speed', 'auto'), ('none', 'all'), ('speed', 'all')]
@@ -122,6 +122,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     supported_host()
+    args.tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     result = {'status': 'failed', 'inputs': inventory(HERE)}

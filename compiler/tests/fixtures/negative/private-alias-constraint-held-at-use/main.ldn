@@ -1,0 +1,7 @@
+--  A key without `keyed` evidence is refused where the alias is applied.
+import holder
+
+public main: () -> (code: i32) =
+    value := holder.new(key: f32, item: i32)
+    code = i32(holder.count(value))
+end main

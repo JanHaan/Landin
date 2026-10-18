@@ -1,0 +1,59 @@
+--  A writable result under a `from` clause may also carry independent
+--  storage that it reaches only through read-only views: no store can land
+--  there, and storage no frame owns outlives every source (D375).  A
+--  builder-like value holds the caller's buffer and an erased policy over
+--  an immutable module binding, as `core/text`'s growing builder does; a
+--  read-only erased view of mutable module storage sees later writes to
+--  it; and a literal rides beside the buffer.
+grower: type = concept (implementation: type)
+    enlarge: (self: ptr implementation, wanted: usize) -> (size: usize)
+end grower
+
+doubling_value: type = struct
+    factor: usize
+end doubling_value
+
+doubling_enlarge: (self: ptr doubling_value, wanted: usize)
+                  -> (size: usize) =
+    size = wanted * self.val.factor
+end doubling_enlarge
+
+doubling_value is grower (enlarge: doubling_enlarge)
+
+doubling: doubling_value = (factor: 2)
+mut tripling: doubling_value = (factor: 3)
+
+holder: type = struct
+    buffer: []mut u8
+    policy: any grower
+    label: []u8
+end holder
+
+--  The immutable module binding, erased.
+growing: (buffer: []mut u8) -> (result: holder from buffer) =
+    result = (buffer: buffer, policy: any(addr doubling), label: "fixed")
+end growing
+
+--  Mutable module storage, erased through a read-only view of it.
+watching: (buffer: []mut u8) -> (result: holder from buffer) =
+    view: ptr doubling_value = addr tripling
+    result = (buffer: buffer, policy: any(view), label: "watched")
+end watching
+
+public main: () -> (code: i32) =
+    code = 1
+    mut storage: [4]u8 = zeroed
+    steady := growing(storage[0..<4])
+    return when steady.policy.enlarge(5) <> 10
+    code = 2
+    steady.buffer[3] = 7
+    return when storage[3] <> 7 or lenof steady.label <> 5
+    code = 3
+    watched := watching(storage[0..<2])
+    return when watched.policy.enlarge(5) <> 15
+    code = 4
+    tripling.factor = 4
+    return when watched.policy.enlarge(5) <> 20
+    return when lenof watched.label <> 7 or lenof watched.buffer <> 2
+    code = 42
+end main

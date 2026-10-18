@@ -82,7 +82,7 @@ exercise: () -> none ! ... =
 end exercise
 
 public main: () -> (code: i32) =
-    exercise() else (ignored) _ = ignored end
+    exercise() else none
     if stack_seen == 42
       and aggregate_seen == 84
       and returned_seen == 41

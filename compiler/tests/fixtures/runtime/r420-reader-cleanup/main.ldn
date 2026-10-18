@@ -1,8 +1,9 @@
-import core/io
-import core/text
-import core/mem
-import hosted/heap
 import core/fault
+import core/io
+import core/io/fake
+import core/mem
+import core/text
+import hosted/heap
 
 reader: type = struct
     opened: io.file
@@ -21,9 +22,7 @@ acquire: (provider: type is mem.allocator, memory: provider,
     initial: [2]u8 = zeroed
     buffer: ptr mut [2]u8 = mem.new(memory, initial) else (problem)
         _ = problem
-        world.close(opened) else (close_problem)
-            _ = close_problem
-        end
+        world.close(opened) else none
         fail mem.out_of_memory
     end
     value = (opened: opened, buffer: buffer)
@@ -47,9 +46,7 @@ consume: (provider: type is mem.allocator, memory: provider,
     loop do
         count: usize = world.read(value.opened, value.buffer.val[0..<2])
           else (problem)
-            release_reader(memory, world, value) else (close_problem)
-                _ = close_problem
-            end
+            release_reader(memory, world, value) else none
             fail problem
         end
         break when count == 0
@@ -69,9 +66,7 @@ allocation_refused: (provider: type is mem.allocator, memory: provider,
         yes = problem == mem.out_of_memory
         return
     end
-    release_reader(memory, world, value) else (problem)
-        _ = problem
-    end
+    release_reader(memory, world, value) else none
     yes = false
 end allocation_refused
 
@@ -80,7 +75,7 @@ public main: () -> (code: i32) =
     name: []u8 = "f"
     file_value: io.memory_file =
       (name: name, contents: input[0..<5], length: 5, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+       readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file_value
     args: [][]u8 = []
@@ -90,13 +85,13 @@ public main: () -> (code: i32) =
     state.read_limit = 2
     state.fail_close_at = 1
     world: any io.world = any(addr memory)
-    heap := heap.host()
+    heap := heap.new()
     budget: usize = 0
     mut space: fault.space = zeroed
     counted := fault.over(space, heap, budget)
     return when not allocation_refused(counted, world)
-    return when publications <> 0 or state.open_calls <> 1
-      or state.close_calls <> 1 or files[0].opened
+    return when publications <> 0 or state.opens <> 1
+      or state.closes <> 1 or files[0].state <> io.closed_slot
       or fault.attempts(counted) <> 1 or fault.live(counted) <> 0
       or fault.frees(counted) <> 0
     allowed: usize = 2
@@ -109,8 +104,8 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when sum <> 335 or publications <> 1 or files[0].opened
-      or state.read_calls <> 4 or state.close_calls <> 2
+    return when sum <> 335 or publications <> 1 or files[0].state <> io.closed_slot
+      or state.reads <> 4 or state.closes <> 2
       or fault.live(counted) <> 0 or fault.frees(counted) <> 1
     state.fail_read_at = 5
     state.fail_close_at = 3
@@ -124,8 +119,8 @@ public main: () -> (code: i32) =
         0
     end
     if refused and failed_sum == 0 and publications == 2
-      and not files[0].opened and state.open_calls == 3
-      and state.close_calls == 3 and state.read_calls == 5
+      and files[0].state == io.closed_slot and state.opens == 3
+      and state.closes == 3 and state.reads == 5
       and fault.attempts(counted) == 3 and fault.successes(counted) == 2
       and fault.injected_failures(counted) == 1
       and fault.live(counted) == 0 and fault.frees(counted) == 2

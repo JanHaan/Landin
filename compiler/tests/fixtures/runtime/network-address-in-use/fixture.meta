@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: over 127.0.0.1 and over ::1, a second listener at a listener's port, and a second UDP socket at a datagram socket's port are each io.address_in_use, the hosted provider keeping EADDRINUSE as its last errno
+summary: over 127.0.0.1 and over ::1, a second listener at a listener's port, and a second UDP socket at a datagram socket's port are each net.address_in_use, the hosted provider keeping EADDRINUSE as its last errno
 program: main.ldn
 root: ../../../../..
 status: 42

@@ -12,6 +12,7 @@ counters: type = struct
     inner_failures: usize
     frees: usize
     live: usize
+    growths: usize
 end counters
 
 --- Caller-owned state of an injector: its budget and cumulative counters.
@@ -26,8 +27,8 @@ end injector_value
 
 --- Allocator wrapper with deterministic failure injection and cumulative
 --- counters, as a handle: copies share one budget. Holds a copy of its inner
---- provider's handle, delegates permitted allocations, resizes and frees,
---- and refuses in-place growth.
+--- provider's handle and delegates permitted allocations, resizes,
+--- in-place growths and frees.
 public injector: type (inner_provider: type) = injector_value(inner_provider)
 
 --- Fill `state` for an injector over `inner` with a budget of
@@ -41,7 +42,7 @@ public over: (inner_provider: type is mem.allocator, inout state: space,
     state = (remaining: allowed_attempts,
              attempts: 0, delegated: 0, successes: 0,
              injected_failures: 0, inner_failures: 0,
-             frees: 0, live: 0)
+             frees: 0, live: 0, growths: 0)
     handle = (state: addr state, inner: inner)
 end over
 
@@ -90,16 +91,30 @@ injector_free: (inner_provider: type is mem.allocator,
     end if
 end injector_free
 
-injector_grow: (inner_provider: type,
+--  Growing in place is an attempt as an allocation is: it spends the
+--  budget, may be refused without reaching the inner provider, and is
+--  otherwise delegated, so a container tested through an injector takes
+--  the in-place path its provider offers (D356).  A refusal of either kind
+--  leaves the block as it was, and the container moves it instead.
+injector_grow: (inner_provider: type is mem.allocator,
                 self: injector(inner_provider), block: ptr mut u8,
                 old_size: usize, new_size: usize, alignment: usize)
                -> (grown: bool) =
-    _ = self.state
-    _ = block
-    _ = old_size
-    _ = new_size
-    _ = alignment
+    state: ptr mut counters = self.state
+    inc state.val.attempts
     grown = false
+    if state.val.remaining == 0 then
+        inc state.val.injected_failures
+        return
+    end if
+    dec state.val.remaining
+    inc state.val.delegated
+    grown = mem.grow(self.inner, block, old_size, new_size, alignment)
+    if grown then
+        inc state.val.growths
+    else
+        inc state.val.inner_failures
+    end if
 end injector_grow
 
 --  A resize may allocate, so it is an attempt as an allocation is: it spends
@@ -150,7 +165,8 @@ public delegated: (inner_provider: type,
     count = memory.state.val.delegated
 end delegated
 
---- Return the number of successful delegated allocations.
+--- Return the number of blocks a delegated allocation or resize gave; a
+--- growth in place gives none and is counted by `growths`.
 public successes: (inner_provider: type,
                    memory: injector(inner_provider)) -> (count: usize) =
     count = memory.state.val.successes
@@ -168,6 +184,12 @@ public inner_failures: (inner_provider: type,
                         memory: injector(inner_provider)) -> (count: usize) =
     count = memory.state.val.inner_failures
 end inner_failures
+
+--- Return the number of blocks the inner provider grew where they are.
+public growths: (inner_provider: type,
+                 memory: injector(inner_provider)) -> (count: usize) =
+    count = memory.state.val.growths
+end growths
 
 --- Return the number of delegated free calls.
 public frees: (inner_provider: type,

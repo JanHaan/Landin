@@ -14,6 +14,11 @@ Each program is held to its fixture's status and output oracle, is given its
 fixture's `run_args:` as its arguments, and reads the file its fixture's
 `stdin:` names as its standard input, or an empty one.
 
+With `--stock`, the system is a stock distribution with only its own GCC
+(D364): the first compile's plan must name a driver the distribution
+installs, never the pinned image's `x86_64-pc-linux-gnu-gcc`, and a program
+that traps must report its kind and site (D361) before it ends.
+
 The first program is read from its runtime fixture, not from the README
 that shows it: the gate may skip this lane for an edit confined to the
 README, so the lane must not read it, and `check.py` holds the README's
@@ -78,10 +83,51 @@ def run(argv, cwd, env, what, given=b""):
                                          ran.returncode, shown)
 
 
+TRAPPING = """public main: () -> (code: i32) =
+    values: [3]i32 = [1, 2, 3]
+    index: usize = 3
+    code = values[index]
+end main
+"""
+
+
+def stock_checks(refine, work, env):
+    """D364's driver and D361's report on a system with only the
+    distribution's GCC."""
+    failures = []
+    project = work / "stock"
+    project.mkdir(exist_ok=True)
+    (project / "main.ldn").write_text(TRAPPING, encoding="utf-8")
+    planned, report = run([str(refine), "compile", "--dry-run", "main.ldn",
+                           "-o", "prog"], project, env, "stock plan")
+    drivers = re.findall(r'^run \["([^"]+)"', planned.stdout.decode(
+        "utf-8", "replace"), re.M)
+    if planned.returncode != 0 or not drivers:
+        failures.append("no link was planned\n%s" % report)
+    elif drivers[-1] == "x86_64-pc-linux-gnu-gcc":
+        failures.append("the plan names the pinned driver\n%s" % report)
+    built, report = run([str(refine), "compile", "main.ldn", "-o", "prog"],
+                        project, env, "stock trap")
+    if built.returncode != 0:
+        failures.append(report)
+        return failures
+    if (project / "prog.s").exists():
+        failures.append("the intermediate assembly was left beside prog")
+    ran, report = run([str(project / "prog")], project, env, "stock trap")
+    if ran.returncode >= 0 or b"main.ldn:4:12: trap: out_of_range\n" \
+            not in ran.stderr:
+        failures.append("the trap did not report its site\n%s" % report)
+    else:
+        print("ok   stock driver %s and trap report" % drivers[-1])
+    return failures
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--prefix", required=True, type=pathlib.Path)
     parser.add_argument("--work", required=True, type=pathlib.Path)
+    parser.add_argument("--stock", action="store_true",
+                        help="hold the run to a stock distribution's driver")
     args = parser.parse_args()
     prefix = args.prefix.resolve()
     work = args.work.resolve()
@@ -118,6 +164,10 @@ def main():
             failures.append("output differs from the oracle\n%s" % report)
         else:
             print("ok   %s" % name)
+
+    if args.stock:
+        failures += stock_checks(refine, work, env)
+        programs.append(("stock driver and trap report",))
 
     for failure in failures:
         print("FAIL " + failure, file=sys.stderr)

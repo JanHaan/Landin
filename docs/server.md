@@ -114,7 +114,9 @@ refresh diagnostics after an external write.
 
 A quick fix is preferred when it is exact: its rule decides the replacement,
 and applying it keeps what the program means, so an editor may apply it
-unasked. A likely fix, such as a respelling, is offered and not preferred.
+unasked. A likely fix, such as a respelling, or D376's `else none` in place
+of a value after the `else` of a call that returns none, which the session
+`else-none-repair` holds the server to, is offered and not preferred.
 A repair of a line that does not parse is likely, however few were found,
 except for removing one copy of a token written twice in a row (D261).
 The edits are the ones `refine`'s report carries, and one fix may change more

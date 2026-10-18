@@ -131,6 +131,8 @@ package body Landin.Tests.Host_Reports_Suite is
       Args.Append ("main.ldn");
       Args.Append ("extra.ldn");
       Args.Append ("--emit=asm");
+      --  A static link's assembly needs platform/linux (D363).
+      Args.Append ("--link=libc");
       Args.Append ("--debug=full");
       Args.Append ("-o");
       Args.Append ("out.s");
@@ -317,6 +319,9 @@ package body Landin.Tests.Host_Reports_Suite is
             Host.Add_Alias (Report, Alias);
          end if;
          Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         if not Executable then
+            Args.Append ("--link=libc");
+         end if;
          Args.Append ("-o");
          Args.Append (Output);
          Args.Append ("--build-report=" & Report);

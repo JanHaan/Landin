@@ -362,8 +362,9 @@ fixed if compiler.os == linux then
     --- call waits until a record is ready.
     public no_limit: atom
 
-    --- A `ppoll` time limit, or `no_limit`.
-    public poll_limit: type = no_limit | ptr timespec
+    --- A `ppoll` time limit, or `no_limit`.  The kernel writes the time
+    --- that was left back into the limit, so it is writable.
+    public poll_limit: type = no_limit | ptr mut timespec
 
     --- Wait until one of the `count` records at `records` has an event or
     --- `limit` passes, with no signal mask: the number of records whose
@@ -485,7 +486,7 @@ fixed if compiler.os == linux then
 
     --- Fill `into` with the clock `clock`'s time: zero, or minus the errno,
     --- EINVAL for a clock the kernel does not have.  This is the system
-    --- call itself; the vDSO's `clock_gettime`, which `vdso_symbol` finds,
+    --- call itself; the vDSO's `clock_gettime`, which `vdso.symbol` finds,
     --- answers the same without entering the kernel.
     public link(symbol: "_landin_linux_clock_gettime") clock_gettime:
         (clock: i32, into: ptr mut timespec) -> (result: i32) =

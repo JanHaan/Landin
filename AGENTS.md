@@ -65,10 +65,13 @@ python3 check.py prototype-2-parser.md
 ./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
 
 # Another Linux target's corpus from this host: a cross lane, under QEMU's
-# user emulation and a cross driver.  Evidence about the emitted code, never
-# about the pinned toolchain on its own host.
+# user emulation and a cross driver, both of which `nix develop` provides.
+# Evidence about the emitted code, never about the pinned toolchain on its
+# own host.  The emulator's own failures are compiler/tests/cross-lanes.json's.
 ./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 \
-    --toolchain=aarch64-unknown-linux-gnu-gcc --suite='fixture execution'
+    --suite='fixture execution'
+QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh --target=linux-rv64 \
+    --runner=qemu-riscv64 --suite='fixture execution'
 
 # Render the documents selected in docs/site/render_html.py as HTML,
 # verify their text was not dropped, and package them. It does not publish:
@@ -92,10 +95,10 @@ nix build .#refine-bin
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
 push and pull request. A new candidate runs every target the compiler has,
-in jobs that report separate verdicts, except RV64: until it has better
-CI, its emission and execution jobs are skipped, the determinism manifests
-leave it out, and it may regress. Only the compiler's own test program
-still checks it. A recent verified identical candidate
+in jobs that report separate verdicts. RV64 runs under QEMU's user
+emulation on an x86-64 runner, which is evidence about its emitted code and
+none about RV64 hardware; its jobs on RISE's physical runners stay skipped
+until they are dependable. A recent verified identical candidate
 or the explanatory-only exception below may reuse a full pass. Compiler
 builds supply checked executables to their same-host consumers, including
 the debug compilers used for cross-host determinism. The final `gate` job requires every build and verification
@@ -142,8 +145,9 @@ still succeed. The linked full run contains the target-test results.
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
 | `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
-| `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, build-modes, Cortex-M and scaling jobs |
+| `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, outside-user-stock, build-modes, Cortex-M and scaling jobs |
 | `release` | `ubuntu-24.04` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
+| `outside-user-stock` | `ubuntu-24.04` | the release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2` |
 | `bindings` | `ubuntu-24.04` | the C binding generator against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
@@ -162,9 +166,10 @@ still succeed. The linked full run contains the target-test results.
 | `freebsd-amd64-runtime`, `freebsd-arm64-runtime-1`, `freebsd-arm64-runtime-2` | `ubuntu-24.04` | emit with the checked Linux release compiler and locked sysroot, check source verdicts, assembler boundaries and linked instructions, then execute the applicable runtime corpus in a fresh FreeBSD 14.4 VM, amd64 under KVM and arm64 emulated, including guest CPU confirmation; the emulated arm64 lane runs as two shards of whole fixtures |
 | `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | `ubuntu-24.04` | the same emission, then native FreeBSD LLDB source stops, frames, local values and unwinding in the VM |
 | `freebsd-amd64-abi`, `freebsd-arm64-abi` | `ubuntu-24.04` | the same emission, then nonempty C ABI fixture sets against independently compiled FreeBSD C peers in the VM |
-| `rv64-emit` matrix | `ubuntu-24.04` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads; source/hash checks, invalid IR register regression and instruction inspection |
+| `rv64-qemu` matrix | `ubuntu-24.04` | the release compiler's whole test program on the Linux RV64 lane in two `--shard` jobs, `rv64-qemu-1` and `rv64-qemu-2`, linked by Ubuntu's riscv64 cross driver and run under `qemu-riscv64`, its CPU's every level confirmed; the emulator's own failures listed in `compiler/tests/cross-lanes.json` are reported and not counted |
+| `rv64-emit` matrix | `ubuntu-24.04` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads for RISE; source/hash checks, invalid IR register regression and instruction inspection |
 | `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
-| `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest on each host in two jobs of three targets each, joins each host's parts and compares the three, starting once the three debug builds succeed rather than after their suites |
+| `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest for all seven targets on each host in two jobs, of four targets and of three, joins each host's parts and compares the three, starting once the three debug builds succeed rather than after their suites |
 
 Linux and Darwin lanes run on GitHub-hosted images for every event, as do
 the called determinism workflow and the links, Pages and release workflows;
@@ -392,9 +397,11 @@ tests, never an authority for semantics, implementation decisions or work.
 layout `refine fmt` gives a source, which the test program holds the
 formatter to, `docs/server.md` says what `refine lsp` answers, which the
 scripted sessions under `compiler/tests/server/` hold the server to, and
-`examples.md` holds the complete programs the runtime suite executes, and
-`docs/benchmarks.md` what five of them cost against other languages. All
-seven are derived documents and none of them decides anything.
+`examples.md` holds the complete programs the runtime suite executes,
+`docs/benchmarks.md` what five of them cost against other languages, and
+`docs/from-c.md` the Landin form of each C habit, its examples a fixture
+the test program compiles. All eight are derived documents and none of
+them decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 

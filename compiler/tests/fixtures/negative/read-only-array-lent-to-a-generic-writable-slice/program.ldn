@@ -1,0 +1,11 @@
+clear: (t: type, items: []mut t, value: t) -> none =
+    for item in items do
+        item = value
+    end for
+end clear
+
+main: () -> (code: i32) =
+    storage: [4]u8 = [5, 2, 3, 4]
+    clear(storage, 0)
+    code = i32(storage[0])
+end main

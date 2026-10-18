@@ -1,6 +1,5 @@
-import hosted/heap
-import core/mem
 import core/vec
+import hosted/heap
 
 counter: type = concept (t: type)
     bump: (self: ptr mut t) -> (result: i32)
@@ -29,7 +28,7 @@ node_ptr: type = ptr mut one
 
 public main: () -> (code: i32) =
     code = 1
-    allocator := heap.host()
+    allocator := heap.new()
     mut pointers := vec.new(item: node_ptr)
     mut erased := vec.new(item: any counter)
     a: any counter = any(addr left)
@@ -48,7 +47,7 @@ public main: () -> (code: i32) =
         inc at
     end while
     pointer_ok: bool = begin
-        view := mem.used(pointers.values)
+        view := vec.used(pointers)
         mut good: bool = lenof view == 17
         mut index: usize = 0
         while index < lenof view do
@@ -59,7 +58,7 @@ public main: () -> (code: i32) =
         good and view[16].val.value == 37 and view[0].val.value == 11
     end
     dispatch_ok: bool = begin
-        view := mem.used(erased.values)
+        view := vec.used(erased)
         mut good: bool = lenof view == 17
         mut index: usize = 0
         while index < lenof view do

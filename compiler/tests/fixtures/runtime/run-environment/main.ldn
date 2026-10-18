@@ -4,10 +4,10 @@
 --  and an empty one.  A name that is empty or holds `=`, or a value
 --  holding a NUL, is no variable a system can pass: the spawn is
 --  io_failed with EINVAL and starts nothing.
+import core/cmp
 import core/io
-import core/mem
 import core/text
-import hosted/io as hosted
+import hosted/system
 import platform/posix
 
 --  The shell writes each variable between brackets, and whether it has a
@@ -17,7 +17,7 @@ script: []u8 = """
     """
 
 --  Run the script with VARIABLES and read back what it wrote.
-echoed: (host: hosted.system, variables: []io.variable, into: []mut u8)
+echoed: (host: system.host, variables: []io.variable, into: []mut u8)
         -> (count: usize) ! ... =
     count = 0
     arguments: [2]text.host_string = [text.host_over("-c"),
@@ -29,21 +29,21 @@ echoed: (host: hosted.system, variables: []io.variable, into: []mut u8)
         part: io.child_read = try io.read_child(host, child,
                                                 into[count..<lenof into])
         break when part.finished
-        if not part.errors then count += part.count end if
+        if part.stream == io.child_output then count += part.count end if
     end loop
     ended: io.ending = try io.wait(host, child)
     _ = ended
 end echoed
 
 --  Whether spawning with VARIABLES is refused with EINVAL.
-refused: (host: hosted.system, variables: []io.variable) -> (yes: bool) =
+refused: (host: system.host, variables: []io.variable) -> (yes: bool) =
     yes = false
     arguments: [1]text.host_string = [text.host_over("-c")]
     child: io.child = io.spawn(host, text.host_over("/bin/sh"),
                                arguments[0..<1], variables,
                                io.discarding) else (problem)
         yes = problem == io.io_failed
-              and hosted.last_errno(host) == posix.number(posix.einval)
+              and system.last_errno(host) == posix.number(posix.einval)
         return
     end
     ended: io.ending = io.wait(host, child) else (problem)
@@ -54,7 +54,7 @@ refused: (host: hosted.system, variables: []io.variable) -> (yes: bool) =
 end refused
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     bytes: [4]u8 = [0xff, 0xfe, 0x41, 0x80]
     variables: [3]io.variable =
@@ -69,7 +69,7 @@ public main: () -> (code: i32) =
     expected: [24]u8 = [91, 0xff, 0xfe, 0x41, 0x80, 93, 91, 97, 61, 98, 61, 99,
                         93, 91, 93, 91, 110, 111, 110, 101, 93, 0, 0, 0]
     return when count <> 21
-    return when mem.compare(room[0..<21], expected[0..<21]) <> mem.equal
+    return when cmp.compare(room[0..<21], expected[0..<21]) <> cmp.equal
     code = 2
     nameless: [1]io.variable =
         [(name: text.host_over(""), value: text.host_over("x"))]

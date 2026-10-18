@@ -3,4 +3,4 @@ error[L0344]: incompatible register access contract
   |
 8 |     compiler.register_write(p, 0, compiler.one_clears, compiler.preserve, 0xff)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
-  = note: [1620]/D227: explicit memory contract
+  = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes

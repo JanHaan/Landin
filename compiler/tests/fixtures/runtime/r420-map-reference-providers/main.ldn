@@ -1,9 +1,10 @@
-import core/fault
-import hosted/heap
+import core/arena
 import core/cmp
+import core/fault
 import core/map
 import core/mem
 import core/pool
+import hosted/heap
 
 node: type = struct
     payload: i32
@@ -51,12 +52,12 @@ failure_case: (provider: type is mem.allocator, memory: provider,
     k5: node_ptr = addr n5
     k6: node_ptr = addr n6
     k7: node_ptr = addr n7
-    map.insert(value, budget, k1, addr n1) else (ignored) _ = ignored end
-    map.insert(value, budget, k2, addr n2) else (ignored) _ = ignored end
-    map.insert(value, budget, k3, addr n3) else (ignored) _ = ignored end
-    map.insert(value, budget, k4, addr n4) else (ignored) _ = ignored end
-    map.insert(value, budget, k5, addr n5) else (ignored) _ = ignored end
-    map.insert(value, budget, k6, addr n6) else (ignored) _ = ignored end
+    map.insert(value, budget, k1, addr n1) else none
+    map.insert(value, budget, k2, addr n2) else none
+    map.insert(value, budget, k3, addr n3) else none
+    map.insert(value, budget, k4, addr n4) else none
+    map.insert(value, budget, k5, addr n5) else none
+    map.insert(value, budget, k6, addr n6) else none
 
     mut initial: bool = map.length(value) == 6
                         and fault.attempts(budget) == 3
@@ -68,7 +69,7 @@ failure_case: (provider: type is mem.allocator, memory: provider,
     --  Removing the first colliding key leaves a preceding tombstone, which
     --  permits reuse. With no allocation budget, replacing the last key
     --  must still search, update, and return without consulting the provider.
-    map.remove(value, k1) else (ignored) _ = ignored end
+    map.remove(value, k1) else none
     zero: usize = 0
     fault.permit(budget, zero)
     map.insert(value, budget, k6, addr n7) else (problem)
@@ -93,7 +94,7 @@ failure_case: (provider: type is mem.allocator, memory: provider,
         _ = problem
         initial = false
     end
-    reused: bool = map.length(value) == 6 and value.tombstones == 0
+    reused: bool = map.length(value) == 6 and map.removed(value) == 0
                    and fault.attempts(budget) == 3 and has(value, k1, 11)
 
     fault.permit(budget, allowed)
@@ -156,12 +157,12 @@ end series
 
 public main: () -> (code: i32) =
     code = 1
-    heap := heap.host()
+    heap := heap.new()
     heap_ok: bool = series(heap)
     mut arena_bytes: [16384]u8 = zeroed
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, addr arena_bytes[0], 16384)
-    arena_ok: bool = series(arena)
+    mut arena_space: arena.space = zeroed
+    bump := arena.over_unchecked(arena_space, addr arena_bytes[0], 16384)
+    arena_ok: bool = series(bump)
     mut pool_bytes: [4096]u8 = zeroed
     mut records: [6]pool.slot = zeroed
     mut pool_space: pool.space = zeroed
@@ -171,7 +172,7 @@ public main: () -> (code: i32) =
         return
     end
     fixed_ok: bool = series(slab)
-    if heap_ok and arena_ok and fixed_ok and mem.arena_used(arena) > 0
+    if heap_ok and arena_ok and fixed_ok and arena.used(bump) > 0
       and pool.allocations(slab) == 21
       and pool.frees(slab) == 21
       and pool.live(slab) == 0 and pool.rejected_frees(slab) == 0

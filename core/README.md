@@ -12,29 +12,33 @@ the documentation convention.
 
 ## Availability inventory
 
-The shared freestanding modules are `core/cmp`, `core/diag`, `core/fault`,
-`core/io`, `core/map`, `core/mem`, `core/panic`, `core/pool`, `core/random`,
-`core/region`, `core/sort`, `core/spill`, `core/text`, `core/tree` and
+The shared freestanding modules are `core/arena`, `core/cmp`, `core/diag`, `core/fault`,
+`core/io` with its submodule `core/io/fake`, `core/map`, `core/mem`,
+`core/net`, `core/panic`, `core/pool`, `core/random`, `core/region`,
+`core/sort`, `core/spill`, `core/text`, `core/time`, `core/tree` and
 `core/vec`. Every public interface is
 available on every target. Their providers retain caller-supplied authority.
 
-`hosted/heap` and `hosted/io` require a hosted system. Import the I/O
-provider `as hosted` alongside the shared `core/io` protocol. Both are
+`hosted/heap` and `hosted/system` require a hosted system. Import the I/O
+provider, `system`, beside the shared `core/io` protocol it implements, with
+no alias. Both are
 written once, over `platform/posix`, which gives POSIX's facilities in
 Landin types on Linux, Darwin and FreeBSD and would not exist on a system
 that is not POSIX. Beneath it each system's own interface stays raw:
 `platform/linux` declares Linux's system calls, which `platform/posix`
 makes on Linux, and the raw `system_call` that makes any of them, and
 `platform/linux/numbers` names every call's number, generated from a pinned
-kernel release; both declare nothing on Darwin and FreeBSD. `platform/libc`
-declares the C library `platform/posix` calls on Darwin and FreeBSD, and
-which a Linux program linked with `--link=libc` may call, its loader among
-it, which `platform/posix` loads shared objects through on every system, with the facts
-that differ between systems selected by `compiler.os`; the compiler names
-none of it. The three `platform` modules' scope is the hosted POSIX
+kernel release, and `platform/linux/vdso` finds functions in the vDSO; all
+three declare nothing on Darwin and FreeBSD. `platform/libc` declares the C
+library `platform/posix` calls on Darwin and FreeBSD, and which a Linux
+program linked with `--link=libc` may call, its loader among it, which
+`platform/posix` loads shared objects through on Darwin and FreeBSD and on
+Linux under `--link=libc`, since a static Linux program has no loader
+(D336); what every system declares alike is in `libc.ldn`, and each
+system's own in a file of its own (D346). The compiler names none of it. The three `platform` modules' scope is the hosted POSIX
 systems, and firmware refuses each by name. `platform/c` holds the
 currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
-synthetic-32. `platform/cpu` holds M-profile CPU operations and admits the
+synthetic-32. `platform/cortex_m` holds M-profile CPU operations and admits the
 armv6-m, armv7-m and armv7e-m feature levels. Namespace availability is checked
 by import name independently of project-first root selection (D267).
 
@@ -61,8 +65,8 @@ Every module spells the same operations the same way (D269):
 | Operation | Spelling | Examples |
 |---|---|---|
 | Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)` |
-| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `mem.arena_over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `io.buffered_over`, `io.lines_over` |
-| A provider's caller-owned state | `space`, declared `zeroed` | `mem.arena_space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
+| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `arena.over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `io.buffered_over`, `io.lines_over` |
+| A provider's caller-owned state | `space`, declared `zeroed` | `arena.space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
 | A writable slot for in-place update | `at` | `vec.at`, `spill.at`, `map.at`; the binding is locked while the slot lives [0800] |
@@ -80,7 +84,7 @@ counters, limits and cursors: `zeroed` has no image for a pointer, a slice,
 a pointer union, a function or an atom set, and refuses one with L0328.
 Everything a service refers to, the backing it was given and the provider it
 stacks on, is held by the handle `over` returns, which is why the handle is
-`from` the state and may also be `from` that backing: `mem.arena_space`
+`from` the state and may also be `from` that backing: `arena.space`
 counts, and the arena's handle holds the base. Giving the state back, as
 `region.release` does, takes it `inout` and is refused while a handle made
 from it is still in use. Process-wide state, the argument root, the last
@@ -95,11 +99,11 @@ provider's caller-owned state and `self` a concept entry's receiver.
 
 `core/mem` keeps `new`/`delete` for one allocated item and `new_bytes`/
 `delete_bytes` for a byte buffer; its raw-storage pop is `withdraw`, so that
-`release` never means anything but giving storage back. Accessors are
-prefixed only where one module holds several types (`arena_used`). A
+`release` never means anything but giving storage back. Names are
+prefixed only where one module holds several types (`io.memory_over`). A
 provider's counters are plural nouns: `pool.allocations`, `pool.frees`,
 `fault.frees`. A module is named by a short noun or a conventional
-abbreviation: `mem`, `vec`, `cmp`, `io`, `diag`, `map`, `sort`, `pool`,
+abbreviation: `mem`, `vec`, `cmp`, `io`, `diag`, `map`, `sort`, `arena`, `pool`,
 `spill`, `fault` (D274).
 
 Two atoms serve every core container: `mem.out_of_bounds` for an index past
@@ -164,7 +168,7 @@ providers of their own so that a world that runs no program carries none
 of them: `variables_over` an environment of `NAME=value` byte strings, and
 `scripted_over` scripted programs that write what they are given and end
 as they are told, writing an inherited stream into the world's own.
-Time is two more concepts outside `world`: `clock`, a monotonic clock
+Time is `core/time`'s two concepts, outside `world`: `clock`, a monotonic clock
 that never goes back and sleeping on it, and `wall_clock`, the system's UTC
 time, which may be set back and so never times anything. A reading is an
 `instant` and a span a `duration`, each a distinct `u64` of nanoseconds,
@@ -172,16 +176,16 @@ time, which may be set back and so never times anything. A reading is an
 target; two of a kind compare and are ordered directly, as every
 distinct scalar type is, and `elapsed` traps rather than answer a negative
 span. A sleep never returns early by its own clock. The
-system's random bytes are a third, `entropy`. The fakes are a
-`manual_clock`, which moves only when the test advances it or something
-sleeps on it, by exactly what was asked, and `scripted_entropy`, the
+system's random bytes are a third, `entropy`. The fakes, in `core/io/fake`, are a
+`fake.clock`, which moves only when the test advances it or something
+sleeps on it, by exactly what was asked, and `fake.entropy`, the
 caller's bytes in order, so a program that times itself, sleeps or seeds
 itself gives the same answer in every test. `core/random` is the
 deterministic generator: xoshiro256**, seeded from a `u64` or from any
 `entropy`, drawing the same sequence for a seed on every target, Cortex-M0
 included, uniform values below a bound without modulo bias and shuffles;
 it is not cryptographic.
-The network is one more concept outside `world`, `network`, so an image
+The network is `core/net`'s concept, outside `world`, `network`, so an image
 that never connects carries none of it. It is a reader and a writer of its
 sockets as well, so a TCP connection is read and written through `read`
 and `write`, a line reader and a buffered writer among them, and its own
@@ -198,7 +202,7 @@ sixteen bytes and a port, made with `loopback`, `unspecified`,
 RFC 5952 writes IPv6, and `text.formattable` too. It has no zone, and
 nothing here resolves a name. A refused connection, an address in use and
 an address this system does not have are atoms of their own. The fake is a
-`memory_network`, a machine of loopback addresses over the caller's socket
+`fake.network`, a machine of loopback addresses over the caller's socket
 records and their buffers: a connection and a datagram arrive at once and
 in order, a datagram no socket takes is lost, and since nothing in one
 thread could ever end a wait, a call that would wait answers `timed_out`
@@ -218,10 +222,10 @@ working directory's path, never changing it, since the working directory
 is the whole process's. `terminals` is another: whether a stream is a
 terminal and its size. Mode bits, owners, links, file times, locks, a
 terminal's raw mode and accounts are POSIX's and stay in `platform/posix`.
-The fakes are a `memory_volume`, a file system in memory over the
+The fakes are a `fake.volume`, a file system in memory over the
 caller's nodes, with their paths, kinds and the room each file may grow
 into, that conforms to `reader`, `writer`, `files`, `directories` and
-`file_system` alike, and `memory_terminals` over the caller's screens.
+`file_system` alike, and `fake.terminals` over the caller's screens.
 `core/text` builds text: a `builder` over the caller's buffer, or one
 growing through an allocator the caller erases, takes typed pieces, bytes,
 text, host strings, decimals of every width and hexadecimal, each whole or
@@ -250,17 +254,18 @@ allocator is hidden in a container or selected implicitly by the target.
 
 | Module | Interface and boundary |
 |---|---|
-| `core/mem` | `allocator` with `alloc`/`grow`/`resize`/`free` taking the handle by value, `allocate`/`resize`/`free`, `relocate` for a provider that resizes by moving, the caller-backed `arena` over an `arena_space` and the `aligned_offset` it bumps with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing, the arena's state and their lifetime belong to the caller. |
+| `core/mem` | `allocator` with `alloc`/`grow`/`resize`/`free` taking the handle by value, `allocate`/`resize`/`free`, `relocate` for a provider that resizes by moving, the `aligned_offset` a bump provider advances with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and its lifetime belong to the caller. |
+| `core/arena` | The caller-backed monotonic `arena` over an `arena.space`, made by `over` or `over_unchecked`, with `used` and `reset`. Its state, its backing and their lifetime belong to the caller. A program that imports no provider, `core/arena`'s or another, still builds: an erased allocator call no conformance answers is a trap no value reaches (D377). |
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
-| `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check with the growth path every builder carries, is about 6.4 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 21.5 KB in all). No allocator is used unless the program builds a growing builder over its own. |
+| `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. |
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
 | `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
 | `core/io` network | Reading and writing addresses run in `runtime/network-addresses-firmware`'s 29.8 KB image at size/auto, 31.9 KB at none/off, of which the address code is about 17 KB, `ipv6_octets` alone 4.6 KB. The memory network does not fit the profile: a provider's conformance table links every entry, about 40 KB of code, so its echo, `runtime/network-echo-memory`, needs about 135 KB and is a recorded image limit, as every form of address text, `runtime/network-addresses`, at about 45 KB, is. |
 | `core/io` file system | The names `make_temporary` tries and the memory terminals run in `runtime/file-system-firmware`'s 18.7 KB image at size/auto, 22.2 KB at none/off. The memory volume does not fit the profile: its conformances link every entry of `reader`, `writer`, `files`, `directories` and `file_system`, so `runtime/volume-memory` needs about 106 KB at size/auto and is a recorded image limit, and a program over the volume alone that makes, writes, renames and reads one file still needed about 61 KB. |
-| `platform/cpu` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
+| `platform/cortex_m` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
 mean byte alignment; other `usize` alignments are honored when representable.
@@ -343,12 +348,12 @@ not run a pending deferred mask restoration; a nonreturning cleanup stops
 later cleanups. D232 specifies panic dispatch and its optional source map.
 
 The [generated device fixtures](../devices/README.md) import no core module.
-Their consumers explicitly import `platform/cpu` and optionally `core/panic`;
+Their consumers explicitly import `platform/cortex_m` and optionally `core/panic`;
 ordinary DMA slices retain the completion/boundary/lifetime obligations above.
 No allocator, heap, scheduler or hosted initialization enters that closure.
 
 The [derived driver](../compiler/tests/driver/DERIVATION.md) uses caller-owned
-initialized static byte storage and the ordinary `platform/cpu` interface. It
+initialized static byte storage and the ordinary `platform/cortex_m` interface. It
 requires no allocator, hosted initialization or reporting storage. Successful
 device drain precedes ordinary reads and storage reuse; failed stop retains
 the caller's manual lifetime obligation. The allocator, initialized-prefix,
@@ -451,9 +456,9 @@ unchanged except where noted.
 | `mut state := mem.arena_over(addr backing[0], 256)`, `arena_over_unchecked` | `mut space: mem.arena_space = zeroed` and `arena := mem.arena_over(space, addr backing[0], 256)`; `mem.arena_used(arena)` |
 | `mut parent := pool.over(base, extent, ...)` | `mut space: pool.space = zeroed` and `parent := pool.over(space, base, extent, ...)`; the counters take the handle |
 | `fault.new(addr inner, 3)` | `mut space: fault.space = zeroed` and `fault.over(space, inner, 3)`, the inner handle by value; `fault.permit` and the counters take the handle |
-| `region.new(addr heap)` and `defer region.release(program)` | `mut ledger: region.space(0) = zeroed`, `program := region.over(ledger, heap)` and `defer region.release(ledger, heap)` |
+| `region.new(addr heap)` and `defer region.release(program)` | `mut ledger: region.growing_space = zeroed`, `program := region.over(ledger, heap)` and `defer region.release(ledger, heap)` |
 | `region.over(addr parent, records[0..<2])` over caller `region.allocation` records | `mut ledger: region.space(2) = zeroed` and `region.over(ledger, parent)`; release as above, then `over` again to reuse it |
-| `mut memory := io.memory_over(...)` with `memory.write_limit = 2` and `memory.write_calls` | `mut state: io.memory_space = zeroed`, `memory := io.memory_over(state, ...)`, `state.write_limit = 2`, `state.write_calls`; `io.written(memory)` takes the handle |
+| `mut memory := io.memory_over(...)` with `memory.write_limit = 2` and `memory.write_calls` | `mut state: io.memory_space = zeroed`, `memory := io.memory_over(state, ...)`, `state.write_limit = 2`, `state.writes`; `io.written(memory)` takes the handle |
 | `mut host := hosted.host()`, `mut heap := heap.host()` | the same calls bound without `mut`; the handles borrow nothing |
 | `hosted.last_errno(host)` reading the provider value | the same call, reading the cell the handle was made with: the process's from `host`, or a declared `hosted.space` from `hosted.over` |
 | `diag.stream(addr writer, addr stream)` | `diag.stream(writer, stream)`; the logger holds copies |
@@ -493,9 +498,9 @@ back a line at a time. Behaviour is unchanged except where noted.
 |---|---|
 | a loop appending a byte string with `text.write_byte` | `text.append(builder, bytes)` |
 | `used = try text.write_u64(into, used, value)` chains over a slice | `mut line := text.over(buffer)`, then `text.append_u64(line, value)` or `text.format(line, "{} {}\n", [any(addr a), any(addr b)])`, and `text.used(line)` |
-| a decimal with a hand-written sign, or hexadecimal from a table of digits | `text.append_i64`, `text.append_hex_u32` and the others; `text.align_right(line, start, 2, 48)` zero-fills to a width |
+| a decimal with a hand-written sign, or hexadecimal from a table of digits | `text.append_i64`, `text.append_hex_u32` and the others; `text.align_right(line, start, 2, u8('0'))` zero-fills to a width |
 | a parse of a signed number or of hexadecimal by hand | `text.parse_i32`, `text.parse_hex_u64` and the others; `number_overflow` now also means below a signed type's minimum |
-| a byte-by-byte copy, fill or comparison loop | `mem.copy`, which allows overlap, `mem.fill`, `mem.compare` and `mem.find` |
+| a byte-by-byte copy, fill or comparison loop | `mem.copy`, which allows overlap, `mem.fill`, `cmp.compare` and `mem.find` |
 | `io.write` for each small piece of output | `io.buffered_over(host, io.out(host), buffer)`, `io.put` and `io.flush`, with a `defer` flush on every way out |
 | splitting what `io.read` returns into lines by hand | `io.lines_over(host, io.input(host), buffer)` and `io.read_line`, whose line is lent until the next read |
 
@@ -520,8 +525,8 @@ where noted.
 
 | Was | Now |
 |---|---|
-| `linux.system_call` with `numbers.clock_gettime_number`, or `clock_gettime` declared `extern(c)` | `io.now(host)` for the monotonic clock and `io.wall_now(host)` for the wall clock, or `platform/posix`'s `clock_time`; on Linux it reads the vDSO, and `linux.clock_gettime` is the system call |
-| `numbers.clock_nanosleep_number`, or `nanosleep` declared `extern(c)`, retried by hand | `io.sleep(host, io.milliseconds(20))`, which sleeps on for what a signal left; `posix.sleep` is the one call |
+| `linux.system_call` with `numbers.clock_gettime_number`, or `clock_gettime` declared `extern(c)` | `time.now(host)` for the monotonic clock and `time.wall_now(host)` for the wall clock, or `platform/posix`'s `clock_time`; on Linux it reads the vDSO, and `linux.clock_gettime` is the system call |
+| `numbers.clock_nanosleep_number`, or `nanosleep` declared `extern(c)`, retried by hand | `time.sleep(host, time.milliseconds(20))`, which sleeps on for what a signal left; `posix.sleep` is the one call |
 | `numbers.getrandom_number`, or `arc4random_buf` declared `extern(c)` | `io.fill_random(host, buffer)`, or `posix.random_bytes` for one call |
 | `linux.auxiliary(25)`'s sixteen bytes as a seed | `random.from_entropy(host)`, or `random.new(seed)` for a fixed sequence |
 | a generator of your own | `core/random`'s `new`, `next`, `below` and `shuffle` |
@@ -534,9 +539,9 @@ and UDP. Behaviour is unchanged except where noted.
 
 | Was | Now |
 |---|---|
-| `numbers.socket_number`, `bind_number`, `connect_number` and the rest through `linux.system_call`, or the BSD socket calls declared `extern(c)` | `io.listen`, `io.accept`, `io.connect`, `io.open_datagram`, `io.send`, `io.receive`, `io.send_to`, `io.receive_from`, `io.shutdown` and `io.close_socket` through the `io.network` concept, or `platform/posix`'s `socket`, `bind`, `listen`, `accept`, `connect`, `send` and the rest, Unix-domain sockets among them |
-| a `sockaddr_in` built by hand, `sin_len` on Darwin and FreeBSD | `io.address`, from `io.loopback`, `io.ipv4_address`, `io.ipv6_address` or `io.parse_address`; `posix.internet_address` lays out each system's record |
-| a write to a pipe or a socket nobody reads ending the process with SIGPIPE | the write failing: `posix.epipe`, `io.disconnected` from `io.send`, `io_failed` with EPIPE from `io.write`; the argument initializer ignores SIGPIPE when it finds the default, and `posix.spawn` gives each child the default back |
+| `numbers.socket_number`, `bind_number`, `connect_number` and the rest through `linux.system_call`, or the BSD socket calls declared `extern(c)` | `net.listen`, `net.accept`, `net.connect`, `net.open_datagram`, `net.send`, `net.receive`, `net.send_to`, `net.receive_from`, `net.shutdown` and `net.close_socket` through the `net.network` concept, or `platform/posix`'s `socket`, `bind`, `listen`, `accept`, `connect`, `send` and the rest, Unix-domain sockets among them |
+| a `sockaddr_in` built by hand, `sin_len` on Darwin and FreeBSD | `net.address`, from `net.loopback`, `net.ipv4_address`, `net.ipv6_address` or `net.parse_address`; `posix.internet_address` lays out each system's record |
+| a write to a pipe or a socket nobody reads ending the process with SIGPIPE | the write failing: `posix.epipe`, `net.disconnected` from `net.send`, `io_failed` with EPIPE from `io.write`; the argument initializer ignores SIGPIPE when it finds the default, and `posix.spawn` gives each child the default back |
 | `hosted.system` as `world`, `directories`, `environment`, `programs`, `clock`, `wall_clock` and `entropy` | the same, and `network` too |
 | `scripts/linux_syscalls.py --tarball` to give a new wrapper its number | `scripts/linux_syscalls.py`, which writes `platform/linux/wrapped.ldn` from the committed numbers; the release is needed only to change the pin |
 
@@ -587,3 +592,47 @@ insertion order: updating a value retains position, while removing and
 reinserting appends. Public map compositions must preserve both live links per
 bucket, the head/tail pair, and the capacity-valued end markers. Increased
 record sizes can reduce capacity within the same backing extent.
+
+## Migrating to the second reading of the library
+
+The library was read whole a second time after the hosted items (D340 to
+D357). Rename as follows; behaviour is unchanged except where noted.
+
+| Was | Now |
+|---|---|
+| `import hosted/io as hosted`, `hosted.host()`, `hosted.system` | `import hosted/system`, `system.new()`, `system.host`; `system.space`, `system.over`, `system.last_errno`, `last_signal`, `descriptor_of` and `file_of` keep their names |
+| `heap.host()`, `heap.system` | `heap.new()`, `heap.heap` |
+| `time.duration`, `time.instant`, `time.wall_time`, `time.clock`, `time.wall_clock`, `time.now`, `time.sleep`, `time.seconds` and the rest of time | `time.duration` and the rest, from `import core/time` |
+| `net.network`, `net.address`, `net.connect`, `net.listen`, `net.send`, `net.parse_address` and the rest of the network | `net.network` and the rest, from `import core/net` |
+| `fake.volume`, `fake.clock`, `fake.entropy`, `fake.network`, `fake.terminals` | `fake.volume`, `fake.clock`, `fake.entropy`, `fake.network`, `fake.terminals`, from `import core/io/fake`; each fake's `_space` and `_over` keep their names under `fake.` |
+| `fake.volume_node`, `fake.network_socket`, `fake.screen` | `fake.volume_node`, `fake.network_socket`, `fake.screen` |
+| `io.memory`, `io.memory_over` and the memory world's environment and scripted programs | unchanged, in `core/io` |
+| a memory file's `opened: false, writing: false` | `state: io.closed_slot`; the provider sets `io.reading_slot` or `io.writing_slot` |
+| a scripted program's `code` and `signalled` | `ending`, an `io.ending`: `(how: io.exited(code: 3))` or `(how: io.signalled)` |
+| `child_read.errors` | `child_read.stream`, `io.child_output` or `io.child_errors` |
+| `io.status_of(host, path, true)`, `false` | `io.status_of(host, path, io.following)`, `io.not_following` |
+| `io.synchronize(host, file, false)`, `true` | `io.synchronize(host, file, io.data_and_status)`, `io.data_only` |
+| the memory world's `read_calls`, `write_calls`, `open_calls`, `close_calls`; the memory network's `lost` | `reads`, `writes`, `opens`, `closes`; `losses` |
+| `mem.compare`, `mem.less`, `mem.equal`, `mem.greater`, `mem.order` | `cmp.compare` and the rest, from `import core/cmp`; `[]u8` is now `cmp.ordered` too |
+| `import platform/cpu`, `cpu.disable_interrupts()` and the rest | `import platform/cortex_m`, `cortex_m.disable_interrupts()` and the rest |
+| `linux.vdso_symbol`, `vdso_find`, `vdso_image`, `vdso_clock_name`, `vdso_version`, `vdso_clock_gettime`, `vdso_largest` | `import platform/linux/vdso`: `vdso.symbol`, `find`, `kernel_image`, `clock_symbol`, `clock_version`, `clock_gettime`, `largest` |
+| `libc.malloc`, `libc.free`, `libc.allocation` | removed; declare them `extern(c)` where a program wants C's heap |
+| `vec.list`'s `values`, `spill.list`'s `storage`, `map.map`'s fields and `map.cursor`'s slot | private; use the modules' operations, `map.removed(value)` for the dead entries a map's `tombstones` counted |
+| `text.write_byte`, `write_u32`, `write_u64`, `write_usize` and `prefix` over a slice and a `used` count | a builder: `mut line := text.over(buffer)`, `text.append_byte`, `append_u32`, `append_u64`, `append_usize` and `text.used(line)`; parsing is all in `core/text`'s `parse_*` |
+| `append_byte(line, 32)`, `path[at] == 47` | `append_byte(line, u8(' '))`, `path[at] == u8('/')` |
+| `hosted.file_of(socket)` for a socket written with `io.write` | `system.socket_of(socket)`, whose writes send without SIGPIPE; `net.connect`, `listen`, `accept` and `open_datagram` give such files, and a socket's `io.file` is no longer its descriptor's number: use `system.descriptor_of` |
+| `random.below(source, 0)` trapping `unreachable` | trapping `overflow`, as a remainder by zero does |
+| `posix.open_library` of an empty path giving the program itself | `enoent` |
+| `linux.poll_limit` of `ptr timespec` | `ptr mut timespec`, which the kernel writes |
+| a fake volume opening a dangling link, or a path through a link | the link's target made, and every link followed as a system follows it |
+| `mem.arena`, `mem.arena_space`, `mem.arena_over`, `mem.arena_over_unchecked`, `mem.arena_used`, `mem.arena_reset` | `import core/arena`: `arena.arena`, `arena.space`, `arena.over`, `arena.over_unchecked`, `arena.used`, `arena.reset`; `mem.aligned_offset` stays in `core/mem` (D377) |
+| `mem.grow_storage` with its three extents, and each container's own extent check and release | `mem.reserve_storage`, `mem.storage_extent` and `mem.release_storage`; `grow_storage` is private |
+| a fault injector that refused every growth in place | an injector that spends a permit on each growth and delegates it, counted by `fault.growths`; `fault.successes` is the blocks it gave |
+| `region.space(0)` for a growing ledger | `region.growing_space` |
+| a builder over a copy of a formatted line for a buffered writer | `io.format(out, template, values)` into the writer's buffer |
+| a routine asking for `io.file_system` and `io.files` to open and close | `io.file_system` alone, which refines `files` |
+
+New since: `tree.kind`, `tree.leaves` and `tree.children`; `spill.clear`,
+`spill.last` and `spill.reserve`; `diag.message`; `mem.arena_reset`;
+`mem.grow`; `map.removed`; `io.format`; and `platform/posix` and `platform/libc` laid out one file per
+facility and per system (D346).

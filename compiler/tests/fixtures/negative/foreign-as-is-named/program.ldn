@@ -1,0 +1,3 @@
+widen: (x: u8) -> (r: i32) =
+    r = x as i32
+end widen

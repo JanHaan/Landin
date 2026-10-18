@@ -1,4 +1,4 @@
-import platform/cpu
+import platform/cortex_m
 
 mut initialized: u32 = 0x670
 mut cleared: u32 = 0
@@ -9,7 +9,7 @@ mut cleanup_order: u32 = 0
 
 finished: () -> noreturn =
     loop do
-        cpu.wait_for_interrupt()
+        cortex_m.wait_for_interrupt()
     end loop
 end finished
 

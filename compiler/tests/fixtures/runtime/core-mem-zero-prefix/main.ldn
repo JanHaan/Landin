@@ -1,10 +1,10 @@
-import hosted/heap
 import core/mem
+import hosted/heap
 
 empty: type = [0]u8
 public main: () -> (code: i32) =
     code = 1
-    allocator := heap.host()
+    allocator := heap.new()
     zero: usize = 0
     one: usize = 1
     two: usize = 2

@@ -6,7 +6,7 @@
 --  pipe stays full; the parent counts every byte of each and its lines.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 --  The shell writes LINE, given in its environment, 1024 times to each
 --  stream.
@@ -26,7 +26,7 @@ totals: type = struct
     errors_lines: usize
 end totals
 
-count: (host: hosted.system, line: []u8) -> (counted: totals) ! ... =
+count: (host: system.host, line: []u8) -> (counted: totals) ! ... =
     counted = (output: 0, errors: 0, output_lines: 0, errors_lines: 0)
     arguments: [2]text.host_string = [text.host_over("-c"),
                                       text.host_over(script)]
@@ -44,7 +44,7 @@ count: (host: hosted.system, line: []u8) -> (counted: totals) ! ... =
         for byte in buffer[0..<part.count] do
             if byte == 10 then inc lines end if
         end for
-        if part.errors then
+        if part.stream == io.child_errors then
             counted.errors += part.count
             counted.errors_lines += lines
         else
@@ -60,7 +60,7 @@ count: (host: hosted.system, line: []u8) -> (counted: totals) ! ... =
 end count
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     --  1023 bytes and its newline: a KiB a line.
     line: [1023]u8 = [1023 of 120]

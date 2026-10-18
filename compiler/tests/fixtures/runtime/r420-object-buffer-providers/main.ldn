@@ -1,7 +1,8 @@
+import core/arena
 import core/fault
-import hosted/heap
 import core/mem
 import core/pool
+import hosted/heap
 
 no_object: atom
 object_result: type = no_object | ptr mut node
@@ -92,12 +93,12 @@ end exercise
 
 public main: () -> (code: i32) =
     code = 1
-    heap := heap.host()
+    heap := heap.new()
     heap_ok: bool = exercise(heap)
     mut arena_bytes: [256]u8 = zeroed
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, addr arena_bytes[0], 256)
-    arena_ok: bool = exercise(arena)
+    mut arena_space: arena.space = zeroed
+    bump := arena.over_unchecked(arena_space, addr arena_bytes[0], 256)
+    arena_ok: bool = exercise(bump)
     mut pool_bytes: [128]u8 = zeroed
     mut records: [2]pool.slot = zeroed
     mut pool_space: pool.space = zeroed
@@ -108,7 +109,7 @@ public main: () -> (code: i32) =
     end
     fixed_ok: bool = exercise(slab)
     if heap_ok and arena_ok and fixed_ok and evaluations == 6
-      and mem.arena_used(arena) > 0 and pool.allocations(slab) == 3
+      and arena.used(bump) > 0 and pool.allocations(slab) == 3
       and pool.frees(slab) == 3 and pool.live(slab) == 0
       and pool.rejected_frees(slab) == 0
     then code = 42 end if

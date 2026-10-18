@@ -1,5 +1,3 @@
-import core/io
-
 --( outer block comment
     --( nested block comment )--
 )--

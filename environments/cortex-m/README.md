@@ -4,7 +4,7 @@ The profile keeps independent C/assembly, memory-model and hosted transport
 controls beside compiler-generated ARMv6-M execution with direct synthetic
 peripheral access. A separate lane runs compiler-owned startup and firmware
 linking, and rooted `core/mem`, `core/vec`, `core/pool`
-and `platform/cpu`/`core/panic` consumers run through that compiler-owned firmware path.
+and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned firmware path.
 
 ## Selected lanes and pins
 
@@ -154,7 +154,9 @@ python3 environments/cortex-m/run.py \
 ```
 
 The default private tool root is `~/work/.cortex-m`; `--tools` selects another
-installation. Setup refuses an existing root; install deliberately into a new
+installation. Every lane refuses a root holding no installation before it
+builds anything, naming the directory it looked in and `--tools`. Setup
+refuses an existing root; install deliberately into a new
 root to change tools. No sudo, host package replacement, Linux container on
 the Mac, Nix job or compiler dependency is introduced. Missing tools, wrong
 pins/host, subprocess failures, deadline expiration, model refusals, unexpected
@@ -165,7 +167,12 @@ the harness's own termination of it.
 
 Each subprocess has a 30-second deadline, GDB 20 seconds, and QEMU startup
 three seconds; timeout cleanup terminates the owned process group, escalating
-after two seconds. Each run needs a new output directory and retains failure
+after two seconds. A failed command's line names the command, how it ended,
+the limit it reached and the log it left, and the firmware lane names its
+case and profile ahead of it. A corpus program whose debugger session ran
+out says how long the program had run under QEMU and that it, not the
+debugger, took too long; an emulator that exited first says that instead.
+Each run needs a new output directory and retains failure
 logs as well as successes. Evidence includes exact commands, version replies,
 installed file hashes, input hashes, linker maps, ELF headers/attributes, sizes,
 ELFs, generated GDB scripts, logs, UART bytes, model traces and `result.json`.
@@ -406,12 +413,45 @@ cannot. The original multi-gigabyte image and oversized hosted stress programs
 retain their original oracles and recorded image-limit dispositions. Their
 unchanged hosted execution does not become a Cortex execution claim.
 
+### The corpus inventory
+
+`compiler/tests/cortex-m/corpus.json` has one row for every shared
+`runtime/` and `abi/` fixture, hosted-only ones included, keyed by the
+fixture's directory under `compiler/tests/fixtures`. A fixture with no row,
+or a row with no fixture, stops the corpus before it builds anything, and
+the refusal names each one and the row to write. A row's `mode` is one of:
+
+| `mode` | Meaning | Also required |
+|---|---|---|
+| `execute` | built and run at every profile, and at each M-profile level its `levels:` names | nothing; the fixture names `cortex-m` in its `targets:` |
+| `execute` with `"profile_limit": "selected-image"` | every profile is still built and attempted; a profile whose image fits runs and must pass, and one that does not is recorded with its sizes | a `reason`; the fixture does *not* name `cortex-m` in its `targets:`, since an image that overflows is no execution, and `check.py` refuses the claim |
+| `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes` and a `reason` |
+| `restriction` | a target restriction, the disabled general C surface or a hosted heap, not attempted | a `reason` and a `witness` file that shows it |
+
+A fixture that reads standard input cannot be `execute`: firmware has none
+to give it. Every program's line gives its verdict and its image against
+the map: `FLASH used of 32768`, `RAM used of 12288` (the 16 KiB less the
+4 KiB stack), each with the sections inside it, and how far over the region
+an image that overflowed is, which the corpus measures by relinking the
+same objects against an enlarged copy of the map that never runs. A
+profile limit no profile meets any more fails an unfiltered run, naming the
+fixture, its largest image, and the row to change: remove `profile_limit`
+and `reason`, and add `cortex-m` to the fixture's `targets:`. An overflow
+in a row with no limit fails naming its sizes and the same row.
+
+`--profile` takes `none-off` or `none/off`, as the corpus line prints it.
+A filtered run judges no limit stale, because the profile that still
+overflows may be one it did not run.
+
 `backend-start.S` and `backend-memory.ld` are small external test support:
 reset/vector words, bytewise initialized-data copying, BSS clearing, a stack
-watermark and result/fault observation. The compiler emits ordinary routines,
-not reset or interrupt entries. The map remains 32 KiB flash, 16 KiB RAM and
-4 KiB stack. A single routine requiring more than that stack reservation is
-recorded as a profile limit. Returned SP, terminated r11 chain, callee-saved
+watermark and result/fault observation. Its reset, fault and unexpected
+entries are `_landin_harness_reset`, `_landin_harness_hardfault` and
+`_landin_harness_unexpected`, in the `_landin` prefix the compiler keeps for
+its own symbols, so a program's own public `reset` links beside them. The
+compiler emits ordinary routines, not reset or interrupt entries. The map
+remains 32 KiB flash, 16 KiB RAM and 4 KiB stack. A single routine requiring
+more than that stack reservation is recorded as a profile limit. Returned SP, terminated r11 chain, callee-saved
 sentinels and a bottom watermark are asserted. The lowest changed watermark
 word is retained as an observation, explicitly not a proved stack bound.
 Freestanding evidence below records measured stack/firmware and source debugging.
@@ -565,7 +605,7 @@ source-map bytes. A focused run is development feedback, not a complete gate run
 
 | Consumer | Independent observation |
 |---|---|
-| `core-cpu.ldn` | Poisoned initialized data/BSS are repaired by compiler reset; `platform/cpu` runs on D248's `general` operands; scalar assembly preserves live values, generic/discarded operations execute; a multi-output block destructures, a block holding every one of r0-r7 stores them all, `general` passes over a register the text writes and a signed byte input is extended; PRIMASK restoration handles enabled/disabled entry, nesting and deferred early return. Masked pending IRQ wakes WFI before handler entry; exception return restores volatile/callee registers, flags, stack alignment, r11 and private status. |
+| `core-cpu.ldn` | Poisoned initialized data/BSS are repaired by compiler reset; `platform/cortex_m` runs on D248's `general` operands; scalar assembly preserves live values, generic/discarded operations execute; a multi-output block destructures, a block holding every one of r0-r7 stores them all, `general` passes over a register the text writes and a signed byte input is extended; PRIMASK restoration handles enabled/disabled entry, nesting and deferred early return. Masked pending IRQ wakes WFI before handler entry; exception return restores volatile/callee registers, flags, stack alignment, r11 and private status. |
 | Default panic derivative | The same source with the hook removed traps on arithmetic, violated nonreturning return and firmware entry return. It retains neither a panic latch nor a source map; the independent hardware exception frame points at UDF. |
 | `core-panic.ldn` | Seventeen independently expected kind/site paths per profile, including conversion/bounds/arithmetic, alignment, packed membership, nonnull pointer construction, reserved bits, UTF-8 decoding, recursive panic, forced nonreturning-callee return, normal firmware-entry return and a real NVIC handler. Poisoned data/BSS, no later actions, stack bounds and off-target source lookup are checked. |
 | `core-noreturn.ldn` | Six cold boots select direct, generic, static/erased evidence, deferred and recovery paths; independent memory assertions check completed stores, skipped later actions/cleanup and retained kept data. The expected frame-chain depth and each previous-r11/incoming-LR record are checked at every selected nonreturning path. Nonreturning entry and 200–376-byte observed stack writes execute in the fixed profile. |
@@ -576,7 +616,7 @@ source-map bytes. A focused run is development feedback, not a complete gate run
 | Library-derived DMA | The unchanged firmware-lane peripheral oracle checks independent register state, exact halfword count accesses, handler delivery, half/completion states, externally written ordinary storage and subsequent ordinary reads. Only CPU/barrier calls are replaced with the new library surface. |
 
 The runner copies only its declared `core/mem`, `core/vec`, `core/pool` and
-`platform/cpu`/`core/panic` import closure. Maps must list the generated object and pinned
+`platform/cortex_m`/`core/panic` import closure. Maps must list the generated object and pinned
 `thumb/v6-m/nofp/libgcc.a`, with optional GNU linker stubs and no other LOAD
 input. Closure records include source hashes, selected archive members, all
 symbols and decoded image extents. Undefined symbols and hosted runtime names

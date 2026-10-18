@@ -1,8 +1,8 @@
 error[L0202]: this type's representation is module-internal
-  --> ../tests/fixtures/negative/core-spill-private-representation/main.ldn:5:26
+  --> ../tests/fixtures/negative/core-spill-private-representation/main.ldn:5:18
   |
-5 |     code = value.storage.inline_values[0]
-  |                          ^^^^^^^^^^^^^
+5 |     code = value.inline_values[0]
+  |                  ^^^^^^^^^^^^^
   --> ../../core/spill/spill.ldn:8:1
   |
 8 | spill_value: type (item: type, fixed inline_slots: usize) = struct

@@ -83,7 +83,7 @@ class ScalingMemory(unittest.TestCase):
                   contextlib.redirect_stderr(stderr)):
                 status = scaling.main(["--refine", sys.executable, "--runs=1",
                                        "--no-derived", "--optimize=size",
-                                       "--json", str(report)])
+                                       "--repeats=0", "--json", str(report)])
             record = json.loads(report.read_text())
         return status, stdout.getvalue(), stderr.getvalue(), record
 
@@ -109,6 +109,93 @@ class ScalingMemory(unittest.TestCase):
         self.assertEqual(record["families"]["sample"], [])
 
 
+class ScalingUnderLoad(unittest.TestCase):
+    """A doubling over its limit is measured again before it is a verdict."""
+
+    def run_with(self, timings, load):
+        """timings maps a size to the frontend seconds each measurement of it
+        gives, in order; every other part grows linearly."""
+        given = {size: iter(values) for size, values in timings.items()}
+
+        def sample(_refine, directory, *_args):
+            size = int(directory.rsplit("-", 1)[1])
+            frontend = next(given[size]) if size in given else float(size)
+            return {"frontend": frontend, "emission": float(size),
+                    "peak_kib": size, "sizes": {"declarations": size}}
+
+        stdout, stderr = CapturedOutput(), io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "measurements.json"
+            with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
+                  mock.patch.object(scaling, "write_program"),
+                  mock.patch.object(scaling, "median_of", side_effect=sample),
+                  mock.patch.object(scaling, "host_load", return_value=load),
+                  contextlib.redirect_stdout(stdout),
+                  contextlib.redirect_stderr(stderr)):
+                status = scaling.main(["--refine", sys.executable, "--runs=1",
+                                       "--no-derived", "--optimize=size",
+                                       "--json", str(report)])
+            record = json.loads(report.read_text())
+        return status, stdout.getvalue(), stderr.getvalue(), record
+
+    QUIET = {"processors": 8, "load": [0.5, 0.5, 0.5]}
+    BUSY = {"processors": 8, "load": [14.0, 12.0, 9.0]}
+
+    def test_a_doubling_met_when_measured_again_passes(self):
+        status, output, errors, record = self.run_with(
+            {2000: [5800.0, 2100.0]}, self.QUIET)
+        self.assertEqual(status, 0, errors)
+        self.assertIn("repeated: frontend 2.10x", output)
+        self.assertIn("within the bound", output)
+        row = record["families"]["sample"][1]
+        self.assertEqual(len(row["repeats"]), 1)
+        self.assertEqual(row["frontend"], 2100.0)
+        self.assertIn("load averages 0.50 0.50 0.50", output)
+
+    def test_a_doubling_missed_every_time_fails_naming_each(self):
+        status, _, errors, record = self.run_with(
+            {2000: [5800.0, 5700.0, 5600.0]}, self.QUIET)
+        self.assertEqual(status, 1)
+        self.assertIn("frontend 1000 -> 2000 grew 5.80x, more than 2.5x,"
+                      " and 5.70x, 5.60x measured again", errors)
+        self.assertNotIn("contention", errors)
+        self.assertEqual(len(record["families"]["sample"][1]["repeats"]), 2)
+
+    def test_a_doubling_missed_only_under_contention_is_refused(self):
+        status, _, errors, record = self.run_with(
+            {2000: [5800.0, 5700.0, 5600.0]}, self.BUSY)
+        self.assertEqual(status, 3)
+        self.assertIn("every measurement was under contention", errors)
+        self.assertIn("8 processors, load averages 14.00", errors)
+        self.assertIn("refused", errors)
+        self.assertEqual(record["host"], self.BUSY)
+
+    def test_contention_is_load_or_a_waiting_compilation(self):
+        self.assertFalse(scaling.contended(self.QUIET, {"wall_ratio": 1.1}))
+        self.assertTrue(scaling.contended(self.BUSY, {"wall_ratio": 1.0}))
+        self.assertTrue(scaling.contended(self.QUIET, {"wall_ratio": 1.6}))
+        self.assertFalse(scaling.contended({"processors": 2, "load": None}, {}))
+
+    def test_a_measurement_records_its_wall_to_processor_ratio(self):
+        with tempfile.TemporaryDirectory() as work:
+            report = Path(work) / "stages.json"
+
+            def compile_once(command, *_args):
+                report.write_text(json.dumps({
+                    "stages": [{"stage": name, "processor_us": 100,
+                                "peak_kib": 32}
+                               for name in scaling.FRONTEND + scaling.EMISSION],
+                    "sizes": {}}))
+                return subprocess.CompletedProcess(command, 0, b"", b"")
+
+            with mock.patch.object(scaling, "run_compiler",
+                                   side_effect=compile_once):
+                result = scaling.measure("refine", work, work, str(report), 1)
+        self.assertIn("wall_ratio", result)
+        self.assertGreater(result["wall_ratio"], 0)
+
+
 class ScalingObjectives(unittest.TestCase):
     def test_every_family_runs_at_size_and_at_speed(self):
         seen = []
@@ -132,7 +219,8 @@ class ScalingObjectives(unittest.TestCase):
                   contextlib.redirect_stdout(stdout),
                   contextlib.redirect_stderr(stderr)):
                 status = scaling.main(["--refine", sys.executable, "--runs=1",
-                                       "--no-derived", "--json", str(report)])
+                                       "--no-derived", "--repeats=0",
+                                       "--json", str(report)])
             record = json.loads(report.read_text())
         self.assertEqual(seen, ["size"] * 5 + ["speed"] * 5)
         self.assertEqual(status, 1)

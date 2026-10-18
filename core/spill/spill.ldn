@@ -14,33 +14,31 @@ end spill_value
 
 --- Vector with an inline prefix of `inline_slots` items that spills into
 --- allocator-backed storage when it fills. Only initialized slots are
---- readable; no item needs a zero image.
-public list: type (item: type, fixed inline_slots: usize) = struct
-    storage: spill_value(item, inline_slots)
-end list
+--- readable; no item needs a zero image.  Its storage is the module's own.
+public list: type (item: type, fixed inline_slots: usize) =
+    spill_value(item, inline_slots)
 
 --- Create an empty inline vector without allocating. Unused inline slots have
 --- no readable item value.
 public new: (item: type, fixed inline_slots: usize)
             -> (value: list(item, inline_slots)) =
     fresh := vec.new(item: item)
-    value = (storage: (count: 0, inline_values: uninit,
-                       spill: fresh, spilled: false))
+    value = (count: 0, inline_values: uninit, spill: fresh, spilled: false)
 end new
 
 --- Return the initialized item count. A read-only pointer accepts addresses
 --- of mutable and immutable containers without copying their inline storage.
 public length: (item: type, fixed inline_slots: usize,
                 value: ptr list(item, inline_slots)) -> (count: usize) =
-    count = value.val.storage.count
+    count = value.val.count
 end length
 
 --- Return the inline capacity before spilling, or the backing vector capacity
 --- afterwards.
 public capacity: (item: type, fixed inline_slots: usize,
                   value: ptr list(item, inline_slots)) -> (count: usize) =
-    if value.val.storage.spilled then
-        count = vec.capacity(value.val.storage.spill)
+    if value.val.spilled then
+        count = vec.capacity(value.val.spill)
     else
         count = inline_slots
     end if
@@ -66,14 +64,14 @@ public push: (item: type, fixed inline_slots: usize,
               escaping inout value: list(item, inline_slots),
               memory: provider, escaping added: item)
              -> none ! mem.out_of_memory =
-    if value.storage.spilled then
-        try vec.push(value.storage.spill, memory, added)
-        inc value.storage.count
+    if value.spilled then
+        try vec.push(value.spill, memory, added)
+        inc value.count
         return
     end if
-    if value.storage.count < inline_slots then
-        value.storage.inline_values[value.storage.count] = added
-        inc value.storage.count
+    if value.count < inline_slots then
+        value.inline_values[value.count] = added
+        inc value.count
         return
     end if
 
@@ -82,18 +80,18 @@ public push: (item: type, fixed inline_slots: usize,
     try vec.reserve(fresh, memory, wanted)
 
     mut at: usize = 0
-    while at < value.storage.count do
+    while at < value.count do
         --  Only the prefix has an item image. Reserve established room for
         --  every one of these pushes without another allocation.
-        copied: item = value.storage.inline_values[at]
+        copied: item = value.inline_values[at]
         try vec.push(fresh, memory, copied)
         inc at
     end while
     try vec.push(fresh, memory, added)
 
-    value.storage.spill = fresh
-    value.storage.spilled = true
-    inc value.storage.count
+    value.spill = fresh
+    value.spilled = true
+    inc value.count
 end push
 
 --- Lend the initialized mutable prefix from inline or spill storage. The
@@ -101,10 +99,10 @@ end push
 public used: (item: type, fixed inline_slots: usize,
               inout value: list(item, inline_slots))
              -> (view: []mut item from value) =
-    if value.storage.spilled then
-        view = vec.used(value.storage.spill)
+    if value.spilled then
+        view = vec.used(value.spill)
     else
-        view = value.storage.inline_values[0..<value.storage.count]
+        view = value.inline_values[0..<value.count]
     end if
 end used
 
@@ -113,11 +111,11 @@ end used
 public get: (item: type, fixed inline_slots: usize,
              value: ptr list(item, inline_slots), index: usize)
             -> (result: item from value) ! mem.out_of_bounds =
-    if value.val.storage.spilled then
-        result = try vec.get(value.val.storage.spill, index)
+    if value.val.spilled then
+        result = try vec.get(value.val.spill, index)
     else
-        fail mem.out_of_bounds when index >= value.val.storage.count
-        result = value.val.storage.inline_values[index]
+        fail mem.out_of_bounds when index >= value.val.count
+        result = value.val.inline_values[index]
     end if
 end get
 
@@ -137,13 +135,13 @@ end at
 public pop: (item: type, fixed inline_slots: usize,
              inout value: list(item, inline_slots))
             -> (removed: item from value) ! mem.empty =
-    fail mem.empty when value.storage.count == 0
-    if value.storage.spilled then
-        removed = try vec.pop(value.storage.spill)
-        dec value.storage.count
+    fail mem.empty when value.count == 0
+    if value.spilled then
+        removed = try vec.pop(value.spill)
+        dec value.count
     else
-        dec value.storage.count
-        removed = value.storage.inline_values[value.storage.count]
+        dec value.count
+        removed = value.inline_values[value.count]
     end if
 end pop
 
@@ -153,9 +151,56 @@ public release: (item: type, fixed inline_slots: usize,
                  provider: type is mem.allocator,
                  inout value: list(item, inline_slots),
                  memory: provider) -> none =
-    if value.storage.spilled then
-        vec.release(value.storage.spill, memory)
+    if value.spilled then
+        vec.release(value.spill, memory)
     end if
-    value.storage.count = 0
-    value.storage.spilled = false
+    value.count = 0
+    value.spilled = false
 end release
+
+--- Forget every item without reading them, keeping any spill storage for
+--- the next pushes, as `vec.clear` does.  Does not clean up resources the
+--- items refer to.
+public clear: (item: type, fixed inline_slots: usize,
+               inout value: list(item, inline_slots)) -> none =
+    if value.spilled then
+        vec.clear(value.spill)
+    end if
+    value.count = 0
+end clear
+
+--- Copy the last item: `mem.empty` when there is none.
+public last: (item: type, fixed inline_slots: usize,
+              value: ptr list(item, inline_slots))
+             -> (result: item from value) ! mem.empty =
+    fail mem.empty when value.val.count == 0
+    result = get(value, value.val.count - 1) else (problem)
+        _ = problem
+        fail mem.empty
+    end
+end last
+
+--- Ensure room for at least `want` items: inline while they fit, and
+--- otherwise in spill storage of at least `want`, spilling now if the list
+--- has not.  Failure leaves the list as it was.  Spilling or growing
+--- invalidates old item views.
+public reserve: (item: type, fixed inline_slots: usize,
+                 provider: type is mem.allocator,
+                 escaping inout value: list(item, inline_slots),
+                 memory: provider, want: usize)
+                -> none ! mem.out_of_memory =
+    if value.spilled then
+        try vec.reserve(value.spill, memory, want)
+        return
+    end if
+    return when want <= inline_slots
+    mut fresh := vec.new(item: item)
+    try vec.reserve(fresh, memory, want)
+    for at in usize(0)..<value.count do
+        --  Reserve made room for every one of these without allocating.
+        copied: item = value.inline_values[at]
+        try vec.push(fresh, memory, copied)
+    end for
+    value.spill = fresh
+    value.spilled = true
+end reserve

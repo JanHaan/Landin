@@ -1,0 +1,365 @@
+--  platform/libc on Darwin: its C library is its system interface, and
+--  these are its numbers, records and the calls Darwin has that Linux's
+--  C library does not, or names otherwise.  What every system declares
+--  alike is in libc.ldn.
+
+fixed if compiler.os == darwin then
+    --- The calling thread's errno cell, `__error`.  Read it immediately after
+    --- the failing call, before any other call that may set it.
+    public extern(c) link(symbol: "__error") errno_cell:
+        () -> (cell: ptr mut i32)
+
+    --- `open` flag: create the file if it does not exist.  Linux keeps one
+    --- value on every architecture; Darwin and FreeBSD share the BSD one.
+    public o_creat: i32 = 512
+    --- `open` flag: truncate an existing regular file to length zero.
+    public o_trunc: i32 = 1024
+    --- `open` flag: with `o_creat`, fail with EEXIST if the name is taken.
+    public o_excl: i32 = 2048
+    --- `open` flag: every write goes to the end of the file.
+    public o_append: i32 = 8
+    --- `mmap` flag: the mapping is backed by no file and starts zeroed.
+    public map_anonymous: i32 = 4096
+    --- `poll`'s count of records, C's `nfds_t`.
+    public poll_count: type = u32
+
+    --- `clock_gettime` clock: time since a point the system fixes, never
+    --- set back.  Each system numbers it its own way.
+    public clock_monotonic: i32 = 6
+
+    --- Fill the `length` bytes at `into` with random bytes from the C
+    --- library's generator, which the kernel's entropy keys and rekeys and
+    --- which is fit for keys.  It never fails.  Darwin's and FreeBSD's.
+    public extern(c) arc4random_buf: (into: ptr mut u8, length: usize)
+                                     -> none
+
+    --  Full records rather than guessed opaque storage, each selected by its
+    --  system and C ABI by name, so a system or an ABI none names has no
+    --  `file_status` rather than another's.  Darwin arm64 uses the ordinary
+    --  stat symbol with its 64-bit inode ABI.
+
+    fixed if compiler.c_darwin_lp64 then
+        --- `sizeof (struct stat)` in the native C headers.
+        public file_status_size: usize = 144
+        --- C's `struct stat`, as `stat` fills it on this system. C declares
+        --- `dev_t` as `int32_t` here, but a device number is a bit pattern, not
+        --- a quantity, and devfs's may have the sign bit set, so both device
+        --- fields are unsigned and widening them never traps.
+        public file_status: type = struct
+            device: u32
+            mode: u16
+            links: u16
+            inode: u64
+            uid: u32
+            gid: u32
+            special_device: u32
+            accessed: timespec
+            modified: timespec
+            changed: timespec
+            created: timespec
+            bytes: i64
+            blocks: i64
+            block_size: i32
+            flags: u32
+            generation: u32
+            spare: i32
+            reserved: [2]i64
+        end file_status
+    end if
+
+    --- `open` flag: fail with ENOTDIR unless the path names a directory.
+    --- Linux's arm64 keeps a value of its own.
+    public o_directory: i32 = 1048576
+    --- `fstatat` flag: report a symbolic link itself.
+    public at_symlink_nofollow: i32 = 32
+
+    --- C's `struct dirent` as `readdir` returns it, with the 64-bit
+    --- inode every arm64 Darwin has.
+    public directory_record: type = struct
+        inode: u64
+        seek_offset: u64
+        record_length: u16
+        name_length: u16
+        kind: u8
+        name: [1024]u8
+    end directory_record
+
+    --- The directory descriptor that makes an `*at` call's relative path
+    --- relative to the working directory.
+    public at_fdcwd: i32 = -2
+    --- `unlinkat` flag: remove an empty directory rather than a file.
+    public at_removedir: i32 = 128
+
+    --- Make the directory `path`, relative to `directory` (or `at_fdcwd`),
+    --- with the permission bits `mode`, which the process umask filters:
+    --- 0, or -1 with the reason in errno.
+    public extern(c) mkdirat: (directory: i32, path: ptr u8, mode: u16)
+                              -> (status: i32)
+
+    --- `open` flag: the new descriptor is closed when the process executes
+    --- a program, set with it.  Darwin has no `pipe2`.
+    public o_cloexec: i32 = 16777216
+    --- `fcntl` command: duplicate a descriptor onto the lowest free number
+    --- at or above the argument, closed on exec.
+    public f_dupfd_cloexec: i32 = 67
+
+    --- A `posix_spawn_file_actions_t` or a `posix_spawnattr_t`: on Darwin
+    --- and FreeBSD a pointer the C library allocates, which its `init` writes
+    --- into the caller's cell and its `destroy` frees.  glibc's are records of
+    --- its own, so these declarations are Darwin's and FreeBSD's alone.
+    public spawn_object: type = usize
+
+    --- Start a list of the actions `posix_spawn` performs in the child before
+    --- it executes the program: 0, or the errno.
+    public extern(c) posix_spawn_file_actions_init:
+        (actions: ptr mut spawn_object) -> (error: i32)
+
+    --- Free a list of actions: 0, or the errno.
+    public extern(c) posix_spawn_file_actions_destroy:
+        (actions: ptr mut spawn_object) -> (error: i32)
+
+    --- Add to `actions` making the child's `target` a duplicate of `source`:
+    --- 0, or the errno.
+    public extern(c) posix_spawn_file_actions_adddup2:
+        (actions: ptr mut spawn_object, source: i32, target: i32) -> (error: i32)
+
+    --- Start a set of attributes for `posix_spawn`: 0, or the errno.
+    public extern(c) posix_spawnattr_init:
+        (attributes: ptr mut spawn_object) -> (error: i32)
+
+    --- Free a set of attributes: 0, or the errno.
+    public extern(c) posix_spawnattr_destroy:
+        (attributes: ptr mut spawn_object) -> (error: i32)
+
+    --- Set the attributes' flags, C's `short`: 0, or the errno.
+    public extern(c) posix_spawnattr_setflags:
+        (attributes: ptr mut spawn_object, flags: i16) -> (error: i32)
+
+    --- Start the program at `path`, with the null-terminated `arguments` and
+    --- `environment` tables, in a child, applying `actions` and `attributes`
+    --- first, and put its ID in `child`: 0, or the errno, which a program
+    --- that could not be executed reports too, its child already reaped.
+    --- Nothing searches a path for the program.
+    public extern(c) posix_spawn:
+        (child: ptr mut i32, path: ptr u8, actions: ptr spawn_object,
+         attributes: ptr spawn_object, arguments: ptr ptr u8,
+         environment: ptr ptr u8) -> (error: i32)
+
+    --- `posix_spawnattr_setflags` flag, Darwin's own: every descriptor the
+    --- actions do not name is closed in the child, as though each were
+    --- closed on exec.
+    public posix_spawn_cloexec_default: i16 = 16384
+
+    --- Add to `actions` that the child keeps `descriptor` as it is, which
+    --- `posix_spawn_cloexec_default` would otherwise close: Darwin's own.
+    public extern(c) posix_spawn_file_actions_addinherit_np:
+        (actions: ptr mut spawn_object, descriptor: i32) -> (error: i32)
+
+    --- `socket` domain: IPv6, AF_INET6, which each system numbers its own
+    --- way.
+    public af_inet6: i32 = 30
+    --- `setsockopt` level: the socket itself, SOL_SOCKET.
+    public sol_socket: i32 = 65535
+    --- `sol_socket` option, an `i32`: a listener may bind an address that
+    --- earlier connections still hold in TIME_WAIT.
+    public so_reuseaddr: i32 = 4
+    --- `sol_socket` option, read as an `i32`: the pending error, cleared as
+    --- it is read.
+    public so_error: i32 = 4103
+    --- `sol_socket` option, a `time_limit`: how long a receive waits.
+    public so_rcvtimeo: i32 = 4102
+    --- `sol_socket` option, a `time_limit`: how long a send waits.
+    public so_sndtimeo: i32 = 4101
+    --- `ipproto_ipv6` option, an `i32`: an IPv6 socket takes IPv6 alone.
+    public ipv6_v6only: i32 = 27
+    --- `sol_socket` option, an `i32`: a write or send to a peer that has
+    --- gone fails with EPIPE and raises no SIGPIPE.  Linux has none.
+    public so_nosigpipe: i32 = 4130
+    --- `sizeof (struct sockaddr_un)`'s path: the longest Unix-domain path
+    --- with its NUL.
+    public sockaddr_un_path: u32 = 104
+
+    --- C's `struct timeval`, which a socket time limit is: Darwin's
+    --- microseconds are an `int`.
+    public time_limit: type = struct
+        seconds: i64
+        microseconds: i32
+        padding: i32
+    end time_limit
+
+    --- Darwin's `sigset_t`, 32 bits.
+    public signal_set: type = struct
+        bits: [1]u32
+    end signal_set
+
+    --- C's `struct sigaction` as Darwin declares it.
+    public signal_action: type = struct
+        handler: u64
+        mask: signal_set
+        flags: i32
+    end signal_action
+
+    --- `posix_spawnattr_setflags` flag: the child's signals named by
+    --- `posix_spawnattr_setsigdefault` start at their default disposition.
+    public posix_spawn_setsigdef: i16 = 4
+
+    --- Name the signals whose disposition a child `posix_spawn` starts with
+    --- `posix_spawn_setsigdef` set is reset to the default: 0, or the
+    --- errno.
+    public extern(c) posix_spawnattr_setsigdefault:
+        (attributes: ptr mut spawn_object, signals: ptr signal_set)
+        -> (error: i32)
+
+    --- Set the permission bits of the file `path` names, relative to
+    --- `directory`, to `mode`, following a final symbolic link with
+    --- `flags` zero: 0, or -1 with the reason in errno.
+    public extern(c) fchmodat: (directory: i32, path: ptr u8, mode: u16,
+                                flags: i32) -> (status: i32)
+    --- Set the permission bits of the file open as `descriptor`: 0, or -1
+    --- with the reason in errno.
+    public extern(c) fchmod: (descriptor: i32, mode: u16) -> (status: i32)
+
+    --- `fcntl` command, Darwin's own: hand the file to its device and have
+    --- the device write what it holds in its own cache, which `fsync`
+    --- leaves there.  A file system that cannot fails with ENOTSUP.
+    public f_fullfsync: i32 = 51
+
+    --- `linkat` flag: follow a final symbolic link of the old path.
+    public at_symlink_follow: i32 = 64
+    --- `open` flag: a terminal opened does not become the controlling one.
+    public o_noctty: i32 = 131072
+    --- `fcntl` command: describe a record lock in the way, `F_GETLK`.
+    public f_getlk: i32 = 7
+    --- `fcntl` command: take or give up a record lock at once, `F_SETLK`.
+    public f_setlk: i32 = 8
+    --- `fcntl` command: take a record lock, waiting for it, `F_SETLKW`.
+    public f_setlkw: i32 = 9
+    --- A record lock's type: shared.
+    public f_rdlck: i16 = 1
+    --- A record lock's type: exclusive.
+    public f_wrlck: i16 = 3
+    --- A record lock's type: none.
+    public f_unlck: i16 = 2
+
+    --- C's `struct flock`, a record lock: its start and length, zero to the
+    --- end of the file however far it reaches, the process holding it,
+    --- which `f_getlk` fills, its type and where its start counts from.
+    public lock_record: type = struct
+        start: i64
+        length: i64
+        process: i32
+        kind: i16
+        whence: i16
+    end lock_record
+
+    --- Darwin's `struct passwd`: the account's name, password, user and
+    --- group IDs, password change time, class, comment, home directory,
+    --- shell and expiry, the strings pointers into the call's buffer.
+    public account_record: type = struct
+        name: usize
+        password: usize
+        user: u32
+        group: u32
+        changed: i64
+        class: usize
+        comment: usize
+        home: usize
+        shell: usize
+        expires: i64
+    end account_record
+
+    --- A terminal's settings, Darwin's `struct termios`, whose flags and
+    --- speeds are C `long`s: the input, output, control and local modes,
+    --- the control characters, `vmin` and `vtime` among them, and the
+    --- speeds.
+    public terminal_record: type = struct
+        input_modes: u64
+        output_modes: u64
+        control_modes: u64
+        local_modes: u64
+        characters: [20]u8
+        padding: u32
+        input_speed: u64
+        output_speed: u64
+    end terminal_record
+
+    --- Read the terminal `descriptor`'s settings into `into`: 0, or -1 with
+    --- the reason in errno, ENOTTY for any other file.
+    public extern(c) tcgetattr: (descriptor: i32, into: ptr mut terminal_record)
+                                -> (status: i32)
+    --- Set the terminal `descriptor`'s settings to `settings`, when `timing`
+    --- says: 0, or -1 with the reason in errno.
+    public extern(c) tcsetattr: (descriptor: i32, timing: i32,
+                                 settings: ptr terminal_record) -> (status: i32)
+
+    --- `terminal_record` input mode: ignore a break.  Darwin and FreeBSD
+    --- share 4.4BSD's numbers.
+    public ignbrk: u32 = 1
+    --- Input mode: a break interrupts.
+    public brkint: u32 = 2
+    --- Input mode: mark a parity error.
+    public parmrk: u32 = 8
+    --- Input mode: strip the eighth bit.
+    public istrip: u32 = 32
+    --- Input mode: read a newline as a carriage return.
+    public inlcr: u32 = 64
+    --- Input mode: ignore a carriage return.
+    public igncr: u32 = 128
+    --- Input mode: read a carriage return as a newline.
+    public icrnl: u32 = 256
+    --- Input mode: XON and XOFF control output.
+    public ixon: u32 = 512
+    --- Output mode: process output.
+    public opost: u32 = 1
+    --- Control mode: the character size's bits.
+    public csize: u32 = 768
+    --- Control mode: eight-bit characters.
+    public cs8: u32 = 768
+    --- Control mode: parity.
+    public parenb: u32 = 4096
+    --- Local mode: input is echoed.
+    public echo: u32 = 8
+    --- Local mode: a newline is echoed even without `echo`.
+    public echonl: u32 = 16
+    --- Local mode: the interrupt, quit and suspend characters raise their
+    --- signals.
+    public isig: u32 = 128
+    --- Local mode: input is read a line at a time and may be edited.
+    public icanon: u32 = 256
+    --- Local mode: the implementation's own input processing.
+    public iexten: u32 = 1024
+    --- `terminal_record` character index: how few bytes a read returns,
+    --- outside line mode.
+    public vmin: usize = 16
+    --- `terminal_record` character index: how long a read waits, in tenths
+    --- of a second, outside line mode.
+    public vtime: usize = 17
+
+    --- `ioctl` request: read a terminal's `window_record`.
+    public tiocgwinsz: u64 = 0x40087468
+    --- `ioctl` request: set a terminal's `window_record`.
+    public tiocswinsz: u64 = 0x80087467
+
+    --- Open a new pseudo-terminal's controller with the `open` flags given:
+    --- its descriptor, or -1 with the reason in errno.
+    public extern(c) posix_openpt: (flags: i32) -> (descriptor: i32)
+    --- Give the caller the pseudo-terminal of the controller `descriptor`:
+    --- 0, or -1 with the reason in errno.
+    public extern(c) grantpt: (descriptor: i32) -> (status: i32)
+    --- Let the pseudo-terminal of the controller `descriptor` be opened: 0,
+    --- or -1 with the reason in errno.
+    public extern(c) unlockpt: (descriptor: i32) -> (status: i32)
+    --- Put the path of the controller `descriptor`'s terminal, with a NUL,
+    --- in the `length` bytes at `into`: 0, or nonzero, the errno itself
+    --- or -1 with it in errno, ERANGE when it does not fit.
+    public extern(c) ptsname_r: (descriptor: i32, into: ptr mut u8,
+                                 length: usize) -> (status: i32)
+
+    --- `dlopen` mode: the object's symbols resolve no other object's
+    --- references.  Darwin's default is `rtld_global`, so it is always
+    --- given.
+    public rtld_local: i32 = 4
+    --- `dlopen` mode: the object's symbols resolve the references of an
+    --- object loaded after it.
+    public rtld_global: i32 = 8
+end if

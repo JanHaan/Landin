@@ -9,9 +9,11 @@
 --  not_found, a read failure while capturing is io_failed, a scripted
 --  program ends by a signal, its piped input is kept, and one already
 --  running cannot start again.
+import core/cmp
 import core/io
-import core/mem
+import core/io/fake
 import core/text
+import core/time
 
 --  Read what the child writes to its output and its errors into the two
 --  builders, from whichever has something, until both have ended, and
@@ -26,7 +28,7 @@ capture: (provider: type is io.programs, host: provider,
     loop do
         part: io.child_read = try io.read_child(host, running, buffer[0..<256])
         break when part.finished
-        if part.errors then
+        if part.stream == io.child_errors then
             try text.append(errors, buffer[0..<part.count])
         else
             try text.append(output, buffer[0..<part.count])
@@ -56,7 +58,7 @@ end quoted
 --  Report what the child wrote, how it ended and how long it took, which
 --  is never less than the second it slept.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
-         output: []u8, errors: []u8, ended: io.ending, took: io.duration)
+         output: []u8, errors: []u8, ended: io.ending, took: time.duration)
         -> none ! ... =
     try io.put(out, "the shell said:\n")
     try quoted(out, output)
@@ -69,10 +71,10 @@ report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
                                          [any(addr code)])
         io.signalled: try text.append(line, "and was ended by a signal\n")
     end match
-    if took >= io.seconds(1) then
+    if took >= time.seconds(1) then
         try text.append(line, "after a second or more\n")
     else
-        whole: u64 = io.in_milliseconds(took)
+        whole: u64 = time.in_milliseconds(took)
         try text.format(line, "after only {} ms\n", [any(addr whole)])
     end if
     try io.put(out, text.used(line))
@@ -103,8 +105,8 @@ expected: []u8 = """the shell said:
 --  runtime/run-shell does, timed on CLOCK, which the scripted shell, which
 --  writes everything at once, moves on by SLEPT as a real one would by
 --  sleeping.
-ran: (world: io.memory, host: io.scripted_programs, clock: io.manual_clock,
-      slept: io.duration)
+ran: (world: io.memory, host: io.scripted_programs, clock: fake.clock,
+      slept: time.duration)
      -> (ended: io.ending) ! ... =
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(world, io.out(world), storage[0..<256])
@@ -114,17 +116,17 @@ ran: (world: io.memory, host: io.scripted_programs, clock: io.manual_clock,
         [(name: text.host_over("NAME"), value: text.host_over("landin")),
          (name: text.host_over("GREETING"),
           value: text.host_over("hello, world"))]
-    began: io.instant = io.now(clock)
+    began: time.instant = time.now(clock)
     started: io.child = try io.spawn(host, text.host_over("/bin/sh"),
                                      arguments[0..<2], variables[0..<2],
                                      io.capturing)
-    io.sleep(clock, slept)
+    time.sleep(clock, slept)
     mut output_room: [512]u8 = zeroed
     mut errors_room: [512]u8 = zeroed
     mut output := text.over(output_room[0..<512])
     mut errors := text.over(errors_room[0..<512])
     ended = try capture(host, started, output, errors)
-    took: io.duration = io.elapsed(began, io.now(clock))
+    took: time.duration = time.elapsed(began, time.now(clock))
     try report(out, text.used(output), text.used(errors), ended, took)
     try io.flush(out)
 end ran
@@ -156,7 +158,7 @@ read_fails: (host: io.scripted_programs, state: ptr mut io.memory_space)
             -> (yes: bool) ! ... =
     yes = false
     mut started: io.child = try started_at(host, "/bin/sh", io.capturing)
-    state.val.fail_read_at = state.val.read_calls + 1
+    state.val.fail_read_at = state.val.reads + 1
     mut buffer: [8]u8 = zeroed
     part: io.child_read = io.read_child(host, started,
                                         buffer[0..<8]) else (problem)
@@ -228,7 +230,7 @@ public main: () -> (code: i32) =
     mut state: io.memory_space = zeroed
     mut slots: [1]io.memory_file =
         [(name: "unused", contents: [], length: 0, cursor: 0, readable: false,
-          writable: false, opened: false, writing: false)]
+          writable: false, state: io.closed_slot)]
     mut written: [1024]u8 = zeroed
     mut complained: [64]u8 = zeroed
     world := io.memory_over(state, slots[0..<1], [], "", written[0..<1024],
@@ -236,17 +238,19 @@ public main: () -> (code: i32) =
     mut kept: [32]u8 = zeroed
     mut programs: [2]io.scripted_program =
         [(path: "/bin/sh", output: said, errors: "something went wrong\n",
-          code: 3, signalled: false, input: kept[0..<32], input_length: 0,
+          ending: (how: io.exited(code: 3)), input: kept[0..<32],
+          input_length: 0,
           starts: 0, arguments: 0, variables: 0, output_read: 0,
           errors_read: 0, running: false),
-         (path: "/bin/false", output: "", errors: "", code: 0,
-          signalled: true, input: kept[0..<0], input_length: 0, starts: 0,
+         (path: "/bin/false", output: "", errors: "",
+          ending: (how: io.signalled), input: kept[0..<0], input_length: 0,
+          starts: 0,
           arguments: 0, variables: 0, output_read: 0, errors_read: 0,
           running: false)]
     host := io.scripted_over(world, programs[0..<2])
-    mut time: io.clock_space = zeroed
-    clock := io.clock_over(time, io.instant(0), (seconds: 0, nanoseconds: 0))
-    ended: io.ending = ran(world, host, clock, io.seconds(1)) else (problem)
+    mut reading: fake.clock_space = zeroed
+    clock := fake.clock_over(reading, time.instant(0), (seconds: 0, nanoseconds: 0))
+    ended: io.ending = ran(world, host, clock, time.seconds(1)) else (problem)
         _ = problem
         return
     end
@@ -255,12 +259,12 @@ public main: () -> (code: i32) =
         io.signalled: return
     end match
     quick: io.ending = ran(world, host, clock,
-                           io.milliseconds(250)) else (problem)
+                           time.milliseconds(250)) else (problem)
         _ = problem
         return
     end
     _ = quick
-    return when mem.compare(io.written(world), expected) <> mem.equal
+    return when cmp.compare(io.written(world), expected) <> cmp.equal
     return when programs[0].starts <> 2 or programs[0].arguments <> 2
       or programs[0].variables <> 2 or programs[0].running
     code = 2

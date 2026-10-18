@@ -1,7 +1,7 @@
-import hosted/heap
 import core/mem
+import hosted/heap
 bad: () -> none =
-    state := heap.host()
+    state := heap.new()
     mut local: u32 = 23
     _ = mem.new(state, addr local) else (problem)
         _ = problem

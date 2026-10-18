@@ -6,7 +6,7 @@
 #include <string.h>
 
 /* Each C worker calls an exported Landin routine, which reaches this wrapper
- * only through hosted/io's call to platform/libc's open. */
+ * only through hosted/system's call to platform/libc's open. */
 extern int32_t r440_errno_thread_probe(void *state, int32_t expected);
 
 struct worker {

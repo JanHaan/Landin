@@ -4,8 +4,8 @@
 --  either, an IPv6 address then in brackets.  Text that is no address is
 --  `invalid_address`, a zone among it.  It runs on every target, firmware
 --  included, since an address is plain data.
-import core/io
-import core/mem
+import core/cmp
+import core/net
 import core/text
 
 --  Text read without a port and what it is written back as, or "" when it
@@ -69,33 +69,33 @@ agrees: (item: case, port: bool) -> (yes: bool) ! text.no_space =
     mut line := text.over(room[0..<64])
     wanted: []u8 = item.written
     yes = lenof wanted == 0
-    at: io.address = read(item.given, port) else (problem)
+    at: net.address = read(item.given, port) else (problem)
         _ = problem
         return
     end
     yes = false
     return when lenof wanted == 0
     if port then
-        try io.append_address(line, at)
+        try net.append_address(line, at)
     else
-        try io.append_ip(line, at)
+        try net.append_ip(line, at)
     end if
-    yes = mem.compare(text.used(line), wanted) == mem.equal
+    yes = cmp.compare(text.used(line), wanted) == cmp.equal
     return when not yes
     --  What is written reads back as the same address.
-    again: io.address = read(text.used(line), port) else (problem)
+    again: net.address = read(text.used(line), port) else (problem)
         _ = problem
         yes = false
         return
     end
-    yes = io.same_address(at, again)
+    yes = net.same_address(at, again)
 end agrees
 
-read: (source: []u8, port: bool) -> (at: io.address) ! io.invalid_address =
+read: (source: []u8, port: bool) -> (at: net.address) ! net.invalid_address =
     if port then
-        at = try io.parse_address(source)
+        at = try net.parse_address(source)
     else
-        at = try io.parse_ip(source)
+        at = try net.parse_ip(source)
     end if
 end read
 
@@ -103,29 +103,29 @@ end read
 --  is written whole or not at all.
 made: () -> (yes: bool) ! text.no_space | text.invalid_format =
     groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]
-    v6: io.address = io.ipv6_address(groups, 443)
-    v4: io.address = io.ipv4_address(192, 0, 2, 1, 80)
+    v6: net.address = net.ipv6_address(groups, 443)
+    v4: net.address = net.ipv4_address(192, 0, 2, 1, 80)
     mut room: [64]u8 = zeroed
     mut line := text.over(room[0..<64])
     try text.format(line, "{} {}", [any(addr v4), any(addr v6)])
-    yes = mem.compare(text.used(line), "192.0.2.1:80 [2001:db8::1]:443")
-          == mem.equal
-    yes = yes and io.same_address(io.loopback(io.ipv4, 7),
-                                  io.ipv4_address(127, 0, 0, 1, 7))
-    yes = yes and not io.same_address(io.loopback(io.ipv4, 7),
-                                      io.loopback(io.ipv4, 8))
-    yes = yes and not io.same_address(io.unspecified(io.ipv4, 0),
-                                      io.unspecified(io.ipv6, 0))
-    yes = yes and io.is_unspecified(io.unspecified(io.ipv6, 9))
-          and not io.is_unspecified(io.loopback(io.ipv6, 9))
-    moved: io.address = io.with_port(v4, 81)
+    yes = cmp.compare(text.used(line), "192.0.2.1:80 [2001:db8::1]:443")
+          == cmp.equal
+    yes = yes and net.same_address(net.loopback(net.ipv4, 7),
+                                   net.ipv4_address(127, 0, 0, 1, 7))
+    yes = yes and not net.same_address(net.loopback(net.ipv4, 7),
+                                       net.loopback(net.ipv4, 8))
+    yes = yes and not net.same_address(net.unspecified(net.ipv4, 0),
+                                       net.unspecified(net.ipv6, 0))
+    yes = yes and net.is_unspecified(net.unspecified(net.ipv6, 9))
+          and not net.is_unspecified(net.loopback(net.ipv6, 9))
+    moved: net.address = net.with_port(v4, 81)
     yes = yes and moved.port == 81 and moved.octets[3] == 1
     --  Twelve bytes have room for `[::1]` but not for its port.
     mut small: [12]u8 = zeroed
     mut short := text.over(small[0..<12])
     try text.append(short, "at ")
     mut full: bool = false
-    io.append_address(short, v6) else (problem)
+    net.append_address(short, v6) else (problem)
         full = problem == text.no_space
     end
     yes = yes and full and text.length(short) == 3

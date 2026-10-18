@@ -7,4 +7,4 @@ error[L0340]: this makes `t` `i32`, but it is already `u8`
   |
 5 | result := same(small, wide)
   |                ^^^^^ this decided it first
-  = note: D138: every argument that decides `t` must decide the same; an untyped literal decides `i32`, so convert it to the type meant
+  = note: D138: every argument that decides `t` must decide the same; a literal that nothing else decides is `i32`, so convert it to the type meant

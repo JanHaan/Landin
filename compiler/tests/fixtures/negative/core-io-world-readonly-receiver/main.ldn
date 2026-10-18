@@ -1,8 +1,8 @@
 import core/io
-import hosted/io as hosted
+import hosted/system
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     world: any io.world = any(host)
     _ = world.argument_count()
     code = 0

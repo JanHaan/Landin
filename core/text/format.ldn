@@ -28,10 +28,10 @@ checked: (source: []u8, count: usize) -> none ! invalid_format =
     mut at: usize = 0
     while at < lenof source do
         current: u8 = source[at]
-        if current == 123 or current == 125 then
+        if current == u8('{') or current == u8('}') then
             fail invalid_format when at + 1 >= lenof source
             following: u8 = source[at + 1]
-            if current == 123 and following == 125 then
+            if current == u8('{') and following == u8('}') then
                 inc wanted
             elsif following <> current then
                 fail invalid_format
@@ -53,8 +53,8 @@ written: (inout into: builder, source: []u8, values: []any formattable)
     mut next: usize = 0
     while at < lenof source do
         current: u8 = source[at]
-        if current == 123 or current == 125 then
-            if current == 123 and source[at + 1] == 125 then
+        if current == u8('{') or current == u8('}') then
+            if current == u8('{') and source[at + 1] == u8('}') then
                 try append(into, source[run..<at])
                 value: any formattable = values[next]
                 try value.append(into)

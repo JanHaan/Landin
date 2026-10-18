@@ -1,10 +1,10 @@
 import core/io
-import hosted/io as hosted
-import platform/libc
 import core/text
+import hosted/system
+import platform/libc
 
 -- The plain C library receives file capabilities from the C root before any
--- argument root exists. Importing hosted/io also retains its unrelated
+-- argument root exists. Importing hosted/system also retains its unrelated
 -- host/argv routines, and platform/posix's, in this unit.
 
 read: () -> (value: i32) = value = 17 end read
@@ -21,13 +21,13 @@ public extern(c) l_plain: (input: i32, output: i32) -> (ok: bool) =
     ok = libc.write(output, addr bytes[0], lenof bytes) == 4
 end l_plain
 
-callback: type = extern(c) (state: ptr hosted.system, depth: i32) -> (ok: bool)
-extern(c) c_reenter: (state: ptr hosted.system, visit: callback, depth: i32)
+callback: type = extern(c) (state: ptr system.host, depth: i32) -> (ok: bool)
+extern(c) c_reenter: (state: ptr system.host, visit: callback, depth: i32)
                      -> (ok: bool)
 extern(c) c_argument_storage: (count: usize, first: ptr u8, second: ptr u8)
                               -> (ok: bool)
 
-arguments_match: (state: ptr hosted.system) -> (ok: bool) =
+arguments_match: (state: ptr system.host) -> (ok: bool) =
     ok = false
     return when io.argument_count(state.val) <> 2
     first: text.host_string = io.argument_at(state.val, usize(0))
@@ -51,7 +51,7 @@ arguments_match: (state: ptr hosted.system) -> (ok: bool) =
     return when not text.equal(word, "alpha") or not text.equal(number, "42")
     -- Mint a fresh world from the root as well as using the one already
     -- minted. This catches a callback prologue resetting the root.
-    fresh: hosted.system = hosted.host()
+    fresh: system.host = system.new()
     again: text.host_string = io.argument_at(fresh, usize(0)) else (problem)
         _ = problem
         return
@@ -66,7 +66,7 @@ arguments_match: (state: ptr hosted.system) -> (ok: bool) =
                             addr second_bytes[0])
 end arguments_match
 
-extern(c) visit: (state: ptr hosted.system, depth: i32) -> (ok: bool) =
+extern(c) visit: (state: ptr system.host, depth: i32) -> (ok: bool) =
     ok = false
     return when not arguments_match(state)
     if depth > 0 then
@@ -78,7 +78,7 @@ end visit
 -- C main delegates capability minting to this root exactly once. All lower
 -- calls, including reentrant C callbacks, receive that ordinary capability.
 public extern(c) l_root: () -> (ok: bool) =
-    state: hosted.system = hosted.host()
+    state: system.host = system.new()
     ok = false
     return when not arguments_match(addr state)
     return when not c_reenter(addr state, visit, 3)

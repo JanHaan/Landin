@@ -110,11 +110,12 @@ public print_number: (world: any io.world, stream: io.file, number: usize)
                      -> none ! io.io_failed =
     --  Twenty bytes hold every decimal digit of a 64-bit usize.
     mut digits: [20]u8 = zeroed
-    used: usize = text.write_usize(digits[0..<20], 0, number) else (problem)
+    mut line := text.over(digits[0..<20])
+    text.append_usize(line, number) else (problem)
         _ = problem
         compiler.unreachable()
     end
-    try world.write(stream, digits[0..<used])
+    try world.write(stream, text.used(line))
 end print_number
 count_done: (self: ptr mut count_dest, world: any io.world)
             -> none ! io.io_failed =

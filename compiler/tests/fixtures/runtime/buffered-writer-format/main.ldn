@@ -1,0 +1,65 @@
+--  io.format writes a template straight into a buffered writer's buffer,
+--  over core/io.memory's standard output, whose write calls are counted.
+import core/io
+import core/text
+
+mut output: [64]u8 = zeroed
+mut errors: [1]u8 = zeroed
+mut unused: [1]u8 = zeroed
+
+wrote: (state: io.memory_space, expected: []u8) -> (yes: bool) =
+    yes = state.output_used == lenof expected
+    mut at: usize = 0
+    for byte in expected do
+        yes = yes and output[at] == byte
+        inc at
+    end for
+end wrote
+
+--  A template formatted straight into the buffer: into the room after the
+--  waiting bytes, after a flush when it does not fit there, and refused
+--  whole when it is larger than the buffer.
+formatted: (host: io.memory, inout state: io.memory_space)
+           -> (ok: bool) ! ... =
+    ok = false
+    mut storage: [8]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<8])
+    a: u32 = 12
+    b: u32 = 345
+    try io.put(out, "x")
+    pair: [2]any text.formattable = [any(addr a), any(addr b)]
+    try io.format(out, "{}+{}", pair[0..<2])
+    return when state.writes <> 0 or io.pending(out) <> 7
+    one: [1]any text.formattable = [any(addr b)]
+    try io.format(out, "={}", one[0..<1])
+    return when state.writes <> 1 or io.pending(out) <> 4
+    mut refused: bool = false
+    --  Ten digits, more than the whole buffer holds.  A u32 rather than a
+    --  u64, whose 64-bit decimal writer would leave the image too large
+    --  for a 32 KiB Cortex-M0 flash at none/off.
+    big: u32 = 0 -% 1
+    huge: [1]any text.formattable = [any(addr big)]
+    io.format(out, "{}", huge[0..<1]) else (problem)
+        refused = problem == text.no_space
+    end
+    return when not refused or io.pending(out) <> 0
+    try io.flush(out)
+    ok = wrote(state, "x12+345=345")
+end formatted
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: false, writable: false, state: io.closed_slot)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: [][]u8 = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<1], no_arguments, "",
+                           output[0..<64], errors[0..<1])
+    ok := formatted(host, state) else false
+    return when not ok
+    code = 42
+end main

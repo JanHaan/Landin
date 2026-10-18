@@ -2,6 +2,7 @@
 --  from it locks nothing: two lent arguments and the count are live at
 --  once, and every one is read after the others were taken.
 import core/io
+import core/io/fake
 import core/text
 
 

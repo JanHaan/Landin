@@ -1,6 +1,6 @@
 import core/mem
 import hosted/heap
-bad: (state: heap.system,
+bad: (state: heap.heap,
       inout source: mem.byte_buffer) -> (count: usize) =
     view := mem.bytes(source)
     mem.delete_bytes(state, source)

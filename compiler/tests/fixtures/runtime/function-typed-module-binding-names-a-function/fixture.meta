@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D371 a module binding of function type written on one line, `chosen: () -> (v: i32) = seven`, is a binding rather than an unclosed function, and calling it runs the function it names
+constructs: 1000, 1790, 1800, 1940
+program: main.ldn
+status: 14
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

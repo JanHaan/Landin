@@ -4,7 +4,8 @@
 --  report goes through a buffered writer, flushed on every way out.
 import core/io
 import core/text
-import hosted/io as hosted
+import core/time
+import hosted/system
 
 --  What the shell runs: it says what its environment holds, complains
 --  once, sleeps for a second and ends with code 3.  Its environment is
@@ -32,7 +33,7 @@ capture: (provider: type is io.programs, host: provider,
     loop do
         part: io.child_read = try io.read_child(host, running, buffer[0..<256])
         break when part.finished
-        if part.errors then
+        if part.stream == io.child_errors then
             try text.append(errors, buffer[0..<part.count])
         else
             try text.append(output, buffer[0..<part.count])
@@ -62,7 +63,7 @@ end quoted
 --  Report what the child wrote, how it ended and how long it took, which
 --  is never less than the second it slept.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
-         output: []u8, errors: []u8, ended: io.ending, took: io.duration)
+         output: []u8, errors: []u8, ended: io.ending, took: time.duration)
         -> none ! ... =
     try io.put(out, "the shell said:\n")
     try quoted(out, output)
@@ -75,10 +76,10 @@ report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
                                          [any(addr code)])
         io.signalled: try text.append(line, "and was ended by a signal\n")
     end match
-    if took >= io.seconds(1) then
+    if took >= time.seconds(1) then
         try text.append(line, "after a second or more\n")
     else
-        whole: u64 = io.in_milliseconds(took)
+        whole: u64 = time.in_milliseconds(took)
         try text.format(line, "after only {} ms\n", [any(addr whole)])
     end if
     try io.put(out, text.used(line))
@@ -87,7 +88,7 @@ end report
 --  The parent's own PATH, the one variable of its environment it passes
 --  on, or the directories every hosted system keeps `sleep` in when it
 --  has none.
-search_path: (host: hosted.system) -> (path: text.host_string from host) =
+search_path: (host: system.host) -> (path: text.host_string from host) =
     path = text.host_over("/bin:/usr/bin")
     path = io.variable_named(host, text.host_over("PATH")) else (problem)
         _ = problem
@@ -96,12 +97,10 @@ search_path: (host: hosted.system) -> (path: text.host_string from host) =
 end search_path
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<256])
-    defer io.flush(out) else (problem)
-        _ = problem
-    end
+    defer io.flush(out) else none
     code = 1
     arguments: [2]text.host_string = [text.host_over("-c"),
                                       text.host_over(script)]
@@ -110,7 +109,7 @@ public main: () -> (code: i32) =
          (name: text.host_over("GREETING"),
           value: text.host_over("hello, world")),
          (name: text.host_over("PATH"), value: search_path(host))]
-    began: io.instant = io.now(host)
+    began: time.instant = time.now(host)
     started := io.spawn(host, text.host_over("/bin/sh"),
                         arguments[0..<2], variables[0..<3],
                         io.capturing) else (problem)
@@ -125,7 +124,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    took: io.duration = io.elapsed(began, io.now(host))
+    took: time.duration = time.elapsed(began, time.now(host))
     report(out, text.used(output), text.used(errors), ended,
            took) else (problem)
         _ = problem

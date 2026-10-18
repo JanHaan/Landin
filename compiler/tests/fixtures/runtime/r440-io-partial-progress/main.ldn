@@ -1,4 +1,5 @@
 import core/io
+import core/io/fake
 import core/text
 
 mut contents: [2]u8 = [65, 66]
@@ -10,7 +11,7 @@ public main: () -> (code: i32) =
     name: []u8 = "f"
     source: io.memory_file =
       (name: name, contents: contents[0..<2], length: 2, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+       readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = source
     path: text.host_string = text.host_over(name)
@@ -30,7 +31,7 @@ public main: () -> (code: i32) =
     world.write(stream, bytes[0..<5]) else (problem)
         stopped = problem == io.io_failed
     end
-    return when not stopped or state.write_calls <> 3 or state.output_used <> 4
+    return when not stopped or state.writes <> 3 or state.output_used <> 4
       or output[0] <> 87 or output[1] <> 88 or output[2] <> 89
       or output[3] <> 90 or output[4] <> 0
 
@@ -40,7 +41,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when state.write_calls <> 3
+    return when state.writes <> 3
     state.fail_write_at = 0
     world.write(stream, bytes[4..<5]) else (problem)
         _ = problem

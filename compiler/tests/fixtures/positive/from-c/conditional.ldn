@@ -1,0 +1,15 @@
+-- The suffix this system gives a shared library.
+fixed if compiler.os == darwin then
+    library_suffix: utf8 = ".dylib"
+else
+    library_suffix: utf8 = ".so"
+end if
+
+--- Whether the tool says what it does: `--option=verbose=true`.
+option verbose: bool = false
+
+fixed if verbose then
+    log_capacity: usize = 256
+else
+    log_capacity: usize = 0
+end if

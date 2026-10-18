@@ -6725,9 +6725,13 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".long 4" & LF & HT & ".long read_first" & LF),
             "identical direct and erased tables share one complete section");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & ".long read_second" & LF)
+           (Item, not Contains (Text, HT & ".long read_second" & LF)
+             and then Contains
+               (Text, "Llandin_evidence_3:" & LF & HT & ".long 4" & LF
+                & HT & ".long 4" & LF & HT & ".long 0" & LF)
              and then Contains (Text, HT & ".word Llandin_evidence_2" & LF),
-            "unused provider and live table address remain distinct");
+            "an unprojected entry is a zero word beside a distinct live"
+            & " table (D374)");
       end;
    end Cortex_Evidence_Tables_Have_Separate_Sections;
 

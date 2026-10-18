@@ -82,7 +82,7 @@ class ProbeFailures(unittest.TestCase):
         import source_debug
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            path = 'source/platform/cpu/cpu.ldn'
+            path = 'source/platform/cortex_m/cortex_m.ldn'
             source = root / path
             source.parent.mkdir(parents=True)
             original = ('public disable_interrupts: () -> (previous: u32) =\n'
@@ -113,8 +113,9 @@ class ProbeFailures(unittest.TestCase):
 
     def test_freestanding_module_and_linker_closure(self):
         from freestanding import imports, linker_closure, programs
-        self.assertEqual(imports('import core/mem\nimport platform/cpu\n'), {'core/mem', 'platform/cpu'})
+        self.assertEqual(imports('import core/mem\nimport platform/cortex_m\n'), {'core/mem', 'platform/cortex_m'})
         self.assertEqual(imports('import core/io'), {'core/io'})
+        self.assertEqual(imports('import core/io/fake'), {'core/io/fake'})
         for name in ('heap', 'c', '../heap'):
             with self.assertRaises(RuntimeError):
                 imports('import core/'+name)
@@ -133,8 +134,9 @@ class ProbeFailures(unittest.TestCase):
             'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
             'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
             {'library-shared-'+name for name in
-             ('cmp', 'diag', 'fault', 'io', 'map', 'mem', 'panic', 'pool', 'random',
-              'region', 'sort', 'spill', 'text', 'tree', 'vec')})
+             ('arena', 'cmp', 'diag', 'fault', 'io', 'map', 'mem', 'net',
+              'panic', 'pool', 'random', 'region', 'sort', 'spill', 'text',
+              'time', 'tree', 'vec')})
 
     def test_shared_library_inventory_requires_each_small_consumer(self):
         from freestanding import MODULES, ROOT
@@ -211,7 +213,7 @@ class ProbeFailures(unittest.TestCase):
             root = Path(directory)
             (root / 'corpus.json').write_text('{"schema":1,"fixtures":{}}')
             with patch('backend_corpus.COUNTERPARTS', root):
-                with self.assertRaisesRegex(RuntimeError, 'inventory disagrees'):
+                with self.assertRaisesRegex(RuntimeError, 'inventory .* disagrees'):
                     inventory()
 
     def test_a_fixture_reading_standard_input_never_executes(self):
@@ -241,7 +243,13 @@ class ProbeFailures(unittest.TestCase):
             refine.write_bytes(b'compiler identity')
             output = root / 'corpus'
             output.mkdir()
-            with (patch('backend.build', return_value=root / 'program.elf'),
+            def build(run, *args, **kwargs):
+                (run.out / 'image.json').write_text(json.dumps({
+                    'regions': {'FLASH': {'used': 400, 'limit': 32768},
+                                'RAM': {'used': 0, 'limit': 12288}},
+                    'sections': {'.isr_vector': 192, '.text': 208}}))
+                return root / 'program.elf'
+            with (patch('backend.build', side_effect=build),
                   patch('backend.execute'),
                   patch('backend.sha', wraps=sha) as fixture_digest,
                   patch('backend_corpus.sha', wraps=sha) as corpus_digest,
@@ -249,7 +257,9 @@ class ProbeFailures(unittest.TestCase):
                 summary = backend_corpus.execute(output, root, refine)
                 self.assertEqual(len(summary['results']), 4)
                 self.assertEqual(fixture_digest.call_count, 0)
-                self.assertEqual(corpus_digest.call_count, 1)
+                #  Each program's own artifacts are hashed; the compiler once.
+                self.assertEqual([c.args[0] for c in corpus_digest.call_args_list
+                                  if c.args[0] == refine], [refine])
                 self.assertEqual(summary['compiler_sha256'], sha(refine))
                 direct = backend.fixture(Run(root, root), refine, name, 'none', 'off')
                 self.assertEqual(direct['compiler_sha256'], summary['compiler_sha256'])
@@ -276,23 +286,144 @@ class ProbeFailures(unittest.TestCase):
                 divide_lowering(run)
 
     def test_image_limit_does_not_hide_codegen_failure(self):
+        from unittest.mock import patch
         from backend_corpus import image_limit
+        from run import CommandFailed
         row = {'profile_limit': 'selected-image', 'reason': 'test physical map'}
-        with tempfile.TemporaryDirectory() as directory:
+        sizes = {'regions': {'FLASH': {'used': 32776, 'limit': 32768},
+                             'RAM': {'used': 24, 'limit': 12288}},
+                 'sections': {'.isr_vector': 192, '.text': 32584, '.bss': 24}}
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('backend_corpus.measure_overflow', return_value=sizes):
             root = Path(directory)
             run = Run(root, root)
+            link = CommandFailed('assemble-link', root / 'assemble-link.log', 'failed with exit 1')
             for text in ("undefined reference to helper",
                          "region `FLASH' overflowed by 8 bytes; undefined reference to helper",
                          "region `RAM' overflowed by 8 bytes; Assembler messages: bad instruction"):
                 (root / 'assemble-link.log').write_text(text)
                 with self.assertRaises(RuntimeError):
-                    image_limit(run, row, RuntimeError('assemble-link failed; inspect retained log'))
+                    image_limit(run, row, link)
             with self.assertRaises(RuntimeError):
-                image_limit(run, row, RuntimeError('gdb-backend failed; inspect retained log'))
+                image_limit(run, row, CommandFailed('gdb-backend', root / 'gdb-backend.log',
+                                                    'failed'))
+            #  A link whose text happens to read like the overflow is not one.
             (root / 'assemble-link.log').write_text("region `FLASH' overflowed by 8 bytes")
-            result = image_limit(run, row, RuntimeError('assemble-link failed; inspect retained log'))
+            with self.assertRaises(RuntimeError):
+                image_limit(run, row, RuntimeError('assemble-link failed with exit 1'))
+            result = image_limit(run, row, link)
             self.assertEqual(result['verdict'], 'selected-image-limit')
             self.assertEqual(result['overflow_bytes'], {'FLASH': 8})
+            self.assertEqual(result['image'], sizes)
+            #  With no recorded limit the overflow fails, with its sizes and the row.
+            with self.assertRaisesRegex(RuntimeError, 'FLASH 32776 of 32768, over by 8 .*'
+                                        'records no profile_limit'):
+                image_limit(run, {'mode': 'execute'}, link)
+
+    def test_the_corpus_line_gives_each_region_and_section(self):
+        from backend import describe_sizes
+        from backend_corpus import corpus_line
+        sizes = {'regions': {'FLASH': {'used': 12034, 'limit': 32768},
+                             'RAM': {'used': 300, 'limit': 12288}},
+                 'sections': {'.isr_vector': 192, '.text': 11800, '.data': 42, '.bss': 258}}
+        self.assertEqual(describe_sizes(sizes),
+                         'FLASH 12034 of 32768 (.isr_vector 192, .text 11800, .data 42); '
+                         'RAM 300 of 12288 (.data 42, .bss 258)')
+        line = corpus_line({'fixture': 'runtime/x', 'optimize': 'size', 'specialize': 'auto',
+                            'verdict': 'executed', 'image': sizes})
+        self.assertEqual(line, 'cortex corpus: runtime/x size/auto executed: '
+                               + describe_sizes(sizes))
+
+    def test_a_limit_no_profile_meets_is_stale(self):
+        from backend_corpus import stale_limits
+        fits = {'regions': {'FLASH': {'used': 30000, 'limit': 32768},
+                            'RAM': {'used': 24, 'limit': 12288}}, 'sections': {}}
+        rows = {'runtime/a': {'mode': 'execute', 'profile_limit': 'selected-image', 'reason': 'r'},
+                'runtime/b': {'mode': 'execute', 'profile_limit': 'selected-image', 'reason': 'r'},
+                'runtime/c': {'mode': 'execute'}}
+        results = [{'fixture': 'runtime/a', 'optimize': 'none', 'specialize': 'off',
+                    'status': 'passed', 'verdict': 'executed', 'image': fits},
+                   {'fixture': 'runtime/b', 'optimize': 'none', 'specialize': 'off',
+                    'status': 'passed', 'verdict': 'selected-image-limit'},
+                   {'fixture': 'runtime/b', 'optimize': 'size', 'specialize': 'auto',
+                    'status': 'passed', 'verdict': 'executed', 'image': fits},
+                   {'fixture': 'runtime/c', 'optimize': 'none', 'specialize': 'off',
+                    'status': 'passed', 'verdict': 'executed', 'image': fits}]
+        stale = stale_limits(rows, results)
+        self.assertEqual(len(stale), 1)
+        self.assertIn('runtime/a: every profile fits', stale[0])
+        self.assertIn('remove profile_limit', stale[0])
+
+    def test_a_profile_may_be_written_as_the_log_prints_it(self):
+        from backend_corpus import profile_name
+        self.assertEqual(profile_name('none/off'), 'none-off')
+        self.assertEqual(profile_name('speed-all'), 'speed-all')
+
+    def test_missing_tools_are_refused_naming_the_path_and_option(self):
+        from setup import installed_tools
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(SystemExit) as refused:
+                installed_tools(Path(directory) / 'absent')
+            self.assertIn(str(Path(directory).resolve() / 'absent'), str(refused.exception))
+            self.assertIn('--tools', str(refused.exception))
+            self.assertIn('arm-none-eabi-gcc', str(refused.exception))
+
+    def test_a_failed_command_names_its_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = Run(root, root)
+            with self.assertRaisesRegex(RuntimeError, 'compile failed with exit 3; inspect '
+                                        + str(root / 'compile.log')):
+                run.command('compile', [sys.executable, '-c', 'raise SystemExit(3)'])
+            with self.assertRaisesRegex(RuntimeError, 'reached its 0.5-second limit'):
+                run.command('slow', [sys.executable, '-c', 'import time; time.sleep(5)'],
+                            timeout=0.5)
+
+    def test_a_firmware_failure_names_its_case(self):
+        from firmware import case
+        with self.assertRaisesRegex(RuntimeError, 'compiler firmware dma at size/auto: '
+                                    'compile failed with exit 1; inspect /x/compile.log'):
+            with case('dma at size/auto'):
+                raise RuntimeError('compile failed with exit 1; inspect /x/compile.log')
+
+    def test_a_timed_out_program_says_the_fixture_ran_too_long(self):
+        from backend import timed_out
+        from run import CommandFailed
+        class Running:
+            returncode = None
+            def poll(self):
+                return None
+        class Exited:
+            returncode = 1
+            def poll(self):
+                return 1
+        error = CommandFailed('gdb-backend', Path('/x/gdb-backend.log'), 'timed out')
+        text = str(timed_out(error, Running(), 20.4))
+        self.assertIn('ran for 20.4 s under QEMU', text)
+        self.assertIn('20-second session limit', text)
+        self.assertIn('the fixture takes longer', text)
+        self.assertIn('/x/gdb-backend.log', text)
+        self.assertIn('QEMU exited with status 1', str(timed_out(error, Exited(), 3.0)))
+
+    def test_the_inventory_names_the_row_to_write(self):
+        import shutil
+        from unittest.mock import patch
+        import backend_corpus
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'cortex-m'
+            shutil.copytree(backend_corpus.COUNTERPARTS, root)
+            record = json.loads((root / 'corpus.json').read_text())
+            removed = 'runtime/word-count'
+            del record['fixtures'][removed]
+            record['fixtures']['runtime/no-such-fixture'] = {'mode': 'execute'}
+            (root / 'corpus.json').write_text(json.dumps(record))
+            with patch('backend_corpus.COUNTERPARTS', root):
+                with self.assertRaises(RuntimeError) as refused:
+                    backend_corpus.inventory()
+            text = str(refused.exception)
+            self.assertIn(removed + ' has no row; add "' + removed + '": {"mode": "execute"}', text)
+            self.assertIn('runtime/no-such-fixture has a row and no fixture', text)
+            self.assertEqual(text.count('\n'), 2)
 
     def test_compact_images_are_bounded_before_assembler(self):
         from backend import preflight
@@ -364,9 +495,9 @@ class ProbeFailures(unittest.TestCase):
             run, stack = self.server_run(root)
             with stack:
                 import run as run_module
-                for lines, problem in ((('fail',), 'failed; inspect retained log'),
+                for lines, problem in ((('fail',), 'failed; inspect .*gdb-bad.log'),
                                        (('python', 'assert False, "no"', 'end'),
-                                        'failed; inspect retained log'),
+                                        'failed; inspect .*gdb-bad.log'),
                                        (('die',), 'lost its debugger'),
                                        (('sleep 5',), 'timed out')):
                     name = self.script(root, 'bad.gdb', *lines)

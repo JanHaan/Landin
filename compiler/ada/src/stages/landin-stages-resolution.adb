@@ -167,6 +167,58 @@ package body Landin.Stages.Resolution is
            (Source, Where, Offered);
       end Near_In_Module;
 
+      --  Whether `Member` is a public declaration of `Module` in some arm of
+      --  a fixed conditional, which configuration did not select for this
+      --  target: the member exists for another system, not misspelt.
+      function Declared_Under_Other_Arm
+        (Module : Landin.Modules.Module_Id;
+         Member : Landin.Source.Names.Name_Id) return Boolean;
+
+      function Declared_Under_Other_Arm
+        (Module : Landin.Modules.Module_Id;
+         Member : Landin.Source.Names.Name_Id) return Boolean is
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Source : constant Landin.Source.Source_Id :=
+                 Nth_Source (Context, Index);
+            begin
+               if Landin.Modules.Module_Of (Graph.all, Source) = Module then
+                  declare
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Landin.Syntax.Forest.Tree_Of (Trees.all, Source);
+                  begin
+                     for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+                     loop
+                        if Syn.Kind (Of_Tree.all, Node) = Syn.Fixed_Arm then
+                           for Position in 1 .. Syn.Fixed_Declaration_Count
+                             (Of_Tree.all, Node)
+                           loop
+                              declare
+                                 Declared : constant Syn.Node_Id :=
+                                   Syn.Nth_Fixed_Declaration
+                                     (Of_Tree.all, Node, Position);
+                              begin
+                                 if Syn.Has_Name
+                                      (Syn.Kind (Of_Tree.all, Declared))
+                                   and then Syn.Name (Of_Tree.all, Declared)
+                                     = Member
+                                   and then Syn.Is_Public
+                                     (Of_Tree.all, Declared)
+                                 then
+                                    return True;
+                                 end if;
+                              end;
+                           end loop;
+                        end if;
+                     end loop;
+                  end;
+               end if;
+            end;
+         end loop;
+         return False;
+      end Declared_Under_Other_Arm;
+
       procedure Report_Reserved (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
       procedure Report_Reserved (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
@@ -1224,6 +1276,24 @@ package body Landin.Stages.Resolution is
                              (Written.all, Any_Member),
                            Because => "declared without `public` here",
                            Into    => Found);
+                     elsif Member_Name /= Landin.Source.Names.No_Name
+                       and then Declared_Under_Other_Arm
+                         (Imported, Member_Name)
+                     then
+                        Names.Report
+                          (Item    => Names.Unresolved_Name,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Node),
+                           Message => "module `" & Spelled (Prefix_Name)
+                                      & "` declares `"
+                                      & Spelled (Member_Name)
+                                      & "` only for another target",
+                           Note    => "[1480]: the module's `fixed if` does"
+                                      & " not select that declaration on"
+                                      & " this target; it is a call this"
+                                      & " system does not have, not a"
+                                      & " misspelling",
+                           Into    => Found);
                      elsif Member_Name /= Landin.Source.Names.No_Name then
                         Names.Report
                           (Item    => Names.Unresolved_Name,
@@ -1975,12 +2045,9 @@ package body Landin.Stages.Resolution is
                  (Item    => Modules_Report.Module_Not_Found,
                   Source  => Source,
                   Where   => Syn.Where (Tree, Node),
-                  Message => "module `" & Unbounded.To_String (Path)
-                             & "` is not found: no import root was given",
-                  Note    => "[1420]: an import outside the library is"
-                             & " found under the roots --root names;"
-                             & " compile the module's directory with"
-                             & " --root=DIR",
+                  Message => Modules_Report.Rootless_Message
+                    (Unbounded.To_String (Path)),
+                  Note    => Modules_Report.Rootless_Note,
                   Into    => Found);
                --  Every name the import would have bound is refused.
                if Syn.Import_Selection_Count (Tree, Node) > 0 then

@@ -1,0 +1,13 @@
+import core/cmp
+
+--- The largest of the items, for any type with an ordering.
+largest: (t: type is cmp.ordered, items: []t) -> (best: t) =
+    best = items[0]
+    for item in items do
+        if t.less(best, item) then best = item end if
+    end for
+end largest
+
+highest_reading: (readings: []u32) -> (high: u32) =
+    high = largest(readings)
+end highest_reading

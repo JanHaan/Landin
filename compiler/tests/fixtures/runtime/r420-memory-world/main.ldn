@@ -1,4 +1,5 @@
 import core/io
+import core/io/fake
 import core/text
 
 mut input: [5]u8 = [65, 66, 67, 68, 69]
@@ -14,10 +15,10 @@ public main: () -> (code: i32) =
     name_out: []u8 = "out"
     first: io.memory_file =
       (name: name_in, contents: input[0..<lenof input], length: 5, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+       readable: true, writable: false, state: io.closed_slot)
     second: io.memory_file =
       (name: name_out, contents: destination[0..<lenof destination], length: 0, cursor: 0,
-       readable: true, writable: true, opened: false, writing: false)
+       readable: true, writable: true, state: io.closed_slot)
     mut files: [2]io.memory_file
     files[0] = first
     files[1] = second
@@ -60,7 +61,7 @@ public main: () -> (code: i32) =
     world.close(opened) else (problem)
         close_failed = problem == io.io_failed
     end
-    if not close_failed or files[0].opened or state.close_calls <> 1 then return end if
+    if not close_failed or files[0].state <> io.closed_slot or state.closes <> 1 then return end if
     stdout: io.file = world.out()
     state.fail_write_at = 3
     mut partial_failed: bool = false
@@ -105,10 +106,10 @@ public main: () -> (code: i32) =
     end
     output_view := io.written(memory)
     if lenof output_view == 7 and output_view[6] == 103
-      and files[1].length == 7 and not files[1].opened
+      and files[1].length == 7 and files[1].state == io.closed_slot
       and destination[0] == 97 and destination[6] == 103
       and state.errors_used == 3 and errors[0] == 98 and errors[2] == 100
-      and state.open_calls == 2 and state.close_calls == 2
+      and state.opens == 2 and state.closes == 2
     then code = 42 end if
 end main
 

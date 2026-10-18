@@ -551,7 +551,15 @@ package body Landin.Commands is
                     & "; debug=" & Effective (C.Debug, "none")
                     & (if Asked.Command = C.Compile
                        then "; link=" & Effective (C.Link, Default_Link)
-                       else "") & LF);
+                       else "")
+                    --  D363: which library the request reads, since a
+                    --  copied compiler finds none and says so here.
+                    & "; library="
+                    & Effective (C.Library,
+                        (if Landin.Driver.Library.Located (Host) = ""
+                         then "none"
+                         else Landin.Driver.Library.Located (Host)))
+                    & LF);
                   for Text of Asked.Forwarded loop
                      US.Append (Transcript, "  " & J.Quoted (Text) & LF);
                   end loop;

@@ -76,6 +76,12 @@ It has control and trap effects, and the verifier refuses a returning body
 with a nonreturning signature. Generic and erased evidence signatures retain
 the same flag; it never becomes an ordinary IR value type.
 
+An erased call of a concept that no conformance in the program answers has
+no evidence table to load its function from, because no value of that `any`
+type can be made. Lowering gives it no call at all: the block ends in `Halt`
+at the call's site, before its arguments, as `compiler.unreachable()` does
+(D377).
+
 An instruction produces at most one value. Its position within its item is
 also its value identity, so there is no separate register-like namespace to
 keep synchronized. The verifier requires every operand to name a producing
@@ -334,6 +340,17 @@ uses one of them a single datum, and a hello-world over `core/io` 64
 routines rather than 546. A compilation without such an entry keeps
 everything, since anything in it may be what its consumer came for.
 
+A reached conformance's table still need not name every provider. Each
+table records its concept, and the backends keep entry N only where code
+that can run projects entry N from some table of that concept (D374): the
+concept rather than the table a projection names, because an `any` value
+may carry any of its concept's tables. Code that can run is what a root
+reaches, a root being a routine something other than a call names, or one
+without parameters, or the panic handler: a routine only a left-out entry's
+target calls projects nothing. An entry left out is a zero word in its
+place, so every offset D144 and D147 give stays put, and the routine it
+named is linked only if something else reaches it.
+
 ## Calls, evidence and failure
 
 A function value needs more than an address. Its signature descriptor
@@ -586,6 +603,14 @@ nominal shape identities and `Place_Address` storage endpoints. These are
 reached-type facts, not source origins or lifetime guarantees. Comparing compact
 dumps alone cannot detect a metadata-only change; focused detailed-dump tests
 cover that distinction. Pointee edges are printed without recursive expansion.
+
+`refine compile --emit=ir program.ldn -o program.ir` writes the compact dump
+of a program as its backend would receive it, after every pass the request's
+`--optimize` and `--specialize` run (D365); it is the way to see why a value
+lives where it does without reading the lowering or diffing two assemblies.
+`refine compile --help` names it. `--link` still decides whether
+`platform/linux` joins the program; `--debug` and `--panic-map`, which
+describe machine code, are refused with it.
 
 The dump has no reader and is not a stable serialization format. Comparing a
 fresh dump with the recorded one detects a change in lowering; it does not

@@ -6,3 +6,4 @@ program: main.ldn
 status: 42
 targets: linux-rv64
 levels: rv64gc, rv64gc_xtheadba
+level_status: rv64gc_xtheadba=43

@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import sys
 
@@ -136,7 +137,11 @@ def main():
             '-o', 'quit'])
         assert 'no locations (pending)' in stripped_session, stripped_session
         assert macho_identity.match(table, stripped, dsym) == identity
-        stripped_bytes = stripped.read_bytes()
+        #  D361: a failed check's report names its file; outside those
+        #  lines no filename is deployed.
+        stripped_bytes = re.sub(
+            rb'[^\x00\n]*: trap: (?:out_of_range|overflow|bad_conversion|unreachable)\n\x00',
+            b'', stripped.read_bytes())
         assert b'__debug_info' not in stripped_bytes
         for source in linux.SOURCES:
             assert os.fsencode(source.name) not in stripped_bytes

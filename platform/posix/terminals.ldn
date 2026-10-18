@@ -185,7 +185,7 @@ fixed if compiler.os == linux then
         raw.settings.output_modes = raw.settings.output_modes & ~linux.opost
         raw.settings.local_modes = raw.settings.local_modes & ~local
         raw.settings.control_modes = (raw.settings.control_modes & ~control)
-                                      | linux.cs8
+                                     | linux.cs8
         raw.settings.characters[linux.vmin] = 1
         raw.settings.characters[linux.vtime] = 0
     end system_raw_mode
@@ -340,7 +340,7 @@ else
                                     & ~flags(libc.opost)
         raw.settings.local_modes = raw.settings.local_modes & ~local
         raw.settings.control_modes = (raw.settings.control_modes & ~control)
-                                      | flags(libc.cs8)
+                                     | flags(libc.cs8)
         raw.settings.characters[libc.vmin] = 1
         raw.settings.characters[libc.vtime] = 0
     end system_raw_mode
@@ -366,13 +366,29 @@ else
         end for
     end system_same_mode
 
+    fixed if compiler.os == freebsd then
+        --  FreeBSD's `posix_openpt` takes O_CLOEXEC, so the controller is
+        --  closed on exec from the moment it exists, as every descriptor
+        --  this module makes is (D314).
+        controller_flags: i32 = libc.o_rdwr | libc.o_noctty | libc.o_cloexec
+    else
+        --  Darwin's `posix_openpt` documents only O_RDWR and O_NOCTTY, so
+        --  the flag is set just after: a program another thread executes
+        --  in between may inherit the controller, which Darwin's interface
+        --  leaves this module no way to close.
+        controller_flags: i32 = libc.o_rdwr | libc.o_noctty
+    end if
+
     system_open_pseudo_terminal: () -> (pair: pseudo_terminal) ! errno =
-        made: i32 = libc.posix_openpt(libc.o_rdwr | libc.o_noctty)
+        made: i32 = libc.posix_openpt(controller_flags)
         fail terminal_failure() when made < 0
         controller: descriptor = descriptor(made)
         undo forgotten(controller)
-        if libc.fcntl(made, libc.f_setfd, libc.fd_cloexec) <> 0
-          or libc.grantpt(made) <> 0 or libc.unlockpt(made) <> 0 then
+        if (controller_flags & libc.o_cloexec) == 0
+          and libc.fcntl(made, libc.f_setfd, libc.fd_cloexec) <> 0 then
+            fail terminal_failure()
+        end if
+        if libc.grantpt(made) <> 0 or libc.unlockpt(made) <> 0 then
             fail terminal_failure()
         end if
         mut name: path_room = zeroed
@@ -392,11 +408,4 @@ else
                         0)
         pair = (controller: controller, terminal: terminal)
     end system_open_pseudo_terminal
-
-    --  Close a descriptor just opened when what follows it fails.
-    forgotten: (opened: descriptor) -> none =
-        close(opened) else (problem)
-            _ = problem
-        end
-    end forgotten
 end if

@@ -95,8 +95,10 @@ public next: (inout source: generator) -> (value: u64) =
     source.s3 = rotate(source.s3, 45)
 end next
 
---- The next 32 bits of the sequence: the upper half of `next`, whose bits
---- the authors recommend over the lower.
+--- The next 32 bits of the sequence: the upper half of `next`.  Every
+--- bit of xoshiro256**'s output passes its authors' tests, unlike the low
+--- bits of xoshiro256+, so either half would do; the upper is the one
+--- their reference code keeps when it narrows a draw.
 public next_u32: (inout source: generator) -> (value: u32) =
     value = u32(next(source) >> 32)
 end next_u32
@@ -105,11 +107,11 @@ end next_u32
 --- bits below `bound`'s highest bit, drawn again while they are `bound`
 --- or more, which is never more often than not, so no value is favoured
 --- as a remainder would favour some.  It uses no division.  A `bound` of
---- zero has no value below it and traps.
+--- zero has no value below it, and traps as a remainder by zero does,
+--- with `overflow`.
 public below: (inout source: generator, bound: u64) -> (value: u64) =
-    if bound == 0 then
-        compiler.unreachable()
-    end if
+    --  A bound of zero is the remainder's zero divisor, which this checked
+    --  subtraction meets as `%` would.
     mut mask: u64 = bound - 1
     mask = mask | (mask >> 1)
     mask = mask | (mask >> 2)

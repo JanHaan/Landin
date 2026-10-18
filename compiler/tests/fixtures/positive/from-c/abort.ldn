@@ -1,0 +1,6 @@
+import platform/posix
+
+--- Stop the program from wherever it is, with status 2.
+give_up: () -> noreturn =
+    posix.exit(2)
+end give_up

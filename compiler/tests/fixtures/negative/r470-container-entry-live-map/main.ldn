@@ -1,6 +1,6 @@
-import hosted/heap
 import core/map
 import core/mem
+import hosted/heap
 
 node: type = struct
     value: i32
@@ -10,7 +10,7 @@ first: node = (value: 11)
 second: node = (value: 22)
 
 bad_insert: (inout value: map.map(u32, ptr node),
-             provider: heap.system) -> (result: i32)
+             provider: heap.heap) -> (result: i32)
             ! mem.out_of_memory | map.end_of_entries =
     mut position := map.entries()
     selected: map.entry(u32, ptr node) = try map.next_entry(value, position)
@@ -20,7 +20,7 @@ bad_insert: (inout value: map.map(u32, ptr node),
 end bad_insert
 
 bad_release: (inout value: map.map(u32, ptr node),
-              provider: heap.system) -> (result: i32)
+              provider: heap.heap) -> (result: i32)
              ! map.end_of_entries =
     mut position := map.entries()
     selected: map.entry(u32, ptr node) = try map.next_entry(value, position)

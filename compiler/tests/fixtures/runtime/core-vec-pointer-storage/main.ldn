@@ -1,5 +1,5 @@
+import core/arena
 import core/fault
-import core/mem
 import core/vec
 
 node: type = struct
@@ -15,16 +15,16 @@ public main: () -> (code: i32) =
     base: ptr mut u8 = addr bytes[0]
     extent: usize = 256
     allowance: usize = 2
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, base, extent)
+    mut arena_space: arena.space = zeroed
+    memory := arena.over_unchecked(arena_space, base, extent)
     mut space: fault.space = zeroed
-    counted := fault.over(space, arena, allowance)
+    counted := fault.over(space, memory, allowance)
     mut values := vec.new(item: ptr node)
 
-    vec.push(values, counted, addr first) else (ignored) _ = ignored end
-    vec.push(values, counted, addr second) else (ignored) _ = ignored end
+    vec.push(values, counted, addr first) else none
+    vec.push(values, counted, addr second) else none
     wanted: usize = 16
-    vec.reserve(values, counted, wanted) else (ignored) _ = ignored end
+    vec.reserve(values, counted, wanted) else none
 
     mut failed: bool = false
     too_many: usize = 32
@@ -35,20 +35,23 @@ public main: () -> (code: i32) =
 
     first_index: usize = 0
     second_index: usize = 1
-    vec.push(values, counted, addr third) else (ignored) _ = ignored end
+    vec.push(values, counted, addr third) else none
     removed: ptr node = vec.pop(values) else addr first
     removed_value: i32 = removed.val.value
     left: ptr node = vec.get(values, first_index) else addr third
     right: ptr node = vec.get(values, second_index) else addr third
 
+    --  The two permits went to the first block and to growing it in place
+    --  to sixteen, which the arena does for its latest block, so nothing was
+    --  freed; the refused reserve was refused growth and allocation alike.
     if failed and vec.length(values) == 2 and vec.capacity(values) == wanted
       and left.val.value == 7 and right.val.value == 11
-      and removed_value == 24 and fault.successes(counted) == 2
-      and fault.frees(counted) == 1
+      and removed_value == 24 and fault.successes(counted) == 1
+      and fault.growths(counted) == 1 and fault.frees(counted) == 0
     then
         vec.release(values, counted)
         if vec.length(values) == 0 and vec.capacity(values) == 0
-          and fault.frees(counted) == 2
+          and fault.frees(counted) == 1
         then
             code = 42
         else

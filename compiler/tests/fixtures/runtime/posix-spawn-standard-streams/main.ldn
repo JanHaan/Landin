@@ -1,0 +1,141 @@
+--  platform/posix's `spawn` gives a child every stream it is handed, from
+--  any of the parent's standard descriptors, closed on exec or not (D378).
+--  The program closes its own standard descriptors and makes, at each of
+--  them, one end of a connected socket pair, which `socket_pair` makes
+--  closed on exec, holding the other end itself.  A shell reads a line
+--  from its input and writes `o` and the line to its output and `e` and
+--  the line to its error stream, and the program reads what came back on
+--  each pair.  The streams are taken from the three descriptors in every
+--  permutation, each its own number among them, and with one descriptor
+--  given for two streams and for all three.  A stream that already was its
+--  own number was once left in place with its close-on-exec flag, so the
+--  exec closed it.  The parent's flags are unchanged by the spawn, and a
+--  stream that is its own number and not open in the parent is not open
+--  in the child, whose spawn still succeeds.  The failing case's number is
+--  the exit code.
+import core/cmp
+import core/io
+import core/text
+import platform/posix
+
+--  A check that did not hold.
+wrong: atom
+
+--  The standard descriptor numbered NUMBER.
+standard: (number: usize) -> (result: posix.descriptor) =
+    result = if number == 0 then posix.standard_input
+             elsif number == 1 then posix.standard_output
+             else posix.standard_error end if
+end standard
+
+--  Close a descriptor whose closing nothing here checks.
+shut: (closing: posix.descriptor) -> none =
+    posix.close(closing) else none
+end shut
+
+--  Which standard descriptor each stream is taken from, and whether the
+--  error stream's is left closed.
+case: type = struct
+    input: usize
+    output: usize
+    errors: usize
+    closed_errors: bool
+end case
+
+--  Run the shell with the streams CHOSEN names, every standard descriptor
+--  closed before and after, and hold what each pair carried back to what
+--  the streams taken from it were written.
+exercise: (chosen: case) -> none ! ... =
+    --  Placeholders hold 0 to 2, so that each pair made after one of them
+    --  is closed has its first end there and its second above 2.
+    for placeholder in usize(0)..<3 do
+        _ = placeholder
+        _ = try posix.open_at(posix.working_directory,
+                              text.host_over("/dev/null"), posix.reading, 0)
+    end for
+    mut parent: [3]posix.descriptor =
+        [posix.standard_input, posix.standard_input, posix.standard_input]
+    made: usize = if chosen.closed_errors then 2 else 3 end if
+    for number in usize(0)..<made do
+        try posix.close(standard(number))
+        ends: posix.connected_pair = try posix.socket_pair(posix.stream)
+        fail wrong when ends.first <> standard(number)
+          or i32(ends.second) < 3
+        fail wrong when not try posix.closed_on_exec(ends.first)
+        parent[number] = ends.second
+    end for
+    if chosen.closed_errors then try posix.close(posix.standard_error) end if
+    _ = try posix.write(parent[chosen.input], "t\n")
+    script: []u8 = "read -r line; printf 'o%s' \"$line\"; printf 'e%s' \"$line\" >&2; exit 0"
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    child: posix.process_id =
+        try posix.spawn(text.host_over("/bin/sh"), arguments[0..<2],
+                        variables[0..<1],
+                        (input: standard(chosen.input),
+                         output: standard(chosen.output),
+                         errors: standard(chosen.errors)))
+    --  The parent's ends at 0 to 2 are as they were, closed on exec.
+    for number in usize(0)..<made do
+        fail wrong when not try posix.closed_on_exec(standard(number))
+        shut(standard(number))
+    end for
+    status: posix.child_status = try posix.wait(child)
+    match status.how
+        posix.exited(code): fail wrong when code <> 0
+        posix.signalled(signal): fail wrong when signal >= 0
+    end match
+    for number in usize(0)..<made do
+        mut expected: [4]u8 = zeroed
+        mut length: usize = 0
+        if chosen.output == number then
+            expected[0] = u8('o')
+            expected[1] = u8('t')
+            length = 2
+        end if
+        if chosen.errors == number and not chosen.closed_errors then
+            expected[length] = u8('e')
+            expected[length + 1] = u8('t')
+            length += 2
+        end if
+        mut room: [8]u8 = zeroed
+        mut total: usize = 0
+        loop do
+            part: usize = try posix.read(parent[number], room[total..<8])
+            break when part == 0
+            total += part
+        end loop
+        shut(parent[number])
+        fail wrong when cmp.compare(room[0..<total],
+                                    expected[0..<length]) <> cmp.equal
+    end for
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    cases: [9]case = [
+        (input: 0, output: 1, errors: 2, closed_errors: false),
+        (input: 1, output: 0, errors: 2, closed_errors: false),
+        (input: 0, output: 2, errors: 1, closed_errors: false),
+        (input: 2, output: 1, errors: 0, closed_errors: false),
+        (input: 1, output: 2, errors: 0, closed_errors: false),
+        (input: 2, output: 0, errors: 1, closed_errors: false),
+        (input: 0, output: 0, errors: 2, closed_errors: false),
+        (input: 1, output: 1, errors: 1, closed_errors: false),
+        (input: 0, output: 1, errors: 2, closed_errors: true)]
+    shut(posix.standard_input)
+    shut(posix.standard_output)
+    shut(posix.standard_error)
+    mut number: i32 = 0
+    for chosen in cases do
+        inc number
+        exercise(chosen) else (problem)
+            _ = problem
+            code = number
+            return
+        end
+    end for
+    code = 42
+end main

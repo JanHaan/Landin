@@ -1,6 +1,6 @@
+import core/arena
 import core/cmp
 import core/map
-import core/mem
 
 arena_key: type = struct
     identity: u64
@@ -35,40 +35,40 @@ public main: () -> (code: i32) =
     --  The first eight-slot table and its sixteen-slot replacement fit. The
     --  next bucket extent does not, even before its key and value extents.
     mut backing: [1600]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], lenof backing)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], lenof backing)
     mut value := map.new(key: arena_key, item: i32)
 
-    map.insert(value, arena, key(1), 101) else (ignored) _ = ignored end
-    map.insert(value, arena, key(2), 102) else (ignored) _ = ignored end
-    map.insert(value, arena, key(3), 103) else (ignored) _ = ignored end
-    map.insert(value, arena, key(4), 104) else (ignored) _ = ignored end
-    map.insert(value, arena, key(5), 105) else (ignored) _ = ignored end
-    map.insert(value, arena, key(6), 106) else (ignored) _ = ignored end
+    map.insert(value, memory, key(1), 101) else none
+    map.insert(value, memory, key(2), 102) else none
+    map.insert(value, memory, key(3), 103) else none
+    map.insert(value, memory, key(4), 104) else none
+    map.insert(value, memory, key(5), 105) else none
+    map.insert(value, memory, key(6), 106) else none
 
     --  Collision-chain replacement allocates nothing. Key seven reuses the
     --  tombstone left by deletion; key eight grows the table to sixteen slots.
-    before_update: usize = mem.arena_used(arena)
-    map.insert(value, arena, key(6), 166) else (ignored) _ = ignored end
-    updated: bool = mem.arena_used(arena) == before_update and map.length(value) == 6
+    before_update: usize = arena.used(memory)
+    map.insert(value, memory, key(6), 166) else none
+    updated: bool = arena.used(memory) == before_update and map.length(value) == 6
                     and has(value, 6, 166)
-    map.remove(value, key(1)) else (ignored) _ = ignored end
-    map.insert(value, arena, key(7), 107) else (ignored) _ = ignored end
+    map.remove(value, key(1)) else none
+    map.insert(value, memory, key(7), 107) else none
 
-    map.insert(value, arena, key(8), 108) else (ignored) _ = ignored end
-    map.insert(value, arena, key(9), 109) else (ignored) _ = ignored end
-    map.insert(value, arena, key(10), 110) else (ignored) _ = ignored end
-    map.insert(value, arena, key(11), 111) else (ignored) _ = ignored end
-    map.insert(value, arena, key(12), 112) else (ignored) _ = ignored end
-    map.insert(value, arena, key(13), 113) else (ignored) _ = ignored end
+    map.insert(value, memory, key(8), 108) else none
+    map.insert(value, memory, key(9), 109) else none
+    map.insert(value, memory, key(10), 110) else none
+    map.insert(value, memory, key(11), 111) else none
+    map.insert(value, memory, key(12), 112) else none
+    map.insert(value, memory, key(13), 113) else none
     grown: bool = map.length(value) == 12 and has(value, 2, 102)
                   and has(value, 7, 107) and has(value, 13, 113)
 
     --  Twelve-of-sixteen pressure requests capacity 32. Bounded arena
     --  exhaustion reports OOM before publication, preserving the old map.
-    before_failure: usize = mem.arena_used(arena)
+    before_failure: usize = arena.used(memory)
     mut exhausted: bool = false
-    map.insert(value, arena, key(14), 114) else (problem)
+    map.insert(value, memory, key(14), 114) else (problem)
         _ = problem
         exhausted = true
     end
@@ -78,20 +78,18 @@ public main: () -> (code: i32) =
         fourteen_missing = true
         i32(0)
     end
-    preserved: bool = exhausted and mem.arena_used(arena) == before_failure
+    preserved: bool = exhausted and arena.used(memory) == before_failure
                       and map.length(value) == 12 and fourteen_missing
                       and has(value, 2, 102) and has(value, 6, 166)
                       and has(value, 13, 113)
 
     --  Arena free is deliberately a no-op. Release still drains and resets
     --  the public map composition to its logical empty state.
-    before_release: usize = mem.arena_used(arena)
-    map.release(value, arena)
+    before_release: usize = arena.used(memory)
+    map.release(value, memory)
     released: bool = map.length(value) == 0
-                     and mem.capacity(value.buckets) == 0
-                     and mem.capacity(value.keys) == 0
-                     and mem.capacity(value.values) == 0
-                     and mem.arena_used(arena) == before_release
+                     and map.slots(value) == 0 and map.capacity(value) == 0
+                     and arena.used(memory) == before_release
 
     if updated and grown and preserved and released then
         code = 42

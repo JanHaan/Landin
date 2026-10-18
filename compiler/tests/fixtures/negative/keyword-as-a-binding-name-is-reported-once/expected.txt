@@ -1,0 +1,6 @@
+error[L0100]: `from` is a keyword, and no keyword is available as a name
+  --> ../tests/fixtures/negative/keyword-as-a-binding-name-is-reported-once/program.ldn:2:5
+  |
+2 |     from := start
+  |     ^^^^
+  = note: [1760]: a word the keyword rule spells is that keyword everywhere, so the binding needs another name

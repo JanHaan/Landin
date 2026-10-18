@@ -30,7 +30,17 @@ end system_value
 --- host's PTRDIFF_MAX before asking the host for memory.  Any other failure
 --- to obtain memory is reported through mem.out_of_memory, before the
 --- provider's own state changes.
-public system: type = system_value
+---
+--- Freeing trusts the two words this heap keeps before every block: the
+--- extent it frees is the one they hold, and the `size` passed is not
+--- read.  So freeing a block it did not give, freeing one twice, or
+--- writing below a block's first byte is undefined, as it is with C's
+--- `free`; nothing here can tell such a block from one of its own.  A
+--- block larger than the largest class is unmapped when it is freed, and
+--- a refusal to unmap, which the system gives only for an address or a
+--- length it never mapped, keeps the pages, costing their memory and
+--- nothing else.
+public heap: type = system_value
 
 word: usize = sizeof usize
 
@@ -164,10 +174,11 @@ host_free: (block: usize) -> none =
         link.val = free_slots[index]
         free_slots[index] = origin
     else
+        --  A refusal means the header no longer holds a mapping of this
+        --  heap's, and free has no failure to report it by: the pages, if
+        --  any, stay mapped.
         base: ptr mut u8 = ptr(origin)
-        posix.unmap(base, held) else (problem)
-            _ = problem
-        end
+        posix.unmap(base, held) else none
     end if
 end host_free
 
@@ -190,7 +201,7 @@ unit_for: (size: usize, alignment: usize) -> (unit: usize) =
     end if
 end unit_for
 
-system_alloc: (self: system, size: usize, alignment: usize)
+system_alloc: (self: heap, size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =
     _ = self.reserved
     unit: usize = unit_for(size, alignment)
@@ -200,7 +211,7 @@ system_alloc: (self: system, size: usize, alignment: usize)
     block = ptr(address)
 end system_alloc
 
-system_free: (self: system, block: ptr mut u8, size: usize) -> none =
+system_free: (self: heap, block: ptr mut u8, size: usize) -> none =
     _ = self.reserved
     _ = size
     host_free(usize(block))
@@ -304,7 +315,7 @@ host_resize: (block: usize, new_size: usize, unit: usize)
     resized = 0
 end host_resize
 
-system_grow: (self: system, block: ptr mut u8,
+system_grow: (self: heap, block: ptr mut u8,
               old_size: usize, new_size: usize, alignment: usize)
              -> (grown: bool) =
     _ = self.reserved
@@ -313,7 +324,7 @@ system_grow: (self: system, block: ptr mut u8,
     grown = host_grow(usize(block), new_size)
 end system_grow
 
-system_resize: (self: system, block: ptr mut u8,
+system_resize: (self: heap, block: ptr mut u8,
                 old_size: usize, new_size: usize, alignment: usize)
                -> (moved: ptr mut u8) ! mem.out_of_memory =
     _ = self.reserved
@@ -327,11 +338,11 @@ system_resize: (self: system, block: ptr mut u8,
     moved = try mem.relocate(self, block, old_size, new_size, alignment)
 end system_resize
 
-system is mem.allocator (alloc: system_alloc, grow: system_grow,
-                         resize: system_resize, free: system_free)
+heap is mem.allocator (alloc: system_alloc, grow: system_grow,
+                       resize: system_resize, free: system_free)
 
 --- Return a handle to the host heap. Making one does not allocate; callers
 --- retain and free each successful allocation explicitly.
-public host: () -> (handle: system) =
+public new: () -> (handle: heap) =
     handle = (reserved: 0)
-end host
+end new

@@ -1,5 +1,6 @@
 --  Sensors of different kinds behind one concept, polled through `any`,
 --  their readings kept in a list whose memory the caller lends.
+import core/arena
 import core/mem
 import core/vec
 
@@ -51,8 +52,8 @@ end poll
 public main: () -> (code: i32) =
     mut bytes: [256]u8 = zeroed
     --  This local backing requires manual lifetime discipline for results.
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr bytes[0], lenof bytes)
+    mut space: arena.space = zeroed
+    bump := arena.over_unchecked(space, addr bytes[0], lenof bytes)
 
     mut kitchen: thermometer = (celsius: 21)
     mut hall: thermometer = (celsius: 19)
@@ -64,11 +65,11 @@ public main: () -> (code: i32) =
     sensors[2] = any(addr cellar)
     sensors[3] = any(addr hall)
 
-    mut readings := poll(arena, sensors[0..<4]) else (problem)
+    mut readings := poll(bump, sensors[0..<4]) else (problem)
         code = if problem == jammed then 2 else 1 end if
         return
     end
-    defer vec.release(readings, arena)
+    defer vec.release(readings, bump)
 
     code = 0
     for value in vec.used(readings) do

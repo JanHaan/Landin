@@ -1,0 +1,10 @@
+class: negative
+summary: D367 `elif` from another language is refused once, naming `elsif`, and its fix writes it
+program: program.ldn
+codes: L0110
+fixed: program.fixed
+constructs: 1810
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/foreign-elif-is-named/program.ldn
+status: 1

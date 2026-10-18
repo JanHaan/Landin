@@ -1,0 +1,11 @@
+error[L0103]: Landin writes `<>` for inequality, not `!=`
+  --> ../tests/fixtures/negative/foreign-bang-equal-is-named/program.ldn:2:14
+  |
+2 |     d = if x != 3 then 1 else 0 end if
+  |              ^^
+  --> ../tests/fixtures/negative/foreign-bang-equal-is-named/program.ldn:2:9
+  |
+2 |     d = if x != 3 then 1 else 0 end if
+  |         ^^ this branch
+  = note: [0350]: the comparisons are `==`, `<>`, `<`, `<=`, `>` and `>=`
+  = help: write `<>`

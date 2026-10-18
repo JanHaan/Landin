@@ -1,5 +1,5 @@
 /* External generated-code execution harness, not a language linker/startup feature. */
-ENTRY(reset)
+ENTRY(_landin_harness_reset)
 MEMORY {
   FLASH (rx) : ORIGIN = 0, LENGTH = 32K
   RAM (rw) : ORIGIN = 0x20000000, LENGTH = 16K

@@ -8,7 +8,7 @@ import hosted/heap
 
 mut blocks: [1500]usize
 
-take: (inout state: heap.system, size: usize, alignment: usize)
+take: (inout state: heap.heap, size: usize, alignment: usize)
       -> (address: usize) =
     block: ptr mut u8 = mem.allocate(state, size, alignment) else (problem)
         _ = problem
@@ -18,12 +18,12 @@ take: (inout state: heap.system, size: usize, alignment: usize)
     address = usize(block)
 end take
 
-give: (inout state: heap.system, address: usize, size: usize) -> none =
+give: (inout state: heap.heap, address: usize, size: usize) -> none =
     block: ptr mut u8 = ptr(address)
     mem.free(state, block, size)
 end give
 
-refused: (inout state: heap.system, size: usize, alignment: usize)
+refused: (inout state: heap.heap, size: usize, alignment: usize)
          -> (yes: bool) =
     yes = false
     block: ptr mut u8 = mem.allocate(state, size, alignment) else (problem)
@@ -34,7 +34,7 @@ refused: (inout state: heap.system, size: usize, alignment: usize)
 end refused
 
 public main: () -> (code: i32) =
-    mut state: heap.system = heap.host()
+    mut state: heap.heap = heap.new()
 
     --  A freed slot is reused before anything else in its class.
     code = 1

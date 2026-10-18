@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix's spawn gives a child each stream taken from the parent's standard descriptors 0 to 2 while each is a socket closed on exec, in every permutation, with one descriptor given for two streams and for all three, and a stream already its own number among them, leaves the parent's close-on-exec flags as they were, and leaves a stream that is its own number and not open in the parent closed in the child
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1210, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

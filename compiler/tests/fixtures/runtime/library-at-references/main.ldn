@@ -1,3 +1,4 @@
+import core/arena
 import core/map
 import core/mem
 import core/spill
@@ -7,8 +8,8 @@ exercise: () -> (ok: bool)
           ! mem.out_of_memory | mem.out_of_bounds | mem.empty | map.missing =
     ok = false
     mut backing: [1024]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], lenof backing)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], lenof backing)
 
     mut numbers := vec.new(item: i32)
     mut refused: bool = false
@@ -17,8 +18,8 @@ exercise: () -> (ok: bool)
         refused = true
     end
     return when not refused
-    try vec.push(numbers, arena, 1)
-    try vec.push(numbers, arena, 2)
+    try vec.push(numbers, memory, 1)
+    try vec.push(numbers, memory, 2)
     second: ptr mut i32 = try vec.at(numbers, usize(1))
     second.val = 20
     last: i32 = try vec.last(numbers)
@@ -32,23 +33,23 @@ exercise: () -> (ok: bool)
     return when not refused
 
     mut few := spill.new(item: i32, inline_slots: 2)
-    try spill.push(few, arena, 5)
+    try spill.push(few, memory, 5)
     inline_slot: ptr mut i32 = try spill.at(few, usize(0))
     inline_slot.val = 50
     inline_value: i32 = try spill.get(addr few, usize(0))
     return when inline_value <> 50
-    try spill.push(few, arena, 6)
-    try spill.push(few, arena, 7)
+    try spill.push(few, memory, 6)
+    try spill.push(few, memory, 7)
     spilled_slot: ptr mut i32 = try spill.at(few, usize(2))
     spilled_slot.val = 70
     spilled_value: i32 = try spill.get(addr few, usize(2))
     return when spilled_value <> 70 or spill.length(addr few) <> 3
 
     mut table := map.new(key: u32, item: i32)
-    try map.reserve(table, arena, usize(10))
+    try map.reserve(table, memory, usize(10))
     reserved: usize = map.capacity(table)
     return when reserved < 10 or map.slots(table) <> 16
-    try map.insert(table, arena, u32(7), 1)
+    try map.insert(table, memory, u32(7), 1)
     return when not map.contains(table, u32(7)) or map.contains(table, u32(8))
     stored: ptr mut i32 = try map.at(table, u32(7))
     stored.val = 70
@@ -63,16 +64,16 @@ exercise: () -> (ok: bool)
     map.clear(table)
     return when map.length(table) <> 0 or map.capacity(table) <> reserved
       or map.contains(table, u32(7))
-    try map.insert(table, arena, u32(7), 2)
-    try map.insert(table, arena, u32(8), 3)
+    try map.insert(table, memory, u32(7), 2)
+    try map.insert(table, memory, u32(8), 3)
     again: i32 = try map.get(table, u32(8))
     return when again <> 3 or map.length(table) <> 2
-    try map.reserve(table, arena, usize(4))
+    try map.reserve(table, memory, usize(4))
     return when map.capacity(table) <> reserved
 
-    map.release(table, arena)
-    spill.release(few, arena)
-    vec.release(numbers, arena)
+    map.release(table, memory)
+    spill.release(few, memory)
+    vec.release(numbers, memory)
     ok = true
 end exercise
 

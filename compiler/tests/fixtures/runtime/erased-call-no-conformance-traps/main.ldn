@@ -1,0 +1,16 @@
+--  D377: an `any outlet` made outside the language, from raw storage through
+--  an untracked pointer [0470], reaches an erased call no conformance
+--  answers.  There is no table to call through, and the call traps as
+--  `unreachable` at its own site before evaluating its arguments.
+outlet: type = concept (target: type)
+    put: (self: ptr mut target, byte: u8) -> none
+end outlet
+
+mut words: [2]usize = [0, 0]
+
+public main: () -> (code: i32) =
+    code = 1
+    forged: ptr any outlet = ptr(usize(addr words[0]))
+    value: any outlet = forged.val
+    value.put(u8('x'))
+end main

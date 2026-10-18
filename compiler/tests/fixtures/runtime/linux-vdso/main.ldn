@@ -7,6 +7,7 @@
 --  hash table counts the symbols.  Each check that fails returns its own
 --  code.
 import platform/linux
+import platform/linux/vdso
 
 --  Room for a copy of the image: the kernel's is two pages or so.
 mut copy: [65536]u8
@@ -24,7 +25,7 @@ end by_system_call
 
 --  The clock `clock` read through the vDSO function at ADDRESS.
 by_vdso: (address: usize, clock: i32) -> (at: i64) =
-    function: linux.vdso_clock_gettime = linux.vdso_clock_gettime(address)
+    function: vdso.clock_gettime = vdso.clock_gettime(address)
     mut record: linux.timespec = zeroed
     at = -1
     return when function(clock, addr record) <> 0
@@ -52,8 +53,8 @@ end agrees
 --  Whether a lookup in the first LENGTH bytes of the copy returns without
 --  trapping and, when it finds the clock, finds it inside them.
 holds: (length: usize) -> (yes: bool) =
-    offset: usize = found_at(copy[0..<length], linux.vdso_clock_name,
-                             linux.vdso_version)
+    offset: usize = found_at(copy[0..<length], vdso.clock_symbol,
+                             vdso.clock_version)
     yes = offset == no_offset or offset < length
 end holds
 
@@ -127,29 +128,29 @@ hidden: u64 = 0x6fffff00
 no_offset: usize = 0 -% 1
 
 found_at: (bytes: []u8, name: []u8, version: []u8) -> (offset: usize) =
-    (found, offset: at) := linux.vdso_find(bytes, name, version)
+    (found, offset: at) := vdso.find(bytes, name, version)
     offset = if found then at else no_offset end if
 end found_at
 
 --  Where the auxiliary vector says the vDSO is.
 vdso_base: () -> (base: usize) =
-    (found: _, value) := linux.auxiliary(linux.at_sysinfo_ehdr)
+    (found: _, value) := linux.auxiliary(vdso.at_sysinfo_ehdr)
     base = usize(value)
 end vdso_base
 
 --  The vDSO's function NAME of VERSION's address, or zero.
 address_of: (name: []u8, version: []u8) -> (address: usize) =
-    (found, address: at) := linux.vdso_symbol(name, version)
+    (found, address: at) := vdso.symbol(name, version)
     address = if found then at else 0 end if
 end address_of
 
 public main: () -> (code: i32) =
-    (found: present, image) := linux.vdso_image()
+    (found: present, image) := vdso.kernel_image()
     code = 1
     return when not present or lenof image < 64 or lenof image > 65536
     code = 2
-    name: []u8 = linux.vdso_clock_name
-    version: []u8 = linux.vdso_version
+    name: []u8 = vdso.clock_symbol
+    version: []u8 = vdso.clock_version
     offset: usize = found_at(image, name, version)
     return when offset >= lenof image
     address: usize = address_of(name, version)

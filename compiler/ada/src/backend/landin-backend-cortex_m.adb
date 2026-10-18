@@ -5846,47 +5846,60 @@ package body Landin.Backend.Cortex_M is
          end;
       end loop;
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
-            declare
-               Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
-                 (Index);
-               Alias_Previous : constant Boolean := Index > 1
-                 and then Shares_Evidence_Table
-                   (Of_Unit, Landin.IR.Evidence_Id (Index - 1), Id);
-               Alias_Next : constant Boolean :=
-                 Index < Landin.IR.Evidence_Count (Of_Unit)
-                   and then Shares_Evidence_Table
-                     (Of_Unit, Id, Landin.IR.Evidence_Id (Index + 1));
-               Bytes : Landin.Targets.Byte_Count;
-               Alignment : Landin.Targets.Byte_Alignment;
-            begin
-               if not Alias_Previous then
-                  Field_Extent
-                    (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
-                     Facts, Bytes, Alignment);
-                  --  One section per physical table, including both
-                  --  aliases of a proven-identical dispatch table.
-                  Emit (".section .rodata.landin_evidence_"
-                    & Trimmed (Id'Image) & ",""a"",%progbits");
-                  Emit (".balign 4");
-                  Put (Evidence_Symbol (Id) & ":");
-                  if Alias_Next then
-                     Put (Evidence_Symbol
-                       (Landin.IR.Evidence_Id (Index + 1)) & ":");
+         declare
+            Kept : constant Kept_Entries :=
+              Kept_Evidence_Entries
+                (Of_Unit,
+                 (if Panic = null then Landin.IR.No_Item
+                  else Landin.Panics.Handler (Panic.all)));
+         begin
+            for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
+               declare
+                  Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
+                    (Index);
+                  Alias_Previous : constant Boolean := Index > 1
+                    and then Shares_Evidence_Table
+                      (Of_Unit, Landin.IR.Evidence_Id (Index - 1), Id);
+                  Alias_Next : constant Boolean :=
+                    Index < Landin.IR.Evidence_Count (Of_Unit)
+                      and then Shares_Evidence_Table
+                        (Of_Unit, Id, Landin.IR.Evidence_Id (Index + 1));
+                  Bytes : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  if not Alias_Previous then
+                     Field_Extent
+                       (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
+                        Facts, Bytes, Alignment);
+                     --  One section per physical table, including both
+                     --  aliases of a proven-identical dispatch table.
+                     Emit (".section .rodata.landin_evidence_"
+                       & Trimmed (Id'Image) & ",""a"",%progbits");
+                     Emit (".balign 4");
+                     Put (Evidence_Symbol (Id) & ":");
+                     if Alias_Next then
+                        Put (Evidence_Symbol
+                          (Landin.IR.Evidence_Id (Index + 1)) & ":");
+                     end if;
+                     Emit (".long " & Trimmed (Landin.Targets.Byte_Count'Image
+                       (Bytes)));
+                     Emit (".long " & Trimmed
+                       (Landin.Targets.Byte_Alignment'Image (Alignment)));
+                     for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
+                       (Of_Unit, Id) loop
+                        --  D374: an entry nothing can project is a zero word.
+                        if Is_Kept (Kept, Id, Entry_Index) then
+                           Emit (".long " & Symbol
+                             (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
+                               Entry_Index)));
+                        else
+                           Emit (".long 0");
+                        end if;
+                     end loop;
                   end if;
-                  Emit (".long " & Trimmed (Landin.Targets.Byte_Count'Image
-                    (Bytes)));
-                  Emit (".long " & Trimmed
-                    (Landin.Targets.Byte_Alignment'Image (Alignment)));
-                  for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
-                    (Of_Unit, Id) loop
-                     Emit (".long " & Symbol
-                       (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
-                         Entry_Index)));
-                  end loop;
-               end if;
-            end;
-         end loop;
+               end;
+            end loop;
+         end;
       end if;
       if Debug /= null then
          Unbounded.Append (Out_Text, Dwarf.Line_Sections

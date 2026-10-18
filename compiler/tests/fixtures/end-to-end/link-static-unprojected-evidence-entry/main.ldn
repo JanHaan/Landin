@@ -1,0 +1,34 @@
+--  A table keeps only the entries something can project (D374).  Nothing
+--  projects `loud`, through `any` or a generic, so its table holds a zero
+--  word there, the link drops `loud_thing`, and the C import only it
+--  names needs no C library: a static link goes ahead.
+extern(c) puts: (text: cstring) -> (result: i32)
+
+speaker: type = concept (t: type)
+    quiet: (self: ptr t) -> (value: i32)
+    loud: (self: ptr t) -> (value: i32)
+end speaker
+
+thing: type = struct
+    value: i32
+end thing
+
+quiet_thing: (self: ptr thing) -> (value: i32) =
+    value = self.val.value
+end quiet_thing
+
+loud_thing: (self: ptr thing) -> (value: i32) =
+    value = puts("never")
+end loud_thing
+
+thing is speaker (quiet: quiet_thing, loud: loud_thing)
+
+hush: (t: type is speaker, item: ptr t) -> (value: i32) =
+    value = t.quiet(item)
+end hush
+
+public main: () -> (code: i32) =
+    item: thing = (value: 1)
+    erased: any speaker = any(addr item)
+    code = erased.quiet() + hush(addr item) - 2
+end main

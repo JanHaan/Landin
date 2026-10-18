@@ -1,0 +1,54 @@
+--  D376: `else none` is a call's recovery wherever the call stands: a
+--  statement, a labelled call, an erased or function-value call, an `if`
+--  arm on one line or several, before the `if`'s own `else`, a `match` arm,
+--  a loop body and a call continued over lines.
+refused: atom
+left: atom
+right: atom
+side: type = left | right
+
+attempt: (flag: bool) -> none ! refused =
+    fail refused when flag
+end attempt
+
+poke: type = concept (t: type)
+    poke: (self: ptr mut t) -> none ! refused
+end poke
+
+cell: type = struct
+    n: u32
+end cell
+
+cell_poke: (self: ptr mut cell) -> none ! refused =
+    inc self.val.n
+    fail refused when self.val.n > 1
+end cell_poke
+
+cell is poke (poke: cell_poke)
+
+forms: (flag: bool, which: side) -> none =
+    attempt(flag) else none
+    attempt(flag: flag) else none
+    mut state: cell = (n: 0)
+    erased: any poke = any(addr state)
+    erased.poke() else none
+    through: (flag: bool) -> none ! refused = attempt
+    through(flag) else none
+    if flag then attempt(flag) else none end if
+    if flag then attempt(flag) else none else attempt(true) else none end if
+    if flag then
+        attempt(flag) else none
+    elsif not flag then
+        attempt(true) else none
+    end if
+    match which
+        left: attempt(flag) else none
+        right: attempt(true) else none
+    end match
+    for index in 0..<2 do
+        attempt(index == 1) else none
+    end for
+    attempt(
+        flag)
+        else none
+end forms

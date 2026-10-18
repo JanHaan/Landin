@@ -1,0 +1,2 @@
+--- The size of every read buffer.
+buffer_size: usize = 4096

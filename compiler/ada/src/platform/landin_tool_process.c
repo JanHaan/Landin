@@ -39,8 +39,31 @@ int landin_tool_capture(char *path, size_t capacity)
     return mkstemp(path);
 }
 
+/* Move SOURCE above the standard descriptors when it is one of them, once
+   for each number, recording the copy in MOVED: the descriptor every
+   action reads, or -1 with errno set.  A negative SOURCE is returned as it
+   is. */
+static int landin_tool_source(int source, int moved[3])
+{
+    if (source < 0 || source > STDERR_FILENO)
+        return source;
+    if (moved[source] < 0)
+        moved[source] = fcntl(source, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+    return moved[source];
+}
+
 /* A negative input inherits the caller's standard input; otherwise the
-   descriptor becomes the child's. */
+   descriptor becomes the child's.  A negative errors merges the error
+   stream into the capture.
+
+   A caller whose standard descriptors are closed has its capture files, and
+   its input, opened at those numbers, where an action replacing one of them
+   would destroy a source a later action still reads: the input made the
+   child's stdout, or the capture closed as its stdin.  So every source
+   among 0 to 2 is first moved above them, and each action reads a
+   descriptor no action writes; the moved copies are closed after the call.
+   A caller with no standard input of its own whose capture took that
+   number gives the child none rather than the capture. */
 int landin_tool_start(char *const args[], int input, int capture, int errors,
                       int *child)
 {
@@ -48,7 +71,13 @@ int landin_tool_start(char *const args[], int input, int capture, int errors,
     posix_spawn_file_actions_t actions;
     pid_t pid;
     int error;
-    int error_copy = -1;
+    int moved[3] = {-1, -1, -1};
+    const int no_input = input < 0
+        && (capture == STDIN_FILENO || errors == STDIN_FILENO);
+    const int given_input = input;
+    const int given_capture = capture;
+    const int given_errors = errors;
+    int index;
 
     *child = 0;
     error = posix_spawnattr_init(&attributes);
@@ -62,20 +91,18 @@ int landin_tool_start(char *const args[], int input, int capture, int errors,
     error = posix_spawnattr_setpgroup(&attributes, 0);
     if (error == 0)
         error = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
-    /* A parent with closed standard descriptors may allocate the error
-       capture as fd 1. Preserve it before the stdout action replaces fd 1. */
-    if (error == 0 && errors == STDOUT_FILENO && capture != STDOUT_FILENO) {
-        error_copy = fcntl(errors, F_DUPFD_CLOEXEC, 3);
-        if (error_copy < 0)
-            error = errno;
-        else
-            errors = error_copy;
+    if (error == 0) {
+        input = landin_tool_source(given_input, moved);
+        capture = landin_tool_source(given_capture, moved);
+        errors = landin_tool_source(given_errors, moved);
+        if ((given_input >= 0 && input < 0) || capture < 0
+            || (given_errors >= 0 && errors < 0))
+            error = errno != 0 ? errno : EBADF;
     }
+    /* Every source is above 2 now, so no duplication below reads a
+       descriptor an earlier one wrote. */
     if (error == 0 && input >= 0)
         error = posix_spawn_file_actions_adddup2(&actions, input, STDIN_FILENO);
-    if (error == 0 && input > STDERR_FILENO && input != capture
-        && input != errors)
-        error = posix_spawn_file_actions_addclose(&actions, input);
     if (error == 0)
         error = posix_spawn_file_actions_adddup2(&actions, capture, STDOUT_FILENO);
     /* A negative error descriptor requests the original merged stream. */
@@ -84,17 +111,23 @@ int landin_tool_start(char *const args[], int input, int capture, int errors,
                                                 errors < 0 ? STDOUT_FILENO
                                                            : errors,
                                                 STDERR_FILENO);
-    if (error == 0 && capture != STDOUT_FILENO && capture != STDERR_FILENO)
+    if (error == 0 && no_input)
+        error = posix_spawn_file_actions_addclose(&actions, STDIN_FILENO);
+    /* Each source once: the moved copies are closed on exec already, but
+       the caller's own are not. */
+    if (error == 0 && input >= 0)
+        error = posix_spawn_file_actions_addclose(&actions, input);
+    if (error == 0 && capture != input)
         error = posix_spawn_file_actions_addclose(&actions, capture);
-    if (error == 0 && errors >= 0 && errors != capture
-        && errors != STDOUT_FILENO && errors != STDERR_FILENO)
+    if (error == 0 && errors >= 0 && errors != capture && errors != input)
         error = posix_spawn_file_actions_addclose(&actions, errors);
     if (error == 0)
         error = posix_spawn(&pid, args[0], &actions, &attributes, args, environ);
     posix_spawn_file_actions_destroy(&actions);
     posix_spawnattr_destroy(&attributes);
-    if (error_copy >= 0)
-        close(error_copy);
+    for (index = 0; index <= STDERR_FILENO; index++)
+        if (moved[index] >= 0)
+            close(moved[index]);
     if (error == 0)
         *child = (int)pid;
     return error;

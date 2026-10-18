@@ -671,8 +671,18 @@ package body Landin.Formatting is
          begin
             if Operation /= Syn.No_Node then
                declare
-                  Left : constant Positive := First (Operation);
+                  Left : Positive := First (Operation);
                begin
+                  --  The tree keeps no node for parentheses that only
+                  --  group, so a parenthesized left operand begins at its
+                  --  `(`: one closed before H groups part of the operation
+                  --  rather than holding all of it.
+                  while Left > 1 and then Kind (Left - 1) = Tok.Left_Paren
+                    and then Matching (Left - 1) /= 0
+                    and then Matching (Left - 1) < H
+                  loop
+                     Left := Left - 1;
+                  end loop;
                   if Left > 1
                     and then Kind (Left - 1) in Tok.Kw_If | Tok.Kw_Elsif
                                              | Tok.Kw_While | Tok.Kw_When
@@ -925,5 +935,159 @@ package body Landin.Formatting is
       end loop;
       return Next = Natural (Before.Length) + 1;
    end Same_Things;
+
+   function Differences
+     (Original : Landin.Source.Snapshot;
+      Answer   : Result) return Difference_List
+   is
+      package Src renames Landin.Source;
+      subtype Line_Index is Natural;
+
+      Laid_Out : constant Src.Snapshot :=
+        Src.Create (1, Src.Name (Original), US.To_String (Answer.Text));
+      Count : constant Natural := Natural (Answer.Edits.Length);
+
+      --  Before (I) is how far the first I edits move the bytes after them.
+      type Shift_Array is array (Natural range <>) of Long_Long_Integer;
+      Before : Shift_Array (0 .. Count) := [others => 0];
+
+      Found : Difference_List;
+
+      --  Lines that end the text with their line end are followed by an
+      --  empty one in the line map; it is no line of the file.
+      function Lines (Item : Src.Snapshot) return Line_Index;
+
+      function Lines (Item : Src.Snapshot) return Line_Index is
+         Size : constant Src.Byte_Offset := Src.Length (Item);
+      begin
+         if Size = 0 then
+            return 0;
+         end if;
+         declare
+            Last : constant String := Src.Slice (Item, (Size - 1, Size));
+         begin
+            return Line_Index (Src.Line_Count (Item))
+              - (if Last (Last'First) in LF | CR then 1 else 0);
+         end;
+      end Lines;
+
+      function Ending (Item : Src.Snapshot; Line : Line_Index)
+        return String
+      is (Src.Slice
+            (Item, (Src.Line_Text_Span (Item, Src.Line_Number (Line)).Last,
+                    Src.Line_Span (Item, Src.Line_Number (Line)).Last)));
+
+      --  Line of Original against Line of the layout, which holds the
+      --  same things.
+      procedure Compare (Line, Wanted : Line_Index);
+
+      procedure Compare (Line, Wanted : Line_Index) is
+         Was  : constant String :=
+           Src.Line_Text (Original, Src.Line_Number (Line));
+         Want : constant String :=
+           Src.Line_Text (Laid_Out, Src.Line_Number (Wanted));
+      begin
+         if Was /= Want then
+            Found.Append (Difference'(Src.Line_Number (Line), Respaced,
+                           US.To_Unbounded_String (Want)));
+         elsif Ending (Original, Line) /= Ending (Laid_Out, Wanted) then
+            Found.Append (Difference'(Src.Line_Number (Line), Ended,
+                           US.To_Unbounded_String (Want)));
+         end if;
+      end Compare;
+
+      --  The blank lines after Line_Before and before Line_After, which the
+      --  layout writes as the lines between Laid_Before and Laid_After.
+      procedure Blank_Run
+        (Line_Before, Line_After : Line_Index;
+         Laid_Before, Laid_After : Line_Index);
+
+      procedure Blank_Run
+        (Line_Before, Line_After : Line_Index;
+         Laid_Before, Laid_After : Line_Index)
+      is
+         Kept : constant Integer := Laid_After - Laid_Before - 1;
+      begin
+         for Line in Line_Before + 1 .. Line_After - 1 loop
+            if Line - Line_Before <= Kept then
+               Compare (Line, Laid_Before + (Line - Line_Before));
+            else
+               Found.Append (Difference'(Src.Line_Number (Line), Removed,
+                              US.Null_Unbounded_String));
+            end if;
+         end loop;
+      end Blank_Run;
+
+      Total : constant Line_Index := Lines (Original);
+      Next_Edit  : Positive := 1;
+      Moved      : Natural := 0;
+      Last_Line  : Line_Index := 0;
+      Last_Laid  : Line_Index := 0;
+   begin
+      if Answer.Edits.Is_Empty then
+         return Found;
+      end if;
+      for Index in 1 .. Count loop
+         declare
+            Item : constant Landin.Diagnostics.Edit := Answer.Edits (Index);
+         begin
+            Before (Index) := Before (Index - 1)
+              + Long_Long_Integer
+                  (Landin.Diagnostics.Replacement (Item)'Length)
+              - Long_Long_Integer
+                  (Src.Length (Landin.Diagnostics.Span_Of (Item)));
+         end;
+      end loop;
+
+      for Line in 1 .. Total loop
+         declare
+            Text  : constant Src.Span :=
+              Src.Line_Text_Span (Original, Src.Line_Number (Line));
+            Probe : Src.Byte_Offset := Text.First;
+            Scan  : Positive := Next_Edit;
+         begin
+            --  Edits only ever replace space, so the first byte of the line
+            --  that no edit covers is a token's or a comment's, and it is
+            --  on the line of the layout that this line becomes.
+            while Probe < Text.Last and then Scan <= Count loop
+               declare
+                  Where : constant Src.Span :=
+                    Landin.Diagnostics.Span_Of (Answer.Edits (Scan));
+               begin
+                  if Where.Last <= Probe then
+                     Scan := Scan + 1;
+                     if Where.Last <= Text.First then
+                        Next_Edit := Scan;
+                     end if;
+                  elsif Where.First <= Probe then
+                     Probe := Where.Last;
+                  else
+                     exit;
+                  end if;
+               end;
+            end loop;
+            if Probe < Text.Last then
+               while Moved < Count
+                 and then Landin.Diagnostics.Span_Of
+                   (Answer.Edits (Moved + 1)).Last <= Probe
+               loop
+                  Moved := Moved + 1;
+               end loop;
+               declare
+                  Laid : constant Line_Index := Line_Index (Src.Position_Of
+                    (Laid_Out, Src.Byte_Offset
+                       (Long_Long_Integer (Probe) + Before (Moved))).Line);
+               begin
+                  Blank_Run (Last_Line, Line, Last_Laid, Laid);
+                  Compare (Line, Laid);
+                  Last_Line := Line;
+                  Last_Laid := Laid;
+               end;
+            end if;
+         end;
+      end loop;
+      Blank_Run (Last_Line, Total + 1, Last_Laid, Lines (Laid_Out) + 1);
+      return Found;
+   end Differences;
 
 end Landin.Formatting;

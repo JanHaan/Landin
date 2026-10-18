@@ -1,0 +1,41 @@
+--  D376: `else none` ignores a failure only where no result is lost with it.
+--  On a call that returns a value -- direct, labelled, erased, through a
+--  function value, generic or discarded with `_ =` -- it is refused once,
+--  with the forms that work.
+refused: atom
+
+count: (flag: bool) -> (n: u32) ! refused =
+    fail refused when flag
+    n = 1
+end count
+
+reader: type = concept (t: type)
+    read: (self: ptr mut t) -> (n: u32) ! refused
+end reader
+
+cell: type = struct
+    n: u32
+end cell
+
+cell_read: (self: ptr mut cell) -> (n: u32) ! refused =
+    n = self.val.n
+end cell_read
+
+cell is reader (read: cell_read)
+
+same: (t: type, value: t) -> (out: t) ! refused =
+    out = value
+end same
+
+forms: () -> (total: u32) =
+    direct := count(true) else none
+    labelled := count(flag: true) else none
+    mut state: cell = (n: 0)
+    erased: any reader = any(addr state)
+    read := erased.read() else none
+    through: (flag: bool) -> (n: u32) ! refused = count
+    indirect := through(false) else none
+    generic := same(u32(7)) else none
+    _ = count(false) else none
+    total = direct + labelled + read + indirect + generic
+end forms

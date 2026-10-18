@@ -50,26 +50,34 @@ package body Landin.Diagnostics.Explanations is
                & "targets.",
             when Catalogue.Unwritable_Output =>
                "An output file cannot be written, or `refine fmt` cannot"
-               & " safely replace its input. For emitted output, check tha"
-               & "t the destination directory exists and is writable, or c"
-               & "hoose another path with `-o`."
+               & " rewrite its input. For emitted output, check that the d"
+               & "estination directory exists and is writable, or choose a"
+               & "nother path with `-o`."
                & LF
                & LF
-               & "Formatting needs a writable ordinary file owned by the c"
-               & "aller and write permission in its directory. Hard links,"
-               & " ACLs, extended attributes and an inability to establish"
-               & " their absence cause refusal. On Linux, ordinary users m"
-               & "ay be unable to inspect privileged attributes even on ap"
-               & "parently plain files. Editor formatting can return edits"
-               & " without replacing the file. A refused formatter replace"
-               & "ment leaves the original bytes intact; see [formatter fi"
-               & "le handling](format.md) for the full contract.",
+               & "Formatting writes into the file it read, so it needs a w"
+               & "ritable ordinary file and, for the copy of the original "
+               & "it keeps until the new bytes last, write permission in t"
+               & "he file's directory (D358). The diagnostic names what it"
+               & " met: a read-only file, a directory that refuses the cop"
+               & "y, a set-user-ID or set-group-ID bit the caller could no"
+               & "t set again, a Linux file with capabilities, or a write "
+               & "that failed, and then whether the original bytes are bac"
+               & "k or where their copy is kept. `refine fmt --stdout` pri"
+               & "nts the layout without writing anything. See [formatter "
+               & "file handling](format.md) for the full contract.",
             when Catalogue.Module_Not_Found =>
                "No import root holds the module an import names [1420]. "
                & "Roots are searched in the order `--root=` gives them, an"
                & "d a path's segments are directories under a root, spelle"
                & "d exactly. When a directory near the missing segment is "
-               & "there, the diagnostic offers it as a likely fix.",
+               & "there, the diagnostic offers it as a likely fix; named f"
+               & "iles with no `--root` are offered the library's `core`, "
+               & "`hosted` or `platform` when the first segment is near on"
+               & "e. An import of `core`, `hosted` or `platform` when `ref"
+               & "ine` found no library beside itself, as a copied `refine"
+               & "` does not, names where it looked; name the library's di"
+               & "rectory with `--library=DIR` (D363).",
             when Catalogue.Module_Directory_Invalid =>
                "With `--root=`, the entry module must be a readable dire"
                & "ctory [1410]. Pass the directory, not a file inside it. "
@@ -81,17 +89,30 @@ package body Landin.Diagnostics.Explanations is
                "An import names a source namespace unavailable for the s"
                & "elected target (D267). `hosted/*` requires a hosted targ"
                & "et; `platform/c` requires one of the currently enabled L"
-               & "P64 C ABIs; `platform/cpu` requires an M-profile target,"
-               & " including its higher supported feature levels. Select a"
-               & "n applicable target or remove the import. Project-first "
-               & "root selection cannot change namespace availability.",
+               & "P64 C ABIs; `platform/cortex_m` requires an M-profile ta"
+               & "rget, including its higher supported feature levels. Sel"
+               & "ect an applicable target or remove the import. Project-f"
+               & "irst root selection cannot change namespace availability"
+               & ".",
+            when Catalogue.Root_Holds_Library_Module =>
+               "A warning: an import of `core`, `hosted` or `platform` w"
+               & "as read from the compiler's own library, and a `--root=`"
+               & " directory also holds a module at that path, which was n"
+               & "ot read (D275, D366). The library always supplies those "
+               & "three namespaces, so a project's copy of `core` never re"
+               & "places it. To compile against that copy instead, name it"
+               & "s directory with `--library=DIR`; to silence the warning"
+               & ", rename or remove the project's directory.",
             when Catalogue.Not_Formatted =>
-               "`refine fmt --check` found a source that is not in the l"
-               & "ayout D252 decides and `docs/format.md` shows. The diagn"
-               & "ostic points at the first line that would change. Nothin"
-               & "g is wrong with the program: run `refine fmt` on the fil"
-               & "e to put it in the layout, which changes its space and n"
-               & "othing else.",
+               "`refine fmt --check` found a line that is not in the lay"
+               & "out D252 decides and `docs/format.md` shows. There is on"
+               & "e diagnostic for every such line, and its note shows the"
+               & " line as the layout writes it, or says that the layout r"
+               & "emoves the blank line or changes its line end (D359). No"
+               & "thing is wrong with the program: run `refine fmt` on the"
+               & " file to put it in the layout, which changes its space a"
+               & "nd nothing else, or `refine fmt --stdout` to see the who"
+               & "le file laid out.",
             when Catalogue.Unknown_Level =>
                "`--level=`, or the language server's `level` option, nam"
                & "es no CPU feature level of the selected target's family "
@@ -135,7 +156,16 @@ package body Landin.Diagnostics.Explanations is
                "A name belongs here and something else stands there [176"
                & "0]. A keyword is never a name, including a control word "
                & "in any position (D225), and `_` alone is the discard. Ch"
-               & "oose another name, such as `begin_value` for `begin`.",
+               & "oose another name, such as `begin_value` for `begin`. A "
+               & "keyword written as a binding's name is reported once, an"
+               & "d its later uses as a value are the same mistake (D368)."
+               & LF
+               & LF
+               & "A `match` arm that begins with a number names a value wh"
+               & "ere a case belongs: compare values with `if` and `elsif`"
+               & " (D369). Statements on the lines under a bare `else` wer"
+               & "e meant as a recovery block, which binds the error first"
+               & ": `else (problem)`, closed by `end` (D370).",
             when Catalogue.Type_Expected =>
                "A type position holds nothing the kernel enables as a ty"
                & "pe [1790].",
@@ -193,7 +223,11 @@ package body Landin.Diagnostics.Explanations is
                & "name the position could mean is near it, the diagnostic "
                & "offers that name as a likely fix: a local or parameter, "
                & "a type, a public member of an imported module, never a n"
-               & "ame out of scope or inaccessible.",
+               & "ame out of scope or inaccessible. A member a module decl"
+               & "ares only in a `fixed if` arm this target does not selec"
+               & "t, a Linux call written for Darwin among them, is named "
+               & "as one this system does not have, since no spelling of i"
+               & "t would be found here.",
             when Catalogue.Inaccessible_Name =>
                "A declaration of another module is used and it is not `p"
                & "ublic` [1410]. The second label shows the declaration. M"
@@ -474,8 +508,8 @@ package body Landin.Diagnostics.Explanations is
                & "olds only scalars, and the references the service needs,"
                & " the backing it was given or the provider it stacks on, "
                & "live in the handle `over` returns from that state (D288)"
-               & ": `mem.arena_space` holds counters, and the arena's hand"
-               & "le holds the base.",
+               & ": `arena.space` holds counters, and the arena's handle h"
+               & "olds the base.",
             when Catalogue.Error_Contract_Violated =>
                "A failure does not follow the declared error contract [0"
                & "940] [0960] [1030]. `fail` carries exactly one atom of t"
@@ -509,14 +543,16 @@ package body Landin.Diagnostics.Explanations is
                & "arded with `_ =` [1020], and a call that returns none ha"
                & "s no value to use, infer from, or discard [1920] [1930],"
                & " nor one for its `else` to yield in place of a result [1"
-               & "030]. An `if`, `match` or bare `begin` used as a stateme"
-               & "nt takes no value from its branches, so a branch that en"
-               & "ds with one would drop it; in an `if` arm that value is "
-               & "often a call's `else value` the `if` took as its own [18"
-               & "20]. Destructuring binds the names of a multiple result,"
-               & " each at most once [0990]. Discard the result explicitly"
-               & ", use a call that returns one, or bind the result names "
-               & "the signature declares.",
+               & "030]: `else none` ignores its failure, and is refused on"
+               & " a call that does return a value (D376). An `if`, `match"
+               & "` or bare `begin` used as a statement takes no value fro"
+               & "m its branches, so a branch that ends with one would dro"
+               & "p it; in an `if` arm that value is often a call's `else "
+               & "value` the `if` took as its own [1820]. Destructuring bi"
+               & "nds the names of a multiple result, each at most once [0"
+               & "990]. Discard the result explicitly, use a call that ret"
+               & "urns one, or bind the result names the signature declare"
+               & "s.",
             when Catalogue.Control_Value =>
                "A `break` must carry a value exactly when its target nee"
                & "ds one [1180] [1190]; every value-producing fallthrough "
@@ -603,16 +639,17 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Generic_Deduction =>
                "A generic call cannot deduce and instantiate one concret"
                & "e routine (D138). Deduction matches each runtime argumen"
-               & "t against its written parameter pattern; it never uses t"
-               & "he return context, conversions or constraints, and repea"
-               & "ted deductions must agree, and the deduced actuals must "
-               & "give a concrete, enabled signature whose fixed values fi"
-               & "t their formals. A generic template has no function valu"
-               & "e until it is called. Recursion that keeps changing the "
-               & "actual tuple never ends, and a circular error-set depend"
-               & "ency cannot be resolved (D215). Give the type argument e"
-               & "xplicitly, pass arguments that agree, or call a concrete"
-               & " routine.",
+               & "t against its written parameter pattern, an untyped lite"
+               & "ral last, when it takes the type its parameter then name"
+               & "s (D372); it never uses the return context, conversions "
+               & "or constraints, and repeated deductions must agree, and "
+               & "the deduced actuals must give a concrete, enabled signat"
+               & "ure whose fixed values fit their formals. A generic temp"
+               & "late has no function value until it is called. Recursion"
+               & " that keeps changing the actual tuple never ends, and a "
+               & "circular error-set dependency cannot be resolved (D215)."
+               & " Give the type argument explicitly, pass arguments that "
+               & "agree, or call a concrete routine.",
             when Catalogue.Conformance_Form =>
                "A concept or conformance declaration is not well formed "
                & "[1230]-[1270]. A concept is parameterized by types and n"
@@ -632,11 +669,12 @@ package body Landin.Diagnostics.Explanations is
                & "alue; every entry takes the erased `self` first, as a po"
                & "inter or as a record the dispatch copies from that point"
                & "er; an entry is called directly and is not a bound value"
-               & "; a concrete pointer selects exactly one conformance, an"
-               & "d the closed program has a runtime table for it; and a m"
-               & "odule `any` binding has no implicit null pair. Pass a po"
-               & "inter, write the `any C` context, or adjust the concept'"
-               & "s entries.",
+               & "; a concrete pointer selects exactly one conformance; an"
+               & "d a module `any` binding has no implicit null pair. A ca"
+               & "ll through a concept no conformance answers is not refus"
+               & "ed: no value can reach it, and it traps as `unreachable`"
+               & " (D377). Pass a pointer, write the `any C` context, or a"
+               & "djust the concept's entries.",
             when Catalogue.Noreturn_Contract =>
                "A noreturn routine breaks its contract [0890]. A noretur"
                & "n signature is ordinary and infallible, and every reacha"
@@ -736,12 +774,17 @@ package body Landin.Diagnostics.Explanations is
                & "the program asks for `linker.library` or refers to C sym"
                & "bols nothing in it defines, each named with the routine "
                & "that refers to it, as `platform/posix`'s loader refers t"
-               & "o `dlopen`), no toolchain is selected, or the named tool"
-               & " is unavailable. Choose a target with a backend, change "
-               & "the debug or firmware configuration, link with `--link=l"
-               & "ibc`, or select or install a toolchain as the note direc"
-               & "ts. `--toolchain=` only helps when a toolchain is absent"
-               & " or unavailable.",
+               & "o `dlopen`), no toolchain is selected, or no driver the "
+               & "target names can be started. On Linux the message lists "
+               & "every driver looked for, the target's own GCC and the na"
+               & "mes Debian, Ubuntu and Fedora give it, and the note says"
+               & " which package to install (D364); the program's own refu"
+               & "sals come first, so a static link that meets a C symbol "
+               & "is refused for that before anything asks for a driver. C"
+               & "hoose a target with a backend, change the debug or firmw"
+               & "are configuration, link with `--link=libc`, or select or"
+               & " install a toolchain as the note directs. `--toolchain=`"
+               & " only helps when a toolchain is absent or unavailable.",
             when Catalogue.Toolchain_Failed =>
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"
@@ -791,6 +834,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Module_Directory_Invalid =>
                "",
             when Catalogue.Module_Unavailable_For_Target =>
+               "",
+            when Catalogue.Root_Holds_Library_Module =>
                "",
             when Catalogue.Not_Formatted =>
                "",

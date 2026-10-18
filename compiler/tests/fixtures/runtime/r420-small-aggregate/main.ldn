@@ -1,6 +1,6 @@
+import core/fault
 import core/spill
 import hosted/heap
-import core/fault
 
 pair: type = struct
     x: i32
@@ -9,7 +9,7 @@ end pair
 
 public main: () -> (code: i32) =
     code = 1
-    host := heap.host()
+    host := heap.new()
     allowed: usize = 8
     mut space: fault.space = zeroed
     allocator := fault.over(space, host, allowed)

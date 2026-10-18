@@ -8,14 +8,14 @@
 --  answer its own way.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 import platform/posix
 
 --  A lookup gave something other than what it was asked for.
 mismatched: atom
 
 --  Write what the account LINE holds, or that it holds none.
-account_line: (inout out: io.buffered_writer(hosted.system), line: []u8)
+account_line: (inout out: io.buffered_writer(system.host), line: []u8)
               -> none ! ... =
     mut room: [256]u8 = zeroed
     mut made := text.over(room[0..<256])
@@ -34,7 +34,7 @@ account_line: (inout out: io.buffered_writer(hosted.system), line: []u8)
 end account_line
 
 --  Write what the group LINE holds, or that it holds none.
-group_line: (inout out: io.buffered_writer(hosted.system), line: []u8)
+group_line: (inout out: io.buffered_writer(system.host), line: []u8)
             -> none ! ... =
     mut room: [256]u8 = zeroed
     mut made := text.over(room[0..<256])
@@ -56,7 +56,7 @@ group_line: (inout out: io.buffered_writer(hosted.system), line: []u8)
 end group_line
 
 --  Parse every line of standard input.
-parsed: (host: hosted.system, inout out: io.buffered_writer(hosted.system))
+parsed: (host: system.host, inout out: io.buffered_writer(system.host))
         -> none ! ... =
     mut buffer: [128]u8 = zeroed
     mut lines := io.lines_over(host, io.input(host), buffer[0..<128])
@@ -142,6 +142,16 @@ looked_up: () -> none ! ... =
         root
     end
     fail mismatched when not met
+    --  A name longer than any system lets a name be names no one, on the
+    --  static route and the C library's alike.
+    met = false
+    long_name: [300]u8 = [300 of 97]
+    _ = posix.account_named(text.host_over(long_name[0..<300]),
+                            buffer[0..<1024]) else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
     met = false
     mut tiny: [4]u8 = zeroed
     _ = posix.account_with_id(posix.user_id(0), tiny[0..<4]) else (problem)
@@ -159,13 +169,11 @@ looked_up: () -> none ! ... =
 end looked_up
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<512])
-    defer io.flush(out) else (problem)
-        _ = problem
-    end
+    defer io.flush(out) else none
     parsed(host, out) else (problem)
         _ = problem
         return

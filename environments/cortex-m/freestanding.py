@@ -11,14 +11,14 @@ from backend_corpus import inventory as corpus_inventory
 from firmware import execute, dma_execute
 from packed_native import PROFILES
 from run import Run, require
-from setup import DEFAULT, inventory, sha, supported_host
+from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 MODULES = tuple('core/'+name for name in
-                ('cmp', 'diag', 'fault', 'io', 'map', 'mem', 'panic', 'pool',
-                 'random', 'region', 'sort', 'spill', 'text', 'tree',
-                 'vec')) + ('platform/cpu',)
+                ('arena', 'cmp', 'diag', 'fault', 'io', 'map', 'mem', 'net',
+                 'panic', 'pool', 'random', 'region', 'sort', 'spill', 'text',
+                 'time', 'tree', 'vec')) + ('platform/cortex_m',)
 
 
 def imports(program):
@@ -27,10 +27,11 @@ def imports(program):
     for line in program.splitlines():
         if not line.startswith('import '):
             continue
-        match = re.fullmatch(r'import ((?:core|platform)/\w+)', line)
+        #  A submodule, `core/io/fake`, is staged with the module it is in.
+        match = re.fullmatch(r'import ((?:core|platform)/\w+)((?:/\w+)*)', line)
         require(match is not None and match[1] in MODULES,
                 'undeclared freestanding module: '+line)
-        result.add(match[1])
+        result.add(match[1] + match[2])
     return result
 
 
@@ -55,7 +56,7 @@ def build(run, refine, program, optimize, specialize, debug='none'):
         if module in modules:
             continue
         modules.add(module)
-        shutil.copytree(ROOT / module, source / module)
+        shutil.copytree(ROOT / module, source / module, dirs_exist_ok=True)
         for path in sorted((source / module).glob('*.ldn')):
             pending.update(imports(path.read_text()) - modules)
     inputs = {str(p.relative_to(source)): sha(p)
@@ -287,18 +288,18 @@ def programs():
     result['panic-default'] = (default[:first]+default[last:]).replace('import core/panic\n', '')
     dma = (HERE / 'probes/firmware-dma.ldn').read_text()
     changes = {
-        'assembler.block("cpsid i")': 'saved_mask := cpu.disable_interrupts()',
+        'assembler.block("cpsid i")': 'saved_mask := cortex_m.disable_interrupts()',
         'assembler.block("cpsie i\\ndsb sy\\nisb sy")':
-            'cpu.restore_interrupts(saved_mask)',
-        'assembler.block("nop")': 'cpu.compiler_barrier()',
-        'assembler.block("wfi")': 'cpu.wait_for_interrupt()',
-        'compiler.device_barrier()': 'cpu.device_barrier()',
-        'compiler.completion_barrier()': 'cpu.completion_barrier()',
+            'cortex_m.restore_interrupts(saved_mask)',
+        'assembler.block("nop")': 'cortex_m.compiler_barrier()',
+        'assembler.block("wfi")': 'cortex_m.wait_for_interrupt()',
+        'compiler.device_barrier()': 'cortex_m.device_barrier()',
+        'compiler.completion_barrier()': 'cortex_m.completion_barrier()',
     }
     for old, new in changes.items():
         require(old in dma, 'stale DMA library derivation: '+old)
         dma = dma.replace(old, new)
-    result['dma'] = 'import platform/cpu\n' + dma
+    result['dma'] = 'import platform/cortex_m\n' + dma
     for name in ('core-mem-allocators', 'core-mem-arena-boundaries',
                  'core-mem-raw-storage'):
         fixture = ROOT / 'compiler/tests/fixtures/runtime' / name
@@ -377,6 +378,7 @@ def main():
     parser.add_argument('--case', action='append')
     args = parser.parse_args()
     supported_host()
+    args.tools = installed_tools(args.tools)
     tools_before = inventory(args.tools)
     args.output.mkdir(parents=True, exist_ok=False)
     record = {'status': 'failed', 'tools': tools_before,

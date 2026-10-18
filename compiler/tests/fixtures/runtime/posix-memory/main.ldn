@@ -13,19 +13,20 @@ end say
 
 --  Write NAME, `=` and the number PROBLEM has on this system.
 said: (name: []u8, problem: posix.errno) -> none =
-    mut line: [32]u8 = zeroed
-    mut used: usize = 0
-    for byte in name do
-        line[used] = byte
-        inc used
-    end for
-    line[used] = 61
-    inc used
-    used = text.write_u32(line[0..<32], used,
-                          u32(posix.number(problem))) else used
-    line[used] = 10
-    say(line[0..<used + 1])
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    line_of(line, name, u32(posix.number(problem))) else none
+    say(text.used(line))
 end said
+
+--  NAME, `=`, NUMBER in decimal and a line end.
+line_of: (inout line: text.builder, name: []u8, number: u32)
+         -> none ! text.no_space =
+    try text.append(line, name)
+    try text.append_byte(line, u8('='))
+    try text.append_u32(line, number)
+    try text.append_byte(line, u8('\n'))
+end line_of
 
 public main: () -> (code: i32) =
     code = 1
@@ -70,7 +71,5 @@ public main: () -> (code: i32) =
         code = 42
         return
     end
-    posix.unmap(refused, huge) else (p)
-        _ = p
-    end
+    posix.unmap(refused, huge) else none
 end main

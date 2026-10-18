@@ -105,24 +105,30 @@ targets.
 
 ### L0005
 
-An output file cannot be written, or `refine fmt` cannot safely replace its
-input. For emitted output, check that the destination directory exists and is
+An output file cannot be written, or `refine fmt` cannot rewrite its input.
+For emitted output, check that the destination directory exists and is
 writable, or choose another path with `-o`.
 
-Formatting needs a writable ordinary file owned by the caller and write
-permission in its directory. Hard links, ACLs, extended attributes and an
-inability to establish their absence cause refusal. On Linux, ordinary users
-may be unable to inspect privileged attributes even on apparently plain files.
-Editor formatting can return edits without replacing the file. A refused
-formatter replacement leaves the original bytes intact; see
-[formatter file handling](format.md) for the full contract.
+Formatting writes into the file it read, so it needs a writable ordinary file
+and, for the copy of the original it keeps until the new bytes last, write
+permission in the file's directory (D358). The diagnostic names what it met:
+a read-only file, a directory that refuses the copy, a set-user-ID or
+set-group-ID bit the caller could not set again, a Linux file with
+capabilities, or a write that failed, and then whether the original bytes
+are back or where their copy is kept. `refine fmt --stdout` prints the
+layout without writing anything. See [formatter file handling](format.md)
+for the full contract.
 
 ### L0006
 
 No import root holds the module an import names [1420]. Roots are searched in
 the order `--root=` gives them, and a path's segments are directories under a
 root, spelled exactly. When a directory near the missing segment is there, the
-diagnostic offers it as a likely fix.
+diagnostic offers it as a likely fix; named files with no `--root` are offered
+the library's `core`, `hosted` or `platform` when the first segment is near
+one. An import of `core`, `hosted` or `platform` when `refine` found no
+library beside itself, as a copied `refine` does not, names where it looked;
+name the library's directory with `--library=DIR` (D363).
 
 ### L0007
 
@@ -134,10 +140,13 @@ is reported by L0006.
 
 ### L0008
 
-`refine fmt --check` found a source that is not in the layout D252 decides
-and `docs/format.md` shows. The diagnostic points at the first line that
-would change. Nothing is wrong with the program: run `refine fmt` on the file
-to put it in the layout, which changes its space and nothing else.
+`refine fmt --check` found a line that is not in the layout D252 decides
+and `docs/format.md` shows. There is one diagnostic for every such line, and
+its note shows the line as the layout writes it, or says that the layout
+removes the blank line or changes its line end (D359). Nothing is wrong with
+the program: run `refine fmt` on the file to put it in the layout, which
+changes its space and nothing else, or `refine fmt --stdout` to see the whole
+file laid out.
 
 ### L0009
 
@@ -150,9 +159,18 @@ no level to select. `refine --identify` lists each target's levels.
 
 An import names a source namespace unavailable for the selected target (D267).
 `hosted/*` requires a hosted target; `platform/c` requires one of the currently
-enabled LP64 C ABIs; `platform/cpu` requires an M-profile target, including its
+enabled LP64 C ABIs; `platform/cortex_m` requires an M-profile target, including its
 higher supported feature levels. Select an applicable target or remove the
 import. Project-first root selection cannot change namespace availability.
+
+### L0016
+
+A warning: an import of `core`, `hosted` or `platform` was read from the
+compiler's own library, and a `--root=` directory also holds a module at that
+path, which was not read (D275, D366). The library always supplies those three
+namespaces, so a project's copy of `core` never replaces it. To compile against
+that copy instead, name its directory with `--library=DIR`; to silence the
+warning, rename or remove the project's directory.
 
 ## Lexical, and what is not enabled
 
@@ -228,11 +246,25 @@ fix is likely, a guess at what was meant, except removing one copy of a
 token written twice, which is exact. A report stands on a token: a missing
 one at a line's end stands on the token it belongs after.
 
+A spelling another language gives a construct is named for what Landin
+writes instead (D367), under the code the parser would have raised:
+`elif` and `elseif` are `elsif`, `fn name(...)` is `name: (...) -> (...) =`,
+`x as i32` is `i32(x)`, `x++` is `inc x`, `*u8` is `ptr u8`, `&&` and `||`
+are `and` and `or`, and `!=` is `<>`. The report begins "Landin writes", and
+where one edit writes the Landin form it offers that edit as a likely fix.
+
 ### L0100
 
 A name belongs here and something else stands there [1760]. A keyword is never
 a name, including a control word in any position (D225), and `_` alone is the
-discard. Choose another name, such as `begin_value` for `begin`.
+discard. Choose another name, such as `begin_value` for `begin`. A keyword
+written as a binding's name is reported once, and its later uses as a value
+are the same mistake (D368).
+
+A `match` arm that begins with a number names a value where a case belongs:
+compare values with `if` and `elsif` (D369). Statements on the lines under a
+bare `else` were meant as a recovery block, which binds the error first:
+`else (problem)`, closed by `end` (D370).
 
 ```landin
 _: u32 = 1
@@ -373,7 +405,10 @@ A name that is declared in no scope this use reaches [1860]. There is no
 implicit declaration, so it is a misspelling or a name used outside its scope.
 When a declared name the position could mean is near it, the diagnostic offers
 that name as a likely fix: a local or parameter, a type, a public member of an
-imported module, never a name out of scope or inaccessible.
+imported module, never a name out of scope or inaccessible. A member a module
+declares only in a `fixed if` arm this target does not select, a Linux call
+written for Darwin among them, is named as one this system does not have,
+since no spelling of it would be found here.
 
 ```landin
 state := nowhere(value: 1)
@@ -815,7 +850,7 @@ filled from one valid element, `[n of value]`, rather than zeroed. A
 service's state is declared `zeroed` beside the caller's other storage, so it
 holds only scalars, and the references the service needs, the backing it was
 given or the provider it stacks on, live in the handle `over` returns from
-that state (D288): `mem.arena_space` holds counters, and the arena's handle
+that state (D288): `arena.space` holds counters, and the arena's handle
 holds the base.
 
 ```landin
@@ -871,7 +906,8 @@ end f
 A call's result is used in a way its signature does not allow. A result that
 is handed back must be used or discarded with `_ =` [1020], and a call that
 returns none has no value to use, infer from, or discard [1920] [1930], nor
-one for its `else` to yield in place of a result [1030].
+one for its `else` to yield in place of a result [1030]: `else none` ignores
+its failure, and is refused on a call that does return a value (D376).
 An `if`, `match` or bare `begin` used as a statement takes no value from its
 branches, so a branch that ends with one would drop it; in an `if` arm that
 value is often a call's `else value` the `if` took as its own [1820].
@@ -1037,7 +1073,8 @@ duplicated: type = (value: i32, value: bool) -> none
 
 A generic call cannot deduce and instantiate one concrete routine (D138).
 Deduction matches each runtime argument against its written parameter
-pattern; it never uses the return context, conversions or constraints, and
+pattern, an untyped literal last, when it takes the type its parameter then
+names (D372); it never uses the return context, conversions or constraints, and
 repeated deductions must agree, and the deduced actuals must give a
 concrete, enabled signature whose fixed values fit their formals. A generic
 template has no function value until it is called. Recursion that keeps changing the actual tuple never ends,
@@ -1077,8 +1114,9 @@ each dispatch name unique across its closure, and erases a pointer, never a
 value; every entry takes the erased `self` first, as a pointer or as a record
 the dispatch copies from that pointer; an entry is called
 directly and is not a bound value; a concrete pointer selects exactly one
-conformance, and the closed program has a runtime table for it; and a module
-`any` binding has no implicit null pair. Pass a pointer, write the
+conformance; and a module `any` binding has no implicit null pair. A call
+through a concept no conformance answers is not refused: no value can reach
+it, and it traps as `unreachable` (D377). Pass a pointer, write the
 `any C` context, or adjust the concept's entries.
 
 ### L0343
@@ -1242,11 +1280,15 @@ forbids `linker.library`, a static Linux link cannot be made (no library
 holding `platform/linux` was found, or the program asks for `linker.library` or
 refers to C symbols nothing in it defines, each named with the routine that
 refers to it, as `platform/posix`'s loader refers to `dlopen`), no toolchain
-is selected, or the
-named tool is unavailable. Choose a target with a backend,
-change the debug or firmware configuration, link with `--link=libc`, or
-select or install a toolchain as the note directs.
-`--toolchain=` only helps when a toolchain is absent or unavailable.
+is selected, or no driver the target names can be started. On Linux the
+message lists every driver looked for, the target's own GCC and the names
+Debian, Ubuntu and Fedora give it, and the note says which package to
+install (D364); the program's own refusals come first, so a static link that
+meets a C symbol is refused for that before anything asks for a driver.
+Choose a target with a backend, change the debug or firmware configuration,
+link with `--link=libc`, or select or install a toolchain as the note
+directs. `--toolchain=` only helps when a toolchain is absent or
+unavailable.
 
 ### L0501
 

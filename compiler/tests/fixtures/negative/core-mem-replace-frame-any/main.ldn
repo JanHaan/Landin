@@ -13,7 +13,5 @@ bad: (inout storage: mem.storage(any reader)) -> none =
     local: node = (value: 23)
     value: any reader = any(addr local)
     zero: usize = 0
-    mem.replace(storage, zero, value) else (problem)
-        _ = problem
-    end
+    mem.replace(storage, zero, value) else none
 end bad

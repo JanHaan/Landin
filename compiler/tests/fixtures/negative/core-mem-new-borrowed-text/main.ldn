@@ -1,9 +1,9 @@
-import hosted/heap
 import core/mem
+import hosted/heap
 filter: type = struct
     needle: utf8
 end filter
-bad: (state: heap.system, source: utf8)
+bad: (state: heap.heap, source: utf8)
      -> (result: ptr mut filter) ! mem.out_of_memory =
     initial: filter = (needle: source)
     result = try mem.new(state, initial)

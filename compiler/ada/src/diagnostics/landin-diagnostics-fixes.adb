@@ -189,6 +189,29 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Compare;
 
+   function Landin_Form
+     (Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Written : String;
+      Word    : String) return Fix
+   is
+      Result : Fix := Make_Fix (Landin_Form, Likely, "write `" & Word & "`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Written));
+      return Result;
+   end Landin_Form;
+
+   function Ignore_Failure
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Ignore_Failure, Likely, "ignore the failure with `else none`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, "none"));
+      return Result;
+   end Ignore_Failure;
+
    function Respellings
      (Source  : Landin.Source.Source_Id;
       Where   : Landin.Source.Span;

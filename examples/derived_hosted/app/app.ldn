@@ -1,5 +1,5 @@
-import core/io
 import core/diag
+import core/io
 import core/mem
 import core/vec
 
@@ -47,20 +47,20 @@ public run_logged: (provider: type is mem.allocator, memory: provider,
     mut cfg := try prepare_logged(memory, world, log)
     mut reader := open_reader(memory, world, cfg.input, chunk_size)
         else (problem)
-        close_config(world, cfg) else (close_problem) _ = close_problem end
+        close_config(world, cfg) else none
         fail problem
     end
     open_output(memory, world, cfg) else (problem)
-        shut_reader(memory, world, reader) else (close_problem) _ = close_problem end
+        shut_reader(memory, world, reader) else none
         fail problem
     end
     kept = process(memory, world, cfg, reader) else (problem)
-        shut_reader(memory, world, reader) else (close_problem) _ = close_problem end
-        close_config(world, cfg) else (close_problem) _ = close_problem end
+        shut_reader(memory, world, reader) else none
+        close_config(world, cfg) else none
         fail problem
     end
     shut_reader(memory, world, reader) else (problem)
-        close_config(world, cfg) else (close_problem) _ = close_problem end
+        close_config(world, cfg) else none
         fail problem
     end
     try close_config(world, cfg)

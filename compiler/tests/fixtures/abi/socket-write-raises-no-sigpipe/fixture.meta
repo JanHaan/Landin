@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: a C main installs its own SIGPIPE handler, which the argument initializer keeps; an io.write through the hosted provider to a TCP connection whose peer has gone fails with EPIPE and never runs the handler, since the provider sends on a socket it made with MSG_NOSIGNAL on Linux and SO_NOSIGPIPE elsewhere (D322)
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 0940, 1030, 1650, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

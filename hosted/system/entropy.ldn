@@ -1,0 +1,23 @@
+--  The hosted provider's `io.entropy`: the system's random bytes, fit for
+--  keys, through platform/posix.  Written once, like the rest.
+
+import core/io
+import platform/posix
+
+--  The system gives at most so much at once, and a signal may interrupt it
+--  before it gives anything; both are asked again for the rest.
+system_fill_random: (self: host, into: []mut u8) -> none ! io.io_failed =
+    self.failure.val = 0
+    mut filled: usize = 0
+    while filled < lenof into do
+        got: usize = posix.random_bytes(into[filled..<lenof into]) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when got == 0 or got > lenof into - filled
+        filled += got
+    end while
+end system_fill_random
+
+host is io.entropy (fill_random: system_fill_random)

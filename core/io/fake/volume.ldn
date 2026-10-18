@@ -1,0 +1,963 @@
+--  A file system in memory, over the caller's nodes: the fake of
+--  `file_system`, and of `reader`, `writer`, `files` and `directories`
+--  over the same files, so a test of code that makes, renames, rewrites
+--  and lists a tree runs the same way in every run and on every target.
+
+import core/cmp
+import core/io
+import core/mem
+import core/text
+import core/time
+
+--- One node of a memory volume: a regular file, a directory or a
+--- symbolic link, named by its whole path from the volume's root.  The
+--- caller gives each node room for a path, `path`, and for a file's bytes
+--- or a link's target, `contents`, sets `path_length` to zero for a node
+--- the volume may use for a new file, and gives the others their path,
+--- `length`, `kind`, `read_only` and `modified`.  A path has no leading
+--- `./`, no trailing `/`, and no `.` or `..` part; its directory must be
+--- a node too, or the root, `.`.  The volume keeps the fields as files
+--- change; a test reads them.
+public volume_node: type = struct
+    path: []mut u8
+    path_length: usize
+    contents: []mut u8
+    length: usize
+    kind: io.entry_kind
+    read_only: bool
+    modified: time.wall_time
+end volume_node
+
+--- One file a memory volume has open: which node, how it may be used, and
+--- the position `read` and `write` use.  The volume's own.
+public volume_opening: type = struct
+    node: usize
+    position: u64
+    readable: bool
+    writable: bool
+    appending: bool
+    open: bool
+end volume_opening
+
+--- How many files a memory volume holds open at once.
+public volume_openings: usize = 8
+
+--- Caller-owned state of a memory volume: the wall-clock time each change
+--- is stamped with, which the test sets, the files it holds open, call
+--- counts, and a call to fail.  Declare it `zeroed` and give it to
+--- `volume_over`, which fills it; it must outlive the handle, and its
+--- fields may be read, and the time and the failure set, while the handle
+--- is in use.  `calls` counts the calls made of the volume, from one:
+--- every call of `reader`, `writer`, `files`, `directories` and
+--- `file_system` counts once, each `read_entry`, `entry_size` and
+--- `same_file` among them, except that `write` counts each piece
+--- `write_some` writes and `make_temporary` counts once and again for each
+--- name it tries to open.  The call `fail_at` names fails `io_failed`;
+--- zero fails none.
+public volume_space: type = struct
+    now_seconds: i64
+    now_nanoseconds: u32
+    openings: [8]volume_opening
+    calls: usize
+    fail_at: usize
+    opens: usize
+    renames: usize
+    synchronizations: usize
+    temporary_tries: usize
+end volume_space
+
+volume_value: type = struct
+    state: ptr mut volume_space
+    nodes: []mut volume_node
+    working: []u8
+end volume_value
+
+--- A file system in memory over the caller's nodes and their storage: a
+--- provider of `reader`, `writer`, `files`, `directories` and
+--- `file_system`.  A file grows only into its node's `contents`, and a
+--- write that finds no room left is `io_failed`, as a full device is; a
+--- new file takes a free node, and a path longer than its room, or a
+--- volume with no free node, is `io_failed` too.  A symbolic link is a
+--- node the caller makes, followed as a system follows one: always before
+--- a path's last part, and in its last part where the call follows links,
+--- a target that begins with `/` from the volume's root and any other from
+--- the link's own directory.  Opening a dangling link to create a file
+--- creates its target.  More than eight links in one path are
+--- `io_failed`, as ELOOP is, and a path that grows past 256 bytes as its
+--- links' targets are put in it is `io_failed` too.  A node a file is open
+--- on cannot be removed or replaced:
+--- `io_failed`, where POSIX would keep the open file without its name, and
+--- a node whose path is longer than 256 bytes is not renamed.
+--- Read-only files refuse writing, `no_access`, as they do to every
+--- process but a privileged one.  Copies share the volume.
+public volume: type = volume_value
+
+--- Fill `state` for a memory volume over `nodes`, whose working directory
+--- is `working`, and return its handle, which lends both; keep them alive
+--- while it is used.
+public volume_over: (inout state: volume_space, nodes: []mut volume_node,
+                     working: []u8)
+                    -> (host: volume from state, nodes, working) =
+    closed: volume_opening = (node: 0, position: 0, readable: false,
+                              writable: false, appending: false, open: false)
+    state = (now_seconds: 0, now_nanoseconds: 0, openings: [8 of closed],
+             calls: 0, fail_at: 0, opens: 0, renames: 0,
+             synchronizations: 0, temporary_tries: 0)
+    host = (state: addr state, nodes: nodes, working: working)
+end volume_over
+
+--- The node at `path`, without following a link, or the node count when
+--- there is none; a test reads what it holds there.
+public volume_find: (host: volume, path: []u8) -> (index: usize) =
+    index = lenof host.nodes
+    for at in usize(0)..<lenof host.nodes do
+        node: ptr volume_node = addr host.nodes[at]
+        if node.val.path_length > 0
+          and volume_same(node.val.path[0..<node.val.path_length], path) then
+            index = at
+            return
+        end if
+    end for
+end volume_find
+
+volume_same: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = cmp.compare(left, right) == cmp.equal
+end volume_same
+
+--  Count a call, failing the one the test chose.
+volume_call: (self: volume) -> none ! io.io_failed =
+    state: ptr mut volume_space = self.state
+    inc state.val.calls
+    fail io.io_failed when state.val.calls == state.val.fail_at
+end volume_call
+
+--  The time a change is stamped with.
+volume_now: (self: volume) -> (at: time.wall_time) =
+    at = (seconds: self.state.val.now_seconds,
+          nanoseconds: self.state.val.now_nanoseconds)
+end volume_now
+
+--  The directory part of PATH, `.` for one at the root.
+volume_parent: (path: []u8) -> (parent: []u8 from path) =
+    mut at: usize = lenof path
+    while at > 0 and path[at - 1] <> u8('/') do
+        dec at
+    end while
+    parent = if at == 0 then "." else path[0..<at - 1] end if
+end volume_parent
+
+--  The last part of PATH.
+volume_leaf: (path: []u8) -> (leaf: []u8 from path) =
+    mut at: usize = lenof path
+    while at > 0 and path[at - 1] <> u8('/') do
+        dec at
+    end while
+    leaf = path[at..<lenof path]
+end volume_leaf
+
+--  Whether PATH is the root or names a directory node.
+volume_is_directory: (self: volume, path: []u8) -> (yes: bool) =
+    yes = volume_same(path, ".")
+    return when yes
+    index: usize = volume_find(self, path)
+    yes = index < lenof self.nodes
+          and self.nodes[index].kind == io.subdirectory
+end volume_is_directory
+
+--  A path a node can have: nonempty, not the root, with no empty, `.` or
+--  `..` part and no NUL.
+volume_valid: (path: []u8) -> (yes: bool) =
+    yes = lenof path > 0 and not volume_same(path, ".")
+    mut start: usize = 0
+    for at in usize(0)..<lenof path + 1 do
+        if at == lenof path or path[at] == u8('/') then
+            part: []u8 = path[start..<at]
+            if lenof part == 0 or volume_same(part, ".")
+              or volume_same(part, "..") then
+                yes = false
+            end if
+            start = at + 1
+        elsif path[at] == 0 then
+            yes = false
+        end if
+    end for
+end volume_valid
+
+--  The most a path may hold once the volume has put its links' targets
+--  in it.
+volume_room: usize = 256
+
+--  PATH of LENGTH bytes in INTO with PART after it, a `/` between them:
+--  the new length, or `io_failed` when it does not fit.
+volume_append: (into: []mut u8, length: usize, part: []u8)
+               -> (grown: usize) ! io.io_failed =
+    mut at: usize = length
+    if at > 0 then
+        fail io.io_failed when at >= lenof into
+        into[at] = u8('/')
+        inc at
+    end if
+    fail io.io_failed when lenof part > lenof into - at
+    mem.copy(into[at..<at + lenof part], part) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    grown = at + lenof part
+end volume_append
+
+--  Where PATH, as the caller gives it, leads: the path from the root with
+--  no empty, `.` or `..` part, written into INTO, and its length, zero for
+--  the root.  A symbolic link before the last part is always followed, and
+--  in the last part when FOLLOW, as a system follows them: a target that
+--  begins with `/` from the root and any other from the link's own
+--  directory.  A part before the last that is missing or is no directory,
+--  and an empty target, are `not_found`, as ENOENT and ENOTDIR are; more
+--  than eight links, ELOOP, and a path longer than the room are
+--  `io_failed`.
+volume_walk: (self: volume, path: []u8, follow: bool,
+              into: []mut u8) -> (length: usize) ! io.not_found | io.io_failed =
+    count: usize = lenof self.nodes
+    length = 0
+    mut rest: [256]u8 = zeroed
+    fail io.io_failed when lenof path > volume_room
+    mem.copy(rest[0..<lenof path], path) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    mut rest_length: usize = lenof path
+    mut start: usize = 0
+    mut hops: usize = 0
+    loop do
+        while start < rest_length and rest[start] == u8('/') do
+            inc start
+        end while
+        break when start == rest_length
+        mut stop: usize = start
+        while stop < rest_length and rest[stop] <> u8('/') do
+            inc stop
+        end while
+        mut after: usize = stop
+        while after < rest_length and rest[after] == u8('/') do
+            inc after
+        end while
+        last: bool = after == rest_length
+        before: usize = length
+        dot: bool = volume_same(rest[start..<stop], ".")
+        dots: bool = volume_same(rest[start..<stop], "..")
+        if dots then
+            while length > 0 and into[length - 1] <> u8('/') do
+                dec length
+            end while
+            if length > 0 then dec length end if
+        elsif not dot then
+            length = try volume_append(into, length, rest[start..<stop])
+        end if
+        start = stop
+        continue when dot or dots or (last and not follow)
+        index: usize = volume_find(self, into[0..<length])
+        if index < count and self.nodes[index].kind == io.symbolic_link then
+            inc hops
+            fail io.io_failed when hops > 8
+            node: ptr volume_node = addr self.nodes[index]
+            target: []u8 = node.val.contents[0..<node.val.length]
+            fail io.not_found when lenof target == 0
+            length = if target[0] == u8('/') then 0 else before end if
+            tail: usize = rest_length - start
+            fail io.io_failed when lenof target + 1 + tail > volume_room
+            mem.copy(rest[lenof target + 1..<lenof target + 1 + tail],
+                     rest[start..<rest_length]) else (problem)
+                _ = problem
+                fail io.io_failed
+            end
+            mem.copy(rest[0..<lenof target], target) else (problem)
+                _ = problem
+                fail io.io_failed
+            end
+            rest[lenof target] = u8('/')
+            rest_length = lenof target + 1 + tail
+            start = 0
+        elsif not last then
+            fail io.not_found when index == count
+              or self.nodes[index].kind <> io.subdirectory
+        end if
+    end loop
+end volume_walk
+
+--  The node PATH leads to, following a link in its last part when FOLLOW,
+--  or the node count when it leads to none or to the root.
+volume_resolve: (self: volume, path: []u8, follow: bool)
+                -> (index: usize) =
+    index = lenof self.nodes
+    mut room: [256]u8 = zeroed
+    length: usize = volume_walk(self, path, follow, room[0..<256])
+        else (problem)
+        _ = problem
+        return
+    end
+    return when length == 0
+    index = volume_find(self, room[0..<length])
+end volume_resolve
+
+--  Whether PATH leads to the root or to a directory, following links.
+volume_directory_at: (self: volume, path: []u8) -> (yes: bool) =
+    yes = false
+    mut room: [256]u8 = zeroed
+    length: usize = volume_walk(self, path, true, room[0..<256])
+        else (problem)
+        _ = problem
+        return
+    end
+    yes = length == 0 or volume_is_directory(self, room[0..<length])
+end volume_directory_at
+
+--  A free node with room for PATH, or the node count.
+volume_free_node: (self: volume, path: []u8) -> (index: usize) =
+    index = lenof self.nodes
+    for at in usize(0)..<lenof self.nodes do
+        node: ptr volume_node = addr self.nodes[at]
+        if node.val.path_length == 0 and lenof node.val.path >= lenof path then
+            index = at
+            return
+        end if
+    end for
+end volume_free_node
+
+--  Whether a file is open on the node INDEX.
+volume_busy: (self: volume, index: usize) -> (yes: bool) =
+    yes = false
+    for opening in self.state.val.openings do
+        if opening.open and opening.node == index then yes = true end if
+    end for
+end volume_busy
+
+--  Stamp the directory holding PATH as changed now.
+volume_touch_parent: (self: volume, path: []u8) -> none =
+    parent: usize = volume_find(self, volume_parent(path))
+    if parent < lenof self.nodes then
+        self.nodes[parent].modified = volume_now(self)
+    end if
+end volume_touch_parent
+
+--  Make a node of KIND at PATH, empty: its index, or `not_found` when its
+--  directory is missing and `io_failed` when there is no room.
+volume_make: (self: volume, path: []u8, kind: io.entry_kind)
+             -> (index: usize) ! io.not_found | io.io_failed =
+    index = lenof self.nodes
+    fail io.io_failed when not volume_valid(path)
+    fail io.not_found when not volume_is_directory(self, volume_parent(path))
+    index = volume_free_node(self, path)
+    fail io.io_failed when index == lenof self.nodes
+    node: ptr mut volume_node = addr self.nodes[index]
+    mem.copy(node.val.path, path) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    node.val.path_length = lenof path
+    node.val.length = 0
+    node.val.kind = kind
+    node.val.read_only = false
+    node.val.modified = volume_now(self)
+    volume_touch_parent(self, path)
+end volume_make
+
+--  The opening a file of this volume is.
+volume_opening_of: (self: volume, opened: io.file)
+                   -> (opening: ptr mut volume_opening from self) ! io.io_failed =
+    fail io.io_failed when usize(opened) < 3
+      or usize(opened) - 3 >= volume_openings
+    opening = addr self.state.val.openings[usize(opened) - 3]
+    fail io.io_failed when not opening.val.open
+      or opening.val.node >= lenof self.nodes
+end volume_opening_of
+
+volume_open_file: (self: volume, path: text.host_string,
+                   options: io.open_options)
+                  -> (opened: io.file)
+                  ! io.already_exists | io.not_found | io.no_access | io.io_failed =
+    try volume_call(self)
+    inc self.state.val.opens
+    opened = io.file(0)
+    fail io.io_failed when not io.valid_options(options)
+    wanted: []u8 = text.host_bytes(path)
+    count: usize = lenof self.nodes
+    mut room: [256]u8 = zeroed
+    length: usize = volume_walk(self, wanted, true, room[0..<256])
+        else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.io_failed
+    end
+    fail io.io_failed when length == 0
+    mut index: usize = volume_find(self, room[0..<length])
+    if index < count then
+        fail io.already_exists when options.exclusive
+        fail io.io_failed when self.nodes[index].kind <> io.regular
+        fail io.no_access when options.write and self.nodes[index].read_only
+    else
+        --  A dangling link is a name that exists, and its target is the
+        --  file a creating open makes.
+        fail io.already_exists when options.exclusive
+          and volume_resolve(self, wanted, false) < count
+        fail io.not_found when not options.create
+        index = try volume_make(self, room[0..<length], io.regular)
+    end if
+    mut slot: usize = volume_openings
+    for at in usize(0)..<volume_openings do
+        if slot == volume_openings and not self.state.val.openings[at].open
+        then
+            slot = at
+        end if
+    end for
+    fail io.io_failed when slot == volume_openings
+    if options.truncate and self.nodes[index].length > 0 then
+        self.nodes[index].length = 0
+        self.nodes[index].modified = volume_now(self)
+    end if
+    self.state.val.openings[slot] =
+        (node: index, position: 0, readable: options.read,
+         writable: options.write, appending: options.append, open: true)
+    opened = io.file(slot + 3)
+end volume_open_file
+
+volume_open_read: (self: volume, path: text.host_string)
+                  -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
+    opened = volume_open_file(self, path,
+                              (read: true, write: false, append: false,
+                               create: false, exclusive: false,
+                               truncate: false)) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.no_access when problem == io.no_access
+        fail io.io_failed
+    end
+end volume_open_read
+
+volume_open_write: (self: volume, path: text.host_string)
+                   -> (opened: io.file) ! io.not_found | io.no_access | io.io_failed =
+    opened = volume_open_file(self, path,
+                              (read: false, write: true, append: false,
+                               create: true, exclusive: false,
+                               truncate: true)) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.no_access when problem == io.no_access
+        fail io.io_failed
+    end
+end volume_open_write
+
+volume_same_file: (self: volume, left: text.host_string,
+                   right: text.host_string) -> (same: bool) ! io.io_failed =
+    try volume_call(self)
+    count: usize = lenof self.nodes
+    first: usize = volume_resolve(self, text.host_bytes(left), true)
+    fail io.io_failed when first == count
+    same = first == volume_resolve(self, text.host_bytes(right), true)
+end volume_same_file
+
+volume_close: (self: volume, sink opened: io.file) -> none ! io.io_failed =
+    opening: ptr mut volume_opening = try volume_opening_of(self, opened)
+    opening.val.open = false
+    try volume_call(self)
+end volume_close
+
+--  Copy what the node holds from OFFSET on into INTO.
+volume_take: (node: ptr volume_node, offset: u64, into: []mut u8)
+             -> (count: usize) =
+    count = 0
+    return when offset >= u64(node.val.length)
+    start: usize = usize(offset)
+    count = node.val.length - start
+    if count > lenof into then count = lenof into end if
+    for at in usize(0)..<count do
+        into[at] = node.val.contents[start + at]
+    end for
+end volume_take
+
+--  Put BYTES into the node from OFFSET on, zeros before them when OFFSET
+--  is past its end, as many as there is room for: how many.
+volume_put: (self: volume, index: usize, offset: u64, bytes: []u8)
+            -> (count: usize) ! io.io_failed =
+    node: ptr mut volume_node = addr self.nodes[index]
+    room: usize = lenof node.val.contents
+    fail io.io_failed when offset >= u64(room) and lenof bytes > 0
+    count = 0
+    return when lenof bytes == 0
+    start: usize = usize(offset)
+    count = room - start
+    if count > lenof bytes then count = lenof bytes end if
+    while node.val.length < start do
+        node.val.contents[node.val.length] = 0
+        inc node.val.length
+    end while
+    for at in usize(0)..<count do
+        node.val.contents[start + at] = bytes[at]
+    end for
+    if start + count > node.val.length then
+        node.val.length = start + count
+    end if
+    node.val.modified = volume_now(self)
+end volume_put
+
+volume_read: (self: volume, opened: io.file, into: []mut u8)
+             -> (count: usize) ! io.io_failed =
+    opening: ptr mut volume_opening = try volume_opening_of(self, opened)
+    fail io.io_failed when not opening.val.readable
+    try volume_call(self)
+    count = volume_take(addr self.nodes[opening.val.node],
+                        opening.val.position, into)
+    opening.val.position = opening.val.position + u64(count)
+end volume_read
+
+volume_write_some: (self: volume, opened: io.file, bytes: []u8)
+                   -> (count: usize) ! io.io_failed =
+    opening: ptr mut volume_opening = try volume_opening_of(self, opened)
+    fail io.io_failed when not opening.val.writable
+    try volume_call(self)
+    if opening.val.appending then
+        opening.val.position = u64(self.nodes[opening.val.node].length)
+    end if
+    count = try volume_put(self, opening.val.node, opening.val.position,
+                           bytes)
+    opening.val.position = opening.val.position + u64(count)
+end volume_write_some
+
+volume_write: (self: volume, opened: io.file, bytes: []u8)
+              -> none ! io.io_failed =
+    mut at: usize = 0
+    while at < lenof bytes do
+        count: usize = try volume_write_some(self, opened,
+                                             bytes[at..<lenof bytes])
+        at += count
+    end while
+end volume_write
+
+volume is io.reader (read: volume_read)
+volume is io.writer (write: volume_write, write_some: volume_write_some)
+volume is io.files
+    (open_read: volume_open_read, open_write: volume_open_write,
+     same_file: volume_same_file, close: volume_close)
+
+--  An open directory's `handle` is the index of its node, or the node
+--  count for the root, and `position` the next node a refill looks at.
+--  Its buffer holds records of a kind byte, a two-byte length and the
+--  name.
+
+--  The directory a node lies directly in is DIRECTORY, given as a node
+--  index or the node count for the root.
+volume_in: (self: volume, at: usize, directory: usize) -> (yes: bool) =
+    node: ptr volume_node = addr self.nodes[at]
+    yes = false
+    return when node.val.path_length == 0
+    parent: []u8 = volume_parent(node.val.path[0..<node.val.path_length])
+    if directory == lenof self.nodes then
+        yes = volume_same(parent, ".")
+        return
+    end if
+    holder: ptr volume_node = addr self.nodes[directory]
+    yes = volume_same(parent, holder.val.path[0..<holder.val.path_length])
+end volume_in
+
+volume_open_directory: (self: volume, path: text.host_string,
+                        buffer: []mut u8)
+                       -> (opened: io.directory from buffer)
+                       ! io.not_found | io.no_access | io.io_failed =
+    try volume_call(self)
+    wanted: []u8 = text.host_bytes(path)
+    count: usize = lenof self.nodes
+    mut room: [256]u8 = zeroed
+    length: usize = volume_walk(self, wanted, true, room[0..<256])
+        else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.io_failed
+    end
+    mut index: usize = count
+    if length > 0 then
+        index = volume_find(self, room[0..<length])
+        fail io.not_found when index == count
+          or self.nodes[index].kind <> io.subdirectory
+    end if
+    opened = (handle: index, stream: 0, position: 0, buffer: buffer,
+              filled: 0, cursor: 0, finished: false)
+end volume_open_directory
+
+volume_refill: (self: volume, inout opened: io.directory)
+               -> none ! io.io_failed =
+    opened.filled = 0
+    opened.cursor = 0
+    while opened.position < lenof self.nodes do
+        at: usize = opened.position
+        if volume_in(self, at, opened.handle) then
+            node: ptr volume_node = addr self.nodes[at]
+            name: []u8 = volume_leaf(node.val.path[0..<node.val.path_length])
+            fail io.io_failed when lenof name > 65535
+            needed: usize = lenof name + 3
+            if needed > lenof opened.buffer - opened.filled then
+                fail io.io_failed when opened.filled == 0
+                return
+            end if
+            place: usize = opened.filled
+            opened.buffer[place] = match node.val.kind
+                io.regular: 0
+                io.subdirectory: 1
+                io.symbolic_link: 2
+                io.special: 3
+            end match
+            opened.buffer[place + 1] = u8(lenof name & 255)
+            opened.buffer[place + 2] = u8(lenof name >> 8)
+            for n in usize(0)..<lenof name do
+                opened.buffer[place + 3 + n] = name[n]
+            end for
+            opened.filled += needed
+        end if
+        inc opened.position
+    end while
+    opened.finished = true
+end volume_refill
+
+volume_read_entry: (self: volume, inout opened: io.directory)
+                   -> (item: io.entry from opened) ! io.io_failed =
+    --  Every call counts, whether it refills the buffer or reads what an
+    --  earlier refill left there.
+    try volume_call(self)
+    if opened.cursor >= opened.filled and not opened.finished then
+        try volume_refill(self, opened)
+    end if
+    if opened.cursor >= opened.filled then
+        item = (name: text.host_over(opened.buffer[0..<0]), kind: io.special)
+        return
+    end if
+    fail io.io_failed when opened.filled - opened.cursor < 3
+    at: usize = opened.cursor
+    length: usize = usize(opened.buffer[at + 1])
+                    | (usize(opened.buffer[at + 2]) << 8)
+    fail io.io_failed when length > opened.filled - at - 3
+    opened.cursor = at + 3 + length
+    kind: io.entry_kind = if opened.buffer[at] == 0 then io.regular
+                          elsif opened.buffer[at] == 1 then io.subdirectory
+                          elsif opened.buffer[at] == 2 then io.symbolic_link
+                          else io.special end if
+    item = (name: text.host_over(opened.buffer[at + 3..<at + 3 + length]),
+            kind: kind)
+end volume_read_entry
+
+volume_entry_size: (self: volume, opened: io.directory,
+                    name: text.host_string)
+                   -> (size: u64) ! io.not_found | io.no_access | io.io_failed =
+    size = 0
+    try volume_call(self)
+    wanted: []u8 = text.host_bytes(name)
+    fail io.not_found when lenof wanted == 0
+    for byte in wanted do
+        fail io.not_found when byte == 0 or byte == u8('/')
+    end for
+    for at in usize(0)..<lenof self.nodes do
+        if volume_in(self, at, opened.handle) then
+            node: ptr volume_node = addr self.nodes[at]
+            if volume_same(volume_leaf(node.val.path[0..<node.val.path_length]),
+                           wanted) then
+                size = if node.val.kind == io.subdirectory then 0
+                       else u64(node.val.length) end if
+                return
+            end if
+        end if
+    end for
+    fail io.not_found
+end volume_entry_size
+
+volume_close_directory: (self: volume, sink opened: io.directory)
+                        -> none ! io.io_failed =
+    _ = opened.handle
+    try volume_call(self)
+end volume_close_directory
+
+volume_make_directory: (self: volume, path: text.host_string)
+                       -> none
+                       ! io.already_exists | io.not_found | io.no_access
+                       | io.io_failed =
+    try volume_call(self)
+    mut room: [256]u8 = zeroed
+    length: usize = volume_walk(self, text.host_bytes(path), false,
+                                room[0..<256]) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.io_failed
+    end
+    fail io.already_exists when length == 0
+      or volume_find(self, room[0..<length]) < lenof self.nodes
+    _ = try volume_make(self, room[0..<length], io.subdirectory)
+end volume_make_directory
+
+--  Free the node at PATH when it is of the kind asked for, a link itself
+--  rather than its target.  A directory asked of a node that is none is
+--  `not_found`, as ENOTDIR is, and a file asked of a directory
+--  `io_failed`, as Linux's EISDIR is.
+volume_remove: (self: volume, path: text.host_string,
+                directory: bool) -> none ! io.not_found | io.no_access | io.io_failed =
+    try volume_call(self)
+    mut room: [256]u8 = zeroed
+    length: usize = volume_walk(self, text.host_bytes(path), false,
+                                room[0..<256]) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.io_failed
+    end
+    fail io.io_failed when length == 0
+    wanted: []u8 = room[0..<length]
+    count: usize = lenof self.nodes
+    index: usize = volume_find(self, wanted)
+    fail io.not_found when index == count
+    node: ptr mut volume_node = addr self.nodes[index]
+    is_directory: bool = node.val.kind == io.subdirectory
+    fail io.not_found when directory and not is_directory
+    fail io.io_failed when is_directory <> directory or volume_busy(self, index)
+    if directory then
+        for at in usize(0)..<count do
+            fail io.io_failed when volume_in(self, at, index)
+        end for
+    end if
+    node.val.path_length = 0
+    volume_touch_parent(self, wanted)
+end volume_remove
+
+volume_remove_file: (self: volume, path: text.host_string)
+                    -> none ! io.not_found | io.no_access | io.io_failed =
+    try volume_remove(self, path, false)
+end volume_remove_file
+
+volume_remove_directory: (self: volume, path: text.host_string)
+                         -> none ! io.not_found | io.no_access | io.io_failed =
+    try volume_remove(self, path, true)
+end volume_remove_directory
+
+volume is io.directories
+    (open_directory: volume_open_directory, read_entry: volume_read_entry,
+     entry_size: volume_entry_size, close_directory: volume_close_directory,
+     make_directory: volume_make_directory,
+     remove_file: volume_remove_file,
+     remove_directory: volume_remove_directory)
+
+--  Whether PATH lies inside the directory PREFIX.
+volume_below: (path: []u8, prefix: []u8) -> (yes: bool) =
+    yes = lenof path > lenof prefix
+          and volume_same(path[0..<lenof prefix], prefix)
+          and path[lenof prefix] == u8('/')
+end volume_below
+
+--  Rename the node at INDEX, and with it everything under it, from OLD to
+--  NEW: `io_failed`, changing nothing, when a path would not fit its room.
+volume_move: (self: volume, index: usize, old: []u8, new: []u8)
+             -> none ! io.io_failed =
+    count: usize = lenof self.nodes
+    for at in usize(0)..<count do
+        node: ptr volume_node = addr self.nodes[at]
+        if node.val.path_length > 0
+          and volume_below(node.val.path[0..<node.val.path_length], old) then
+            moved: usize = node.val.path_length - lenof old + lenof new
+            fail io.io_failed when moved > lenof node.val.path
+        end if
+    end for
+    fail io.io_failed when lenof new > lenof self.nodes[index].path
+    for at in usize(0)..<count do
+        node: ptr mut volume_node = addr self.nodes[at]
+        if node.val.path_length > 0
+          and volume_below(node.val.path[0..<node.val.path_length], old) then
+            tail: usize = node.val.path_length - lenof old
+            mem.copy(node.val.path[lenof new..<lenof new + tail],
+                     node.val.path[lenof old..<node.val.path_length]) else (problem)
+                _ = problem
+                fail io.io_failed
+            end
+            mem.copy(node.val.path[0..<lenof new], new) else (problem)
+                _ = problem
+                fail io.io_failed
+            end
+            node.val.path_length = lenof new + tail
+        end if
+    end for
+    node: ptr mut volume_node = addr self.nodes[index]
+    mem.copy(node.val.path[0..<lenof new], new) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    node.val.path_length = lenof new
+end volume_move
+
+volume_rename: (self: volume, old: text.host_string,
+                new: text.host_string)
+               -> none ! io.not_found | io.no_access | io.io_failed =
+    try volume_call(self)
+    inc self.state.val.renames
+    mut from_room: [256]u8 = zeroed
+    from_length: usize = volume_walk(self, text.host_bytes(old), false,
+                                     from_room[0..<256]) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.io_failed
+    end
+    mut to_room: [256]u8 = zeroed
+    to_length: usize = volume_walk(self, text.host_bytes(new), false,
+                                   to_room[0..<256]) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.io_failed
+    end
+    fail io.io_failed when from_length == 0 or to_length == 0
+    from_path: []u8 = from_room[0..<from_length]
+    to_path: []u8 = to_room[0..<to_length]
+    count: usize = lenof self.nodes
+    moving: usize = volume_find(self, from_path)
+    fail io.not_found when moving == count
+    fail io.not_found when not volume_is_directory(self, volume_parent(to_path))
+    fail io.io_failed when not volume_valid(to_path)
+    replaced: usize = volume_find(self, to_path)
+    return when replaced == moving
+    is_directory: bool = self.nodes[moving].kind == io.subdirectory
+    fail io.io_failed when is_directory and volume_below(to_path, from_path)
+    if replaced < count then
+        other: bool = self.nodes[replaced].kind == io.subdirectory
+        fail io.io_failed when other <> is_directory
+          or volume_busy(self, replaced)
+        if is_directory then
+            for at in usize(0)..<count do
+                fail io.io_failed when volume_in(self, at, replaced)
+            end for
+        end if
+    end if
+    try volume_move(self, moving, from_path, to_path)
+    if replaced < count then
+        self.nodes[replaced].path_length = 0
+    end if
+    volume_touch_parent(self, from_path)
+    volume_touch_parent(self, to_path)
+end volume_rename
+
+volume_status_of_node: (self: volume, index: usize) -> (found: io.status) =
+    node: ptr volume_node = addr self.nodes[index]
+    found = (size: if node.val.kind == io.subdirectory then 0
+                   else u64(node.val.length) end if,
+             kind: node.val.kind, modified: node.val.modified,
+             read_only: node.val.read_only)
+end volume_status_of_node
+
+volume_status_of: (self: volume, path: text.host_string,
+                   links: io.link_handling)
+                  -> (found: io.status) ! io.not_found | io.no_access | io.io_failed =
+    try volume_call(self)
+    wanted: []u8 = text.host_bytes(path)
+    found = (size: 0, kind: io.subdirectory, modified: volume_now(self),
+             read_only: false)
+    mut room: [256]u8 = zeroed
+    length: usize = volume_walk(self, wanted, links == io.following,
+                                room[0..<256]) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.io_failed
+    end
+    return when length == 0
+    index: usize = volume_find(self, room[0..<length])
+    fail io.not_found when index == lenof self.nodes
+    found = volume_status_of_node(self, index)
+end volume_status_of
+
+volume_status_of_file: (self: volume, opened: io.file)
+                       -> (found: io.status) ! io.io_failed =
+    opening: ptr mut volume_opening = try volume_opening_of(self, opened)
+    try volume_call(self)
+    found = volume_status_of_node(self, opening.val.node)
+end volume_status_of_file
+
+volume_set_read_only: (self: volume, path: text.host_string,
+                       read_only: bool)
+                      -> none ! io.not_found | io.no_access | io.io_failed =
+    try volume_call(self)
+    index: usize = volume_resolve(self, text.host_bytes(path), true)
+    fail io.not_found when index == lenof self.nodes
+    self.nodes[index].read_only = read_only
+end volume_set_read_only
+
+volume_synchronize: (self: volume, opened: io.file,
+                     writing: io.synchronizing)
+                    -> none ! io.io_failed =
+    _ = writing
+    _ = try volume_opening_of(self, opened)
+    try volume_call(self)
+    inc self.state.val.synchronizations
+end volume_synchronize
+
+volume_truncate: (self: volume, opened: io.file, size: u64)
+                 -> none ! io.io_failed =
+    opening: ptr mut volume_opening = try volume_opening_of(self, opened)
+    fail io.io_failed when not opening.val.writable
+    try volume_call(self)
+    node: ptr mut volume_node = addr self.nodes[opening.val.node]
+    fail io.io_failed when size > u64(lenof node.val.contents)
+    wanted: usize = usize(size)
+    while node.val.length < wanted do
+        node.val.contents[node.val.length] = 0
+        inc node.val.length
+    end while
+    node.val.length = wanted
+    node.val.modified = volume_now(self)
+end volume_truncate
+
+volume_read_at: (self: volume, opened: io.file, offset: u64,
+                 into: []mut u8) -> (count: usize) ! io.io_failed =
+    opening: ptr mut volume_opening = try volume_opening_of(self, opened)
+    fail io.io_failed when not opening.val.readable
+    try volume_call(self)
+    count = volume_take(addr self.nodes[opening.val.node], offset, into)
+end volume_read_at
+
+volume_write_at: (self: volume, opened: io.file, offset: u64,
+                  bytes: []u8) -> none ! io.io_failed =
+    opening: ptr mut volume_opening = try volume_opening_of(self, opened)
+    fail io.io_failed when not opening.val.writable
+    try volume_call(self)
+    mut written: usize = 0
+    while written < lenof bytes do
+        count: usize = try volume_put(self, opening.val.node,
+                                      offset + u64(written),
+                                      bytes[written..<lenof bytes])
+        written += count
+    end while
+end volume_write_at
+
+volume_make_temporary: (self: volume, directory: text.host_string,
+                        names: any io.entropy, into: []mut u8)
+                       -> (made: io.temporary from into)
+                       ! io.not_found | io.no_access | io.io_failed =
+    try volume_call(self)
+    made = (opened: io.file(0), path: text.host_over(into[0..<0]))
+    folder: []u8 = text.host_bytes(directory)
+    fail io.not_found when lenof folder > 0
+      and not volume_directory_at(self, folder)
+    for attempt in usize(0)..<io.temporary_tries do
+        _ = attempt
+        inc self.state.val.temporary_tries
+        mut bytes: [8]u8 = zeroed
+        try names.fill_random(bytes[0..<8])
+        path: text.host_string = try io.temporary_path(directory, bytes, into)
+        opened: io.file = volume_open_file(self, path, io.creating) else (problem)
+            continue when problem == io.already_exists
+            fail io.not_found when problem == io.not_found
+            fail io.no_access when problem == io.no_access
+            fail io.io_failed
+        end
+        made = (opened: opened, path: path)
+        return
+    end for
+    fail io.io_failed
+end volume_make_temporary
+
+volume_current_directory: (self: volume, into: []mut u8)
+                          -> (path: text.host_string from into) ! io.io_failed =
+    path = text.host_over(into[0..<0])
+    try volume_call(self)
+    working: []u8 = self.working
+    fail io.io_failed when lenof working > lenof into
+    mem.copy(into[0..<lenof working], working) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    path = text.host_over(into[0..<lenof working])
+end volume_current_directory
+
+volume is io.file_system
+    (open_file: volume_open_file, rename: volume_rename,
+     status_of: volume_status_of, status_of_file: volume_status_of_file,
+     set_read_only: volume_set_read_only, synchronize: volume_synchronize,
+     truncate: volume_truncate, read_at: volume_read_at,
+     write_at: volume_write_at, make_temporary: volume_make_temporary,
+     current_directory: volume_current_directory)

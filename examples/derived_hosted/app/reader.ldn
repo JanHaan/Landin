@@ -1,6 +1,6 @@
 import core/io
-import core/text
 import core/mem
+import core/text
 import core/vec
 
 public at_end: atom
@@ -21,7 +21,7 @@ public open_reader: (provider: type is mem.allocator, memory: provider,
     fail io.io_failed when chunk_size == 0
     opened: io.file = try world.open_read(path)
     chunk := mem.new_bytes(memory, chunk_size) else (problem)
-        world.close(opened) else (close_problem) _ = close_problem end
+        world.close(opened) else none
         fail problem
     end
     line := vec.new(item: u8)

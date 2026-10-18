@@ -1,17 +1,18 @@
+import core/arena
 import core/fault
 import core/mem
 
 stopped: atom
 absent: atom
 optional: type = absent | ptr mut u8
-counted: type = fault.injector(mem.arena)
+counted: type = fault.injector(arena.arena)
 
-leave: (arena: counted, mode: u8) -> none ! stopped =
-    block := mem.allocate(arena, usize(1), usize(1)) else (problem)
+leave: (memory: counted, mode: u8) -> none ! stopped =
+    block := mem.allocate(memory, usize(1), usize(1)) else (problem)
         _ = problem
         fail stopped
     end
-    defer mem.free(arena, block, usize(1))
+    defer mem.free(memory, block, usize(1))
     if mode == 0 then
         return
     end if
@@ -49,19 +50,19 @@ public main: () -> (code: i32) =
     code = 1
     mut outer_bytes: [4]u8 = zeroed
     mut inner_bytes: [2]u8 = zeroed
-    mut outer_arena_space: mem.arena_space = zeroed
-    mut inner_arena_space: mem.arena_space = zeroed
-    outer_arena := mem.arena_over_unchecked(outer_arena_space,
+    mut outer_arena_space: arena.space = zeroed
+    mut inner_arena_space: arena.space = zeroed
+    outer_arena := arena.over_unchecked(outer_arena_space,
                                             addr outer_bytes[0], 4)
-    inner_arena := mem.arena_over_unchecked(inner_arena_space,
+    inner_arena := arena.over_unchecked(inner_arena_space,
                                             addr inner_bytes[0], 2)
     mut outer_space: fault.space = zeroed
     mut inner_space: fault.space = zeroed
     outer := fault.over(outer_space, outer_arena, usize(4))
     inner := fault.over(inner_space, inner_arena, usize(3))
     ok: bool = nested(outer, inner) else false
-    return when not ok or mem.arena_used(outer_arena) <> 2
-      or mem.arena_used(inner_arena) <> 2
+    return when not ok or arena.used(outer_arena) <> 2
+      or arena.used(inner_arena) <> 2
     --  The arena's refusal reached it, so it spent the inner budget's third
     --  permit.
     return when fault.frees(outer) <> 2 or fault.remaining(inner) <> 0
@@ -70,11 +71,9 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    leave(outer, 1) else (problem)
-        _ = problem
-    end
-    if mem.arena_used(outer_arena) == 4 and fault.successes(outer) == 4
-      and fault.frees(outer) == 4 and mem.arena_used(inner_arena) == 2
+    leave(outer, 1) else none
+    if arena.used(outer_arena) == 4 and fault.successes(outer) == 4
+      and fault.frees(outer) == 4 and arena.used(inner_arena) == 2
     then
         code = 42
     end if

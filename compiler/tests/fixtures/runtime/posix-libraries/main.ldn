@@ -167,8 +167,6 @@ checked: () -> none ! ... =
 end checked
 
 public main: () -> (code: i32) =
-    checked() else (problem)
-        _ = problem
-    end
+    checked() else none
     code = reached
 end main

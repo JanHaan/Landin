@@ -1,0 +1,23 @@
+import core/time
+
+--  Spans in every unit agree, an instant later by a span is that span
+--  after it, and the whole milliseconds round down.
+exercise: () -> (ok: bool) =
+    ok = false
+    return when time.seconds(2) <> time.milliseconds(2000)
+      or time.milliseconds(3) <> time.microseconds(3000)
+      or time.microseconds(4) <> time.nanoseconds(4000)
+    start: time.instant = time.instant(1000)
+    deadline: time.instant = time.later(start, time.milliseconds(5))
+    return when time.elapsed(start, deadline) <> time.milliseconds(5)
+      or not (start < deadline)
+    ok = time.in_milliseconds(time.microseconds(2999)) == 2
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise()
+    if ok then
+        code = 42
+    end if
+end main

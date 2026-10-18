@@ -1,0 +1,2 @@
+write "out"
+run ["x86_64-pc-linux-gnu-gcc","-nostdlib","-static","-no-pie","-Wl,-e,_landin_start","../tests/fixtures/end-to-end/link-assembly-operand-dry-run/hand.s","-o","out","-Wl,--gc-sections","-Wa,-march=generic64"]

@@ -1,0 +1,8 @@
+class: negative
+summary: an erased view a store could reach through, of mutable module storage or of a module binding holding a writable view, still hides a destination under a writable from clause, and one of frame storage still escapes
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/erased-writable-view-under-from
+constructs: 0790, 0840, 1370
+codes: L0316, L0316, L0314
+status: 1
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

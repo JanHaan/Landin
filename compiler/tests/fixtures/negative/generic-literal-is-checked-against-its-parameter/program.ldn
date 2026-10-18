@@ -1,0 +1,8 @@
+pick: (t: type, value: t, size: u8) -> (r: u8) =
+    _ = value
+    r = size
+end pick
+
+main: () -> (code: i32) =
+    code = i32(pick(true, 300))
+end main

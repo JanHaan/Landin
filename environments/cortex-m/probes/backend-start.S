@@ -1,17 +1,20 @@
 /* External generated-code test harness. These are not Landin startup, vector,
- * interrupt or section capabilities. The tested entry is ordinary main. */
+ * interrupt or section capabilities. The tested entry is ordinary main. The
+ * harness's own entry points are named in the `_landin` prefix the compiler
+ * keeps for its own symbols, so a program's public routine, `arena.reset`
+ * among them, cannot collide with them. */
 .syntax unified
 .cpu cortex-m0
 .thumb
 .section .isr_vector,"a",%progbits
-.word 0x20004000, reset, unexpected, hardfault
+.word 0x20004000, _landin_harness_reset, _landin_harness_unexpected, _landin_harness_hardfault
 .rept 44
-.word unexpected
+.word _landin_harness_unexpected
 .endr
 .text
-.global reset
+.global _landin_harness_reset
 .thumb_func
-reset:
+_landin_harness_reset:
   movs r0, #0
   mov r11, r0
   ldr r0, =__data_load
@@ -59,7 +62,7 @@ reset:
 backend_done:
   b backend_done
 .thumb_func
-hardfault:
+_landin_harness_hardfault:
   mrs r0, ipsr
   ldr r1, =backend_fault
   str r0, [r1]
@@ -68,8 +71,8 @@ hardfault:
 backend_fault_done:
   b backend_fault_done
 .thumb_func
-unexpected:
-  b unexpected
+_landin_harness_unexpected:
+  b _landin_harness_unexpected
 .bss
 .balign 4
 .global backend_result

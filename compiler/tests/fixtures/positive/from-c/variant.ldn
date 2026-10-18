@@ -1,0 +1,17 @@
+--- A token and what it holds; the variant part is the tag and the union.
+token: type = struct
+    offset: u32
+    kind: variant
+        number: (value: i64) |
+        word: (letters: u32) |
+        end_of_input
+    end kind
+end token
+
+token_width: (t: token) -> (width: u32) =
+    match t.kind
+        number(value): width = if value < 0 then 2 else 1 end if
+        word(letters): width = letters
+        end_of_input: width = 0
+    end match
+end token_width

@@ -32,9 +32,27 @@ def hash_file(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+#  D361: the line a trap with no panic handler writes to standard error
+#  before its terminal instruction.  A fixture's `trap_report:` names it
+#  by the file's base name, so it matches a line ending in `/` and that.
+TRAP_REPORT = re.compile(rb"^(?:.*: )?trap: (?:out_of_range|overflow|bad_conversion|unreachable)\n\Z")
+
+
+def reports_trap(output, line):
+    wanted = line.encode()
+    return any(text == wanted or text.endswith(b"/" + wanted)
+               for text in output.split(b"\n"))
+
+
 def outcome(meta, status, stdout, stderr, expected=None):
     if meta.get("traps") == "yes":
         require(status == -signal.SIGTRAP, f"expected synchronous BRK, got {status}")
+        if meta.get("trap_report"):
+            require(reports_trap(stdout + stderr, meta["trap_report"]),
+                    f"trap report missing: {meta['trap_report']!r} in {(stdout + stderr)[:400]!r}")
+        #  The report is the trap's, not the program's output.
+        if meta.get("stream") != "merged" and TRAP_REPORT.match(stderr):
+            stderr = b""
     else:
         require(status == int(meta["status"]), f"expected status {meta['status']}, got {status}")
     if expected is not None:
@@ -273,7 +291,8 @@ def main(argv=None):
                 # ABI cases retain a separate Apple-assembled Mach-O object.
                 if meta["class"] == "runtime" and not meta.get("c-sources"):
                     driver_args = ["--toolchain=" + str(retained_driver)] if args.parity else []
-                    run.command([*argv, *driver_args, "--emit=exe", "-o", executable], label + "-build", cwd, timeout=900)
+                    run.command([*argv, *driver_args, "--emit=exe", "--keep-asm", "-o", executable],
+                                label + "-build", cwd, timeout=900)
                     produced = Path(str(executable) + ".s")
                     if produced.exists() and produced != assembly:
                         produced.rename(assembly)

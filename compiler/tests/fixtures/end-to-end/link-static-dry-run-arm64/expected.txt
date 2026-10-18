@@ -1,3 +1,4 @@
 write "out.s"
 write "out"
 run ["aarch64-linux-gnu-gcc","-nostdlib","-static","-no-pie","-Wl,-e,_landin_start","out.s","-o","out","-Wl,--gc-sections","-Wa,-march=armv8-a"]
+remove "out.s"

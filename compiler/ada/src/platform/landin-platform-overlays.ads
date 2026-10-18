@@ -75,7 +75,8 @@ package Landin.Platform.Overlays is
      (Host    : Overlay;
       Path    : String;
       Content : String;
-      Status  : out Write_Status);
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String);
 
    overriding procedure Remove_File
      (Host   : Overlay;

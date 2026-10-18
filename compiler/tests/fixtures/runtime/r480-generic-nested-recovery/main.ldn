@@ -34,9 +34,7 @@ run: (t: type is display, value: ptr mut t, erased: any action, broken: bool)
     object := (select(value, broken) else (problem)
         match problem
             unavailable:
-                cleanup(value, erased) else (close_problem)
-                    _ = close_problem
-                end
+                cleanup(value, erased) else none
         end match
         fail problem
     end)

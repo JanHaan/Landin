@@ -1,0 +1,7 @@
+class: end-to-end
+summary: an assembly operand is linked as a compiled program is, with the static link's arguments, and is neither read nor removed
+expect: expected.txt
+targets: linux-x86-64
+args: compile --target=linux-x86-64 --dry-run ../tests/fixtures/end-to-end/link-assembly-operand-dry-run/hand.s -o out
+status: 0
+stream: output

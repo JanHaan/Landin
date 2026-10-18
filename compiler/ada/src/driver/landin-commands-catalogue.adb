@@ -50,13 +50,15 @@ package body Landin.Commands.Catalogue is
          when Library => "--library",
          when Build_Option => "--option", when Build_Mode => "--build-mode",
          when Optimize => "--optimize", when Specialize => "--specialize",
-         when Emit => "--emit", when Output => "-o", when Debug => "--debug",
+         when Emit => "--emit", when Output => "-o",
+         when Keep_Asm => "--keep-asm", when Debug => "--debug",
          when Panic_Map => "--panic-map", when Toolchain => "--toolchain",
          when Linker => "--linker", when Link => "--link",
          when Firmware_Entry => "--firmware-entry",
          when Build_Report => "--build-report",
          when Stage_Report => "--stage-report", when Dry_Run => "--dry-run",
          when Depfile => "--depfile", when Format_Check => "--check",
+         when Format_Stdout => "--stdout",
          when Stdio => "--stdio", when JSON => "--json",
          when Warnings => "--warnings", when Warn => "--warn",
          when Allow => "--allow", when Deny => "--deny");
@@ -79,8 +81,9 @@ package body Landin.Commands.Catalogue is
            "Optimization objective: none, size (default), speed",
          when Specialize =>
            "Dispatch specialization: off, auto (default), all",
-         when Emit => "Artifact kind: exe (default), asm",
-         when Output => "Output path; default a.out (exe) or a.s (asm)",
+         when Emit => "Artifact kind: exe (default), asm, ir",
+         when Output => "Output path; default a.out, a.s or a.ir",
+         when Keep_Asm => "Keep an executable's assembly beside it as OUT.s",
          when Debug => "Debug information: none (default), full, lines",
          when Panic_Map => "Emit an off-target runtime check-site map",
          when Toolchain => "Override the target's native compiler driver",
@@ -95,7 +98,9 @@ package body Landin.Commands.Catalogue is
          when Depfile =>
            "Write Make-format dependencies after successful emission",
          when Format_Check =>
-           "Report layout differences without rewriting files",
+           "Report every line out of the layout; write nothing",
+         when Format_Stdout =>
+           "Print the one source in the layout; write nothing",
          when Stdio => "Use the standard input/output LSP transport (default)",
          when JSON => "Print structured query output",
          when Warnings => "Base warning selection: default, all, none",
@@ -111,13 +116,13 @@ package body Landin.Commands.Catalogue is
          when Diagnostics => "human|short|json",
          when Build_Mode => "debug|release",
          when Optimize => "none|size|speed",
-         when Specialize => "off|auto|all", when Emit => "asm|exe",
+         when Specialize => "off|auto|all", when Emit => "asm|exe|ir",
          when Debug => "none|full|lines", when Link => "static|libc",
          when others => "");
 
    function Takes_Value (Flag : Option) return Boolean is
      (Flag not in Help_Flag | Verbose | Quiet | Panic_Map | Dry_Run
-       | Format_Check | Stdio | JSON);
+       | Format_Check | Format_Stdout | Stdio | JSON | Keep_Asm);
 
    function Shared (Flag : Option) return Boolean is
      (Flag in Help_Flag | Verbose | Quiet | Color | Diagnostics);
@@ -130,7 +135,7 @@ package body Landin.Commands.Catalogue is
             | Warnings | Warn | Allow | Deny,
           when Compile => Flag in Target .. Depfile
             or else Flag in Warnings .. Deny,
-          when Format => Flag = Format_Check,
+          when Format => Flag in Format_Check | Format_Stdout,
           when Server => Flag = Stdio,
           when Version => Flag in JSON | Library,
           when Targets => Flag = JSON,
@@ -151,7 +156,7 @@ package body Landin.Commands.Catalogue is
          when Build_Mode => return Text in "debug" | "release";
          when Optimize => return Text in "none" | "size" | "speed";
          when Specialize => return Text in "off" | "auto" | "all";
-         when Emit => return Text in "asm" | "exe";
+         when Emit => return Text in "asm" | "exe" | "ir";
          when Debug => return Text in "none" | "full" | "lines";
          when Link => return Text in "static" | "libc";
          when others => return Text /= "";
@@ -248,6 +253,13 @@ package body Landin.Commands.Catalogue is
             if Command = Compile then
                US.Append (Text, "Example: refine compile --emit asm "
                  & "program.ldn -o program.s" & LF
+                 & "Example: refine compile program.s -o program" & LF
+                 & "An executable's assembly is the link's input and is"
+                 & LF & "removed after it; --keep-asm keeps it as OUT.s, and"
+                 & LF & "a .s operand is linked as a compiled program is,"
+                 & LF & "with the same --target, --level and --link."
+                 & LF & "--emit ir writes the IR the backend receives."
+                 & LF
                  & "Hosted targets use --debug full; Cortex-M uses --debug"
                  & LF & "lines and requires --firmware-entry for executables."
                  & LF);

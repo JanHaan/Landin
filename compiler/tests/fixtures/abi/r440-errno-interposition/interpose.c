@@ -9,7 +9,7 @@
 
 /*
  * The link resolves platform/libc's undefined libc references to these
- * functions.  Landin's hosted/io therefore still calls open, read and their
+ * functions.  Landin's hosted/system therefore still calls open, read and their
  * siblings exactly as it calls the C library; only the endpoint is scripted.
  */
 

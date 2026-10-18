@@ -142,6 +142,27 @@ package Landin.Diagnostics.Fixes is
       Where  : Landin.Source.Span) return Fix
      with Pre => Landin.Source.Length (Where) = 1;
 
+   --  D367: the bytes at Where, another language's spelling of a form,
+   --  become Written, the Landin spelling of it; Word is what the fix's
+   --  sentence names.  Likely: the table says what the spelling stands
+   --  for, but the person may have meant something else on that line.
+   function Landin_Form
+     (Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Written : String;
+      Word    : String) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
+   --  D376: the value at Where, written after the `else` of a call that
+   --  returns nothing, becomes `none`, so the clause ignores the failure.
+   --  Likely: a value there stood in for no result, and ignoring the
+   --  failure is what the corpus wrote it for, but the person may have
+   --  meant to handle the error.
+   function Ignore_Failure
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
    --  One Respell per name the ranking kept, nearest first; none when it
    --  kept none.
    function Respellings

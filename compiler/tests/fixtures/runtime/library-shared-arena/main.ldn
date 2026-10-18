@@ -1,0 +1,28 @@
+import core/arena
+import core/mem
+
+exercise: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut backing: [32]u8 = zeroed
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 32)
+    address := try mem.allocate(memory, usize(4), usize(1))
+    address.val = 42
+    return when address.val <> 42
+    _ = mem.allocate(memory, usize(64), usize(1)) else (problem)
+        _ = problem
+        return when arena.used(memory) <> 4
+        arena.reset(memory)
+        again := try mem.allocate(memory, usize(32), usize(1))
+        ok = arena.used(memory) == 32 and again == address
+        return
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

@@ -1,0 +1,10 @@
+error[L0301]: this array is not writable, and this parameter writes through the slice it lends
+  --> ../tests/fixtures/negative/read-only-array-lent-to-a-generic-writable-slice/program.ldn:9:11
+  |
+9 |     clear(storage, 0)
+  |           ^^^^^^^
+  --> ../tests/fixtures/negative/read-only-array-lent-to-a-generic-writable-slice/program.ldn:1:18
+  |
+1 | clear: (t: type, items: []mut t, value: t) -> none =
+  |                  ^^^^^^^^^^^^^^ this parameter
+  = note: [0570]: a writable slice is lent only by a `mut` binding or another writable place

@@ -1,5 +1,8 @@
---  Target-neutral I/O capability, adapters and caller-backed provider.
---  Hosted services live in hosted/io and are selected explicitly.
+--  Target-neutral I/O capabilities and their adapters.  The memory world
+--  that provides them over the caller's storage is memory.ldn's, time is
+--  core/time's, the network core/net's and the fakes of a system's
+--  providers core/io/fake's; the hosted provider is hosted/system, selected
+--  explicitly.
 
 import core/text
 
@@ -395,13 +398,15 @@ public err: (provider: type is process, host: provider)
     stream = provider.err(host)
 end err
 
---- Return the number of argument entries exposed by the provider.
+--- Return the number of arguments after the program's name, which is not
+--- one of them: C's `argc - 1`.
 public argument_count: (provider: type is process, host: provider)
                        -> (count: usize) =
     count = provider.argument_count(host)
 end argument_count
 
---- Lend the indexed process argument as a host string. Reports
+--- Lend the indexed process argument as a host string; index zero is the
+--- first argument after the program's name, C's `argv[1]`. Reports
 --- `no_argument` for an invalid index; the provider's argument backing must
 --- outlive its use. `text.from_host` is its checked conversion to `utf8`
 --- and `text.host_bytes` its bytes; passed on as a path, it is not

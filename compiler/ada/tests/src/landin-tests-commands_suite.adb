@@ -359,7 +359,8 @@ package body Landin.Tests.Commands_Suite is
       Host.Add_File ("main.ldn", Source);
       declare
          Result : constant Landin.Driver.Outcome := Landin.Commands.Execute
-           (["compile", "--target=linux-x86-64", "--emit", "asm",
+           (["compile", "--target=linux-x86-64", "--link=libc",
+             "--emit", "asm",
              "main.ldn", "-o", "out.s", "--depfile", "out.d"],
             Host, Tools, Meter);
       begin
@@ -375,7 +376,8 @@ package body Landin.Tests.Commands_Suite is
       declare
          Count : constant Natural := Host.Write_Count;
          Result : constant Landin.Driver.Outcome := Landin.Commands.Execute
-           (["compile", "--target=linux-x86-64", "--emit=asm", "main.ldn",
+           (["compile", "--target=linux-x86-64", "--link=libc",
+             "--emit=asm", "main.ldn",
              "--depfile=main.ldn"], Host, Tools, Meter);
       begin
          Landin.Testing.Check_Equal
@@ -659,10 +661,12 @@ package body Landin.Tests.Commands_Suite is
       end;
       declare
          Base : constant Landin.Driver.Outcome := Landin.Commands.Execute
-           (["compile", "--target=linux-x86-64", "--emit=asm", "main.ldn",
+           (["compile", "--target=linux-x86-64", "--link=libc",
+             "--emit=asm", "main.ldn",
              "-o=base.s"], Host, Tools, Meter);
          Allowed : constant Landin.Driver.Outcome := Landin.Commands.Execute
-           (["compile", "--target=linux-x86-64", "--emit=asm", "main.ldn",
+           (["compile", "--target=linux-x86-64", "--link=libc",
+             "--emit=asm", "main.ldn",
              "-o=allowed.s", "--allow=all"], Host, Tools, Meter);
          Selected : constant Landin.Driver.Outcome := Landin.Commands.Execute
            (["check", "main.ldn", "--warn=" & Mutable_Code,

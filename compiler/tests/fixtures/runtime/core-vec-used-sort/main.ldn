@@ -1,8 +1,8 @@
-import core/fault
-import hosted/heap
 import core/cmp
+import core/fault
 import core/sort
 import core/vec
+import hosted/heap
 
 mut comparisons: usize = 0
 
@@ -21,7 +21,7 @@ counted is cmp.ordered (less: less_counted)
 
 public main: () -> (code: i32) =
     code = 1
-    heap := heap.host()
+    heap := heap.new()
     budget: usize = 10
     mut space: fault.space = zeroed
     limited := fault.over(space, heap, budget)

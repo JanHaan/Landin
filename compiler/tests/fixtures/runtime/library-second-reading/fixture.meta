@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the points the second reading of the library added, but the spill list's, which runtime/library-second-reading-spill holds: a bounded diagnostic entry lends its message whole; an arena is reset to its base; and a block grows in place through a region over its newest record, so a container over a region takes the in-place path
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 1290, 1360
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

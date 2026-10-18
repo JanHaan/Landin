@@ -1,7 +1,7 @@
 error[L0314]: this frame-origin reference cannot be retained beyond the call
-  --> ../tests/fixtures/negative/core-diag-frame-message-escape/main.ldn:16:12
+  --> ../tests/fixtures/negative/core-diag-frame-message-escape/main.ldn:14:12
    |
-16 |     retain(message[0..<1])
+14 |     retain(message[0..<1])
    |            ^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-diag-frame-message-escape/main.ldn:11:5
    |

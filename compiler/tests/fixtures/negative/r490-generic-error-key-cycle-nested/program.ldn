@@ -9,6 +9,6 @@ cycle: (t: type, value: t, stop: bool) -> none ! ... =
     end
 end cycle
 public main: () -> (code: i32) =
-    cycle(42, false) else (error) _ = error end
+    cycle(42, false) else none
     code = 42
 end main

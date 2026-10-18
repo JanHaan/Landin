@@ -2,6 +2,7 @@ with Ada.Containers.Indefinite_Hashed_Sets;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Hash;
+with Ada.Strings.Maps;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Firmware;
@@ -13,6 +14,7 @@ with Landin.Build_Reports.Sources;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Debugging;
+with Landin.IR.Dump;
 with Landin.IR.If_Conversion;
 with Landin.IR.In_Place;
 with Landin.IR.Inlining;
@@ -47,6 +49,7 @@ with Landin.Targets.Levels;
 package body Landin.Driver is
 
    use type Landin.Targets.Architecture;
+   use type Landin.Targets.Target_Facts;
 
    package Unbounded renames Ada.Strings.Unbounded;
 
@@ -135,7 +138,10 @@ package body Landin.Driver is
    --  What a request asked to be left behind.  Nothing is the state every
    --  request had before the native path and most still have: a program is
    --  read, checked and lowered, and no file is written.
-   type Emit_Kind is (Emit_Nothing, Emit_Assembly, Emit_Executable);
+   --  Emit_IR is the verified IR as the backend receives it, after every
+   --  pass the request's objective runs (D365).
+   type Emit_Kind is
+     (Emit_Nothing, Emit_Assembly, Emit_Executable, Emit_IR);
 
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF
@@ -169,7 +175,7 @@ package body Landin.Driver is
    function Usage return String is
      ("usage: refine [options] [source.ldn ...]" & LF
       & "       refine explain [CODE ...]" & LF
-      & "       refine fmt [--check] source.ldn ..." & LF
+      & "       refine fmt [--check|--stdout] source.ldn ..." & LF
       & "       refine lsp" & LF
       & LF
       & "  --help              print this text" & LF
@@ -223,9 +229,11 @@ package body Landin.Driver is
       & LF
       & "it.  `refine fmt` rewrites each named source in the one layout;"
       & LF
-      & "with --check it writes nothing and reports each source that is"
+      & "with --check it writes nothing and reports each line that is"
       & LF
-      & "not in it.  `refine lsp` is a language server over standard" & LF
+      & "not in it, and with --stdout it prints the one source named in"
+      & LF
+      & "it.  `refine lsp` is a language server over standard" & LF
       & "input and output." & LF
       & LF
       & "The toolchain is found by the target's GNU triplet, so"
@@ -365,6 +373,7 @@ package body Landin.Driver is
       Named   : Landin.Platform.Path_List;
       Seen    : Path_Sets.Set;
       Check   : Boolean := False;
+      Printing : Boolean := False;
       Misused : Boolean := False;
 
       procedure Refuse (Code : Landin.Diagnostics.Code_String;
@@ -382,46 +391,75 @@ package body Landin.Driver is
                Message => Message));
       end Refuse;
 
-      --  L0008 at the first changed byte, including line terminators.
-      --  A missing or removed suffix changes at the first byte past the
-      --  common prefix.
+      --  One L0008 for every line the layout changes, each showing the
+      --  line as the layout writes it (D359), so a reader who cannot or
+      --  will not have the file rewritten can lay it out by hand.
       procedure Not_Formatted (Answer : Landin.Formatting.Result);
 
       procedure Not_Formatted (Answer : Landin.Formatting.Result) is
          Snapshot : Landin.Source.Snapshot renames
            Sources.Get (Answer.Id).Element.all;
-         Original  : constant String := Landin.Source.Text (Snapshot);
-         Formatted : constant String := Unbounded.To_String (Answer.Text);
-
-         function Changed_Line return Landin.Source.Line_Number;
-
-         function Changed_Line return Landin.Source.Line_Number is
-         begin
-            for Index in 1 .. Natural'Min
-              (Original'Length, Formatted'Length)
-            loop
-               if Original (Index) /= Formatted (Index) then
-                  return Landin.Source.Position_Of
-                    (Snapshot, Landin.Source.Byte_Offset (Index - 1)).Line;
-               end if;
-            end loop;
-            return Landin.Source.Position_Of
-              (Snapshot, Landin.Source.Byte_Offset
-                 (Natural'Min (Original'Length, Formatted'Length))).Line;
-         end Changed_Line;
-
-         Line : constant Landin.Source.Line_Number := Changed_Line;
-         Item : Landin.Diagnostics.Diagnostic := Landin.Diagnostics.Make
-           (Code    => Rows.Code (Rows.Not_Formatted),
-            Level   => Landin.Diagnostics.Error,
-            Source  => Answer.Id,
-            Where   => Landin.Source.Line_Text_Span (Snapshot, Line),
-            Message => "this source is not in the layout");
+         Changes : constant Landin.Formatting.Difference_List :=
+           Landin.Formatting.Differences (Snapshot, Answer);
+         First : Boolean := True;
       begin
-         Landin.Diagnostics.Add_Note
-           (Item, "D252: `refine fmt` puts it in the layout and changes"
-                  & " only its space");
-         Found.Append (Item);
+         for Change of Changes loop
+            declare
+               use type Landin.Formatting.Difference_Kind;
+               use type Landin.Source.Byte_Offset;
+               Was : constant String :=
+                 Landin.Source.Line_Text (Snapshot, Change.Line);
+               Wanted : constant String :=
+                 Unbounded.To_String (Change.Wanted);
+               Trimmed : constant String :=
+                 Ada.Strings.Fixed.Trim
+                   (Was, Ada.Strings.Maps.Null_Set,
+                    Ada.Strings.Maps.To_Set (" " & ASCII.HT));
+               Item : Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Make
+                   (Code    => Rows.Code (Rows.Not_Formatted),
+                    Level   => Landin.Diagnostics.Error,
+                    Source  => Answer.Id,
+                    Where   => Landin.Source.Line_Text_Span
+                      (Snapshot, Change.Line),
+                    Message =>
+                      (if Change.Kind = Landin.Formatting.Removed
+                       then "this blank line is not in the layout"
+                       else "this line is not in the layout"));
+            begin
+               case Change.Kind is
+                  when Landin.Formatting.Removed =>
+                     Landin.Diagnostics.Add_Note
+                       (Item, "the layout removes it: a run of blank lines"
+                              & " is one, and none begins or ends a file");
+                  when Landin.Formatting.Ended =>
+                     Landin.Diagnostics.Add_Note
+                       (Item,
+                        (if Landin.Source.Line_Text_Span
+                              (Snapshot, Change.Line).Last
+                            = Landin.Source.Line_Span
+                                (Snapshot, Change.Line).Last
+                         then "the layout ends the file's last line with"
+                              & " a line end"
+                         else "the layout ends this line with LF alone"));
+                  when Landin.Formatting.Respaced =>
+                     Landin.Diagnostics.Add_Note
+                       (Item,
+                        (if Wanted = "" then "the layout writes it empty"
+                         else "the layout writes it `" & Wanted & "`"
+                         & (if Trimmed = Wanted and then Trimmed /= Was
+                            then ", without the space at its end"
+                            else "")));
+               end case;
+               if First then
+                  Landin.Diagnostics.Add_Note
+                    (Item, "D252: `refine fmt` writes the whole file in the"
+                           & " layout, and `refine fmt --stdout` prints it");
+                  First := False;
+               end if;
+               Found.Append (Item);
+            end;
+         end loop;
       end Not_Formatted;
    begin
       for Index in 2 .. Natural (Arguments.Length) loop
@@ -430,12 +468,15 @@ package body Landin.Driver is
          begin
             if Argument = "--check" and then not Check then
                Check := True;
+            elsif Argument = "--stdout" and then not Printing then
+               Printing := True;
             elsif Argument'Length > 0
               and then Argument (Argument'First) = '-'
             then
                Misused := True;
                Refuse (Code_Unknown_Option,
-                       "fmt takes no option but --check, once: " & Argument);
+                       "fmt takes no option but --check or --stdout, once: "
+                       & Argument);
             elsif Host.Is_Directory (Argument) then
                Misused := True;
                Refuse (Code_Unknown_Option,
@@ -453,6 +494,18 @@ package body Landin.Driver is
       if Named.Is_Empty and then not Misused then
          Misused := True;
          Refuse (Code_Unknown_Option, "fmt needs a source to format");
+      end if;
+      if Check and then Printing and then not Misused then
+         Misused := True;
+         Refuse (Code_Unknown_Option,
+                 "fmt --check reports and fmt --stdout prints; give one");
+      end if;
+      if Printing and then Natural (Named.Length) > 1 and then not Misused
+      then
+         Misused := True;
+         Refuse (Code_Unknown_Option,
+                 "fmt --stdout prints one source; it was given"
+                 & Natural'Image (Natural (Named.Length)));
       end if;
 
       if not Misused then
@@ -473,22 +526,41 @@ package body Landin.Driver is
                        Landin.Formatting.Format
                          (Sources, Path, Unbounded.To_String (Content));
                      Written : Landin.Platform.Write_Status;
+                     Reason  : Unbounded.Unbounded_String;
                   begin
                      Result.Named.Append (Path);
                      for Position in 1 .. Answer.Found.Count loop
                         Found.Append (Answer.Found.Get (Position));
                      end loop;
-                     if Answer.Outcome = Landin.Formatting.Refused
-                       or else Answer.Edits.Is_Empty
-                     then
+                     if Answer.Outcome = Landin.Formatting.Refused then
+                        null;
+                     elsif Printing then
+                        Unbounded.Append (Result.Output, Answer.Text);
+                     elsif Answer.Edits.Is_Empty then
                         null;
                      elsif Check then
                         Not_Formatted (Answer);
                      else
                         Host.Replace_File
-                          (Path, Unbounded.To_String (Answer.Text), Written);
+                          (Path, Unbounded.To_String (Answer.Text), Written,
+                           Reason);
                         if Written /= Landin.Platform.Write_Ok then
-                           Refuse (Code_Unwritable, "cannot write: " & Path);
+                           declare
+                              Item : Landin.Diagnostics.Diagnostic :=
+                                Landin.Diagnostics.Make
+                                  (Code    => Code_Unwritable,
+                                   Level   => Landin.Diagnostics.Error,
+                                   Source  => Landin.Source.No_Source,
+                                   Where   => Landin.Source.Empty_Span,
+                                   Message => "cannot rewrite " & Path & ": "
+                                     & Unbounded.To_String (Reason));
+                           begin
+                              Landin.Diagnostics.Add_Note
+                                (Item, "`refine fmt --stdout " & Path
+                                       & "` prints it in the layout without"
+                                       & " writing it");
+                              Found.Append (Item);
+                           end;
                         end if;
                      end if;
                   end;
@@ -518,6 +590,12 @@ package body Landin.Driver is
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
       and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
+
+   --  D362: an operand naming GNU assembly, which `compile` links as it
+   --  links the assembly it emits, rather than reading it as Landin.
+   function Is_Assembly_Operand (Text : String) return Boolean
+     is (Text'Length > 2
+         and then Text (Text'Last - 1 .. Text'Last) = ".s");
 
    function After (Text : String; Prefix : String) return String is
      (Text (Text'First + Prefix'Length .. Text'Last));
@@ -597,6 +675,8 @@ package body Landin.Driver is
       Lines_Debug : Boolean := False;
       Panic_Map : Boolean := False;
       Emit_Seen, Output_Seen : Boolean := False;
+      --  D362: an executable's assembly is kept beside it only on request.
+      Keep_Assembly : Boolean := False;
       Skip_Compilation : Boolean := False;
       Index     : Positive := 1;
       Dependency_Directories : aliased Landin.Platform.Path_List;
@@ -691,6 +771,13 @@ package body Landin.Driver is
                   end if;
                   Specialize_Seen := True;
                end;
+
+            elsif Argument = "--keep-asm" then
+               if Keep_Assembly then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Keep_Assembly := True;
 
             elsif Argument = "--panic-map" then
                if Panic_Map then
@@ -813,6 +900,8 @@ package body Landin.Driver is
                      Emit := Emit_Assembly;
                   elsif Kind = "exe" then
                      Emit := Emit_Executable;
+                  elsif Kind = "ir" then
+                     Emit := Emit_IR;
                   else
                      Unknowns.Append (Argument);
                      Bad_Use := True;
@@ -871,6 +960,8 @@ package body Landin.Driver is
           and then (Wants_Usage or Wants_Identity))
         or else ((Report_Seen or Debug_Seen or Firmware_Seen or Panic_Map)
                  and then Emit = Emit_Nothing)
+        or else ((Debug_Seen or Panic_Map) and then Emit = Emit_IR)
+        or else (Keep_Assembly and then Emit /= Emit_Executable)
         or else ((Optimize_Seen or Specialize_Seen)
                  and then Natural (Inputs.Length) = 0)
         or else (Output_Seen
@@ -923,6 +1014,11 @@ package body Landin.Driver is
            Landin.Stages.Create (Facts, Level);
          Panic : aliased Landin.Panics.Plan;
          Panic_Problem : Unbounded.Unbounded_String;
+         --  The driver a link runs, once the program is known to need one.
+         Chosen_Driver : Unbounded.Unbounded_String;
+         --  An executable's assembly once written, which D362 removes
+         --  after the link unless --keep-asm asked for it.
+         Intermediate_Assembly : Unbounded.Unbounded_String;
          Target_Option_Refused : Boolean := False;
          Policy_Denied : Boolean := False;
 
@@ -932,6 +1028,35 @@ package body Landin.Driver is
            is (Landin.Targets.Capabilities.Hosted_System_Of (Facts)
                  = Landin.Targets.Capabilities.Linux
                and then Link_Mode /= Link_Libc);
+
+         --  D364: the drivers a link may use, in the order tried; the
+         --  host's own `gcc` among them only for the compiler's own host.
+         Native_Target : constant Boolean :=
+           Has_Default
+           and then Facts = Landin.Targets.Selection.Host_Default (Built_For);
+         Candidates : constant Landin.Platform.Path_List :=
+           Landin.Backend.Toolchain.Driver_Candidates
+             (Facts, Unbounded.To_String (Toolchain), Native_Target);
+
+         --  The first candidate the host can start, or "".  Run asks the
+         --  host again, so a driver removed meanwhile is still reported.
+         function Available_Driver return String;
+         function Available_Driver return String is
+         begin
+            for Name of Candidates loop
+               if Tools.Available (Name) then
+                  return Name;
+               end if;
+            end loop;
+            return "";
+         end Available_Driver;
+
+         --  What a dry run says would run: the driver a link would take
+         --  now, or the first it would look for when none is installed.
+         function Planned_Driver return String
+           is (if Available_Driver /= "" then Available_Driver
+               elsif Candidates.Is_Empty then ""
+               else Candidates.First_Element);
 
          --  What a static link starts at is library source: the program
          --  holds platform/linux, whose `_landin_start` is the process entry,
@@ -987,7 +1112,8 @@ package body Landin.Driver is
                      | "--specialize" | "--panic-map" | "--debug"
                      | "--build-report" | "--stage-report" | "--root"
                      | "--library" | "--emit" | "-o" | "--toolchain"
-                     | "--linker" | "--link" | "--firmware-entry");
+                     | "--linker" | "--link" | "--firmware-entry"
+                     | "--keep-asm");
 
          --  How many times an option with this stem was written.
          function Times_Written (Stem : String) return Natural;
@@ -1012,7 +1138,7 @@ package body Landin.Driver is
                  "; it takes off, auto or all"
                elsif Stem = "--debug" then
                  "; it takes none, full or lines"
-               elsif Stem = "--emit" then "; it takes asm or exe"
+               elsif Stem = "--emit" then "; it takes asm, exe or ir"
                elsif Stem = "--link" then "; it takes static or libc"
                else "");
 
@@ -1035,7 +1161,8 @@ package body Landin.Driver is
               new String'("--root"), new String'("--library"),
               new String'("--emit"),
               new String'("--toolchain"), new String'("--linker"),
-              new String'("--link"), new String'("--firmware-entry")];
+              new String'("--link"), new String'("--firmware-entry"),
+              new String'("--keep-asm")];
 
          --  Why the options given cannot be one request.
          function Incompatible_Action return String
@@ -1051,6 +1178,12 @@ package body Landin.Driver is
                  and then Emit = Emit_Nothing
                then "--build-report, --debug, --firmware-entry and"
                     & " --panic-map describe what is emitted; add --emit"
+               elsif (Debug_Seen or Panic_Map) and then Emit = Emit_IR
+               then "--debug and --panic-map describe machine code, and"
+                    & " --emit=ir writes the IR before any is chosen"
+               elsif Keep_Assembly and then Emit /= Emit_Executable
+               then "--keep-asm keeps an executable's assembly beside it;"
+                    & " --emit=asm writes the assembly alone"
                elsif (Optimize_Seen or Specialize_Seen)
                  and then Natural (Inputs.Length) = 0
                then "--optimize and --specialize need a source to compile"
@@ -1397,14 +1530,373 @@ package body Landin.Driver is
 
          procedure Note_Unavailable_Toolchain (Driver : String);
 
+         --  D364: the names looked for, and what to install.  A named
+         --  driver is the only one looked for, so it is the one named.
          procedure Note_Unavailable_Toolchain (Driver : String) is
+            Looked : Unbounded.Unbounded_String;
          begin
+            for Index in 1 .. Natural (Candidates.Length) loop
+               Unbounded.Append
+                 (Looked,
+                  (if Index = 1 then ""
+                   elsif Index = Natural (Candidates.Length) then " and "
+                   else ", ")
+                  & Candidates (Index));
+            end loop;
             Note_No_Toolchain
-              ("cannot run " & Driver & " for target "
-               & Landin.Targets.Name (Facts),
-               "install a toolchain named " & Driver
-               & ", or name another with --toolchain=NAME");
+              ((if Natural (Candidates.Length) <= 1
+                then "cannot run " & Driver & " for target "
+                  & Landin.Targets.Name (Facts)
+                else "no compiler driver to link "
+                  & Landin.Targets.Name (Facts) & " was found; looked for "
+                  & Unbounded.To_String (Looked)),
+               Landin.Backend.Toolchain.Install_Advice
+                 (Facts, Unbounded.To_String (Toolchain), Native_Target));
          end Note_Unavailable_Toolchain;
+
+         --  The link that finishes an executable from assembly, whether
+         --  this request emitted it or named it (D362): the driver chosen,
+         --  the prior executable kept aside until a new one exists, and
+         --  every failure said as the tool said it.
+         procedure Link_Assembly
+           (Assembly_Path, Product_Path, Map_Id : String;
+            Destinations : Landin.Platform.Path_List);
+
+         procedure Link_Assembly
+           (Assembly_Path, Product_Path, Map_Id : String;
+            Destinations : Landin.Platform.Path_List)
+         is
+            Report_Path : constant String :=
+              Unbounded.To_String (Build_Report_Path);
+            Cortex : constant Boolean :=
+              Landin.Targets.Architecture_Of (Facts)
+                = Landin.Targets.Cortex_M0;
+            Written : Landin.Platform.Write_Status;
+         begin
+            declare
+               Driver : constant String :=
+                 Unbounded.To_String (Chosen_Driver);
+               Target_Path : constant String :=
+                 (if Unbounded.Length (Output) > 0
+                  then Unbounded.To_String (Output)
+                  else Default_Executable);
+               Ran : Landin.Platform.Tool_Result;
+               Libraries : Landin.Platform.Path_List;
+               Libraries_Ready : Boolean;
+               Backup : Unbounded.Unbounded_String;
+               Prior_Identity : Landin.Platform.File_Identity;
+               Prepared : Boolean := False;
+               Removed : Landin.Platform.Remove_Status;
+               Moved : Landin.Platform.Move_Status;
+               Lock_Handle : Integer := -1;
+
+               procedure Release_Lock;
+
+               procedure Release_Lock is
+               begin
+                  if Lock_Handle >= 0 then
+                     Host.Unlock_Output (Lock_Handle);
+                     Lock_Handle := -1;
+                  end if;
+               end Release_Lock;
+
+               procedure Restore_Output;
+
+               procedure Restore_Output is
+               begin
+                  if not Prepared then
+                     return;
+                  end if;
+                  if Unbounded.Length (Backup) > 0
+                    and then not Host.Exists (Unbounded.To_String (Backup))
+                    and then Host.Identity_Of (Target_Path) = Prior_Identity
+                  then
+                     --  The tool moved the old inode back itself.
+                     Prepared := False;
+                     return;
+                  end if;
+                  Host.Remove_File (Target_Path, Removed);
+                  if Removed = Landin.Platform.Not_Removable then
+                     Note_Failure
+                        (Code_Toolchain_Failed,
+                        "cannot clear failed executable: " & Target_Path
+                        & (if Unbounded.Length (Backup) > 0
+                           then "; prior executable retained at "
+                             & Unbounded.To_String (Backup)
+                           else ""));
+                  elsif Unbounded.Length (Backup) > 0 then
+                     Host.Move_File
+                       (Unbounded.To_String (Backup), Target_Path, Moved);
+                     if Moved /= Landin.Platform.Moved then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot restore prior executable from "
+                           & Unbounded.To_String (Backup));
+                     end if;
+                  end if;
+                  Prepared := False;
+               end Restore_Output;
+            begin
+               if Driver = "" then
+                  Note_No_Toolchain
+                    ("target " & Landin.Targets.Name (Facts)
+                     & " names no toolchain",
+                     "name one with --toolchain=NAME");
+                  return;
+               end if;
+
+               for Index in 1 .. Landin.Configuration.Library_Count
+                 (Landin.Stages.Configurations (Context).all)
+               loop
+                  Libraries.Append (Landin.Configuration.Library_Name
+                    (Landin.Stages.Configurations (Context).all, Index));
+               end loop;
+
+               --  A tool that cannot be started at all is the platform
+               --  interface's own distinction, and it is exactly the one a
+               --  host without this target's toolchain falls on.  Catching
+               --  it here is what turns "not installed" into a sentence
+               --  rather than an unhandled exception at the top of
+               --  `refine`.
+               begin
+                  if Cortex then
+                     Host.Write_File
+                       (Product_Path & ".ld",
+                        Landin.Backend.Firmware.Linker_Script, Written);
+                     if Written /= Landin.Platform.Write_Ok then
+                        Note_Failure
+                          (Code_Unwritable,
+                           "cannot write: " & Product_Path & ".ld");
+                        return;
+                     end if;
+                     Tools.Run
+                       (Driver,
+                        Landin.Backend.Toolchain.Assemble_Arguments
+                          (Assembly_Path, Product_Path & ".o", Facts,
+                           Debug => Debug_Enabled,
+                           Level => Landin.Stages.Level (Context)),
+                        Ran, Landin.Platform.Merged);
+                     if Ran.Ended /= Landin.Platform.Exited
+                       or else Ran.Exit_Code /= 0
+                     then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "firmware assembly failed" & LF
+                           & Unbounded.To_String (Ran.Output));
+                        return;
+                     end if;
+                  end if;
+                  Landin.Backend.Toolchain.Resolve_Libraries
+                    (Facts, Driver, Host, Tools, Libraries, Ran,
+                     Libraries_Ready);
+                  if not Libraries_Ready then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        Unbounded.To_String (Ran.Output));
+                     return;
+                  end if;
+
+                  Host.Lock_Output (Target_Path, Lock_Handle);
+                  if Lock_Handle < 0 then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        "cannot lock executable destination: "
+                        & Target_Path);
+                     return;
+                  end if;
+
+                  --  A zero-exit tool must produce a new pathname for this
+                  --  invocation. Keep the old file aside until that is
+                  --  established, even when the new bytes are identical.
+                  if Host.Exists (Target_Path) then
+                     Prior_Identity := Host.Identity_Of (Target_Path);
+                     if not Prior_Identity.Valid then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot identify prior executable: "
+                           & Target_Path);
+                        Release_Lock;
+                        return;
+                     end if;
+                     for Index in 1 .. 100 loop
+                        declare
+                           Candidate : constant String := Target_Path
+                             & ".landin-backup-"
+                             & Ada.Strings.Fixed.Trim
+                                 (Positive'Image (Index), Ada.Strings.Both);
+                           Conflicts : Boolean := Host.Exists (Candidate)
+                             or else (Report_Seen and then
+                               Host.Paths_Overlap (Candidate, Report_Path));
+                        begin
+                           for Path of Destinations loop
+                              Conflicts := Conflicts or else
+                                Host.Paths_Overlap (Candidate, Path);
+                           end loop;
+                           for Source in 1 .. Landin.Stages.Source_Count
+                             (Context)
+                           loop
+                              Conflicts := Conflicts or else
+                                Host.Paths_Overlap
+                                  (Candidate, Landin.Source.Name
+                                     (Landin.Stages.Source
+                                        (Context,
+                                         Landin.Stages.Nth_Source
+                                           (Context, Source))));
+                           end loop;
+                           if not Conflicts then
+                              Host.Move_File
+                                (Target_Path, Candidate, Moved);
+                              if Moved = Landin.Platform.Moved then
+                                 Backup := Unbounded.To_Unbounded_String
+                                   (Candidate);
+                                 exit;
+                              end if;
+                           end if;
+                        end;
+                     end loop;
+                     if Unbounded.Length (Backup) = 0 then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot preserve prior executable: "
+                           & Target_Path);
+                        Release_Lock;
+                        return;
+                     end if;
+                  else
+                     Host.Remove_File (Target_Path, Removed);
+                     if Removed = Landin.Platform.Not_Removable then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "cannot clear executable output: "
+                           & Target_Path);
+                        Release_Lock;
+                        return;
+                     end if;
+                  end if;
+                  Prepared := True;
+                  Tools.Prepare_Output (Host, Target_Path);
+                  Tools.Run
+                    (Program   => Driver,
+                     Arguments =>
+                       Landin.Backend.Toolchain.Link_Arguments
+                         (Assembly => Assembly_Path,
+                          Output   => Target_Path,
+                          Linker   => Unbounded.To_String (Linker),
+                          Build_Id => Map_Id,
+                          Full_Debug => Debug_Enabled,
+                          Libraries => Libraries, Facts => Facts,
+                          Level => Landin.Stages.Level (Context),
+                          Static => Static_Link),
+                     Result    => Ran,
+                     Capture   => Landin.Platform.Merged);
+               exception
+                  when Failure : Landin.External_Tool_Failed =>
+                     Restore_Output;
+                     --  The adapter says why.  Only a tool that is not
+                     --  there is the reader's to install; a capture file
+                     --  that could not be removed is a host fault after
+                     --  the tool ran, and naming it a missing toolchain
+                     --  sent the reader to install one they had.
+                     declare
+                        Why : constant String :=
+                          Ada.Exceptions.Exception_Message (Failure);
+                     begin
+                        if Starts_With (Why, "tool not found") then
+                           Note_Unavailable_Toolchain (Driver);
+                        else
+                           Note_Failure
+                             (Code_Toolchain_Failed,
+                              Driver & " could not be run to completion: "
+                              & Why);
+                        end if;
+                     end;
+                     Release_Lock;
+                     return;
+                  when others =>
+                     Restore_Output;
+                     raise;
+               end;
+
+               --  How the run ended is asked before what it returned,
+               --  because a tool a signal killed has no status and the
+               --  field beside it holds zero.  Reading that alone would
+               --  make a dead assembler a success that wrote nothing.
+               if Ran.Ended /= Landin.Platform.Exited then
+                  Restore_Output;
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " was stopped before it could finish" & LF
+                     & Unbounded.To_String (Ran.Output));
+               elsif Ran.Exit_Code /= 0 then
+                  Restore_Output;
+                  --  A line the assembler refused inside an assembly
+                  --  block is the program's, and is reported there.
+                  declare
+                     Written_Assembly : Unbounded.Unbounded_String;
+                     Read : Landin.Platform.Read_Status;
+                     Found : Landin.Diagnostics.Diagnostic_List;
+                     Placed : Boolean := False;
+                  begin
+                     Host.Read_File (Assembly_Path, Written_Assembly, Read);
+                     if Read = Landin.Platform.Read_Ok
+                       and then Landin.Stages.Source_Count (Context) > 0
+                     then
+                        Landin.Driver.Assembler_Sites.Place
+                          (Output  => Unbounded.To_String (Ran.Output),
+                           Emitted => Unbounded.To_String (Written_Assembly),
+                           Code    => Landin.Stages.Code (Context).all,
+                           Names   => Landin.Stages.Identities (Context).all,
+                           Facts   => Facts,
+                           Into    => Found,
+                           Placed  => Placed);
+                     end if;
+                     if Placed then
+                        for Index in 1 .. Landin.Diagnostics.Count (Found) loop
+                           Landin.Stages.Report
+                             (Context, Landin.Diagnostics.Get (Found, Index));
+                        end loop;
+                     else
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           Driver & " failed with status"
+                           & Integer'Image (Ran.Exit_Code) & LF
+                           & Unbounded.To_String (Ran.Output));
+                     end if;
+                  end;
+               elsif not Tools.Output_Produced (Host, Target_Path) then
+                  Restore_Output;
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " reported success but produced no executable"
+                     & " at " & Target_Path & LF
+                     & Unbounded.To_String (Ran.Output));
+               elsif Unbounded.Length (Backup) > 0
+                 and then
+                   (Host.Same_File
+                      (Target_Path, Unbounded.To_String (Backup))
+                    or else Host.Identity_Of (Target_Path) = Prior_Identity)
+               then
+                  Restore_Output;
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " left executable output aliasing its prior"
+                     & " backup at " & Target_Path);
+               elsif Unbounded.Length (Backup) > 0 then
+                  Host.Remove_File (Unbounded.To_String (Backup), Removed);
+                  if Removed = Landin.Platform.Not_Removable then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        "cannot remove prior executable backup: "
+                        & Unbounded.To_String (Backup));
+                  end if;
+               end if;
+               Release_Lock;
+            exception
+               when others =>
+                  Release_Lock;
+                  raise;
+            end;
+         end Link_Assembly;
 
          procedure Emit_Requested;
 
@@ -1421,6 +1913,7 @@ package body Landin.Driver is
                        else Default_Executable)
                elsif Unbounded.Length (Output) > 0
                then Unbounded.To_String (Output)
+               elsif Emit = Emit_IR then Default_IR
                else Default_Assembly);
 
             Written : Landin.Platform.Write_Status;
@@ -1439,9 +1932,10 @@ package body Landin.Driver is
               Unbounded.To_String (Build_Report_Path);
             Stage_Path : constant String :=
               Unbounded.To_String (Stage_Report_Path);
-            Emit_Map : constant Boolean := Debug_Enabled or else Panic_Map
-              or else Landin.IR.Caller_Source_Count
-                (Landin.Stages.Code (Context).all) > 0;
+            Emit_Map : constant Boolean := Emit /= Emit_IR
+              and then (Debug_Enabled or else Panic_Map
+                or else Landin.IR.Caller_Source_Count
+                  (Landin.Stages.Code (Context).all) > 0);
             Destinations : Landin.Platform.Path_List;
             Source_Paths : Landin.Platform.Path_List;
             Cortex : constant Boolean :=
@@ -1763,8 +2257,10 @@ package body Landin.Driver is
 
             --  A static Linux link has no C library, so a program
             --  that needs one is refused here, by name, rather than by the
-            --  linker's undefined references.
-            if Emit = Emit_Executable and then Static_Link then
+            --  linker's undefined references.  Its process entry is
+            --  platform/linux's, so assembly or IR for one without it is
+            --  refused too, rather than written without it (D363).
+            if Emit /= Emit_Nothing and then Static_Link then
                declare
                   Needed : Landin.Platform.Path_List;
                   Referrers : Landin.Platform.Path_List;
@@ -1789,6 +2285,8 @@ package body Landin.Driver is
                         "name the library with --library=PATH, or link"
                         & " with --link=libc, which keeps C's runtime");
                      return;
+                  elsif Emit /= Emit_Executable then
+                     null;
                   elsif Requests > 0 then
                      Note_No_Toolchain
                        ("a static link of " & Landin.Targets.Name (Facts)
@@ -1829,6 +2327,43 @@ package body Landin.Driver is
                      return;
                   end if;
                end;
+            end if;
+
+            --  D365: the IR the backend would be given, in Landin.IR.Dump's
+            --  text, and nothing after it.
+            if Emit = Emit_IR then
+               if Dry_Run then
+                  Unbounded.Append (Result.Output,
+                    "write " & Landin.Json.Quoted (Assembly_Path) & LF);
+                  return;
+               end if;
+               Host.Write_File
+                 (Assembly_Path,
+                  Landin.IR.Dump.Text
+                    (Landin.Stages.Code (Context).all,
+                     Landin.Stages.Meanings (Context).all,
+                     Landin.Stages.Identities (Context).all),
+                  Written);
+               if Written /= Landin.Platform.Write_Ok then
+                  Note_Failure
+                    (Code_Unwritable, "cannot write: " & Assembly_Path);
+                  return;
+               end if;
+               Write_Build_Report;
+               return;
+            end if;
+
+            --  The program needs nothing it cannot have; whether the host
+            --  can link it is asked now, before anything is written.
+            if Emit = Emit_Executable and then not Dry_Run then
+               Chosen_Driver := Unbounded.To_Unbounded_String
+                 (Available_Driver);
+               if Unbounded.Length (Chosen_Driver) = 0 then
+                  Note_Unavailable_Toolchain
+                    (if Candidates.Is_Empty then ""
+                     else Candidates.First_Element);
+                  return;
+               end if;
             end if;
 
             declare
@@ -1913,9 +2448,7 @@ package body Landin.Driver is
                   end if;
                   if Emit = Emit_Executable then
                      declare
-                        Driver : constant String :=
-                          Landin.Backend.Toolchain.Driver_For
-                            (Facts, Unbounded.To_String (Toolchain));
+                        Driver : constant String := Planned_Driver;
                         Libraries : Landin.Platform.Path_List;
                         procedure Plan_Tool
                           (Arguments : Landin.Platform.Path_List);
@@ -1966,6 +2499,13 @@ package body Landin.Driver is
                               Level => Landin.Stages.Level (Context),
                               Static => Static_Link));
                         end if;
+                        if not Keep_Assembly and then not Cortex
+                          and then not Emit_Map
+                        then
+                           Unbounded.Append (Result.Output,
+                             "remove " & Landin.Json.Quoted (Assembly_Path)
+                             & LF);
+                        end if;
                      end;
                   end if;
                   return;
@@ -1977,6 +2517,12 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Unwritable, "cannot write: " & Assembly_Path);
                   return;
+               end if;
+               if Emit = Emit_Executable and then not Cortex
+                 and then not Keep_Assembly and then not Emit_Map
+               then
+                  Intermediate_Assembly :=
+                    Unbounded.To_Unbounded_String (Assembly_Path);
                end if;
                if Emit_Map then
                   Host.Write_File
@@ -1994,330 +2540,134 @@ package body Landin.Driver is
                return;
             end if;
 
-            declare
-               Driver : constant String :=
-                 Landin.Backend.Toolchain.Driver_For
-                   (Facts, Unbounded.To_String (Toolchain));
-               Target_Path : constant String :=
-                 (if Unbounded.Length (Output) > 0
-                  then Unbounded.To_String (Output)
-                  else Default_Executable);
-               Ran : Landin.Platform.Tool_Result;
-               Libraries : Landin.Platform.Path_List;
-               Libraries_Ready : Boolean;
-               Backup : Unbounded.Unbounded_String;
-               Prior_Identity : Landin.Platform.File_Identity;
-               Prepared : Boolean := False;
-               Removed : Landin.Platform.Remove_Status;
-               Moved : Landin.Platform.Move_Status;
-               Lock_Handle : Integer := -1;
-
-               procedure Release_Lock;
-
-               procedure Release_Lock is
-               begin
-                  if Lock_Handle >= 0 then
-                     Host.Unlock_Output (Lock_Handle);
-                     Lock_Handle := -1;
-                  end if;
-               end Release_Lock;
-
-               procedure Restore_Output;
-
-               procedure Restore_Output is
-               begin
-                  if not Prepared then
-                     return;
-                  end if;
-                  if Unbounded.Length (Backup) > 0
-                    and then not Host.Exists (Unbounded.To_String (Backup))
-                    and then Host.Identity_Of (Target_Path) = Prior_Identity
-                  then
-                     --  The tool moved the old inode back itself.
-                     Prepared := False;
-                     return;
-                  end if;
-                  Host.Remove_File (Target_Path, Removed);
-                  if Removed = Landin.Platform.Not_Removable then
-                     Note_Failure
-                        (Code_Toolchain_Failed,
-                        "cannot clear failed executable: " & Target_Path
-                        & (if Unbounded.Length (Backup) > 0
-                           then "; prior executable retained at "
-                             & Unbounded.To_String (Backup)
-                           else ""));
-                  elsif Unbounded.Length (Backup) > 0 then
-                     Host.Move_File
-                       (Unbounded.To_String (Backup), Target_Path, Moved);
-                     if Moved /= Landin.Platform.Moved then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot restore prior executable from "
-                           & Unbounded.To_String (Backup));
-                     end if;
-                  end if;
-                  Prepared := False;
-               end Restore_Output;
-            begin
-               if Driver = "" then
-                  Note_No_Toolchain
-                    ("target " & Landin.Targets.Name (Facts)
-                     & " names no toolchain",
-                     "name one with --toolchain=NAME");
-                  return;
-               end if;
-
-               for Index in 1 .. Landin.Configuration.Library_Count
-                 (Landin.Stages.Configurations (Context).all)
-               loop
-                  Libraries.Append (Landin.Configuration.Library_Name
-                    (Landin.Stages.Configurations (Context).all, Index));
-               end loop;
-
-               --  A tool that cannot be started at all is the platform
-               --  interface's own distinction, and it is exactly the one a
-               --  host without this target's toolchain falls on.  Catching
-               --  it here is what turns "not installed" into a sentence
-               --  rather than an unhandled exception at the top of
-               --  `refine`.
-               begin
-                  if Cortex then
-                     Host.Write_File
-                       (Product_Path & ".ld",
-                        Landin.Backend.Firmware.Linker_Script, Written);
-                     if Written /= Landin.Platform.Write_Ok then
-                        Note_Failure
-                          (Code_Unwritable,
-                           "cannot write: " & Product_Path & ".ld");
-                        return;
-                     end if;
-                     Tools.Run
-                       (Driver,
-                        Landin.Backend.Toolchain.Assemble_Arguments
-                          (Assembly_Path, Product_Path & ".o", Facts,
-                           Debug => Debug_Enabled,
-                           Level => Landin.Stages.Level (Context)),
-                        Ran, Landin.Platform.Merged);
-                     if Ran.Ended /= Landin.Platform.Exited
-                       or else Ran.Exit_Code /= 0
-                     then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "firmware assembly failed" & LF
-                           & Unbounded.To_String (Ran.Output));
-                        return;
-                     end if;
-                  end if;
-                  Landin.Backend.Toolchain.Resolve_Libraries
-                    (Facts, Driver, Host, Tools, Libraries, Ran,
-                     Libraries_Ready);
-                  if not Libraries_Ready then
-                     Note_Failure
-                       (Code_Toolchain_Failed,
-                        Unbounded.To_String (Ran.Output));
-                     return;
-                  end if;
-
-                  Host.Lock_Output (Target_Path, Lock_Handle);
-                  if Lock_Handle < 0 then
-                     Note_Failure
-                       (Code_Toolchain_Failed,
-                        "cannot lock executable destination: "
-                        & Target_Path);
-                     return;
-                  end if;
-
-                  --  A zero-exit tool must produce a new pathname for this
-                  --  invocation. Keep the old file aside until that is
-                  --  established, even when the new bytes are identical.
-                  if Host.Exists (Target_Path) then
-                     Prior_Identity := Host.Identity_Of (Target_Path);
-                     if not Prior_Identity.Valid then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot identify prior executable: "
-                           & Target_Path);
-                        Release_Lock;
-                        return;
-                     end if;
-                     for Index in 1 .. 100 loop
-                        declare
-                           Candidate : constant String := Target_Path
-                             & ".landin-backup-"
-                             & Ada.Strings.Fixed.Trim
-                                 (Positive'Image (Index), Ada.Strings.Both);
-                           Conflicts : Boolean := Host.Exists (Candidate)
-                             or else (Report_Seen and then
-                               Host.Paths_Overlap (Candidate, Report_Path));
-                        begin
-                           for Path of Destinations loop
-                              Conflicts := Conflicts or else
-                                Host.Paths_Overlap (Candidate, Path);
-                           end loop;
-                           for Source in 1 .. Landin.Stages.Source_Count
-                             (Context)
-                           loop
-                              Conflicts := Conflicts or else
-                                Host.Paths_Overlap
-                                  (Candidate, Landin.Source.Name
-                                     (Landin.Stages.Source
-                                        (Context,
-                                         Landin.Stages.Nth_Source
-                                           (Context, Source))));
-                           end loop;
-                           if not Conflicts then
-                              Host.Move_File
-                                (Target_Path, Candidate, Moved);
-                              if Moved = Landin.Platform.Moved then
-                                 Backup := Unbounded.To_Unbounded_String
-                                   (Candidate);
-                                 exit;
-                              end if;
-                           end if;
-                        end;
-                     end loop;
-                     if Unbounded.Length (Backup) = 0 then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot preserve prior executable: "
-                           & Target_Path);
-                        Release_Lock;
-                        return;
-                     end if;
-                  else
-                     Host.Remove_File (Target_Path, Removed);
-                     if Removed = Landin.Platform.Not_Removable then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot clear executable output: "
-                           & Target_Path);
-                        Release_Lock;
-                        return;
-                     end if;
-                  end if;
-                  Prepared := True;
-                  Tools.Prepare_Output (Host, Target_Path);
-                  Tools.Run
-                    (Program   => Driver,
-                     Arguments =>
-                       Landin.Backend.Toolchain.Link_Arguments
-                         (Assembly => Assembly_Path,
-                          Output   => Target_Path,
-                          Linker   => Unbounded.To_String (Linker),
-                          Build_Id => Unbounded.To_String (Map_Id),
-                          Full_Debug => Debug_Enabled,
-                          Libraries => Libraries, Facts => Facts,
-                          Level => Landin.Stages.Level (Context),
-                          Static => Static_Link),
-                     Result    => Ran,
-                     Capture   => Landin.Platform.Merged);
-               exception
-                  when Failure : Landin.External_Tool_Failed =>
-                     Restore_Output;
-                     --  The adapter says why.  Only a tool that is not
-                     --  there is the reader's to install; a capture file
-                     --  that could not be removed is a host fault after
-                     --  the tool ran, and naming it a missing toolchain
-                     --  sent the reader to install one they had.
-                     declare
-                        Why : constant String :=
-                          Ada.Exceptions.Exception_Message (Failure);
-                     begin
-                        if Starts_With (Why, "tool not found") then
-                           Note_Unavailable_Toolchain (Driver);
-                        else
-                           Note_Failure
-                             (Code_Toolchain_Failed,
-                              Driver & " could not be run to completion: "
-                              & Why);
-                        end if;
-                     end;
-                     Release_Lock;
-                     return;
-                  when others =>
-                     Restore_Output;
-                     raise;
-               end;
-
-               --  How the run ended is asked before what it returned,
-               --  because a tool a signal killed has no status and the
-               --  field beside it holds zero.  Reading that alone would
-               --  make a dead assembler a success that wrote nothing.
-               if Ran.Ended /= Landin.Platform.Exited then
-                  Restore_Output;
-                  Note_Failure
-                    (Code_Toolchain_Failed,
-                     Driver & " was stopped before it could finish" & LF
-                     & Unbounded.To_String (Ran.Output));
-               elsif Ran.Exit_Code /= 0 then
-                  Restore_Output;
-                  --  A line the assembler refused inside an assembly
-                  --  block is the program's, and is reported there.
-                  declare
-                     Written_Assembly : Unbounded.Unbounded_String;
-                     Read : Landin.Platform.Read_Status;
-                     Found : Landin.Diagnostics.Diagnostic_List;
-                     Placed : Boolean := False;
-                  begin
-                     Host.Read_File (Assembly_Path, Written_Assembly, Read);
-                     if Read = Landin.Platform.Read_Ok then
-                        Landin.Driver.Assembler_Sites.Place
-                          (Output  => Unbounded.To_String (Ran.Output),
-                           Emitted => Unbounded.To_String (Written_Assembly),
-                           Code    => Landin.Stages.Code (Context).all,
-                           Names   => Landin.Stages.Identities (Context).all,
-                           Facts   => Facts,
-                           Into    => Found,
-                           Placed  => Placed);
-                     end if;
-                     if Placed then
-                        for Index in 1 .. Landin.Diagnostics.Count (Found) loop
-                           Landin.Stages.Report
-                             (Context, Landin.Diagnostics.Get (Found, Index));
-                        end loop;
-                     else
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           Driver & " failed with status"
-                           & Integer'Image (Ran.Exit_Code) & LF
-                           & Unbounded.To_String (Ran.Output));
-                     end if;
-                  end;
-               elsif not Tools.Output_Produced (Host, Target_Path) then
-                  Restore_Output;
-                  Note_Failure
-                    (Code_Toolchain_Failed,
-                     Driver & " reported success but produced no executable"
-                     & " at " & Target_Path & LF
-                     & Unbounded.To_String (Ran.Output));
-               elsif Unbounded.Length (Backup) > 0
-                 and then
-                   (Host.Same_File
-                      (Target_Path, Unbounded.To_String (Backup))
-                    or else Host.Identity_Of (Target_Path) = Prior_Identity)
-               then
-                  Restore_Output;
-                  Note_Failure
-                    (Code_Toolchain_Failed,
-                     Driver & " left executable output aliasing its prior"
-                     & " backup at " & Target_Path);
-               elsif Unbounded.Length (Backup) > 0 then
-                  Host.Remove_File (Unbounded.To_String (Backup), Removed);
-                  if Removed = Landin.Platform.Not_Removable then
-                     Note_Failure
-                       (Code_Toolchain_Failed,
-                        "cannot remove prior executable backup: "
-                        & Unbounded.To_String (Backup));
-                  end if;
-               end if;
-               Release_Lock;
-            exception
-               when others =>
-                  Release_Lock;
-                  raise;
-            end;
+            Link_Assembly
+              (Assembly_Path, Product_Path, Unbounded.To_String (Map_Id),
+               Destinations);
             Write_Build_Report;
          end Emit_Requested;
+
+         --  D362: `refine compile prog.s -o prog` links an assembly file
+         --  through the same driver, arguments and output protection as a
+         --  compiled program.  Nothing is compiled, so nothing is read but
+         --  the operand, and the driver reads that.
+         procedure Link_Operand;
+         procedure Link_Operand is
+            Operand : constant String := Inputs.First_Element;
+            Product : constant String :=
+              (if Unbounded.Length (Output) > 0
+               then Unbounded.To_String (Output)
+               else Default_Executable);
+            Cortex : constant Boolean :=
+              Landin.Targets.Architecture_Of (Facts)
+                = Landin.Targets.Cortex_M0;
+            Destinations : Landin.Platform.Path_List;
+         begin
+            Destinations.Append (Product);
+            if Cortex then
+               Destinations.Append (Product & ".o");
+               Destinations.Append (Product & ".ld");
+               Destinations.Append (Product & ".map");
+            end if;
+            for Path of Destinations loop
+               if Host.Paths_Overlap (Path, Operand) then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "artifact collides with source: " & Path);
+                  return;
+               end if;
+            end loop;
+            if not Host.Exists (Operand) then
+               Note_Failure (Code_Unreadable, "source not found: " & Operand);
+               return;
+            end if;
+            if Dry_Run then
+               declare
+                  procedure Plan_Tool (Arguments : Landin.Platform.Path_List);
+                  procedure Plan_Tool (Arguments : Landin.Platform.Path_List)
+                  is
+                  begin
+                     Unbounded.Append (Result.Output,
+                       "run [" & Landin.Json.Quoted (Planned_Driver));
+                     for Argument of Arguments loop
+                        Unbounded.Append (Result.Output,
+                          "," & Landin.Json.Quoted (Argument));
+                     end loop;
+                     Unbounded.Append (Result.Output, "]" & LF);
+                  end Plan_Tool;
+               begin
+                  Unbounded.Append (Result.Output,
+                    "write " & Landin.Json.Quoted (Product) & LF);
+                  if Cortex then
+                     Plan_Tool
+                       (Landin.Backend.Toolchain.Assemble_Arguments
+                          (Operand, Product & ".o", Facts,
+                           Debug => Debug_Enabled,
+                           Level => Landin.Stages.Level (Context)));
+                  end if;
+                  Plan_Tool (Landin.Backend.Toolchain.Link_Arguments
+                    (Assembly => Operand, Output => Product,
+                     Linker => Unbounded.To_String (Linker),
+                     Facts => Facts, Full_Debug => Debug_Enabled,
+                     Level => Landin.Stages.Level (Context),
+                     Static => Static_Link));
+               end;
+               return;
+            end if;
+            Chosen_Driver := Unbounded.To_Unbounded_String (Available_Driver);
+            if Unbounded.Length (Chosen_Driver) = 0 then
+               Note_Unavailable_Toolchain
+                 (if Candidates.Is_Empty then ""
+                  else Candidates.First_Element);
+               return;
+            end if;
+            Link_Assembly (Operand, Product, "", Destinations);
+         end Link_Operand;
+
+         --  Whether the one operand is assembly to link, and if not, why
+         --  an assembly operand cannot be what this request means.
+         Assembly_Operand : constant Boolean :=
+           Emit = Emit_Executable and then Roots.Is_Empty
+           and then Natural (Inputs.Length) = 1
+           and then Is_Assembly_Operand (Inputs.First_Element);
+
+         function Operand_Problem return String;
+         function Operand_Problem return String is
+            Named_Assembly : Boolean := False;
+         begin
+            for Path of Inputs loop
+               Named_Assembly := Named_Assembly
+                 or else Is_Assembly_Operand (Path);
+            end loop;
+            if not Named_Assembly then
+               return "";
+            elsif Emit /= Emit_Executable then
+               return "an assembly operand is linked, which --emit=exe asks"
+                 & " for; Landin source is what is checked or emitted";
+            elsif not Assembly_Operand then
+               return "an assembly operand is linked alone, without --root"
+                 & " or another operand";
+            end if;
+            declare
+               Described : constant String :=
+                 (if Report_Seen then "--build-report"
+                  elsif Stage_Report_Seen then "--stage-report"
+                  elsif Panic_Map then "--panic-map"
+                  elsif Depfile /= "" then "--depfile"
+                  elsif Firmware_Seen then "--firmware-entry"
+                  elsif Keep_Assembly then "--keep-asm"
+                  elsif not Options.Is_Empty then "--option"
+                  elsif not Modes.Is_Empty then "--build-mode"
+                  elsif Optimize_Seen then "--optimize"
+                  elsif Specialize_Seen then "--specialize"
+                  else "");
+            begin
+               return (if Described = "" then ""
+                       else Described & " describes compiling Landin source,"
+                         & " and an assembly operand is linked as it is"
+                         & " written");
+            end;
+         end Operand_Problem;
 
       begin
          Check_Dependency_Path (Depfile);
@@ -2604,6 +2954,11 @@ package body Landin.Driver is
             return Result;
          end if;
 
+         if Operand_Problem /= "" then
+            Bad_Use := True;
+            Note_Failure (Code_Unknown_Option, Operand_Problem);
+         end if;
+
          --  Informational actions and invalid requests wait for every
          --  command-line diagnostic, then return before reading sources.
          if Wants_Usage or else Wants_Identity or else Bad_Use then
@@ -2620,31 +2975,28 @@ package body Landin.Driver is
             return Result;
          end if;
 
-         --  Availability is already determined by the selected target and
-         --  command line. Report a missing driver before reading sources or
-         --  producing any of an executable request's artifacts. Run checks
-         --  again when it starts, in case PATH changes meanwhile.
+         --  A target that names no driver is refused before any source is
+         --  read.  Whether a named one is installed is asked only once the
+         --  program is known to need one (D364): a static link that meets
+         --  a C symbol is the program's refusal, and comes first (D364's
+         --  order), before anything is written.
          if Emit = Emit_Executable
            and then not Dry_Run
            and then not Bad_Use
            and then not Landin.Stages.Failed (Context)
+           and then Candidates.Is_Empty
          then
-            declare
-               Driver : constant String :=
-                 Landin.Backend.Toolchain.Driver_For
-                   (Facts, Unbounded.To_String (Toolchain));
-            begin
-               if Driver = "" then
-                  Note_No_Toolchain
-                    ("target " & Landin.Targets.Name (Facts)
-                     & " names no toolchain",
-                     "name one with --toolchain=NAME");
-                  Skip_Compilation := True;
-               elsif not Tools.Available (Driver) then
-                  Note_Unavailable_Toolchain (Driver);
-                  Skip_Compilation := True;
-               end if;
-            end;
+            Note_No_Toolchain
+              ("target " & Landin.Targets.Name (Facts)
+               & " names no toolchain",
+               "name one with --toolchain=NAME");
+            Skip_Compilation := True;
+         end if;
+
+         if Assembly_Operand and then not Skip_Compilation then
+            Current_Stage := Unbounded.To_Unbounded_String ("emission");
+            Link_Operand;
+            Skip_Compilation := True;
          end if;
 
          if not Skip_Compilation then
@@ -2671,9 +3023,10 @@ package body Landin.Driver is
                   Loading.Load_Files (Context, Host, Inputs);
                   --  Named files reach the library and nothing else, and
                   --  are parsed here to say what they import, as a rooted
-                  --  request's modules are.
-                  if Library_Root /= ""
-                    and then Landin.Stages.Source_Count (Context) > 0
+                  --  request's modules are.  With no library found, an
+                  --  import of it is refused here naming where refine
+                  --  looked (D363), and any other as D262 says.
+                  if Landin.Stages.Source_Count (Context) > 0
                     and then not Landin.Stages.Failed (Context)
                   then
                      Loading.Load_Library_Imports
@@ -2742,6 +3095,28 @@ package body Landin.Driver is
                   Current_Stage := Unbounded.To_Unbounded_String ("emission");
                   Stage_Began;
                   Emit_Requested;
+                  --  D362: the assembly was the link's input and nothing
+                  --  else's, whether the link succeeded or not.  A source
+                  --  map beside the executable names it by its hash and is
+                  --  resolved against it, so the two stay together; and
+                  --  firmware keeps it with the object, script and map its
+                  --  link writes beside the image, which its report reads.
+                  if Unbounded.Length (Intermediate_Assembly) > 0 then
+                     declare
+                        Removed : Landin.Platform.Remove_Status;
+                     begin
+                        Host.Remove_File
+                          (Unbounded.To_String (Intermediate_Assembly),
+                           Removed);
+                        if Removed = Landin.Platform.Not_Removable then
+                           Note_Failure
+                             (Code_Unwritable,
+                              "cannot remove the intermediate assembly "
+                              & Unbounded.To_String (Intermediate_Assembly)
+                              & "; --keep-asm keeps it on purpose");
+                        end if;
+                     end;
+                  end if;
                   Stage_Ended ("emission");
                end if;
             end if;

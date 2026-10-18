@@ -77,6 +77,20 @@ set, and records that executable's version. The gate runs the sessions with
 release `refine` and the GDB the pinned GNAT bundles, separately from the
 emitted program's optimization policy.
 
+## The cross lane
+
+Another Linux target's corpus runs on this host under QEMU's user
+emulation, linked by that target's cross driver: evidence about the emitted
+code, none about the pinned compiler on its own host. The Linux nix shell
+provides the lane from `flake.lock`'s package set, QEMU `11.1.0` and the
+cross GCC `15.3.0`, the versions `environments/pins.sh` names as
+`LANDIN_CROSS_QEMU_NIX` and `LANDIN_CROSS_GCC_NIX`; the shell refuses to
+build from a lock whose package set has others. Its drivers carry the
+triplet names `refine` asks for, and its multi-target GDB is
+`gdb-multiarch`, because the GDB the pinned GNAT bundles reads only its own
+architecture. The gate's `rv64-qemu` jobs install Ubuntu 24.04's `qemu-user`
+and riscv64 cross packages, whose versions their logs print.
+
 ### Archives and checksums
 
 The releases below are the ones the pins name. Every checksum here has been

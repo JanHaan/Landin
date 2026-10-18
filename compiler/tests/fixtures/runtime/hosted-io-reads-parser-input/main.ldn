@@ -1,9 +1,9 @@
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 public main: () -> (code: i32) =
-    argument_host := hosted.host()
+    argument_host := system.new()
     fail_code: i32 = 1
 
     if io.argument_count(argument_host) <> 1 then
@@ -18,7 +18,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    host := hosted.host()
+    host := system.new()
     opened := io.open_read(host, source) else (open_problem)
         _ = open_problem
         code = fail_code
@@ -58,8 +58,6 @@ public main: () -> (code: i32) =
         code = 42
         return
     end
-    io.close(host, should_fail) else (unexpected_close_problem)
-        _ = unexpected_close_problem
-    end
+    io.close(host, should_fail) else none
     code = fail_code
 end

@@ -274,6 +274,11 @@ package body Landin.Stages.Checking.References is
          Frame      : Boolean := False;
          Frame_Witness : Res.Declaration_Id := Res.No_Declaration;
          External   : Boolean := False;
+         --  D375: an External alternative that a writable reference in
+         --  the value may reach.  Storage reached only through read-only
+         --  views, immutable module storage among it, can be no store's
+         --  destination, so D222 asks only about this subset.
+         Writable_External : Boolean := False;
          Untracked  : Boolean := False;
          --  A refused value supplies no proof for a return-origin check.
          --  Keep that diagnostic state distinct from raw address origins.
@@ -336,6 +341,8 @@ package body Landin.Stages.Checking.References is
             Into_Fact.Frame_Witness := Other.Frame_Witness;
          end if;
          Into_Fact.External := Into_Fact.External or Other.External;
+         Into_Fact.Writable_External :=
+           Into_Fact.Writable_External or Other.Writable_External;
          Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
          Into_Fact.Invalid := Into_Fact.Invalid or Other.Invalid;
          --  An explicitly untracked alternative cannot erase a tracked
@@ -868,6 +875,9 @@ package body Landin.Stages.Checking.References is
       function Has_References
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
+      function Reaches_No_Writable_Reference
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
       function Has_Reference_Storage
         (Tree : Syn.Tree; Place : Syn.Node_Id) return Boolean;
 
@@ -1034,6 +1044,31 @@ package body Landin.Stages.Checking.References is
          end if;
          return False;
       end Has_References;
+
+      --  D375: whether NODE's value provably reaches no writable reference,
+      --  through its own descriptor or any it reaches, as D222 counts them.
+      --  Only a pointer or slice, or a nominal aggregate, is described
+      --  here; every other value, an erased one included, may.
+      function Reaches_No_Writable_Reference
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Kind : constant Ty.Type_Kind :=
+           Landin.Checking.Type_Of (Types.all, Tree, Node);
+         Part : Landin.Checking.Signature_Part :=
+           (Kind => Kind, Site => Syn.Origin (Tree, Node), others => <>);
+      begin
+         if Kind in Ty.Pointer_Value | Ty.Slice_Value then
+            Part.Reference :=
+              Landin.Checking.Reference_Of (Types.all, Tree, Node);
+         elsif Kind = Ty.Aggregate then
+            Part.Nominal := Landin.Checking.Nominal_Of (Types.all, Tree, Node);
+         else
+            return False;
+         end if;
+         return Landin.Checking.Holds (Types.all, Part)
+           and then not Landin.Checking.Contains_Writable_References
+             (Types.all, Part);
+      end Reaches_No_Writable_Reference;
 
       --  Whether a member selection names a case of a variant part, the
       --  form a payload-free case another module declares is written in.
@@ -2336,6 +2371,7 @@ package body Landin.Stages.Checking.References is
                   end if;
                when Res.Module_Binding =>
                   Result.External := True;
+                  Result.Writable_External := True;
                when Res.Parameter =>
                   declare
                      Parameter_Tree : constant
@@ -2400,7 +2436,21 @@ package body Landin.Stages.Checking.References is
            and then not Result.Value.Untracked
            and then (for all Bit of Result.Value.From => not Bit)
          then
+            --  An alternative already known keeps what D375 found of it.
+            if not Result.Value.External then
+               Result.Value.Writable_External := True;
+            end if;
             Result.Value.External := True;
+         end if;
+         --  D375: a value whose type reaches no writable reference cannot
+         --  lead a store to the independent storage it carries.  An erased
+         --  value keeps what its operand had, since `any` admits no entry
+         --  whose `self` asks more permission than the operand gives.
+         if Node /= Syn.No_Node and then Falls_Through
+           and then Result.Value.Writable_External
+           and then Reaches_No_Writable_Reference (Tree, Node)
+         then
+            Result.Value.Writable_External := False;
          end if;
          return Result;
       end Fact_Of;
@@ -2714,6 +2764,7 @@ package body Landin.Stages.Checking.References is
                                  Part.External := Landin.Checking
                                    .Signature_Return_Source_Count
                                      (Types.all, Called, Returned) = 0;
+                                 Part.Writable_External := Part.External;
                                  for Source in 1 .. Landin.Checking
                                    .Signature_Return_Source_Count
                                      (Types.all, Called, Returned)
@@ -2758,6 +2809,19 @@ package body Landin.Stages.Checking.References is
                                        end if;
                                     end;
                                  end loop;
+                                 --  D375: a writable result may reach its
+                                 --  sources' independent storage through
+                                 --  that permission, whatever the
+                                 --  argument's own type allowed.
+                                 if Part.External
+                                   and then Landin.Checking
+                                     .Contains_Writable_References
+                                       (Types.all,
+                                        Landin.Checking.Nth_Signature_Result
+                                          (Types.all, Called, Returned))
+                                 then
+                                    Part.Writable_External := True;
+                                 end if;
                               end if;
                               Join (Result.Value, Part);
                               if Landin.Checking.Signature_Result_Count
@@ -2940,7 +3004,7 @@ package body Landin.Stages.Checking.References is
                --  alternative behind those parameter bits. Raw addresses
                --  still carry no proof; joining one must not conceal a
                --  separately known external destination.
-               if Fact.External
+               if Fact.Writable_External
                  and then (for some Bit of Expected => Bit)
                  and then Landin.Checking.Contains_Writable_References
                    (Types.all, Part)

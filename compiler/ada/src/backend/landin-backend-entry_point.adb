@@ -239,11 +239,38 @@ package body Landin.Backend.Entry_Point is
          end loop;
       end Reach_Name;
 
+      --  The panic handler the backend calls, which D374 counts as a root.
+      function Handler return Landin.IR.Item_Id;
+
+      function Handler return Landin.IR.Item_Id is
+      begin
+         for Index in 1 .. Count loop
+            declare
+               Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            begin
+               if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+                 and then not Landin.IR.Is_External (Of_Unit, Item)
+                 and then Link_Name (Item) = "panic_handler"
+               then
+                  return Item;
+               end if;
+            end;
+         end loop;
+         return Landin.IR.No_Item;
+      end Handler;
+
+      --  A table names only the entries D374 keeps; the rest are zero.
+      Kept : constant Kept_Entries :=
+        Kept_Evidence_Entries (Of_Unit, Handler);
+
       procedure Reach_Evidence (Id : Landin.IR.Evidence_Id) is
       begin
          for Position in 1 .. Landin.IR.Evidence_Entry_Count (Of_Unit, Id)
          loop
-            Reach (Landin.IR.Evidence_Entry_Target (Of_Unit, Id, Position));
+            if Is_Kept (Kept, Id, Position) then
+               Reach
+                 (Landin.IR.Evidence_Entry_Target (Of_Unit, Id, Position));
+            end if;
          end loop;
       end Reach_Evidence;
    begin

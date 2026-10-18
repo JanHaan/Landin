@@ -1,8 +1,7 @@
 import core/text
 
-bad: () -> (result: []u8) ! text.past_end =
+bad: () -> (result: []u8) =
     mut storage: [4]u8 = zeroed
-    source: []u8 = storage[0..<4]
-    zero: usize = 0
-    result = try text.prefix(source, zero)
+    line := text.over(storage[0..<4])
+    result = text.used(line)
 end bad

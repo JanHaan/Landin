@@ -7,8 +7,8 @@
 --  ended it.  The failure oracles: a missing program is `enoent` with no
 --  child started, a name holding `=` is `einval`, waiting for a child
 --  already waited for is `echild`, and a closed descriptor is `ebadf`.
+import core/cmp
 import core/io
-import core/mem
 import core/text
 import platform/posix
 
@@ -20,21 +20,15 @@ end say
 said: (name: []u8, problem: posix.errno) -> none =
     mut room: [32]u8 = zeroed
     mut line := text.over(room[0..<32])
-    text.append(line, name) else (other)
-        _ = other
-    end
+    text.append(line, name) else none
     number: i32 = posix.number(problem)
-    text.format(line, "={}\n", [any(addr number)]) else (other)
-        _ = other
-    end
+    text.format(line, "={}\n", [any(addr number)]) else none
     say(text.used(line))
 end said
 
 --  Close a descriptor whose closing nothing here checks.
 shut: (closing: posix.descriptor) -> none =
-    posix.close(closing) else (problem)
-        _ = problem
-    end
+    posix.close(closing) else none
 end shut
 
 --  The shell, started with ARGUMENTS after its name and STREAMS.
@@ -62,7 +56,7 @@ public main: () -> (code: i32) =
         return
     end
     return when sent <> 7 or got <> 7
-      or mem.compare(room[0..<7], "through") <> mem.equal
+      or cmp.compare(room[0..<7], "through") <> cmp.equal
     posix.close(loop_ends.writing) else (problem)
         said("close", problem)
         return
@@ -109,7 +103,7 @@ public main: () -> (code: i32) =
         total += part
     end loop
     shut(back.reading)
-    return when mem.compare(echoed[0..<total], "<piped>") <> mem.equal
+    return when cmp.compare(echoed[0..<total], "<piped>") <> cmp.equal
     code = 3
     status: posix.child_status = posix.wait(child) else (problem)
         said("wait", problem)

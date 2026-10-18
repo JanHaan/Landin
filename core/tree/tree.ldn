@@ -165,6 +165,46 @@ public name: (value: node) -> (text: utf8 from value) =
     text = value.name
 end name
 
+--- A node with no children of its own.
+public leaf_node: atom
+--- A node over a range of earlier nodes, its children.
+public branch_node: atom
+--- What a node is: `leaf_node` or `branch_node`.
+public node_kind: type = leaf_node | branch_node
+
+--- Whether `value` is a leaf or a branch.
+public kind: (value: node) -> (result: node_kind) =
+    result = match value.kind
+        leaf: leaf_node
+        branch(first, count): begin
+            _ = first
+            _ = count
+            branch_node
+        end
+    end match
+end kind
+
+--- The leaves `value` counts: one for a leaf, and a branch's children's
+--- total, an empty branch counting zero.
+public leaves: (value: node) -> (count: usize) =
+    count = value.leaves
+end leaves
+
+--- A branch's children, the `count` nodes from `first` on; a leaf has
+--- none, the empty range at its own start, `first` zero.
+public children: (value: node) -> (first: node_id, count: usize) =
+    match value.kind
+        leaf: begin
+            first = identifier(0)
+            count = 0
+        end
+        branch(start, many): begin
+            first = start
+            count = many
+        end
+    end match
+end children
+
 --- Return the node's precomputed leaf total in constant time. Shared children
 --- count once per incoming path; an empty branch counts zero.
 public count_leaves: (value: tree, id: node_id)

@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: platform/posix's open_library refuses an empty path with enoent, as every call of the module refuses one, rather than handing the loader an empty name for which it would give the program itself
+program: main.ldn
+root: ../../../../..
+link: libc
+status: 42
+constructs: 0940, 1580, 1975
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

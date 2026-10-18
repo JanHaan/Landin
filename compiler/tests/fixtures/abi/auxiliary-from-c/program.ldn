@@ -2,7 +2,9 @@
 --  argument initializer: the auxiliary vector's entries, the page size,
 --  the vDSO's clock and the environment, which a C peer compares with the
 --  C library's own `getauxval`.
+import core/time
 import platform/linux
+import platform/linux/vdso
 import platform/posix
 
 --  The auxiliary-vector entry tagged TAG, or zero when there is none.
@@ -17,8 +19,8 @@ end l_page_size
 
 --  Whether the vDSO's clock_gettime was found.
 public extern(c) l_vdso: () -> (yes: bool) =
-    (found, address) := linux.vdso_symbol(linux.vdso_clock_name,
-                                          linux.vdso_version)
+    (found, address) := vdso.symbol(vdso.clock_symbol,
+                                    vdso.clock_version)
     yes = found and address <> 0
 end l_vdso
 
@@ -36,9 +38,9 @@ end l_environment
 --  The monotonic clock in nanoseconds, or -1.
 public extern(c) l_monotonic: () -> (at: i64) =
     at = -1
-    time: posix.time_value = posix.clock_time(posix.monotonic_clock) else (problem)
+    reading: posix.time_value = posix.clock_time(posix.monotonic_clock) else (problem)
         _ = problem
         return
     end
-    at = time.seconds * 1000000000 + i64(time.nanoseconds)
+    at = reading.seconds * 1000000000 + i64(reading.nanoseconds)
 end l_monotonic

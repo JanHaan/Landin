@@ -9,6 +9,7 @@
 
 import core/text
 import platform/libc
+import platform/linux
 
 user_value: type = distinct u32
 group_value: type = distinct u32
@@ -98,7 +99,7 @@ fields_of: (line: []u8, count: usize, inout into: [7]field)
     mut found: usize = 0
     mut start: usize = 0
     for at in usize(0)..<lenof line do
-        if line[at] == 58 then
+        if line[at] == u8(':') then
             fail malformed_entry when found + 1 >= count
             into[found] = (start: start, stop: at)
             inc found
@@ -131,7 +132,7 @@ public link(symbol: "_landin_posix_parse_account") parse_account:
     mut at: [7]field = [7 of (start: 0, stop: 0)]
     try fields_of(line, 7, at)
     fail malformed_entry when at[0].stop == at[0].start
-      or line[0] == 35 or line[0] == 43 or line[0] == 45
+      or line[0] == u8('#') or line[0] == u8('+') or line[0] == u8('-')
     user: u32 = try identity_of(line[at[2].start..<at[2].stop])
     group: u32 = try identity_of(line[at[3].start..<at[3].stop])
     found = (name: text.host_over(line[at[0].start..<at[0].stop]),
@@ -150,7 +151,7 @@ public link(symbol: "_landin_posix_parse_group") parse_group:
     mut at: [7]field = [7 of (start: 0, stop: 0)]
     try fields_of(line, 4, at)
     fail malformed_entry when at[0].stop == at[0].start
-      or line[0] == 35 or line[0] == 43 or line[0] == 45
+      or line[0] == u8('#') or line[0] == u8('+') or line[0] == u8('-')
     group: u32 = try identity_of(line[at[2].start..<at[2].stop])
     found = (name: text.host_over(line[at[0].start..<at[0].stop]),
              password: text.host_over(line[at[1].start..<at[1].stop]),
@@ -166,7 +167,7 @@ public link(symbol: "_landin_posix_member_count") member_count:
     count = 0
     mut start: usize = 0
     for at in usize(0)..<lenof names + 1 do
-        if at == lenof names or names[at] == 44 then
+        if at == lenof names or names[at] == u8(',') then
             if at > start then inc count end if
             start = at + 1
         end if
@@ -182,7 +183,7 @@ public link(symbol: "_landin_posix_member") member:
     mut start: usize = 0
     mut seen: usize = 0
     for at in usize(0)..<lenof names + 1 do
-        if at == lenof names or names[at] == 44 then
+        if at == lenof names or names[at] == u8(',') then
             if at > start then
                 if seen == index then
                     name = text.host_over(names[start..<at])
@@ -237,12 +238,17 @@ end group_named
 
 no_name: [1]u8 = [0]
 
---  Whether NAME could be in a database: nonempty, with no NUL and no
---  colon, which no entry's name holds.
+--  The longest name an account or a group has, LOGIN_NAME_MAX without its
+--  NUL: Linux's is the largest of the three systems'.
+longest_name: usize = 255
+
+--  Whether NAME could be in a database: nonempty, no longer than any
+--  system lets a name be, with no NUL and no colon, which no entry's name
+--  holds.  Both routes refuse any other as naming no one.
 name_valid: (name: []u8) -> (yes: bool) =
-    yes = lenof name > 0
+    yes = lenof name > 0 and lenof name <= longest_name
     for byte in name do
-        if byte == 0 or byte == 58 then yes = false end if
+        if byte == 0 or byte == u8(':') then yes = false end if
     end for
 end name_valid
 
@@ -340,24 +346,19 @@ fixed if compiler.os == linux and not compiler.c_runtime then
         end loop
     end next_line
 
-    --  Open a database file.
-    database: (path: []u8) -> (opened: descriptor) ! errno =
+    --  Open a database file.  A system with none has no such account,
+    --  which is what the C library answers then too.
+    database: (path: []u8) -> (opened: descriptor) ! errno | no_account =
         loop do
             opened = open_at(working_directory, text.host_over(path),
                              reading, 0) else (problem)
                 continue when problem == eintr
+                fail no_account when problem == enoent
                 fail problem
             end
             return
         end loop
     end database
-
-    --  Forget a database file, whatever its close says.
-    closed: (opened: descriptor) -> none =
-        close(opened) else (problem)
-            _ = problem
-        end
-    end closed
 
     system_account: (buffer: []mut u8, by_id: bool, wanted_id: u32,
                      wanted: []u8)
@@ -365,7 +366,7 @@ fixed if compiler.os == linux and not compiler.c_runtime then
         fail no_account when not by_id and not name_valid(wanted)
         fail erange when lenof buffer == 0
         source: descriptor = try database(passwd_path)
-        defer closed(source)
+        defer forgotten(source)
         mut state: scan = (cursor: 0, filled: 0, ended: false,
                            skipped: false)
         loop do
@@ -393,7 +394,7 @@ fixed if compiler.os == linux and not compiler.c_runtime then
         fail no_account when not by_id and not name_valid(wanted)
         fail erange when lenof buffer == 0
         source: descriptor = try database(group_path)
-        defer closed(source)
+        defer forgotten(source)
         mut state: scan = (cursor: 0, filled: 0, ended: false,
                            skipped: false)
         loop do
@@ -444,10 +445,11 @@ else
               or problem == ebadf or problem == eperm
     end not_found
 
-    --  Copy NAME with a NUL after it into ROOM, for a call that takes one.
+    --  Copy NAME, which `name_valid` admitted, with a NUL after it into
+    --  ROOM, for a call that takes one.
     name_in: (name: []u8, room: []mut u8) -> (terminated: ptr u8 from room)
              ! errno =
-        fail erange when lenof name >= lenof room
+        fail unlisted when lenof name >= lenof room
         for at in usize(0)..<lenof name do
             room[at] = name[at]
         end for
@@ -484,17 +486,11 @@ else
                  shell: text.host_over(try inside(buffer, record.shell)))
     end system_account
 
-    --  The group's strings are copied to the front of the caller's buffer,
-    --  members joined by commas, and the C library given the back half to
-    --  fill.
-    system_group: (buffer: []mut u8, by_id: bool, wanted_id: u32,
-                   wanted: []u8)
-                  -> (found: group_entry from buffer) ! errno | no_account =
-        fail no_account when not by_id and not name_valid(wanted)
-        fail erange when lenof buffer < 2
-        half: usize = lenof buffer / 2
-        scratch: []mut u8 = buffer[half..<lenof buffer]
-        mut record: libc.group_record = zeroed
+    --  Look the group up into SCRATCH, filling RECORD.
+    group_into: (scratch: []mut u8, by_id: bool, wanted_id: u32,
+                 wanted: []u8, inout record: libc.group_record)
+                -> none ! errno | no_account =
+        fail erange when lenof scratch == 0
         mut result: usize = 0
         mut error: i32 = 0
         if by_id then
@@ -509,15 +505,16 @@ else
         fail no_account when result == 0 and not_found(error)
         fail errno_of(error) when error <> 0
         fail no_account when result == 0
+    end group_into
+
+    --  The bytes RECORD's copy needs: its name, its password and its
+    --  members joined by commas, each of which, and the members' table of
+    --  addresses ended by zero, must lie in SCRATCH.
+    joined_size: (scratch: []mut u8, record: libc.group_record)
+                 -> (size: usize) ! errno =
         name: []u8 = try inside(scratch, record.name)
         password: []u8 = try inside(scratch, record.password)
-        mut used: usize = 0
-        name_at: usize = used
-        used = try placed(buffer, half, used, name)
-        password_at: usize = used
-        used = try placed(buffer, half, used, password)
-        members_at: usize = used
-        --  The members' table: pointers, the last one null.
+        size = lenof name + lenof password
         fail unlisted when record.members == 0
         mut entry: usize = record.members
         mut first: bool = true
@@ -526,11 +523,53 @@ else
               or entry + sizeof usize > usize(addr scratch[0]) + lenof scratch
             slot: ptr usize = ptr(entry)
             break when slot.val == 0
+            if not first then inc size end if
+            first = false
+            member: []u8 = try inside(scratch, slot.val)
+            size += lenof member
+            entry += sizeof usize
+        end loop
+    end joined_size
+
+    --  The group's strings are copied to the front of the caller's buffer,
+    --  members joined by commas.  The C library is given the whole buffer
+    --  first, which says whether the group fits it and how much room the
+    --  copy needs, and then what is past that room, so a group is `erange`
+    --  only when it and its copy together do not fit.
+    system_group: (buffer: []mut u8, by_id: bool, wanted_id: u32,
+                   wanted: []u8)
+                  -> (found: group_entry from buffer) ! errno | no_account =
+        fail no_account when not by_id and not name_valid(wanted)
+        mut record: libc.group_record = zeroed
+        try group_into(buffer, by_id, wanted_id, wanted, record)
+        needed: usize = try joined_size(buffer, record)
+        fail erange when needed >= lenof buffer
+        scratch: []mut u8 = buffer[needed..<lenof buffer]
+        record = zeroed
+        try group_into(scratch, by_id, wanted_id, wanted, record)
+        --  The database may have changed between the two lookups.
+        again: usize = try joined_size(scratch, record)
+        fail erange when again > needed
+        name: []u8 = try inside(scratch, record.name)
+        password: []u8 = try inside(scratch, record.password)
+        mut used: usize = 0
+        name_at: usize = used
+        used = try placed(buffer, needed, used, name)
+        password_at: usize = used
+        used = try placed(buffer, needed, used, password)
+        members_at: usize = used
+        --  The members' table: pointers, the last one null, which
+        --  `joined_size` has held to the scratch.
+        mut entry: usize = record.members
+        mut first: bool = true
+        loop do
+            slot: ptr usize = ptr(entry)
+            break when slot.val == 0
             if not first then
-                used = try placed(buffer, half, used, ",")
+                used = try placed(buffer, needed, used, ",")
             end if
             first = false
-            used = try placed(buffer, half, used, try inside(scratch, slot.val))
+            used = try placed(buffer, needed, used, try inside(scratch, slot.val))
             entry += sizeof usize
         end loop
         name_end: usize = name_at + lenof name
@@ -541,14 +580,52 @@ else
                  members: text.host_over(buffer[members_at..<used]))
     end system_group
 
-    --  Copy BYTES into the front half of BUFFER at USED: where the next
-    --  goes, or `erange` past the half.
-    placed: (buffer: []mut u8, half: usize, used: usize, bytes: []u8)
+    --  Copy BYTES into the first ROOM bytes of BUFFER at USED: where the
+    --  next goes, or `erange` past them.
+    placed: (buffer: []mut u8, room: usize, used: usize, bytes: []u8)
             -> (next: usize) ! errno =
-        fail erange when lenof bytes > half - used
+        fail erange when lenof bytes > room - used
         for at in usize(0)..<lenof bytes do
             buffer[used + at] = bytes[at]
         end for
         next = used + lenof bytes
     end placed
+end if
+
+--  The system's own calls beneath the facility above: Linux's system
+--  calls through platform/linux, and the C library through
+--  platform/libc on Darwin and FreeBSD, whose system interface it is.
+
+fixed if compiler.os == linux then
+    system_real_user: () -> (user: u32) =
+        user = linux.getuid()
+    end system_real_user
+
+    system_effective_user: () -> (user: u32) =
+        user = linux.geteuid()
+    end system_effective_user
+
+    system_real_group: () -> (group: u32) =
+        group = linux.getgid()
+    end system_real_group
+
+    system_effective_group: () -> (group: u32) =
+        group = linux.getegid()
+    end system_effective_group
+elsif compiler.os == darwin or compiler.os == freebsd then
+    system_real_user: () -> (user: u32) =
+        user = libc.getuid()
+    end system_real_user
+
+    system_effective_user: () -> (user: u32) =
+        user = libc.geteuid()
+    end system_effective_user
+
+    system_real_group: () -> (group: u32) =
+        group = libc.getgid()
+    end system_real_group
+
+    system_effective_group: () -> (group: u32) =
+        group = libc.getegid()
+    end system_effective_group
 end if

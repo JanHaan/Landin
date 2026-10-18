@@ -4,6 +4,7 @@
 --  platform/posix chooses the route by, and the lookups and refusals are
 --  runtime/posix-accounts' own.
 import core/text
+import platform/libc
 import platform/posix
 
 compiler.assert(compiler.c_runtime)
@@ -79,6 +80,16 @@ looked_up: () -> none ! ... =
         root
     end
     fail mismatched when not met
+    --  A name longer than any system lets a name be names no one, on the
+    --  static route and the C library's alike.
+    met = false
+    long_name: [300]u8 = [300 of 97]
+    _ = posix.account_named(text.host_over(long_name[0..<300]),
+                            buffer[0..<1024]) else (problem)
+        met = problem == posix.no_account
+        root
+    end
+    fail mismatched when not met
     met = false
     mut tiny: [4]u8 = zeroed
     _ = posix.account_with_id(posix.user_id(0), tiny[0..<4]) else (problem)
@@ -95,7 +106,54 @@ looked_up: () -> none ! ... =
     fail mismatched when not met
 end looked_up
 
+--  The smallest buffer the C library finds group zero in.
+c_needs: () -> (least: usize) =
+    mut room: [1024]u8 = zeroed
+    least = 1
+    while least < 1024 do
+        mut record: libc.group_record = zeroed
+        mut found: usize = 0
+        error: i32 = libc.getgrgid_r(0, addr record, addr room[0], least,
+                                     addr found)
+        return when error == 0 and found <> 0
+        inc least
+    end while
+end c_needs
+
+--  The C library is given the caller's whole buffer: group zero is found
+--  in one that holds what the C library needs and the joined copy beside
+--  it, and in none smaller but for the table's alignment.
+whole_buffer: () -> none ! ... =
+    needs: usize = c_needs()
+    mut room: [1024]u8 = zeroed
+    mut least: usize = 1
+    loop do
+        fail mismatched when least >= 1024
+        entry: posix.group_entry =
+            posix.group_with_id(posix.group_id(0), room[0..<least])
+            else (problem)
+                fail problem when problem <> posix.erange
+                inc least
+                continue
+            end
+        copy: usize = lenof text.host_bytes(entry.name)
+                      + lenof text.host_bytes(entry.password)
+                      + lenof text.host_bytes(entry.members)
+        --  The copy is beside what the C library needs, which may align
+        --  its table after an unaligned copy; given half the buffer, as
+        --  it once was, it would need twice what it needs.
+        fail mismatched when least < needs + copy
+          or least > needs + copy + sizeof usize or least >= 2 * needs
+        return
+    end loop
+end whole_buffer
+
 public main: () -> (code: i32) =
+    code = 2
+    whole_buffer() else (problem)
+        _ = problem
+        return
+    end
     code = 3
     looked_up() else (problem)
         _ = problem

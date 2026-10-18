@@ -1,0 +1,119 @@
+--  `map.reserve(want)` promises room for `want` entries without a growth
+--  allocation, and counts the tombstones removals leave, which count
+--  against the capacity as live entries do (D379).  A table already large
+--  enough once kept them, so a later new key rebuilt the table, or failed
+--  `out_of_memory` with no allocation permitted, short of `want`.  Here a
+--  reservation the tombstones crowd rebuilds the table at its size, which
+--  is an allocation the injector can refuse, keeping every entry, and the
+--  keys after it need none; a reservation that fits beside its tombstones
+--  is left alone and allocates nothing either.  The failing step's number
+--  is the exit code.
+import core/arena
+import core/fault
+import core/map
+import core/mem
+
+public main: () -> (code: i32) =
+    code = 1
+    mut backing: [2048]u8 = zeroed
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], lenof backing)
+    mut counted_space: fault.space = zeroed
+    counted := fault.over(counted_space, memory, usize(100))
+    mut table := map.new(key: u32, item: i32)
+    map.reserve(table, counted, usize(6)) else (problem)
+        _ = problem
+        return
+    end
+    keys: [6]u32 = [0, 19, 28, 6, 1, 4]
+    for key in keys do
+        map.insert(table, counted, key, 1) else (problem)
+            _ = problem
+            return
+        end
+    end for
+    map.remove(table, u32(0)) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when map.length(table) <> 5 or map.capacity(table) <> 6
+      or map.removed(table) <> 1
+    --  Six entries do not fit beside the one tombstone: the reservation
+    --  rebuilds, and a refused rebuild changes nothing.
+    fault.permit(counted, usize(0))
+    mut refused: bool = false
+    map.reserve(table, counted, usize(6)) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    code = 3
+    return when not refused or map.length(table) <> 5
+      or map.removed(table) <> 1 or map.capacity(table) <> 6
+      or not map.contains(table, u32(19)) or map.contains(table, u32(0))
+    fault.permit(counted, usize(100))
+    map.reserve(table, counted, usize(6)) else (problem)
+        _ = problem
+        return
+    end
+    code = 4
+    return when map.removed(table) <> 0 or map.capacity(table) <> 6
+      or map.slots(table) <> 8 or map.length(table) <> 5
+    --  The sixth entry needs no allocation.
+    fault.permit(counted, usize(0))
+    attempts: usize = fault.attempts(counted)
+    map.insert(table, counted, u32(3), 1) else (problem)
+        _ = problem
+        code = 5
+        return
+    end
+    code = 6
+    return when map.length(table) <> 6 or map.capacity(table) <> 6
+      or fault.attempts(counted) <> attempts
+    --  Room beside the tombstone: a fresh table reserved for six holds two
+    --  entries and one tombstone, and a reservation of five, which fits
+    --  beside it, allocates nothing, nor do the three keys after it.
+    fault.permit(counted, usize(100))
+    map.release(table, counted)
+    mut second := map.new(key: u32, item: i32)
+    map.reserve(second, counted, usize(6)) else (problem)
+        _ = problem
+        code = 7
+        return
+    end
+    first: [3]u32 = [10, 11, 12]
+    for key in first do
+        map.insert(second, counted, key, 1) else (problem)
+            _ = problem
+            code = 7
+            return
+        end
+    end for
+    map.remove(second, u32(11)) else (problem)
+        _ = problem
+        code = 7
+        return
+    end
+    fault.permit(counted, usize(0))
+    held: usize = fault.attempts(counted)
+    map.reserve(second, counted, usize(5)) else (problem)
+        _ = problem
+        code = 8
+        return
+    end
+    code = 9
+    return when map.removed(second) <> 1 or map.length(second) <> 2
+      or fault.attempts(counted) <> held
+    later: [3]u32 = [40, 41, 42]
+    for key in later do
+        map.insert(second, counted, key, 2) else (problem)
+            _ = problem
+            code = 10
+            return
+        end
+    end for
+    code = 11
+    return when map.length(second) <> 5 or fault.attempts(counted) <> held
+    fault.permit(counted, usize(100))
+    map.release(second, counted)
+    code = 42
+end main

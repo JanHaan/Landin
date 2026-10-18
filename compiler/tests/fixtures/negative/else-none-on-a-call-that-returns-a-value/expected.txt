@@ -1,0 +1,60 @@
+error[L0331]: this call returns a value, so `else none` leaves nothing in its place
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:31:27
+   |
+31 |     direct := count(true) else none
+   |                           ^^^^^^^^^
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:7:25
+  |
+7 | count: (flag: bool) -> (n: u32) ! refused =
+  |                         ^^^^^^ the result `else none` would leave unset
+  = note: D376: `else none` ignores the failure of a call that returns none; give the result a value with `else value`, handle the error with `else (problem) ... end`, or pass it on with `try`
+error[L0331]: this call returns a value, so `else none` leaves nothing in its place
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:32:35
+   |
+32 |     labelled := count(flag: true) else none
+   |                                   ^^^^^^^^^
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:7:25
+  |
+7 | count: (flag: bool) -> (n: u32) ! refused =
+  |                         ^^^^^^ the result `else none` would leave unset
+  = note: D376: `else none` ignores the failure of a call that returns none; give the result a value with `else value`, handle the error with `else (problem) ... end`, or pass it on with `try`
+error[L0331]: this call returns a value, so `else none` leaves nothing in its place
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:35:27
+   |
+35 |     read := erased.read() else none
+   |                           ^^^^^^^^^
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:13:33
+   |
+13 |     read: (self: ptr mut t) -> (n: u32) ! refused
+   |                                 ^^^^^^ the result `else none` would leave unset
+  = note: D376: `else none` ignores the failure of a call that returns none; give the result a value with `else value`, handle the error with `else (problem) ... end`, or pass it on with `try`
+error[L0331]: this call returns a value, so `else none` leaves nothing in its place
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:37:32
+   |
+37 |     indirect := through(false) else none
+   |                                ^^^^^^^^^
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:36:31
+   |
+36 |     through: (flag: bool) -> (n: u32) ! refused = count
+   |                               ^^^^^^ the result `else none` would leave unset
+  = note: D376: `else none` ignores the failure of a call that returns none; give the result a value with `else value`, handle the error with `else (problem) ... end`, or pass it on with `try`
+error[L0331]: this call returns a value, so `else none` leaves nothing in its place
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:38:29
+   |
+38 |     generic := same(u32(7)) else none
+   |                             ^^^^^^^^^
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:26:31
+   |
+26 | same: (t: type, value: t) -> (out: t) ! refused =
+   |                               ^^^^^^ the result `else none` would leave unset
+  = note: D376: `else none` ignores the failure of a call that returns none; give the result a value with `else value`, handle the error with `else (problem) ... end`, or pass it on with `try`
+error[L0331]: this call returns a value, so `else none` leaves nothing in its place
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:39:22
+   |
+39 |     _ = count(false) else none
+   |                      ^^^^^^^^^
+  --> ../tests/fixtures/negative/else-none-on-a-call-that-returns-a-value/program.ldn:7:25
+  |
+7 | count: (flag: bool) -> (n: u32) ! refused =
+  |                         ^^^^^^ the result `else none` would leave unset
+  = note: D376: `else none` ignores the failure of a call that returns none; give the result a value with `else value`, handle the error with `else (problem) ... end`, or pass it on with `try`

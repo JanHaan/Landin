@@ -1,0 +1,8 @@
+--- A record C reads and writes, field for field.
+header: type = layout(c) struct
+    kind: u8
+    length: u16
+    id: u32
+end header
+
+header_size: usize = sizeof header -- 8: one byte of padding after kind

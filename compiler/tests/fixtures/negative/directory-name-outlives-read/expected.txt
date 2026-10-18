@@ -1,10 +1,10 @@
 error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
-  --> ../tests/fixtures/negative/directory-name-outlives-read/main.ldn:11:51
+  --> ../tests/fixtures/negative/directory-name-outlives-read/main.ldn:12:51
    |
-11 |     following: io.entry = try io.read_entry(host, listing)
+12 |     following: io.entry = try io.read_entry(host, listing)
    |                                                   ^^^^^^^
-  --> ../tests/fixtures/negative/directory-name-outlives-read/main.ldn:10:5
+  --> ../tests/fixtures/negative/directory-name-outlives-read/main.ldn:11:5
    |
-10 |     name: []u8 = text.host_bytes(item.name)
+11 |     name: []u8 = text.host_bytes(item.name)
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
   = note: [0800]/[0830]: take the view again after mutating its source

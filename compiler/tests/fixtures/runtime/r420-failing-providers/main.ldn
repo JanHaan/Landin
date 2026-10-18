@@ -1,14 +1,14 @@
 import core/fault
-import hosted/heap
 import core/mem
 import core/pool
 import core/vec
+import hosted/heap
 
-heap_provider: type = heap.system
+heap_provider: type = heap.heap
 pool_provider: type = pool.provider
 
 heap_budgets: () -> (ok: bool) =
-    inner := heap.host()
+    inner := heap.new()
     zero: usize = 0
     mut space: fault.space = zeroed
     counted := fault.over
@@ -251,14 +251,14 @@ vec_growth_retry: () -> (ok: bool) =
         (inner_provider: pool_provider, state: space, inner: inner,
          allowed_attempts: one)
     mut values := vec.new(item: ptr node)
-    vec.push(values, counted, addr node_1) else (problem) _ = problem end
-    vec.push(values, counted, addr node_2) else (problem) _ = problem end
-    vec.push(values, counted, addr node_3) else (problem) _ = problem end
-    vec.push(values, counted, addr node_4) else (problem) _ = problem end
-    vec.push(values, counted, addr node_5) else (problem) _ = problem end
-    vec.push(values, counted, addr node_6) else (problem) _ = problem end
-    vec.push(values, counted, addr node_7) else (problem) _ = problem end
-    vec.push(values, counted, addr node_8) else (problem) _ = problem end
+    vec.push(values, counted, addr node_1) else none
+    vec.push(values, counted, addr node_2) else none
+    vec.push(values, counted, addr node_3) else none
+    vec.push(values, counted, addr node_4) else none
+    vec.push(values, counted, addr node_5) else none
+    vec.push(values, counted, addr node_6) else none
+    vec.push(values, counted, addr node_7) else none
+    vec.push(values, counted, addr node_8) else none
 
     mut growth_failed: bool = false
     vec.push(values, counted, addr node_9) else (problem)
@@ -274,9 +274,9 @@ vec_growth_retry: () -> (ok: bool) =
         if growth_failed and vec.length(values) == 8
           and vec.capacity(values) == 8
           and kept_first.val.value == 1 and kept_eighth.val.value == 8
-          and fault.attempts(counted) == 2
+          and fault.attempts(counted) == 3
           and fault.successes(counted) == 1
-          and fault.injected_failures(counted) == 1
+          and fault.injected_failures(counted) == 2
           and fault.frees(counted) == 0 and fault.live(counted) == 1
           and pool.live(inner) == 1
         then
@@ -284,7 +284,11 @@ vec_growth_retry: () -> (ok: bool) =
         end if
     end
 
-    fault.permit(counted, one)
+    --  The growth asks to grow in place first (D356), which the pool
+    --  refuses, then allocates: two permits, and the refused one above was
+    --  refused twice.
+    two: usize = 2
+    fault.permit(counted, two)
     vec.push(values, counted, addr node_9) else (problem)
         _ = problem
         preserved = false
@@ -293,9 +297,10 @@ vec_growth_retry: () -> (ok: bool) =
     kept_ninth: ptr node = vec.get(values, at_ninth) else addr node_1
     ok = preserved and vec.length(values) == 9 and vec.capacity(values) == 16
          and kept_ninth.val.value == 9
-         and fault.attempts(counted) == 3
-         and fault.delegated(counted) == 2
+         and fault.attempts(counted) == 5
+         and fault.delegated(counted) == 3
          and fault.successes(counted) == 2
+         and fault.inner_failures(counted) == 1
          and fault.frees(counted) == 1 and fault.live(counted) == 1
          and pool.allocations(inner) == 2
          and pool.frees(inner) == 1 and pool.live(inner) == 1

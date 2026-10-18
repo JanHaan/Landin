@@ -1,0 +1,2 @@
+-- This module is written for a 64-bit target.
+compiler.assert(sizeof usize == 8)

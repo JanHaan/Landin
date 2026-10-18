@@ -1,0 +1,14 @@
+seven: () -> (v: i32) =
+    v = 7
+end seven
+
+double: (x: i32) -> (y: i32) =
+    y = x * 2
+end double
+
+chosen: () -> (v: i32) = seven
+scale: (x: i32) -> (y: i32) = double
+
+public main: () -> (code: i32) =
+    code = scale(chosen())
+end main

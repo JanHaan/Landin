@@ -1,0 +1,66 @@
+--  An erased view joined into a writable result under a `from` clause is
+--  still refused when a store could reach what it views: mutable module
+--  storage, immutable module storage holding a writable view, or the
+--  frame (D222, D375).
+bump: type = concept (implementation: type)
+    up: (self: ptr mut implementation) -> none
+end bump
+
+peek: type = concept (implementation: type)
+    look: (self: ptr implementation) -> (value: u8)
+end peek
+
+counter: type = struct
+    count: u8
+end counter
+
+counter_up: (self: ptr mut counter) -> none =
+    inc self.val.count
+end counter_up
+
+counter_look: (self: ptr counter) -> (value: u8) =
+    value = self.val.count
+end counter_look
+
+counter is bump (up: counter_up)
+counter is peek (look: counter_look)
+
+window: type = struct
+    bytes: []mut u8
+end window
+
+window_look: (self: ptr window) -> (value: u8) =
+    value = self.val.bytes[0]
+end window_look
+
+window is peek (look: window_look)
+
+mut shared: counter = (count: 0)
+mut backing: [4]u8 = zeroed
+spare: window = (bytes: backing[0..<4])
+
+bumping: type = struct
+    buffer: []mut u8
+    policy: any bump
+end bumping
+
+peeking: type = struct
+    buffer: []mut u8
+    policy: any peek
+end peeking
+
+--  Mutable module storage behind a writable erased view.
+mutable_module: (buffer: []mut u8) -> (result: bumping from buffer) =
+    result = (buffer: buffer, policy: any(addr shared))
+end mutable_module
+
+--  Immutable module storage whose own field is a writable view.
+writable_inside: (buffer: []mut u8) -> (result: peeking from buffer) =
+    result = (buffer: buffer, policy: any(addr spare))
+end writable_inside
+
+--  The frame's storage, read-only or not, never outlives the call.
+local_storage: (buffer: []mut u8) -> (result: peeking from buffer) =
+    held: counter = (count: 0)
+    result = (buffer: buffer, policy: any(addr held))
+end local_storage

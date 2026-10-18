@@ -417,8 +417,8 @@ path out of the block.
 ```landin
 public take_events: () -> (n: u32) =
     begin
-        prev := cpu.disable_interrupts()
-        defer cpu.restore_interrupts(prev)
+        prev := cortex_m.disable_interrupts()
+        defer cortex_m.restore_interrupts(prev)
 
         n = rx_events
         rx_events = 0
@@ -430,7 +430,7 @@ end take_events
 ## app  —  freestanding, no main
 
 ```landin
-import platform/cpu
+import platform/cortex_m
 import drivers/uart
 import chip/vendor/gpio
 import chip/vendor/dma
@@ -462,7 +462,7 @@ start: () -> noreturn =
             n := uart.read(console, scratch[0..<lenof scratch])
             _ = handle(scratch[0..<n])
         end if
-        cpu.wait_for_interrupt()
+        cortex_m.wait_for_interrupt()
     end loop
 end start
 

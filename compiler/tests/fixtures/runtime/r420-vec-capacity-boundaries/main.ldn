@@ -1,3 +1,4 @@
+import core/arena
 import core/fault
 import core/mem
 import core/vec
@@ -80,7 +81,7 @@ public main: () -> (code: i32) =
          last_free_size: 0, base: base)
     exact_probe: probe = (state: addr exact_state)
     mut exact_values := vec.new(item: u64)
-    vec.reserve(exact_values, exact_probe, largest) else (ignored) _ = ignored end
+    vec.reserve(exact_values, exact_probe, largest) else none
     vec.release(exact_values, exact_probe)
 
     mut zero_state: probe_state =
@@ -91,7 +92,7 @@ public main: () -> (code: i32) =
     empty_value: zero_item = zeroed
     for index in 0..<9 do
         _ = index
-        vec.push(zero_values, zero_probe, empty_value) else (ignored) _ = ignored end
+        vec.push(zero_values, zero_probe, empty_value) else none
     end for
     last_index: usize = 8
     last_zero: zero_item = vec.get(zero_values, last_index) else (problem)
@@ -105,7 +106,7 @@ public main: () -> (code: i32) =
         code = 1
         return
     end
-    vec.push(zero_values, zero_probe, removed_zero) else (ignored) _ = ignored end
+    vec.push(zero_values, zero_probe, removed_zero) else none
     zero_length: usize = vec.length(zero_values)
     zero_capacity: usize = vec.capacity(zero_values)
     vec.release(zero_values, zero_probe)
@@ -116,20 +117,20 @@ public main: () -> (code: i32) =
          last_free_size: maximum, base: base)
     maximum_zero_probe: probe = (state: addr maximum_zero_state)
     mut maximum_zero := vec.new(item: zero_item)
-    vec.reserve(maximum_zero, maximum_zero_probe, maximum) else (ignored) _ = ignored end
+    vec.reserve(maximum_zero, maximum_zero_probe, maximum) else none
     maximum_zero_capacity: usize = vec.capacity(maximum_zero)
     vec.release(maximum_zero, maximum_zero_probe)
 
     --  A refused second zero-byte allocation leaves the first allocation's
     --  initialized witness available for access and eventual release.
-    mut refused_arena_space: mem.arena_space = zeroed
-    refused_arena := mem.arena_over_unchecked(refused_arena_space, base, 0)
+    mut refused_arena_space: arena.space = zeroed
+    refused_arena := arena.over_unchecked(refused_arena_space, base, 0)
     mut refused_space: fault.space = zeroed
     refused_counted := fault.over(refused_space, refused_arena, usize(1))
     mut refused_values := vec.new(item: zero_item)
     for index in 0..<8 do
         _ = index
-        vec.push(refused_values, refused_counted, empty_value) else (ignored) _ = ignored end
+        vec.push(refused_values, refused_counted, empty_value) else none
     end for
     mut zero_growth_refused: bool = false
     vec.push(refused_values, refused_counted, empty_value) else (problem)

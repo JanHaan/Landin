@@ -1,0 +1,10 @@
+error[L0318]: this concrete type has no conformance to `outlet`
+  --> ../tests/fixtures/negative/erased-construction-without-conformance/program.ldn:18:10
+   |
+18 |     send(any(addr storage))
+   |          ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/erased-construction-without-conformance/program.ldn:12:8
+   |
+12 | send: (into: any outlet) -> none =
+   |        ^^^^^^^^^^^^^^^^ the required type
+  = note: [1290]: every constrained type actual must have one whole-program conformance

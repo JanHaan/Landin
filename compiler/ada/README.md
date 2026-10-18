@@ -12,7 +12,7 @@ non-authoritative account derived from the implementation and its tests.
 Every `assembler.block` form, D248's named operands, D230's Cortex-only u32
 shorthand through r0 and the operand-free block, is one IR instruction with
 the same conservative effects and ordinary register/frame restrictions.
-`platform/cpu` uses `general` operands; [the core guide](../../core/README.md) records its public interfaces.
+`platform/cortex_m` uses `general` operands; [the core guide](../../core/README.md) records its public interfaces.
 The compiler-host Cortex tests verify source/IR restrictions and the native
 Linux freestanding lane executes the generated firmware. D231/D232 implement
 nonreturning control and selected panic handlers on every implemented backend.
@@ -123,7 +123,7 @@ different responsibilities.
 | `Landin.Syntax.Repairs` | D261's smallest change that mends a refused statement: its own scan and parse of one line, and of the routine that holds it, each as a local, and the report restated as that change | decide what a program means, keep anything past the call, or try a line outside a routine body |
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and freed with the forest | hand out a tree that can be copied, written to or kept past the forest |
-| `Landin.Formatting` | D252's layout of one source's bytes: the scan and the parse as locals, the edits that take the source to the layout, and a re-scan that the edits changed no token and no comment | read anything later than the parse, keep anything past the call, break or join a line, or write a file |
+| `Landin.Formatting` | D252's layout of one source's bytes: the scan and the parse as locals, the edits that take the source to the layout, a re-scan that the edits changed no token and no comment, and D359's account of each line the edits change | read anything later than the parse, keep anything past the call, break or join a line, or write a file |
 | `Landin.Modules` | the deterministic reached graph: module identities, selected directories/root ordinals, source membership and resolved import edges | read the host, parse source, own a scope or depend on a stage |
 | `Landin.Modules.Availability` | source namespace availability from target facts, independent of root selection | read the host, resolve imports, enable an ABI or select runtime authority |
 | `Landin.Resolution` | declarations, scopes, which declaration each name means and which declaration each declaring node made | hold a diagnostic, or decide what a name may be called |
@@ -139,7 +139,8 @@ different responsibilities.
 | `Landin.IR.Inlining` | D339's copies, at speed only: which direct calls are copied into their callers, the copy of each body with its arguments stored into copied parameters, its returns and failures rejoining the caller, values that cross it carried in slots, and each copied block, slot and alias recording the call it came from | copy a routine whose address is taken, copy a copy's own calls, change a trap's site or order, grow a routine past its bound, or run on Cortex-M0 |
 | `Landin.IR.Dominance` | a routine's dominator tree from its control-flow graph, in O(E log V) work and linear space, with constant-time dominance questions | assume reachability, or say what holds in a block |
 | `Landin.IR.Liveness` | each slot's live interval over the laid-out order of a routine's values, in work bounded linearly in the routine, and each block's loop depth | choose a location, a register or which slots one may hold |
-| `Landin.Panics` | canonical entry-hook validation, source-byte site spaces and final nonzero atom codes | runtime reporting or allocation |
+| `Landin.Panics` | canonical entry-hook validation, source-byte site spaces, final nonzero atom codes, and the text of D361's hosted default report for a site | a runtime reporting library, allocation in an image, or how a backend writes the report |
+| `Landin.Backend.Trap_Reports` | D361's distinct report lines in the order a backend meets them, and their assembler string spelling | decide a line's text, choose a section or write to a stream |
 | `Landin.IR.Effects` | conservative opcode effects and policy weights, including observable traps | infer alias permissions from unchecked regions |
 | `Landin.IR.Rewriting` | shared arena compaction for verified transforms | change slot, signature, shape, image or semantic instance identities |
 | `Landin.IR.Scalar_Replacement` | splitting small scalar-part slots into one scalar slot per part, as simplification's first step and verified with its output: at speed, entry copies of the parameter parts a loop reads, rewritten part accesses, whole copies and clears, and the piece record a debugger reads | split a slot whose address is taken, a partial copy, a routine result or a part whose load checks, or move a trap |
@@ -170,7 +171,7 @@ different responsibilities.
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.X86_64.Dwarf` | x86 allocation adapter, register encodings and ELF entry points for the shared DWARF encoder | change source facts or choose variable storage |
-| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | infer target policy from the host, invoke a linker directly, or search a PATH |
+| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, D364's ordered driver candidates and what to install when none is found, and D202's ordered archive arguments | infer target policy from the host, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Firmware` | compiler-owned reset text, constrained linker script and bounded image materialization | perform host effects or initialize user modules by executing source code |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, fixes and their edits, ordering | render, apply a fix, or own the catalogue of codes |
@@ -186,7 +187,7 @@ different responsibilities.
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Diagnostics.Checking` | turning a type that does not agree, a checker-recognised deferred use or D251's warning into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
 | `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads and the byte channel a server talks through | perform an effect, or let a measurement decide anything |
-| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
+| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, writing a formatted source into its own file through `landin_format_replace.c` (D358), the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
 | `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
@@ -215,7 +216,7 @@ different responsibilities.
 | `Landin.Commands.Tracing` | native argument-vector tracing through the supplied tool runner | execute a command outside that capability |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, an import of `core`, `hosted` or `platform` from the library root alone, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
-| `Landin.Driver.Library` | where the repository-owned library is: beside the executable in an installed or a checkout layout, or a directory `--library=DIR` names, and which imports name it | search any other default root, read a source, or acquire a package |
+| `Landin.Driver.Library` | where the repository-owned library is: beside the executable in an installed or a checkout layout, or a directory `--library=DIR` names, which imports name it, and where it looked when it found none | search any other default root, read a source, or acquire a package |
 | `Landin.Driver.Assembler_Sites` | placing an assembler's refusal of a `.s` line at the `assembler.block` whose text wrote it, by that text alone | change emitted assembly, or place a line two blocks share |
 | `Landin.Driver.Checking` | the stages a loaded program runs, in their one order, and the panic contract after them, for `refine` and a server alike | decide whether a stage runs past a refusal, or hold a compilation |
 | `Landin.Server` | the language server's namespace: the compiler's third client after `refine` and the test program | decide anything a stage decides |
@@ -1108,7 +1109,12 @@ handler's private reentry latch prevents recursive reporting. `--panic-map`
 adds byte ranges and line offsets to the existing build-bound source map.
 Neither that map nor source filenames enter a default constrained image.
 Private startup/host-root guards use site zero, and hardware/naked obligations
-remain distinct. All targets preserve the default terminal trap instructions.
+remain distinct. All targets preserve the default terminal trap instructions;
+on a hosted target with no selected handler each failed check first passes
+its D361 report line, a merged read-only string, to one compiler-owned
+writer that writes it to standard error and executes the terminal
+instruction, Linux by its `write` system call and Darwin and FreeBSD through
+their C libraries. Firmware keeps the bare instruction.
 
 The stage seam is one interface and one pipeline, contract-tested with fake
 stages. Named per-stage packages arrive as each stage is written, which is

@@ -6,7 +6,7 @@
 --  buffer fails here, as `.` or `..` would if a listing gave them.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 top: []u8 = "larger-scratch"
 count: usize = 400
@@ -38,7 +38,7 @@ named: (number: usize, making_top: bool, scratch: []mut u8)
 end named
 
 --  Remove file NUMBER, or the directory, if it is there.
-forget: (host: hosted.system, number: usize, making_top: bool)
+forget: (host: system.host, number: usize, making_top: bool)
         -> none ! ... =
     mut scratch: [80]u8 = zeroed
     path: text.host_string = named(number, making_top, scratch[0..<80])
@@ -47,7 +47,7 @@ forget: (host: hosted.system, number: usize, making_top: bool)
     end
 end forget
 
-gone: (host: hosted.system, path: text.host_string, directory: bool)
+gone: (host: system.host, path: text.host_string, directory: bool)
       -> none ! ... =
     if directory then
         try io.remove_directory(host, path)
@@ -56,14 +56,14 @@ gone: (host: hosted.system, path: text.host_string, directory: bool)
     end if
 end gone
 
-clear: (host: hosted.system) -> none ! ... =
+clear: (host: system.host) -> none ! ... =
     for number in usize(0)..<count do
         try forget(host, number, false)
     end for
     try forget(host, 0, true)
 end clear
 
-build: (host: hosted.system) -> none ! ... =
+build: (host: system.host) -> none ! ... =
     try clear(host)
     mut scratch: [80]u8 = zeroed
     try io.make_directory(host, named(0, true, scratch[0..<80]))
@@ -89,16 +89,14 @@ end number_of
 
 --  Read every entry, counting each number's names; zero when each was
 --  seen once and nothing else was.
-read_all: (host: hosted.system, seen: []mut u16) -> (stray: usize) ! ... =
+read_all: (host: system.host, seen: []mut u16) -> (stray: usize) ! ... =
     stray = 0
     mut scratch: [80]u8 = zeroed
     mut buffer: [1024]u8 = zeroed
     mut listing: io.directory =
         try io.open_directory(host, named(0, true, scratch[0..<80]),
                               buffer[0..<1024])
-    defer io.close_directory(host, listing) else (problem)
-        _ = problem
-    end
+    defer io.close_directory(host, listing) else none
     loop do
         item: io.entry = try io.read_entry(host, listing)
         name: []u8 = text.host_bytes(item.name)
@@ -113,7 +111,7 @@ read_all: (host: hosted.system, seen: []mut u16) -> (stray: usize) ! ... =
 end read_all
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     build(host) else (problem)
         _ = problem

@@ -115,7 +115,9 @@ package Landin.Diagnostics is
       Swap_Tokens,     --  two neighbouring tokens change places
       Move_Token,      --  one token moves to its statement's start
       Measure_Bare,    --  `sizeof (t)` loses the parentheses
-      Unwrap_Name);    --  `else (r)` as a branch's value loses them
+      Unwrap_Name,     --  `else (r)` as a branch's value loses them
+      Landin_Form,     --  another language's spelling becomes Landin's
+      Ignore_Failure); --  a value no call result needs becomes `none`
 
    type Fix is private;
 

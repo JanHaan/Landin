@@ -117,11 +117,14 @@ package body Landin.Platform.Overlays is
      (Host    : Overlay;
       Path    : String;
       Content : String;
-      Status  : out Write_Status)
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String)
    is
       pragma Unreferenced (Host, Path, Content);
    begin
       Status := Not_Writable;
+      Reason := Unbounded.To_Unbounded_String
+        ("an editor's buffer is not written to the file it shows");
    end Replace_File;
 
    overriding procedure Remove_File

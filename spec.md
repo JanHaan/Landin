@@ -785,7 +785,8 @@ neutral RHS, and resolution classifies the callee before selecting type or
 expression projections. A construction may then use the optional trailing
 fill; the all-fill spelling remains refused by name.
 A call-site `else` followed by a parenthesised name or `_`, and not by `:=`,
-opens that call's recovery wherever it stands, an `if` arm included. Any
+or by `none` (D376), opens that call's recovery wherever it stands, an `if`
+arm included. Any
 other call-site `else` binds to the call except where that same token can
 close an enclosing `then` or `elsif` arm: there it divides the `if`, which is
 the one reading `if c then a() else b() end if` can have, and parentheses
@@ -839,6 +840,7 @@ slice_selection ::= "[" expression (".." | "..<") expression "]"
 selection   ::= identifier ("." identifier)*
 call        ::= indexed "(" arguments? ")" recovery? | written_conversion
 recovery    ::= "else" expression
+              | "else" "none"
               | "else" "(" identifier ")" block "end"
 address     ::= "addr" place
 written_conversion ::= conversion_type "(" expression ")"
@@ -1424,6 +1426,10 @@ payloads; a read-only outer view does not remove a nested view's permission.
 An erased value conservatively qualifies, while a function value's signature
 does not describe storage carried by that code value. Aggregate value origins
 remain a conservative union, including origins from read-only sibling fields.
+An independent alternative counts only where a writable reference may reach
+it: one that arrives as a pointer, slice or nominal aggregate whose type
+reaches no writable reference, or as an `any` of one, can be no store's
+destination and is admitted beside the named sources (D375).
 A separately known independent alternative is retained across control joins,
 local copies, calls and selection of anonymous result positions. An optional
 empty atom and an empty slice literal contribute no storage destination;
@@ -1551,8 +1557,8 @@ place's own. A generic routine's argument is typed on its own (D138), before
 its parameter is known, so it lends nothing and takes a named array's range
 slice. An atom argument whose parameter is written as an atom set that names
 no formal of the routine has nothing to deduce there, and widens into that
-set as [0640] lets an ordinary call's argument widen: `io.shutdown(host,
-socket, io.sending)` needs no local of the set's type first.
+set as [0640] lets an ordinary call's argument widen: `net.shutdown(host,
+socket, net.sending)` needs no local of the set's type first.
 A call of a function returning none has no successful-result type. It is a
 statement [1810] and nothing else: nothing binds it, no argument is one, and
 [1930] cannot discard it, because there is no result there to discard. Its
@@ -1976,11 +1982,11 @@ Foreign failure detail is ordinary explicit state. `platform/posix` reads the
 errno after a documented libc failure indication on Darwin and FreeBSD,
 through `platform/libc`'s `errno_cell` before any other host call, and on
 Linux takes it from the failing system call's negative result (D279); either
-way it reaches `hosted/io` as an atom of `posix.errno` with its number (D298).
-`hosted/io` retains the exact terminal value in the last-error cell the system handle
-names, exposed by `hosted.last_errno`: the process's private cell for a handle
-from `hosted.host()`, or a caller-declared `hosted.space` for one from
-`hosted.over` (D288). Safe interrupted open/read/write attempts may retry; completed
+way it reaches `hosted/system` as an atom of `posix.errno` with its number (D298).
+`hosted/system` retains the exact terminal value in the last-error cell the system handle
+names, exposed by `system.last_errno`: the process's private cell for a handle
+from `system.new()`, or a caller-declared `system.space` for one from
+`system.over` (D288). Safe interrupted open/read/write attempts may retry; completed
 read/write progress is never replayed. Close consumes the handle even on
 failure and is never blindly retried, including EINTR. These facts neither add
 payloads to error atoms nor make errno a public Landin variable.
@@ -2000,7 +2006,7 @@ a hosted entry every declaration carrying that symbol must be exactly
 markers, or it is refused. The environment table is retained beside the
 argument table without copying, a null table meaning an empty environment, and
 an identical repeat must repeat all three carriers. A C-owned startup that drives public C-convention Landin routines
-calls it explicitly before `hosted.host()` can mint an argument-table
+calls it explicitly before `system.new()` can mint an argument-table
 capability and before starting any thread that may do so. Merely importing
 `core/io` does not perform initialization, and file, stream and heap work,
 which needs no argument root, may run without it. Ordinary exports and
@@ -2023,7 +2029,7 @@ owner must keep the `argv` table and every argument it names readable for the
 whole lifetime of every Landin world, view and callback derived from them. A
 later call with the identical count and pointer is harmless; a negative count,
 null table or attempt to replace either part of the established root traps.
-`hosted.host()` traps before initialization. The published user table begins
+`system.new()` traps before initialization. The published user table begins
 at `argv + 1`, its count is `max(argc - 1, 0)`, and indexed lookup traps on a
 null entry within that count.
 
@@ -2034,13 +2040,13 @@ ordinary `extern(c)` imports: `open`, `read`, `write`, `close`, `strlen`, `mallo
 and the calling thread's errno cell, with the constants and records whose
 values differ between systems selected by `compiler.os` and the C ABI. These
 are library declarations, not privileged language operations, and the
-compiler reserves none of their names. On Darwin and FreeBSD, `hosted/io` and
+compiler reserves none of their names. On Darwin and FreeBSD, `hosted/system` and
 `hosted/heap` reach the host only through them. On Linux they reach it through
 the public module `platform/linux`, which declares Linux's system calls in
 source as ordinary assembly blocks and owns the process entry `_landin_start`
 (D279); a hosted Linux executable links statically by default, with no C
 runtime or library, and `--link=libc` links C's runtime instead (D280).
-`hosted/io` turns descriptors and pointer-and-length
+`hosted/system` turns descriptors and pointer-and-length
 argument views into ordinary values, maps foreseeable host failures onto
 declared atoms, and threads its `world(provider)` concept as the authority for
 opening files and touching streams [1660] [1680]. The required `world.write_some` reports counted
@@ -6355,7 +6361,7 @@ refuses every read-modify-write atomic (D227), so a wrapper portable across
 every implemented target would offer only loads, stores and fences there, and which
 operations a wrapper exposes is a design question for the program that needs
 one. No derived program or `core` module needed one: the driver uses
-`platform/cpu`'s interrupt masking and D227's barriers.
+`platform/cortex_m`'s interrupt masking and D227's barriers.
 
 **The alternatives:** `compiler.vector_*` as aliases of the operators was
 declined as two spellings of one operation. A `core/atomic` wrapper now was
@@ -11092,7 +11098,7 @@ type holds a reference, the name binds as written and the exact comparison
 applies. A parameter of any other type keeps the exact rule, so naming a
 reference-free one is still L0316. `region.over(state, parent) -> (handle:
 region(P) from state, parent)` (D288) is the case: a pool's handle carries
-references into its backing that the region must keep, and `heap.host()`'s
+references into its backing that the region must keep, and `heap.new()`'s
 handle carries none.
 
 **The alternatives:** leaving `parent` out of the clause, which refuses every
@@ -11179,6 +11185,44 @@ which hid the relation instead of stating it.
 `negative/frame-origin-under-from`,
 `negative/static-origin-beside-unnamed-source` and
 `negative/static-origin-writable-from`.
+
+### D375 — A writable result may carry static storage it reaches only through read-only views
+
+**The tour said** at [0790] that `from` names the parameters a result
+derives from, and D222 refused a writable result that also carried any
+known independent storage, counting every alternative of an aggregate and
+every erased value as writable. A text builder holds the caller's writable
+buffer and an erased policy over an immutable module binding,
+`any(addr doubling)`; its constructor was refused, though no store can
+land in a module binding through a read-only view and the binding outlives
+every source, and the library hid the address behind an integer
+conversion, whose pointer [0470] does not track.
+
+**Chosen:** D222 asks about an independent alternative only when a
+writable reference in the result may reach it. An alternative arriving as
+a pointer, slice or nominal aggregate whose type reaches no writable
+reference, through its own descriptor or any it reaches, can be no store's
+destination, and D301 already holds such storage to outlive every source.
+An erased value is judged by what it erased: `any` admits no entry whose
+`self` asks more permission than its operand gives, so `any` of a
+read-only pointer reaches what the pointer reaches. A call's writable
+result counts every independent storage its named arguments carry, since
+the callee's permission, not the argument's type, decides what the result
+can write. The binding's own mutability does not matter; the view's does,
+as it does for D301. The writable parts of the result still derive
+exactly from the clause; an erased view of mutable storage through a
+`ptr mut`, or of a binding that holds a writable view, is still refused;
+and frame storage still escapes.
+
+**The alternatives:** origins per field, which D301 declined as more
+tracking than the question needs: the fact here is per alternative and
+follows the value through joins, copies and erasure; refusing erased
+values outright, which leaves the integer address as the library's only
+form; and admitting every static alternative, which hides the mutable
+destination D222 exists to show.
+
+**Pinned by** `runtime/erased-static-view-under-writable-from` and
+`negative/erased-writable-view-under-from`.
 
 ### D94 — An ordinary struct argument is copied into callee storage
 
@@ -12372,7 +12416,9 @@ then be unstated. Privileging a particular core type was unnecessary.
 
 D232's compiler-check handler takes its separate site number. Both features
 follow [1670]'s no-mandatory-filename rule and share optional source/build
-identity packaging, without changing this caller-value contract.
+identity packaging, without changing this caller-value contract. Since D361
+a hosted program with no selected handler carries the file names of its
+checks in their reports; selecting a handler leaves them out.
 
 **Pinned by** `positive/caller-parameters`, `runtime/caller-parameters`,
 `runtime/caller-is-an-ordinary-name`, the `negative/caller-parameter-*` corpus,
@@ -12509,14 +12555,14 @@ so a result `from` that parameter cannot leave the caller. A place, a binding,
 a module array, a parameter, a named return or an admitted array field, lends
 its own storage for its type's whole length and keeps the place's origin. A
 `[]mut T` parameter takes a writable place, as a range slice of it would, and
-never a literal. A `utf8` parameter takes neither, and a generic routine's
-argument still refuses a literal, because D138 types it before the parameter
-is known.
+never a literal. A `utf8` parameter takes neither. A generic routine's slice
+parameter takes a place as any other routine's does (D372), and still refuses
+a literal, because D138 types an array literal before the parameter is known.
 
 **The alternatives:** a slice binding, field or return taking a literal, none
 of which has a call whose run bounds the storage; a literal lent to `[]mut T`,
-whose writes nobody could see; lending to a generic parameter, which needs
-arguments typed after deduction; and requiring `[0..<n]`, the count written
+whose writes nobody could see; lending a literal to a generic parameter, which
+needs it typed after deduction; and requiring `[0..<n]`, the count written
 twice.
 
 **Pinned by** `runtime/array-lent-to-slice` on every target,
@@ -12538,6 +12584,63 @@ result of a `none` call; ignoring the value, the defect itself; and refusing
 every `else` on such a call, which is the only way to handle its errors.
 
 **Pinned by** `negative/none-call-else-value`.
+
+### D376 — `else none` ignores the failure of a call that returns nothing
+
+**The tour said** at [1030] that a call whose failure is discarded is an
+error, and that an `else` discards it. Once D310 refused a value there, the
+honest way to ignore a failure was three lines, `else (problem)`,
+`_ = problem` and `end`, which the corpus and the library wrote wherever a
+failure did not matter: longer than the defect it replaced, by three
+tokens and two lines.
+
+**Chosen:** `recovery ::= "else" "none"` is a recovery of its own. It is
+admitted only on a call that returns none, where it means exactly the empty
+bound block: the call's effects up to its failure stay, and the statement
+after the call runs next, whatever failed. `none` begins no expression or
+statement, so an `if`'s own `else` can never begin with it, and `else none`
+is the call's recovery in an `if` arm as anywhere else [1820]. On a call
+that returns a value it is L0331, "this call returns a value, so `else none`
+leaves nothing in its place", whose note names `else value`, the bound block
+and `try`: a failure is never ignored by leaving a result unset. D310's
+refusal of `f() else 0` on a `none` call now offers to write `none` for the
+value.
+
+**The alternatives:** `else _`, which reads as the binding of nothing
+D261 refuses in `else (_)`; the empty bound block,
+`else (problem) end`, which names an error nobody reads and spends a line
+on its `end`; a statement prefix such as
+`ignore f()`, a keyword for one position the recovery already owns; and
+admitting `else none` on a value call by zeroing the result, which hides a
+missing value behind a plausible one.
+
+**Pinned by** `positive/else-none-ignores-a-failure`,
+`runtime/else-none-ignores-a-failure`,
+`negative/else-none-on-a-call-that-returns-a-value` and
+`negative/none-call-else-value-becomes-else-none`.
+
+### D371 — A one-line function-typed module binding is a binding
+
+**The discrepancy:** `cb: () -> (v: i32) = lib.f` at a module's top level was
+read as a function declaration whose body is `lib.f`, and refused as L0104,
+"this function is never closed". [1790]'s grammar derives it as a binding of
+function type, which a body accepts, and at the top level it needed a type
+alias first, `callback: type = () -> (v: i32)`, which no report said.
+
+**Chosen:** a top-level `name: (...) -> returns = value` is a binding when the
+value is a name, or a name selected from a module, that ends its line on the
+declaration's line, and the next line does not begin with `end`. A function
+always closes with `end`, so such a line declares no function, and every
+function the corpus writes is read as before. A function-typed value written
+over several lines, such as an anonymous function, is still read as a
+function and still needs the alias.
+
+**The alternatives:** refusing the form with a note naming the alias, which
+keeps a source the grammar derives refused; and deciding by whether an `end`
+closes the declaration anywhere later, which would let a missing `end` turn a
+function into a binding.
+
+**Pinned by** `runtime/function-typed-module-binding-names-a-function`.
 
 ## DECISIONS: CONTROL FLOW
 
@@ -12891,17 +12994,17 @@ classified failure boundary before the repository gate can pass.
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity`, `runtime/r490-generic-atom-arrays`, `runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`, `negative/r490-atom-array-wrong-member`, `negative/r490-generic-atom-field-member` |
 | `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors and L0334 for a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0313 or L0334 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-fault-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
+| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results that a writable reference may reach (D375) | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `runtime/erased-static-view-under-writable-from`, `negative/erased-writable-view-under-from`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-fault-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302, L0327, L0331, L0343 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition`, `runtime/r480-generic-provider-entry` |
 | `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/specialization-speed-growth`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0339 rejects an invalid site type, L0301 a different signature, L0327 an extra positional argument or invalid forwarding source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 0570, 0750, 0920, 1000, 1570, 1580, 1600, 1975 | C convention and variadicness remain recursively distinct from the Landin convention; fixed positions at the selected boundary admit integers, bool, pointers, f32/f64, fixed C callbacks and compatible nonempty `layout(c)` structs, while L0346 refuses an ordinary Landin struct, a slice, a Landin error channel or a native-convention callback even when its machine shape matches | `positive/external-scalar-c-boundary`, `positive/r440-external-float`, `positive/r440-c-signatures`, `negative/external-aggregate-boundary`, `negative/r440-c-slice-parameter`, `negative/r440-c-error-channel`, `negative/r440-c-native-callback` |
 | `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, L0347 refuses an assembly expression, incompatible declarations or multiple definitions, and L0301 refuses treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
-| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry calls `hosted/io`'s initializer, when the program defines it, to establish the actual argument root before its body; C-owned startup must initialize it explicitly before `hosted.host()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and file, stream and heap work needs no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
+| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry calls `hosted/system`'s initializer, when the program defines it, to establish the actual argument root before its body; C-owned startup must initialize it explicitly before `system.new()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and file, stream and heap work needs no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
 | `capabilities.host-root-exclusion` | outside | 1660, 1680, 1975 | non-guarantee: an ordinary hosted routine without an I/O or allocator parameter may call a public host constructor and use that authority; passing a replacement provider does not exclude this path | `runtime/derived-hosted-memory` |
-| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `hosted/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `hosted/system` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` copies at most N messages of up to `diag.message_capacity` bytes and counts later or oversized notes in `dropped` | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
@@ -13796,9 +13899,10 @@ may participate in deduction.
 
 **Chosen:** a generic routine template has no standalone function value or IR
 item. A direct call first synthesizes each runtime argument without an expected
-parameter type. A context-free integer literal therefore takes [0200]'s `i32`.
-The checker then recursively unifies each written runtime parameter pattern
-with that independently synthesized normalized descriptor. Scalar and atom-set
+parameter type, except an untyped numeric literal, which D372 types from its
+parameter after the others. The checker then recursively unifies each written
+runtime parameter pattern with that independently synthesized normalized
+descriptor. Scalar and atom-set
 constants agree exactly. A direct type formal binds the complete scalar,
 structural atom-set, fixed-array, nominal, pointer/slice reference,
 `any`-concept or concrete function-signature descriptor; every repeat must
@@ -13915,9 +14019,10 @@ substitution. A checker-owned identity plus overlay avoids all three.
 A runtime parameter written as an atom set that names no formal deduces
 nothing, so an atom argument widens into it as [0640] allows in an ordinary
 call; an atom set bound to a formal still matches exactly. This amendment
-came with `io.shutdown(host, connection, io.sending)`, which was L0340, and
+came with `net.shutdown(host, connection, net.sending)`, which was L0340, and
 is pinned by `runtime/generic-atom-widening` and
-`negative/generic-atom-outside-set`.
+`negative/generic-atom-outside-set`. D372 amends the literal and the lent
+array the same way.
 
 **Pinned by** the checking public-seam case `routine instance views keep source
 facts`, the lowering case `generic routines lower once per key`,
@@ -14187,7 +14292,8 @@ concepts do not participate. The construction node retains its concrete
 conformance solely so lowering can form a static table address; later copies
 carry no static concrete type fact. The enabled construction forms runtime
 storage; a module static image cannot yet carry the two relocations and is
-refused rather than fabricated.
+refused rather than fabricated. An erased call of a concept no conformance answers is
+D377's, which amends this decision.
 
 **The alternatives:** erasing a by-value object would either copy an unknown
 size or create hidden storage. Choosing the first conformance by declaration
@@ -14201,6 +14307,55 @@ D142 key. All were declined.
 `negative/any-construction-needs-context`, and
 `negative/any-concept-identity-mismatch`.
 
+### D377 — An erased call no value can reach is not refused
+
+**The tour said** at [1380] that an `any` value is built explicitly from a
+pointer, and at [1390] that its calls go through the table. D145 made a
+construction select one exact conformance, and refused, as L0342, an
+erased call whose concept no conformance in the closed program answers:
+"this closed program has no concrete runtime table". No `any` of such a
+concept can be built, so no value can reach the call, yet the program was
+refused, with no remedy named. A library routine that takes `any C` from
+its caller, `text.growing`'s allocator among them, made every program that
+imported its module but declared no conformance of `C` unbuildable, which
+kept the arena in `core/mem`.
+
+**Chosen:** an erased call of a concept that no conformance in the closed
+program answers is checked against the entry as the concept writes it,
+its represented type standing for nothing in particular: D146 keeps that
+type in `self` alone, which the receiver supplies, so the arguments,
+results and error set the caller is held to do not depend on it. The
+program contains no table for the concept, and the call site traps as
+D232's `unreachable` does, before evaluating anything, so a receiver made
+outside the language, from raw storage through an untracked pointer
+[0470], stops there rather than calling through no table. Every refusal
+that guards a value stays: constructing an `any C` still needs exactly one
+conformance of its pointer's referent, and an entry that is not object
+safe, a name inherited twice or a name the concept lacks are refused
+whether or not a conformance exists.
+
+The arena is then a provider of its own, `core/arena`, beside `core/pool`,
+`core/region` and `core/fault`: its handle is `arena.arena`, its state
+`arena.space`, made by `arena.over` or `arena.over_unchecked`, with
+`arena.used` and `arena.reset`. `mem.aligned_offset`, the arithmetic every
+bump provider needs, stays in `core/mem`. A program that imports
+`core/text` and no allocator builds, and the growing builder's doubling
+traps in it at a call no value reaches.
+
+**The alternatives:** an empty table, which gives the call an address to
+load a function from and a backend a table no construction can name; a
+refusal naming its remedy, importing a provider the program does not use
+only to be buildable; refusing only reachable calls, which needs the
+whole-program call graph before checking, where today the check is local;
+and keeping the arena in `core/mem`, which hides the defect behind an
+import every program happens to make.
+
+**Pinned by** `runtime/erased-call-no-conformance-answers`,
+`runtime/erased-call-no-conformance-traps`,
+`negative/erased-construction-without-conformance`,
+`runtime/core-text-format-firmware`, which imports `core/text` and no
+allocator, `runtime/library-shared-arena` and every other consumer of
+`core/arena`.
 ### D146 — Erased entries have one object-safe `self` pointer
 
 **The tour said** that a mutable entry writes `self: ptr mut T`, that no extra
@@ -14454,6 +14609,94 @@ conformances. All are declined.
 `negative/core-io-world-readonly-receiver`,
 `runtime/io-handle-beside-erased-view` and
 `runtime/diagnostic-loggers-dispatch`.
+
+### D372 — A generic call types a literal from its parameter and lends an array
+
+**The discrepancy:** D138 synthesized every argument before the parameter was
+known, so an untyped integer literal was `i32`: `mem.allocate(arena, 8, 1)`
+was L0340 until it said `usize(8)` and `usize(1)`, and
+`io.variable_at(world, 1)` the same. A fixed array lent whole to a generic
+routine's slice parameter, `io.buffered_over(host, file, storage)`, was L0340
+too, though D309 lends one to every other slice parameter.
+
+**Chosen:** an untyped integer or float literal argument waits until every
+other argument of the call has been matched. Its parameter pattern is then
+normalized with what they bound: a pattern that names an integer type gives an
+integer literal that type, a float type a float literal, and the literal is
+checked there as [1880] checks any literal in context. A pattern still unbound,
+or of another class, leaves [0200]'s default, which then decides the pattern
+as before. Because every literal waits for every other argument,
+`second(4, u16(30))` and `second(u16(30), 4)` both make `t` `u16`. A
+fixed-array place, a binding, a parameter, a named return or an admitted
+field, matches an outer slice pattern `[]t` through its element, and the
+instance's ordinary call check then lends it as D309 does, refusing a
+read-only place where `[]mut t` is written. An array literal is still typed
+before the parameter is known.
+
+**The alternatives:** naming the conversion in L0340's note and keeping D138's
+order, which leaves the commonest generic call in the library needing one;
+typing a literal from an earlier argument only, which makes the result depend
+on argument order; and inferring from the return context, which D138 excludes.
+
+**Pinned by** `runtime/generic-arguments-are-typed-and-lent-from-the-parameter`,
+`negative/generic-literal-is-checked-against-its-parameter`,
+`negative/read-only-array-lent-to-a-generic-writable-slice` and
+`negative/generic-routine-repeated-deduction-conflict`, whose conflict is
+now between two typed places.
+
+### D374 — A table names only the entries something can project
+
+**The tour said** at [1310] and [1390] that evidence is a table of the
+conformance's functions and that a call through `any` reads its entry
+there, and D144 and D147 fixed every entry's place. Nothing said a table
+must name the routines no call reads. Every emitted table named every
+provider, so a program that called one entry of a conformance linked all
+of them: calling `io.close` kept the whole `files` conformance, about
+7 KiB, and three entries of the memory network kept about 40 KiB, so
+neither fitted a 32 KiB Cortex-M0 image.
+
+**Chosen:** every backend, on every target, keeps entry N of a table only
+when code that can run projects entry N from a table of the same concept,
+direct tables and erased tables apart. The concept, not the table a
+projection names, is the unit, because a projection's table at runtime may
+be any table of its concept: an `any C` value carries whichever
+conformance built it, and an instance's hidden table is any of its
+concept's. Code that can run starts from the roots: a routine with a
+reference no call makes (a function value, an image, an export, an import,
+a link name, a placement, a non-ordinary convention or the C ABI), one
+without parameters, as a firmware entry is, the panic handler the backend
+calls, and every routine of a program with an `assembler.block`, whose
+text may name anything. A routine a routine that can run calls can run,
+and an entry's target can run once that entry is kept; a routine that only
+routines that cannot run call cannot run either, so what it projects keeps
+nothing. An entry left out is a zero word in its place, so a table's size,
+its order and every offset D144 and D147 give stay as they were, and the
+two identities of one physical table keep the same entries. The routine a
+zero word replaced is linked only if something else reaches it, and D303's
+L0500 count follows the kept entries. Calling through a left-out entry
+cannot happen, since nothing reads it.
+
+**The alternatives:** pruning on Cortex-M alone, which would link
+different routines for the same program on different targets and
+answer L0500 differently; keeping an entry per table, by the table a
+projection names, which drops an entry an `any` value of another type
+still reads; compacting the tables, which moves the offsets D144 fixed and
+makes them depend on the program; leaving it to specialization, which
+removes only the projections it proves and keeps every entry of the
+tables it still passes; and counting every routine but an entry's
+target as able to run, which lets a routine that only an unkept entry's
+target calls keep every entry it projects. All are declined.
+
+**Pinned by** `end-to-end/link-static-unprojected-evidence-entry`, whose
+unprojected entry alone names a C import a static link would refuse,
+`runtime/network-datagram-memory-firmware`, which overflows the Cortex-M0
+image at every profile when every entry is kept,
+`runtime/region-bounded-pool`, whose region's in-place growth, called only
+from an entry nothing projects, would keep every allocator's `grow` and
+overflow the Cortex-M0 image at none/off were each routine a call reaches
+a root, and `runtime/evidence-projected-entries-kept`, whose projections
+read an entry from the other type's table and a parent's entry from a
+child's erased table on every target.
 
 ## DECISIONS: MODULES AND COMPILE TIME
 
@@ -14900,7 +15143,9 @@ name an import could not supply, so no use of them is reported again. D202's
 `import compiler`, `import assembler` and `import linker` name the toolchain,
 need no root and are unchanged. Since D275 an import of `core`, `hosted` or
 `platform` needs none either: it resolves from the library the compiler found
-beside itself.
+beside itself. Since D363 the refusal is made when the files are loaded,
+offering a library namespace near the one written, and an import of the
+library when none was found names where `refine` looked and `--library`.
 
 **The alternatives:** searching the source's own directory as an implicit
 root, which makes a file's meaning depend on what sits beside it; leaving
@@ -14908,6 +15153,37 @@ the import silent and improving the use's message, which reports the same
 mistake once for every use.
 
 **Pinned by** `negative/import-without-a-root-is-refused-there`.
+
+### D363 — An import is refused where the files are loaded, and told where the library is
+
+**The discrepancy:** D262 refused an import of named files in resolution,
+which saw no library, so `import cor/io` was told to give `--root` where the
+same import under `--root` was offered `core`; and with no library
+found beside a copied `refine`, `import core/io` was refused the same way,
+naming `--root` and never `--library`, while `--emit=asm` left
+`platform/linux` out of a static program's assembly and said nothing.
+
+**Chosen:** named files' imports are refused when the files are loaded,
+with D262's sentence and note: an import of anything but the library is not
+found for want of a root, and offered a library namespace its first segment
+is near, as a rooted import is. An import of `core`, `hosted` or `platform`
+when no library was found, named files or rooted, says so and names where
+`refine` looked, the prefix's `lib/landin` beside its executable and the
+checkout a build tree's executable sits in, with a note naming
+`--library=DIR`. A static Linux link with no `platform/linux` is refused for
+`--emit=asm` and `--emit=ir` as for an executable, rather than written
+without its entry, and `-v` names the library a request reads, or `none`.
+
+**The alternatives:** passing the library's namespaces to resolution so it
+could offer them, a host fact in a stage that reads no host; a separate
+refusal code for a library that was not found, when the rule is still
+[1420]'s; and letting `--emit=asm` write the program without
+`platform/linux`, which an old-against-new comparison of two compilers
+silently differed by.
+
+**Pinned by** `negative/import-without-a-root-is-refused-there` and the
+`newcomer` cases `a misspelt namespace is offered the library` and `a
+library found nowhere says where it looked`.
 
 ### D324 — A module value reads another module's values as its own
 
@@ -14955,15 +15231,15 @@ its interface or introduce hosted authority. The memory-backed I/O provider
 remains part of core/io; importing it does not select hosted I/O or allocation.
 
 `hosted/*` is available only where the target has a hosted system. The current
-modules are hosted/heap and hosted/io, written once over `platform/posix`
+modules are hosted/heap and hosted/system, written once over `platform/posix`
 (D297). `platform/libc` declares the C library, `platform/linux` Linux's
 system calls and the static process entry (D279), and `platform/posix` the
 POSIX facilities over both; all three are scoped to the hosted POSIX systems
-and refused by name on firmware. hosted/io is ordinarily imported
-`as hosted` when a consumer also imports core/io. `platform/*` holds scoped
+and refused by name on firmware. hosted/system needs no alias beside core/io
+(D347). `platform/*` holds scoped
 freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
 AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
-does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cpu
+does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cortex_m
 admits the Cortex M-profile family, including armv6-m, armv7-m and armv7e-m
 feature levels, and refuses hosted architectures. Existing compiler.assert
 source guards remain. No generic package manifest is introduced.
@@ -14984,7 +15260,7 @@ whose transport is not implemented. Relying only on provider bodies would let
 a harmless project override bypass a firmware refusal. Namespace checking
 preserves root selection while making availability explicit.
 
-**Pinned by** `negative/library-platform-cpu-hosted`, the driver case
+**Pinned by** `negative/library-platform-cortex-m-hosted`, the driver case
 `source namespaces enforce target availability` and the separately sized
 shared-library consumers.
 
@@ -15123,9 +15399,9 @@ that has to go through a generated adapter instead.
 
 D288 keeps the remembered value in a cell the handle names rather than in the
 provider value, which a callee could only change in its own copy. Handles
-from `hosted.host()` share the process's cell; `hosted.over` gives a caller,
+from `system.new()` share the process's cell; `system.over` gives a caller,
 such as a C thread calling into Landin, a cell of its own in a declared
-`hosted.space`. The thread-local meaning the alternatives below protect is
+`system.space`. The thread-local meaning the alternatives below protect is
 therefore kept by ownership, until thread-local storage exists: a thread that
 owns its cell reads only its own failures, and code that shares the
 process's cell shares its last error as it shares its descriptors.
@@ -15135,7 +15411,7 @@ at [1660] to pass host authority explicitly. Prototype 2's diagnostic sink and
 prototype 4's replaceable world both need detail without a second error system.
 
 **Chosen:** [1975]'s immediate errno capture, explicit system state and
-`hosted.last_errno` preserve the exact terminal libc detail while ordinary
+`system.last_errno` preserve the exact terminal libc detail while ordinary
 `not_found`, `no_access` and `io_failed` remain payload-free atoms. On
 Darwin and FreeBSD the provider reads the calling thread's `errno_cell`
 through `platform/libc` immediately after the failing call and before any other
@@ -15166,12 +15442,12 @@ table and that C's `argc`/`argv` entry remains available, and at [1660] that the
 entry point mints the host capability. It did not say how a C-owned entry starts
 Landin exports, when the argument root exists, or how long its backing lives.
 
-**Chosen:** `hosted/io` defines the public C entry
+**Chosen:** `hosted/system` defines the public C entry
 `void _landin_host_initialize_arguments(int argc, char **argv);` in source,
 which D311 gives the environment's table as a third argument, and
 under D276 the ordinary no-argument Landin `main` calls it before its body when
 the program defines it. A C-owned startup calls it with its real carriers before
-`hosted.host()` or any thread that may acquire the argument capability. Exports
+`system.new()` or any thread that may acquire the argument capability. Exports
 and callbacks never call it implicitly. File, stream and heap work needs no
 argument root, and retaining `core/io` alone does not initialize one. Under a
 static Linux link, `platform/linux`'s `_landin_start` is the process entry
@@ -15717,7 +15993,7 @@ D248 makes this form the shorthand for `inout value: u32 at r0 = operand`
 without an operand name, so its text names r0 directly. Hosted targets refuse
 it by name, because r0 is Cortex-M0's; they check the operand form instead.
 
-This permits `platform/cpu` to implement PRIMASK save/disable/restore with ordinary
+This permits `platform/cortex_m` to implement PRIMASK save/disable/restore with ordinary
 Landin functions. It does not add a CPU intrinsic namespace, an assembly
 template language, pointer operands or a new calling convention. The saved
 mask is explicit caller state; nested sections restore their own prior mask.
@@ -15775,7 +16051,9 @@ The handler remains an ordinary D231 function value for calls and evidence.
 No selected declaration means the compiler supplies the terminal default:
 Linux `ud2`, Darwin `brk #1`, Cortex `udf #1`. Calling this known terminal
 implementation is folded to that instruction, with no mandatory thunk, data,
-strings or allocation. A selected handler receives exactly `(kind, site)`
+strings or allocation. Since D361, on a target with a hosted system the
+default first writes the failed check's kind and source site to standard
+error; firmware keeps the bare instruction. A selected handler receives exactly `(kind, site)`
 at the check's failed edge, through the unchanged ordinary target ABI. The
 failed computation never resumes: its later stores, argument evaluations,
 recovery, `defer` and `undo` actions do not run. The handler's own terminal
@@ -15908,7 +16186,7 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 | The memory effect is fixed: every block reads and writes memory, may call and may trap | GCC's `"memory"` clobber and Rust's `nomem` and `readonly` let a block promise less. The default is always correct, no optimisation here would use the promise, and the case assembly exists for, a critical section, is the one a narrower promise breaks; a measured need in optimisation reopens it | `core-cpu.ldn` |
 | Every output gets a register distinct from every input unless it is `inout` | Rust's `lateout` shares an input's register with an output; it saves a register and asks the programmer to know when an input is dead | `negative/assembly-register-twice` |
 | `general` counts only the registers the block does not otherwise name | Counting the whole class accepts a block the compiler cannot give registers to, and leaves the failure to emission | `negative/assembly-general-exhausted` |
-| D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `platform/cpu` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
+| D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `platform/cortex_m` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
 | The operand form was specified and checked on every target before any lowered it, refused by one stated lowering limit until each did | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | the runtime `assembly-*` fixtures, `negative/assembly-synthetic-target` |
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
@@ -15957,7 +16235,9 @@ implementation to; they were measured on `core` and the examples before any
 was written, and where those disagreed the majority was taken. Formatting
 changes byte offsets, so a caller location (D192), a panic site (D232) and
 debug information follow the formatted source; nothing else a program does
-can change.
+can change. How the layout reaches the file is D358's, how it reaches a
+reader who will not have the file written is D359's, and where a
+parenthesized operand begins is D360's.
 
 **The alternatives:** a style with options, which is a second opinion the
 language would then have to settle between two programs that follow different
@@ -15978,6 +16258,114 @@ be open, which is what the language had before and what `core` shows.
 `formatting/every source keeps what it says` case requires to be formatted,
 `negative/unclosed-block-comment` and `negative/latin1-byte-in-name`, which it
 requires to be refused, and `formatting/the page is the layout`.
+
+### D358 — `refine fmt` writes a source into its own file
+
+**The discrepancy:** D252 decides what `refine fmt` writes and not how it
+reaches the file. The formatter wrote a sibling file and renamed it over the
+source, which gives the source a new inode: whatever the old one carried and
+the new one was not given is lost. So it refused every file with an extended
+attribute or an ACL, and on Linux, where a process without privilege cannot
+list the `trusted.*` namespace, it first proved that namespace visible by
+setting a name in it, which only a privileged process may. Every ordinary
+user's file was refused, on tmpfs and ZFS alike, with a report that said
+only that it could not write a file the user could write.
+
+**Chosen:** the formatted bytes are written into the file that was read, the
+same inode, so it keeps its owner, group, extended attributes and ACLs,
+those the caller cannot list among them, and every name a hard link gives
+it, which sees the formatted bytes too. Writing in place is not atomic, so
+before the first byte changes the original bytes, read back through the
+descriptor that will be written, are copied into a new file beside it,
+`NAME.fmt-original-` and six characters, and the copy and its directory are
+synced. Then the new bytes are written from the start, the file is cut to
+their length and synced, and the copy is removed. A failed write puts the
+original bytes back from memory and removes the copy; a write that cannot
+do even that keeps the copy and names it, which is also what a crash during
+the write leaves. A path names a symlink's target; a file that is not
+ordinary or that no one may write is refused; a file renamed over while it
+was formatted is refused before it is written. What a write itself takes
+away is checked first: the set-user-ID and set-group-ID bits a write clears
+are set again and read back, so a file whose bit the caller could not set
+again, as its owner and for set-group-ID in its group, is refused before it
+is written, and so is a Linux file with capabilities, which a write removes
+and only a privileged process can give back. Nothing needs privilege. Each
+refusal names its cause, and says whether the original bytes are back or
+where their copy is.
+
+**The alternatives:** keeping the rename and refusing what it would lose,
+which refused everyone, because an unprivileged process cannot see what it
+would lose. Keeping the rename and copying every attribute to the new file,
+which cannot copy what it cannot see, nor give a file its owner back when
+the caller is not that owner, and still parts hard links and anything that
+followed the old inode. Writing in place with no copy, which a full disk or
+a crash part way leaves torn with nothing to recover. Keeping the copy only
+in memory, which a crash loses. The copy beside the file, rather than in a
+temporary directory, is on the same file system and survives where the file
+does, which is the case it exists for; it needs write permission in the
+directory, as the rename did.
+
+**Pinned by** `compiler/tests/test_formatter_write_safety.py`, run without
+privilege in the gate on each Linux and Darwin host's `/tmp` and on Linux's
+tmpfs `/dev/shm`, whose cases format an ordinary file, a symlink's target,
+every special mode bit, a file with an extended attribute or an ACL and a
+hard-linked file in place, refuse a read-only file and a directory without
+room for the copy by name, and drive the adapter's own faults: a failed
+write undone, a failed undo that keeps and names its copy, a copy that
+cannot be kept, a mode a chmod did not restore and a file with
+capabilities; and `driver/fmt is a subcommand`, whose refusal names its
+cause.
+
+### D359 — `refine fmt --check` names every line, and `--stdout` prints the layout
+
+**The discrepancy:** `refine fmt --check` said that a source was not in the
+layout and pointed at its first line that would change, and nothing printed
+the layout. A reader who could not, or would not, have the file rewritten
+learnt the layout one difference at a time, guessing each.
+
+**Chosen:** `--check` reports L0008 for every line the layout changes, in
+line order, and each report shows the line as the layout writes it, or says
+that the layout removes the blank line or changes only its line end. The
+layout breaks and joins no line (D252), so every line that holds a token or
+a comment is one line of the formatted text, found through the edits, which
+only ever replace space; a run of blank lines keeps as many of its first
+lines as the formatted text has between the same two lines. `--stdout`
+writes the one source it is given to standard output in the layout, or as
+it is when it is in the layout already, and writes no file; a source that
+does not parse is reported, and nothing is printed. `--check` and
+`--stdout` are refused together, and `--stdout` with more than one source,
+because concatenated sources are no source.
+
+**The alternatives:** a unified diff, which a reader has to apply in their
+head and which no other report of the compiler resembles; one report for a
+whole file with the formatted text in its note, which is `--stdout`'s job
+done worse; printing every source under `--stdout` one after another, which
+a caller then has to split again.
+
+**Pinned by** `driver/fmt is a subcommand`, the `formatting` suite's
+requirement on every source it formats that the reported lines rebuild the
+formatted text line for line, and `scripts/tests/test_cli_native.py`'s
+`refine fmt` case.
+
+### D360 — A parenthesized operand begins at its parenthesis
+
+**The discrepancy:** the syntax tree keeps no node for parentheses that only
+group, and D252's rule that a continued operation stands under its left
+operand found that operand's first token inside the parentheses. A line
+that continued `(a or b)` stood one column past the `(`, and in a condition
+under `a` rather than two spaces in. `docs/format.md` said neither.
+
+**Chosen:** a left operand that parentheses enclose begins at its `(`, so a
+line that continues the operation stands under the `(`, or two spaces in
+from a condition's line. Inside parentheses an operation's first operand
+still begins one column past the `(`, because there it does.
+
+**The alternatives:** documenting the column one past the `(` outside the
+parentheses too, which puts a continuation under a token that is not the
+start of what it continues.
+
+**Pinned by** `docs/format.md`'s Parentheses rule, which
+`formatting/the page is the layout` holds the formatter to.
 
 ### D253 — An editor is answered past a broken body, and a build is not
 
@@ -16155,7 +16543,9 @@ binding or an assignment whose name was left out. A closing word
 written again, as `end if if` or `end end match`, is one copy and is said
 once; the copy after `end if` opens nothing, because an `if` needs its
 condition on its line, so removing it is Exact. These are the grammar's own constructs, recognised by
-their tokens, not a table of other languages' spellings.
+their tokens. Another language's spelling of a construct is D367's, and a
+report that names one is not tried: removing one `&` of `&&` mends the line
+into a bitwise operation nobody wrote.
 
 **The alternatives:** Exact whenever one repair alone mends the line. It was
 the first rule and was withdrawn: a repair found by parsing alone still guesses
@@ -16557,6 +16947,227 @@ case `a choice is held to its operands`, and the `x86 opt` and
 `arm64 selection` cases `a counted comparison is a flag add` and `a choice is
 a conditional move`.
 
+### D361 — A hosted trap with no handler says what and where before it ends
+
+**The tour said** at [1960] that a trap stops at its operation and that how
+the surrounding system reports it is not program behaviour, and D232 gave a
+program with no `panic_handler` the bare terminal instruction. On a hosted
+system that instruction reached a reader as the shell's "Illegal
+instruction": nothing named the kind or the site, so an index past an array
+looked like a processor fault and finding the line took a `--debug full`
+build and a debugger.
+
+**Chosen:** with no selected handler, on a target with a hosted system, each
+failed check first writes one line to standard error and then executes
+D232's terminal instruction, so the process ends as it did and a debugger
+still stops on that instruction. The line is
+`FILE:LINE:COLUMN: trap: KIND`, the kind one of `core/panic`'s four atom
+names and the site the failed operation's own, the one D232's site number
+and the panic map name: under D339's inlining at `speed` a copied check
+reports the routine's line, as the call's would have. A file in the entry
+module is named as it was read, as a diagnostic names it; a file of any
+other module by its module path, `core/vec/vec.ldn`, so an image says the
+same wherever the library is installed and every host emits the same bytes.
+A site with no source, D232's site zero, writes `trap: KIND`.
+
+Each distinct line is one read-only string the link may merge, in a section
+of its own on ELF, so a link keeps only the lines a retained routine
+reaches. A failed check passes the line's address and length to one
+compiler-owned routine, emitted only when some check uses it, which writes
+them with one call and executes the terminal instruction: Linux's `write`
+system call, which a static image has, on x86-64, arm64 and RV64 alike;
+`write` from the C library on Darwin and FreeBSD, whose images always link
+it. The routine keeps a frame record and frame information, so a backtrace
+from it reaches the failed operation. It touches no heap, latch or
+reporting library, and no source is imported for it. Firmware keeps D232's
+bare instruction and no filename enters a constrained image; a selected
+handler is unchanged and receives `(kind, site)` as before. The line is the
+default's report, as the instruction after it is: its text is the
+compiler's, not Landin program behaviour [1960], and a program that needs a
+report of its own selects a handler. The file names a hosted image carries
+are these reports' alone: with its debugging sections stripped no other name
+of a source is deployed, and a program that must carry none selects a
+handler, so no filename is mandatory, as [1670] requires.
+
+**The alternatives:** a signal handler installed at startup that maps the
+faulting address to a site, which keeps each check's code as small as a
+bare instruction but needs a per-system handler, its frame layout and an
+address table, and reports faults that are not checks; passing D232's
+`(kind, site)` and decoding the site at run time, which needs every
+source's line table in the image; writing the line in pieces, which two
+threads trapping together interleave; and keeping the bare instruction,
+which leaves the newcomer the shell's sentence.
+
+**Pinned by** `runtime/inline-copies-trap-in-place` at every profile and
+`runtime/computed-array-index-traps`, each with `trap_report:` on every
+hosted target, the `newcomer` case `a trap names its site`, and
+`scripts/outside_user.py --stock`, which the gate's `outside-user-stock` job
+runs on a stock Ubuntu.
+
+### D365 — `--emit=ir` writes the IR the backend receives
+
+**The tour said** at [1550] that the compiler optimizes a verified,
+target-neutral representation, and `Landin.IR.Dump` printed one only inside
+the test program: learning why a value lived in a stack slot meant reading
+the lowering, temporary trace code or a diff of two assemblies.
+
+**Chosen:** `refine compile --emit=ir` writes `Landin.IR.Dump`'s text of
+the program as the backend would receive it, after every pass the request's
+`--optimize` and `--specialize` run, to `-o` or `a.ir`, and stops there.
+The text is the dump the test program records, which `docs/ir.md` explains:
+not a stable interface, never read back and printing no origin. `--link`
+still decides whether `platform/linux` joins the program, and `--debug` and
+`--panic-map`, which describe machine code, are a misuse with it.
+
+**The alternatives:** a separate command or a `--dump-ir` flag beside
+`--emit`, a second way to say what is emitted; dumping after lowering only,
+which shows nothing the passes did; and a serialized format, which
+`Landin.IR`'s header refuses to freeze.
+
+**Pinned by** the `newcomer` case `the IR is written on request`.
+
+### D367 — A form from another language is refused naming the Landin form
+
+**The discrepancy:** a spelling another language gives a construct, `elif`,
+`fn`, `x as i32`, `total++`, `*u8`, `&&`, `||` or `!=`, got the report of what
+the parser needed where it stopped: `elif` was "this does not continue the
+expression before it", `x++` "an expression belongs after this operator" and
+`&&` the same, and `fn add(...)` "a binding names its type after `:`". None
+named the word to write, and for `&&` and `++` D261's search could mend the
+line by removing one copy, which turns a logical operator into a bitwise one.
+An audit of agent sessions counted such spellings among the refusals people
+and agents make, `fn` twice, `as`, `++` and `*u8` once each, and later
+sessions met `elif`.
+
+**Chosen:** one table, `Landin.Diagnostics.Syntactic.Foreign_Form`, names each
+foreign spelling, the Landin form it stands for, the paragraph that defines
+that form and the negative fixture that pins its one report. The parser reads
+nothing differently: it refuses the line exactly as before, and only when the
+tokens its report stands on spell a row, in the position the row names, does
+the report say "Landin writes ..." and the Landin form, stand on the foreign
+spelling and cite that paragraph in plain words. The code and the second
+place the parser named are its own. Where one edit writes the Landin form,
+the report offers it as a Likely fix; D261's search leaves such a report
+standing. The rows are `elif` and `elseif` at the start of a line in a body,
+`fn name(` beginning a declaration, `value as type`, `name++` ending its line,
+`*T` where a type belongs, `&&` and `||` between operands, and `!=`, which
+replaces the note [0350]'s check used to append. `check.py` holds every row to
+a spelling the keyword rule does not spell, a paragraph a document defines,
+and a fixture whose recorded report names both the foreign and the Landin
+spelling.
+
+A foreign form with no single Landin construct to name keeps the generic
+report: `a ++ b` for concatenation has none, since text is built through a
+builder or `text.format`, and [0400]'s answer is for `name++` alone.
+
+**The alternatives:** keeping the generic report, the earlier choice, which
+leaves the newcomer to guess the word and lets D261 mend `&&` into `&`;
+accepting the foreign spelling as a synonym, which gives every construct two
+spellings and the formatter a choice; and a list of spellings searched at
+every refusal, which would name a form in a position where it was not meant.
+
+**Pinned by** `negative/foreign-elif-is-named`,
+`negative/foreign-elseif-is-named`, `negative/foreign-fn-is-named`,
+`negative/foreign-as-is-named`, `negative/foreign-postfix-increment-is-named`,
+`negative/foreign-star-pointer-is-named`,
+`negative/foreign-double-ampersand-is-named`,
+`negative/foreign-double-bar-is-named` and
+`negative/foreign-bang-equal-is-named`, each one recorded report, the ones
+with a fix applied by the `fixes` suite; and the parser case `inequality
+typos name the operator`.
+
+### D368 — A keyword in a binding's place is one report
+
+**The discrepancy:** `from := 1` in a body was L0110, "this begins no
+statement", with [1810]'s list of statements, and never said that `from` is
+a keyword. Its later use, `code = from`, was a second report, L0102, so one
+mistake read as two.
+
+**Chosen:** a statement that begins with a keyword followed by `:`, `:=`, `=`
+or an updating assignment is refused at the keyword as L0100, "`from` is a
+keyword, and no keyword is available as a name", as [1760] refuses a keyword
+written as a declaration's name. The parser notes the word, and a later place
+in the file where that keyword stands where a value belongs is read as the
+same mistake and adds no report, as D242 treats a name an import refused.
+
+**The alternatives:** saying it at the use as well, which is the second report
+of one mistake; reading the keyword as a name after the refusal, which makes
+every later keyword in the file a candidate name; and a reserved-word list in
+the note, which [1760] already is.
+
+**Pinned by** `negative/keyword-as-a-binding-name-is-reported-once`.
+
+### D369 — A match arm written as a value names `if` and `elsif`
+
+**The discrepancy:** `match x` over an integer with an arm `1: code = 1` was
+L0100, "a match arm begins with a case name", with D77's arm grammar as its
+note, and said neither that the arms of a `match` name cases nor how values
+are compared instead.
+
+**Chosen:** an arm that begins with a literal or a minus sign is refused as
+L0100, "a match arm names a case or an atom, never a value; compare a number
+with `if` and `elsif`", whose note shows the `if` that compares. The arms
+after it are the rest of that mistake, as D260 passes over the arms of a
+refused `match`. The checker's refusal of a `match` over an integer subject
+with named arms keeps its own note, which says the same.
+
+**The alternatives:** admitting integer arms, a switch the tour does not have
+and [1210]'s exhaustiveness could not check; and naming a lookup table, which
+is one route among several and not the construct the arm stands for.
+
+**Pinned by** `negative/match-over-an-integer-names-if-and-elsif`.
+
+### D370 — Statements under a bare `else` name the bound recovery
+
+**The discrepancy:** a statement call whose recovery is a block,
+`io.write(host, io.out(host), "hello\n") else` with `code = 1` on the next
+line and `end` after it, was L0105 at the `=`, "assignment is a statement,
+never an expression", with the help "compare with `==`". A bare `else` takes
+the value that stands in for the call's result [1030], which neither the
+report nor its help said, and the repair is `else (problem)`.
+
+**Chosen:** a bare `else` that ends its line, followed by a line that begins
+a statement rather than a value (a binding, an assignment, `inc`, `dec`,
+`return`, `fail`, `defer`, `undo` or a discard), is refused at the `else` as
+L0100, naming the binder: "a recovery that runs statements names the error
+after `else`: write `else (problem)`". Its note says that `_ = problem`
+discards an error the block does not use, and its Likely fix writes
+` (problem)` after the `else`. The block is read as the bound recovery to its
+`end`, so the mistake is one report.
+
+**The alternatives:** admitting a block after a bare `else`, which gives one
+recovery two block forms that differ only in whether the error is named;
+and keeping L0105 with a second sentence, which still stands on the `=` a
+line below the mistake.
+
+**Pinned by** `negative/statements-after-a-bare-else-name-its-binder`, whose
+fix the `fixes` suite compiles clean.
+
+### D373 — A note explains in words, and a cited label stands beside them
+
+**The discrepancy:** a diagnostic's note is what a reader who does not know
+the rule reads, and many quoted a register label or a grammar summary and
+nothing else: L0100's was `D77: match expression case : arm end match`, a
+for loop's never-closed report said only `[1150]`, and the parser cited
+productions, `returns ::= ( named_return (, named_return)* ) | none`, that a
+newcomer cannot read.
+
+**Chosen:** every note the compiler emits says what the rule is in plain
+words. A paragraph or decision label may stand beside those words, first as
+the code's catalogue row does, but never instead of them, and no note quotes
+a grammar production, its `::=`, `?` or `*`. Where a note needs the shape
+of a construct, it shows a short example of the source, as
+`for item in source do`. `check.py` reads every note literal out of the
+compiler and refuses one that is a bare label or quotes a production.
+
+**The alternatives:** dropping the labels, which are how a reader who wants
+the rule finds it; and moving the explanation to `refine explain` alone,
+which a reader at the report has not yet run.
+
+**Pinned by** `check.py`'s note check and its control in
+`scripts/tests/test_check_controls.py`, and every recorded negative report the change
+rewrote.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most
@@ -16780,14 +17391,14 @@ owned argument capture into the shared Landin- or C-owned startup contract. The
 original bridge decision below remains the basis of the hosted authority path,
 not today's complete C admissibility rule. D276 supersedes its compiler-emitted
 bridge: the libc route it chose is now the ordinary `extern(c)` declarations of
-`platform/libc`, and the argument root is `hosted/io` source. The provider
+`platform/libc`, and the argument root is `hosted/system` source. The provider
 contracts below are unchanged. On Linux, D279 replaces the libc route:
-`hosted/io` makes system calls through `platform/linux`, and D280 links no C
+`hosted/system` makes system calls through `platform/linux`, and D280 links no C
 library by default; D297 puts both routes beneath `platform/posix`, over which
-`hosted/io` is written once. D288 makes both providers handles: every entry takes
+`hosted/system` is written once. D288 makes both providers handles: every entry takes
 `self: provider` by value, the memory provider's mutable state is a
 caller-declared `io.memory_space`, and the system provider's last errno is in
-a cell its handle names, the process's or a caller's `hosted.space` (D207);
+a cell its handle names, the process's or a caller's `system.space` (D207);
 the paragraphs below say where.
 
 **The tour and prototypes said** that hosted arguments begin in C `argc` and
@@ -16875,9 +17486,9 @@ cleanup cannot replace it.
 
 The `core/io` module contains the target-neutral `world` concept, adapters and
 caller-backed `memory` provider. The libc-backed `system` provider and its
-argument root live in `hosted/io`, over the `extern(c)` declarations of
-`platform/libc`; hosted roots import `hosted/io` explicitly and call
-`hosted.host()`. Selecting `core/io` alone does not select foreign
+argument root live in `hosted/system`, over the `extern(c)` declarations of
+`platform/libc`; hosted roots import `hosted/system` explicitly and call
+`system.new()`. Selecting `core/io` alone does not select foreign
 declarations, so the same world API can be used by Cortex-M0 consumers. The
 hosted provider still conforms to `io.world`, and the errno contract above
 remains unchanged.
@@ -17000,7 +17611,7 @@ boundary to account
 for those other authority paths.
 
 **Pinned by** `runtime/derived-hosted-memory`, whose `long_lines` helper calls
-`heap.host()` without an allocator parameter, `runtime/core-io-erased-system`
+`heap.new()` without an allocator parameter, `runtime/core-io-erased-system`
 for provider substitution, and the `capabilities.host-root-exclusion` guarantee
 row. These demonstrate the current behavior; they do not prove that an
 arbitrary call tree uses only supplied providers.
@@ -17713,8 +18324,8 @@ linked walk would require searching the live list on insertion.
 machine without pretending sparse K/V slots contain values. A dead bucket's
 still-initialized K/V entry follows the language's manual element-resource
 contract, and its stable dense index makes tombstone reuse infallible after the
-ordinary invariant checks. The entry is exposed by the public composition; it
-is not claimed to be private. Three independent extents preserve Z19's actual
+ordinary invariant checks. The entry is the module's own since D354, and a dead
+one is counted by `map.removed`. Three independent extents preserve Z19's actual
 failure pressure and D197's six-live-slot allocator case. Reusing dead buckets
 keeps capacity and metadata bounded under churn without repeatedly acquiring
 replacement extents. A table may retain dead entries until growth or release;
@@ -17887,7 +18498,7 @@ argument table to be a diagnostics destination.
 [1340], so a root that has everything still passes one `any io.world` and
 `world.write` on it reaches the writer entry through D147's flattened table.
 Each free function in `core/io` is constrained by the narrowest concept it
-calls. `core/io.memory` and `hosted/io.system` conform to all five, the fifth
+calls. `core/io.memory` and `hosted/system.system` conform to all five, the fifth
 with an empty body. `core/diag.stream` takes `ptr any io.writer`, and since
 D288 takes `any io.writer` by value. Because `any C`
 has direct-concept identity (D145), an erased world is not an erased writer;
@@ -17939,7 +18550,7 @@ index. [1850] admits the same name in different modules; qualification tells
 constructors read well in isolation and differently in every module. Both
 were declined; a convention that has to be looked up is not one.
 
-**Pinned by** the fourteen `runtime/library-shared-*` consumers,
+**Pinned by** the `runtime/library-shared-*` consumers, one per core module,
 `runtime/library-at-references`, `negative/core-mem-used-live-release` and
 `negative/core-mem-bytes-live-drop`.
 
@@ -18089,8 +18700,9 @@ rebuilds in place and two rebuilds are at least half a capacity of operations
 apart.
 Hashes are spread with MurmurHash3's finalizer before reduction, since the
 shipped integer hashes are the identity. `reserve(n)` allocates the smallest
-table whose capacity holds `n`. Release clears a storage's prefix in constant
-time rather than withdrawing each item.
+table whose capacity holds `n`, and counts the tombstones as D379 says.
+Release clears a storage's prefix in constant time rather than withdrawing
+each item.
 
 `spill.list` drops the `zeroable` constraint D152 had left with no effect, so
 it stores pointers and atom-bearing records. Public signatures spell the
@@ -18121,6 +18733,42 @@ and an arena would never get them back.
 `negative/generic-signature-applies-a-parameter` and
 `negative/generic-signature-names-nothing`.
 
+### D379 — A reservation counts the tombstones
+
+**The tour said** nothing of a map's reservation, and D274 had `map.reserve(n)`
+allocate the smallest table whose capacity holds `n` and leave a table
+already that large alone, tombstones included, while its comment promised
+room for `n` entries without a growth allocation. A new key that takes a
+free bucket meets the pressure check with the tombstones counted, so a map
+reserved for six, filled and with one entry removed, was reserved for six
+again without a rebuild, and the sixth entry grew the table, or failed
+`out_of_memory` where no allocation was permitted.
+
+**Chosen:** the promise is kept. After `reserve(n)`, inserting new keys
+until `length` reaches `n` neither grows nor rebuilds the table, as long as
+nothing is removed in between. A table too small for `n` is replaced by the
+smallest whose capacity holds `n`, as before. A table already that large
+keeps its size, and is rebuilt at it when its tombstones and `n` together
+exceed its capacity, which drops the tombstones; otherwise it is left alone
+and nothing is allocated. Since a new key rebuilds once the live entries
+and the tombstones reach the capacity, `n` entries fit beside the
+tombstones exactly when the two together do. A rebuild in `reserve` is an
+allocation like any other: a refused one keeps every entry and tombstone.
+This amends D274.
+
+**The alternatives:** weakening the comment to room before the next
+rebuild, which leaves a caller that removed entries no way to reserve
+without counting tombstones it cannot see; rebuilding on every reservation,
+which allocates a whole table for a map that already has room; and
+removing tombstones in place, which the probe chains of the remaining keys
+cross and which would have to rehash every entry anyway.
+
+**Pinned by** `runtime/library-map-reserve-after-removal`, which reserves
+six, removes one of six entries, has a reservation of six refused and
+then granted, and inserts the sixth with no allocation permitted, and
+reserves five beside a tombstone without allocating;
+`runtime/library-map-reserve-rollback` and `runtime/r420-map-operations`.
+
 ### D275 — The compiler finds its library beside itself
 
 **The tour said** [1480] that the roots are the project, then the user's
@@ -18148,6 +18796,8 @@ directory is searched once, under the user's spelling, so a build that names
 the checkout records the paths it always did. `refine version` and its JSON
 name the library, and the language server finds it the same way. A user's
 home root and every other default stay with the Companion tool and ecosystem.
+Since D366 a named root holding a module the library supplies is warned
+about, with `--library` as the way to compile against it.
 
 **The alternatives:** an environment variable or a configuration file gives
 the same answer a second place to be wrong; a compiler built with the
@@ -18162,6 +18812,29 @@ commands case `version identity`, the server case `the library is found
 beside the server`, `negative/import-without-a-root-is-refused-there` and
 `scripts/tests/test_outside_user.py`, whose script the gate runs against the
 packaged release compiler on Linux x86-64, Linux arm64 and Darwin.
+
+### D366 — A project root holding a library module is told the library supplies it
+
+**The discrepancy:** D275 takes `core`, `hosted` and `platform` from the
+library alone, so a program checked under `--root` against an older `core`
+in that root was compiled against the bundled one and refused at its
+modules, with nothing naming `--library` as the route.
+
+**Chosen:** when an import of the library is read from it and a named root
+that is not the library holds a directory of the same module path, L0016
+warns once per module at the import that first reached it, naming the
+library's directory, the root's directory that was not read, and
+`--library=ROOT` as the way to compile against it. The program is compiled
+as D275 says; a root that is the library itself is searched once and is not
+warned about.
+
+**The alternatives:** letting a project root override the library again,
+which D275 declined; a note on whatever refusal follows, which needs every
+stage to know about roots; and refusing the program, which punishes a
+project for holding a directory named `core`.
+
+**Pinned by** `negative/root-holding-library-module-is-told` and the
+`newcomer` case `a root holding the library is told`.
 
 ### D276 — The hosted operating-system boundary is library source
 
@@ -18179,20 +18852,20 @@ flags and the creation mode as facts in every backend.
 returning `isize`, `close`, `strlen`, `malloc` returning an `allocation`
 union whose empty arm is the atom `no_allocation`, `free`, `stat`, and
 `errno_cell`, linked to `__errno_location` on Linux and to `__error` on Darwin
-and FreeBSD by `fixed if compiler.os`, which `hosted/io` reads on Darwin and
+and FreeBSD by `fixed if compiler.os`, which `hosted/system` reads on Darwin and
 FreeBSD. The errno constants `eperm`, `enoent`, `eintr`, `eacces`, `erofs` and
 `enotdir` (D287), the flags
 `o_rdonly` and `o_wronly`, the per-system `o_creat` and `o_trunc`, `timespec`,
 the per-system `file_status` record and `file_status_size` are source
 declarations selected by `compiler.os` and the C ABI and checked against each
 system's C headers. Like every hosted module it is refused on firmware (D267).
-`hosted/io` and `hosted/heap` reach the host only through it; the 0666
-creation mode stays in `hosted/io` as provider policy. On Linux `hosted/io`
+`hosted/system` and `hosted/heap` reach the host only through it; the 0666
+creation mode stays in `hosted/system` as provider policy. On Linux `hosted/system`
 and `hosted/heap` use `platform/linux` instead (D279, D282), and since D297 both
 reach the host only through `platform/posix`; every `platform/libc` declaration is
 bodyless, so a program naming none of them needs no C library.
 
-`hosted/io` holds the argument root in two module cells, and since D288 the
+`hosted/system` holds the argument root in two module cells, and since D288 the
 process's last-error cell in a third, and defines in source
 the public C routine `_landin_host_initialize_arguments`, whose signature is
 `(count: i32, escaping values: ptr ptr u8) -> none`, to which D311 adds the
@@ -18202,14 +18875,14 @@ an identical repeat is a no-op; an invalid call, use before initialization or
 replacement traps; the published count is `max(argc - 1, 0)` without
 `argv[0]`. Indexed lookup reads the `argv` entry by address and traps on a
 null entry. Each of these traps is the library's own `compiler.unreachable()`
-(D278), so a panic handler receives `unreachable` at a site in `hosted/io`
+(D278), so a panic handler receives `unreachable` at a site in `hosted/system`
 where the bridge reported it at a synthetic site zero.
 
 The compiler's one hosted contract is that call. When a hosted entry is
 selected and the program defines a C routine with the link symbol
 `_landin_host_initialize_arguments`, the hosted `main` calls it with its
 incoming `argc` and `argv`, and since D311 its `envp`, before its body. A program that defines none calls
-nothing, so a hosted program that never imports `hosted/io` links without it.
+nothing, so a hosted program that never imports `hosted/system` links without it.
 Beside a hosted entry every declaration carrying that symbol must be exactly
 `extern(c) (i32, ptr ptr u8) -> none`, with `escaping` immaterial, or it is
 refused with L0347. The symbol is an ordinary default-visibility global rather
@@ -18222,7 +18895,7 @@ the same spelling from capturing them.
 **The alternatives:** keeping the bridge, which leaves the compiler owning
 libc's names, flags and errno spelling in three backends and a checker
 contract for each wrapper. Always calling the initializer as an import that
-may be undefined, which makes every hosted program link against `hosted/io`
+may be undefined, which makes every hosted program link against `hosted/system`
 or fail to link. Keeping the argument root in `platform/libc`, which would put
 Landin policy in the module whose purpose is to transcribe C. Declaring
 libc privately in each provider, declined because one module gives each
@@ -18278,7 +18951,7 @@ admits every alignment.
 **The tour said** [1670] that a failed check calls a fixed, never-returning
 symbol, and [1960] that a trap stops at the operation. Only the compiler's
 own checks reached that path: library source had no way to say that a path
-must not run, so when `hosted/io` took over the argument root's startup
+must not run, so when `hosted/system` took over the argument root's startup
 contract (D276) it could stop only at an unrelated check, which reported
 `bad_conversion` where the bridge had reported `unreachable`.
 
@@ -18292,7 +18965,7 @@ a routine would be, L0327 for an argument, L0331 for a value and L0329 for
 `unreachable` through D232 at its own numbered site, with the panic map entry
 a compiler check has, or the terminal default trap when no handler is
 selected. It is a statement and not a check, so `unchecked` never removes it.
-It is available on every target, firmware included. `hosted/io` stops on every
+It is available on every target, firmware included. `hosted/system` stops on every
 misuse of the argument root with it.
 
 **The alternatives:** an `unreachable` keyword statement would take a word
@@ -18320,7 +18993,7 @@ no C library to reach its kernel.
 
 **Chosen:** the public module `platform/linux` declares Linux's system calls in
 source, inside `fixed if compiler.os == linux`. It declares nothing on Darwin
-and FreeBSD, and because Landin has no conditional import, `hosted/io` and
+and FreeBSD, and because Landin has no conditional import, `hosted/system` and
 `hosted/heap` import it on every hosted system. Each call is one ordinary
 assembly block: x86-64 `syscall` with the number in rax, arguments in rdi,
 rsi, rdx, r10, r8 and r9, and rcx and r11 overwritten; arm64 `svc #0` with
@@ -18372,7 +19045,7 @@ ends at `_landin_start`.
 **The alternatives:** keeping libc on Linux, a dynamic dependency and a
 runtime the language does not need. Writing the entry in the compiler, which
 repeats the bridge D276 removed. A target assertion to scope the module,
-which without conditional imports breaks `hosted/io` on Darwin and FreeBSD.
+which without conditional imports breaks `hosted/system` on Darwin and FreeBSD.
 Public wrappers under their C names, which would interpose on libc's `read`,
 `write` and `close` in a libc-linked program. All are declined.
 
@@ -18420,6 +19093,96 @@ and `end-to-end/link-needs-hosted-system`; the toolchain case `a static Linux
 link has no C runtime`; and the driver cases `a static link needs
 platform/linux` and `a static link starts at platform/linux`.
 
+### D362 — An executable's assembly is the link's input, and an assembly file links
+
+**The tour said** at [1550] that Landin emits assembly for the platform's
+assembler and linker, and the driver wrote `OUTPUT.s` beside every
+executable as that input and left it there, which the README's first
+program did not mention; an edited copy could be linked only by
+copying the link line `-v -v` printed.
+
+**Chosen:** on a hosted target the assembly is removed once the link has
+run, whether it succeeded or not, unless `--keep-asm` asks to keep it, or a
+source map is written beside the executable (`--debug`, `--panic-map` or
+caller coordinates), since the map names that assembly by its hash and is
+resolved against it. Firmware keeps it with the object, linker script and
+map its link writes beside the image, which its build report reads.
+`--keep-asm` belongs to an executable; with `--emit=asm` or `--emit=ir` it
+is a misuse. A dry run says `remove` after the link it plans.
+
+`refine compile PROGRAM.s -o PROGRAM` links one assembly file as a compiled
+program's assembly is linked: the same driver choice, the same arguments for
+the request's `--target`, `--level`, `--link`, `--linker` and `--debug`, and
+the same protection of an existing executable and of the operand itself. A
+file is assembly when its name ends in `.s`; it must be the one operand,
+without `--root`, and options that describe compiling Landin source
+(`--optimize`, `--specialize`, `--build-mode`, `--option`, `--build-report`,
+`--stage-report`, `--panic-map`, `--depfile`, `--firmware-entry` and
+`--keep-asm`) are refused with it. The operand is never read by the compiler
+and never removed. A program's `linker.library` archives are not recorded in
+its assembly, so an assembly file is linked without them.
+
+**The alternatives:** keeping the assembly and documenting it, which leaves
+every first compile a file the reader did not ask for; writing it to a
+temporary directory, which moves the protection of an existing file and the
+assembler's messages, which name the path, somewhere the reader cannot see;
+and a separate `link` command, a second interface for what `compile` already
+does after emission.
+
+**Pinned by** the `newcomer` cases `assembly is kept only on request` and
+`an assembly operand links`, `end-to-end/link-static-dry-run` and its
+siblings' `remove` line, and `compiler/tests/test_native_report_identity.py`,
+which finds no assembly after a failed link.
+
+### D364 — Linux links through the GCC a distribution installs
+
+**The tour said** at [1590] that the platform driver owns the hosted
+runtime's linkage, and `Landin.Backend.Toolchain` named one driver per
+target, the pinned image's `x86_64-pc-linux-gnu-gcc`, with no fallback.
+Debian and Ubuntu install `x86_64-linux-gnu-gcc` and Fedora
+`x86_64-redhat-linux-gcc`, so a release archive unpacked on a stock
+distribution refused its first executable with L0500; and that
+refusal came before the program's own, so a static link that needed a C
+symbol sent its reader to install a toolchain only to be refused again.
+
+**Chosen:** with no `--toolchain`, a Linux target tries, in order, the
+target's own triplet driver, `MACHINE-linux-gnu-gcc`,
+`MACHINE-redhat-linux-gcc` and the `pc` or `unknown` vendor's spelling, each
+a GCC that drives the assembler and linker for that machine alone, and then
+`gcc` only when the target is the compiler's own host (D257), where the
+host's GCC is a driver for it; a cross target never falls back to the host's
+compiler, which would assemble for the wrong machine. It is `gcc` and not
+`cc` because the link passes the GNU assembler's options. The first one the
+host can start is the one run; a dry run names it, or the first looked for
+when none can be. `--toolchain=NAME` is still the only one tried. Darwin
+keeps Apple's `/usr/bin/clang`, FreeBSD its triplet's Clang and Cortex-M
+`arm-none-eabi-gcc`.
+
+Whether a driver can be started is asked once the program is known to need
+it, after every refusal of the program itself, D280's static refusals of a C
+symbol, `linker.library` and a missing `platform/linux` among them, and
+before anything is written. A target that names no driver is still refused
+before any source is read. With none found, L0500 names every driver looked
+for and what to install: the distribution's GCC on the compiler's own host
+(`apt install gcc`, `dnf install gcc`), its cross compiler for another Linux
+machine (`apt install gcc-aarch64-linux-gnu`), Apple's command line tools on
+Darwin, and the Arm embedded GCC for Cortex-M.
+
+**The alternatives:** a bare `cc` for every target, which can hand ELF
+assembly to the wrong machine's assembler or to a Clang that refuses the GNU
+assembler's options; asking `gcc -dumpmachine` which triplet a host has,
+another process on every compile for what four names cover; an installation
+step that links a pinned name, which a newcomer has to find first; and
+keeping the early check, which tells a reader to install a driver for a
+program the static link refuses anyway.
+
+**Pinned by** the `newcomer` cases `linux names every distribution's
+driver`, `a stock driver links`, `a missing driver says what to install` and
+`a static refusal precedes a missing driver`, and the gate's
+`outside-user-stock` job, which runs `scripts/outside_user.py --stock` on a
+stock Ubuntu with only its own GCC and fails if the pinned driver is
+reachable.
+
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 
 **The tour said** at [1630] that an ordinary block is straight-line code with
@@ -18448,15 +19211,16 @@ RV64's breakpoints and `mret`.
 fixed-buffer providers, and D277 had the hosted heap over-allocate through
 libc's `malloc` on every hosted system.
 
-**Chosen:** on Linux `hosted/heap` maps its own memory through `platform/linux`
-(D279). It keeps eight size classes from 32 to 4096 bytes. A class with no
+**Chosen:** on Linux `hosted/heap` maps its own memory, now through
+`platform/posix`, which makes `platform/linux`'s calls (D279, D297). It keeps eight size classes from 32 to 4096 bytes. A class with no
 free slot maps a 64 KiB chunk and links its slots into a free list; a freed
 slot returns to its class's list and is handed out before any new chunk is
 mapped; chunks are never unmapped. A request whose extent exceeds 4096 bytes
 is a mapping of its own, rounded to the page size and unmapped when freed.
 Two words precede every block, the slot's or mapping's start and its extent,
-written a byte at a time, so every `usize` alignment works, a power of two or
-not, and a zero-byte request is a distinct token. An addition that would
+at the multiple of the word at or below a header before the block, so they
+are aligned whatever the block's alignment and every `usize` alignment works,
+a power of two or not; a zero-byte request is a distinct token. An addition that would
 overflow, or an extent above `PTRDIFF_MAX` less the page rounding, is
 `mem.out_of_memory` before any state changes, as is a failed mapping. The
 provider is single-threaded. D300 makes it the heap of every hosted system.
@@ -18550,9 +19314,9 @@ their own `.bss` sections; Mach-O keeps `.subsections_via_symbols` and Darwin
 links with `-dead_strip`; Cortex-M keeps its per-item sections under its own
 script. Every ELF link passes `--gc-sections`. A static link's L0500 counts
 only the references the entry reaches, from `_landin_start`, `main`, the
-argument initializer, `panic_handler`, every `keep` item and every datum and
-evidence table, through calls and taken addresses, an external C name leading
-to the routine that defines it.
+argument initializer, `panic_handler`, every `keep` item, every datum and
+the entries D374 keeps of every evidence table, through calls and taken
+addresses, an external C name leading to the routine that defines it.
 
 **The alternatives:** sections on x86-64 alone, which left arm64 and FreeBSD
 images several times larger, a static hello on arm64 near 200 KB; and
@@ -18614,7 +19378,7 @@ functions of one concept.
 
 **Chosen:** `process` gains `input: (self: provider) -> (stream: file)`, taking
 the handle by value as every I/O entry does (D288), read through `reader` like
-any opened file: zero from a nonempty read is the end of input. `hosted/io`
+any opened file: zero from a nonempty read is the end of input. `hosted/system`
 answers descriptor 0. `core/io.memory` answers handle 0 over the caller's
 `input` bytes, the argument `memory_over` takes after the argument table;
 the `read_limit` and `fail_read_at` of its `io.memory_space` apply to it as to
@@ -18663,7 +19427,9 @@ scan from the left meets first; `usize` is the target's width, so firmware
 parses 32 bits. `to_u32` over `utf8` parses the text's bytes. `core/diag`'s
 position writer, the derived hosted program and the fizzbuzz and fannkuch
 writers use them; the configuration parser keeps its recursive digit parser,
-which the debugger sessions stop in.
+which the debugger sessions stop in. D355 retires the slice writers: the
+builder's appends are the one decimal writer, and the parses live with the
+signed and hexadecimal ones.
 
 **The alternatives:** `to_u64` and `to_usize` over `utf8`, which makes a
 caller validate digits as text first; a `_bytes` suffix, as the opens have,
@@ -18755,18 +19521,18 @@ through an `escaping` parameter would refuse every frame-local parent with
 L0314. The `diag.log` concept keeps `self: ptr mut logger`,
 because a bounded log is an edited value. Process-wide state belongs to the
 process, so its handles borrow nothing and are bound without `mut`:
-`hosted.host()` returns a handle holding the argument table, its count and
-the process's last-error cell, `heap.host()` is unchanged, and the Linux
+`system.new()` returns a handle holding the argument table, its count and
+the process's last-error cell, `heap.new()` is unchanged, and the Linux
 heap's size classes are module state (D282). An erased capability is built
 from the address of a handle binding, `any(addr host)`, which D289
 dispatches; an immutable binding suffices.
 
 The last error is the one value the system provider writes on behalf of its
 caller, so the handle names the cell it records into, `failure: ptr mut i32`,
-and `hosted.last_errno(host)` reads that cell. Every handle from
-`hosted.host()` shares the process's cell, a private module `mut` of
-`hosted/io`. `hosted.over(inout state: hosted.space) -> (handle: system from
-state)` fills a caller-declared, zeroable `hosted.space` holding one `failure:
+and `system.last_errno(host)` reads that cell. Every handle from
+`system.new()` shares the process's cell, a private module `mut` of
+`hosted/system`. `system.over(inout state: system.space) -> (handle: system from
+state)` fills a caller-declared, zeroable `system.space` holding one `failure:
 i32` and returns a handle that records its last error there instead, for a C
 thread calling into Landin or a library that keeps its own detail. Either
 handle shares the process's arguments and descriptors, and either traps before
@@ -18790,7 +19556,7 @@ have. Making the state in one call and taking its handle in a second, which
 leaves state without a handle between them and doubles every constructor.
 For the last error: one process cell and no other, which reverses D207 and
 mixes the failures of C threads; a declared cell behind every handle, which
-loses the one-line `hosted.host()`; and a field in the handle value itself,
+loses the one-line `system.new()`; and a field in the handle value itself,
 where a write in the callee's copy is lost.
 
 **Pinned by** `runtime/io-handle-lends-two-arguments`,
@@ -18902,7 +19668,7 @@ tables and requires the committed files to be its output.
 
 **The tour said** at [1660] that a program reaches its host through
 capabilities, and D276 and D279 put each system's interface beneath
-`hosted/io` and `hosted/heap`, which then wrote every facility once over
+`hosted/system` and `hosted/heap`, which then wrote every facility once over
 Linux's system calls and once over the C library.
 
 **Chosen:** four layers. Each system's own interface stays raw under
@@ -18911,7 +19677,7 @@ Linux's system calls and once over the C library.
 types, written once over each (D298). The portable concepts in `core` name no
 POSIX type, so `io.file` is a `distinct usize`, an open directory holds a
 `handle: usize`, and no integer descriptor, mode bit, owner, signal number or
-errno is in a `core` signature. `hosted/io` and `hosted/heap` are written once
+errno is in a `core` signature. `hosted/system` and `hosted/heap` are written once
 over `platform/posix`, with no code of their own for any system. All three
 `platform` modules are scoped to the hosted POSIX systems, Linux, Darwin and
 FreeBSD, by namespace and by a `compiler.assert`, and firmware refuses them
@@ -18923,7 +19689,7 @@ module for kqueue comes with the event-driven Io that needs it.
 **The alternatives:** writing every hosted facility twice, once per route;
 `platform/linux` scoped to Linux alone, which needs a conditional import the
 language does not have; and a compiler fact for POSIX, where the namespace
-rule already scopes `platform/c` and `platform/cpu`.
+rule already scopes `platform/c` and `platform/cortex_m`.
 
 **Pinned by** every hosted fixture, unchanged in behaviour,
 `runtime/posix-files`, `runtime/posix-directories`, `runtime/posix-memory`,
@@ -18950,7 +19716,7 @@ calls over a caller's buffer, which list `.` and `..` as POSIX does,
 `make_directory_at`, `unlink_at`, `remove_directory_at`, `map`, `unmap`,
 `page_size`, `exit` and `poll`, whose events are a `distinct u16` flag set
 (D302). None retries EINTR or completes a short transfer; that is provider
-policy in `hosted/io`. Each path is copied with its NUL into a per-system
+policy in `hosted/system`. Each path is copied with its NUL into a per-system
 `PATH_MAX` buffer, so the terminator never reaches a caller; a path holding a
 NUL is `einval` and one too long `enametoolong`. The argument root lives here,
 with the environment's table since D311,
@@ -19028,7 +19794,7 @@ byte and from the first up when it starts at or before the source, so overlap
 is always safe; one wholly after the source may go either way. It fails
 `out_of_bounds` before writing when `into` is shorter; a longer destination
 keeps its tail.
-`mem.fill` sets every byte. `mem.compare` answers the atom set
+`mem.fill` sets every byte. `cmp.compare` answers the atom set
 `less | equal | greater`, bytes unsigned and a proper prefix first.
 `mem.find` gives the first match's index or the source's length, so
 `source[0..<find(…)]` is always valid.
@@ -19065,7 +19831,7 @@ entry must name one builder type.
 
 **The alternatives:** a builder generic over its allocator, which an erased
 entry cannot name (D146); a static refusing allocator inside every bounded
-builder, which D222 refuses; an atom-or-erased union, which D189 does not
+builder, which D222 refused until D375; an atom-or-erased union, which D189 does not
 admit; `out_of_memory` in every bounded caller's error set; partial pieces;
 and a width and fill on every typed append.
 
@@ -19205,8 +19971,8 @@ streams is `inherited`, `discarded` or `piped`, with presets `inheriting`,
 both piped outputs and reads whichever is ready, so a child is never stalled
 on a full pipe. `io.wait` takes the child `sink`, closes its pipes and answers
 `io.ending`, `exited(code)` or `signalled`; the signal's number is hosted
-detail, `hosted.last_signal(host)`, kept in a cell of the handle's
-`hosted.space` beside its last error. `io.scripted_over(world, programs)`
+detail, `system.last_signal(host)`, kept in a cell of the handle's
+`system.space` beside its last error. `io.scripted_over(world, programs)`
 gives scripted children whose output, errors, code and ending are given,
 recording how often each started, its argument and variable counts and the
 input written to it.
@@ -19240,7 +20006,8 @@ Darwin and FreeBSD it is `posix_spawn`, with `POSIX_SPAWN_CLOEXEC_DEFAULT` and
 `posix_spawn_file_actions_addinherit_np` on Darwin and
 `posix_spawn_file_actions_addclosefrom_np(3)` on FreeBSD. `posix.wait` is
 `wait4` or `waitpid` and answers `exited(code)` or `signalled(signal)`; the
-hosted provider retries EINTR.
+hosted provider retries EINTR. A stream that is already its own number is
+D378's, which amends this decision.
 
 **The alternatives:** `vfork` or `CLONE_VM`, which need a routine Landin cannot
 express that runs on the parent's stack; `posix_spawn` through glibc, which a
@@ -19252,18 +20019,60 @@ close-on-exec is removed, `runtime/posix-processes` and
 `abi/libc-process-constants`, which holds each system's constants to its
 headers.
 
+### D378 — A child receives every stream it is handed, closed on exec or not
+
+**The tour said** nothing of what a child inherits, and D314 had `spawn`
+move a stream below 3 that was not its own number above 2, and leave one
+that was as the parent's own stream, inherited as it was. A descriptor the
+POSIX layer makes is closed on exec, and a process whose standard input is
+closed gets its next one at 0: a file opened then and handed to a child as
+its input was its own number, was left in place with its flag, and the
+exec closed it, so the child read from no descriptor at all. Linux skipped
+its `dup3` and FreeBSD its `posix_spawn_file_actions_adddup2` for it; Darwin
+named it with `posix_spawn_file_actions_addinherit_np`.
+
+**Chosen:** `spawn` duplicates every stream below 3 above 2 for the call,
+its own number included, with `F_DUPFD_CLOEXEC`, and closes the duplicate
+after, so each stream reaches its number in the child by a duplication from
+another descriptor, which clears the close-on-exec flag in the child alone:
+`dup3(source, target, 0)` on Linux and `posix_spawn_file_actions_adddup2`
+on Darwin and FreeBSD. The parent's descriptors and their flags are never
+changed. The same descriptor may be given for several streams. A stream
+that is its own number and not open in the parent cannot be duplicated and
+is left as it is, so the child's is not open either and the spawn goes on;
+any other stream that is not open is `ebadf`. Darwin no longer names an
+inherited stream: a stream that reaches the child is a duplication's
+target, which `POSIX_SPAWN_CLOEXEC_DEFAULT` keeps. This amends D314.
+
+**The alternatives:** clearing the flag with `fcntl(F_SETFD)` in the
+Linux child, which `posix_spawn` cannot do on FreeBSD without trusting that
+its `adddup2` of a descriptor onto itself clears the flag, as POSIX.1-2024
+asks and older systems do not; relying on Darwin's
+`posix_spawn_file_actions_addinherit_np`, whose clearing of the flag is
+Darwin's alone; refusing a
+stream that is closed on exec, which makes the caller rearrange its
+descriptors for a fault of the layer's own; and clearing the flag in the
+parent, which another thread's exec could inherit and which changes the
+caller's descriptor behind it.
+
+**Pinned by** `runtime/posix-spawn-standard-streams`, which closes the
+program's standard descriptors, makes a socket closed on exec at each and
+spawns a shell from them in every permutation, with one descriptor for two
+streams and for all three, and with a closed standard error;
+`runtime/posix-processes` and `runtime/run-no-descriptor-leak`.
+
 ### D315 — Time is a count of nanoseconds, and the wall clock seconds and nanoseconds
 
 **The tour said** nothing of time, and floating-point values are neither written
 nor parsed as text yet.
 
-**Chosen:** `io.duration` and `io.instant` are each a `distinct u64` of
+**Chosen:** `time.duration` and `time.instant` are each a `distinct u64` of
 nanoseconds, about 584 years, and ordered and compared as their base is
-(D302). `io.wall_time` is a record of `seconds: i64` and `nanoseconds: u32`,
-UTC since 1970 without leap seconds. Spans are made with `io.nanoseconds`,
-`io.microseconds`, `io.milliseconds` and `io.seconds`, which trap past the
-range; `io.elapsed` traps when its second reading is the earlier one;
-`io.later` makes a deadline, and `io.in_milliseconds` rounds down. There is no
+(D302). `time.wall_time` is a record of `seconds: i64` and `nanoseconds: u32`,
+UTC since 1970 without leap seconds. Spans are made with `time.nanoseconds`,
+`time.microseconds`, `time.milliseconds` and `time.seconds`, which trap past the
+range; `time.elapsed` traps when its second reading is the earlier one;
+`time.later` makes a deadline, and `time.in_milliseconds` rounds down. There is no
 other arithmetic on time. Calendars, time zones and their formatting are the
 locale record's in the roadmap's register.
 
@@ -19282,13 +20091,13 @@ reports.
 **The tour said** at [1660] that authority is passed, and D312 put a facility
 firmware need not pay for outside `world`.
 
-**Chosen:** `io.clock` holds `now` and `sleep` together, because a sleep is
-measured on that clock and its fake must advance it; `io.wall_clock` holds
+**Chosen:** `time.clock` holds `now` and `sleep` together, because a sleep is
+measured on that clock and its fake must advance it; `time.wall_clock` holds
 `wall_now`, apart, because firmware may count time without knowing the date
 and the wall clock jumps; `io.entropy` holds `fill_random`. All three are
-outside `world`, with fakes in `core/io`: `io.clock_over` gives a
+outside `world`, with fakes in `core/io`: `fake.clock_over` gives a
 `manual_clock` a test advances, whose sleep advances it by exactly the span,
-and `io.entropy_over` gives scripted bytes. Reading a clock cannot fail; a
+and `fake.entropy_over` gives scripted bytes. Reading a clock cannot fail; a
 failure of the system's own is `compiler.unreachable()`. A sleep cannot fail
 and never returns before `now` has reached its start plus the span: the hosted
 provider takes a deadline from the monotonic clock and sleeps for what is
@@ -19314,7 +20123,7 @@ its child, `runtime/run-shell-memory` and `abi/clock-agrees-with-c`.
 **The tour said** nothing of how a clock is read. A system call to read the
 time costs about 270 ns; the kernel's vDSO answers in about 27.
 
-**Chosen:** `platform/linux.vdso_symbol` finds the clock function the
+**Chosen:** `platform/linux/vdso`'s `vdso.symbol` (D346) finds the clock function the
 auxiliary vector's AT_SYSINFO_EHDR names: `__vdso_clock_gettime` at
 `LINUX_2.6` on x86-64, `__kernel_clock_gettime` at `LINUX_2.6.39` on arm64 and
 `__vdso_clock_gettime` at `LINUX_4.15` on RV64. It reads the first load
@@ -19327,7 +20136,7 @@ a mebibyte. The function's address is cached in a plain module word on first
 use, single-threaded state like the heap's, and called through D335's
 conversion of that address to a C function value. A missing symbol, a malformed
 image or a nonzero answer falls back to the system call. Since D279's
-adoption it serves `--link=libc` too, and `io.now` costs about 116 ns either
+adoption it serves `--link=libc` too, and `time.now` costs about 116 ns either
 way.
 
 **The alternatives:** the system call alone; resolving the vDSO in every static
@@ -19347,7 +20156,8 @@ no helper on Cortex-M0. `random.new(seed)` seeds it through splitmix64, as its
 authors advise; `random.from_entropy` reads 32 bytes from an `io.entropy`
 provider and replaces the impossible all-zero state with `new(0)`'s.
 `random.below` masks to the bound's width and draws again when the value is
-too large, so it has neither division nor bias, and traps on a bound of zero;
+too large, so it has neither division nor bias, and traps on a bound of zero,
+with `overflow` since D342;
 `random.shuffle` is Fisher and Yates'. A fixed seed's sequence is the same on
 every target. It is not cryptographic, as its documentation says.
 
@@ -19364,7 +20174,7 @@ implementation's outputs on every target, Cortex-M0 included, and
 **The tour said** at [1660] that authority is passed, and nothing could talk
 over a network.
 
-**Chosen:** `io.network` is a concept outside `world` that also conforms to
+**Chosen:** `net.network` is a concept outside `world` that also conforms to
 `reader` and `writer`, so a connection is a `file` that `io.read`, `io.write`,
 the line reader and the buffered writer take. Its entries are `connect`,
 `listen`, `accept`, `open_datagram`, `send`, `receive`, `send_to`,
@@ -19401,7 +20211,7 @@ and both families, `runtime/network-refused`,
 **The tour said** nothing of addresses, and resolving a name is the resolver
 record's in the roadmap's register.
 
-**Chosen:** `io.address` is a public record, as D293's directory is, so a
+**Chosen:** `net.address` is a public record, as D293's directory is, so a
 provider in another module builds one, of an `ipv4` or `ipv6` family, sixteen
 bytes and a port; it has no zone, so `%zone` is `invalid_address` and a
 link-local address waits. IPv4 is four decimal parts with no leading zero, as
@@ -19409,8 +20219,8 @@ link-local address waits. IPv4 is four decimal parts with no leading zero, as
 and an IPv4 tail; it is written as RFC 5952 says, in lower case with the
 longest run of two or more zero groups compressed, the first on a tie, and
 only an IPv4-mapped address dotted. With a port it is `a.b.c.d:p` or
-`[v6]:p`. `io.parse_ip`, `io.parse_address`, `io.append_ip` and
-`io.append_address` read and write them, and an address is `formattable`.
+`[v6]:p`. `net.parse_ip`, `net.parse_address`, `net.append_ip` and
+`net.append_address` read and write them, and an address is `formattable`.
 
 **The alternatives:** an opaque type; a scope identifier; `inet_aton`'s
 shorthands, whose leading zero is octal; and dotted IPv4-compatible addresses.
@@ -19422,7 +20232,7 @@ shorthands, whose leading zero is octal; and dotted IPv4-compatible addresses.
 
 **The tour said** at [1660] that every hosted facility has a fake.
 
-**Chosen:** `io.memory_network`, from `io.network_over`, is one machine with
+**Chosen:** `fake.network`, from `fake.network_over`, is one machine with
 only loopback addresses, over socket records the caller declares, each
 record's buffer its receive buffer. Delivery is at once, whole and in order;
 a datagram no socket takes, or one its buffer has no room for, is lost. It
@@ -19454,8 +20264,8 @@ layer keeps the default. `posix.spawn` gives every child the default again,
 on Linux in the clone child before `execve` and elsewhere with
 `posix_spawnattr_setsigdefault`. Every Linux send passes `MSG_NOSIGNAL` and
 every Darwin and FreeBSD socket sets `SO_NOSIGPIPE`, so socket writes are safe
-beside a C handler too; a pipe has no such flag, so the process-wide ignore
-stays.
+beside a C handler too, `io.write` to a socket among them since D340; a pipe has
+no such flag, so the process-wide ignore stays.
 
 **The alternatives:** ignoring it in the static entry, which depends on the
 route and makes every static program pay; an unconditional ignore, which
@@ -19516,9 +20326,9 @@ for appending is a documented hazard, since Linux ignores the offset there.
 The working directory can be read and is never changed, since it is
 process-wide state beside threads. `io.terminals` is a second concept, whether
 a stream is a terminal and its window size, failing `not_a_terminal`. The
-fakes are `io.memory_volume`, a node-based volume for all five file concepts,
+fakes are `fake.volume`, a node-based volume for all five file concepts,
 which does not fit Cortex-M0 because its conformances link every entry, and
-`io.memory_terminals`.
+`fake.terminals`.
 
 **The alternatives:** widening `files` or `world`, which every conformance and
 memory image would carry; a concept refining all five, which every provider
@@ -19842,3 +20652,657 @@ record for each resize.
 `runtime/core-region-resize` on every target, Cortex-M0 among them,
 `runtime/hosted-heap-resize` on every hosted target and
 `runtime/core-text-builder`.
+
+### D340 — A write to a socket the hosted provider made is a send
+
+**The tour said** nothing of signals, and D322 promised that every Linux send
+passes `MSG_NOSIGNAL`, so that socket writes are safe beside a C program's
+own SIGPIPE handler. `io.write` on a connection made POSIX's `write`, which
+takes no flag: on Linux, where no socket option stands in for one, a write to
+a connection whose peer had gone ran the C handler, and the process-wide
+ignore was all that kept a Landin program alive.
+
+**Chosen:** a socket the hosted provider makes carries a mark beside its
+descriptor in the `io.file` it gives, a bit no descriptor has, and
+`io.write` and `write_some` send on a marked file, where `posix.send` passes
+`MSG_NOSIGNAL` on Linux and Darwin and FreeBSD's sockets carry
+`SO_NOSIGPIPE`. `system.descriptor_of` drops the mark. `system.socket_of`
+makes such a file from a socket `platform/posix` made; `file_of` keeps
+making a plain one, whose writes are POSIX's `write`, as its documentation
+now says.
+
+**The alternatives:** trying `send` first and falling back to `write` on
+`ENOTSOCK`, which costs every write to a file a failed system call; asking
+the system whether each descriptor is a socket when it is written, which
+costs a call too; a table of the process's sockets, which is state the
+provider does not keep; and leaving the ignore to cover it, which D322
+declined because a C handler is kept.
+
+**Pinned by** `abi/socket-write-raises-no-sigpipe`, whose C handler counts a
+SIGPIPE that a Linux `write` raises and a send does not.
+
+### D341 — The fakes fail where the hosted provider fails
+
+**The tour said** nothing of test providers, and D325 and D321 made the
+memory volume and the memory network stand in for the system. Each differed
+from it where a program could see: the volume found a link's target from the
+volume's root rather than from the link's directory, followed no link before
+a path's last part, and made a second node at a dangling link's own path
+when an open created a file there; its `remove_directory` of a file was
+`io_failed` where the hosted provider's ENOTDIR is `not_found`; the network
+refused a listener on a port an accepted connection used, where the hosted
+provider's listeners set SO_REUSEADDR; and a line reader over an empty
+buffer took the empty read its buffer gave for the end of its input.
+
+**Chosen:** the volume resolves every path as a system does, part by part:
+a link before the last part is always followed, the last as the call says, a
+target beginning with `/` from the root and any other from the link's own
+directory, `..` climbing from where the walk has reached. A part before the
+last that is missing or no directory is `not_found`, more than eight links
+`io_failed` as ELOOP is, and a path that grows past 256 bytes as targets are
+put in it `io_failed`. A creating open of a dangling link makes its target,
+and an exclusive one is `already_exists`, as O_EXCL is. Removing works on the
+link itself; a directory asked of anything else is `not_found`, a file asked
+of a directory `io_failed`, as Linux's EISDIR is. The memory network's
+listener conflicts only with listeners, while a connection's port still
+conflicts with both. A line reader over an empty buffer reports every line
+`line_too_long` and never reads.
+
+**The alternatives:** a volume that refuses links in a path's directory
+part, which a test of code meeting real trees could not use; giving the
+memory network SO_REUSEADDR as an option the program sets, which the
+portable concept has no way to ask for; and refusing an empty buffer in
+`lines_over`, which would make a constructor fallible for a case one check
+in `read_line` answers.
+
+**Pinned by** `runtime/volume-links-as-systems-follow`,
+`runtime/network-listen-beside-accepted`, which runs the same routine over
+the memory network and the hosted provider, and
+`runtime/core-io-line-reader`.
+
+### D380 — Every call of the memory volume counts, its directory reads among them
+
+**The tour said** nothing of test providers. D325 made the memory volume,
+whose `fail_at` fails a chosen call and whose comment said it counted every
+call that changed or read a file. Opening and closing a directory counted,
+but `read_entry`, whether it refilled the directory's buffer or read what a
+refill left there, `entry_size` and `same_file` did not, so no test could
+fail a listing, an entry's size or a comparison through it, and the failure
+meant for one of them reached the next call that counted, a
+`close_directory`.
+
+**Chosen:** every call of the volume's `reader`, `writer`, `files`,
+`directories` and `file_system` counts once in `calls`, `read_entry`,
+`entry_size` and `same_file` among them, and the call `fail_at` names fails
+`io_failed`. Two compose others and count what they make: `write` counts
+each piece `write_some` writes, and `make_temporary` counts itself and
+each name it tries to open. A read fails before it touches the directory,
+so the next one gives the entry the failed one would have. The hosted
+provider can fail each of these calls: a read that refills calls
+`getdents` or `readdir`, one that does not may stat an entry whose record
+gives no kind, and `entry_size` and `same_file` each stat.
+
+**The alternatives:** counting only a read that refills the buffer, as a
+system call is made, which would leave a test to know the buffer's size to
+name the read it fails, and give a failed read nothing to fail on a system
+whose records name each entry's kind; counting each entry a refill places,
+which counts work no caller asked for; and leaving the three uncounted with
+a comment that says so, which keeps the failure paths of a directory walk
+untestable.
+
+**Pinned by** `runtime/volume-directory-calls`, which holds `calls` after
+each directory call and fails a read from a filled buffer, a read that
+refills it, an `entry_size` and a `same_file`; and `runtime/volume-memory`.
+
+### D342 — A bound of zero is a zero divisor
+
+**The tour said** nothing of random numbers, and D318 had `random.below` trap
+on a bound of zero by reaching `compiler.unreachable()`, which tells a panic
+handler that a path declared unreachable was reached, when it was the
+caller's argument that had no value below it.
+
+**Chosen:** `random.below(source, 0)` traps with `overflow`, at the checked
+subtraction that makes its mask, as `n % 0` traps: the bound is the
+remainder's divisor that a biased `next % bound` would have used. D318's
+other choices stand. `next_u32`'s documentation gives xoshiro256**'s own
+reason for the upper half: every bit of its output passes its authors'
+tests, so the half is a convention, where the low bits of xoshiro256+ are
+the weak ones.
+
+**The alternatives:** `out_of_range`, which describes an index and has no
+spelling a routine can raise; a failure atom, which would make every draw's
+caller handle a case that a correct program never reaches; and keeping
+`unreachable`.
+
+**Pinned by** `runtime/random-below-zero-overflows`, whose panic handler
+ends the process with the kind's own code.
+
+### D343 — The POSIX layer asks each system what it takes
+
+**The tour said** nothing of the systems beneath `platform/posix`, and D297
+wrote it twice, over Linux's calls and over the C library of Darwin and
+FreeBSD. Four of its requests were not what a system takes, and one record
+was chosen by elimination: Darwin's C library refuses a `read` or a `write`
+of more than INT_MAX bytes with EINVAL, where POSIX lets a transfer be
+short; `dlopen` of an empty name gives the program itself, which D336 keeps
+out of what a library is; the kernel writes the time left back into
+`ppoll`'s limit, which `platform/linux` declared read-only; FreeBSD's
+pseudo-terminal controller was made close-on-exec by an `fcntl` after it was
+opened, which another thread's exec could precede; and `platform/libc` gave
+Darwin's `struct stat` to whatever system no earlier branch named.
+
+**Chosen:** on Darwin and FreeBSD `read`, `write`, `read_at` and `write_at`
+ask for at most INT_MAX bytes and return short past it. `open_library` of an
+empty path is `enoent`, as every other call of the module answers one.
+`linux.poll_limit` is `no_limit | ptr mut timespec`. FreeBSD's
+`posix_openpt` is asked for O_CLOEXEC; Darwin's documents only O_RDWR and
+O_NOCTTY and keeps the `fcntl`. Each `file_status` record is chosen by its
+system and C ABI by name, and a system none names has none.
+
+**The alternatives:** bounding transfers on every system, which Linux does
+itself at a little less than 2 GiB; `no_library` for an empty path, which
+would leave `library_failure` with no words of the loader's; a separate
+writable limit beside a read-only one; and keeping the `else`, which
+compiles another system's record for a system nobody has described.
+
+**Pinned by** `runtime/posix-transfer-above-int-max`, which fails on Darwin
+without the bound and was not run there natively for this decision;
+`runtime/posix-library-empty-path`; `negative/linux-ppoll-limit-is-written`;
+`abi/freebsd-pseudo-terminal-closed-on-exec`, whose C `posix_openpt` records
+its flags, written for FreeBSD and not run there natively for this decision;
+and `abi/core-io-file-identity`, which holds each record to its header.
+
+### D344 — The two account routes answer alike
+
+**The tour said** nothing of accounts, and D329 read them from
+`/etc/passwd` and `/etc/group` on a static Linux program and through the C
+library elsewhere. They answered differently for the same question: a name
+too long for the C route's room was `erange` there and `no_account` from the
+files, a missing database file was an errno from the files and `no_account`
+from the C library, and the C group lookup gave the C library only half the
+caller's buffer, so a group that fitted the buffer could be `erange`.
+
+**Chosen:** a name longer than 255 bytes, Linux's LOGIN_NAME_MAX without its
+NUL and the largest of the three systems', names no one on both routes, and
+a missing database file is `no_account`. The C group lookup gives the C
+library the caller's whole buffer, measures the copy the joined members
+need, and asks again into the part of the buffer past that copy, so a group
+is `erange` only when it and its copy together do not fit; a group that grew
+between the two lookups is `erange` too.
+
+**The alternatives:** a larger fixed room for the name, which still differs
+from a route with no limit; copying the C library's strings into the front of
+the buffer in place, which their order in the buffer, the C library's own,
+does not allow in general; and returning the members as the C library's
+table, which would give the two routes different types.
+
+**Pinned by** `runtime/posix-accounts-libc`, which finds the smallest buffer
+group zero fits and holds it to what the C library needs and the copy, and
+`runtime/posix-accounts`.
+
+### D345 — A list's storage is its module's, and the heap's free is trusted
+
+**The tour said** at [1360] that containers keep allocators out of their
+storage, and D151 made raw storage private. `vec.list`'s one field was
+public, so a program could assign a storage of its own, from
+`mem.storage_over`, behind a list's length and capacity; and the hosted
+heap's `free` read its block's header without saying that it trusted it or
+that it ignored the extent passed and a refused unmap.
+
+**Chosen:** `vec.list` is a public name for a module-internal record, so its
+field is unreachable outside `core/vec`, as `spill.list`'s storage already
+was. The heap's documentation states that `free` frees the extent its header
+holds, never reads the size passed, and is undefined for a block it did not
+give or one freed twice, as C's `free` is; and that a refused unmap keeps the
+pages, which costs memory and nothing else.
+
+**The alternatives:** checking the size passed against the header, which a
+foreign block's header cannot be trusted to answer either; a trap on a
+refused unmap, which turns a leak into an ending; and keeping the field
+public for inspection, which `vec.length` and `vec.capacity` already give.
+
+**Pinned by** `negative/core-vec-used-frame`, whose list over the caller's
+storage once lent a view of frame origin and is now refused as it is built.
+
+### D346 — Each system's C library in its own file, each facility's calls in its own
+
+**The tour said** at [1590] that the platform's loader owns linkage, and
+nothing of how the platform modules are laid out. D297 wrote
+`platform/posix` twice beneath one file, once over Linux's calls in
+`linux.ldn` and once over the C library in `libc.ldn`, so a facility's
+Landin layer and the calls beneath it were three files apart, and
+`libc.ldn` read as the C library route when it was chosen by
+`compiler.os == darwin or freebsd` and never used under Linux's
+`--link=libc`, where `accounts` takes the C route by `compiler.c_runtime`.
+`platform/libc` declared what every system has beside what only
+Darwin and FreeBSD have, so a reader could not tell from it what Linux
+lacks, and still declared `malloc`, `free` and their `allocation`
+union, which nothing has called since D300.
+
+**Chosen:** `platform/posix` is one file per facility, `posix.ldn` for the
+descriptor, paths and the module's shared helpers, then `files.ldn`,
+`directories.ldn`, `memory.ldn`, `time.ldn`, `random.ldn`, `poll.ldn`,
+`processes.ldn`, `sockets.ldn`, `terminals.ldn`, `accounts.ldn`,
+`libraries.ldn` and `errno.ldn`. Each holds its facility's interface and,
+beneath it, the system's calls in one `fixed if compiler.os == linux` and
+one `elsif compiler.os == darwin or compiler.os == freebsd`, so each route
+is named by what selects it and lies beside what it serves. `platform/libc`
+keeps in `libc.ldn` what every system declares alike, and gives Linux,
+Darwin and FreeBSD each a file of its own, `linux.ldn`, `darwin.ldn` and
+`freebsd.ldn`, wholly under its own `fixed if`; a declaration two systems
+share is written in each. `malloc`, `free`, `allocation` and
+`no_allocation` are removed. The vDSO, which only a caller reading a clock
+needs, is `platform/linux/vdso`, a submodule as `platform/linux/numbers` is,
+and its names lose the prefix the module now gives them:
+`vdso.kernel_image`, `vdso.find`, `vdso.symbol`, `vdso.clock_symbol`,
+`vdso.clock_version`, `vdso.clock_gettime`, `vdso.largest` and
+`vdso.at_sysinfo_ehdr`. No other public name changes.
+
+**The alternatives:** renaming `libc.ldn` to `bsd.ldn` or
+`darwin_freebsd.ldn` and keeping the two route files, which names the
+route but keeps every facility in three places; one file per system in
+`platform/posix` too, which is the layout this replaces; marking each
+declaration of `platform/libc` with the systems it exists on, which
+leaves a reader to collect them; and keeping the unused
+allocation declarations for a program that wants C's heap, which may
+declare them itself.
+
+**Pinned by** every hosted runtime and ABI fixture, which compile the
+whole of `platform/posix` on each target, `abi/core-io-file-identity`, which
+holds each system's `stat` record to its header, and the debugger
+workloads' source inventory, which lists the files; `runtime/linux-vdso` and
+`runtime/clock-system-libc` for the vDSO's submodule.
+
+### D347 — The hosted provider is `hosted/system`, its handle a `system.host`
+
+**The tour said** at [1680] that the hosted root mints the program's
+capabilities, and nothing of the module's name. `hosted/io` had the last
+segment of `core/io`, so each of its 62 importers wrote `import hosted/io as
+hosted`; its type and the heap's were both `system`, the I/O
+handle's constructor and the heap's were both `host()`, where D269 makes a
+principal type with `new`, and `host` was also the I/O handle's conventional
+parameter name.
+
+**Chosen:** the module is `hosted/system`, imported with no alias. Its
+handle's type is `system.host`, made by `system.new()`, or from a
+`system.space` by `system.over`; `system.last_errno`, `last_signal`,
+`descriptor_of`, `file_of` and `socket_of` keep their names. The heap's
+type is `heap.heap`, made by `heap.new()`. So `system` names the module,
+`host` the I/O handle and its parameter, and `heap` the allocator, each one
+thing in both layers. The module's files mirror `core/io`'s: `system.ldn`
+for the four concepts of `world` and the environment, `directories.ldn`,
+`file_system.ldn` with terminals as `core/io` keeps them, `time.ldn`,
+`entropy.ldn`, `network.ldn` and `programs.ldn`.
+
+**The alternatives:** `hosted/os`, imported as `os`, which is shorter and
+reads as the operating system rather than as this provider of it;
+`hosted/host`, whose module name would collide with every `host` binding;
+`hosted/posix`, which says what it is written over rather than what it
+provides; keeping `host()` beside `new`, which D269 declined for every other
+module; and naming the heap's type `heap.system`, which keeps one word for
+two things.
+
+**Pinned by** every hosted runtime, ABI and derived fixture, which import
+it; `runtime/first-program`; and
+`runtime/derived-hosted-memory`, whose entry mints both handles.
+
+### D348 — `core/io` splits into `core/time`, `core/net` and `core/io/fake`
+
+**The tour said** at [1660] that I/O is a capability passed as an argument,
+and nothing of how its module grows. Each hosted item had added a file to
+`core/io`, which reached 193 public names: the clocks and spans of D315 and
+D316, the network and its addresses of D319 and D320, and the fakes, each
+named its own way, `memory_volume`, `memory_network`, `manual_clock`,
+`scripted_entropy` and `memory_terminals`, beside the concepts they fake.
+
+**Chosen:** `core/time` holds `duration`, `instant`, `wall_time`, the
+`clock` and `wall_clock` concepts and their arithmetic; `core/net` holds the
+`network` concept, which refines `io.reader` and `io.writer`, its addresses
+and its atoms; `core/io` keeps the files, the process, the environment,
+directories, programs, the file system, terminals, entropy, the buffered
+writer and the line reader, and its status stamps a `time.wall_time`. The
+fakes of a system are the submodule `core/io/fake`, named one way: a
+provider type for what it fakes, its caller-owned state that type with
+`_space`, and its constructor that type with `_over`: `fake.volume`,
+`volume_space`, `volume_over`; `fake.network`, `network_space`,
+`network_over`; `fake.clock`, `clock_space`, `clock_over`; `fake.entropy`,
+`entropy_space`, `entropy_over`; and `fake.terminals` with `terminals_over`.
+The caller's records keep their provider's name, `fake.volume_node`,
+`fake.network_socket` and `fake.screen`, since a record named `socket`
+would take a name every routine gives a parameter. The memory world,
+`io.memory`, stays in `core/io` with its environment and its scripted
+programs, which write into the world's own streams: it is firmware's own
+world rather than a fake of a system's, and it is what makes `io.writer_of`,
+an erased `any world`, dispatchable in every program that imports
+`core/io`, since a closed program refuses an erased call no conformance can
+answer (D145). A dependency runs one way: `core/net` and `core/io/fake`
+import `core/io`, and `core/io` imports `core/time`. No behaviour changes.
+
+**The alternatives:** keeping one module, which keeps a reader of the
+reference wading through every fake to find a concept; a module per
+concept, which makes the four concepts of `world` four imports; each fake
+beside what it fakes, the manual clock in `core/time`, which puts test
+providers into every program that reads the time; `core/test` for the
+fakes, a name any program's own tests would want; moving the memory world
+with the fakes, which leaves `writer_of` refused wherever no world is
+declared; and naming each record for what it is, `fake.socket`, which
+collides as said.
+
+**Pinned by** every consumer of the moved names, among them
+`runtime/volume-memory`, `runtime/network-echo-memory`,
+`runtime/clock-manual`, `runtime/random-sequence` and
+`runtime/run-shell-memory`, and the firmware lane's
+`runtime/network-addresses-firmware` and `runtime/file-system-firmware`.
+
+### D349 — The M profile's operations are `platform/cortex_m`
+
+**The tour said** at [1590] and [1630] that firmware reaches its processor
+through the platform, and D267 named the module `platform/cpu`. Its every
+operation, PRIMASK, WFI and the M profile's barriers, is the Cortex-M
+profile's, so a reader took `cpu` for a processor-neutral interface that an
+x86-64 or an RV64 target would also have.
+
+**Chosen:** the module is `platform/cortex_m`, imported as `cortex_m`, with
+its routines unchanged: `cortex_m.disable_interrupts`,
+`restore_interrupts`, `interrupt_mask`, `wait_for_interrupt`,
+`device_barrier`, `completion_barrier` and `compiler_barrier`. Namespace
+availability refuses it off an M-profile target by its new name, and a
+module for another profile is named for that profile in turn.
+
+**The alternatives:** `platform/arm`, which would also name the A profile's
+different interrupt model; `platform/armv6m`, which names one of the three
+feature levels it admits; and keeping `platform/cpu` with documentation,
+which leaves the name to say the wrong thing.
+
+**Pinned by** `negative/library-platform-cortex-m-hosted`, the firmware
+lane's `core-cpu.ldn` probe, the generated device consumers and the derived
+driver.
+
+### D350 — A closed set the library carries is an atom set, and a counter a plural noun
+
+**The tour said** at [0350] that an atom is a named value, and D272 made a
+closed set of named values in the library an atom set. Some had stayed
+integers and bools: the memory network's socket records carried their role
+as a number from 0 to 3; a scripted program said how it ended in a
+`code` and a `signalled` bool beside it; `child_read` said which stream it
+read in an `errors` bool; the text builder said whose its buffer was in an
+`owned` bool; and `io.status_of` and `io.synchronize` took a bare `true` or
+`false`, which a call site cannot be read by. D274 made a provider's
+counters plural nouns, and the memory world's `read_calls`, `write_calls`,
+`open_calls` and `close_calls` and the memory network's `lost` were not.
+
+**Chosen:** the memory network's role is the private atom set
+`free_slot | listening_slot | connection_slot | datagram_slot`; a scripted
+program holds an `io.ending`, `(how: io.exited(code: 3))` or `(how:
+io.signalled)`, as `wait` reports it; a `child_read` has a `stream`,
+`io.child_output` or `io.child_errors`, of the type `io.child_stream`; the
+builder's buffer is `not_allocated` or `allocated`; `io.status_of` takes an
+`io.link_handling`, `io.following` or `io.not_following`, and
+`io.synchronize` an `io.synchronizing`, `io.data_and_status` or
+`io.data_only`. The counters are `reads`, `writes`, `opens`, `closes` and
+`losses`. `platform/posix` keeps POSIX's own flags, where a bool is the
+system's interface. The region's ledger of capacity zero, which grows, and
+the pool's vacant slot, a `size` of the largest `usize`, keep their
+encodings for now, since each is a fixed parameter or a record callers
+initialise, and their change waits for the reading of those modules.
+
+**The alternatives:** named constants beside the bools, which leave the
+call site as unreadable as before; a variant for the builder carrying its
+allocator, which the builder's `growth` already holds; and renaming the
+counters to `*_count`, which D274 declined.
+
+**Pinned by** `runtime/network-echo-memory`, `runtime/run-shell-memory`,
+`runtime/run-memory-firmware`, `runtime/run-shell`,
+`runtime/run-large-output`, `runtime/core-text-builder`,
+`runtime/volume-memory`, `runtime/core-io-file-system` and
+`runtime/core-io-line-reader`.
+
+### D351 — A byte is written as its character
+
+**The tour said** at [0250] that a character literal is a `u32` codepoint,
+and D163 kept its type fixed rather than taken from context, so the corpus
+wrote a byte as its number: `append_byte(line, 32)` for a space,
+`align_right(line, start, 2, 48)` for a zero fill and `path[at] == 47` for
+a slash.
+
+**Chosen:** a byte that is a character is written `u8('c')`, D199's checked
+conversion of the character literal, which a constant folds; `u8('\n')`
+for a line end. The library and the corpus write every byte they compare
+or append as text so, and keep numbers where a byte is a number: a record's
+kind byte, an octet of an address, NUL as `0`. D163 is unchanged.
+
+**The alternatives:** a character literal that takes `u8` from context when
+its codepoint is below 128, which reopens D163's fixed type and makes
+`'é'` an error in one context and a value in another; a `b'c'` byte
+literal, which is new syntax for what a conversion already says; and named
+constants such as `text.space`, which a reader has to look up.
+
+**Pinned by** `runtime/core-text-builder`, `runtime/core-text-format`,
+`runtime/fizzbuzz`, `runtime/line-numbers` and every library module that
+compares a byte with a character, through the corpus that runs them.
+
+### D352 — Byte equality, hashing and three-way order are `core/cmp`'s
+
+**The tour said** at [1280] that evidence is declared once, and D273 made
+the comparison concepts a module of their own. Byte strings were still
+compared in two: `core/cmp` gave `[]u8` equality and hashing, while
+`core/mem` gave `compare`, its `less`, `equal` and `greater` and their
+`order`, and `[]u8` had no `ordered` evidence, so a sort of byte strings
+declared its own.
+
+**Chosen:** `cmp.compare`, `cmp.less`, `cmp.equal`, `cmp.greater` and
+`cmp.order` replace `core/mem`'s, unchanged in meaning, and `[]u8 is
+ordered` with `compare`'s `less`. `core/mem` keeps copying, filling and
+finding bytes. `core/cmp` still imports nothing, so every module can
+import it.
+
+**The alternatives:** keeping `mem.compare` and adding only the evidence,
+which leaves one facility in two places; `compare` returning an `i32` as
+`memcmp` does, which D272 declined for every closed set; and ordering bytes
+as `utf8` is ordered, by codepoint, which for valid UTF-8 is the same order
+and for a host string is not defined.
+
+**Pinned by** `runtime/cmp-bytes-ordered`, on Cortex-M0 too,
+`runtime/core-mem-blocks`, `runtime/tree-copy`,
+`runtime/directory-listing` and `runtime/library-builtin-evidence`.
+
+### D353 — The hosted provider maps a path's errno, opens and closes once
+
+**The tour said** nothing of the providers' insides, and D297 wrote the
+hosted provider once over `platform/posix`. Inside it, each call on a path
+wrote the same four lines that keep an errno and map it to `not_found`,
+`no_access` or `io_failed`, twelve times; `open_read`, `open_write`,
+`open_file` and `make_temporary` each had a loop retrying `open_at` on
+EINTR; and `platform/posix` closed a descriptor it did not report three
+times over, as `closed`, `forgotten` and `forget`.
+
+**Chosen:** `hosted/system` has one `path_failure`, which keeps the errno
+and fails as the concepts say of a path, and one `open`, which takes the
+options and the creation mode, retries EINTR and gives `already_exists`
+for a taken exclusive name; every open of every concept and
+`make_temporary` call it, the latter now retrying an interrupted attempt in
+place rather than spending one of its tries. `platform/posix` has one
+`forgotten`. No interface or behaviour changes, but that interrupted
+temporary attempt. `platform/posix`'s `/etc/passwd` and `/etc/group`
+parsers stay public for now: `runtime/posix-accounts` holds every
+malformed-line refusal through them, and the static route reads the
+system's own files, which a test cannot replace.
+
+**The alternatives:** a table of errno to atom shared by every module,
+which the concepts' different atom sets do not fit; leaving the copies,
+which drift, as the temporary file's retry had; and making the parsers
+private now, which would leave their refusals unpinned until a database
+path can be given to the static route.
+
+**Pinned by** `runtime/core-io-file-system`, `runtime/hosted-io-not-a-directory`,
+`runtime/directory-through-file`, `runtime/r440-errno-detail`,
+`runtime/posix-accounts` and `runtime/posix-terminals`.
+
+### D354 — The first reading's open points, each changed or kept for a reason
+
+**The tour said** nothing of these interfaces; the first whole reading of
+the library left fourteen points no consumer had asked for, and the register asked
+that each be changed or kept with its reason when the library was next read
+whole.
+
+**Chosen:** changed: a tree node says what it is, `tree.kind` of
+`tree.leaf_node | tree.branch_node`, how many leaves it counts,
+`tree.leaves`, and which nodes are its children, `tree.children`, and the
+module keeps its name, since an append-only tree of named nodes is a tree;
+a spill list has `spill.clear`, `spill.last` and `spill.reserve`, and its
+storage is the module's own as `vec.list`'s is (D345); a bounded
+diagnostic entry lends its whole message, `diag.message`; an arena gives
+every allocation back at once, `mem.arena_reset`; a region grows the block
+its newest record holds in place through its parent, and `mem.grow` makes
+the allocator's `grow` callable as `mem.resize` makes `resize`; the memory
+file's `opened` and `writing` are one `state`, `io.closed_slot`,
+`io.reading_slot` or `io.writing_slot`; `host()` is `new()` (D347); and
+byte strings are ordered (D352). Kept, each for its reason: `io.argument_at`
+takes the handle by value as `out` and `err` do since D288, so that point
+no longer stands; the map's representation is the module's own, a public
+alias of a private record, with `map.removed` counting the dead entries a
+caller read from it before, and `map.cursor`'s slot private too; a private
+alias of a type whose formal carries a constraint first stopped the
+checker with an internal defect, since a template is checked once with
+its formals symbolic and the constraint was asked of the symbolic type,
+which is now left to each concrete application; the compositions
+`runtime/r420-map-operations` built below the map, a seven-slot table and
+forged buckets, cannot be made and are gone with the public composition; a saved
+PRIMASK stays a `u32`, since every bit but one is reserved and the value is
+only ever restored or counted, which a distinct type would make longer to
+write and no safer; `text.nowhere` waits for the text cursor's retirement,
+which removes it; `pool.over`'s misconfiguration, `grow_storage`'s three
+extents and the fault injector's refusal to grow in place wait for the
+readings of those modules, the last because a dozen fixtures pin which
+path a container takes through an injector by its counters.
+
+**The alternatives:** a tree module named for its use, `core/outline` or
+`core/forest`, or moved out of `core` into the derived program that is its
+one consumer, both of which Jan may prefer; returning a node's children as
+a slice of nodes, which would lend from the tree's storage across a push;
+an arena that resets by giving each block back, which costs a walk the
+bump allocator does not need; and changing every point at once, which a
+compiler defect and the injector's oracles stand in the way of.
+
+**Pinned by** `runtime/private-alias-of-constrained-template`,
+`negative/private-alias-constraint-held-at-use`,
+`runtime/core-tree-node-queries`, `runtime/library-second-reading`,
+`runtime/library-second-reading-spill`, `runtime/r420-map-operations`,
+`runtime/r420-memory-world`, `runtime/core-io-identity-memory` and
+`runtime/cmp-bytes-ordered`.
+
+### D355 — One decimal writer, one home for parsing, and formatting into a buffered writer
+
+**The tour said** at [0600] that text is built and read back by the library,
+and D286 and D305 gave it two decimal writers: the slice writers
+`text.write_byte`, `write_u32`, `write_u64` and `write_usize` with
+`text.prefix`, writing at a `used` count, and the builder's appends, written
+over them. Parsing was in two files of `core/text`, unsigned in one and the
+rest in the other, `core/net` scanned its addresses' decimal and
+hexadecimal digits with copies of its own, and `text.format` wrote only into
+a builder, so a program writing a formatted line through a buffered writer
+built it in a buffer and copied it again.
+
+**Chosen:** the slice writers and `text.prefix` are retired; the builder's
+`append_u32`, `append_u64` and `append_usize` are the library's one decimal
+writer, private at each width so that a 32-bit image divides in 32 bits, as
+D286 chose. Every `parse_*` and `to_u32` is `numbers.ldn`'s, written over one
+scanner per width, and `core/net` reads an address's parts with
+`text.parse_u8` and `text.parse_hex_u32`. `io.format(writer, template,
+values)` formats straight into a buffered writer's buffer: into the room after
+what waits, after a flush when the text does not fit there, and refused whole
+with `text.no_space` when it is larger than the buffer; the builder and the
+buffered writer are the byte sinks a template is formatted into.
+`core/text`'s cursor, `text.position`, stays, and with it `text.nowhere`:
+D182 makes `utf8[position]` the language's direct byte-offset index, which
+reads that exact type, so retiring the cursor is a language change and is
+left to one.
+
+**The alternatives:** keeping the slice writers beside the builder, which
+keeps two ways to write a number; one `u64` writer for every width, which
+D286 declined for 32-bit images; a `sink` concept that `formattable` writes
+through, which changes every conformance and whose failures `core/text`
+cannot name, since `core/io` imports it; and a builder over a copy, which is
+what this replaces.
+
+**Pinned by** `runtime/core-text-decimal-widths`,
+`runtime/core-text-runtime-helpers`, `runtime/buffered-writer-format`,
+`runtime/network-addresses`, `runtime/library-shared-net` and
+`negative/core-text-prefix-frame`, now over a builder's storage.
+
+### D356 — Storage is reserved once, and an injector grows in place
+
+**The tour said** at [1360] that allocators are passed to containers, and
+D151 and D152 gave raw storage its states and a provider in-place growth.
+`core/vec` and `core/map` each wrote the extent check and the release of a
+storage, and `core/vec` the reserve, with `mem.grow_storage` public and
+trusting three extents its caller passed. The fault injector refused every
+in-place growth, so a container tested through one never took that path,
+and a region over capacity zero grew where a positive capacity bounded it,
+with nothing at the call site to say so.
+
+**Chosen:** `mem.storage_extent`, `mem.reserve_storage` and
+`mem.release_storage` are the containers' one way of taking and giving back
+slots: a reserve grows the block in place where the provider does and moves
+it otherwise, published last; `grow_storage` is private, so no caller passes
+its extents. The injector delegates `grow`, spending its budget on the
+attempt, and counts a growth in place as `fault.growths`, so `successes` is
+still the blocks it gave and each is freed once; every fixture that pinned an
+injector's counters was rewritten for a growth asked before an allocation,
+holding what is the same whichever way a provider answers where the answer
+depends on the system's pages. `region.growing_space` names the growing
+ledger, which capacity zero still is, since a bounded ledger of no records
+could hold nothing. Two parts were stopped on inspection. The arena stays in
+`core/mem`: as a module of its own it would leave every program that
+imports `core/text`, whose growing builder is an `any mem.allocator`, with no
+allocator conformance, which D145 refuses (L0342) though no such value
+could exist, so moving it waits on that rule. The pool's vacant slot stays
+the largest `usize`: `runtime/r420-pool-provider` pins the slot's sixteen
+bytes against the padded form with a flag, and callers declare the slots
+`zeroed`, which no atom set can be (L0328).
+
+**The alternatives:** a container-private reserve in each module, which is
+what this replaces; an injector that grows without spending its budget,
+which lets a test's permits be spent by a path it did not count; and
+`region.space(0)` left unnamed.
+
+**Pinned by** `runtime/r420-vec-large-list`, `runtime/core-tree-indices`,
+`runtime/core-tree-provider-failures`, `runtime/core-tree-count-overflow`,
+`runtime/r420-reference-provider-matrix`, `runtime/r420-failing-providers`,
+`runtime/r420-small-vector-providers`, `runtime/r420-stateful-filter-list`,
+`runtime/r420-tree-real-exhaustion`, `runtime/core-vec-pointer-storage`,
+`runtime/derived-hosted-memory` and `runtime/library-second-reading`.
+
+### D357 — `file_system` refines `files`, and a member for another system says so
+
+**The tour said** at [1290] that a concept may refine another, and D325 made
+`file_system` a concept beside `files`, so a routine that asked for it could
+open a file and not close it. A call `platform/linux` declares only on Linux,
+written for Darwin, was L0201's "has no member", which reads as a
+misspelling rather than as a call the system does not have. A
+public alias of a private record whose formal is constrained, the private
+map of D354, stopped the checker with an internal defect.
+
+**Chosen:** `file_system` refines `files`, so its providers open with
+`open_read`, `open_write` and `open_file` and close each with `files`'
+`close`. L0201 for a member the module declares only in a `fixed if` arm
+this target does not select says that the module declares it only for
+another target. A template is checked once with its type formals symbolic,
+and a constraint asked of a symbolic formal inside an alias's body is now
+left to the alias's concrete applications, which normalize the body again
+and refuse a type without the evidence there. The memory world is not
+rebuilt over the volume: the volume's conformance tables link every entry
+of five concepts, about 100 KiB, which a firmware image over the memory
+world, the world it is kept in `core/io` for, cannot hold in its 32 KiB.
+
+**The alternatives:** a separate open and close in `file_system`, which
+gives a file two ways to close; a new diagnostic code for an absent member
+of another system, which says no more than L0201's note can; deciding the
+symbolic constraint by the outer formal's own, which every alias would have
+to repeat; and building the memory world over the volume for hosted tests
+alone, which gives firmware and hosts two memory worlds.
+
+**Pinned by** `runtime/volume-links-as-systems-follow`,
+`negative/module-member-for-another-target`,
+`runtime/private-alias-of-constrained-template` and
+`negative/private-alias-constraint-held-at-use`.

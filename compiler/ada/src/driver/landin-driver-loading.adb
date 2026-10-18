@@ -617,6 +617,52 @@ package body Landin.Driver.Loading is
          end loop;
          return Landin.Diagnostics.No_Fixes;
       end Modules_Near;
+
+      --  D366: a library module taken from the library while a project
+      --  root holds a directory of the same path, which D275 does not read.
+      --  The program is compiled all the same; the warning says which one
+      --  it was compiled against and how to choose the other.
+      procedure Note_Shadowed_Root
+        (Logical : String; Selected_Root : Natural;
+         Source : Landin.Source.Source_Id; Where : Landin.Source.Span);
+
+      procedure Note_Shadowed_Root
+        (Logical : String; Selected_Root : Natural;
+         Source : Landin.Source.Source_Id; Where : Landin.Source.Span) is
+      begin
+         if Library_At = 0 or else Library_At <= Named_Roots
+           or else Selected_Root /= Library_At
+           or else not Landin.Driver.Library.Is_Library_Import (Logical)
+         then
+            return;
+         end if;
+         for Index in 1 .. Named_Roots loop
+            if Host.Is_Directory
+              (Joined_Path (Searched.Element (Index), Logical))
+            then
+               declare
+                  Found : Landin.Diagnostics.Diagnostic_List;
+               begin
+                  Module_Diagnostics.Report
+                    (Item    => Module_Diagnostics.Root_Holds_Library_Module,
+                     Source  => Source,
+                     Where   => Where,
+                     Message => "`" & Logical & "` is read from refine's"
+                       & " library, " & Library & ", and not from "
+                       & Joined_Path (Searched.Element (Index), Logical),
+                     Note    => "D275: core, hosted and platform come from"
+                       & " the library alone; to compile against "
+                       & Searched.Element (Index) & "'s, name it with"
+                       & " --library=" & Searched.Element (Index),
+                     Into    => Found);
+                  Landin.Stages.Report
+                    (Context, Landin.Diagnostics.Get (Found, 1));
+               end;
+               return;
+            end if;
+         end loop;
+      end Note_Shadowed_Root;
+
       Graph : constant not null access Landin.Modules.Table :=
         Landin.Stages.Modules (Context);
       Queue : Module_Vectors.Vector;
@@ -851,21 +897,51 @@ package body Landin.Driver.Loading is
                             (Graph.all, Logical);
                      begin
                         --  Named files look for the library and nothing
-                        --  else, and leave every refusal to the stage that
-                        --  makes it when there is no library: a builtin or
-                        --  an unavailable import to configuration, and any
-                        --  other to resolution (D262).
+                        --  else.  A builtin or an unavailable import is
+                        --  left to configuration.  Any other import is
+                        --  D262's refusal, made here rather than by
+                        --  resolution so that a misspelt library
+                        --  namespace is offered the near one, as it is
+                        --  under --root (D363).
                         if Named_Files
                           and then
                             (Landin.Configuration.Is_Builtin_Import
                                (Landin.Stages.Identities (Context).all,
                                 Tree.all, Import_Node)
                              or else not Landin.Modules.Availability.Permitted
-                               (Logical, Landin.Stages.Target (Context))
-                             or else not Landin.Driver.Library
-                               .Is_Library_Import (Logical))
+                               (Logical, Landin.Stages.Target (Context)))
                         then
                            Target := Landin.Modules.No_Module;
+                        elsif Named_Files
+                          and then Logical in "compiler" | "assembler"
+                            | "linker"
+                        then
+                           --  D202's toolchain, which needs no root; its
+                           --  uses are resolution's.
+                           Target := Landin.Modules.No_Module;
+                        elsif Named_Files
+                          and then not Landin.Driver.Library
+                            .Is_Library_Import (Logical)
+                        then
+                           Target := Landin.Modules.No_Module;
+                           declare
+                              Found : Landin.Diagnostics.Diagnostic_List;
+                           begin
+                              Module_Diagnostics.Report
+                                (Item    => Module_Diagnostics
+                                   .Module_Not_Found,
+                                 Source  => Source_Id,
+                                 Where   => Landin.Syntax.Where
+                                   (Tree.all, Import_Node),
+                                 Message => Module_Diagnostics
+                                   .Rootless_Message (Logical),
+                                 Note    => Module_Diagnostics.Rootless_Note,
+                                 Fixes   => Modules_Near
+                                   (Tree.all, Import_Node),
+                                 Into    => Found);
+                              Landin.Stages.Report
+                                (Context, Landin.Diagnostics.Get (Found, 1));
+                           end;
 
                         --  Rooted discovery refuses builtins before
                         --  any host lookup. Configuration shares this
@@ -944,6 +1020,37 @@ package body Landin.Driver.Loading is
                                       (Context,
                                        Landin.Diagnostics.Get (Found, 1));
                                  end;
+                              elsif Directory_Path = ""
+                                and then Library_At = 0
+                                and then Landin.Driver.Library
+                                  .Is_Library_Import (Logical)
+                              then
+                                 --  D363: the library holds this, and
+                                 --  none was found; say where refine
+                                 --  looked and how to name one.
+                                 declare
+                                    Found : Landin.Diagnostics
+                                      .Diagnostic_List;
+                                 begin
+                                    Module_Diagnostics.Report
+                                      (Item    => Module_Diagnostics
+                                         .Module_Not_Found,
+                                       Source  => Source_Id,
+                                       Where   => Landin.Syntax.Where
+                                         (Tree.all, Import_Node),
+                                       Message => "module `" & Logical
+                                         & "` is in refine's library, and"
+                                         & " no library was found: "
+                                         & Landin.Driver.Library.Looked_In
+                                             (Host),
+                                       Note    => "D275: name the directory"
+                                         & " holding core, hosted and"
+                                         & " platform with --library=DIR",
+                                       Into    => Found);
+                                    Landin.Stages.Report
+                                      (Context,
+                                       Landin.Diagnostics.Get (Found, 1));
+                                 end;
                               elsif Directory_Path = "" then
                                  if Missing_Directories /= null then
                                     for Index in First_Root (Logical)
@@ -991,6 +1098,11 @@ package body Landin.Driver.Loading is
                                           Positive (Selected_Root));
                                        Remember_Directory (Target, Identity);
                                        Queue.Append (Target);
+                                       Note_Shadowed_Root
+                                         (Logical, Selected_Root,
+                                          Source_Id,
+                                          Landin.Syntax.Where
+                                            (Tree.all, Import_Node));
                                     end if;
                                  end;
                               end if;

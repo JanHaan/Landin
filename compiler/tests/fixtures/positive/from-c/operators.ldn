@@ -1,0 +1,15 @@
+--- Where the word that starts at `start` ends.
+word_end: (line: []u8, start: usize) -> (i: usize) =
+    i = start
+    while i < lenof line and line[i] <> u8(' ') do
+        inc i
+    end while
+end word_end
+
+--- A hash that wraps on purpose, which the operators say.
+hash_bytes: (bytes: []u8) -> (h: u32) =
+    h = 0
+    for byte in bytes do
+        h = h *% 31 +% u32(byte)
+    end for
+end hash_bytes

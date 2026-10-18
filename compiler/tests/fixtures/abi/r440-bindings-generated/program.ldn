@@ -2,9 +2,10 @@
 -- The declarations and type dependencies in bindings.ldn came only from
 -- r440-bindings.h through Clang's JSON AST.
 
-import platform/c
+import core/arena
 import core/fault
 import core/mem
+import platform/c
 
 no_callback_storage: atom
 callback_storage: type = no_callback_storage | ptr mut u8
@@ -119,8 +120,8 @@ public extern(c) landin_bindings_check: () -> (result: c.c_int) =
     --  The generated cell can live in the same bounded, failing allocator
     --  used for ordinary Landin storage. No C heap allocation is involved.
     mut callback_bytes: [64]u8 = zeroed
-    mut backing_space: mem.arena_space = zeroed
-    callback_backing := mem.arena_over_unchecked(backing_space,
+    mut backing_space: arena.space = zeroed
+    callback_backing := arena.over_unchecked(backing_space,
                                                  addr callback_bytes[0], 64)
     mut arena_space: fault.space = zeroed
     callback_arena := fault.over(arena_space, callback_backing, usize(1))

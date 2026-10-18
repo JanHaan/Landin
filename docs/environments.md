@@ -35,12 +35,16 @@ from the locked 14.4 image and executes them, amd64 under KVM and arm64
 under emulation; the evidence records the actual guest version and CPU
 probes.
 
-RV64 Linux LP64D is cross-emitted on the supported Linux compiler host and
-executed on the RISE service's physical runners with the sole label
-`ubuntu-24.04-riscv`. Separate recurring runtime, native GDB, C ABI and
-ISA-level verdicts retain hardware identity and transcripts. Both emission
-and execution are suspended from the gate until further notice. See the
-[RV64 evidence guide](../compiler/tests/rv64/README.md).
+RV64 Linux LP64D runs in the gate's `rv64-qemu` jobs: the release
+compiler's whole test program with `linux-rv64` as its lane on
+`ubuntu-24.04`, linked by Ubuntu's riscv64 cross packages and run under
+QEMU's user emulation, the emulator's own failures listed in
+`compiler/tests/cross-lanes.json`. That is evidence about the emitted code,
+none about RV64 hardware. Its physical lanes, cross-emitted for the RISE
+service's runners with the sole label `ubuntu-24.04-riscv`, with separate
+recurring runtime, native GDB, C ABI and ISA-level verdicts that retain
+hardware identity and transcripts, are suspended from the gate until they
+are dependable. See the [RV64 evidence guide](../compiler/tests/rv64/README.md).
 
 ## GitHub Actions runners
 
@@ -91,7 +95,7 @@ See the [FreeBSD VMs](../environments/freebsd/README.md) for the guests.
 | exact-revision Darwin acceptance | verified Mac evidence matched Linux before approval | retired |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | Apple Container, `linux/arm64` on Apple silicon | Linux arm64 work before a push: the pinned aarch64 toolchain runs natively, with no emulation, in a Debian container | working |
-| QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain | working |
+| QEMU user emulation on Linux x86-64 | a cross lane for another Linux architecture, with a cross driver: evidence about the emitted code, none about the pinned toolchain; `nix develop` provides it, and the gate's `rv64-qemu` jobs run RV64's | working |
 | FreeBSD amd64 and arm64 system VMs on Linux | independent runtime, native guest LLDB and C ABI gate lanes with checked CPU levels | working |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
@@ -372,6 +376,20 @@ no failures — `runtime fixtures execute` among them, which is the case that
 reported `cannot find Scrt1.o` and the reason any of this was looked at.
 That is a result for this shell and for nothing else: the table above is
 still what the three environments say.
+
+On Linux the shell is also the cross lane, so another Linux target's corpus
+runs from it with nothing found by hand: QEMU's user emulation,
+`qemu-aarch64` and `qemu-riscv64`; each other Linux target's cross driver
+and binutils, from the same package set, under the triplet names `refine`
+asks for — `aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc` and on an
+arm64 host `x86_64-pc-linux-gnu-gcc` — each reaching that glibc's static
+maths archives; and the package set's multi-target GDB as `gdb-multiarch`,
+since the pinned GNAT's own `gdb` comes first on `PATH` and reads only its
+own architecture. `environments/pins.sh` records the QEMU and cross GCC
+versions `flake.lock` gives, and the shell refuses to build from a lock
+that gives others. `./scripts/debug.sh --target=linux-arm64` and the
+commands in [the test guide's lanes](../compiler/tests/README.md#lanes) run
+in it as written.
 
 The static-library directive's fixture also needs nixpkgs' separate static glibc
 output. The Linux shell includes it as a library input so an explicit

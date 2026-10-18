@@ -164,6 +164,12 @@ def read_items(text, source):
                 signature = '\n'.join(lines[i:j+1])
                 kind = 'concept' if block[1] == 'concept' else 'type'
             else:
+                continued = (code.rstrip().endswith('=') and i + 1 < len(codes)
+                             and codes[i+1].startswith(prefix + '    ')
+                             and codes[i+1].strip())
+                if continued:
+                    # An alias whose right side the layout put on the next line.
+                    code = code.rstrip() + ' ' + codes[i+1].strip()
                 if '=' not in code or not code.split('=', 1)[1].strip():
                     raise ValueError(f'{source}:{i+1}: unsupported type alias')
                 rhs = code.split('=', 1)[1].strip()
@@ -172,7 +178,7 @@ def read_items(text, source):
                         or rhs.count('(') != rhs.count(')')
                         or rhs.count('[') != rhs.count(']')):
                     raise ValueError(f'{source}:{i+1}: unsupported multiline type')
-                signature = lines[i]
+                signature = '\n'.join(lines[i:i+2]) if continued else lines[i]
                 kind = 'type'
         elif after == 'atom':
             signature, kind = lines[i], 'atom'

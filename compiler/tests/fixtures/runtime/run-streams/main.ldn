@@ -7,11 +7,11 @@
 --  the parent's own, here the fixture's input file.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 --  Run SCRIPT in /bin/sh with STREAMS, writing GIVEN to its input when
 --  that is piped, and report the code it exited with.
-ran: (host: hosted.system, script: []u8, streams: io.child_streams,
+ran: (host: system.host, script: []u8, streams: io.child_streams,
       given: []u8) -> (code: i32) ! ... =
     arguments: [2]text.host_string = [text.host_over("-c"),
                                       text.host_over(script)]
@@ -32,12 +32,12 @@ ran: (host: hosted.system, script: []u8, streams: io.child_streams,
 end ran
 
 --  Write LINE to standard output at once, before a child writes there.
-say: (host: hosted.system, line: []u8) -> none ! ... =
+say: (host: system.host, line: []u8) -> none ! ... =
     try io.write(host, io.out(host), line)
 end say
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     piped: io.child_streams = (input: io.piped, output: io.inherited,
                                errors: io.discarded)

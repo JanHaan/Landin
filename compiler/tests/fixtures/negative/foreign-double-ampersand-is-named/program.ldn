@@ -1,0 +1,3 @@
+between: (x: i32) -> (inside: bool) =
+    inside = x > 1 && x < 5
+end between

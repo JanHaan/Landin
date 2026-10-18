@@ -1,0 +1,47 @@
+--  Terminals a test gives, the fake of `io.terminals`.
+
+import core/io
+
+--- One terminal of `terminals_over`'s fake: the file it is and its size.
+public screen: type = struct
+    stream: io.file
+    size: io.window
+end screen
+
+screens_value: type = struct
+    screens: []screen
+end screens_value
+
+--- Terminals a test gives: each `screen` is a terminal of its size, and
+--- every other file is no terminal.  A provider of `terminals`; copies
+--- share the screens.
+public terminals: type = screens_value
+
+--- Terminals over `screens`, which the handle lends; keep them alive while
+--- it is used.
+public terminals_over: (screens: []screen)
+                       -> (host: terminals from screens) =
+    host = (screens: screens)
+end terminals_over
+
+memory_is_terminal: (self: terminals, stream: io.file) -> (yes: bool) =
+    yes = false
+    for index in usize(0)..<lenof self.screens do
+        if self.screens[index].stream == stream then yes = true end if
+    end for
+end memory_is_terminal
+
+memory_window_size: (self: terminals, stream: io.file)
+                    -> (size: io.window) ! io.not_a_terminal | io.io_failed =
+    size = (rows: 0, columns: 0)
+    for index in usize(0)..<lenof self.screens do
+        if self.screens[index].stream == stream then
+            size = self.screens[index].size
+            return
+        end if
+    end for
+    fail io.not_a_terminal
+end memory_window_size
+
+terminals is io.terminals
+    (is_terminal: memory_is_terminal, window_size: memory_window_size)

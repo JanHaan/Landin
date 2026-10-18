@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/cmp gives byte strings all three comparisons, so core/sort orders []u8 values with no evidence of the program's own, as cmp.compare orders them, a proper prefix first and the first differing byte deciding as an unsigned byte
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 1280, 1290
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

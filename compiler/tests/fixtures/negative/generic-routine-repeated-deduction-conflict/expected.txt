@@ -1,10 +1,10 @@
-error[L0340]: this makes `t` `i32`, but it is already `u8`
-  --> ../tests/fixtures/negative/generic-routine-repeated-deduction-conflict/program.ldn:5:24
+error[L0340]: this makes `t` `u16`, but it is already `u8`
+  --> ../tests/fixtures/negative/generic-routine-repeated-deduction-conflict/program.ldn:6:28
   |
-5 |     code = same(small, 9)
-  |                        ^
-  --> ../tests/fixtures/negative/generic-routine-repeated-deduction-conflict/program.ldn:5:17
+6 |     code = i32(same(small, wide))
+  |                            ^^^^
+  --> ../tests/fixtures/negative/generic-routine-repeated-deduction-conflict/program.ldn:6:21
   |
-5 |     code = same(small, 9)
-  |                 ^^^^^ this decided it first
-  = note: D138: every argument that decides `t` must decide the same; an untyped literal decides `i32`, so convert it to the type meant
+6 |     code = i32(same(small, wide))
+  |                     ^^^^^ this decided it first
+  = note: D138: every argument that decides `t` must decide the same

@@ -1,0 +1,7 @@
+fn add(a: i32, b: i32) -> (r: i32) =
+    r = a + b
+end add
+
+twice: (a: i32) -> (r: i32) =
+    r = a + a
+end twice

@@ -1,7 +1,7 @@
 error[L0314]: this frame-origin reference cannot be retained beyond the call
   --> ../tests/fixtures/negative/core-mem-replace-frame-any/main.ldn:16:32
    |
-16 |     mem.replace(storage, zero, value) else (problem)
+16 |     mem.replace(storage, zero, value) else none
    |                                ^^^^^
   --> ../tests/fixtures/negative/core-mem-replace-frame-any/main.ldn:13:5
    |

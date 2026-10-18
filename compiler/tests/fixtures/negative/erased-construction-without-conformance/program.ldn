@@ -1,0 +1,20 @@
+--  D377 admits an erased call no conformance answers, because no value can
+--  reach it.  Making a value is what still needs one: `any(pointer)` of a
+--  type with no conformance of the concept is refused.
+outlet: type = concept (target: type)
+    put: (self: ptr mut target, byte: u8) -> none
+end outlet
+
+cell: type = struct
+    last: u8
+end cell
+
+send: (into: any outlet) -> none =
+    into.put(u8('x'))
+end send
+
+public main: () -> (code: i32) =
+    mut storage: cell = (last: 0)
+    send(any(addr storage))
+    code = i32(storage.last)
+end main

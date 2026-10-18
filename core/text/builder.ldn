@@ -4,15 +4,41 @@
 
 import core/mem
 
+--  Whose a builder's buffer is: the caller's, or nothing yet, or a block
+--  the builder took from its allocator and gives back at `release`.
+not_allocated: atom
+allocated: atom
+holding: type = not_allocated | allocated
+
 builder_value: type = struct
     buffer: []mut u8
     used: usize
-    owned: bool
+    held: holding
     growth: variant
         bounded |
-        grows: (memory: any mem.allocator)
+        grows: (memory: any mem.allocator, policy: any grower)
     end growth
 end builder_value
+
+--  How a builder from `growing` takes more storage.  Only `growing` builds
+--  this concept's one table, so an image whose builders are all `over` a
+--  caller's buffer links none of the growth: `room` projects `enlarge`
+--  from the table a growing builder holds, and the table, with the
+--  routines only it names, is linked only where `growing` is (D374).  A
+--  match arm calling them directly would link them into every image that
+--  appends to a builder, about 2.5 KiB of a Cortex-M0 image at none/off.
+grower: type = concept (implementation: type)
+    enlarge: (self: ptr implementation, memory: any mem.allocator,
+              buffer: []mut u8, held: holding, wanted: usize)
+             -> (result: []mut u8) ! no_space
+end grower
+
+--  The one grower, which holds nothing: the doubling is `enlarge`'s.
+doubling_value: type = struct
+    unused: u8
+end doubling_value
+
+doubling: doubling_value = (unused: 0)
 
 --- Text being built: the bytes written so far, in a buffer the caller gave
 --- `over` or in storage that `growing` takes from an allocator.  A value
@@ -25,7 +51,7 @@ public builder: type = builder_value
 --- append that does not fit reports `no_space`.  The buffer's earlier
 --- contents are overwritten as pieces are appended.
 public over: (buffer: []mut u8) -> (result: builder from buffer) =
-    result = (buffer: buffer, used: 0, owned: false, growth: bounded)
+    result = (buffer: buffer, used: 0, held: not_allocated, growth: bounded)
 end over
 
 --- An empty builder that takes its storage from `memory` as it needs it,
@@ -37,8 +63,11 @@ end over
 --- its storage.
 public growing: (memory: any mem.allocator) -> (result: builder from memory) =
     nothing: []mut u8 = []
-    result = (buffer: nothing, used: 0, owned: false,
-              growth: grows(memory: memory))
+    --  A read-only view of module storage, which no store reaches and
+    --  which outlives `memory` (D375).
+    policy: any grower = any(addr doubling)
+    result = (buffer: nothing, used: 0, held: not_allocated,
+              growth: grows(memory: memory, policy: policy))
 end growing
 
 --- The bytes written so far, lent from the builder until it is next
@@ -80,16 +109,19 @@ end truncate
 --- use of `used` first.
 public release: (inout target: builder) -> none =
     target.used = 0
-    return when not target.owned
+    return when target.held == not_allocated
     extent: usize = lenof target.buffer
     block: ptr mut u8 = addr target.buffer[0]
     match target.growth
         bounded: return
-        grows(memory): memory.free(block, extent)
+        grows(memory, policy): begin
+            _ = policy
+            memory.free(block, extent)
+        end
     end match
     nothing: []mut u8 = []
     target.buffer = nothing
-    target.owned = false
+    target.held = not_allocated
 end release
 
 --  A writable view of `size` bytes at `block`, which an allocator returned.
@@ -102,25 +134,51 @@ view: (block: ptr mut u8, size: usize) -> (result: []mut u8) =
     end unchecked
 end view
 
---  `size` bytes of storage for a growing builder: the storage it owns,
---  resized through `memory` with the bytes written kept, or a first block
---  when it owns none, since it has then written nothing.
-storage: (memory: any mem.allocator, source: builder, size: usize)
-         -> (block: ptr mut u8) ! mem.out_of_memory =
-    if source.owned then
-        held := source.buffer
-        old: ptr mut u8 = addr source.buffer[0]
-        block = try memory.resize(old, lenof held, size, 1)
+--  `size` bytes of storage for a growing builder: the `held` storage
+--  `buffer` is, resized through `memory` with the bytes written kept, or a
+--  first block when it holds none, since it has then written nothing.
+storage: (memory: any mem.allocator, buffer: []mut u8, held: holding,
+          size: usize) -> (block: ptr mut u8) ! mem.out_of_memory =
+    if held == allocated then
+        old: ptr mut u8 = addr buffer[0]
+        block = try memory.resize(old, lenof buffer, size, 1)
     else
         block = try memory.alloc(size, 1)
     end if
 end storage
 
+--  Storage of at least `wanted` bytes for a growing builder's `buffer`,
+--  doubling what it holds, with its bytes kept: `no_space` when the
+--  allocator refuses.
+doubling_enlarge: (self: ptr doubling_value, memory: any mem.allocator,
+                   buffer: []mut u8, held: holding, wanted: usize)
+                  -> (result: []mut u8) ! no_space =
+    _ = self.val.unused
+    capacity_now: usize = lenof buffer
+    maximum: usize = 0 -% 1
+    mut size: usize = 16
+    if capacity_now > maximum / 2 then
+        size = maximum
+    elsif capacity_now * 2 > size then
+        size = capacity_now * 2
+    end if
+    if size < wanted then
+        size = wanted
+    end if
+    block: ptr mut u8 = storage(memory, buffer, held, size) else (problem)
+        _ = problem
+        fail no_space
+    end
+    result = view(block, size)
+end doubling_enlarge
+
+doubling_value is grower (enlarge: doubling_enlarge)
+
 --  Make room for `extra` more bytes after the used ones.  A bounded builder
---  without the room reports `no_space`; a growing one doubles through the
---  allocator's `resize`, which grows its storage in place or moves it, and
---  reports `no_space` when the allocator refuses.  A failure changes
---  nothing.
+--  without the room reports `no_space`; a growing one asks its grower,
+--  which doubles through the allocator's `resize`, growing the storage in
+--  place or moving it, and reports `no_space` when the allocator refuses.
+--  A failure changes nothing.
 room: (inout target: builder, extra: usize) -> none ! no_space =
     capacity_now: usize = lenof target.buffer
     return when extra <= capacity_now - target.used
@@ -129,22 +187,10 @@ room: (inout target: builder, extra: usize) -> none ! no_space =
     wanted: usize = target.used + extra
     match target.growth
         bounded: fail no_space
-        grows(memory): begin
-            mut size: usize = 16
-            if capacity_now > maximum / 2 then
-                size = maximum
-            elsif capacity_now * 2 > size then
-                size = capacity_now * 2
-            end if
-            if size < wanted then
-                size = wanted
-            end if
-            block: ptr mut u8 = storage(memory, target, size) else (problem)
-                _ = problem
-                fail no_space
-            end
-            target.buffer = view(block, size)
-            target.owned = true
+        grows(memory, policy): begin
+            target.buffer = try policy.enlarge(memory, target.buffer,
+                                               target.held, wanted)
+            target.held = allocated
         end
     end match
 end room
@@ -182,38 +228,88 @@ public append_host: (inout into: builder, value: host_string)
     try append(into, value.bytes)
 end append_host
 
+--  The library's one decimal writer (D355), at each width so that a
+--  32-bit image writes a `u32` or a `usize` with 32-bit division: the
+--  digits are counted by division before the first store, so a builder
+--  without room for all of them is left as it was.
+
+decimal_u32: (inout into: builder, value: u32) -> none ! no_space =
+    mut digits: usize = 1
+    mut scan: u32 = value
+    while scan >= 10 do
+        scan /= 10
+        inc digits
+    end while
+    try room(into, digits)
+    mut remaining: u32 = value
+    mut offset: usize = digits
+    while remaining >= 10 do
+        quotient: u32 = remaining / 10
+        dec offset
+        into.buffer[into.used + offset] = u8(remaining - quotient * 10)
+                                          + u8('0')
+        remaining = quotient
+    end while
+    into.buffer[into.used] = u8(remaining) + u8('0')
+    into.used += digits
+end decimal_u32
+
+decimal_u64: (inout into: builder, value: u64) -> none ! no_space =
+    mut digits: usize = 1
+    mut scan: u64 = value
+    while scan >= 10 do
+        scan /= 10
+        inc digits
+    end while
+    try room(into, digits)
+    mut remaining: u64 = value
+    mut offset: usize = digits
+    while remaining >= 10 do
+        quotient: u64 = remaining / 10
+        dec offset
+        into.buffer[into.used + offset] = u8(remaining - quotient * 10)
+                                          + u8('0')
+        remaining = quotient
+    end while
+    into.buffer[into.used] = u8(remaining) + u8('0')
+    into.used += digits
+end decimal_u64
+
+decimal_usize: (inout into: builder, value: usize) -> none ! no_space =
+    mut digits: usize = 1
+    mut scan: usize = value
+    while scan >= 10 do
+        scan /= 10
+        inc digits
+    end while
+    try room(into, digits)
+    mut remaining: usize = value
+    mut offset: usize = digits
+    while remaining >= 10 do
+        quotient: usize = remaining / 10
+        dec offset
+        into.buffer[into.used + offset] = u8(remaining - quotient * 10)
+                                          + u8('0')
+        remaining = quotient
+    end while
+    into.buffer[into.used] = u8(remaining) + u8('0')
+    into.used += digits
+end decimal_usize
+
 --- Append a `u32` in decimal: its digits, with no sign, padding or
 --- separator.  Write `u8` and `u16` through it.
 public append_u32: (inout into: builder, value: u32) -> none ! no_space =
-    next: usize = write_u32(into.buffer, into.used, value) else (problem)
-        _ = problem
-        try room(into, 10)
-        into.used = try write_u32(into.buffer, into.used, value)
-        return
-    end
-    into.used = next
+    try decimal_u32(into, value)
 end append_u32
 
 --- Append a `u64` in decimal.
 public append_u64: (inout into: builder, value: u64) -> none ! no_space =
-    next: usize = write_u64(into.buffer, into.used, value) else (problem)
-        _ = problem
-        try room(into, 20)
-        into.used = try write_u64(into.buffer, into.used, value)
-        return
-    end
-    into.used = next
+    try decimal_u64(into, value)
 end append_u64
 
 --- Append a `usize` in decimal, at the target's width.
 public append_usize: (inout into: builder, value: usize) -> none ! no_space =
-    next: usize = write_usize(into.buffer, into.used, value) else (problem)
-        _ = problem
-        try room(into, 20)
-        into.used = try write_usize(into.buffer, into.used, value)
-        return
-    end
-    into.used = next
+    try decimal_usize(into, value)
 end append_usize
 
 --- Append an `i32` in decimal: a `-` before a negative value's digits and
@@ -224,7 +320,7 @@ public append_i32: (inout into: builder, value: i32) -> none ! no_space =
         return
     end if
     start: usize = into.used
-    try append_byte(into, 45)
+    try append_byte(into, u8('-'))
     magnitude: u32 = u32(0 - (value + 1)) + 1
     append_u32(into, magnitude) else (problem)
         into.used = start
@@ -239,7 +335,7 @@ public append_i64: (inout into: builder, value: i64) -> none ! no_space =
         return
     end if
     start: usize = into.used
-    try append_byte(into, 45)
+    try append_byte(into, u8('-'))
     magnitude: u64 = u64(0 - (value + 1)) + 1
     append_u64(into, magnitude) else (problem)
         into.used = start
@@ -254,7 +350,7 @@ public append_isize: (inout into: builder, value: isize) -> none ! no_space =
         return
     end if
     start: usize = into.used
-    try append_byte(into, 45)
+    try append_byte(into, u8('-'))
     magnitude: usize = usize(0 - (value + 1)) + 1
     append_usize(into, magnitude) else (problem)
         into.used = start

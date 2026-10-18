@@ -20,10 +20,17 @@
 --  instead defaults to Apple's `/usr/bin/clang`, with `-arch arm64` in its
 --  link arguments.  A named driver overrides any of these defaults.
 --
---  There is deliberately no fallback to a bare `gcc`.  A host without the
---  selected driver cannot finish the target; substituting a host compiler
---  could hand ELF assembly to a Mach-O toolchain.  `Landin.Targets` keeps
---  the target explicit rather than inferring it from the host.
+--  A Linux target names the drivers a stock distribution installs as
+--  well (D364): the pinned image's `x86_64-pc-linux-gnu-gcc` first, then
+--  Debian's and Ubuntu's `x86_64-linux-gnu-gcc`, Fedora's
+--  `x86_64-redhat-linux-gcc` and the `unknown` vendor's spelling, each a
+--  GCC that assembles and links for that machine and no other.  A bare
+--  `gcc` is the last candidate only when the target is the compiler's own
+--  host, where the host's GCC is a driver for it; for any other target it
+--  would hand the assembly to the host's assembler, which is why it is
+--  never tried there.  It is `gcc` and not `cc` because the link line
+--  passes the GNU assembler's own options.  The driver takes the first
+--  candidate the host can start.
 --
 --  Whether the named driver exists is not asked here either.  A tool that
 --  cannot be started raises `External_Tool_Failed` from
@@ -63,6 +70,24 @@ package Landin.Backend.Toolchain is
    function Driver_For
      (Facts : Landin.Targets.Target_Facts;
       Named : String) return String;
+
+   --  Every driver a link may use, in the order tried: Named alone when
+   --  it is given, Driver_For's otherwise and, on Linux, the other
+   --  distributions' spellings of the same GCC, then `gcc` when Native
+   --  says the target is the compiler's own host.  Empty exactly when
+   --  Driver_For is.
+   function Driver_Candidates
+     (Facts : Landin.Targets.Target_Facts;
+      Named : String;
+      Native : Boolean) return Landin.Platform.Path_List;
+
+   --  What to install when no candidate can be started, as a note names
+   --  it: the package a stock distribution gives the driver in, or the
+   --  tools an operating system's vendor ships.
+   function Install_Advice
+     (Facts : Landin.Targets.Target_Facts;
+      Named : String;
+      Native : Boolean) return String;
 
    --  Apple ld has no GNU exact-archive -l form. Ask the selected
    --  compiler driver to resolve each archive through its own search path.

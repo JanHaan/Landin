@@ -7,21 +7,22 @@
 --  generator.  Each check that fails returns its own code.
 import core/io
 import core/random
-import hosted/io as hosted
+import core/time
+import hosted/system
 
 --  The wall clock's reading in nanoseconds since 1970.
-wall_nanoseconds: (host: hosted.system) -> (at: i64) =
-    wall: io.wall_time = io.wall_now(host)
+wall_nanoseconds: (host: system.host) -> (at: i64) =
+    wall: time.wall_time = time.wall_now(host)
     at = wall.seconds * 1000000000 + i64(wall.nanoseconds)
 end wall_nanoseconds
 
 --  Whether ten thousand readings of the monotonic clock never go back.
-in_order: (host: hosted.system) -> (yes: bool) =
+in_order: (host: system.host) -> (yes: bool) =
     yes = false
-    mut last: io.instant = io.now(host)
+    mut last: time.instant = time.now(host)
     for round in usize(0)..<10000 do
         _ = round
-        reading: io.instant = io.now(host)
+        reading: time.instant = time.now(host)
         return when reading < last
         last = reading
     end for
@@ -30,11 +31,11 @@ end in_order
 
 --  Whether a sleep of SPAN lasted at least SPAN on the monotonic clock,
 --  and no more than a minute.
-slept_for: (host: hosted.system, span: io.duration) -> (yes: bool) =
-    start: io.instant = io.now(host)
-    io.sleep(host, span)
-    took: io.duration = io.elapsed(start, io.now(host))
-    yes = took >= span and took < io.seconds(60)
+slept_for: (host: system.host, span: time.duration) -> (yes: bool) =
+    start: time.instant = time.now(host)
+    time.sleep(host, span)
+    took: time.duration = time.elapsed(start, time.now(host))
+    yes = took >= span and took < time.seconds(60)
 end slept_for
 
 --  Whether BYTES are all zero.
@@ -51,7 +52,7 @@ mut large: [300000]u8
 
 --  Whether the system's entropy fills two buffers differently, a large
 --  one and an empty one.
-entropy_answers: (host: hosted.system) -> (yes: bool) ! ... =
+entropy_answers: (host: system.host) -> (yes: bool) ! ... =
     yes = false
     mut first: [64]u8 = zeroed
     mut second: [64]u8 = zeroed
@@ -67,32 +68,32 @@ entropy_answers: (host: hosted.system) -> (yes: bool) ! ... =
     return when all_zero(large[299936..<300000])
     mut empty: [1]u8 = zeroed
     try io.fill_random(host, empty[0..<0])
-    yes = hosted.last_errno(host) == 0
+    yes = system.last_errno(host) == 0
 end entropy_answers
 
 --  Two generators seeded from the system's entropy draw differently.
-seeded_apart: (host: hosted.system) -> (yes: bool) ! ... =
+seeded_apart: (host: system.host) -> (yes: bool) ! ... =
     mut one := try random.from_entropy(host)
     mut other := try random.from_entropy(host)
     yes = random.next(one) <> random.next(other)
 end seeded_apart
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     return when not in_order(host)
     code = 2
-    return when not slept_for(host, io.milliseconds(20))
-      or not slept_for(host, io.microseconds(1500))
+    return when not slept_for(host, time.milliseconds(20))
+      or not slept_for(host, time.microseconds(1500))
     code = 3
-    return when not slept_for(host, io.duration(0))
+    return when not slept_for(host, time.duration(0))
     code = 4
     --  2026-01-01T00:00:00Z, before which no run of this program is.
-    wall: io.wall_time = io.wall_now(host)
+    wall: time.wall_time = time.wall_now(host)
     return when wall.seconds < 1767225600 or wall.nanoseconds >= 1000000000
     code = 5
     before: i64 = wall_nanoseconds(host)
-    io.sleep(host, io.milliseconds(10))
+    time.sleep(host, time.milliseconds(10))
     after: i64 = wall_nanoseconds(host)
     return when after - before < 0 or after - before > 60000000000
     code = 6

@@ -1,0 +1,3 @@
+outside: (x: i32) -> (beyond: bool) =
+    beyond = x < 1 || x > 5
+end outside

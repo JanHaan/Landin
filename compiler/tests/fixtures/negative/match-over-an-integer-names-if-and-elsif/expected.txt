@@ -1,0 +1,6 @@
+error[L0100]: a match arm names a case or an atom, never a value; compare a number with `if` and `elsif`
+  --> ../tests/fixtures/negative/match-over-an-integer-names-if-and-elsif/program.ldn:3:9
+  |
+3 |         1: code = 10
+  |         ^
+  = note: [1210]: a `match` selects one case of a variant or one atom of a set, and `if x == 1 then ... elsif x == 2 then ... end if` compares values

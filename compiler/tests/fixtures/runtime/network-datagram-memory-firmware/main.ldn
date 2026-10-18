@@ -1,0 +1,42 @@
+--  core/io/fake's memory network within a Cortex-M0 image: a datagram socket
+--  sends to a port no socket holds, which loses it, and is closed.  The
+--  program projects three of the network's entries, and its table keeps
+--  only those (D374): the rest of the memory network's conformance, about
+--  40 KiB that runtime/network-echo-memory needs whole, stays out of the
+--  image.
+import core/io
+import core/io/fake
+import core/net
+
+lost_datagram: (network: fake.network, state: ptr fake.network_space)
+               -> (yes: bool) ! ... =
+    socket: io.file = try net.open_datagram(network, net.loopback(net.ipv4, 0))
+    before: usize = state.val.losses
+    try net.send_to(network, socket, "anyone?", net.loopback(net.ipv4, 9))
+    yes = state.val.losses == before + 1 and state.val.datagrams == 0
+    try net.close_socket(network, socket)
+end lost_datagram
+
+public main: () -> (code: i32) =
+    code = 1
+    mut space: fake.network_space = zeroed
+    mut b0: [64]u8 = zeroed
+    mut b1: [64]u8 = zeroed
+    mut sockets: [2]fake.network_socket =
+        [fake.socket_over(b0[0..<64]), fake.socket_over(b1[0..<64])]
+    network := fake.network_over(space, sockets[0..<2])
+    lost := lost_datagram(network, addr space) else false
+    return when not lost
+    code = 2
+    --  The socket was closed, so its record is free for another.
+    again: io.file = net.open_datagram(network, net.loopback(net.ipv4, 0))
+        else (problem)
+        _ = problem
+        return
+    end
+    net.close_socket(network, again) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

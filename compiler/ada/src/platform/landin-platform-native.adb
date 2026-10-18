@@ -384,31 +384,46 @@ package body Landin.Platform.Native is
      (Host    : Native_Filesystem;
       Path    : String;
       Content : String;
-      Status  : out Write_Status)
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String)
    is
       pragma Unreferenced (Host);
       use type Interfaces.C.int;
+      use type Interfaces.C.size_t;
       function Replace_Existing
-        (Name : Interfaces.C.char_array;
-         Data : System.Address;
-         Size : Interfaces.C.size_t) return Interfaces.C.int
+        (Name   : Interfaces.C.char_array;
+         Data   : System.Address;
+         Size   : Interfaces.C.size_t;
+         Said   : out Interfaces.C.char_array;
+         Room   : Interfaces.C.size_t) return Interfaces.C.int
         with Import, Convention => C,
              External_Name => "landin_replace_existing_file";
       Data : constant System.Address :=
         (if Content'Length = 0 then System.Null_Address
          else Content (Content'First)'Address);
+      --  A cause names at most one path, its copy's, which the system may
+      --  have made absolute and so longer than Path.
+      Said : Interfaces.C.char_array
+        (1 .. Interfaces.C.size_t (Path'Length) + 4096) :=
+        [others => Interfaces.C.nul];
+      Room : constant Interfaces.C.size_t := Said'Length;
    begin
       if Path = "" or else
         (for some Byte of Path => Byte = Character'Val (0))
       then
          Status := Not_Writable;
+         Reason := Ada.Strings.Unbounded.To_Unbounded_String
+           ("its name cannot be given to the system");
       elsif Replace_Existing
         (Interfaces.C.To_C (Path), Data,
-         Interfaces.C.size_t (Content'Length)) = 0
+         Interfaces.C.size_t (Content'Length), Said, Room) = 0
       then
          Status := Write_Ok;
+         Reason := Ada.Strings.Unbounded.Null_Unbounded_String;
       else
          Status := Not_Writable;
+         Reason := Ada.Strings.Unbounded.To_Unbounded_String
+           (Interfaces.C.To_Ada (Said));
       end if;
    end Replace_File;
 

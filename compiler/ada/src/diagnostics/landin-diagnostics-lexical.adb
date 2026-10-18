@@ -126,7 +126,8 @@ package body Landin.Diagnostics.Lexical is
                when Landin.Tokens.Malformed_Text_Literal_Run =>
                   Add_Note
                     (Report,
-                     "the text escape set is closed and small [0270]");
+                     "the escapes are `\n`, `\r`, `\t`, `\e`, `\\`, `\""`,"
+                     & " `\'`, `\xNN` and `\u{...}`, and no others [0270]");
 
                when Landin.Tokens.Invalid_Comment_Encoding =>
                   Add_Note

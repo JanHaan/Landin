@@ -2,6 +2,7 @@ with Ada.Containers;
 with Ada.Containers.Generic_Array_Sort;
 with Ada.Strings.Unbounded;
 with Landin.Backend.Work_Arrays;
+with Landin.Machine;
 
 package body Landin.Backend is
 
@@ -66,6 +67,262 @@ package body Landin.Backend is
       end loop;
       return True;
    end Shares_Evidence_Table;
+
+   function Kept_Evidence_Entries
+     (Of_Unit : IR.Unit;
+      Handler : IR.Item_Id) return Kept_Entries
+   is
+      use type Landin.IR.Item_Kind;
+      use type Landin.IR.Opcode;
+      use type Landin.IR.Signature_Id;
+      use type Landin.Machine.Convention;
+      use type Landin.Source.Names.Name_Id;
+
+      Tables : constant Natural := IR.Evidence_Count (Of_Unit);
+      Items : constant Natural := IR.Item_Count (Of_Unit);
+      Result : Kept_Entries;
+      Total : Natural := 0;
+
+      type Flag_Array is array (Positive range <>) of Boolean;
+      type Item_List is array (Positive range <>) of IR.Item_Id;
+      type Table_List is array (Positive range <>) of Positive;
+
+      Live : Flag_Array (1 .. Natural'Max (1, Items)) := [others => True];
+      Pending : Item_List (1 .. Natural'Max (1, Items));
+      Waiting : Natural := 0;
+
+      --  Tables in family order, ties in table order, so that the tables
+      --  sharing one family are a run; Run_Of (T) is where T's run starts.
+      Order : Table_List (1 .. Natural'Max (1, Tables)) := [others => 1];
+      Run_Of : Table_List (1 .. Natural'Max (1, Tables)) := [others => 1];
+
+      function Key (Table : Positive) return Natural
+        is (if IR.Evidence_Family (Of_Unit, IR.Evidence_Id (Table)) = 0
+            then 0
+            else 2 * IR.Evidence_Family (Of_Unit, IR.Evidence_Id (Table))
+                 + (if IR.Evidence_Is_Erased
+                         (Of_Unit, IR.Evidence_Id (Table))
+                    then 1 else 0));
+
+      function Before (Left, Right : Positive) return Boolean
+        is (Key (Left) < Key (Right)
+            or else (Key (Left) = Key (Right) and then Left < Right));
+
+      procedure Sort is new Ada.Containers.Generic_Array_Sort
+        (Index_Type => Positive, Element_Type => Positive,
+         Array_Type => Table_List, "<" => Before);
+
+      procedure Reach (Target : IR.Item_Id);
+      procedure Keep (Table : Positive; Which : Positive);
+      procedure Keep_In_Family (Table : Positive; Which : Positive);
+      procedure Note_Exposed (Item : IR.Item_Id);
+
+      procedure Reach (Target : IR.Item_Id) is
+      begin
+         if Target /= IR.No_Item and then not Live (Positive (Target)) then
+            Live (Positive (Target)) := True;
+            Waiting := Waiting + 1;
+            Pending (Waiting) := Target;
+         end if;
+      end Reach;
+
+      procedure Keep (Table : Positive; Which : Positive) is
+         Position : constant Positive := Result.First (Table) + Which;
+      begin
+         if not Result.Kept (Position) then
+            Result.Kept (Position) := True;
+            Reach (IR.Evidence_Entry_Target
+              (Of_Unit, IR.Evidence_Id (Table), Which));
+         end if;
+      end Keep;
+
+      procedure Keep_In_Family (Table : Positive; Which : Positive) is
+      begin
+         if Key (Table) = 0 then
+            Keep (Table, Which);
+            return;
+         elsif Result.Kept (Result.First (Table) + Which) then
+            --  Only this procedure keeps a family's entry, and it keeps
+            --  it in the whole family at once.
+            return;
+         end if;
+         for Index in Run_Of (Table) .. Tables loop
+            exit when Key (Order (Index)) /= Key (Table);
+            if Which <= IR.Evidence_Entry_Count
+              (Of_Unit, IR.Evidence_Id (Order (Index)))
+            then
+               Keep (Order (Index), Which);
+            end if;
+         end loop;
+      end Keep_In_Family;
+
+      procedure Note_Exposed (Item : IR.Item_Id) is
+      begin
+         Live (Positive (Item)) := True;
+      end Note_Exposed;
+
+      Any_Assembly : Boolean := False;
+   begin
+      for Table in 1 .. Tables loop
+         Result.First.Append (Total);
+         Total := Total + IR.Evidence_Entry_Count
+           (Of_Unit, IR.Evidence_Id (Table));
+      end loop;
+      Result.Kept.Append (False, Ada.Containers.Count_Type (Total));
+      if Tables = 0 then
+         return Result;
+      end if;
+
+      for Table in 1 .. Tables loop
+         Order (Table) := Table;
+      end loop;
+      Sort (Order);
+      for Index in 1 .. Tables loop
+         Run_Of (Order (Index)) :=
+           (if Index > 1 and then Key (Order (Index - 1)) = Key (Order (Index))
+            then Run_Of (Order (Index - 1)) else Index);
+      end loop;
+
+      for Index in 1 .. Items loop
+         declare
+            Item : constant IR.Item_Id := IR.Item_Id (Index);
+         begin
+            if IR.Kind_Of (Of_Unit, Item) = IR.Routine then
+               for Value in 1 .. IR.Value_Count (Of_Unit, Item) loop
+                  Any_Assembly := Any_Assembly
+                    or else IR.Op_Of (Of_Unit, Item, IR.Value_Id (Value))
+                      = IR.Assembly;
+               end loop;
+            end if;
+         end;
+      end loop;
+
+      --  Only an ordinary routine with parameters, which nothing but a
+      --  call or an evidence entry names, can be left unreached; every
+      --  other routine, and the panic handler the backend calls, is a
+      --  root.  A routine only unreached routines call stays unreached.
+      if not Any_Assembly then
+         for Index in 1 .. Items loop
+            declare
+               Target : constant IR.Item_Id := IR.Item_Id (Index);
+               Signature : constant IR.Signature_Id :=
+                 (if IR.Kind_Of (Of_Unit, Target) = IR.Routine
+                  then IR.Signature_Of (Of_Unit, Target)
+                  else IR.No_Signature);
+               Placed : constant Landin.Machine.Placement :=
+                 IR.Placement_Of (Of_Unit, Target);
+            begin
+               if Signature /= IR.No_Signature
+                 and then Target /= Handler
+                 and then not IR.Is_External (Of_Unit, Target)
+                 and then IR.Link_Symbol (Of_Unit, Target)
+                   = Landin.Source.Names.No_Name
+                 and then Placed.Section = Landin.Source.Names.No_Name
+                 and then Placed.Vector = 0
+                 and then not Placed.Keep
+                 and then not IR.Signature_Uses_C_ABI (Of_Unit, Signature)
+                 and then IR.Signature_Machine (Of_Unit, Signature)
+                   = Landin.Machine.Ordinary
+                 and then IR.Signature_Parameter_Count
+                   (Of_Unit, Signature) > 0
+               then
+                  Live (Index) := False;
+               end if;
+            end;
+         end loop;
+         IR.Visit_Address_Exposures_Beside_Evidence
+           (Of_Unit, Note_Exposed'Access);
+         for Index in 1 .. Items loop
+            declare
+               Item : constant IR.Item_Id := IR.Item_Id (Index);
+               Function_Image : constant IR.Item_Id :=
+                 IR.Function_Target (Of_Unit, Item);
+               Address_Image : constant IR.Item_Id :=
+                 IR.Address_Target (Of_Unit, Item);
+            begin
+               if Function_Image /= IR.No_Item then
+                  Live (Positive (Function_Image)) := True;
+               end if;
+               if Address_Image /= IR.No_Item then
+                  Live (Positive (Address_Image)) := True;
+               end if;
+            end;
+         end loop;
+      end if;
+
+      --  Each item waits at most once: the roots now, and later only what
+      --  Reach makes live.
+      for Index in reverse 1 .. Items loop
+         if Live (Index) then
+            Waiting := Waiting + 1;
+            Pending (Waiting) := IR.Item_Id (Index);
+         end if;
+      end loop;
+      for Table in 1 .. Tables loop
+         if Key (Table) = 0 then
+            for Which in 1 .. IR.Evidence_Entry_Count
+              (Of_Unit, IR.Evidence_Id (Table))
+            loop
+               Keep (Table, Which);
+            end loop;
+         end if;
+      end loop;
+
+      while Waiting > 0 loop
+         declare
+            Item : constant IR.Item_Id := Pending (Waiting);
+         begin
+            Waiting := Waiting - 1;
+            if IR.Kind_Of (Of_Unit, Item) = IR.Routine then
+               for Position in 1 .. IR.Value_Count (Of_Unit, Item) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                  begin
+                     case IR.Op_Of (Of_Unit, Item, Value) is
+                        when IR.Function_Address | IR.Call =>
+                           Reach (IR.Callee_Of (Of_Unit, Item, Value));
+                        when IR.Evidence_Function =>
+                           Keep_In_Family
+                             (Positive (IR.Evidence_Of (Of_Unit, Item, Value)),
+                              IR.Evidence_Entry_Of (Of_Unit, Item, Value));
+                        when others =>
+                           null;
+                     end case;
+                  end;
+               end loop;
+            end if;
+         end;
+      end loop;
+
+      --  One physical table keeps what either of its identities keeps.
+      for Table in 1 .. Tables - 1 loop
+         if Shares_Evidence_Table
+           (Of_Unit, IR.Evidence_Id (Table), IR.Evidence_Id (Table + 1))
+         then
+            for Which in 1 .. IR.Evidence_Entry_Count
+              (Of_Unit, IR.Evidence_Id (Table))
+            loop
+               declare
+                  Left : constant Positive := Result.First (Table) + Which;
+                  Right : constant Positive :=
+                    Result.First (Table + 1) + Which;
+                  Either : constant Boolean :=
+                    Result.Kept (Left) or else Result.Kept (Right);
+               begin
+                  Result.Kept (Left) := Either;
+                  Result.Kept (Right) := Either;
+               end;
+            end loop;
+         end if;
+      end loop;
+      return Result;
+   end Kept_Evidence_Entries;
+
+   function Is_Kept
+     (Of_Kept : Kept_Entries;
+      Id      : IR.Evidence_Id;
+      Which   : Positive) return Boolean
+     is (Of_Kept.Kept (Of_Kept.First (Positive (Id)) + Which));
 
    function Stack_Add
      (Left, Right, Maximum : Targets.Byte_Count) return Targets.Byte_Count

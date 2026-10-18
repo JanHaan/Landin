@@ -7,4 +7,4 @@ error[L0336]: a packed field has no independent address
   |
 6 |     _ = addr x.value
   |         ^^^^^^^^^^^^ this address operation
-  = note: [0730]: take the containing image's address
+  = note: [0730]: a packed field has no address of its own; take the address of the whole packed value that holds it

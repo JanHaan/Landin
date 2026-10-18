@@ -1,0 +1,17 @@
+import core/io
+import core/text
+import hosted/system
+
+--- Copy the first block of one file into another, closing both on every way
+--- out.
+copy_first_block: (host: system.host, source_path: text.host_string,
+                   target_path: text.host_string)
+                  -> none ! io.not_found | io.no_access | io.io_failed =
+    source := try io.open_read(host, source_path)
+    defer io.close(host, source) else none
+    target := try io.open_write(host, target_path)
+    defer io.close(host, target) else none
+    mut block: [512]u8 = zeroed
+    count := try io.read(host, source, block)
+    try io.write(host, target, block[0..<count])
+end copy_first_block

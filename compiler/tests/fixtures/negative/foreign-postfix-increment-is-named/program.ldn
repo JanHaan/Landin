@@ -1,0 +1,5 @@
+count: (n: i32) -> (r: i32) =
+    mut total: i32 = n
+    total++
+    r = total
+end count

@@ -3,6 +3,7 @@
 --  every payload and every block back with the address and extent each was
 --  allocated with.  A parent that refuses any one of the first forty
 --  attempts, a payload's or a ledger block's, leaves nothing live either.
+import core/arena
 import core/fault
 import core/mem
 import core/region
@@ -13,7 +14,7 @@ mut backing: [2048]usize
 --  sums each block's address and extent, so a free of the wrong block or
 --  extent leaves a trace.  It is not the reusable `core/fault`.
 tally_state: type = struct
-    inner: mem.arena
+    inner: arena.arena
     live: usize
     addresses: usize
     extents: usize
@@ -69,15 +70,15 @@ run: (count: usize, budget: usize) -> (made: usize, clean: bool) =
     made = 0
     clean = false
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, base,
+    mut arena_space: arena.space = zeroed
+    memory := arena.over_unchecked(arena_space, base,
                                       lenof backing * sizeof usize)
-    mut state: tally_state = (inner: arena, live: 0, addresses: 0,
+    mut state: tally_state = (inner: memory, live: 0, addresses: 0,
                               extents: 0)
     counter: tally = (state: addr state)
     mut fault_space: fault.space = zeroed
     counted := fault.over(fault_space, counter, budget)
-    mut ledger: region.space(0) = zeroed
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, counted)
     mut refused: bool = false
     while made < count and not refused do

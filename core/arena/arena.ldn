@@ -1,0 +1,133 @@
+--  A monotonic allocator over a caller-supplied byte extent, a provider of
+--  its own beside core/pool, core/region and core/fault.  Individual frees
+--  deliberately do nothing; ending the extent ends all of its allocations
+--  together.  The caller holds the counters; the handle holds the backing
+--  and a pointer to them.
+
+import core/mem
+
+arena_state: type = struct
+    size: usize
+    used: usize
+end arena_state
+
+--- Caller-owned state of an arena: its extent and the bytes it has handed
+--- out. Declare it `zeroed` beside the backing and give it to `over`,
+--- which fills it; it must outlive the arena handle.
+public space: type = arena_state
+
+arena_value: type = struct
+    state: ptr mut arena_state
+    base: ptr mut u8
+end arena_value
+
+--- Monotonic allocator over caller-owned bytes, as a handle: copies share one
+--- arena. Individual frees do not reclaim space; only the most recent
+--- allocation can grow in place, or give back its tail when it is resized
+--- smaller, and a resize that cannot grow in place moves the block to a new
+--- allocation, leaving the old bytes spent. Zero-byte requests may consume
+--- alignment padding. `reset` gives every allocation back at once,
+--- the arena's one free that reclaims anything.
+public arena: type = arena_value
+
+--- Fill `state` for an arena over retainable backing and return its handle,
+--- without allocating. The range must stay valid for the arena and all
+--- allocations made through it.
+---
+--- The independent allocator result may be retained after this call. Only
+--- backing which the caller may itself retain can enter the checked arena.
+public over: (inout state: space, escaping base: ptr mut u8, size: usize)
+             -> (handle: arena from state, base) =
+    state = (size: size, used: 0)
+    handle = (state: addr state, base: base)
+end over
+
+--- Fill `state` for an arena over local backing with an explicit lifetime
+--- opt-out and return its handle. The caller must end every allocated view
+--- before that backing ends.
+---
+--- Explicit lifetime opt-out for a local extent. The handle still keeps its
+--- tracked origins, but allocations do not; users must end every allocation
+--- before the backing ends, including allocations retained by helpers.
+public over_unchecked: (inout state: space, base: ptr mut u8, size: usize)
+                       -> (handle: arena from state, base) =
+    state = (size: size, used: 0)
+    handle = (state: addr state, base: base)
+end over_unchecked
+
+--- Return consumed arena bytes, including alignment padding.
+public used: (memory: arena) -> (count: usize) =
+    count = memory.state.val.used
+end used
+
+--- Give every allocation of the arena back at once: the next allocation
+--- starts at its base again.  Every block it gave is then free, and a
+--- program that still uses one has the same obligation as after `free`.
+public reset: (memory: arena) -> none =
+    memory.state.val.used = 0
+end reset
+
+arena_alloc: (self: arena, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! mem.out_of_memory =
+    state: ptr mut arena_state = self.state
+    offset: usize = try mem.aligned_offset(self.base, state.val.used,
+                                           state.val.size, size, alignment)
+    --  [0810]: the block borrows nothing, so that a container may keep it
+    --  in its own storage; its lifetime is the backing's, which the caller
+    --  keeps.
+    address: usize = usize(self.base) + offset
+    block = ptr(address)
+    state.val.used = offset + size
+end arena_alloc
+
+arena_free: (self: arena, block: ptr mut u8, size: usize) -> none =
+    _ = self.state
+    _ = block
+    _ = size
+end arena_free
+
+arena_grow: (self: arena, block: ptr mut u8,
+             old_size: usize, new_size: usize, alignment: usize)
+            -> (grown: bool) =
+    grown = false
+    state: ptr mut arena_state = self.state
+    return when new_size <= old_size or state.val.used > state.val.size
+    base_address: usize = usize(self.base)
+    block_address: usize = usize(block)
+    return when block_address < base_address
+    offset: usize = block_address - base_address
+    return when offset > state.val.used or old_size <> state.val.used - offset
+    return when alignment > 1 and block_address % alignment <> 0
+    return when new_size > state.val.size - offset
+    maximum: usize = 0 -% 1
+    return when new_size > maximum - block_address
+    state.val.used = offset + new_size
+    grown = true
+end arena_grow
+
+--  A smaller extent keeps the block where it is, and the latest allocation
+--  gives its tail back; a larger one grows in place when `arena_grow` can,
+--  and otherwise moves the block to the top.
+arena_resize: (self: arena, block: ptr mut u8,
+               old_size: usize, new_size: usize, alignment: usize)
+              -> (moved: ptr mut u8) ! mem.out_of_memory =
+    --  [0810]: the block borrows nothing, as an allocation does.
+    moved = ptr(usize(block))
+    if new_size <= old_size then
+        state: ptr mut arena_state = self.state
+        base_address: usize = usize(self.base)
+        block_address: usize = usize(block)
+        return when block_address < base_address
+        offset: usize = block_address - base_address
+        if offset <= state.val.used and old_size == state.val.used - offset
+        then
+            state.val.used = offset + new_size
+        end if
+        return
+    end if
+    return when arena_grow(self, block, old_size, new_size, alignment)
+    moved = try mem.relocate(self, block, old_size, new_size, alignment)
+end arena_resize
+
+arena is mem.allocator (alloc: arena_alloc, grow: arena_grow,
+                        resize: arena_resize, free: arena_free)

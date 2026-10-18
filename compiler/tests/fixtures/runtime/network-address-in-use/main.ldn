@@ -6,53 +6,52 @@
 --  address and the same port is not among them: Linux refuses it, and
 --  Darwin and FreeBSD let the specific one take what is sent to it.
 import core/io
-import hosted/io as hosted
+import core/net
+import hosted/system
 import platform/posix
 
 --  Whether binding a socket of the kind `listening` says at AT fails as
 --  in use.
-in_use: (host: hosted.system, at: io.address, listening: bool)
+in_use: (host: system.host, at: net.address, listening: bool)
         -> (yes: bool) =
     yes = false
     second: io.file = opened(host, at, listening) else (problem)
-        yes = problem == io.address_in_use
-              and hosted.last_errno(host) == posix.number(posix.eaddrinuse)
+        yes = problem == net.address_in_use
+              and system.last_errno(host) == posix.number(posix.eaddrinuse)
         return
     end
-    io.close_socket(host, second) else (problem)
-        _ = problem
-    end
+    net.close_socket(host, second) else none
 end in_use
 
 --  A listener at AT, or with `listening` false a datagram socket.
-opened: (host: hosted.system, at: io.address, listening: bool)
+opened: (host: system.host, at: net.address, listening: bool)
         -> (socket: io.file)
-        ! io.address_in_use | io.address_unavailable | io.no_access
+        ! net.address_in_use | net.address_unavailable | io.no_access
         | io.io_failed =
     if listening then
-        socket = try io.listen(host, at)
+        socket = try net.listen(host, at)
     else
-        socket = try io.open_datagram(host, at)
+        socket = try net.open_datagram(host, at)
     end if
 end opened
 
 --  Whether every second binding of FAMILY's is refused.
-refusals: (host: hosted.system, family: io.address_family) -> (yes: bool)
+refusals: (host: system.host, family: net.address_family) -> (yes: bool)
           ! ... =
-    listener: io.file = try io.listen(host, io.loopback(family, 0))
-    at: io.address = try io.local_address(host, listener)
+    listener: io.file = try net.listen(host, net.loopback(family, 0))
+    at: net.address = try net.local_address(host, listener)
     yes = in_use(host, at, true)
-    try io.close_socket(host, listener)
-    socket: io.file = try io.open_datagram(host, io.loopback(family, 0))
-    taken: io.address = try io.local_address(host, socket)
+    try net.close_socket(host, listener)
+    socket: io.file = try net.open_datagram(host, net.loopback(family, 0))
+    taken: net.address = try net.local_address(host, socket)
     yes = yes and in_use(host, taken, false)
-    try io.close_socket(host, socket)
+    try net.close_socket(host, socket)
 end refusals
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
-    families: [2]io.address_family = [io.ipv4, io.ipv6]
+    families: [2]net.address_family = [net.ipv4, net.ipv6]
     for family in families do
         yes: bool = refusals(host, family) else (problem)
             _ = problem

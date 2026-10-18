@@ -1,30 +1,30 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:3:1
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:4:1
   |
-3 | bad: (inout space: mem.arena_space) -> (arena: mem.arena from space) =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:4:5
+4 | bad: (inout space: arena.space) -> (memory: arena.arena from space) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:5:5
   |
-4 |     mut bytes: [32]u8 = zeroed
+5 |     mut bytes: [32]u8 = zeroed
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
 error[L0314]: this frame-origin reference cannot be retained beyond the call
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:7:35
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:8:32
   |
-7 |     arena = mem.arena_over(space, base, extent)
-  |                                   ^^^^
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:4:5
+8 |     memory = arena.over(space, base, extent)
+  |                                ^^^^
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:5:5
   |
-4 |     mut bytes: [32]u8 = zeroed
+5 |     mut bytes: [32]u8 = zeroed
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
 error[L0314]: this frame-origin reference cannot be retained beyond the call
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:27:36
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:28:33
    |
-27 |     arena := mem.arena_over(space, addr bytes[0], 32)
-   |                                    ^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:25:5
+28 |     memory := arena.over(space, addr bytes[0], 32)
+   |                                 ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:26:5
    |
-25 |     mut bytes: [32]u8 = zeroed
+26 |     mut bytes: [32]u8 = zeroed
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

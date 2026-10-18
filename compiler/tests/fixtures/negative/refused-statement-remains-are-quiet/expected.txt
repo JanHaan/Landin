@@ -7,4 +7,4 @@ error[L0103]: a binding names its type after `:`, not `)`
   |
 7 |     mut total ) := pair(
   |         ^^^^^ declared here
-  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+  = note: [1790]: a binding is a name, `:` and its type, optionally `= value`, or a name and `:=` with the value whose type it takes

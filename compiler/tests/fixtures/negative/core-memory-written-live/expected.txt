@@ -1,10 +1,10 @@
 error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
-  --> ../tests/fixtures/negative/core-memory-written-live/main.ldn:12:12
+  --> ../tests/fixtures/negative/core-memory-written-live/main.ldn:13:12
    |
-12 |     refill(state)
+13 |     refill(state)
    |            ^^^^^
-  --> ../tests/fixtures/negative/core-memory-written-live/main.ldn:11:5
+  --> ../tests/fixtures/negative/core-memory-written-live/main.ldn:12:5
    |
-11 |     view := io.written(memory)
+12 |     view := io.written(memory)
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
   = note: [0800]/[0830]: take the view again after mutating its source

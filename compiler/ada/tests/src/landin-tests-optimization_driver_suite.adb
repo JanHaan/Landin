@@ -44,6 +44,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
    begin
       Result.Append ("main.ldn");
       Result.Append ("--emit=asm");
+      --  A static link's assembly needs platform/linux (D363).
+      Result.Append ("--link=libc");
       Result.Append ("-o");
       Result.Append ("out.s");
       return Result;
@@ -124,6 +126,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
          Args.Append ("app");
          Args.Append ("--root=lib");
          Args.Append ("--emit=asm");
+         --  A static link's assembly needs platform/linux (D363).
+         Args.Append ("--link=libc");
          Args.Append ("-o");
          Args.Append ("out.s");
          Args.Append ("--build-report=./app//main.ldn");
@@ -315,6 +319,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Host.Add_File (Path, Source);
       Args.Append (Path);
       Args.Append ("--emit=asm");
+      --  A static link's assembly needs platform/linux (D363).
+      Args.Append ("--link=libc");
       Args.Append ("--build-report=report.json");
       Result := Landin.Driver.Execute (Args, Host, Tools);
       Landin.Testing.Check_Equal
@@ -401,6 +407,9 @@ package body Landin.Tests.Optimization_Driver_Suite is
          end if;
          Args.Append ("main.ldn");
          Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         if not Executable then
+            Args.Append ("--link=libc");
+         end if;
          Args.Append ("-o");
          Args.Append (if Executable then "out" else "out.s");
          if With_Map then

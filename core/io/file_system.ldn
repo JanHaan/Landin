@@ -5,6 +5,7 @@
 --  A firmware image that never asks for either carries neither.
 
 import core/text
+import core/time
 
 --- How `open_file` opens a file: to `read`, to `write`, or both; to
 --- `append`, every write going to the end of the file, which needs
@@ -39,6 +40,20 @@ public creating: open_options = (read: true, write: true, append: false,
                                  create: true, exclusive: true,
                                  truncate: false)
 
+--- Follow a symbolic link that ends a path to what it names.
+public following: atom
+--- Take a symbolic link that ends a path as itself.
+public not_following: atom
+--- What `status_of` does with a symbolic link that ends its path.
+public link_handling: type = following | not_following
+
+--- Write a file's data and its status where they last.
+public data_and_status: atom
+--- Write a file's data and only the status reading it back needs.
+public data_only: atom
+--- What `synchronize` writes where it lasts.
+public synchronizing: type = data_and_status | data_only
+
 --- What a file is and the little every system says of it alike: its
 --- size in bytes, what it is, when it was last written, as the wall clock
 --- read then, and whether it is `read_only`, which on POSIX means that no
@@ -47,7 +62,7 @@ public creating: open_options = (read: true, write: true, append: false,
 public status: type = struct
     size: u64
     kind: entry_kind
-    modified: wall_time
+    modified: time.wall_time
     read_only: bool
 end status
 
@@ -60,11 +75,13 @@ public temporary: type = struct
     path: text.host_string
 end temporary
 
---- The rest of the file system: a narrow concept of its own beside
---- `files` and `directories`, outside `world`.  A path is a host string,
---- as `files` takes one, and a file is a `file` of the provider, which
---- `reader`, `writer` and `files` take too.
-public file_system: type = concept (provider: type)
+--- The rest of the file system: a concept that refines `files`, so a
+--- provider of it opens with `open_read`, `open_write` and `open_file` and
+--- closes every one of them with `files`' `close`, the one close a file has
+--- (D357); it is outside `world`, beside `directories`.  A path is a host
+--- string, as `files` takes one, and a file is a `file` of the provider,
+--- which `reader`, `writer` and `files` take too.
+public file_system: type = concept (provider: type) is files
     --- Open the file at `path` as `options` say.  A missing file without
     --- `create`, and a path through something that is not a directory,
     --- are `not_found`; a file `exclusive` finds is `already_exists`; a
@@ -81,8 +98,10 @@ public file_system: type = concept (provider: type)
     rename: (self: provider, old: text.host_string, new: text.host_string)
             -> none ! not_found | no_access | io_failed
     --- The status of the file at `path`, of a final symbolic link's target
-    --- when `follow` is true and of the link itself when it is not.
-    status_of: (self: provider, path: text.host_string, follow: bool)
+    --- when `links` is `following` and of the link itself when it is
+    --- `not_following`.
+    status_of: (self: provider, path: text.host_string,
+                links: link_handling)
                -> (found: status) ! not_found | no_access | io_failed
     --- The status of an open file.
     status_of_file: (self: provider, opened: file) -> (found: status)
@@ -94,7 +113,7 @@ public file_system: type = concept (provider: type)
     --- Have what the provider holds of an open file written where it
     --- lasts before returning: its data and its status, or with
     --- `data_only` its data and only what reading it back needs.
-    synchronize: (self: provider, opened: file, data_only: bool)
+    synchronize: (self: provider, opened: file, writing: synchronizing)
                  -> none ! io_failed
     --- Give a file open for writing the size `size`, cutting it or
     --- extending it with zeros.
@@ -157,11 +176,12 @@ public rename: (provider: type is file_system, host: provider,
 end rename
 
 --- The status of the file at `path`, of a final symbolic link's target
---- when `follow` is true and of the link itself when it is not.
+--- when `links` is `following` and of the link itself when it is
+--- `not_following`.
 public status_of: (provider: type is file_system, host: provider,
-                   path: text.host_string, follow: bool)
+                   path: text.host_string, links: link_handling)
                   -> (found: status) ! not_found | no_access | io_failed =
-    found = try provider.status_of(host, path, follow)
+    found = try provider.status_of(host, path, links)
 end status_of
 
 --- The status of an open file.
@@ -180,10 +200,11 @@ public set_read_only: (provider: type is file_system, host: provider,
 end set_read_only
 
 --- Have what the provider holds of an open file written where it lasts,
---- its status too unless `data_only`, before returning.
+--- its status too unless `writing` is `data_only`, before returning.
 public synchronize: (provider: type is file_system, host: provider,
-                     opened: file, data_only: bool) -> none ! io_failed =
-    try provider.synchronize(host, opened, data_only)
+                     opened: file, writing: synchronizing)
+                    -> none ! io_failed =
+    try provider.synchronize(host, opened, writing)
 end synchronize
 
 --- Give a file open for writing the size `size`, cutting it or extending
@@ -251,7 +272,7 @@ public temporary_path: (directory: text.host_string, bytes: [8]u8,
         _ = problem
         fail io_failed
     end
-    divided: bool = lenof folder == 0 or folder[lenof folder - 1] == 47
+    divided: bool = lenof folder == 0 or folder[lenof folder - 1] == u8('/')
     separator: []u8 = if divided then "" else "/" end if
     text.append(made, separator) else (problem)
         _ = problem
@@ -267,7 +288,7 @@ public temporary_path: (directory: text.host_string, bytes: [8]u8,
             _ = problem
             fail io_failed
         end
-        text.align_right(made, start, 2, 48) else (problem)
+        text.align_right(made, start, 2, u8('0')) else (problem)
             _ = problem
             fail io_failed
         end
@@ -310,47 +331,3 @@ public window_size: (provider: type is terminals, host: provider,
                     ! not_a_terminal | io_failed =
     size = try provider.window_size(host, stream)
 end window_size
-
---- One terminal of `terminals_over`'s fake: the file it is and its size.
-public screen: type = struct
-    stream: file
-    size: window
-end screen
-
-screens_value: type = struct
-    screens: []screen
-end screens_value
-
---- Terminals a test gives: each `screen` is a terminal of its size, and
---- every other file is no terminal.  A provider of `terminals`; copies
---- share the screens.
-public memory_terminals: type = screens_value
-
---- Terminals over `screens`, which the handle lends; keep them alive while
---- it is used.
-public terminals_over: (screens: []screen)
-                       -> (host: memory_terminals from screens) =
-    host = (screens: screens)
-end terminals_over
-
-memory_is_terminal: (self: memory_terminals, stream: file) -> (yes: bool) =
-    yes = false
-    for index in usize(0)..<lenof self.screens do
-        if self.screens[index].stream == stream then yes = true end if
-    end for
-end memory_is_terminal
-
-memory_window_size: (self: memory_terminals, stream: file)
-                    -> (size: window) ! not_a_terminal | io_failed =
-    size = (rows: 0, columns: 0)
-    for index in usize(0)..<lenof self.screens do
-        if self.screens[index].stream == stream then
-            size = self.screens[index].size
-            return
-        end if
-    end for
-    fail not_a_terminal
-end memory_window_size
-
-memory_terminals is terminals
-    (is_terminal: memory_is_terminal, window_size: memory_window_size)

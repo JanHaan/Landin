@@ -1,6 +1,6 @@
-import hosted/heap
 import core/mem
 import core/vec
+import hosted/heap
 
 no_allocation: atom
 allocation: type = no_allocation | ptr mut u8
@@ -22,7 +22,7 @@ end is_absent
 --  wrapper `core/fault` supplies.  It delegates every operation
 --  to the real heap while retaining the two simultaneously live extents.
 audit_state: type = struct
-    inner: heap.system
+    inner: heap.heap
     first_live: bool
     first_block: allocation
     first_size: usize
@@ -46,7 +46,7 @@ audit: type = struct
 end audit
 
 new_audit: () -> (state: audit_state) =
-    state = (inner: heap.host(),
+    state = (inner: heap.new(),
              first_live: false, first_block: no_allocation, first_size: 0,
              second_live: false, second_block: no_allocation, second_size: 0,
              live: 0, peak_live: 0, allocations: 0, frees: 0,
@@ -247,15 +247,15 @@ public main: () -> (code: i32) =
     mut growth := new_audit()
     grower: audit = (state: addr growth)
     mut values := vec.new(item: ptr node)
-    vec.push(values, grower, addr node_1) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_2) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_3) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_4) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_5) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_6) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_7) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_8) else (ignored) _ = ignored end
-    vec.push(values, grower, addr node_9) else (ignored) _ = ignored end
+    vec.push(values, grower, addr node_1) else none
+    vec.push(values, grower, addr node_2) else none
+    vec.push(values, grower, addr node_3) else none
+    vec.push(values, grower, addr node_4) else none
+    vec.push(values, grower, addr node_5) else none
+    vec.push(values, grower, addr node_6) else none
+    vec.push(values, grower, addr node_7) else none
+    vec.push(values, grower, addr node_8) else none
+    vec.push(values, grower, addr node_9) else none
 
     at_first: usize = 0
     at_eighth: usize = 7

@@ -83,6 +83,35 @@ package body Landin.Tests.Memory_Suite is
      (Final - Settled <= Tolerance
       and then not (Late > Midpoint and then Final > Late));
 
+   --  The host's one-minute load average, for a failure's message: a flat
+   --  case that failed once on a loaded host and passed alone says nothing
+   --  about the cause unless the failure records what else was running.
+   function Load_Note return String;
+
+   function Load_Note return String is
+      type Averages is array (1 .. 3) of Interfaces.C.double
+        with Convention => C;
+      function Get_Load_Average
+        (Into : out Averages; Count : Interfaces.C.int) return Interfaces.C.int
+        with Import, Convention => C, External_Name => "getloadavg";
+      Loads : Averages := [others => 0.0];
+      use type Interfaces.C.int;
+      use type Interfaces.C.double;
+   begin
+      if Get_Load_Average (Loads, 3) < 1 then
+         return "; the host's load average is unavailable";
+      end if;
+      declare
+         Hundredths : constant Natural := Natural (Loads (1) * 100.0);
+         Fraction : constant String := Natural'Image (Hundredths mod 100);
+      begin
+         return "; the host's one-minute load average was"
+           & Natural'Image (Hundredths / 100) & "."
+           & (if Hundredths mod 100 < 10 then "0" else "")
+           & Fraction (Fraction'First + 1 .. Fraction'Last);
+      end;
+   end Load_Note;
+
    --  Execute returns only after its per-run result has been finalized.
    --  Every sample, including the last, is taken at that same point.
    procedure Measure_Repeated
@@ -245,6 +274,53 @@ package body Landin.Tests.Memory_Suite is
       return Arguments;
    end Request;
 
+   --  The verdict of a window that grew, decided by a second window.
+   --
+   --  A leak is growth every run, so it shows in every window measured; a
+   --  window that grew once, on a loaded host, is what "checking stays
+   --  flat" met once and nothing could explain.
+   --  A window that is not flat is therefore followed by a second,
+   --  measured the same way straight after it, and the case fails only if
+   --  that one grows too, with both windows' numbers and the host's load
+   --  in the failure.  A flat first window is the verdict on its own.
+   procedure Confirm
+     (Item     : in out Landin.Testing.Context;
+      Meter    : Landin.Platform.Native.Native_Meter;
+      Measured : Positive;
+      Execute  : not null access function (Run : Positive) return Boolean;
+      Settled, Midpoint, Late, Final : Long_Long_Integer;
+      First    : String);
+
+   procedure Confirm
+     (Item     : in out Landin.Testing.Context;
+      Meter    : Landin.Platform.Native.Native_Meter;
+      Measured : Positive;
+      Execute  : not null access function (Run : Positive) return Boolean;
+      Settled, Midpoint, Late, Final : Long_Long_Integer;
+      First    : String)
+   is
+      Again_Settled, Again_Midpoint, Again_Late, Again_Final :
+        Long_Long_Integer;
+      Completed : Boolean;
+   begin
+      if Flat (Settled, Midpoint, Late, Final) then
+         Landin.Testing.Check (Item, True, First);
+         return;
+      end if;
+      Measure_Repeated
+        (Meter, 1, Measured, Execute,
+         Again_Settled, Again_Midpoint, Again_Late, Again_Final, Completed);
+      if not Completed then
+         return;
+      end if;
+      Landin.Testing.Check
+        (Item, Flat (Again_Settled, Again_Midpoint, Again_Late, Again_Final),
+         First & "; a second window grew by "
+         & Image (Again_Final - Again_Settled) & " bytes, tail parts "
+         & Image (Again_Late - Again_Midpoint) & " and "
+         & Image (Again_Final - Again_Late) & Load_Note);
+   end Confirm;
+
    --  Runs the request Warm times unmeasured and Measured times more, and
    --  checks both the total growth and whether it persists across the tail.
    procedure Repeat
@@ -290,8 +366,9 @@ package body Landin.Tests.Memory_Suite is
       if not Completed then
          return;
       end if;
-      Landin.Testing.Check
-        (Item, Flat (Settled, Midpoint, Late, Final),
+      Confirm
+        (Item, Meter, Measured, Execute_One'Access,
+         Settled, Midpoint, Late, Final,
          What & ": after" & Measured'Image & " more runs the allocator "
          & "holds " & Image (Final - Settled) & " bytes more than after "
          & "the first" & Warm'Image & "; tail parts grew by "
@@ -347,8 +424,9 @@ package body Landin.Tests.Memory_Suite is
       if not Completed then
          return;
       end if;
-      Landin.Testing.Check
-        (Item, Flat (Settled, Midpoint, Late, Final),
+      Confirm
+        (Item, Meter, Measured, Execute_One'Access,
+         Settled, Midpoint, Late, Final,
          "formatting the derived log filter: after" & Measured'Image
          & " more runs the allocator holds " & Image (Final - Settled)
          & " bytes more; tail parts grew by " & Image (Late - Midpoint)

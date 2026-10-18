@@ -1,9 +1,11 @@
 with Ada.Calendar.Formatting;
 with Ada.Directories;
 with Ada.Environment_Variables;
+with Ada.Exceptions;
 with Ada.Streams.Stream_IO;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Ada.Text_IO;
 with Ada.Unchecked_Deallocation;
 with Interfaces.C;
 
@@ -762,6 +764,190 @@ package body Landin.Tests.Platform_Suite is
            and then Result.Exit_Code = 3,
          "an empty path restores the inherited input");
    end Native_Standard_Input_Is_Fed_From_A_File;
+
+   --  Deliberate native-host test: a caller whose standard descriptors are
+   --  closed has its captures, and the input Set_Input opens, made at those
+   --  numbers, where one spawn action could overwrite a source a later one
+   --  still read.  With standard input closed, the merged capture took 0,
+   --  the input became the tool's stdout and the capture was closed as its
+   --  stdin.  Every nonempty set of closed standard descriptors runs with
+   --  a merged and a split capture, fed from a file and, when 0 is among
+   --  them, inheriting a standard input the caller has not got.  This
+   --  process's own descriptors are put back before any check is
+   --  recorded, and nothing writes while they are closed.
+   procedure Native_Runs_Survive_Closed_Standard_Descriptors
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Runs_Survive_Closed_Standard_Descriptors
+     (Item : in out Landin.Testing.Context)
+   is
+      use type Interfaces.C.int;
+
+      function Duplicate
+        (Descriptor : Interfaces.C.int) return Interfaces.C.int
+        with Import, Convention => C, External_Name => "dup";
+      function Duplicate_Onto
+        (Source, Target : Interfaces.C.int) return Interfaces.C.int
+        with Import, Convention => C, External_Name => "dup2";
+      --  Its result is not wanted: a descriptor already closed stays so.
+      procedure Close (Descriptor : Interfaces.C.int)
+        with Import, Convention => C, External_Name => "close";
+
+      subtype Standard_Descriptor is Natural range 0 .. 2;
+      type Descriptor_Set is array (Standard_Descriptor) of Boolean;
+      type Mode_Index is range 1 .. 2;
+      Modes : constant array (Mode_Index) of Landin.Platform.Capture_Mode :=
+        [Landin.Platform.Merged, Landin.Platform.Output_Only];
+
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Path    : constant String := Scratch & "/closed-standard-input.txt";
+      Fed     : constant String := "fed" & ASCII.LF;
+      Written : Landin.Platform.Write_Status;
+      Saved   : array (Standard_Descriptor) of Interfaces.C.int :=
+        [others => -1];
+      Restored : Boolean := True;
+
+      --  The caller's own descriptors back where they were: a copy where
+      --  it had one, and closed where it had none.
+      procedure Restore;
+
+      procedure Restore is
+      begin
+         for Number in Standard_Descriptor loop
+            if Saved (Number) >= 0 then
+               if Duplicate_Onto (Saved (Number), Interfaces.C.int (Number))
+                 < 0
+               then
+                  Restored := False;
+               end if;
+            else
+               Close (Interfaces.C.int (Number));
+            end if;
+         end loop;
+      end Restore;
+
+      function Image (Closed : Descriptor_Set) return String;
+
+      function Image (Closed : Descriptor_Set) return String is
+        ((if Closed (0) then " 0" else "")
+         & (if Closed (1) then " 1" else "")
+         & (if Closed (2) then " 2" else ""));
+
+      --  Run the shell with SCRIPT and every descriptor in CLOSED closed,
+      --  and report the result, or the exception, once this process's
+      --  descriptors are back.
+      procedure Closed_Run
+        (Closed  : Descriptor_Set;
+         Mode    : Landin.Platform.Capture_Mode;
+         Script  : String;
+         Result  : out Landin.Platform.Tool_Result;
+         Problem : out Unbounded.Unbounded_String);
+
+      procedure Closed_Run
+        (Closed  : Descriptor_Set;
+         Mode    : Landin.Platform.Capture_Mode;
+         Script  : String;
+         Result  : out Landin.Platform.Tool_Result;
+         Problem : out Unbounded.Unbounded_String)
+      is
+         Args : Landin.Platform.Path_List := Landin.Platform.Arguments ("-c");
+      begin
+         Problem := Unbounded.Null_Unbounded_String;
+         Landin.Platform.Add (Args, Script);
+         for Number in Standard_Descriptor loop
+            if Closed (Number) then
+               Close (Interfaces.C.int (Number));
+            end if;
+         end loop;
+         begin
+            Runner.Run ("sh", Args, Result, Mode);
+         exception
+            when Error : others =>
+               Problem := Unbounded.To_Unbounded_String
+                 (Ada.Exceptions.Exception_Information (Error));
+         end;
+         Restore;
+      end Closed_Run;
+
+      Result  : Landin.Platform.Tool_Result;
+      Problem : Unbounded.Unbounded_String;
+      Closed  : Descriptor_Set;
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      Host.Write_File (Path, Fed, Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok, "the input was written");
+      Ada.Text_IO.Flush (Ada.Text_IO.Standard_Output);
+      Ada.Text_IO.Flush (Ada.Text_IO.Standard_Error);
+      for Number in Standard_Descriptor loop
+         Saved (Number) := Duplicate (Interfaces.C.int (Number));
+      end loop;
+
+      for Mask in 1 .. 7 loop
+         Closed := [for Number in Standard_Descriptor =>
+                      (Mask / 2 ** Number) mod 2 = 1];
+         for Mode of Modes loop
+            declare
+               Label : constant String :=
+                 " with" & Image (Closed) & " closed and "
+                 & (if Mode = Landin.Platform.Merged then "a merged"
+                    else "a split")
+                 & " capture";
+            begin
+               Runner.Set_Input (Path);
+               Closed_Run
+                 (Closed, Mode, "cat; printf err >&2", Result, Problem);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Problem), "",
+                  "a fed run starts" & Label);
+               Landin.Testing.Check
+                 (Item, Result.Ended = Landin.Platform.Exited
+                    and then Result.Exit_Code = 0,
+                  "a fed run exits 0" & Label);
+               if Mode = Landin.Platform.Merged then
+                  Landin.Testing.Check_Equal
+                    (Item, Unbounded.To_String (Result.Output), Fed & "err",
+                     "the input and both streams reach the capture" & Label);
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Unbounded.To_String (Result.Output), Fed,
+                     "the input reaches the output capture" & Label);
+                  Landin.Testing.Check_Equal
+                    (Item, Unbounded.To_String (Result.Error_Output), "err",
+                     "the error stream reaches its own capture" & Label);
+               end if;
+
+               if Closed (0) then
+                  Runner.Set_Input ("");
+                  Closed_Run
+                    (Closed, Mode,
+                     "if cat 2>/dev/null; then printf open; "
+                     & "else printf closed; fi; printf err >&2",
+                     Result, Problem);
+                  Landin.Testing.Check_Equal
+                    (Item, Unbounded.To_String (Problem), "",
+                     "an inheriting run starts" & Label);
+                  Landin.Testing.Check_Equal
+                    (Item,
+                     Unbounded.To_String (Result.Output)
+                     & Unbounded.To_String (Result.Error_Output),
+                     "closederr",
+                     "a tool inheriting no standard input gets none, "
+                     & "not the capture," & Label);
+               end if;
+            end;
+         end loop;
+      end loop;
+
+      for Number in Standard_Descriptor loop
+         if Saved (Number) >= 0 then
+            Close (Saved (Number));
+         end if;
+      end loop;
+      Landin.Testing.Check
+        (Item, Restored, "this process's own descriptors were put back");
+   end Native_Runs_Survive_Closed_Standard_Descriptors;
 
    --  Deliberate native-host test: only the host says where a file was
    --  created. The tool lists TMPDIR while its captures are open, and both
@@ -1632,6 +1818,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native standard input is fed from a file",
          Native_Standard_Input_Is_Fed_From_A_File'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native runs survive closed standard descriptors",
+         Native_Runs_Survive_Closed_Standard_Descriptors'Access);
       Landin.Testing.Register
         (Into, "platform", "fake writes are recorded",
          Fake_Writes_Are_Recorded'Access);

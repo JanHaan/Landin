@@ -393,7 +393,7 @@ def index(pages, site_url, release, sizes):
            "today rather" % release,
            "than what is intended, and it grows one slice at a time. There "
            "is no",
-           "release, packaging or acquisition story yet, and no claim of "
+           "package acquisition story yet, and no claim of "
            "memory or",
            "resource safety — the language is deliberately unsafe with "
            "useful local",

@@ -1,11 +1,17 @@
 import core/fault
-import hosted/heap
 import core/tree
+import hosted/heap
 
 public main: () -> (code: i32) =
     code = 1
-    heap := heap.host()
-    budget: usize = 10
+    heap := heap.new()
+    --  Seven growths of the node list, each first asking to grow in place
+    --  (D356).  How many the heap grows where they are depends on the
+    --  system's pages and where its mappings land, so the oracle holds what
+    --  does not: every block given is freed once, a growth in place gives
+    --  none, and the seven growth attempts are what attempts count beyond
+    --  frees.  Fifteen attempts cover none grown in place.
+    budget: usize = 15
     mut space: fault.space = zeroed
     counted := fault.over(space, heap, budget)
     zero_count: usize = 0
@@ -98,8 +104,10 @@ public main: () -> (code: i32) =
     tree.release(value, counted)
     if three == 3 and empty == 0 and six == 6 and deep_count == 3
       and invalid and unchanged and tree.length(value) == 0
-      and fault.live(counted) == 0 and fault.successes(counted) == 8
-      and fault.frees(counted) == 8
+      and fault.live(counted) == 0
+      and fault.successes(counted) == fault.frees(counted)
+      and fault.successes(counted) + fault.growths(counted) == 8
+      and fault.attempts(counted) - fault.frees(counted) == 7
     then
         code = 42
     end if

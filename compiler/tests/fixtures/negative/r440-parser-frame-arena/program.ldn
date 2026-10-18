@@ -1,16 +1,14 @@
+import core/arena
 import core/diag
-import core/mem
 import examples/config_parser/parser
 
 bad: () -> none =
     mut memory: [4096]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over(space, addr memory[0], 4096)
+    mut space: arena.space = zeroed
+    bump := arena.over(space, addr memory[0], 4096)
     mut collected := diag.new(capacity: 1)
     mut logger: any diag.log = any(addr collected)
     mut tree := parser.empty()
     source: [1]u8 = [10]
-    parser.parse_file(source[0..<1], logger, arena, tree) else (problem)
-        _ = problem
-    end
+    parser.parse_file(source[0..<1], logger, bump, tree) else none
 end bad

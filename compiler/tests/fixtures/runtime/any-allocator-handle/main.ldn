@@ -1,23 +1,24 @@
 --  An arena handle erased as `any mem.allocator`: two copies of the erased
 --  view and the handle itself allocate from one state, so each sees the
 --  others' allocations in the shared count.
+import core/arena
 import core/mem
 
 exercise: () -> (ok: bool) ! mem.out_of_memory =
     ok = false
     mut backing: [32]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 32)
-    erased: any mem.allocator = any(addr arena)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 32)
+    erased: any mem.allocator = any(addr memory)
     again := erased
     first := try erased.alloc(usize(4), usize(1))
     second := try again.alloc(usize(4), usize(1))
-    third := try mem.allocate(arena, usize(4), usize(1))
+    third := try mem.allocate(memory, usize(4), usize(1))
     first.val = 1
     second.val = 2
     third.val = 3
     return when first.val <> 1 or second.val <> 2 or third.val <> 3
-    ok = mem.arena_used(arena) == 12
+    ok = arena.used(memory) == 12
 end exercise
 
 public main: () -> (code: i32) =

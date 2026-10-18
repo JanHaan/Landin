@@ -1,0 +1,65 @@
+--  A transfer of more than INT_MAX bytes is made short, as POSIX lets any
+--  transfer be, and never refused: Darwin's C library fails a read or a
+--  write above INT_MAX with EINVAL, so platform/posix bounds what it asks.
+--  The buffer is a fresh mapping larger than INT_MAX, which /dev/null's
+--  writes never touch and the reads touch only where they put bytes.
+import core/text
+import platform/posix
+
+--  INT_MAX and one page more.
+length: usize = 0x80001000
+
+--  A writable view of LENGTH bytes at BASE, a mapping of that many.
+view_of: (base: ptr mut u8) -> (view: []mut u8) =
+    first: ptr mut [1]u8 = ptr(usize(base))
+    view = first.val[0..<1]
+    unchecked begin
+        --  The mapping holds `length` bytes.
+        view = view[0..<length]
+    end unchecked
+end view_of
+
+transfers: (view: []mut u8) -> (code: i32) ! posix.errno =
+    code = 3
+    nowhere: posix.descriptor =
+        try posix.open_at(posix.working_directory,
+                          text.host_over("/dev/null"),
+                          (access: posix.read_write, create: false,
+                           exclusive: false, truncate: false, append: false,
+                           directory: false), 0)
+    defer posix.close(nowhere) else none
+    written: usize = try posix.write(nowhere, view)
+    return when written == 0 or written > 0x7FFFFFFF
+    code = 4
+    placed: usize = try posix.write_at(nowhere, u64(0), view)
+    return when placed == 0 or placed > 0x7FFFFFFF
+    code = 5
+    ends: posix.pipe_ends = try posix.pipe()
+    defer posix.close(ends.reading) else none
+    sent: usize = try posix.write(ends.writing, "hello")
+    try posix.close(ends.writing)
+    return when sent <> 5
+    got: usize = try posix.read(ends.reading, view)
+    return when got <> 5 or view[0] <> u8('h') or view[4] <> u8('o')
+    code = 6
+    nothing: usize = try posix.read_at(nowhere, u64(0), view)
+    return when nothing <> 0
+    code = 42
+end transfers
+
+public main: () -> (code: i32) =
+    code = 1
+    base: ptr mut u8 = posix.map(length) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    code = transfers(view_of(base)) else (problem)
+        _ = problem
+        2
+    end
+    posix.unmap(base, length) else (problem)
+        _ = problem
+        code = 7
+    end
+end main

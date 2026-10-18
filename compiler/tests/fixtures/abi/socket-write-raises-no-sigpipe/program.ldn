@@ -1,0 +1,56 @@
+--  Landin's side of a C main that installed its own SIGPIPE handler: it
+--  connects to a listener over 127.0.0.1, has the server close its end,
+--  and writes to the connection through the writer concept until a write
+--  fails, for at most two seconds.  It reports 1 when that write failed
+--  with EPIPE kept as the last errno, and a larger number for what went
+--  wrong instead.
+import core/io
+import core/net
+import core/time
+import hosted/system
+import platform/posix
+
+public extern(c) l_connection_write: () -> (result: i32) =
+    host := system.new()
+    result = 2
+    listener: io.file = net.listen(host, net.loopback(net.ipv4, 0)) else (problem)
+        _ = problem
+        return
+    end
+    at: net.address = net.local_address(host, listener) else (problem)
+        _ = problem
+        return
+    end
+    client: io.file = net.connect(host, at) else (problem)
+        _ = problem
+        return
+    end
+    server: io.file = net.accept(host, listener) else (problem)
+        _ = problem
+        return
+    end
+    net.close_socket(host, listener) else (problem)
+        _ = problem
+        return
+    end
+    net.close_socket(host, server) else (problem)
+        _ = problem
+        return
+    end
+    result = 3
+    deadline: time.instant = time.later(time.now(host), time.seconds(2))
+    loop do
+        io.write(host, client, "anyone?") else (problem)
+            _ = problem
+            result = if system.last_errno(host) == posix.number(posix.epipe)
+            then 1 else 4 end if
+            break
+        end
+        break when time.now(host) >= deadline
+        time.sleep(host, time.milliseconds(10))
+    end loop
+    net.close_socket(host, client) else (problem)
+        _ = problem
+        result = 5
+    end
+end l_connection_write

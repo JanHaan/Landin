@@ -1,0 +1,12 @@
+--  D310 refuses a value after the `else` of a call that returns none, and
+--  D376 offers the one word that says what the value was written for.
+refused: atom
+
+attempt: (flag: bool) -> none ! refused =
+    fail refused when flag
+end attempt
+
+handled: () -> (code: i32) =
+    attempt(true) else none
+    code = 0
+end handled

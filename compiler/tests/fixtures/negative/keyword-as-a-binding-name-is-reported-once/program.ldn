@@ -1,0 +1,4 @@
+span: (start: i32) -> (r: i32) =
+    from := start
+    r = from + 1
+end span

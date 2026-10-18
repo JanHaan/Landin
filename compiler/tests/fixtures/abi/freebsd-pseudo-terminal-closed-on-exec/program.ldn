@@ -1,0 +1,12 @@
+--  Landin's side: open a pseudo-terminal pair through platform/posix and
+--  give C the controller's descriptor, or -1.
+import platform/posix
+
+public extern(c) l_controller: () -> (result: i32) =
+    result = -1
+    pair: posix.pseudo_terminal = posix.open_pseudo_terminal() else (problem)
+        _ = problem
+        return
+    end
+    result = i32(pair.controller)
+end l_controller

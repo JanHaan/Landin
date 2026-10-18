@@ -80,23 +80,24 @@ public main: () -> (code: i32) =
     end
 
     mut output_storage: [11]u8 = [of 0]
-    output: []mut u8 = output_storage[0..<lenof output_storage]
-    mut used: usize = text.write_byte(output, 0, 65) else 99
-    used = text.write_u32(output, used, 4294967295) else 99
-    output_bytes: []u8 = text.prefix(output, used) else []
+    mut output := text.over(output_storage[0..<11])
+    text.append_byte(output, u8('A')) else none
+    text.append_u32(output, 4294967295) else none
+    used: usize = text.length(output)
+    output_bytes: []u8 = text.used(output)
 
     mut edge_storage: [13]u8 = [of 0]
-    edge: []mut u8 = edge_storage[0..<lenof edge_storage]
-    mut edge_used: usize = text.write_u32(edge, 0, 0) else 99
-    edge_used = text.write_u32(edge, edge_used, 10) else 99
-    edge_used = text.write_u32(edge, edge_used, 1000000000) else 99
+    mut edge := text.over(edge_storage[0..<13])
+    text.append_u32(edge, 0) else none
+    text.append_u32(edge, 10) else none
+    text.append_u32(edge, 1000000000) else none
+    edge_used: usize = text.length(edge)
 
     mut small_storage: [3]u8 = [7, 8, 9]
-    small: []mut u8 = small_storage[0..<lenof small_storage]
+    mut small := text.over(small_storage[1..<3])
     mut refused_write: bool = false
-    _ = text.write_u32(small, 1, 999) else (problem)
+    text.append_u32(small, 999) else (problem)
         refused_write = problem == text.no_space
-        0
     end
 
     --  Repeated prefixes used to retry every offset with the old search.
@@ -139,12 +140,12 @@ public main: () -> (code: i32) =
       and used == 11 and lenof output_bytes == 11
       and output_bytes[0] == 65 and output_bytes[1] == 52
       and output_bytes[10] == 53
-      and edge_used == 13 and edge[0] == 48
-      and edge[1] == 49 and edge[2] == 48
-      and edge[3] == 49 and edge[4] == 48
-      and edge[11] == 48 and edge[12] == 48
-      and refused_write and small[0] == 7 and small[1] == 8
-      and small[2] == 9
+      and edge_used == 13 and edge_storage[0] == 48
+      and edge_storage[1] == 49 and edge_storage[2] == 48
+      and edge_storage[3] == 49 and edge_storage[4] == 48
+      and edge_storage[11] == 48 and edge_storage[12] == 48
+      and refused_write and small_storage[0] == 7
+      and small_storage[1] == 8 and small_storage[2] == 9
     then
         code = 42
     else

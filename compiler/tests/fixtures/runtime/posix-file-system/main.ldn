@@ -19,10 +19,7 @@ said: (name: []u8, problem: posix.errno) -> none =
     mut line: [64]u8 = zeroed
     mut made := text.over(line[0..<64])
     number: i32 = posix.number(problem)
-    text.format(made, "{}={}\n", [any(addr name), any(addr number)])
-        else (ignored)
-        _ = ignored
-    end
+    text.format(made, "{}={}\n", [any(addr name), any(addr number)]) else none
     say(text.used(made))
 end said
 
@@ -38,13 +35,9 @@ files: [7][]u8 = ["data", "taken", "second", "link", "loop", "dangling",
 --  Remove what an earlier run may have left.
 clear: (folder: posix.descriptor) -> none =
     for name in files do
-        posix.unlink_at(folder, text.host_over(name)) else (problem)
-            _ = problem
-        end
+        posix.unlink_at(folder, text.host_over(name)) else none
     end for
-    posix.remove_directory_at(folder, text.host_over("box")) else (problem)
-        _ = problem
-    end
+    posix.remove_directory_at(folder, text.host_over("box")) else none
 end clear
 
 update: posix.open_options = (access: posix.read_write, create: true,
@@ -131,9 +124,7 @@ sizes: (folder: posix.descriptor, data: posix.descriptor) -> (ok: bool) =
             said("open", problem)
             return
         end
-    defer posix.close(reading) else (problem)
-        _ = problem
-    end
+    defer posix.close(reading) else none
     posix.truncate(reading, 0) else (problem)
         --  Linux and FreeBSD say EINVAL; POSIX allows EBADF too.
         ok = was("ftruncate-read-only", problem, posix.einval)

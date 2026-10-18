@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: the memory volume counts every read_entry, whether it refills the directory's buffer or reads what a refill left there, every entry_size and every same_file as a call, and fails the one fail_at names with io_failed without reading anything, so the next call gives the entry the failed one would have
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0560, 0570, 0900, 0940, 1030, 1100, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,5 @@
+--- The entry at `index` of a table C handed over as a bare pointer.
+entry_at: (table: ptr u32, index: usize) -> (value: u32) =
+    entry: ptr u32 = ptr(usize(table) + index * sizeof u32)
+    value = entry.val
+end entry_at

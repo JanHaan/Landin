@@ -2909,10 +2909,16 @@ package body Landin.Stages.Checking.Flow is
                      Recovery_Edges : Edge_Facts;
                   begin
                      if Syn.Kind (Of_Tree, Recovery_Body) = Syn.Block then
+                        --  D376: `else none` on a call with a result is
+                        --  refused once, by the checker, rather than again
+                        --  here as an empty value block.
                         Flow_Block
                           (Of_Tree, Recovery_Body, Result,
                            Syn.Origin (Of_Tree, Recovery), Recovered,
-                           Recovery_Edges, Needs_Value);
+                           Recovery_Edges,
+                           Needs_Value
+                           and then not Syn.Ignores_Failure
+                             (Of_Tree, Recovery));
                      else
                         Flow_Expression
                           (Of_Tree, Recovery_Body, Result, Recovered,

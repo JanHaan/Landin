@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: over 127.0.0.1 and over ::1, once the server has closed its end the client reads the end of the stream, a send is io.disconnected within two seconds and a later io.write fails with EPIPE kept as the last errno, the process surviving both because it ignores SIGPIPE
+summary: over 127.0.0.1 and over ::1, once the server has closed its end the client reads the end of the stream, a send is net.disconnected within two seconds and a later io.write fails with EPIPE kept as the last errno, the process surviving both because it ignores SIGPIPE
 program: main.ldn
 root: ../../../../..
 status: 42

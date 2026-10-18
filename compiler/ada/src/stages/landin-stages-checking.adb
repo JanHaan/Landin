@@ -1465,7 +1465,9 @@ package body Landin.Stages.Checking is
       end Written_Return_Sources;
       function Exact_Concept_Entry_Signature
         (Evidence : Landin.Checking.Conformance_Id;
-         Position : Positive) return Landin.Checking.Signature_Id;
+         Position : Positive;
+         Unanswered : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept) return Landin.Checking.Signature_Id;
       function Provider_Preserves_Concept_Labels
         (Evidence  : Landin.Checking.Conformance_Id;
          Position  : Positive;
@@ -9426,6 +9428,11 @@ package body Landin.Stages.Checking is
          Pattern_Failure_Reported : array
            (1 .. Positive'Max (1, Runtime_Count)) of Boolean :=
              [others => False];
+         --  D372: the class of each untyped literal argument, matched
+         --  after every other argument; Not_Typed for any other argument.
+         Deferred_Literal : array
+           (1 .. Positive'Max (1, Runtime_Count)) of Ty.Type_Kind :=
+             [others => Ty.Not_Typed];
 
          --  A parameterized type pattern introduces its own formals.  Their
          --  actuals are still written patterns in the caller's signature,
@@ -10110,8 +10117,9 @@ package body Landin.Stages.Checking is
                                (Syn.Name (Template_Tree.all, Formal_Node))
                              & "` must decide the same"
                              & (if This_Is = "`i32`"
-                                then "; an untyped literal decides `i32`,"
-                                     & " so convert it to the type meant"
+                                then "; a literal that nothing else decides"
+                                     & " is `i32`, so convert it to the"
+                                     & " type meant"
                                 else ""),
                   Related =>
                     (if Landin.Provenance.Is_Known (First)
@@ -10688,7 +10696,8 @@ package body Landin.Stages.Checking is
                    else "this is " & Shown (Actual.Kind) & " and "
                         & Shown (Expected.Kind) & " belongs here")
                   & (if Actual.Kind = Ty.I32
-                     then "; in a generic call an untyped literal is `i32`"
+                     then "; an integer literal takes only an integer type,"
+                          & " and `i32` when nothing else decides it"
                      else ""));
                return False;
             end Constant_Agrees;
@@ -10727,6 +10736,35 @@ package body Landin.Stages.Checking is
                            Position, Item.Parent_Limit);
                      end;
                   end if;
+               end;
+            end if;
+
+            --  D372: a fixed-array place lends a slice of its whole length
+            --  to an outer slice parameter, as D309 lends one to any other
+            --  routine.  Its element meets the slice's element pattern; the
+            --  ordinary check of the instance's call then lends it, and
+            --  refuses a read-only place where `[]mut` is written.
+            if Kind = Syn.Slice_Type
+              and then Outer_Reference
+              and then Actual.Kind = Ty.Fixed_Array
+              and then Syn.Kind (Caller_Tree, Argument) /= Syn.Array_Literal
+              and then Lends_An_Array (Caller_Tree, Argument)
+            then
+               declare
+                  Element : constant Type_Descriptor :=
+                    (if Has_Element_Metadata (Actual.Element_Shape)
+                     then Shape_Descriptor (Actual.Element_Shape)
+                     elsif Actual.Element_Nominal
+                          /= Landin.Checking.No_Nominal_Type
+                     then (Kind => Ty.Aggregate,
+                           Nominal => Actual.Element_Nominal,
+                           others => <>)
+                     else (Kind => Actual.Element, others => <>));
+               begin
+                  return Match_Type_Pattern
+                    (Pattern_Tree,
+                     Syn.Referenced_Type (Pattern_Tree, Pattern),
+                     Element, Argument, Position, Map_Limit);
                end;
             end if;
 
@@ -11280,12 +11318,12 @@ package body Landin.Stages.Checking is
                            then Ty.Fixed_Array
                            else Selected_From (Caller_Tree, Argument))
                      else Synthesise (Caller_Tree, Argument));
-                  if Got = Ty.Untyped_Integer then
-                     Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
-                     Got := Ty.Default_Integer;
-                  elsif Got = Ty.Untyped_Float then
-                     Commit_To (Caller_Tree, Argument, Ty.Default_Float);
-                     Got := Ty.Default_Float;
+                  --  D372: an untyped literal is typed from its
+                  --  parameter, so it waits until every other argument
+                  --  has been matched.
+                  if Got in Ty.Untyped_Integer | Ty.Untyped_Float then
+                     Deferred_Literal (Index) := Got;
+                     goto Next_Deduction_Argument;
                   end if;
                   if Got = Ty.Ill_Typed then
                      Good := False;
@@ -11296,7 +11334,7 @@ package body Landin.Stages.Checking is
                      --  A written atom set names no formal, so there is
                      --  nothing to deduce: the argument widens into it as
                      --  [0640] lets an ordinary call's argument widen, and
-                     --  `io.shutdown(host, socket, io.sending)` needs no
+                     --  `net.shutdown(host, socket, net.sending)` needs no
                      --  local of the set's type first.
                      null;
                   else
@@ -11314,6 +11352,49 @@ package body Landin.Stages.Checking is
                end;
                <<Next_Deduction_Argument>>
                null;
+            end loop;
+
+            --  D372: each untyped literal takes the type its parameter
+            --  pattern names once the other arguments have bound what it
+            --  mentions, when that is a scalar of the literal's class.
+            --  Otherwise it takes [0200]'s default as before and decides
+            --  the pattern itself.  The literals wait for every other
+            --  argument, so which one is written first changes nothing.
+            for Index in 1 .. Runtime_Count loop
+               if Deferred_Literal (Index) /= Ty.Not_Typed then
+                  declare
+                     Parameter : constant Syn.Node_Id := Syn.Nth_Parameter
+                       (Template_Tree.all, Function_Node, Index);
+                     Pattern : constant Syn.Node_Id :=
+                       Syn.Declared_Type (Template_Tree.all, Parameter);
+                     Argument : constant Syn.Node_Id :=
+                       Runtime_Argument_At (Index);
+                     Expected : constant Type_Descriptor := Normalized_Type
+                       (Template_Tree.all, Pattern, Bound,
+                        Syn.Origin (Caller_Tree, Call), Identity_Only);
+                     Got : constant Ty.Type_Kind :=
+                       (if Deferred_Literal (Index) = Ty.Untyped_Integer
+                          and then Expected.Kind in Ty.Integer_Name
+                        then Expected.Kind
+                        elsif Deferred_Literal (Index) = Ty.Untyped_Float
+                          and then Expected.Kind in Ty.Float_Name
+                        then Expected.Kind
+                        elsif Deferred_Literal (Index) = Ty.Untyped_Integer
+                        then Ty.Default_Integer
+                        else Ty.Default_Float);
+                  begin
+                     Commit_To (Caller_Tree, Argument, Got);
+                     declare
+                        Agrees : constant Boolean := Match_Type_Pattern
+                          (Template_Tree.all, Pattern,
+                           Descriptor_At (Caller_Tree, Argument, Got),
+                           Argument, Index, 0, True);
+                        pragma Unreferenced (Agrees);
+                     begin
+                        null;
+                     end;
+                  end;
+               end if;
             end loop;
          end if;
 
@@ -14094,7 +14175,9 @@ package body Landin.Stages.Checking is
                               Where => Syn.Where (Of_Tree, Argument),
                               Message => "a packed field has no independent"
                                 & " address for an inout parameter",
-                              Note => "[0730]: pass the containing image",
+                              Note => "[0730]: a packed field has no address"
+                                      & " of its own; pass the whole packed"
+                                      & " value that holds it",
                               Related => Parameter.Site,
                               Because => "this inout parameter",
                               Into => Found);
@@ -14702,17 +14785,49 @@ package body Landin.Stages.Checking is
                               Message => "this call returns nothing, so its"
                                          & " `else` has no result to stand"
                                          & " in for",
-                              Note    => "[1030]: handle the error in a"
-                                         & " block, `else (problem) ... end`,"
-                                         & " which yields no value",
+                              Note    => "[1030]: `else none` ignores the"
+                                         & " error, and `else (problem) ..."
+                                         & " end` handles it in a block;"
+                                         & " neither yields a value",
                               Related => Landin.Checking.Signature_Origin
                                 (Types.all, Signature),
                               Because => "this signature returns none",
+                              --  Only the one-value form is a value the
+                              --  source wrote in `none`'s place.
+                              Fixes   =>
+                                (if Syn.Name (Of_Tree, Recovery)
+                                      = Landin.Source.Names.No_Name
+                                   and then Syn.Statement_Count
+                                     (Of_Tree, Recovery_Body) = 0
+                                 then
+                                   [1 => Landin.Diagnostics.Fixes
+                                           .Ignore_Failure
+                                             (Syn.Source_Of (Of_Tree),
+                                              Syn.Where (Of_Tree, Value))]
+                                 else Landin.Diagnostics.No_Fixes),
                               Into    => Found);
                            Landin.Checking.Refuse
                              (Types.all, Of_Tree, Value);
                         end if;
                      end;
+                  elsif Syn.Ignores_Failure (Of_Tree, Recovery) then
+                     --  D376: `else none` ignores a failure only where no
+                     --  result is lost with it.
+                     Bad.Report
+                       (Item    => Bad.Result_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Recovery),
+                        Message => "this call returns a value, so `else"
+                                   & " none` leaves nothing in its place",
+                        Note    => "D376: `else none` ignores the failure of"
+                                   & " a call that returns none; give the"
+                                   & " result a value with `else value`,"
+                                   & " handle the error with `else (problem)"
+                                   & " ... end`, or pass it on with `try`",
+                        Related => Result_Site,
+                        Because => "the result `else none` would leave"
+                                   & " unset",
+                        Into    => Found);
                   else
                      Check_Block
                        (Of_Tree, Recovery_Body, Expected.Kind, Expected,
@@ -15592,12 +15707,20 @@ package body Landin.Stages.Checking is
       --  association.  Validate_Conformance_Entries later proves that the
       --  provider has this shape; typing an inferred result does not need to
       --  read that provider before the proof has populated its table run.
+      --  D377: with Unanswered, a concept no conformance answers, the
+      --  entry is read with its represented type standing for nothing in
+      --  particular.  D146 keeps that type in `self` alone, which an erased
+      --  call supplies from its receiver, so what a caller is checked
+      --  against does not depend on it.
       function Exact_Concept_Entry_Signature
         (Evidence : Landin.Checking.Conformance_Id;
-         Position : Positive) return Landin.Checking.Signature_Id
+         Position : Positive;
+         Unanswered : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept) return Landin.Checking.Signature_Id
       is
          Concept : constant Landin.Checking.Concept_Id :=
-           Landin.Checking.Conformance_Concept (Types.all, Evidence);
+           (if Unanswered /= Landin.Checking.No_Concept then Unanswered
+            else Landin.Checking.Conformance_Concept (Types.all, Evidence));
          Declaration : constant Res.Declaration_Id :=
            Landin.Checking.Concept_Declaration (Types.all, Concept);
          Concept_Tree : constant not null access constant Syn.Tree :=
@@ -15674,8 +15797,11 @@ package body Landin.Stages.Checking is
            or else Formal_Count = 0
            or else Position > Syn.Concept_Entry_Count
              (Concept_Tree.all, Concept_Node)
-           or else Landin.Checking.Conformance_Input_Count
-             (Types.all, Evidence) + 1 /= Formal_Count
+           or else
+             (if Unanswered /= Landin.Checking.No_Concept
+              then Formal_Count /= 1
+              else Landin.Checking.Conformance_Input_Count
+                (Types.all, Evidence) + 1 /= Formal_Count)
          then
             return Landin.Checking.No_Signature;
          end if;
@@ -15688,7 +15814,9 @@ package body Landin.Stages.Checking is
                Syn.Nth_Concept_Formal
                  (Concept_Tree.all, Concept_Node, Index));
             Bound (Index).Value :=
-              (if Index = 1
+              (if Index = 1 and then Unanswered /= Landin.Checking.No_Concept
+               then (Kind => Ty.U8, others => <>)
+               elsif Index = 1
                then Descriptor_For
                  (Landin.Checking.Conformance_Target (Types.all, Evidence))
                else Descriptor_For
@@ -16133,19 +16261,26 @@ package body Landin.Stages.Checking is
             end;
          end loop;
          if Root_Evidence = Landin.Checking.No_Conformance then
-            Bad.Report
-              (Item => Bad.Erased_Contract,
-               Source => Syn.Source_Of (Of_Tree),
-               Where => Syn.Where (Of_Tree, Selection),
-               Message => "this closed program has no concrete runtime"
-                          & " table for the selected concept",
-               Note => "D145: an erased call dispatches one collected exact"
-                       & " conformance",
-               Related => Syn.Origin (Of_Tree, From),
-               Because => "the erased receiver",
-               Into => Found);
-            Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
-            return Landin.Checking.No_Signature;
+            --  D377: no conformance in the closed program answers the
+            --  concept, so no `any` of it can be made [1380] and no value
+            --  reaches this call.  It is checked against the entry as the
+            --  concept writes it, and noted with no dispatch, which lowering
+            --  turns into D232's `unreachable` trap at the call.
+            if Direct_Entry = 0 then
+               return Landin.Checking.No_Signature;
+            end if;
+            declare
+               Signature : constant Landin.Checking.Signature_Id :=
+                 Exact_Concept_Entry_Signature
+                   (Landin.Checking.No_Conformance, Positive (Direct_Entry),
+                    Unanswered => Declaring);
+            begin
+               if Signature /= Landin.Checking.No_Signature then
+                  Landin.Checking.Note_Signature
+                    (Types.all, Of_Tree, Selection, Signature);
+               end if;
+               return Signature;
+            end;
          end if;
          Declaring_Evidence := Landin.Checking.Find_Conformance
            (Types.all, Declaring,
@@ -17209,6 +17344,15 @@ package body Landin.Stages.Checking is
            or else Actual.Kind = Ty.Ill_Typed
          then
             return False;
+         end if;
+
+         --  A template is checked once with each type formal symbolic, and
+         --  an alias's body may apply a constrained template to one: the
+         --  constraint is decided where the alias is applied to concrete
+         --  actuals, which normalizes the body again, so nothing is decided
+         --  or recorded for the symbolic type here.
+         if Actual.Kind = Ty.Undecided then
+            return True;
          end if;
 
          --  Compiler concepts are representation-derived.  An ordinary
@@ -20424,8 +20568,10 @@ package body Landin.Stages.Checking is
                                  Message => "this is " & Shown (Got)
                                             & ", and an array literal needs"
                                             & " a scalar element type",
-                                 Note    => "D31: `lenof` checks the literal's"
-                                            & " D25 scalar shape",
+                                 Note    => "D31: `lenof` measures a literal"
+                                            & " whose elements share one"
+                                            & " scalar type, without"
+                                            & " evaluating them",
                                  Related => Syn.Origin (Of_Tree, Asked),
                                  Because => "this measured literal",
                                  Into    => Found);
@@ -21345,7 +21491,9 @@ package body Landin.Stages.Checking is
                            Source => Syn.Source_Of (Of_Tree),
                            Where => Syn.Where (Of_Tree, Node),
                            Message => "memory intrinsics cannot fail",
-                           Note => "[1620]/D227: no declared error result",
+                           Note => "[1620]/D227: a memory intrinsic has no"
+                                   & " error set, so neither `try` nor"
+                                   & " `else` applies to it",
                            Related => Syn.Origin (Of_Tree, Operand),
                            Because => "this memory operation", Into => Found);
                         return Kept (Ty.Ill_Typed);
@@ -21710,7 +21858,9 @@ package body Landin.Stages.Checking is
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Node),
                         Message => Message,
-                        Note => "[1620]/D227: explicit memory contract",
+                        Note => "[1620]/D227: a memory intrinsic's arguments"
+                                & " state its whole contract, and each must"
+                                & " be one the intrinsic takes",
                         Related => Syn.Origin (Of_Tree, Node),
                         Because => "this memory operation", Into => Found);
                      return Kept (Ty.Ill_Typed);
@@ -22785,7 +22935,9 @@ package body Landin.Stages.Checking is
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Place),
                         Message => "a packed field has no independent address",
-                        Note => "[0730]: take the containing image's address",
+                        Note => "[0730]: a packed field has no address of"
+                                & " its own; take the address of the whole"
+                                & " packed value that holds it",
                         Related => Syn.Origin (Of_Tree, Node),
                         Because => "this address operation", Into => Found);
                      return Kept (Ty.Ill_Typed);
@@ -25645,7 +25797,8 @@ package body Landin.Stages.Checking is
                Where   => Syn.Where (Of_Tree, Repetition),
                Message => "this mixed repetition leaves no array suffix to"
                           & " fill",
-               Note    => "D36/D37: a prefix requires 1 <= k < N",
+               Note    => "D36/D37: a repeated prefix writes at least one"
+                          & " element and fewer than the array holds",
                Related => Related,
                Because => "the array context here",
                Into    => Found);
@@ -26671,8 +26824,8 @@ package body Landin.Stages.Checking is
                      Where   => Syn.Where (Of_Tree, Subject),
                      Message => "a match subject is an atom set, a variant"
                                 & " part or a pointer union",
-                     Note    => "[1210]: arms name atoms and cases; compare"
-                                & " numbers with if and elsif",
+                     Note    => "[1210]: each arm names an atom or a case;"
+                                & " compare numbers with `if` and `elsif`",
                      Related => Syn.Origin (Of_Tree, Node),
                      Because => "this match",
                      Into    => Found);
@@ -31948,7 +32101,9 @@ package body Landin.Stages.Checking is
                         Where => Syn.Where (Of_Tree.all, Value),
                         Message => "an inferred erased pair is not a module"
                                    & " static image",
-                        Note => "D145: form `any(pointer)` in runtime storage",
+                        Note => "D145: an `any` value is made at run time"
+                                & " from a pointer, `any(p)`, so it has no"
+                                & " module image; make it inside a body",
                         Related => Syn.Origin (Of_Tree.all, Node),
                         Because => "this module binding",
                         Into => Found);

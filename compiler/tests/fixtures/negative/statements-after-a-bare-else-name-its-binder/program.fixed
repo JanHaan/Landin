@@ -1,0 +1,12 @@
+fault: atom
+
+attempt: (n: i32) -> none ! fault =
+    fail fault when n < 0
+end attempt
+
+run: (n: i32) -> (code: i32) =
+    code = 0
+    attempt(n) else (problem)
+        code = 1
+    end
+end run

@@ -1,0 +1,6 @@
+error[L0110]: Landin writes a conversion as its type applied to the value, `type(value)`, not with `as`
+  --> ../tests/fixtures/negative/foreign-as-is-named/program.ldn:2:11
+  |
+2 |     r = x as i32
+  |           ^^
+  = note: [0310]: nothing converts on its own, and a conversion is a call of the type converted to, as in `u32(count)`

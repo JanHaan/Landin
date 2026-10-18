@@ -1,0 +1,129 @@
+--  The system's two clocks, the monotonic one and the wall clock, read
+--  as seconds and nanoseconds, and sleeping on the monotonic one.
+
+import platform/libc
+import platform/linux
+import platform/linux/vdso
+
+--- The clock that counts steadily from a point the system fixes, its
+--- start, and is never set: POSIX's `CLOCK_MONOTONIC`.  Only the
+--- difference between two of its readings means anything.
+public monotonic_clock: atom
+
+--- The wall clock, UTC seconds and nanoseconds since 1970-01-01 without
+--- leap seconds, as the system keeps it, which may be set and so jump
+--- either way: POSIX's `CLOCK_REALTIME`.
+public realtime_clock: atom
+
+--- Which clock `clock_time` reads: `monotonic_clock` or `realtime_clock`.
+public clock_kind: type = monotonic_clock | realtime_clock
+
+--- A time or a span of time, POSIX's `struct timespec`: whole seconds and
+--- the nanoseconds after them, from 0 to 999,999,999.
+public time_value: type = struct
+    seconds: i64
+    nanoseconds: u32
+end time_value
+
+--- The time the clock `clock` reads now, POSIX's `clock_gettime`, or the
+--- errno.  On Linux it is the vDSO's `clock_gettime` when the auxiliary
+--- vector names a vDSO that has one, which answers without entering the
+--- kernel, under `--link=libc` too, and the system call otherwise; on
+--- Darwin and FreeBSD it is the C library's.
+public link(symbol: "_landin_posix_clock_time") clock_time:
+    (clock: clock_kind) -> (time: time_value) ! errno =
+    time = try system_clock_time(clock)
+end clock_time
+
+--- Sleep for `span`, POSIX's `nanosleep`, measured on the monotonic clock
+--- on Linux and on the system's own clock for sleeping elsewhere: or the
+--- errno, `eintr` when a signal came first, which leaves part of the span
+--- unslept, and `einval` for nanoseconds of a second or more.  It may
+--- return late, never early, of the clock it sleeps on.
+public link(symbol: "_landin_posix_sleep") sleep:
+    (span: time_value) -> none ! errno =
+    fail einval when span.seconds < 0 or span.nanoseconds >= 1000000000
+    try system_sleep(span)
+end sleep
+
+--  The system's own calls beneath the facility above: Linux's system
+--  calls through platform/linux, and the C library through
+--  platform/libc on Darwin and FreeBSD, whose system interface it is.
+
+fixed if compiler.os == linux then
+    --  The vDSO's `clock_gettime`, found the first time a clock is read:
+    --  zero before then, one when there is none, its address otherwise.
+    --  Process state of a single thread, as the heap's classes are: a C
+    --  thread calling in under --link=libc, the only other thread there
+    --  can be, finds the same vDSO and stores the same answer.  Threads of
+    --  the program's own are the threads item's.
+    mut vdso_clock: u64
+
+    no_vdso_clock: u64 = 1
+
+    --  The vDSO's clock function, found once and kept.
+    vdso_clock_address: () -> (address: u64) =
+        address = vdso_clock
+        return when address <> 0
+        (found, address: at) := vdso.symbol(vdso.clock_symbol,
+                                            vdso.clock_version)
+        address = if found and u64(at) > no_vdso_clock then u64(at)
+                  else no_vdso_clock end if
+        vdso_clock = address
+    end vdso_clock_address
+
+    clock_number: (clock: clock_kind) -> (number: i32) =
+        number = match clock
+            monotonic_clock: linux.clock_monotonic
+            realtime_clock: linux.clock_realtime
+        end match
+    end clock_number
+
+    --  The vDSO's function is made a value of its C type from its address,
+    --  as a looked-up symbol is.
+    system_clock_time: (clock: clock_kind) -> (time: time_value) ! errno =
+        mut record: linux.timespec = zeroed
+        mut result: i32 = -1
+        address: u64 = vdso_clock_address()
+        if address <> no_vdso_clock then
+            function: vdso.clock_gettime =
+                vdso.clock_gettime(usize(address))
+            result = function(clock_number(clock), addr record)
+        end if
+        if result <> 0 then
+            result = linux.clock_gettime(clock_number(clock), addr record)
+            fail errno_of(-result) when result < 0
+        end if
+        fail unlisted when record.nanoseconds < 0
+          or record.nanoseconds >= 1000000000
+        time = (seconds: record.seconds, nanoseconds: u32(record.nanoseconds))
+    end system_clock_time
+
+    system_sleep: (span: time_value) -> none ! errno =
+        request: linux.timespec = (seconds: span.seconds,
+                                   nanoseconds: i64(span.nanoseconds))
+        mut remaining: linux.timespec = zeroed
+        result: i32 = linux.clock_nanosleep(linux.clock_monotonic, 0,
+                                            addr request, addr remaining)
+        fail errno_of(-result) when result < 0
+    end system_sleep
+elsif compiler.os == darwin or compiler.os == freebsd then
+    system_clock_time: (clock: clock_kind) -> (time: time_value) ! errno =
+        number: i32 = match clock
+            monotonic_clock: libc.clock_monotonic
+            realtime_clock: libc.clock_realtime
+        end match
+        mut record: libc.timespec = zeroed
+        fail failure() when libc.clock_gettime(number, addr record) <> 0
+        fail unlisted when record.nanoseconds < 0
+          or record.nanoseconds >= 1000000000
+        time = (seconds: record.seconds, nanoseconds: u32(record.nanoseconds))
+    end system_clock_time
+
+    system_sleep: (span: time_value) -> none ! errno =
+        request: libc.timespec = (seconds: span.seconds,
+                                  nanoseconds: i64(span.nanoseconds))
+        mut remaining: libc.timespec = zeroed
+        fail failure() when libc.nanosleep(addr request, addr remaining) <> 0
+    end system_sleep
+end if

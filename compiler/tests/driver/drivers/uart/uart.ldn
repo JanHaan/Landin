@@ -1,9 +1,9 @@
 -- Synthetic driver. DERIVATION.md states the device/lifetime premises.
 -- Vendor images/accessors are unchanged; this is not an RP2040 board port.
+import platform/cortex_m
+import rp2040/dma
 import rp2040/io_bank0
 import rp2040/uart0
-import rp2040/dma
-import platform/cpu
 
 public busy: atom
 public bad_baud: atom
@@ -69,7 +69,7 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     dma.ch0_trans_count_write(dma_base, budget)
     dma.intr_write(dma_base, 1)
     dma.inte0_write(dma_base, 1)
-    cpu.device_barrier()
+    cortex_m.device_barrier()
     dma.ch0_ctrl_trig_write(dma_base, image | 1)
     r = (buf: buf, consumed: 0, budget: budget, config: image,
          active: true, quiet: false, lost: false, broken: false)
@@ -84,7 +84,7 @@ freeze: (inout r: rx) -> none ! stop_timeout =
     loop do
         status := dma.ch0_ctrl_trig_read(dma_base)
         if (status & 0x01000000) == 0 then
-            cpu.device_barrier()
+            cortex_m.device_barrier()
             r.quiet = true
             return
         end if
@@ -103,7 +103,7 @@ end stop
 snapshot: (inout r: rx) -> (count: usize) ! overrun | transfer_error | exhausted =
     status := dma.ch0_ctrl_trig_read(dma_base)
     remaining := dma.ch0_trans_count_read(dma_base)
-    cpu.device_barrier()
+    cortex_m.device_barrier()
     if remaining == 0 then r.active = false end if
     if (status & 0x60000000) <> 0 or remaining > r.budget then
         r.broken = true
@@ -126,7 +126,7 @@ end snapshot
 resume: (inout r: rx) -> none =
     -- Called only after a successful snapshot or a fully repaired restart.
     if r.active then
-        cpu.device_barrier()
+        cortex_m.device_barrier()
         dma.ch0_ctrl_trig_write(dma_base, r.config | 1)
         r.quiet = false
     end if

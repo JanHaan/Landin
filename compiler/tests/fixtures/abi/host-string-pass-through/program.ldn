@@ -7,7 +7,7 @@
 --  92, kept as the last errno, so the path reached the system as given.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 fixed if compiler.os == darwin then
     refuses: bool = true
@@ -18,7 +18,7 @@ end if
 extern(c) c_argument_is_argv: (bytes: ptr u8, length: usize) -> (yes: bool)
 
 public extern(c) l_pass_through: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 10
     return when io.argument_count(host) <> 1
     argument: text.host_string = io.argument_at(host, usize(0)) else (problem)
@@ -44,7 +44,7 @@ public extern(c) l_pass_through: () -> (code: i32) =
     code = 14
     written: io.file = io.open_write(host, argument) else (problem)
         if refuses and problem == io.io_failed
-          and hosted.last_errno(host) == 92
+          and system.last_errno(host) == 92
         then
             code = 42
         end if

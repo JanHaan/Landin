@@ -1,7 +1,8 @@
+import core/arena
 import core/mem
 import core/spill
 
-bad_spill: (state: mem.arena,
+bad_spill: (state: arena.arena,
             escaping inout value: spill.list(i32, 1))
            -> (result: i32) ! mem.out_of_memory =
     view := spill.used(value)
@@ -9,7 +10,7 @@ bad_spill: (state: mem.arena,
     result = view[0]
 end bad_spill
 
-bad_release: (state: mem.arena,
+bad_release: (state: arena.arena,
               inout value: spill.list(i32, 1)) -> (result: i32) =
     view := spill.used(value)
     spill.release(value, state)

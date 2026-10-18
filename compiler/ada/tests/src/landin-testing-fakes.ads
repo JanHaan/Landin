@@ -133,7 +133,8 @@ package Landin.Testing.Fakes is
      (Host    : Fake_Filesystem;
       Path    : String;
       Content : String;
-      Status  : out Landin.Platform.Write_Status);
+      Status  : out Landin.Platform.Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String);
 
    overriding procedure List_Directory
      (Host    : Fake_Filesystem;
@@ -150,6 +151,11 @@ package Landin.Testing.Fakes is
 
    procedure Set_Available
      (Host : in out Fake_Tool_Runner; Found : Boolean);
+
+   --  One program the host cannot start while every other one it can, as
+   --  a system without the pinned driver but with its distribution's.
+   procedure Set_Absent
+     (Host : in out Fake_Tool_Runner; Program : String);
 
    overriding function Available
      (Host : Fake_Tool_Runner; Program : String) return Boolean;
@@ -386,6 +392,7 @@ private
    with record
       State : Recorder_Owner;
       Tool_Available : Boolean := True;
+      Absent : Landin.Platform.Path_List;
    end record;
 
    package Offset_Vectors is new Ada.Containers.Vectors

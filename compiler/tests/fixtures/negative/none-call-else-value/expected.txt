@@ -7,7 +7,8 @@ error[L0331]: this call returns nothing, so its `else` has no result to stand in
   |
 6 | attempt: (flag: bool) -> none ! oops =
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this signature returns none
-  = note: [1030]: handle the error in a block, `else (problem) ... end`, which yields no value
+  = note: [1030]: `else none` ignores the error, and `else (problem) ... end` handles it in a block; neither yields a value
+  = help: ignore the failure with `else none`
 error[L0331]: this call returns nothing, so its `else` has no result to stand in for
   --> ../tests/fixtures/negative/none-call-else-value/main.ldn:18:9
    |
@@ -17,4 +18,4 @@ error[L0331]: this call returns nothing, so its `else` has no result to stand in
   |
 6 | attempt: (flag: bool) -> none ! oops =
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this signature returns none
-  = note: [1030]: handle the error in a block, `else (problem) ... end`, which yields no value
+  = note: [1030]: `else none` ignores the error, and `else (problem) ... end` handles it in a block; neither yields a value

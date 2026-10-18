@@ -6,9 +6,11 @@
 --  input refuses; render's formatted totals are held to their exact bytes,
 --  and a line too short for them holds nothing of them.
 --  The input is closed through the provider's public flag rather than
---  io.close, whose files evidence would not fit the 32 KiB firmware image
---  beside everything else.
+--  io.close: the files table keeps only `close` (D374), but at none/off
+--  that call and its instance still put the image about 480 bytes past
+--  the 32 KiB firmware image.
 import core/io
+import core/io/fake
 import core/text
 
 counts: type = struct
@@ -70,7 +72,7 @@ counted: (input: []u8, limit: usize, room: usize, fail_at: usize,
     name: []u8 = "unused"
     file: io.memory_file =
         (name: name, contents: unused[0..<1], length: 0, cursor: 0,
-         readable: true, writable: false, opened: false, writing: false)
+         readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     no_arguments: [][]u8 = []

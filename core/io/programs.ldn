@@ -62,13 +62,20 @@ public child: type = struct
     errors_open: bool
 end child
 
---- What `read_child` read: `count` bytes, from the child's errors when
---- `errors` is true and from its output when it is not, or nothing and
---- `finished`, once every piped output stream of the child has reached its
---- end.
+--- A read from the child's output.
+public child_output: atom
+--- A read from the child's errors.
+public child_errors: atom
+--- Which of a child's streams `read_child` read: `child_output` or
+--- `child_errors`.
+public child_stream: type = child_output | child_errors
+
+--- What `read_child` read: `count` bytes from the child's `stream`, or
+--- nothing and `finished`, once every piped output stream of the child has
+--- reached its end.
 public child_read: type = struct
     count: usize
-    errors: bool
+    stream: child_stream
     finished: bool
 end child_read
 

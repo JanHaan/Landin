@@ -21,6 +21,7 @@ with Landin.Backend.Arm64.Platform;
 with Landin.Backend.Arm64.Selection;
 with Landin.Backend.ELF;
 with Landin.Backend.Entry_Point;
+with Landin.Backend.Trap_Reports;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
 
@@ -29,6 +30,7 @@ package body Landin.Backend.Arm64 is
    package ELF_Spelling renames Landin.Backend.ELF;
    use type Landin.Targets.Capabilities.Object_Format;
    use type Landin.Targets.Capabilities.Backend_Kind;
+   use type Landin.Targets.Capabilities.Hosted_System;
 
    package Unbounded renames Ada.Strings.Unbounded;
    use type Landin.Source.Names.Name_Id;
@@ -2133,6 +2135,22 @@ package body Landin.Backend.Arm64 is
 
       Local_Prefix : constant String := Unused_Local_Prefix;
 
+      --  D361's report lines, each a read-only string, and the one routine
+      --  that writes a line to standard error and ends the process.  On
+      --  Mach-O the routine's name starts an atom of its own, which an `L`
+      --  label would not, so dead stripping keeps it with what calls it.
+      Reports : Landin.Backend.Trap_Reports.Table;
+      Private_Prefix : constant String :=
+        (if Format = Landin.Targets.Capabilities.Mach_O
+         then "l" & Local_Prefix (Local_Prefix'First + 1 .. Local_Prefix'Last)
+         else Local_Prefix);
+      Reporter : constant String := Private_Prefix & "landin_trap_report";
+      --  A linker-private `l` name on Mach-O, as Apple's compilers give a
+      --  string literal, so the link sees each line as an atom of its own.
+      function Report_Label (Index : Positive) return String
+        is (Private_Prefix & "landin_trap_line_"
+            & Trimmed (Positive'Image (Index)));
+
       --  Branch-reach steps were always `L` on Mach-O, which no external
       --  name can collide with; on ELF they take the checked local prefix.
       Step_Prefix : constant String :=
@@ -2474,8 +2492,7 @@ package body Landin.Backend.Arm64 is
 
          function Trap (Reason : Landin.Panics.Kind) return String is
          begin
-            if Panic = null or else Landin.Panics.Handler (Panic.all)
-              = Landin.IR.No_Item
+            if Panic = null or else not Landin.Panics.Calls_Out (Panic.all)
             then
                return Hard_Trap;
             end if;
@@ -6042,8 +6059,8 @@ package body Landin.Backend.Arm64 is
                   Emit ("mov w8, #0");
                   Finish_Exit;
                when Landin.IR.Halt =>
-                  if Panic = null or else Landin.Panics.Handler (Panic.all)
-                    = Landin.IR.No_Item
+                  if Panic = null
+                    or else not Landin.Panics.Calls_Out (Panic.all)
                   then
                      Emit ("brk #1");
                   else
@@ -6381,10 +6398,23 @@ package body Landin.Backend.Arm64 is
             if Debug /= null then
                Put (Dwarf.Source_Line (Debug.all, Edge.Origin));
             end if;
-            Immediate ("x0", Pattern (Landin.Panics.Code
-              (Panic.all, Edge.Reason)));
-            Immediate ("x1", Pattern (Edge.Site));
-            Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+            if Landin.Panics.Handler (Panic.all) /= Landin.IR.No_Item then
+               Immediate ("x0", Pattern (Landin.Panics.Code
+                 (Panic.all, Edge.Reason)));
+               Immediate ("x1", Pattern (Edge.Site));
+               Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+            else
+               --  D361: the line for this operation, and its length, to
+               --  the routine that writes it and ends the process.
+               declare
+                  Line : constant String := Landin.Panics.Report
+                    (Panic.all, Edge.Origin, Edge.Reason);
+               begin
+                  Address ("x0", Report_Label (Reports.Index_Of (Line)));
+                  Immediate ("x1", Pattern (Line'Length));
+                  Emit ("bl " & Reporter);
+               end;
+            end if;
             Emit ("brk #1");
          end loop;
          Put (Hard_Trap & ":");
@@ -7766,47 +7796,117 @@ package body Landin.Backend.Arm64 is
          end;
       end loop;
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         Emit (Platform.Relocated_Read_Only_Section (Format));
-         for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
-            declare
-               Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
-                 (Index);
-               Alias_Previous : constant Boolean := Index > 1
-                 and then Shares_Evidence_Table
-                   (Of_Unit, Landin.IR.Evidence_Id (Index - 1), Id);
-               Alias_Next : constant Boolean :=
-                 Index < Landin.IR.Evidence_Count (Of_Unit)
-                   and then Shares_Evidence_Table
-                     (Of_Unit, Id, Landin.IR.Evidence_Id (Index + 1));
-               Bytes : Landin.Targets.Byte_Count;
-               Alignment : Landin.Targets.Byte_Alignment;
-            begin
-               if not Alias_Previous then
-                  if Format = Landin.Targets.Capabilities.ELF then
-                     Emit (ELF_Spelling.Item_Section
-                       ("data.rel.ro.local", "evidence", Index));
+         declare
+            Kept : constant Kept_Entries :=
+              Kept_Evidence_Entries
+                (Of_Unit,
+                 (if Panic = null then Landin.IR.No_Item
+                  else Landin.Panics.Handler (Panic.all)));
+         begin
+            Emit (Platform.Relocated_Read_Only_Section (Format));
+            for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
+               declare
+                  Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
+                    (Index);
+                  Alias_Previous : constant Boolean := Index > 1
+                    and then Shares_Evidence_Table
+                      (Of_Unit, Landin.IR.Evidence_Id (Index - 1), Id);
+                  Alias_Next : constant Boolean :=
+                    Index < Landin.IR.Evidence_Count (Of_Unit)
+                      and then Shares_Evidence_Table
+                        (Of_Unit, Id, Landin.IR.Evidence_Id (Index + 1));
+                  Bytes : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  if not Alias_Previous then
+                     if Format = Landin.Targets.Capabilities.ELF then
+                        Emit (ELF_Spelling.Item_Section
+                          ("data.rel.ro.local", "evidence", Index));
+                     end if;
+                     Field_Extent
+                       (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
+                        Facts, Bytes, Alignment);
+                     Emit (".balign 8");
+                     Put (Evidence_Symbol (Id) & ":");
+                     if Alias_Next then
+                        Put (Evidence_Symbol
+                          (Landin.IR.Evidence_Id (Index + 1)) & ":");
+                     end if;
+                     Emit (".quad " & Trimmed (Landin.Targets.Byte_Count'Image
+                       (Bytes)));
+                     Emit (".quad " & Trimmed
+                       (Landin.Targets.Byte_Alignment'Image (Alignment)));
+                     for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
+                       (Of_Unit, Id) loop
+                        --  D374: an entry nothing can project is a zero word.
+                        if Is_Kept (Kept, Id, Entry_Index) then
+                           Emit (".quad " & Symbol
+                             (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
+                               Entry_Index)));
+                        else
+                           Emit (".quad 0");
+                        end if;
+                     end loop;
                   end if;
-                  Field_Extent
-                    (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
-                     Facts, Bytes, Alignment);
-                  Emit (".balign 8");
-                  Put (Evidence_Symbol (Id) & ":");
-                  if Alias_Next then
-                     Put (Evidence_Symbol
-                       (Landin.IR.Evidence_Id (Index + 1)) & ":");
-                  end if;
-                  Emit (".quad " & Trimmed (Landin.Targets.Byte_Count'Image
-                    (Bytes)));
-                  Emit (".quad " & Trimmed
-                    (Landin.Targets.Byte_Alignment'Image (Alignment)));
-                  for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
-                    (Of_Unit, Id) loop
-                     Emit (".quad " & Symbol
-                       (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
-                         Entry_Index)));
-                  end loop;
-               end if;
-            end;
+               end;
+            end loop;
+         end;
+      end if;
+      --  D361's writer: standard error is descriptor 2, and the line's
+      --  address and length arrive as a C call's first two arguments.
+      --  Linux is asked by its system call, which a static image has;
+      --  Darwin and FreeBSD only through their C libraries, which every
+      --  image of theirs links.  It keeps a frame record, as every routine
+      --  here does, and does not return: the terminal instruction follows.
+      if Reports.Count > 0 then
+         Emit (if Format = Landin.Targets.Capabilities.ELF
+               then ".section .text.landin_trap_report,""ax"",@progbits"
+               else ".text");
+         Emit (".p2align 2");
+         Platform_Directive (Platform.Begin_Function (Format, Reporter));
+         Put (Reporter & ":");
+         if Debug /= null then
+            Emit (".cfi_startproc");
+         end if;
+         Emit ("stp x29, x30, [sp, #-16]!");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 16");
+            Emit (".cfi_offset w29, -16");
+            Emit (".cfi_offset w30, -8");
+         end if;
+         Emit ("mov x29, sp");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_register w29");
+         end if;
+         Emit ("mov x2, x1");
+         Emit ("mov x1, x0");
+         Emit ("mov x0, #2");
+         if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+           = Landin.Targets.Capabilities.Linux
+         then
+            Emit ("mov x8, #64");
+            Emit ("svc #0");
+         else
+            Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
+              (Facts, "write"));
+         end if;
+         Emit ("brk #1");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
+         Platform_Directive (Platform.End_Function (Format, Reporter));
+         --  Each line a string the link may merge, and on ELF in a section
+         --  of its own, so the link keeps only the lines a retained routine
+         --  reaches; Mach-O's literal section is split by string already.
+         for Index in 1 .. Reports.Count loop
+            Emit (if Format = Landin.Targets.Capabilities.ELF
+                  then ".section .rodata.str1.1.landin_trap_"
+                    & Trimmed (Positive'Image (Index))
+                    & ",""aMS"",@progbits,1"
+                  else ".section __TEXT,__cstring,cstring_literals");
+            Put (Report_Label (Index) & ":");
+            Emit (".asciz " & Landin.Backend.Trap_Reports.Quoted
+              (Reports.Text (Index)));
          end loop;
       end if;
       if Debug /= null then

@@ -4,6 +4,7 @@
 --  exactly once.  runtime/directory-memory holds the rest of the memory
 --  world's directories on the hosted targets, where it fits.
 import core/io
+import core/io/fake
 import core/text
 
 mut unused: [1]u8 = zeroed
@@ -13,7 +14,7 @@ mut errors: [1]u8 = zeroed
 slot: (name: []u8, contents: []mut u8)
       -> (file: io.memory_file from name, contents) =
     file = (name: name, contents: contents, length: 0, cursor: 0,
-            readable: true, writable: false, opened: false, writing: false)
+            readable: true, writable: false, state: io.closed_slot)
 end slot
 
 public main: () -> (code: i32) =

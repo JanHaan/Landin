@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: core/text writes u64 and usize decimals and parses u32, u64 and usize from byte slices at zero, each width's maximum and one past it, with the refusals' atoms, order and untouched buffers, the usize forms following the target's width
+summary: core/text's builder appends u64 and usize decimals and parses u32, u64 and usize from byte slices at zero, each width's maximum and one past it, with the refusals' atoms, order and untouched buffers, the usize forms following the target's width
 program: main.ldn
 root: ../../../../..
 status: 42

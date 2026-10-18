@@ -207,6 +207,10 @@ end less_i64
 less_isize: (left: isize, right: isize) -> (yes: bool) =
     yes = left < right
 end less_isize
+--  Bytes order as `compare` orders them.
+less_bytes: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = compare(left, right) == less
+end less_bytes
 u8 is ordered (less: less_u8)
 u16 is ordered (less: less_u16)
 u32 is ordered (less: less_u32)
@@ -217,3 +221,36 @@ i16 is ordered (less: less_i16)
 i32 is ordered (less: less_i32)
 i64 is ordered (less: less_i64)
 isize is ordered (less: less_isize)
+[]u8 is ordered (less: less_bytes)
+
+--- The left bytes order before the right ones.
+public less: atom
+--- The two byte strings are the same bytes.
+public equal: atom
+--- The left bytes order after the right ones.
+public greater: atom
+--- How two byte strings order: `less`, `equal` or `greater`.
+public order: type = less | equal | greater
+
+--- Order two byte strings as unsigned bytes, the first difference
+--- deciding, and a string that is a proper prefix of the other ordering
+--- first: C's `memcmp` with the lengths taken into account, and the order
+--- `ls` gives names in the C locale.  `[]u8`'s `ordered` evidence is this
+--- order's `less`.
+public compare: (left: []u8, right: []u8) -> (result: order) =
+    mut at: usize = 0
+    while at < lenof left and at < lenof right do
+        if left[at] <> right[at] then
+            result = if left[at] < right[at] then less else greater end if
+            return
+        end if
+        inc at
+    end while
+    if lenof left < lenof right then
+        result = less
+    elsif lenof left > lenof right then
+        result = greater
+    else
+        result = equal
+    end if
+end compare

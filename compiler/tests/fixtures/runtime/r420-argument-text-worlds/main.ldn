@@ -1,6 +1,7 @@
 import core/io
-import hosted/io as hosted
+import core/io/fake
 import core/text
+import hosted/system
 
 memory_word: [5]u8 = [97, 108, 112, 104, 97]
 memory_number: [10]u8 = [52, 50, 57, 52, 57, 54, 55, 50, 57, 53]
@@ -44,7 +45,7 @@ end lends
 
 public main: () -> (code: i32) =
     code = 1
-    host := hosted.host()
+    host := system.new()
     host_world: any io.world = any(addr host)
     return when not pair_is_expected(host_world, 2)
 
@@ -75,7 +76,7 @@ public main: () -> (code: i32) =
         return
     end
     if lenof empty_bytes == 0 and text.equal(empty_text, "")
-      and state.open_calls == 0 and state.read_calls == 0
-      and state.write_calls == 0 and state.close_calls == 0
+      and state.opens == 0 and state.reads == 0
+      and state.writes == 0 and state.closes == 0
     then code = 42 end if
 end main

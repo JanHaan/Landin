@@ -1,4 +1,5 @@
 import core/io
+import core/io/fake
 import core/text
 
 --  A name is lent from the directory until the next read, which refills

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: io.format formats a template straight into a buffered writer's buffer, with no builder of the caller's and no copy, into the room after the waiting bytes, after a flush when it does not fit there, and refuses a text larger than the whole buffer with no_space, leaving none of it waiting
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0940, 1290, 1370
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

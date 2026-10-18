@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: random.below with a bound of zero, which has no value below it, traps as a remainder by zero does, handing the panic handler `overflow` rather than `unreachable`, since the caller reached it by its argument and no path was declared unreachable
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1560, 1670, 1960
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64

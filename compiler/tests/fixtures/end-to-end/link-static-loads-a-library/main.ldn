@@ -11,8 +11,6 @@ public main: () -> (code: i32) =
         code = 1
         return
     end
-    posix.close_library(loaded) else (problem)
-        _ = problem
-    end
+    posix.close_library(loaded) else none
     code = 0
 end main

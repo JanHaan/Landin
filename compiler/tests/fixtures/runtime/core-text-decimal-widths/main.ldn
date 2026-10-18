@@ -1,4 +1,4 @@
---  core/text's u64 and usize decimal writers and its byte-slice parsers at
+--  core/text's u64 and usize decimal appends and its byte-slice parsers at
 --  their edges: zero, each type's maximum and one past it, leading zeros, an
 --  empty slice and a stray byte, and a writer refused for room leaving the
 --  buffer as it found it.  usize is 32 bits on Cortex-M and 64 elsewhere,
@@ -18,28 +18,36 @@ end same
 
 writes: () -> (ok: bool) ! text.no_space =
     ok = false
-    mut line: [24]u8 = zeroed
-    mut used: usize = try text.write_u64(line[0..<24], 0, 0)
-    return when not same(line[0..<used], "0")
+    mut room: [24]u8 = zeroed
+    mut line := text.over(room[0..<24])
+    try text.append_u64(line, 0)
+    return when not same(text.used(line), "0")
     largest: u64 = 0 -% 1
-    used = try text.write_u64(line[0..<24], 0, largest)
-    return when not same(line[0..<used], "18446744073709551615")
-    used = try text.write_u64(line[0..<24], 2, 1000000)
-    return when used <> 9 or not same(line[2..<9], "1000000")
+    text.clear(line)
+    try text.append_u64(line, largest)
+    return when not same(text.used(line), "18446744073709551615")
+    text.clear(line)
+    try text.append(line, "ab")
+    try text.append_u64(line, 1000000)
+    written: []u8 = text.used(line)
+    return when text.length(line) <> 9 or not same(written[2..<9], "1000000")
     widest: usize = 0 -% 1
-    used = try text.write_usize(line[0..<24], 0, widest)
+    text.clear(line)
+    try text.append_usize(line, widest)
     if sizeof usize == 8 then
-        return when not same(line[0..<used], "18446744073709551615")
+        return when not same(text.used(line), "18446744073709551615")
     else
-        return when not same(line[0..<used], "4294967295")
+        return when not same(text.used(line), "4294967295")
     end if
 
     --  Twenty digits do not fit in nineteen bytes: nothing is written.
     mut cramped: [19]u8 = [19 of 33]
-    _ = text.write_u64(cramped[0..<19], 0, largest) else (problem)
-        return when problem <> text.no_space or cramped[0] <> 33
-          or cramped[18] <> 33
-        _ = text.write_usize(cramped[0..<19], 19, 0) else (full)
+    mut short := text.over(cramped[0..<19])
+    text.append_u64(short, largest) else (problem)
+        return when problem <> text.no_space or text.length(short) <> 0
+          or cramped[0] <> 33 or cramped[18] <> 33
+        mut tight := text.over(cramped[19..<19])
+        text.append_usize(tight, 0) else (full)
             ok = full == text.no_space
             return
         end

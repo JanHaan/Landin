@@ -19,32 +19,27 @@ end say
 
 --  Write NAME, `=` and the number PROBLEM has on this system.
 said: (name: []u8, problem: posix.errno) -> none =
-    mut line: [32]u8 = zeroed
-    mut used: usize = 0
-    for byte in name do
-        line[used] = byte
-        inc used
-    end for
-    line[used] = 61
-    inc used
-    used = text.write_u32(line[0..<32], used,
-                          u32(posix.number(problem))) else used
-    line[used] = 10
-    say(line[0..<used + 1])
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    line_of(line, name, u32(posix.number(problem))) else none
+    say(text.used(line))
 end said
 
+--  NAME, `=`, NUMBER in decimal and a line end.
+line_of: (inout line: text.builder, name: []u8, number: u32)
+         -> none ! text.no_space =
+    try text.append(line, name)
+    try text.append_byte(line, u8('='))
+    try text.append_u32(line, number)
+    try text.append_byte(line, u8('\n'))
+end line_of
+
 clear: () -> none =
-    posix.unlink_at(posix.working_directory, text.host_over(inside)) else (p)
-        _ = p
-    end
+    posix.unlink_at(posix.working_directory, text.host_over(inside)) else none
     posix.remove_directory_at(posix.working_directory,
-                              text.host_over(below)) else (p)
-        _ = p
-    end
+                              text.host_over(below)) else none
     posix.remove_directory_at(posix.working_directory,
-                              text.host_over(top)) else (p)
-        _ = p
-    end
+                              text.host_over(top)) else none
 end clear
 
 --  The kind of the entry NAME of the directory open as AT, its own when
@@ -67,9 +62,7 @@ listed: () -> (seen: u32) ! posix.errno =
     loop do
         entry: posix.directory_entry =
             posix.read_directory(stream, buffer[0..<1024]) else (problem)
-            posix.close_directory(stream) else (p)
-                _ = p
-            end
+            posix.close_directory(stream) else none
             fail problem
         end
         name: text.host_string = entry.name

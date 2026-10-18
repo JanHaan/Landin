@@ -1,10 +1,10 @@
-import core/mem
+import core/arena
 import core/region
 
-bad: (inout ledger: region.space(0))
-     -> (value: region.region(mem.arena) from ledger) =
+bad: (inout ledger: region.growing_space)
+     -> (value: region.region(arena.arena) from ledger) =
     mut backing: [64]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    provider := mem.arena_over_unchecked(space, addr backing[0], 64)
+    mut space: arena.space = zeroed
+    provider := arena.over_unchecked(space, addr backing[0], 64)
     value = region.over(ledger, provider)
 end bad

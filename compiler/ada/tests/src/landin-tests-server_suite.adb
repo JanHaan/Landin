@@ -1158,11 +1158,19 @@ package body Landin.Tests.Server_Suite is
          declare
             Output : constant String := Landin.Testing.Fakes.Output (Channel);
          begin
+            --  Under a root that holds `core/answer` too, the library's is
+            --  read and D366 says so in one warning; under none, nothing.
             Landin.Testing.Check
               (Item, Status = 0
-               and then Ada.Strings.Fixed.Count
-                 (Output, """uri"":" & Landin.Json.Quoted (URI)
-                          & ",""version"":1,""diagnostics"":[]") = 1,
+               and then
+                 (if Roots = ""
+                  then Ada.Strings.Fixed.Count
+                    (Output, """uri"":" & Landin.Json.Quoted (URI)
+                             & ",""version"":1,""diagnostics"":[]") = 1
+                  else Ada.Strings.Fixed.Count
+                    (Output, """code"":""L0016""") = 1
+                    and then Ada.Strings.Fixed.Count
+                      (Output, """severity"":1") = 0),
                "a document "
                & (if Roots = "" then "under no root" else "under a root")
                & " reads the library: " & Output);

@@ -167,10 +167,7 @@ end terminated
 --  A file platform/posix makes and gives permission bits and times, and a
 --  link to it, as C's stat and readlink read them.
 written_agrees: () -> (yes: bool) ! posix.errno =
-    posix.unlink_at(posix.working_directory, text.host_over(path))
-        else (problem)
-        _ = problem
-    end
+    posix.unlink_at(posix.working_directory, text.host_over(path)) else none
     made: posix.descriptor =
         try posix.open_at(posix.working_directory, text.host_over(path),
                           posix.writing, 0o600)
@@ -189,10 +186,7 @@ written_agrees: () -> (yes: bool) ! posix.errno =
           and found.permissions == 0o640 and found.size == 7
           and found.modified.nanoseconds == 123456789
           and found.user == posix.effective_user()
-    posix.unlink_at(posix.working_directory, text.host_over(link))
-        else (problem)
-        _ = problem
-    end
+    posix.unlink_at(posix.working_directory, text.host_over(link)) else none
     try posix.symbolic_link_at(text.host_over(path), posix.working_directory,
                                text.host_over(link))
     mut name_room: [64]u8 = zeroed

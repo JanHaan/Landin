@@ -1,0 +1,13 @@
+--- The fixed part of Linux's `struct linux_dirent64`; the name follows it.
+directory_record: type = layout(c) struct
+    inode: u64
+    offset: i64
+    length: u16
+    kind: u8
+end directory_record
+
+--- Where the name begins: the byte after `kind`, measured.
+name_offset: () -> (bytes: usize) =
+    record: directory_record = zeroed
+    bytes = usize(addr record.kind) + sizeof u8 - usize(addr record)
+end name_offset

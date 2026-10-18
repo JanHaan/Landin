@@ -1,0 +1,9 @@
+class: negative
+summary: D369 a match arm written as a number is refused naming `if` and `elsif`, the form that compares values
+program: program.ldn
+codes: L0100
+constructs: 1210
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/match-over-an-integer-names-if-and-elsif/program.ldn
+status: 1

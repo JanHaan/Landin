@@ -40,6 +40,7 @@ with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Lowering_Suite;
 with Landin.Tests.Memory_Suite;
 with Landin.Tests.Mutation_Suite;
+with Landin.Tests.Newcomer_Suite;
 with Landin.Tests.Optimization_Driver_Suite;
 with Landin.Tests.Optimization_Foundations_Suite;
 with Landin.Tests.Parser_Suite;
@@ -426,6 +427,7 @@ begin
    Landin.Tests.Debugging_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
+   Landin.Tests.Newcomer_Suite.Register (Cases);
    Landin.Tests.Commands_Suite.Register (Cases);
    Landin.Tests.Fixture_Execution_Suite.Register
      (Cases, Include_Target_Workloads => Mode /= Run_Host and not Host_Only);

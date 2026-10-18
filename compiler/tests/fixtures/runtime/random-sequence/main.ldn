@@ -7,6 +7,7 @@
 --  the same routines ported to C over them.  Each check that fails
 --  returns its own code.
 import core/io
+import core/io/fake
 import core/random
 
 --  The first eight outputs for seeds 0, 42 and 0x0123456789abcdef.
@@ -100,15 +101,15 @@ zero_bytes: [32]u8 = zeroed
 
 entropy_seeds: () -> (yes: bool) ! ... =
     yes = false
-    mut state: io.entropy_space = zeroed
-    counted := io.entropy_over(state, counted_bytes[0..<32])
+    mut state: fake.entropy_space = zeroed
+    counted := fake.entropy_over(state, counted_bytes[0..<32])
     mut source := try random.from_entropy(counted)
     for value in counted_draws do
         return when random.next(source) <> value
     end for
     return when state.used <> 32 or state.requests <> 1
-    mut empty_state: io.entropy_space = zeroed
-    zero := io.entropy_over(empty_state, zero_bytes[0..<32])
+    mut empty_state: fake.entropy_space = zeroed
+    zero := fake.entropy_over(empty_state, zero_bytes[0..<32])
     mut zeroed_source := try random.from_entropy(zero)
     return when random.next(zeroed_source) <> seed_zero[0]
     dry: random.generator = random.from_entropy(zero) else (problem)

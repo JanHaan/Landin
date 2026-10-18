@@ -75,6 +75,10 @@ package Landin.Diagnostics.Catalogue is
       Module_Not_Found,
       Module_Directory_Invalid,
       Module_Unavailable_For_Target,
+      --  D366: a project root holds a library namespace the library
+      --  supplies instead.  A warning: the program is compiled as D275
+      --  says, and the reader is told which `core` it was compiled with.
+      Root_Holds_Library_Module,
       --  `refine fmt --check`: a source that parses and is not in the
       --  layout.  Whose rule is D252, not a language rule, and no program
       --  is refused for it.
@@ -225,6 +229,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => "L0006",
             when Module_Directory_Invalid => "L0007",
             when Module_Unavailable_For_Target => "L0015",
+            when Root_Holds_Library_Module => "L0016",
             when Not_Formatted         => "L0008",
             when Unknown_Level         => "L0009",
             when Construct_Not_Enabled => "L0010",
@@ -321,6 +326,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => Error,
             when Module_Directory_Invalid => Error,
             when Module_Unavailable_For_Target => Error,
+            when Root_Holds_Library_Module => Warning,
             when Not_Formatted         => Error,
             when Unknown_Level         => Error,
             when Construct_Not_Enabled => Error,
@@ -357,6 +363,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => Live,
             when Module_Directory_Invalid => Live,
             when Module_Unavailable_For_Target => Live,
+            when Root_Holds_Library_Module => Live,
             when Not_Formatted         => Live,
             when Unknown_Level         => Live,
             when Construct_Not_Enabled => Live,
@@ -401,6 +408,9 @@ package Landin.Diagnostics.Catalogue is
             when Module_Unavailable_For_Target =>
                "D267: an imported source namespace is unavailable"
                  & " for the target",
+            when Root_Holds_Library_Module =>
+               "D275: a project root holds a module the compiler's"
+                 & " library supplies instead",
             when Not_Formatted         =>
                "D252: a source `refine fmt --check` finds out of the layout",
             when Unknown_Level         =>
@@ -646,6 +656,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => True,
             when Module_Directory_Invalid => False,
             when Module_Unavailable_For_Target => True,
+            when Root_Holds_Library_Module => True,
             when Not_Formatted         => True,
             when Unknown_Level         => False,
             when Construct_Not_Enabled => True,
@@ -681,6 +692,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => True,
             when Module_Directory_Invalid => False,
             when Module_Unavailable_For_Target => True,
+            when Root_Holds_Library_Module => True,
             --  The first line out of the layout, which may be one whose
             --  only fault is its missing line end, and so empty.
             when Not_Formatted         => False,
@@ -794,7 +806,8 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => 1,
             when Unknown_Bytes         => 1,
             when Module_Not_Found | Module_Directory_Invalid
-               | Module_Unavailable_For_Target => 1,
+               | Module_Unavailable_For_Target
+               | Root_Holds_Library_Module => 1,
             --  What a reader runs to put the file right.
             when Not_Formatted         => 1,
             when Name_Expected .. Positional_After_Named => 1,
@@ -843,7 +856,8 @@ package Landin.Diagnostics.Catalogue is
             when others                => 0);
 
    function Warning_Enabled_By_Default (Of_Code : Code_Name) return Boolean
-     is (Of_Code in Mutable_Never_Written | Unused_Pure_Local);
+     is (Of_Code in Mutable_Never_Written | Unused_Pure_Local
+           | Root_Holds_Library_Module);
 
    --  Whether an occurrence may carry a fix, which the text renders as a
    --  `help` line and an editor offers as an action.  Must_Fix is a code
@@ -876,6 +890,8 @@ package Landin.Diagnostics.Catalogue is
             when Assignment_In_Expression => May_Fix,
             --  D251 separates the observation from a safe source edit.
             when Mutable_Never_Written | Unused_Pure_Local => May_Fix,
+            --  D376: a value after a `none` call's `else`, offered `none`.
+            when Result_Use => May_Fix,
             when others => No_Fix);
 
    function Count return Natural

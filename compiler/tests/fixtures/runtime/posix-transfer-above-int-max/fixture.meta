@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix's read, write, read_at and write_at of more than INT_MAX bytes return a short count rather than failing, as Darwin's C library would with EINVAL had the request not been bounded; the buffer is a mapping of 2 GiB and a page that is never touched but by what is read
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

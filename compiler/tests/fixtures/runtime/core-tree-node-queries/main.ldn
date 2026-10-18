@@ -1,0 +1,36 @@
+--  A node is asked what it is: its kind, its leaves and its children.
+import core/arena
+import core/tree
+
+wrong: atom
+
+queried: (inout value: tree.tree, memory: arena.arena) -> none ! ... =
+    a: tree.node_id = try tree.add_leaf(value, memory, "a")
+    _ = try tree.add_leaf(value, memory, "b")
+    root: tree.node_id = try tree.add_branch(value, memory, "root", a,
+                                             usize(2))
+    leaf: tree.node = try tree.get(value, a)
+    branch: tree.node = try tree.get(value, root)
+    fail wrong when tree.kind(leaf) <> tree.leaf_node
+      or tree.kind(branch) <> tree.branch_node
+      or tree.leaves(leaf) <> 1 or tree.leaves(branch) <> 2
+    (first, count) := tree.children(branch)
+    fail wrong when first <> a or count <> 2
+    (first: start, count: zero) := tree.children(leaf)
+    fail wrong when tree.ordinal(start) <> 0 or zero <> 0
+end queried
+
+mut backing: [512]u8 = zeroed
+
+public main: () -> (code: i32) =
+    code = 1
+    mut space: arena.space = zeroed
+    bump := arena.over(space, addr backing[0], 512)
+    mut value := tree.new()
+    queried(value, bump) else (problem)
+        _ = problem
+        return
+    end
+    tree.release(value, bump)
+    code = 42
+end main

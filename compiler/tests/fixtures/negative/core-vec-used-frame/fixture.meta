@@ -1,8 +1,8 @@
 class: negative
-summary: vector initialized views preserve frame refusal
+summary: a list over storage of the caller's own, which once lent a view of frame origin through vec.used, cannot be made: core/vec's list keeps its storage in a module-internal record (D345)
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/core-vec-used-frame
 status: 1
-codes: L0314
-constructs: 0430, 0790, 0800
+codes: L0202
+constructs: 0430, 0770, 0790, 0800, 1360
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

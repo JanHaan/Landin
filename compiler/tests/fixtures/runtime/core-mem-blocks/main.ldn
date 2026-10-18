@@ -3,10 +3,11 @@
 --  one array, so that a byte-at-a-time copy in the wrong direction would
 --  read what it had just written; a destination shorter than its source,
 --  refused before anything is written; and the orders and searches.
+import core/cmp
 import core/mem
 
 same: (left: []u8, right: []u8) -> (yes: bool) =
-    yes = mem.compare(left, right) == mem.equal
+    yes = cmp.compare(left, right) == cmp.equal
 end same
 
 copies: () -> (ok: bool) =
@@ -61,7 +62,7 @@ end refused
 
 filled: () -> (ok: bool) =
     mut bytes: [5]u8 = [1, 2, 3, 4, 5]
-    mem.fill(bytes[1..<4], 32)
+    mem.fill(bytes[1..<4], u8(' '))
     mem.fill(bytes[0..<0], 0)
     expected: [5]u8 = [1, 32, 32, 32, 5]
     ok = same(bytes[0..<5], expected[0..<5])
@@ -70,22 +71,22 @@ end filled
 ordered: () -> (ok: bool) =
     high: [1]u8 = [200]
     low: [1]u8 = [100]
-    ok = mem.compare("abc", "abd") == mem.less
-         and mem.compare("abd", "abc") == mem.greater
-         and mem.compare("ab", "abc") == mem.less
-         and mem.compare("abc", "ab") == mem.greater
-         and mem.compare("", "") == mem.equal
-         and mem.compare("", "a") == mem.less
-         and mem.compare(high[0..<1], low[0..<1]) == mem.greater
-         and mem.compare("same", "same") == mem.equal
+    ok = cmp.compare("abc", "abd") == cmp.less
+         and cmp.compare("abd", "abc") == cmp.greater
+         and cmp.compare("ab", "abc") == cmp.less
+         and cmp.compare("abc", "ab") == cmp.greater
+         and cmp.compare("", "") == cmp.equal
+         and cmp.compare("", "a") == cmp.less
+         and cmp.compare(high[0..<1], low[0..<1]) == cmp.greater
+         and cmp.compare("same", "same") == cmp.equal
 end ordered
 
 found: () -> (ok: bool) =
     line: []u8 = "key=value=more"
-    ok = mem.find(line, 61) == 3
-         and mem.find(line, 107) == 0
-         and mem.find(line, 10) == lenof line
-         and mem.find(line[0..<0], 61) == 0
+    ok = mem.find(line, u8('=')) == 3
+         and mem.find(line, u8('k')) == 0
+         and mem.find(line, u8('\n')) == lenof line
+         and mem.find(line[0..<0], u8('=')) == 0
 end found
 
 public main: () -> (code: i32) =

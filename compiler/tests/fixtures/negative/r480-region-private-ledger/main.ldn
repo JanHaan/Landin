@@ -1,9 +1,9 @@
-import hosted/heap
 import core/region
+import hosted/heap
 
 public main: () -> (code: i32) =
-    provider := heap.host()
-    mut ledger: region.space(0) = zeroed
+    provider := heap.new()
+    mut ledger: region.growing_space = zeroed
     value := region.over(ledger, provider)
     _ = value.records
     code = 0

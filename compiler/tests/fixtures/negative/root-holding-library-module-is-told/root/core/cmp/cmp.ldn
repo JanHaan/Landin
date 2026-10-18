@@ -1,0 +1,4 @@
+--  A project's own copy of a library module, which the library replaces.
+public older: () -> (code: i32) =
+    code = 0
+end older

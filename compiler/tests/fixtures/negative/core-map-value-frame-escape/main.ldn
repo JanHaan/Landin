@@ -1,12 +1,12 @@
-import hosted/heap
 import core/map
+import hosted/heap
 
 node: type = struct
     value: u32
 end node
 
 bad: () -> (result: map.map(u32, ptr node)) ! ... =
-    provider := heap.host()
+    provider := heap.new()
     mut local: node = (value: 7)
     mut value := map.new(key: u32, item: ptr node)
     key: u32 = 11

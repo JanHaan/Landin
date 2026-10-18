@@ -5,8 +5,10 @@
 --  reader of its own, and the report goes to standard output through a
 --  buffered writer, flushed on every way out.
 import core/io
+import core/net
 import core/text
-import hosted/io as hosted
+import core/time
+import hosted/system
 
 --  What the client sends over TCP: three lines.
 request: []u8 = "one\ntwo\nhello, world\n"
@@ -20,7 +22,7 @@ wrong_sender: atom
 --  Serve one connection: read each line through a line reader and write it
 --  back through a buffered writer, until the client has finished sending,
 --  and then finish sending too.  How many lines it echoed.
-serve: (provider: type is io.network, host: provider, connection: io.file)
+serve: (provider: type is net.network, host: provider, connection: io.file)
        -> (lines: usize) ! ... =
     mut incoming: [64]u8 = zeroed
     mut reader := io.lines_over(host, connection, incoming[0..<64])
@@ -35,7 +37,7 @@ serve: (provider: type is io.network, host: provider, connection: io.file)
         inc lines
     end loop
     try io.flush(writer)
-    try io.shutdown(host, connection, io.sending)
+    try net.shutdown(host, connection, net.sending)
 end serve
 
 --  Echo `request` over TCP between a server and a client on FAMILY's
@@ -44,26 +46,20 @@ end serve
 --  port 0, any free one, and says which it got; the client sends all of
 --  its lines and finishes sending before the server accepts, which the
 --  system's buffers allow in one thread.
-tcp_echo: (provider: type is io.network, host: provider,
-           family: io.address_family, inout echoed: text.builder)
+tcp_echo: (provider: type is net.network, host: provider,
+           family: net.address_family, inout echoed: text.builder)
           -> (lines: usize) ! ... =
-    listener: io.file = try io.listen(host, io.loopback(family, 0))
-    defer io.close_socket(host, listener) else (problem)
-        _ = problem
-    end
-    at: io.address = try io.local_address(host, listener)
-    client: io.file = try io.connect(host, at)
-    defer io.close_socket(host, client) else (problem)
-        _ = problem
-    end
-    try io.set_timeouts(host, client, io.seconds(5), io.seconds(5))
-    try io.send(host, client, request)
-    try io.shutdown(host, client, io.sending)
-    server: io.file = try io.accept(host, listener)
-    defer io.close_socket(host, server) else (problem)
-        _ = problem
-    end
-    try io.set_timeouts(host, server, io.seconds(5), io.seconds(5))
+    listener: io.file = try net.listen(host, net.loopback(family, 0))
+    defer net.close_socket(host, listener) else none
+    at: net.address = try net.local_address(host, listener)
+    client: io.file = try net.connect(host, at)
+    defer net.close_socket(host, client) else none
+    try net.set_timeouts(host, client, time.seconds(5), time.seconds(5))
+    try net.send(host, client, request)
+    try net.shutdown(host, client, net.sending)
+    server: io.file = try net.accept(host, listener)
+    defer net.close_socket(host, server) else none
+    try net.set_timeouts(host, server, time.seconds(5), time.seconds(5))
     lines = try serve(host, server)
     mut incoming: [64]u8 = zeroed
     mut replies := io.lines_over(host, client, incoming[0..<64])
@@ -71,37 +67,33 @@ tcp_echo: (provider: type is io.network, host: provider,
         item: io.line = try io.read_line(replies)
         break when item.finished
         try text.append(echoed, item.bytes)
-        try text.append_byte(echoed, 10)
+        try text.append_byte(echoed, u8('\n'))
     end loop
 end tcp_echo
 
 --  Echo `messages` over UDP between two sockets on FAMILY's loopback
 --  address: the server sends each datagram back to whoever sent it, and
 --  the client puts each reply in `echoed`, a line each.
-udp_echo: (provider: type is io.network, host: provider,
-           family: io.address_family, inout echoed: text.builder)
+udp_echo: (provider: type is net.network, host: provider,
+           family: net.address_family, inout echoed: text.builder)
           -> none ! ... =
-    server: io.file = try io.open_datagram(host, io.loopback(family, 0))
-    defer io.close_socket(host, server) else (problem)
-        _ = problem
-    end
-    client: io.file = try io.open_datagram(host, io.loopback(family, 0))
-    defer io.close_socket(host, client) else (problem)
-        _ = problem
-    end
-    try io.set_timeouts(host, server, io.seconds(5), io.seconds(5))
-    try io.set_timeouts(host, client, io.seconds(5), io.seconds(5))
-    at: io.address = try io.local_address(host, server)
+    server: io.file = try net.open_datagram(host, net.loopback(family, 0))
+    defer net.close_socket(host, server) else none
+    client: io.file = try net.open_datagram(host, net.loopback(family, 0))
+    defer net.close_socket(host, client) else none
+    try net.set_timeouts(host, server, time.seconds(5), time.seconds(5))
+    try net.set_timeouts(host, client, time.seconds(5), time.seconds(5))
+    at: net.address = try net.local_address(host, server)
     mut buffer: [64]u8 = zeroed
     for message in messages do
-        try io.send_to(host, client, message, at)
-        got: io.datagram = try io.receive_from(host, server, buffer[0..<64])
-        try io.send_to(host, server, buffer[0..<got.count], got.sender)
-        back: io.datagram = try io.receive_from(host, client,
-                                                buffer[0..<64])
-        fail wrong_sender when not io.same_address(back.sender, at)
+        try net.send_to(host, client, message, at)
+        got: net.datagram = try net.receive_from(host, server, buffer[0..<64])
+        try net.send_to(host, server, buffer[0..<got.count], got.sender)
+        back: net.datagram = try net.receive_from(host, client,
+                                                  buffer[0..<64])
+        fail wrong_sender when not net.same_address(back.sender, at)
         try text.append(echoed, buffer[0..<back.count])
-        try text.append_byte(echoed, 10)
+        try text.append_byte(echoed, u8('\n'))
     end for
 end udp_echo
 
@@ -121,14 +113,14 @@ end quoted
 --  Report what came back over PROTOCOL on FAMILY's loopback address: how
 --  many of what the server echoed, and each of them.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
-         protocol: []u8, family: io.address_family, count: usize,
+         protocol: []u8, family: net.address_family, count: usize,
          what: []u8, echoed: []u8) -> none ! ... =
     mut room: [64]u8 = zeroed
     mut line := text.over(room[0..<64])
-    at: io.address = io.loopback(family, 0)
+    at: net.address = net.loopback(family, 0)
     try text.append(line, protocol)
     try text.append(line, " over ")
-    try io.append_ip(line, at)
+    try net.append_ip(line, at)
     try text.format(line, ": the server echoed {} {}\n",
                     [any(addr count), any(addr what)])
     try io.put(out, text.used(line))
@@ -136,9 +128,9 @@ report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
 end report
 
 --  Echo over TCP and then UDP on FAMILY's loopback address, and report it.
-exchange: (host: hosted.system,
-           inout out: io.buffered_writer(hosted.system),
-           family: io.address_family) -> none ! ... =
+exchange: (host: system.host,
+           inout out: io.buffered_writer(system.host),
+           family: net.address_family) -> none ! ... =
     mut room: [256]u8 = zeroed
     mut echoed := text.over(room[0..<256])
     lines: usize = try tcp_echo(host, family, echoed)
@@ -150,23 +142,19 @@ exchange: (host: hosted.system,
 end exchange
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<512])
-    defer io.flush(out) else (problem)
-        _ = problem
-    end
+    defer io.flush(out) else none
     code = 1
-    families: [2]io.address_family = [io.ipv4, io.ipv6]
+    families: [2]net.address_family = [net.ipv4, net.ipv6]
     for family in families do
         exchange(host, out, family) else (problem)
             --  A system without IPv6 cannot run the second half, which
             --  says so rather than passing over it.
-            if problem == io.address_unavailable then
+            if problem == net.address_unavailable then
                 io.put(out, "this system has no such loopback address\n")
-                    else (ignored)
-                    _ = ignored
-                end
+                    else none
             end if
             code = 2
             return

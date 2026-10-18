@@ -7,8 +7,8 @@
 --  the receive limit with no record, so on a cross lane under it the
 --  limit read back is `unlisted` and this program fails at its sixth step;
 --  a native lane holds it.
-import core/io
-import core/mem
+import core/cmp
+import core/net
 import core/text
 import platform/posix
 
@@ -23,7 +23,7 @@ pair: () -> none ! ... =
     mut buffer: [8]u8 = zeroed
     got: usize = try posix.receive(ends.second, buffer[0..<8])
     fail wrong when sent <> 4 or got <> 4
-      or mem.compare(buffer[0..<4], "ping") <> mem.equal
+      or cmp.compare(buffer[0..<4], "ping") <> cmp.equal
     try posix.close(ends.second)
     mut broken: bool = false
     _ = posix.send(ends.first, "gone") else (problem)
@@ -50,16 +50,14 @@ named_listener: () -> none ! ... =
     for byte in random do
         start: usize = text.length(name)
         try text.append_hex_u32(name, u32(byte))
-        try text.align_right(name, start, 2, 48)
+        try text.align_right(name, start, 2, u8('0'))
     end for
     try text.append(name, ".sock")
     path: text.host_string = text.host_over(text.used(name))
     at: posix.socket_address = try posix.unix_address(path)
     listener: posix.descriptor = try posix.socket(posix.local, posix.stream)
     try posix.bind(listener, at)
-    defer posix.unlink_at(posix.working_directory, path) else (problem)
-        _ = problem
-    end
+    defer posix.unlink_at(posix.working_directory, path) else none
     try posix.listen(listener, 4)
     client: posix.descriptor = try posix.socket(posix.local, posix.stream)
     try posix.connect(client, at)
@@ -67,8 +65,8 @@ named_listener: () -> none ! ... =
     bound: posix.socket_address = try posix.socket_name(listener)
     mut kept: [128]u8 = zeroed
     back: text.host_string = try posix.unix_path(bound, kept[0..<128])
-    fail wrong when mem.compare(text.host_bytes(back), text.used(name))
-      <> mem.equal
+    fail wrong when cmp.compare(text.host_bytes(back), text.used(name))
+      <> cmp.equal
       or try posix.family_of(bound) <> posix.local
     _ = try posix.send(client, "hello")
     mut buffer: [8]u8 = zeroed
@@ -81,7 +79,7 @@ end named_listener
 
 --  A record for a failed call's value.
 nowhere: () -> (at: posix.socket_address) =
-    at = posix.internet_address(io.unspecified(io.ipv4, 0))
+    at = posix.internet_address(net.unspecified(net.ipv4, 0))
 end nowhere
 
 --  A Unix-domain path that is empty, holds a NUL or does not fit.
@@ -109,11 +107,11 @@ end bad_paths
 --  Unix-domain record is no internet address.
 records: () -> none ! ... =
     groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 9]
-    six: io.address = io.ipv6_address(groups, 8080)
-    four: io.address = io.ipv4_address(10, 1, 2, 3, 53)
-    fail wrong when not io.same_address(
+    six: net.address = net.ipv6_address(groups, 8080)
+    four: net.address = net.ipv4_address(10, 1, 2, 3, 53)
+    fail wrong when not net.same_address(
         try posix.address_of(posix.internet_address(six)), six)
-      or not io.same_address(
+      or not net.same_address(
           try posix.address_of(posix.internet_address(four)), four)
       or try posix.family_of(posix.internet_address(six)) <> posix.internet6
     mut refused: bool = false
@@ -127,7 +125,7 @@ end records
 
 --  TCP over loopback with the options, a refused connection, a taken
 --  address and a send after shutting the sending side.
-stream_calls: (family: posix.socket_family, at: io.address) -> none ! ... =
+stream_calls: (family: posix.socket_family, at: net.address) -> none ! ... =
     listener: posix.descriptor = try posix.socket(family, posix.stream)
     if family == posix.internet6 then
         try posix.set_ipv6_only(listener, true)
@@ -135,7 +133,7 @@ stream_calls: (family: posix.socket_family, at: io.address) -> none ! ... =
     try posix.set_reuse_address(listener, true)
     try posix.bind(listener, posix.internet_address(at))
     try posix.listen(listener, 4)
-    bound: io.address = try posix.address_of(try posix.socket_name(listener))
+    bound: net.address = try posix.address_of(try posix.socket_name(listener))
     fail wrong when bound.port == 0
     taken: posix.descriptor = try posix.socket(family, posix.stream)
     mut in_use: bool = false
@@ -150,8 +148,8 @@ stream_calls: (family: posix.socket_family, at: io.address) -> none ! ... =
     try posix.set_receive_timeout(client, (seconds: 2, nanoseconds: 0))
     limit: posix.time_value = try posix.receive_timeout(client)
     accepted: posix.descriptor = try posix.accept(listener)
-    peer: io.address = try posix.address_of(try posix.peer_name(accepted))
-    mine: io.address = try posix.address_of(try posix.socket_name(client))
+    peer: net.address = try posix.address_of(try posix.peer_name(accepted))
+    mine: net.address = try posix.address_of(try posix.socket_name(client))
     try posix.shutdown(client, posix.shut_writing)
     mut shut: bool = false
     _ = posix.send(client, "late") else (problem)
@@ -170,12 +168,12 @@ stream_calls: (family: posix.socket_family, at: io.address) -> none ! ... =
     end
     try posix.close(nothing)
     fail wrong when not in_use or limit.seconds <> 2
-      or limit.nanoseconds <> 0 or not io.same_address(peer, mine)
+      or limit.nanoseconds <> 0 or not net.same_address(peer, mine)
       or not shut or ended <> 0 or not refused
 end stream_calls
 
 --  UDP over loopback: a datagram arrives whole with its sender's address.
-datagram_calls: (family: posix.socket_family, at: io.address) -> none
+datagram_calls: (family: posix.socket_family, at: net.address) -> none
                 ! ... =
     one: posix.descriptor = try posix.socket(family, posix.datagram)
     try posix.bind(one, posix.internet_address(at))
@@ -185,10 +183,10 @@ datagram_calls: (family: posix.socket_family, at: io.address) -> none
     sent: usize = try posix.send_to(one, "datagram", to)
     mut buffer: [16]u8 = zeroed
     got: posix.received = try posix.receive_from(other, buffer[0..<16])
-    sender: io.address = try posix.address_of(got.sender)
-    from_one: io.address = try posix.address_of(try posix.socket_name(one))
+    sender: net.address = try posix.address_of(got.sender)
+    from_one: net.address = try posix.address_of(try posix.socket_name(one))
     fail wrong when sent <> 8 or got.count <> 8
-      or not io.same_address(sender, from_one)
+      or not net.same_address(sender, from_one)
     try posix.close(other)
     try posix.close(one)
 end datagram_calls
@@ -199,7 +197,7 @@ closed_on_exec: () -> none ! ... =
     listener: posix.descriptor = try posix.socket(posix.internet,
                                                   posix.stream)
     try posix.bind(listener,
-                   posix.internet_address(io.loopback(io.ipv4, 0)))
+                   posix.internet_address(net.loopback(net.ipv4, 0)))
     try posix.listen(listener, 4)
     client: posix.descriptor = try posix.socket(posix.internet, posix.stream)
     try posix.connect(client, try posix.socket_name(listener))
@@ -241,22 +239,22 @@ public main: () -> (code: i32) =
         return
     end
     code = 6
-    stream_calls(posix.internet, io.loopback(io.ipv4, 0)) else (problem)
+    stream_calls(posix.internet, net.loopback(net.ipv4, 0)) else (problem)
         _ = problem
         return
     end
     code = 7
-    stream_calls(posix.internet6, io.loopback(io.ipv6, 0)) else (problem)
+    stream_calls(posix.internet6, net.loopback(net.ipv6, 0)) else (problem)
         _ = problem
         return
     end
     code = 8
-    datagram_calls(posix.internet, io.loopback(io.ipv4, 0)) else (problem)
+    datagram_calls(posix.internet, net.loopback(net.ipv4, 0)) else (problem)
         _ = problem
         return
     end
     code = 9
-    datagram_calls(posix.internet6, io.loopback(io.ipv6, 0)) else (problem)
+    datagram_calls(posix.internet6, net.loopback(net.ipv6, 0)) else (problem)
         _ = problem
         return
     end

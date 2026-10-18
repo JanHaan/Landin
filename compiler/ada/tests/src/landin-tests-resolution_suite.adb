@@ -890,6 +890,8 @@ package body Landin.Tests.Resolution_Suite is
       Args.Append ("--root=root");
       Args.Append ("--root=later");
       Args.Append ("--emit=asm");
+      --  A static link's assembly needs platform/linux (D363).
+      Args.Append ("--link=libc");
       Args.Append ("entry");
       declare
          Result : constant Landin.Driver.Outcome :=

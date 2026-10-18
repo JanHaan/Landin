@@ -4449,7 +4449,7 @@ package body Landin.Tests.Parser_Suite is
                Label & " keeps its diagnostic verdict");
             Landin.Testing.Check
               (Item, (Ada.Strings.Fixed.Index
-                 (Rendered, "[0350]: write `<>` for inequality;") > 0) = Hint,
+                 (Rendered, "Landin writes `<>` for inequality") > 0) = Hint,
                Label & " has exactly the applicable guidance: " & Rendered);
          end;
       end Check;

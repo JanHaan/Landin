@@ -1119,6 +1119,12 @@ package body Landin.Syntax.Repairs is
                                     in Tok.Dot | Tok.Left_Bracket)))
            or else Starts_Said (Diag.Message (Diag.Primary (Item)),
                                 "`addr` takes")
+           --  D367: a report that names the Landin form of a foreign
+           --  spelling already says what to write; a one-token change
+           --  would mend the line into something nobody meant, as
+           --  removing one `&` of `&&` makes it bitwise.
+           or else Starts_Said (Diag.Message (Diag.Primary (Item)),
+                                "Landin writes")
          then
             Result.Append (Item);
             return;

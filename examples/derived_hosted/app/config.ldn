@@ -1,5 +1,5 @@
-import core/io
 import core/diag
+import core/io
 import core/mem
 import core/text
 import core/vec
@@ -185,7 +185,7 @@ public open_output: (provider: type is mem.allocator, memory: provider,
         stream: io.file = try world.open_write(target)
         initial: text_dest = (stream: stream)
         object := mem.new(memory, initial) else (problem)
-            world.close(stream) else (close_problem) _ = close_problem end
+            world.close(stream) else none
             fail problem
         end
         value.to = any(object)

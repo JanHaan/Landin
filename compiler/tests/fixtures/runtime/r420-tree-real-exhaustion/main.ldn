@@ -1,3 +1,4 @@
+import core/arena
 import core/fault
 import core/mem
 import core/pool
@@ -36,9 +37,12 @@ exhaust: (provider: type is mem.allocator, inner: provider)
         tree.id(0)
     end
     _ = tree.ordinal(branch)
+    --  The leaf and the branch each ask the full provider to grow the list
+    --  in place and then to allocate a larger one, and it refuses both
+    --  (D356): four refusals of its own after the first block.
     return when not leaf_failed or not branch_failed or tree.length(value) <> 8
-      or fault.attempts(counted) <> 3 or fault.successes(counted) <> 1
-      or fault.inner_failures(counted) <> 2
+      or fault.attempts(counted) <> 5 or fault.successes(counted) <> 1
+      or fault.inner_failures(counted) <> 4 or fault.growths(counted) <> 0
       or fault.injected_failures(counted) <> 0
       or fault.live(counted) <> 1 or fault.frees(counted) <> 0
     at = 0
@@ -92,10 +96,10 @@ public main: () -> (code: i32) =
     mut backing: [1024]u64 = zeroed
     extent: usize = 8 * sizeof tree.node
     arena_base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, arena_base, extent)
-    arena_ok: bool = exhaust(arena)
-    return when not arena_ok or mem.arena_used(arena) <> extent
+    mut arena_space: arena.space = zeroed
+    memory := arena.over_unchecked(arena_space, arena_base, extent)
+    arena_ok: bool = exhaust(memory)
+    return when not arena_ok or arena.used(memory) <> extent
     mut words: [2048]u64 = zeroed
     mut records: [1]pool.slot = zeroed
     slot_size: usize = 16 * sizeof tree.node

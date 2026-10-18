@@ -28,6 +28,15 @@ LANDIN_CLANG_UBUNTU=1:19.1.1-1ubuntu1~24.04.2
 LANDIN_TREE_SITTER_VERSION=0.26.9
 LANDIN_TREE_SITTER_SHA256_X86_64_LINUX=9ce82137caa65864e7ca8b869fd391cef88c9bd2a01c4371b9c4dd26c2585efb
 
+#  The cross lane: QEMU's user emulation and the cross drivers that link
+#  another Linux target's executables.  The nix shell takes both from
+#  flake.lock's nixpkgs and refuses to build when that revision's versions
+#  are not these, so moving the lock moves these on purpose.  The gate's
+#  linux-rv64 lane installs Ubuntu 24.04's packages of the same tools and
+#  prints their versions; check.py holds flake.nix to reading these.
+LANDIN_CROSS_QEMU_NIX=11.1.0
+LANDIN_CROSS_GCC_NIX=15.3.0
+
 #  sha256 of each archive, verified before it is unpacked.
 LANDIN_GNAT_SHA256_X86_64_LINUX=9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703
 LANDIN_GPRBUILD_SHA256_X86_64_LINUX=e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b

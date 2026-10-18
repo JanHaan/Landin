@@ -889,6 +889,11 @@ GUIDES = [
          blurb="Eleven complete programs the compiler emits and the Linux "
                "gate runs, from a sensor poll and Euclid to three Benchmark "
                "Game correctness workloads."),
+    dict(key="from-c", src="docs/from-c.md", out="from-c.html",
+         nav="for C programmers", group="the language",
+         blurb="Each habit a C programmer brings, from `#include` to "
+               "`exit`, in its Landin form, and the habits with no answer "
+               "yet."),
     dict(key="readme", src="README.md", out="readme.html",
          nav="the project", group="the project",
          blurb="What Landin is, what is in the repository, and how to build "
@@ -1507,7 +1512,7 @@ def render_guide(text, links, targets, hl):
 #  being read start open.  The front page's shelf uses the same table, so
 #  the two cannot disagree about where a document lives.
 NAV_GROUPS = [
-    ("the language", ["tour", "spec", "examples", "documents"]),
+    ("the language", ["tour", "spec", "examples", "from-c", "documents"]),
     ("the prototypes", ["p1", "p2", "p3", "p4"]),
     ("the project", ["readme", "roadmap", "handoff"]),
     ("the compiler", ["compiler", "ir", "diagnostics", "format", "server",
@@ -2024,7 +2029,7 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         f'<figcaption><span class="dot"></span><span class="path">{esc(path)}</span>'
         f'<span class="grow"></span><span>{len(lines)} lines</span></figcaption>'
         f'{listing(hl.block(lines))}'
-        '<div class="foot"><code>$ refine --emit=exe -o sensors … '
+        '<div class="foot"><code>$ refine compile … -o sensors '
         '&amp;&amp; ./sensors; echo $?</code><span class="grow"></span>'
         '<a href="examples.html">more programs →</a></div>'
         '</figure>'

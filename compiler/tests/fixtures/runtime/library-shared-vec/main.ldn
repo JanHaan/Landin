@@ -1,13 +1,14 @@
+import core/arena
 import core/mem
 import core/vec
 
 exercise: () -> (ok: bool) ! mem.out_of_memory | mem.empty | mem.out_of_bounds =
     ok = false
     mut backing: [256]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 256)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 256)
     mut values := vec.new(item: i32)
-    try vec.push(values, arena, i32(41))
+    try vec.push(values, memory, i32(41))
     return when vec.length(values) <> 1
     slot: ptr mut i32 = try vec.at(values, usize(0))
     slot.val = 42

@@ -1110,6 +1110,15 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                             in Call | Labeled_Application;
 
+   --  D376's `else none`: the clause ignores the call's failure.  Its body
+   --  is an empty Block standing on the `none`, so every consumer of a
+   --  recovery block reads it as the block form with nothing in it; this
+   --  says the source wrote no block, which the checker needs to refuse it
+   --  on a call that returns a value.
+   function Ignores_Failure (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Recovery_Clause;
+
    --  Two facts about a line end the grammar decided without it, kept so
    --  a later stage refusing what the parser accepted can say what the
    --  line end did.  Continued_At is the `(` of a call, or the operator of

@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: dense-prefix maps preserve pointer values across collisions tombstones empty misses wraparound churn and rehash
+summary: dense-prefix maps preserve pointer values across collisions tombstones empty misses wraparound churn and rehash; the seven-slot and forged-bucket compositions it once built below the map cannot be made since the map is private (D354)
 program: main.ldn
 root: ../../../../..
 status: 42

@@ -6,12 +6,12 @@
 --  found by lookup.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 extern(c) c_value_is_entry: (value: ptr u8, length: usize) -> (yes: bool)
 
 --  Whether the variable at INDEX has NAME and VALUE.
-holds: (host: hosted.system, index: usize, name: utf8, value: utf8)
+holds: (host: system.host, index: usize, name: utf8, value: utf8)
        -> (yes: bool) =
     yes = false
     item: io.variable = io.variable_at(host, index) else (problem)
@@ -22,7 +22,7 @@ holds: (host: hosted.system, index: usize, name: utf8, value: utf8)
 end holds
 
 public extern(c) l_environment: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 10
     return when io.variable_count(host) <> 6
     code = 11

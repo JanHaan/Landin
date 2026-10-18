@@ -1,7 +1,7 @@
-import core/fault
+import core/arena
 import core/cmp
+import core/fault
 import core/map
-import core/mem
 import core/pool
 
 fixed_provider: type = pool.provider
@@ -80,12 +80,12 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     k5: colliding = colliding(u64(5))
     k6: colliding = colliding(u64(6))
     k7: colliding = colliding(u64(7))
-    map.insert(value, budget, k1, addr n1) else (ignored) _ = ignored end
-    map.insert(value, budget, k2, addr n2) else (ignored) _ = ignored end
-    map.insert(value, budget, k3, addr n3) else (ignored) _ = ignored end
-    map.insert(value, budget, k4, addr n4) else (ignored) _ = ignored end
-    map.insert(value, budget, k5, addr n5) else (ignored) _ = ignored end
-    map.insert(value, budget, k6, addr n6) else (ignored) _ = ignored end
+    map.insert(value, budget, k1, addr n1) else none
+    map.insert(value, budget, k2, addr n2) else none
+    map.insert(value, budget, k3, addr n3) else none
+    map.insert(value, budget, k4, addr n4) else none
+    map.insert(value, budget, k5, addr n5) else none
+    map.insert(value, budget, k6, addr n6) else none
 
     mut initial: bool = map.length(value) == 6
                         and fault.attempts(budget) == 3
@@ -175,16 +175,16 @@ end failure_case
 churn_case: () -> (ok: bool) =
     mut words: [64]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]))
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, base, lenof words * sizeof u64)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, base, lenof words * sizeof u64)
     mut value := map.new(key: colliding, item: ptr node)
-    map.insert(value, arena, colliding(u64(1)), addr n1) else (ignored) _ = ignored end
-    map.insert(value, arena, colliding(u64(2)), addr n2) else (ignored) _ = ignored end
-    map.insert(value, arena, colliding(u64(3)), addr n3) else (ignored) _ = ignored end
-    map.insert(value, arena, colliding(u64(4)), addr n4) else (ignored) _ = ignored end
-    map.insert(value, arena, colliding(u64(5)), addr n5) else (ignored) _ = ignored end
-    map.insert(value, arena, colliding(u64(6)), addr n6) else (ignored) _ = ignored end
-    before: usize = mem.arena_used(arena)
+    map.insert(value, memory, colliding(u64(1)), addr n1) else none
+    map.insert(value, memory, colliding(u64(2)), addr n2) else none
+    map.insert(value, memory, colliding(u64(3)), addr n3) else none
+    map.insert(value, memory, colliding(u64(4)), addr n4) else none
+    map.insert(value, memory, colliding(u64(5)), addr n5) else none
+    map.insert(value, memory, colliding(u64(6)), addr n6) else none
+    before: usize = arena.used(memory)
     mut departing: colliding = colliding(u64(1))
     mut arriving: colliding = colliding(u64(7))
     mut cycles: usize = 0
@@ -194,11 +194,11 @@ churn_case: () -> (ok: bool) =
             _ = problem
             intact = false
         end
-        map.insert(value, arena, arriving, addr n7) else (problem)
+        map.insert(value, memory, arriving, addr n7) else (problem)
             _ = problem
             intact = false
         end
-        intact = intact and mem.arena_used(arena) == before
+        intact = intact and arena.used(memory) == before
                  and map.slots(value) == 8
                  and map.length(value) == 6
                  and has(value, arriving, 77)
@@ -207,8 +207,8 @@ churn_case: () -> (ok: bool) =
         arriving = colliding(u64(arriving) + 1)
         inc cycles
     end while
-    map.release(value, arena)
-    ok = intact and mem.arena_used(arena) == before and map.length(value) == 0
+    map.release(value, memory)
+    ok = intact and arena.used(memory) == before and map.length(value) == 0
 end churn_case
 
 public main: () -> (code: i32) =

@@ -1,6 +1,6 @@
 import core/fault
-import hosted/heap
 import core/mem
+import hosted/heap
 
 no_allocation: atom
 allocation: type = no_allocation | ptr mut u8
@@ -27,7 +27,7 @@ audit_state: type = struct
 end audit_state
 audit: type = struct
     state: ptr mut audit_state
-    inner: heap.system
+    inner: heap.heap
 end audit
 --  The state's allocation fields have no zero value, so the caller starts
 --  it from this value rather than from `zeroed`.
@@ -36,7 +36,7 @@ checked_state: () -> (result: audit_state) =
               third: no_allocation, allocated: 0, freed: 0, exact: true)
 end checked_state
 checked_over: (inout state: audit_state) -> (handle: audit from state) =
-    handle = (state: addr state, inner: heap.host())
+    handle = (state: addr state, inner: heap.new())
 end checked_over
 checked_alloc: (self: audit, size: usize, alignment: usize)
                -> (block: ptr mut u8) ! mem.out_of_memory =

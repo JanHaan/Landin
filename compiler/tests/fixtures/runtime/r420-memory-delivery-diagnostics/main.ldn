@@ -1,0 +1,50 @@
+import core/diag
+import core/io
+import core/io/fake
+import core/text
+
+mut delivered_bytes: [12]u8 = zeroed
+mut output_bytes: [8]u8 = zeroed
+mut error_bytes: [8]u8 = zeroed
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "delivery"
+    configured: io.memory_file =
+      (name: name, contents: delivered_bytes[0..<12], length: 0, cursor: 0,
+       readable: true, writable: true, state: io.closed_slot)
+    mut files: [1]io.memory_file
+    files[0] = configured
+    no_arguments: [][]u8 = []
+    mut state: io.memory_space = zeroed
+    memory := io.memory_over(
+        state, files[0..<1], no_arguments, "", output_bytes[0..<8],
+        error_bytes[0..<8])
+    state.write_limit = 2
+    world: any io.world = any(addr memory)
+
+    diagnostic_stream: io.file = world.err()
+    writer: any io.writer = any(addr memory)
+    mut streaming := diag.stream(writer, diagnostic_stream)
+    mut logger: any diag.log = any(addr streaming)
+    message: []u8 = "bad"
+    where: text.position = text.cursor(message, 7)
+    logger.note(where, diag.error, message) else (problem)
+        _ = problem
+        return
+    end
+    return when not logger.failed()
+
+    if state.writes == 5 and state.output_used == 0
+      and state.errors_used == 7
+      and error_bytes[0] == 69 and error_bytes[1] == 58
+      and error_bytes[2] == 55 and error_bytes[3] == 58
+      and error_bytes[4] == 98 and error_bytes[5] == 97
+      and error_bytes[6] == 100 and error_bytes[7] == 0
+      and state.output_open and state.errors_open
+      and output_bytes[0] == 0 and state.opens == 0
+      and files[0].state == io.closed_slot and delivered_bytes[0] == 0
+    then
+        code = 42
+    end if
+end main

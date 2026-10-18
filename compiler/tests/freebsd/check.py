@@ -331,6 +331,14 @@ class Lane:
             expected = expected_output(meta, Path(result['base']))
             if expected is not None:
                 require(stdout == expected, f'{label}: output mismatch {stdout[:400]!r}, expected {expected[:400]!r}')
+            if meta.get('trap_report'):
+                #  D361: the line the trap wrote before it ended, named by
+                #  the file's base name wherever this lane put the fixture.
+                written = stdout + (b'' if meta.get('stream', 'merged') == 'merged'
+                                    else Path(str(path) + '.stderr').read_bytes())
+                wanted = meta['trap_report'].encode()
+                require(any(line == wanted or line.endswith(b'/' + wanted) for line in written.split(b'\n')),
+                        f'{label}: trap report missing: {wanted!r}')
             if meta.get('stream', 'merged') != 'merged':
                 require(not Path(str(path) + '.stderr').read_bytes(), label + ': unexpected stderr')
             result['status'] = 'passed'

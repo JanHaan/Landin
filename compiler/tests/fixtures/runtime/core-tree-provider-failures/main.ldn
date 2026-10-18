@@ -1,8 +1,9 @@
+import core/arena
 import core/fault
-import hosted/heap
 import core/mem
 import core/pool
 import core/tree
+import hosted/heap
 
 leaf_name: utf8 = "retained"
 branch_name: utf8 = "branch"
@@ -59,7 +60,10 @@ exercise: (provider: type is mem.allocator, memory: provider)
         return when lenof text <> 8 or text[0] <> 'r'
         inc at
     end while
-    fault.permit(counted, one)
+    --  The growth asks to grow in place before it allocates (D356): two
+    --  permits cover both, whichever the provider grants.
+    two: usize = 2
+    fault.permit(counted, two)
     root: tree.node_id = tree.add_branch(value, counted, branch_name,
                                          tree.id(0), eight) else (problem)
         _ = problem
@@ -70,21 +74,28 @@ exercise: (provider: type is mem.allocator, memory: provider)
         return
     end
     tree.release(value, counted)
+    --  The refused leaf and branch were each refused growing in place and
+    --  allocating, so five refusals in all.  The first block, and the
+    --  growth, in place where the arena grows it and moved where the heap
+    --  and the pool do not, which spends a seventh attempt and gives a
+    --  second block; every block given is freed once.
     okay = tree.ordinal(root) == 8 and leaves == 8
-        and tree.length(value) == 0 and fault.attempts(counted) == 5
-        and fault.injected_failures(counted) == 3
-        and fault.successes(counted) == 2 and fault.frees(counted) == 2
+        and tree.length(value) == 0
+        and fault.injected_failures(counted) == 5
+        and fault.successes(counted) + fault.growths(counted) == 2
+        and fault.frees(counted) == fault.successes(counted)
+        and fault.frees(counted) == fault.attempts(counted) - 6
         and fault.live(counted) == 0
 end exercise
 
 public main: () -> (code: i32) =
     code = 1
-    heap := heap.host()
+    heap := heap.new()
     heap_ok: bool = exercise(heap)
     mut arena_bytes: [8192]u8 = zeroed
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, addr arena_bytes[0], 8192)
-    arena_ok: bool = exercise(arena)
+    mut arena_space: arena.space = zeroed
+    bump := arena.over_unchecked(arena_space, addr arena_bytes[0], 8192)
+    arena_ok: bool = exercise(bump)
     mut pool_bytes: [8192]u8 = zeroed
     mut slots: [2]pool.slot = zeroed
     mut pool_space: pool.space = zeroed

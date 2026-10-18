@@ -1,8 +1,8 @@
-import hosted/heap
 import core/tree
+import hosted/heap
 
 retain: (inout value: tree.tree,
-         state: heap.system, text: utf8) -> none =
+         state: heap.heap, text: utf8) -> none =
     _ = tree.add_leaf(value, state, text) else (problem)
         _ = problem
         return

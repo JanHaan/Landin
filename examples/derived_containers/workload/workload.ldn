@@ -1,13 +1,14 @@
-import core/fault
-import hosted/heap
+import core/arena
 import core/cmp
+import core/fault
 import core/map
 import core/mem
 import core/pool
-import core/spill
 import core/sort
+import core/spill
 import core/tree
 import core/vec
+import hosted/heap
 
 pool_provider: type = pool.provider
 
@@ -34,7 +35,7 @@ end reverse_seed
 
 numbers_path: () -> (ok: bool) =
     ok = false
-    provider := heap.host()
+    provider := heap.new()
     mut seed: [20]i32 =
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
          11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
@@ -275,17 +276,17 @@ vector_growth_retry: () -> (ok: bool) =
     preserved: bool = failed and vec.length(values) == 8
                       and vec.capacity(values) == 8
                       and first.val.value == 1 and eighth.val.value == 8
-                      and fault.attempts(counted) == 2
+                      and fault.attempts(counted) == 3
                       and fault.delegated(counted) == 1
                       and fault.successes(counted) == 1
-                      and fault.injected_failures(counted) == 1
+                      and fault.injected_failures(counted) == 2
                       and fault.frees(counted) == 0
                       and fault.live(counted) == 1
                       and pool.allocations(inner) == 1
                       and pool.frees(inner) == 0
                       and pool.live(inner) == 1
 
-    fault.permit(counted, one)
+    fault.permit(counted, one + one)
     vec.push(values, counted, addr node_9) else (problem)
         _ = problem
         vec.release(values, counted)
@@ -294,10 +295,10 @@ vector_growth_retry: () -> (ok: bool) =
     ninth: ptr sample_node = vec.get(values, eight) else addr node_1
     retried: bool = vec.length(values) == 9 and vec.capacity(values) == 16
                     and ninth.val.value == 9
-                    and fault.attempts(counted) == 3
-                    and fault.delegated(counted) == 2
+                    and fault.attempts(counted) == 5
+                    and fault.delegated(counted) == 3
                     and fault.successes(counted) == 2
-                    and fault.injected_failures(counted) == 1
+                    and fault.injected_failures(counted) == 2
                     and fault.frees(counted) == 1
                     and fault.live(counted) == 1
                     and pool.allocations(inner) == 2
@@ -446,7 +447,7 @@ reference_entry_enumeration: () -> (ok: bool) =
     ok = false
     discarded: map.entry(ptr sample_node, ptr sample_node) =
         (key: addr node_1, item: addr node_2)
-    provider := heap.host()
+    provider := heap.new()
     mut value := map.new(key: ptr sample_node, item: ptr sample_node)
     mut empty_cursor := map.entries()
     mut empty_seen: bool = false
@@ -512,8 +513,8 @@ map_operations: () -> (ok: bool) =
     discarded: map.entry(collision_key, i32) =
         (key: (identity: u64(0), home: u64(0)), item: i32(0))
     mut bytes: [4096]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    provider := mem.arena_over_unchecked(space, addr bytes[0], lenof bytes)
+    mut space: arena.space = zeroed
+    provider := arena.over_unchecked(space, addr bytes[0], lenof bytes)
     mut value := map.new(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
@@ -602,7 +603,7 @@ map_operations: () -> (ok: bool) =
             discarded
         end
         sparse_walk = map.slots(value) == 16 and map.length(value) == 1
-                      and value.tombstones == 6
+                      and map.removed(value) == 6
                       and survivor.key.identity == 6
                       and survivor.item == 106
                       and ended and ended_again
@@ -634,7 +635,7 @@ map_operations: () -> (ok: bool) =
         revived = selected.key.identity == 1 and selected.item == 111
                   and map.length(value) == 1
     end
-    used_bytes: bool = mem.arena_used(provider) > 0
+    used_bytes: bool = arena.used(provider) > 0
     map.release(value, provider)
 
     --  Churn reaches the eight-slot pressure threshold with three live
@@ -651,8 +652,8 @@ map_operations: () -> (ok: bool) =
     map.remove(compact, k2) else (problem) _ = problem return end
     map.remove(compact, k3) else (problem) _ = problem return end
     before_slots: usize = map.slots(compact)
-    before_tombstones: usize = compact.tombstones
-    before_used: usize = mem.arena_used(provider)
+    before_tombstones: usize = map.removed(compact)
+    before_used: usize = arena.used(provider)
 
     --  Dead buckets remain beside the live chain. Enumeration must follow
     --  only its used links, retaining their insertion order through rehash.
@@ -692,8 +693,8 @@ map_operations: () -> (ok: bool) =
     reused_without_growth: bool = before_slots == 8
                                   and before_tombstones == 3
                                   and map.slots(compact) == before_slots
-                                  and mem.arena_used(provider) == before_used
-                                  and compact.tombstones == 2
+                                  and arena.used(provider) == before_used
+                                  and map.removed(compact) == 2
                                   and map.length(compact) == 4
                                   and map_lacks(compact, 1) and map_lacks(compact, 2)
                                   and map_lacks(compact, 3) and map_has(compact, 7, 77)
@@ -772,7 +773,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     map.insert(value, counted, k6, 66) else (problem) _ = problem return end
     initial: bool = map.length(value) == 6
                     and map.slots(value) == 8
-                    and value.tombstones == 0
+                    and map.removed(value) == 0
                     and fault.attempts(counted) == 3
                     and fault.delegated(counted) == 3
                     and fault.successes(counted) == 3
@@ -789,7 +790,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     end
     preserved: bool = failed and map.length(value) == 6
                       and map.slots(value) == 8
-                      and value.tombstones == 0
+                      and map.removed(value) == 0
                       and map_has(value, 1, 11)
                       and map_has(value, 2, 22)
                       and map_has(value, 3, 33)
@@ -813,7 +814,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     expected_attempts: usize = 7 + allowed
     retried: bool = map.length(value) == 7
                     and map.slots(value) == 16
-                    and value.tombstones == 0
+                    and map.removed(value) == 0
                     and map_has(value, 1, 11)
                     and map_has(value, 2, 22)
                     and map_has(value, 3, 33)
@@ -908,8 +909,8 @@ tree_append_retry: () -> (ok: bool) =
 
     mut retained: bool = leaf_failed and branch_failed
                          and tree.length(value) == 8
-                         and fault.attempts(counted) == 4
-                         and fault.injected_failures(counted) == 3
+                         and fault.attempts(counted) == 6
+                         and fault.injected_failures(counted) == 5
                          and fault.delegated(counted) == 1
                          and fault.frees(counted) == 0
                          and fault.live(counted) == 1
@@ -940,7 +941,7 @@ tree_append_retry: () -> (ok: bool) =
         inc at
     end while
 
-    fault.permit(counted, one)
+    fault.permit(counted, one + one)
     root: tree.node_id = tree.add_branch
         (value, counted, branch_name, tree.id(0), eight) else (problem)
         _ = problem
@@ -962,10 +963,10 @@ tree_append_retry: () -> (ok: bool) =
     appended: bool = tree.ordinal(root) == 8 and tree.length(value) == 9
                      and lenof root_name == 6 and root_first == 'b'
                      and total == 8
-                     and fault.attempts(counted) == 5
-                     and fault.delegated(counted) == 2
+                     and fault.attempts(counted) == 8
+                     and fault.delegated(counted) == 3
                      and fault.successes(counted) == 2
-                     and fault.injected_failures(counted) == 3
+                     and fault.injected_failures(counted) == 5
                      and fault.frees(counted) == 1
                      and fault.live(counted) == 1
                      and pool.allocations(inner) == 2
@@ -1034,7 +1035,7 @@ heterogeneous_drawables: () -> (ok: bool) =
     ok = false
     round_shape.calls = 0
     text_shape.calls = 0
-    host := heap.host()
+    host := heap.new()
     one: usize = 1
     mut space: fault.space = zeroed
     provider := fault.over(space, host, one)

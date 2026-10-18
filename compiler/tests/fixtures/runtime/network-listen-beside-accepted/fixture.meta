@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a server that closes its listener may listen on the same port again while the connection it accepted is still open, through core/io's memory network as through the hosted provider, whose listeners set SO_REUSEADDR; the memory network still refuses a second listener on a port a listener holds
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1150, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,9 @@
+--  The alias is applied to a key with `keyed` evidence.
+import holder
+
+public main: () -> (code: i32) =
+    mut value := holder.new(key: u32, item: i32)
+    holder.add(value)
+    holder.add(value)
+    code = i32(holder.count(value)) + 40
+end main

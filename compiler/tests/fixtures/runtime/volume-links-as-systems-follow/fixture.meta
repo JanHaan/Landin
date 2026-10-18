@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io's memory volume follows symbolic links as a system does: a creating open of a dangling link makes its target rather than a second node at the link's path, a relative target is read from its link's directory and one beginning with / from the root, a link before a path's last part is followed whatever the call, .. in a target climbs from the link's directory, a loop of links is io_failed as ELOOP is, removing a link removes the link, and remove_directory of a file is not_found as the hosted provider's ENOTDIR is; a routine that asks only for file_system opens and closes a file through files, which it refines
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0560, 0570, 0900, 0940, 1030, 1100, 1660
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

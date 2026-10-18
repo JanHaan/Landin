@@ -2,5 +2,5 @@ import core/spill
 
 public main: () -> (code: i32) =
     value := spill.new(item: i32, inline_slots: 4)
-    code = value.storage.inline_values[0]
+    code = value.inline_values[0]
 end main

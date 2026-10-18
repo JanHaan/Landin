@@ -1,0 +1,73 @@
+--  The hosted provider's clocks and entropy, written once over
+--  platform/posix: `time.clock` is the monotonic clock and sleeping on it,
+--  `time.wall_clock` the realtime clock, and `io.entropy` the system's own
+--  random bytes.
+
+import core/time
+import platform/posix
+
+--  A second in nanoseconds.
+second: u64 = 1000000000
+
+--  The longest one request to sleep asks for, about eleven days.
+longest: u64 = 1000000 * second
+
+--  The clock `clock` read now.  Every hosted system has both clocks, and
+--  reading one fails only when the process is given a bad address, which
+--  no call here gives, so a failure ends the program.
+read: (clock: posix.clock_kind) -> (sample: posix.time_value) =
+    sample = posix.clock_time(clock) else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+end read
+
+--  The monotonic clock in nanoseconds since the system started, which no
+--  hosted system counts as negative.
+reading: () -> (at: u64) =
+    sample: posix.time_value = read(posix.monotonic_clock)
+    at = u64(sample.seconds) * second + u64(sample.nanoseconds)
+end reading
+
+system_now: (self: host) -> (at: time.instant) =
+    _ = self.failure
+    at = time.instant(reading())
+end system_now
+
+--  The sleep is measured on the clock `now` reads, whatever clock the
+--  system sleeps on: the deadline is taken first, and the system is asked
+--  again for what is left until the clock has reached it, so a sleep a
+--  signal interrupts, or the system ends early, sleeps on for the rest.
+--  A deadline past the clock's last instant is that instant.  A system
+--  that refused every sleep would leave this loop reading the clock until
+--  the deadline, which is still never early; none of them does.
+system_sleep: (self: host, span: time.duration) -> none =
+    _ = self.failure
+    start: u64 = reading()
+    room: u64 = (0 -% 1) - start
+    deadline: u64 = if u64(span) > room then 0 -% 1
+                    else start + u64(span) end if
+    loop do
+        now: u64 = reading()
+        return when now >= deadline
+        --  No more than a million seconds at once, within what every
+        --  system's sleep takes; the loop sleeps again for the rest.
+        mut left: u64 = deadline - now
+        if left > longest then left = longest end if
+        whole: u64 = left / second
+        posix.sleep((seconds: i64(whole),
+                     nanoseconds: u32(left - whole * second))) else (problem)
+            --  Interrupted, or refused: the clock says what is left.
+            _ = problem
+        end
+    end loop
+end system_sleep
+
+system_wall_now: (self: host) -> (at: time.wall_time) =
+    _ = self.failure
+    sample: posix.time_value = read(posix.realtime_clock)
+    at = (seconds: sample.seconds, nanoseconds: sample.nanoseconds)
+end system_wall_now
+
+host is time.clock (now: system_now, sleep: system_sleep)
+host is time.wall_clock (wall_now: system_wall_now)

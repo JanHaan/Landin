@@ -1,11 +1,11 @@
 -- Vendor image/address evidence executes in ordinary RAM on the M0 CPU lane.
+import platform/cortex_m
+import rp2040/dma
 import rp2040/io_bank0
 import rp2040/sio
 import rp2040/timer
 import rp2040/uart0
 import rp2040/uart1
-import rp2040/dma
-import platform/cpu
 
 mut initialized: u32 = 0x680
 mut cleared: u32 = 0
@@ -46,10 +46,10 @@ start: () -> none =
     mut backing: u32 = 0
     timer.alarm0_write(usize(addr backing) - timer.alarm0_offset, 0x12345678)
     if backing <> 0x12345678 then return end if
-    outer := cpu.disable_interrupts()
-    inner := cpu.disable_interrupts()
-    cpu.restore_interrupts(inner)
-    if cpu.interrupt_mask() <> 1 then return end if
-    cpu.restore_interrupts(outer)
+    outer := cortex_m.disable_interrupts()
+    inner := cortex_m.disable_interrupts()
+    cortex_m.restore_interrupts(inner)
+    if cortex_m.interrupt_mask() <> 1 then return end if
+    cortex_m.restore_interrupts(outer)
     observed = initialized + cleared
 end start

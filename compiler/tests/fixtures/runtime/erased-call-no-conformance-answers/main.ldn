@@ -1,0 +1,23 @@
+--  D377: no conformance in this program answers `outlet`, so no `any outlet`
+--  can be made and no value reaches `drain`'s erased calls.  They are
+--  checked against the entries as the concept writes them, the program
+--  builds and runs, and each call is a trap nothing reaches.
+full: atom
+
+outlet: type = concept (target: type)
+    put: (self: ptr mut target, byte: u8) -> none ! full
+    count: (self: ptr target) -> (written: usize)
+end outlet
+
+drain: (into: any outlet, bytes: []u8) -> (written: usize) ! full =
+    for byte in bytes do
+        try into.put(byte)
+    end for
+    written = into.count()
+end drain
+
+mut kept: (into: any outlet, bytes: []u8) -> (written: usize) ! full = drain
+
+public main: () -> (code: i32) =
+    code = 42
+end main

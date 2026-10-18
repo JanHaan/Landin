@@ -1,12 +1,12 @@
 import core/diag
 import core/io
-import hosted/io as hosted
+import hosted/system
 
 retain: (escaping value: diag.streaming) -> none =
 end retain
 
 bad: () -> none =
-    host := hosted.host()
+    host := system.new()
     writer: any io.writer = any(addr host)
     stream := io.err(host)
     logger := diag.stream(writer, stream)

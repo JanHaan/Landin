@@ -1,0 +1,76 @@
+--  D376: `else none` ignores a failure of a call that returns nothing.  The
+--  call's effects up to its failure stay, and the statement after it runs
+--  next, whether the call is direct, labelled, erased, through a function
+--  value, generic, in an `if` arm or in a loop.
+refused: atom
+
+counter: type = struct
+    calls: i32
+    total: i32
+end counter
+
+bump: (inout into: counter, by: i32) -> none ! refused =
+    inc into.calls
+    fail refused when by > 2
+    into.total += by
+end bump
+
+steppable: type = concept (t: type)
+    step: (self: ptr mut t, by: i32) -> none ! refused
+end steppable
+
+counter_step: (self: ptr mut counter, by: i32) -> none ! refused =
+    bump(self.val, by) else (problem)
+        fail problem
+    end
+end counter_step
+
+counter is steppable (step: counter_step)
+
+twice: (t: type, value: t, inout seen: counter) -> none ! refused =
+    bump(seen, 1) else none
+    fail refused
+end twice
+
+public main: () -> (code: i32) =
+    code = 1
+    mut direct: counter = (calls: 0, total: 0)
+    bump(direct, 1) else none
+    bump(direct, 5) else none
+    bump(into: direct, by: 2) else none
+    return when direct.calls <> 3 or direct.total <> 3
+
+    mut erased_state: counter = (calls: 0, total: 0)
+    erased: any steppable = any(addr erased_state)
+    erased.step(9) else none
+    erased.step(1) else none
+    return when erased_state.calls <> 2 or erased_state.total <> 1
+
+    mut through: counter = (calls: 0, total: 0)
+    stepper: (self: ptr mut counter, by: i32) -> none ! refused = counter_step
+    stepper(addr through, 3) else none
+    stepper(addr through, 2) else none
+    return when through.calls <> 2 or through.total <> 2
+
+    mut generic: counter = (calls: 0, total: 0)
+    twice(u8(7), generic) else none
+    return when generic.calls <> 1 or generic.total <> 1
+
+    mut armed: counter = (calls: 0, total: 0)
+    if armed.calls == 0 then bump(armed, 4) else none end if
+    if armed.calls == 1 then
+        bump(armed, 1) else none
+    else
+        bump(armed, 1) else none
+    end if
+    if armed.calls == 5 then bump(armed, 9) else none else bump(armed, 1) else none end if
+    return when armed.calls <> 3 or armed.total <> 2
+
+    mut looped: counter = (calls: 0, total: 0)
+    for by in 0..<6 do
+        bump(looped, by) else none
+    end for
+    return when looped.calls <> 6 or looped.total <> 3
+
+    code = 42
+end main

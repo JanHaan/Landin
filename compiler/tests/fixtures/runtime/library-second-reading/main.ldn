@@ -1,0 +1,60 @@
+--  What the library's second reading added, each step its own code; the
+--  spill list's steps are runtime/library-second-reading-spill's, since
+--  with them the image would not fit a 32 KiB Cortex-M0 flash.
+import core/arena
+import core/cmp
+import core/diag
+import core/mem
+import core/region
+import core/text
+
+wrong: atom
+
+mut backing: [1024]u8 = zeroed
+
+--  A bounded entry's message, lent whole.
+noted: () -> none ! ... =
+    mut retained := diag.new(capacity: 2)
+    log: any diag.log = any(addr retained)
+    try log.note(text.nowhere, diag.warning, "careful")
+    item: diag.entry = try diag.get(addr retained, usize(0))
+    fail wrong when cmp.compare(diag.message(addr item), "careful")
+      <> cmp.equal
+end noted
+
+--  Growing in place through a region, over its newest record.
+grown: (memory: arena.arena) -> none ! ... =
+    --  A ledger of its own records, so nothing but the payload is taken
+    --  from the arena, whose newest block alone grows in place.
+    mut ledger: region.space(2) = zeroed
+    program := region.over(ledger, memory)
+    first: ptr mut u8 = try mem.allocate(program, usize(16), usize(1))
+    fail wrong when not mem.grow(program, first, usize(16), usize(48),
+                                 usize(1))
+    region.release(ledger, memory)
+end grown
+
+public main: () -> (code: i32) =
+    code = 1
+    mut space: arena.space = zeroed
+    bump := arena.over(space, addr backing[0], 1024)
+    noted() else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    _ = mem.allocate(bump, usize(100), usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    return when arena.used(bump) == 0
+    code = 3
+    arena.reset(bump)
+    return when arena.used(bump) <> 0
+    code = 4
+    grown(bump) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

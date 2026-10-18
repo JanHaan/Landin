@@ -1,0 +1,8 @@
+class: negative
+summary: a public alias of a private generic struct with a constrained formal still holds the constraint where it is applied, so a key with no keyed evidence is refused there
+program: main.ldn
+root: root
+status: 1
+codes: L0318
+constructs: 1290, 1420
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

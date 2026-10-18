@@ -1,5 +1,6 @@
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Strings.Fixed;
+with Ada.Strings.Maps;
 
 with Landin.Targets.Levels;
 
@@ -71,6 +72,38 @@ package body Landin.Testing.Fixtures is
 
    function Levels (Item : Fixture) return String
      is (Unbounded.To_String (Item.Levels));
+
+   function Status_At (Item : Fixture; Level : String) return Integer is
+      Text : constant String := Unbounded.To_String (Item.Level_Status);
+      Start : Positive := Text'First;
+   begin
+      if Level = "" then
+         return Item.Status;
+      end if;
+      while Start <= Text'Last loop
+         declare
+            Stop : constant Natural :=
+              Ada.Strings.Fixed.Index (Text (Start .. Text'Last), ",");
+            Entry_Text : constant String := Ada.Strings.Fixed.Trim
+              (Text (Start .. (if Stop = 0 then Text'Last else Stop - 1)),
+               Ada.Strings.Both);
+            Equals : constant Natural :=
+              Ada.Strings.Fixed.Index (Entry_Text, "=");
+         begin
+            if Equals > 0
+              and then Ada.Strings.Fixed.Trim
+                (Entry_Text (Entry_Text'First .. Equals - 1),
+                 Ada.Strings.Both) = Level
+            then
+               return Integer'Value
+                 (Entry_Text (Equals + 1 .. Entry_Text'Last));
+            end if;
+            exit when Stop = 0;
+            Start := Stop + 1;
+         end;
+      end loop;
+      return Item.Status;
+   end Status_At;
 
 
    --  Whether a level is one of a product target's.  A runtime fixture is
@@ -144,6 +177,9 @@ package body Landin.Testing.Fixtures is
    function Status (Item : Fixture) return Integer is (Item.Status);
 
    function Traps (Item : Fixture) return Boolean is (Item.Traps);
+
+   function Trap_Report (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Trap_Report));
 
    function Constructs (Item : Fixture) return String
      is (Unbounded.To_String (Item.Made_Of));
@@ -470,6 +506,7 @@ package body Landin.Testing.Fixtures is
       Seen_Run_Expect : Boolean := False;
       Seen_Status  : Boolean := False;
       Seen_Traps   : Boolean := False;
+      Seen_Trap_Report : Boolean := False;
       Seen_Constructs : Boolean := False;
       Seen_With    : Boolean := False;
       Seen_Root    : Boolean := False;
@@ -481,6 +518,7 @@ package body Landin.Testing.Fixtures is
       Seen_Stream  : Boolean := False;
       Seen_Profiles : Boolean := False;
       Seen_Levels : Boolean := False;
+      Seen_Level_Status : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
       Line_Number  : Natural := 0;
@@ -722,6 +760,52 @@ package body Landin.Testing.Fixtures is
                end if;
                Seen_Levels := True;
                Item.Levels := Unbounded.To_Unbounded_String (Value);
+
+            elsif Key = "level_status" then
+               if Seen_Level_Status then
+                  Complain ("duplicate key: level_status");
+                  return;
+               end if;
+               Seen_Level_Status := True;
+               --  Each entry is LEVEL=STATUS with an integer status; that
+               --  each level is one `levels:` names is checked below.
+               declare
+                  Start : Positive := Value'First;
+               begin
+                  while Start <= Value'Last loop
+                     declare
+                        Stop : constant Natural := Ada.Strings.Fixed.Index
+                          (Value (Start .. Value'Last), ",");
+                        Entry_Text : constant String := Ada.Strings.Fixed.Trim
+                          (Value (Start ..
+                             (if Stop = 0 then Value'Last else Stop - 1)),
+                           Ada.Strings.Both);
+                        Equals : constant Natural :=
+                          Ada.Strings.Fixed.Index (Entry_Text, "=");
+                     begin
+                        if Equals = 0 then
+                           Complain ("level_status entry is not LEVEL=STATUS: "
+                                     & Entry_Text);
+                           return;
+                        end if;
+                        declare
+                           Ignored : constant Integer := Integer'Value
+                             (Entry_Text (Equals + 1 .. Entry_Text'Last));
+                           pragma Unreferenced (Ignored);
+                        begin
+                           null;
+                        exception
+                           when Constraint_Error =>
+                              Complain ("level_status is not an integer: "
+                                        & Entry_Text);
+                              return;
+                        end;
+                        exit when Stop = 0;
+                        Start := Stop + 1;
+                     end;
+                  end loop;
+               end;
+               Item.Level_Status := Unbounded.To_Unbounded_String (Value);
 
             elsif Key = "stream" then
                if Seen_Stream then
@@ -998,6 +1082,14 @@ package body Landin.Testing.Fixtures is
                   Complain ("traps is not yes or no: " & Value);
                end if;
 
+            elsif Key = "trap_report" then
+               if Seen_Trap_Report then
+                  Complain ("duplicate key: trap_report");
+                  return;
+               end if;
+               Seen_Trap_Report := True;
+               Item.Trap_Report := Unbounded.To_Unbounded_String (Value);
+
             elsif Key = "status" then
                if Seen_Status then
                   Complain ("duplicate key: status");
@@ -1032,6 +1124,7 @@ package body Landin.Testing.Fixtures is
                Codes   => Unbounded.Null_Unbounded_String,
                Status  => 0,
                Traps   => False,
+               Trap_Report => Unbounded.Null_Unbounded_String,
                Made_Of => Unbounded.Null_Unbounded_String,
                Beside  => Unbounded.Null_Unbounded_String,
                Root    => Unbounded.Null_Unbounded_String,
@@ -1042,7 +1135,8 @@ package body Landin.Testing.Fixtures is
                Link    => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
                Profiles => Standard,
-               Levels  => Unbounded.Null_Unbounded_String);
+               Levels  => Unbounded.Null_Unbounded_String,
+               Level_Status => Unbounded.Null_Unbounded_String);
 
       for Index in Content'Range loop
          if Content (Index) = Character'Val (10) then
@@ -1106,6 +1200,39 @@ package body Landin.Testing.Fixtures is
             if Named = 0 then
                Complain ("levels names no level");
             end if;
+         end;
+      end if;
+
+      if Seen_Level_Status then
+         declare
+            Value : constant String := Unbounded.To_String (Item.Level_Status);
+            Listed : constant String :=
+              "," & Unbounded.To_String (Item.Levels) & ",";
+            First : Integer := Value'First;
+         begin
+            for Index in Value'First .. Value'Last + 1 loop
+               if Index > Value'Last or else Value (Index) = ',' then
+                  declare
+                     One : constant String :=
+                       Trimmed (Value (First .. Index - 1));
+                     Equals : constant Natural :=
+                       Ada.Strings.Fixed.Index (One, "=");
+                     Level : constant String :=
+                       (if Equals = 0 then One
+                        else Trimmed (One (One'First .. Equals - 1)));
+                  begin
+                     if Ada.Strings.Fixed.Index
+                          (Ada.Strings.Fixed.Translate
+                             (Listed, Ada.Strings.Maps.To_Mapping (" ", ",")),
+                           "," & Level & ",") = 0
+                     then
+                        Complain ("level_status names a level levels does"
+                                  & " not: " & Level);
+                     end if;
+                  end;
+                  First := Index + 1;
+               end if;
+            end loop;
          end;
       end if;
 
@@ -1260,6 +1387,12 @@ package body Landin.Testing.Fixtures is
       then
          Complain
            ("only a runtime or ABI fixture runs a program that could trap");
+      end if;
+
+      if Seen_Trap_Report and then not (Seen_Traps and then Item.Traps)
+      then
+         Complain ("trap_report is the line a trapping program writes,"
+                   & " and needs traps: yes");
       end if;
 
       if Seen_Class and then Item.Class = Negative_Program

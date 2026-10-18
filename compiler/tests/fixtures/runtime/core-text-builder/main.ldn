@@ -3,11 +3,13 @@
 --  a piece that does not fit; a growing one takes its storage from an
 --  allocator, in place where the arena can extend its last block and by
 --  copying where something was allocated after it.
+import core/arena
+import core/cmp
 import core/mem
 import core/text
 
 holds: (line: text.builder, expected: []u8) -> (yes: bool) =
-    yes = mem.compare(text.used(line), expected) == mem.equal
+    yes = cmp.compare(text.used(line), expected) == cmp.equal
 end holds
 
 pieces: () -> (ok: bool) ! text.no_space =
@@ -15,41 +17,41 @@ pieces: () -> (ok: bool) ! text.no_space =
     mut storage: [160]u8 = zeroed
     mut line := text.over(storage[0..<160])
     try text.append(line, "<")
-    try text.append_byte(line, 62)
+    try text.append_byte(line, u8('>'))
     try text.append_text(line, " café ")
     try text.append_host(line, text.host_over("name"))
     return when not holds(line, "<> café name")
     text.clear(line)
     try text.append_u32(line, 4294967295)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_u64(line, 18446744073709551615)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_u32(line, 0)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_usize(line, 65535)
     return when not holds(line, "4294967295 18446744073709551615 0 65535")
     text.clear(line)
     least_i32: i32 = 0 - 2147483647 - 1
     least_i64: i64 = 0 - 9223372036854775807 - 1
     try text.append_i32(line, least_i32)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_i32(line, 2147483647)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_i64(line, least_i64)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_i64(line, 9223372036854775807)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_isize(line, 0 - 7)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_i32(line, 0)
     return when not holds(line, "-2147483648 2147483647 -9223372036854775808 9223372036854775807 -7 0")
     text.clear(line)
     try text.append_hex_u32(line, 0)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_hex_u32(line, 3735928559)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_hex_u64(line, 18446744073709551615)
-    try text.append_byte(line, 32)
+    try text.append_byte(line, u8(' '))
     try text.append_hex_usize(line, 4096)
     return when not holds(line, "0 deadbeef ffffffffffffffff 1000")
     ok = true
@@ -62,19 +64,19 @@ aligned: () -> (ok: bool) ! text.no_space =
     try text.append(line, "[")
     start: usize = text.length(line)
     try text.append_u32(line, 42)
-    try text.align_right(line, start, 6, 32)
+    try text.align_right(line, start, 6, u8(' '))
     try text.append(line, "][")
     hex: usize = text.length(line)
     try text.append_hex_u32(line, 255)
-    try text.align_right(line, hex, 4, 48)
+    try text.align_right(line, hex, 4, u8('0'))
     try text.append(line, "][")
     word: usize = text.length(line)
     try text.append(line, "ab")
-    try text.align_left(line, word, 5, 46)
+    try text.align_left(line, word, 5, u8('.'))
     try text.append(line, "][")
     wide: usize = text.length(line)
     try text.append(line, "wider")
-    try text.align_right(line, wide, 3, 32)
+    try text.align_right(line, wide, 3, u8(' '))
     try text.append(line, "]")
     ok = holds(line, "[    42][00ff][ab...][wider]")
 end aligned
@@ -98,7 +100,7 @@ bounded: () -> (ok: bool) =
             text.append_u64(line, 100) else (decimal)
                 return when decimal <> text.no_space
                 return when not holds(line, "ab")
-                text.align_right(line, 0, 5, 32) else (padded)
+                text.align_right(line, 0, 5, u8(' ')) else (padded)
                     ok = padded == text.no_space and holds(line, "ab")
                          and text.capacity(line) == 4
                     return
@@ -118,28 +120,28 @@ end bounded
 growing: () -> (ok: bool) ! text.no_space =
     ok = false
     mut backing: [256]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 256)
-    mut line := text.growing(any(addr arena))
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 256)
+    mut line := text.growing(any(addr memory))
     return when text.capacity(line) <> 0
     try text.append(line, "0123456789")
     return when text.capacity(line) <> 16
     try text.append(line, "0123456789")
-    return when text.capacity(line) <> 32 or mem.arena_used(arena) <> 32
-    other: ptr mut u8 = mem.allocate(arena, usize(8), usize(1)) else (problem)
+    return when text.capacity(line) <> 32 or arena.used(memory) <> 32
+    other: ptr mut u8 = mem.allocate(memory, usize(8), usize(1)) else (problem)
         _ = problem
         return
     end
     _ = other
     try text.append(line, "0123456789abcd")
-    return when text.capacity(line) <> 64 or mem.arena_used(arena) <> 104
+    return when text.capacity(line) <> 64 or arena.used(memory) <> 104
     return when not holds(line, "012345678901234567890123456789abcd")
     try text.append_u64(line, 18446744073709551615)
-    return when text.capacity(line) <> 64 or mem.arena_used(arena) <> 104
+    return when text.capacity(line) <> 64 or arena.used(memory) <> 104
     mut more: [100]u8 = zeroed
-    mem.fill(more[0..<100], 120)
+    mem.fill(more[0..<100], u8('x'))
     try text.append(line, more[0..<64])
-    return when text.capacity(line) <> 128 or mem.arena_used(arena) <> 168
+    return when text.capacity(line) <> 128 or arena.used(memory) <> 168
     held: usize = text.length(line)
     text.append(line, more[0..<100]) else (problem)
         return when problem <> text.no_space

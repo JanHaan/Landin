@@ -7,4 +7,4 @@ error[L0334]: this mixed repetition leaves no array suffix to fill
   |
 2 |     row: [2]u8 = [1, 2, of 3]
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the array context here
-  = note: D36/D37: a prefix requires 1 <= k < N
+  = note: D36/D37: a repeated prefix writes at least one element and fewer than the array holds

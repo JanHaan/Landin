@@ -1,0 +1,43 @@
+--  The library's second reading of the spill list: cleared, its last
+--  item, and room reserved inline and then spilled.
+import core/arena
+import core/mem
+import core/spill
+
+wrong: atom
+
+mut backing: [1024]u8 = zeroed
+
+spilled: (memory: arena.arena) -> none ! ... =
+    mut values := spill.new(item: i32, inline_slots: 2)
+    try spill.push(values, memory, 1)
+    try spill.push(values, memory, 2)
+    fail wrong when try spill.last(addr values) <> 2
+    try spill.reserve(values, memory, usize(2))
+    fail wrong when spill.capacity(addr values) <> 2
+    try spill.reserve(values, memory, usize(8))
+    fail wrong when spill.capacity(addr values) < 8
+      or spill.length(addr values) <> 2
+      or try spill.get(addr values, usize(1)) <> 2
+    spill.clear(values)
+    fail wrong when spill.length(addr values) <> 0
+      or spill.capacity(addr values) < 8
+    mut empty: bool = false
+    _ = spill.last(addr values) else (problem)
+        empty = problem == mem.empty
+        0
+    end
+    fail wrong when not empty
+    spill.release(values, memory)
+end spilled
+
+public main: () -> (code: i32) =
+    code = 1
+    mut space: arena.space = zeroed
+    bump := arena.over(space, addr backing[0], 1024)
+    spilled(bump) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

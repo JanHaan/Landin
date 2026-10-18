@@ -1,5 +1,5 @@
+import core/arena
 import core/fault
-import core/mem
 import core/vec
 
 mut backing: [530000]u8
@@ -20,22 +20,27 @@ public main: () -> (code: i32) =
     middle: usize = 32767
     last: usize = total - 1
     allowance: usize = 14
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, addr backing[0],
+    mut arena_space: arena.space = zeroed
+    memory := arena.over_unchecked(arena_space, addr backing[0],
                                       lenof backing)
     mut space: fault.space = zeroed
-    counted := fault.over(space, arena, allowance)
+    counted := fault.over(space, memory, allowance)
     mut values := vec.new(item: u32)
 
     for index in zero..<total do
-        vec.push(values, counted, u32(index)) else (ignored) _ = ignored end
+        vec.push(values, counted, u32(index)) else none
     end for
 
+    --  One first block of eight and thirteen doublings, each grown in place,
+    --  since the list is always the arena's latest block (D356): the
+    --  fourteen permits go to one allocation and thirteen growths, and
+    --  nothing is freed until the release.
     if not (vec.length(values) == total)
       or not (vec.capacity(values) == total)
       or not contents_ok(values, middle, last)
-      or not (fault.successes(counted) == allowance)
-      or not (fault.frees(counted) == allowance - 1)
+      or not (fault.successes(counted) == 1)
+      or not (fault.growths(counted) == allowance - 1)
+      or not (fault.frees(counted) == 0)
     then
         code = 1
         return
@@ -43,7 +48,7 @@ public main: () -> (code: i32) =
 
     vec.release(values, counted)
     if vec.length(values) == 0 and vec.capacity(values) == 0
-      and fault.frees(counted) == allowance
+      and fault.frees(counted) == 1
     then
         code = 42
     else

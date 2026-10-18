@@ -1,7 +1,7 @@
 /* External reach control: only compiler routine 4 (cm_leaf) runs in SRAM.
  * Placement forces a GNU Thumb veneer across flash/RAM's >4 MiB gap.
  * This is no Landin section, startup or linker surface. */
-ENTRY(reset)
+ENTRY(_landin_harness_reset)
 MEMORY {
   FLASH (rx) : ORIGIN = 0, LENGTH = 32K
   RAM (rw) : ORIGIN = 0x20000000, LENGTH = 16K

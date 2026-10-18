@@ -1,0 +1,21 @@
+red, amber, green: atom
+
+signal: type = red | amber | green
+
+wait_seconds: (light: signal) -> (seconds: u32) =
+    match light
+        red: seconds = 30
+        amber: seconds = 3
+        green: seconds = 0
+    end match
+end wait_seconds
+
+digit_name: (digit: u32) -> (name: utf8) =
+    if digit == 0 then
+        name = "zero"
+    elsif digit == 1 then
+        name = "one"
+    else
+        name = "many"
+    end if
+end digit_name

@@ -1,9 +1,9 @@
 import core/io
 import core/mem
-import hosted/heap
 import examples/derived_hosted/app
+import hosted/heap
 
-bad: (allocator: heap.system,
+bad: (allocator: heap.heap,
       inout reader: app.reader, world: any io.world) -> (byte: u8)
      ! io.io_failed | mem.out_of_memory | app.at_end =
     line: []u8 = try app.next_line(allocator, reader, world)

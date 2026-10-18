@@ -61,7 +61,8 @@ package Landin.Platform.Native is
      (Host    : Native_Filesystem;
       Path    : String;
       Content : String;
-      Status  : out Write_Status);
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String);
 
    overriding procedure Remove_File
      (Host   : Native_Filesystem;

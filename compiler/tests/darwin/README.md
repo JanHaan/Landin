@@ -62,7 +62,8 @@ mutable erased filter state and destination through the complete application
 stack. All sessions finish the original application oracle, including exact
 parser diagnostics. They retain full reached-source inventories and
 specialization reports. `debugging/workload-sources.json` pins each complete
-source closure for both native debugger runners.
+source closure for both native debugger runners; the test program holds it
+to the closures too, and `debugging/workload_sources.py --write` rewrites it.
 
 Each complete program retains assembly, object, executable, dSYM, source map,
 DWARF verification, unwind/UUID output, command logs and LLDB assertions.

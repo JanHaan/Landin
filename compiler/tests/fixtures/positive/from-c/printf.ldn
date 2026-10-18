@@ -1,0 +1,16 @@
+import core/io
+import core/text
+import hosted/system
+
+--- Write a name and a count, the count right-aligned in five columns.
+report: (host: system.host, name: utf8, count: u32)
+        -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut storage: [128]u8 = zeroed
+    mut line := text.over(storage)
+    try text.format(line, "{}: ", [any(addr name)])
+    start := text.length(line)
+    try text.append_u32(line, count)
+    try text.align_right(line, start, 5, u8(' '))
+    try text.append(line, " items\n")
+    try io.write(host, io.out(host), text.used(line))
+end report

@@ -1237,12 +1237,13 @@ package body Landin.IR is
 
    function Add_Evidence
      (Into : in out Unit; Represented : Field_Shape;
-      Erased : Boolean := False) return Evidence_Id
+      Erased : Boolean := False;
+      Family : Natural := 0) return Evidence_Id
    is
    begin
       Into.Evidence.Append
         (Evidence_Record'
-           (Represented => Represented, Erased => Erased,
+           (Represented => Represented, Erased => Erased, Family => Family,
             Entries => (First => Natural (Into.Evidence_Entries.Length),
                         Count => 0)));
       return Evidence_Id (Into.Evidence.Last_Index);
@@ -1252,6 +1253,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Id : Evidence_Id) return Boolean
      is (Holds (Of_Unit, Id)
          and then Of_Unit.Evidence.Element (Positive (Id)).Erased);
+
+   function Evidence_Family
+     (Of_Unit : Unit; Id : Evidence_Id) return Natural
+     is (Of_Unit.Evidence.Element (Positive (Id)).Family);
 
    function Evidence_Represented
      (Of_Unit : Unit; Id : Evidence_Id) return Field_Shape
@@ -1592,9 +1597,29 @@ package body Landin.IR is
       Into.Items (Positive (Item)).Address_Exposed := True;
    end Mark_Address_Exposed;
 
+   procedure Visit_Exposures
+     (Of_Unit  : Unit;
+      Process  : not null access procedure (Item : Item_Id);
+      Evidence : Boolean);
+
    procedure Visit_Address_Exposures
      (Of_Unit : Unit;
-      Process : not null access procedure (Item : Item_Id))
+      Process : not null access procedure (Item : Item_Id)) is
+   begin
+      Visit_Exposures (Of_Unit, Process, Evidence => True);
+   end Visit_Address_Exposures;
+
+   procedure Visit_Address_Exposures_Beside_Evidence
+     (Of_Unit : Unit;
+      Process : not null access procedure (Item : Item_Id)) is
+   begin
+      Visit_Exposures (Of_Unit, Process, Evidence => False);
+   end Visit_Address_Exposures_Beside_Evidence;
+
+   procedure Visit_Exposures
+     (Of_Unit  : Unit;
+      Process  : not null access procedure (Item : Item_Id);
+      Evidence : Boolean)
    is
       procedure Note (Item : Item_Id);
 
@@ -1621,15 +1646,17 @@ package body Landin.IR is
       for Image of Of_Unit.Aggregate_Images loop
          Note (Image.Target);
       end loop;
-      for Entry_Item of Of_Unit.Evidence_Entries loop
-         Note (Entry_Item.Target);
-      end loop;
+      if Evidence then
+         for Entry_Item of Of_Unit.Evidence_Entries loop
+            Note (Entry_Item.Target);
+         end loop;
+      end if;
       for Value of Of_Unit.Code loop
          if Value.Op = Function_Address then
             Note (Value.Named);
          end if;
       end loop;
-   end Visit_Address_Exposures;
+   end Visit_Exposures;
 
    function Has_Address_Exposure
      (Of_Unit : Unit; Item : Item_Id) return Boolean

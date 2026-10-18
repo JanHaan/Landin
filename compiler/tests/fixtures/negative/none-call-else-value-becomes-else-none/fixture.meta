@@ -1,0 +1,10 @@
+class: negative
+summary: D310's refused value after a none call's `else` is offered D376's `else none`, which compiles clean
+program: program.ldn
+codes: L0331
+fixed: program.fixed
+constructs: 0940, 1030
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/none-call-else-value-becomes-else-none/program.ldn
+status: 1

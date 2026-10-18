@@ -27,6 +27,11 @@ end space_value
 --- fills it; it must outlive the region handle, and `release` empties it.
 public space: type (fixed capacity: usize) = space_value(capacity)
 
+--- Caller-owned state of a region whose ledger grows through its parent:
+--- the one ledger a capacity of zero means, since a bounded ledger of no
+--- records could hold nothing (D356).  Declare it `zeroed`.
+public growing_space: type = space_value(0)
+
 region_value: type (provider: type) = struct
     parent: provider
     book: ptr mut book_value
@@ -127,16 +132,23 @@ region_free: (provider: type is mem.allocator, self: region(provider),
     _ = size
 end region_free
 
-region_grow: (provider: type,
+--  The block the newest record holds grows where it is when its parent
+--  grows it, and its record follows; any other block is refused, as a
+--  provider may always refuse, and is moved by a resize instead.
+region_grow: (provider: type is mem.allocator,
               self: region(provider), block: ptr mut u8,
               old_size: usize, new_size: usize, alignment: usize)
              -> (grown: bool) =
-    _ = self.book
-    _ = block
-    _ = old_size
-    _ = new_size
-    _ = alignment
     grown = false
+    newest: usize = newest_record(self)
+    return when newest == 0
+    record: ptr mut allocation = ptr(newest)
+    return when record.val.address <> usize(block)
+      or record.val.extent <> old_size
+    grown = provider.grow(self.parent, block, old_size, new_size, alignment)
+    if grown then
+        record.val.extent = new_size
+    end if
 end region_grow
 
 --  Where the newest record is, or zero when there is none: the last of a

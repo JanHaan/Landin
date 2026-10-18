@@ -1,12 +1,12 @@
 import core/io
-import hosted/io as hosted
+import hosted/system
 import platform/linux
 
 --  Under --link=libc the C runtime starts the program, so
 --  platform/linux's entry never runs, but the argument initializer hands
 --  it the initial stack's tables that C's `main` was given: it reports the
 --  same environment and the auxiliary vector after it, with the kernel's
---  page size, as a static program's entry finds them.  hosted/io still
+--  page size, as a static program's entry finds them.  hosted/system still
 --  reaches the kernel through platform/linux's system calls and the
 --  arguments still reach its world.
 --  Whether the auxiliary vector gives the page size, a power of two of at
@@ -19,7 +19,7 @@ end page_known
 
 public main: () -> (code: i32) =
     code = 1
-    state: hosted.system = hosted.host()
+    state: system.host = system.new()
     return when io.argument_count(state) <> 1
     code = 2
     table: linux.environment_table = linux.environment()

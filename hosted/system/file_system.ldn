@@ -1,0 +1,240 @@
+--  The hosted provider's `io.file_system` and `io.terminals`, written
+--  once over platform/posix like the rest: a file of this provider is a
+--  descriptor, so what `files` opens these read and write at an offset,
+--  and what `open_file` opens `reader`, `writer` and `files` take.
+
+import core/io
+import core/text
+import platform/posix
+
+--  The access an open asks for.
+access_of: (options: io.open_options) -> (access: posix.access) =
+    access = if options.read and options.write then posix.read_write
+             elsif options.write then posix.write_only
+             else posix.read_only end if
+end access_of
+
+system_open_file: (self: host, path: text.host_string,
+                   options: io.open_options)
+                  -> (opened: io.file)
+                  ! io.already_exists | io.not_found | io.no_access
+                  | io.io_failed =
+    self.failure.val = 0
+    opened = file_of(posix.standard_input)
+    if not io.valid_options(options) then
+        record(self, posix.einval)
+        fail io.io_failed
+    end if
+    asked: posix.open_options = (access: access_of(options),
+                                 create: options.create,
+                                 exclusive: options.exclusive,
+                                 truncate: options.truncate,
+                                 append: options.append, directory: false)
+    opened = try open(self, path, asked, created_mode)
+end system_open_file
+
+--  Not retried on EINTR: a rename made before the interruption would then
+--  report the old name missing.
+system_rename: (self: host, old: text.host_string, new: text.host_string)
+               -> none ! io.not_found | io.no_access | io.io_failed =
+    self.failure.val = 0
+    posix.rename_at(posix.working_directory, old, posix.working_directory,
+                    new) else (problem)
+        record(self, problem)
+        fail io.not_found when problem == posix.enoent
+        fail io.no_access when refused(problem)
+        fail io.io_failed
+    end
+end system_rename
+
+--  What core/io says of a status: no permission bit lets anyone write a
+--  read-only file.
+status_from: (found: posix.status) -> (result: io.status) =
+    result = (size: found.size, kind: kind_of(found.kind),
+              modified: (seconds: found.modified.seconds,
+                         nanoseconds: found.modified.nanoseconds),
+              read_only: (found.permissions & 0o222) == 0)
+end status_from
+
+system_status_of: (self: host, path: text.host_string,
+                   links: io.link_handling)
+                  -> (found: io.status)
+                  ! io.not_found | io.no_access | io.io_failed =
+    self.failure.val = 0
+    given: posix.status =
+        posix.status_at(posix.working_directory, path,
+                        links == io.following) else (problem)
+            try path_failure(self, problem)
+            fail io.io_failed
+        end
+    found = status_from(given)
+end system_status_of
+
+system_status_of_file: (self: host, opened: io.file)
+                       -> (found: io.status) ! io.io_failed =
+    self.failure.val = 0
+    given: posix.status = posix.status_of(descriptor_of(opened)) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+    found = status_from(given)
+end system_status_of_file
+
+--  Read-only clears every write bit; writable again sets the owner's.
+--  The status is read and the bits set in two calls, so a change another
+--  program makes between them is lost.
+system_set_read_only: (self: host, path: text.host_string,
+                       read_only: bool)
+                      -> none ! io.not_found | io.no_access | io.io_failed =
+    self.failure.val = 0
+    given: posix.status =
+        posix.status_at(posix.working_directory, path, true) else (problem)
+            try path_failure(self, problem)
+            fail io.io_failed
+        end
+    bits: u32 = if read_only then given.permissions & ~u32(0o222)
+                else given.permissions | 0o200 end if
+    posix.change_mode_at(posix.working_directory, path, bits) else (problem)
+        try path_failure(self, problem)
+        fail io.io_failed
+    end
+end system_set_read_only
+
+system_synchronize: (self: host, opened: io.file,
+                     writing: io.synchronizing)
+                    -> none ! io.io_failed =
+    self.failure.val = 0
+    loop do
+        posix.synchronize(descriptor_of(opened), writing == io.data_only)
+            else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        return
+    end loop
+end system_synchronize
+
+system_truncate: (self: host, opened: io.file, size: u64)
+                 -> none ! io.io_failed =
+    self.failure.val = 0
+    loop do
+        posix.truncate(descriptor_of(opened), size) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        return
+    end loop
+end system_truncate
+
+system_read_at: (self: host, opened: io.file, offset: u64, into: []mut u8)
+                -> (count: usize) ! io.io_failed =
+    self.failure.val = 0
+    count = 0
+    return when lenof into == 0
+    loop do
+        --  A read interrupted before it read a byte is made again; a short
+        --  one is returned as it came.
+        count = posix.read_at(descriptor_of(opened), offset, into)
+            else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        return
+    end loop
+end system_read_at
+
+system_write_at: (self: host, opened: io.file, offset: u64, bytes: []u8)
+                 -> none ! io.io_failed =
+    self.failure.val = 0
+    mut written: usize = 0
+    while written < lenof bytes do
+        accepted: usize =
+            posix.write_at(descriptor_of(opened), offset + u64(written),
+                           bytes[written..<lenof bytes]) else (problem)
+                continue when problem == posix.eintr
+                record(self, problem)
+                fail io.io_failed
+            end
+        fail io.io_failed when accepted == 0
+        written += accepted
+    end while
+end system_write_at
+
+--  A temporary file is readable and writable by its owner alone.
+temporary_mode: u32 = 0o600
+
+--  The options a temporary file is made with: read and write, created
+--  exclusively, so a name another program took, or a symbolic link
+--  planted at it, is never opened in its place.
+temporary_options: posix.open_options =
+    (access: posix.read_write, create: true, exclusive: true,
+     truncate: false, append: false, directory: false)
+
+system_make_temporary: (self: host, directory: text.host_string,
+                        names: any io.entropy, into: []mut u8)
+                       -> (made: io.temporary from into)
+                       ! io.not_found | io.no_access | io.io_failed =
+    self.failure.val = 0
+    made = (opened: file_of(posix.standard_input),
+            path: text.host_over(into[0..<0]))
+    mut tries: usize = 0
+    while tries < io.temporary_tries do
+        inc tries
+        mut bytes: [8]u8 = zeroed
+        try names.fill_random(bytes[0..<8])
+        path: text.host_string = try io.temporary_path(directory, bytes, into)
+        opened: io.file =
+            open(self, path, temporary_options, temporary_mode)
+            else (problem)
+                --  The name is taken: try another.
+                continue when problem == io.already_exists
+                fail io.not_found when problem == io.not_found
+                fail io.no_access when problem == io.no_access
+                fail io.io_failed
+            end
+        self.failure.val = 0
+        made = (opened: opened, path: path)
+        return
+    end while
+    fail io.io_failed
+end system_make_temporary
+
+system_current_directory: (self: host, into: []mut u8)
+                          -> (path: text.host_string from into)
+                          ! io.io_failed =
+    self.failure.val = 0
+    path = posix.current_directory(into) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end system_current_directory
+
+system_is_terminal: (self: host, stream: io.file) -> (yes: bool) =
+    _ = self.failure
+    yes = posix.is_terminal(descriptor_of(stream))
+end system_is_terminal
+
+system_window_size: (self: host, stream: io.file) -> (size: io.window)
+                    ! io.not_a_terminal | io.io_failed =
+    self.failure.val = 0
+    found: posix.window_size =
+        posix.window_size_of(descriptor_of(stream)) else (problem)
+            record(self, problem)
+            fail io.not_a_terminal when problem == posix.enotty
+            fail io.io_failed
+        end
+    size = (rows: found.rows, columns: found.columns)
+end system_window_size
+
+host is io.file_system
+    (open_file: system_open_file, rename: system_rename,
+     status_of: system_status_of, status_of_file: system_status_of_file,
+     set_read_only: system_set_read_only, synchronize: system_synchronize,
+     truncate: system_truncate, read_at: system_read_at,
+     write_at: system_write_at, make_temporary: system_make_temporary,
+     current_directory: system_current_directory)
+host is io.terminals
+    (is_terminal: system_is_terminal, window_size: system_window_size)

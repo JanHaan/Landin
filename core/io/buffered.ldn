@@ -3,6 +3,7 @@
 --  flushes it.
 
 import core/mem
+import core/text
 
 buffered_value: type (provider: type) = struct
     host: provider
@@ -101,3 +102,30 @@ public pending: (provider: type, out: buffered_writer(provider))
                 -> (count: usize) =
     count = out.used
 end pending
+
+--- Format `template` with `values`, as `text.format` does, straight into
+--- the buffer, with no builder of the caller's and no copy: into the room
+--- after the waiting bytes, or when the text does not fit there, after a
+--- flush, into the whole buffer.  A text larger than the whole buffer is
+--- `text.no_space` and leaves nothing of itself waiting; a template that
+--- does not fit its values is `text.invalid_format`; a failed flush is the
+--- writer's `io_failed`.  The buffered writer and the builder are the byte
+--- sinks a template is formatted into (D355).
+public format: (provider: type is writer,
+                inout out: buffered_writer(provider), template: utf8,
+                values: []any text.formattable)
+               -> none ! text.no_space | text.invalid_format | io_failed =
+    mut line := text.over(out.buffer[out.used..<lenof out.buffer])
+    text.format(line, template, values) else (problem)
+        fail text.invalid_format when problem == text.invalid_format
+        try flush(out)
+        mut whole := text.over(out.buffer[0..<lenof out.buffer])
+        text.format(whole, template, values) else (again)
+            fail text.invalid_format when again == text.invalid_format
+            fail text.no_space
+        end
+        out.used = text.length(whole)
+        return
+    end
+    out.used += text.length(line)
+end format

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Execute the compiler-owned firmware path; never use backend-start.S."""
 import argparse
+import contextlib
 import json
 from pathlib import Path
 import subprocess
@@ -12,7 +13,7 @@ from packed import TRACE
 from machine import Machine
 from models import EncodingPeripheral, PrototypePeripheral
 from run import Run, gdb_listener, oracle, require, stop
-from setup import DEFAULT, inventory, sha, supported_host
+from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 
 def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
@@ -124,19 +125,19 @@ end start
 def cpu_levels(parent, refine):
     """Link the scoped CPU module through compiler-owned startup at each level."""
     root = Path(__file__).resolve().parents[2]
-    program = """import platform/cpu
+    program = """import platform/cortex_m
 mut observed: u32 = 0
 start: () -> none =
-    saved := cpu.disable_interrupts()
-    observed = cpu.interrupt_mask()
-    cpu.compiler_barrier()
-    cpu.device_barrier()
-    cpu.completion_barrier()
-    cpu.restore_interrupts(saved)
+    saved := cortex_m.disable_interrupts()
+    observed = cortex_m.interrupt_mask()
+    cortex_m.compiler_barrier()
+    cortex_m.device_barrier()
+    cortex_m.completion_barrier()
+    cortex_m.restore_interrupts(saved)
 end start
 """
     inputs = {str(p.relative_to(root)): sha(p)
-              for p in sorted((root / 'platform/cpu').glob('*.ldn'))}
+              for p in sorted((root / 'platform/cortex_m').glob('*.ldn'))}
     controls = []
     for level in ('armv6-m', 'armv7-m', 'armv7e-m'):
         out = parent.out / level
@@ -465,6 +466,15 @@ end start
     (run.out / 'device-trace.txt').write_text(model.trace + '\n')
 
 
+@contextlib.contextmanager
+def case(name):
+    """Name the firmware case a failure belongs to, ahead of the failure itself."""
+    try:
+        yield
+    except RuntimeError as error:
+        raise RuntimeError('compiler firmware ' + name + ': ' + str(error)) from error
+
+
 def execute_suite(parent, refine, profiles=PROFILES):
     root = parent.out / 'firmware'
     root.mkdir()
@@ -478,13 +488,16 @@ def execute_suite(parent, refine, profiles=PROFILES):
             'firmware selected the wrong runtime archive')
     out = root / 'cpu-levels'
     out.mkdir()
-    controls = cpu_levels(Run(out, parent.tools), refine)
+    with case('cpu-levels'):
+        controls = cpu_levels(Run(out, parent.tools), refine)
     out = root / 'refusals'
     out.mkdir()
-    failures(Run(out, parent.tools), refine)
+    with case('refusals'):
+        failures(Run(out, parent.tools), refine)
     out = root / 'independent-c-assembly'
     out.mkdir()
-    independent(Run(out, parent.tools))
+    with case('independent-c-assembly'):
+        independent(Run(out, parent.tools))
     for optimize, specialize in profiles:
         profile = root / (optimize + '-' + specialize)
         profile.mkdir()
@@ -493,8 +506,9 @@ def execute_suite(parent, refine, profiles=PROFILES):
             out = profile / name
             out.mkdir()
             run = Run(out, parent.tools)
-            elf = build(run, refine, optimize=optimize, specialize=specialize)
-            execute(run, elf)
+            with case('%s at %s/%s' % (name, optimize, specialize)):
+                elf = build(run, refine, optimize=optimize, specialize=specialize)
+                execute(run, elf)
             images.append(out)
         for suffix in ('', '.o', '.s', '.ld', '.map'):
             require((images[0] / ('firmware.elf' + suffix)).read_bytes() ==
@@ -504,34 +518,35 @@ def execute_suite(parent, refine, profiles=PROFILES):
             out = profile / kind
             out.mkdir()
             run = Run(out, parent.tools)
-            if kind == 'interrupts':
-                program = (Path(__file__).parent / 'probes/firmware-irq.ldn').read_text()
-                elf = build(run, refine, program, optimize, specialize)
-                symbols = (out / 'symbols.log').read_text().splitlines()
-                present = {parts[-1] for line in symbols if (parts := line.split())}
-                require('discarded' not in present and 'discarded_handler' not in present,
-                        'unreferenced sections survived garbage collection')
-                require({'retained','svc_handler','irq_handler'} <= present,
-                        'retained/vector-referenced sections disappeared')
-                interrupts(run, elf)
-            elif kind == 'dma':
-                dma(run, refine, optimize, specialize)
-            elif kind == 'machine':
-                machine(run, refine, optimize, specialize)
-            elif kind == 'fallthrough':
-                fallthrough(run, refine, optimize, specialize)
-            elif kind == 'veneers':
-                veneers(run, refine, optimize, specialize)
-            else:
-                peripheral(run, refine, kind, optimize, specialize)
-            fresh = out / 'fresh'
-            fresh.mkdir()
-            build(Run(fresh, parent.tools), refine,
-                  (out / 'boot.ldn').read_text(), optimize, specialize)
-            for suffix in ('', '.o', '.s', '.ld', '.map'):
-                require((out / ('firmware.elf' + suffix)).read_bytes() ==
-                        (fresh / ('firmware.elf' + suffix)).read_bytes(),
-                        'fresh ' + kind + ' artifact differs: ' + suffix)
+            with case('%s at %s/%s' % (kind, optimize, specialize)):
+                if kind == 'interrupts':
+                    program = (Path(__file__).parent / 'probes/firmware-irq.ldn').read_text()
+                    elf = build(run, refine, program, optimize, specialize)
+                    symbols = (out / 'symbols.log').read_text().splitlines()
+                    present = {parts[-1] for line in symbols if (parts := line.split())}
+                    require('discarded' not in present and 'discarded_handler' not in present,
+                            'unreferenced sections survived garbage collection')
+                    require({'retained','svc_handler','irq_handler'} <= present,
+                            'retained/vector-referenced sections disappeared')
+                    interrupts(run, elf)
+                elif kind == 'dma':
+                    dma(run, refine, optimize, specialize)
+                elif kind == 'machine':
+                    machine(run, refine, optimize, specialize)
+                elif kind == 'fallthrough':
+                    fallthrough(run, refine, optimize, specialize)
+                elif kind == 'veneers':
+                    veneers(run, refine, optimize, specialize)
+                else:
+                    peripheral(run, refine, kind, optimize, specialize)
+                fresh = out / 'fresh'
+                fresh.mkdir()
+                build(Run(fresh, parent.tools), refine,
+                      (out / 'boot.ldn').read_text(), optimize, specialize)
+                for suffix in ('', '.o', '.s', '.ld', '.map'):
+                    require((out / ('firmware.elf' + suffix)).read_bytes() ==
+                            (fresh / ('firmware.elf' + suffix)).read_bytes(),
+                            'fresh ' + kind + ' artifact differs: ' + suffix)
             controls.append({'kind': kind, 'optimize': optimize,
                              'specialize': specialize, 'status': 'passed'})
         controls.append({'kind': 'cold-boot-reset-fresh', 'optimize': optimize,
@@ -555,6 +570,7 @@ def main():
     parser.add_argument('--all-profiles', action='store_true')
     args = parser.parse_args()
     supported_host()
+    args.tools = installed_tools(args.tools)
     before = inventory(args.tools)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)

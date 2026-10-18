@@ -1,0 +1,58 @@
+--  Listening again beside an accepted connection: the same routine runs
+--  over core/io's memory network and over the hosted provider, so the
+--  fake is held to what the system does.
+import core/io
+import core/io/fake
+import core/net
+import hosted/system
+
+--  The second listener was refused, or a second listener on a port a
+--  listener holds was taken.
+wrong: atom
+
+--  Listen on port 0, accept a connection, close the listener and listen
+--  on its port again while the accepted connection is open.
+relisten: (provider: type is net.network, host: provider) -> none ! ... =
+    first: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(host, first)
+    client: io.file = try net.connect(host, at)
+    defer net.close_socket(host, client) else none
+    server: io.file = try net.accept(host, first)
+    defer net.close_socket(host, server) else none
+    --  A second listener while the first holds the port is refused.
+    mut refused: bool = false
+    doubled: io.file = net.listen(host, at) else (problem)
+        refused = problem == net.address_in_use
+        io.file(0)
+    end
+    if not refused then
+        try net.close_socket(host, doubled)
+        fail wrong
+    end if
+    try net.close_socket(host, first)
+    again: io.file = try net.listen(host, at)
+    try net.close_socket(host, again)
+end relisten
+
+public main: () -> (code: i32) =
+    code = 1
+    mut b0: [64]u8 = zeroed
+    mut b1: [64]u8 = zeroed
+    mut b2: [64]u8 = zeroed
+    mut b3: [64]u8 = zeroed
+    mut space: fake.network_space = zeroed
+    mut sockets: [4]fake.network_socket =
+        [fake.socket_over(b0[0..<64]), fake.socket_over(b1[0..<64]),
+         fake.socket_over(b2[0..<64]), fake.socket_over(b3[0..<64])]
+    network := fake.network_over(space, sockets[0..<4])
+    relisten(network) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    relisten(system.new()) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

@@ -3,7 +3,7 @@
 --  twelve for the performance run, and never more than sixteen.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 bad_size: atom
 
@@ -81,7 +81,7 @@ fannkuch: (n: usize) -> (result: score) =
 end fannkuch
 
 --  The order named by the first argument, one to sixteen.
-order_size: (host: hosted.system)
+order_size: (host: system.host)
             -> (n: usize)
             ! io.no_argument | text.invalid_number | text.number_overflow
             | bad_size =
@@ -91,7 +91,7 @@ order_size: (host: hosted.system)
     fail bad_size when n < 1 or n > 16
 end order_size
 
-report: (host: hosted.system, n: usize, value: score)
+report: (host: system.host, n: usize, value: score)
         -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [64]u8 = zeroed
     mut line := text.over(storage)
@@ -102,15 +102,12 @@ report: (host: hosted.system, n: usize, value: score)
 end report
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     n := order_size(host) else (problem)
         _ = problem
         io.write(host, io.err(host),
-                 "usage: fannkuch-redux N, where N is 1 to 16\n")
-            else (ignored)
-            _ = ignored
-        end
+                 "usage: fannkuch-redux N, where N is 1 to 16\n") else none
         return
     end
 

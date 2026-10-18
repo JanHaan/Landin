@@ -7,7 +7,7 @@ error[L0333]: a match subject is an atom set, a variant part or a pointer union
    |
 11 |     match x
    |     ^^^^^^^ this match
-  = note: [1210]: arms name atoms and cases; compare numbers with if and elsif
+  = note: [1210]: each arm names an atom or a case; compare numbers with `if` and `elsif`
 error[L0333]: a match subject is an atom set, a variant part or a pointer union
   --> ../tests/fixtures/negative/r720-match-subject-type/main.ldn:14:11
    |
@@ -17,4 +17,4 @@ error[L0333]: a match subject is an atom set, a variant part or a pointer union
    |
 14 |     match p
    |     ^^^^^^^ this match
-  = note: [1210]: arms name atoms and cases; compare numbers with if and elsif
+  = note: [1210]: each arm names an atom or a case; compare numbers with `if` and `elsif`

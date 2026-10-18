@@ -5556,6 +5556,12 @@ package body Landin.Stages.Lowering is
              /= Res.Bound
            and then Type_At
              (Of_Tree, Syn.Target_Of (Of_Tree, Callee)) = Ty.Any_Value;
+         --  D377: an erased call of a concept no conformance answers has
+         --  no table to dispatch through, because no value of it exists.
+         Unanswered : constant Boolean :=
+           Erased_Self
+           and then Landin.Checking.Evidence_Of (Types.all, Of_Tree, Callee)
+             = Landin.Checking.No_Conformance;
          Parameter_Offset : constant Natural :=
            (if Erased_Self then 1 else 0);
          Source_Signature : constant Landin.Checking.Signature_Id :=
@@ -5567,14 +5573,16 @@ package body Landin.Stages.Lowering is
             else Landin.Checking.Signature_Of
               (Types.all, Of_Tree, Callee));
          Dispatch_Evidence : constant IR.Evidence_Id :=
-           (if Erased_Self then Any_Evidence_For
+           (if Erased_Self and then not Unanswered then Any_Evidence_For
               (Landin.Checking.Evidence_Of (Types.all, Of_Tree, Callee))
             else IR.No_Evidence);
          Dispatch_Entry : constant Natural :=
-           (if Erased_Self then Landin.Checking.Evidence_Entry_Of
+           (if Erased_Self and then not Unanswered
+            then Landin.Checking.Evidence_Entry_Of
               (Types.all, Of_Tree, Callee) else 0);
          Signature : constant IR.Signature_Id :=
-           (if Erased_Self then IR.Evidence_Entry_Dispatch_Signature
+           (if Unanswered then IR.No_Signature
+            elsif Erased_Self then IR.Evidence_Entry_Dispatch_Signature
               (Unit.all, Dispatch_Evidence, Positive (Dispatch_Entry))
             elsif Source_Signature = Landin.Checking.No_Signature
             then IR.No_Signature
@@ -5696,6 +5704,16 @@ package body Landin.Stages.Lowering is
          if Landin.Configuration.Unreachable_Call
            (Spellings.all, Of_Tree, Node)
          then
+            IR.Emit_Halt (Unit.all, Filling, Syn.Origin (Of_Tree, Node));
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+            return IR.No_Value;
+         end if;
+         --  D377: no value reaches an erased call no conformance answers,
+         --  so it traps as `unreachable` does, before anything it would
+         --  evaluate.  A receiver made outside the language, from raw
+         --  storage, stops here rather than calling through no table.
+         if Unanswered then
             IR.Emit_Halt (Unit.all, Filling, Syn.Origin (Of_Tree, Node));
             IR.Leave_Block (Unit.all, Filling);
             Current := IR.No_Block;
@@ -17148,9 +17166,15 @@ package body Landin.Stages.Lowering is
                     Landin.Checking.Conformance_Target (Types.all, Source);
                   Represented : constant IR.Field_Shape :=
                     Evidence_Shape (Actual);
+                  --  D374: every table of one concept has its layout, so
+                  --  the concept is what a projection's table may be.
+                  Family : constant Positive :=
+                    Landin.Checking.Concept_Identities.Position
+                      (Types.all, Landin.Checking.Conformance_Concept
+                         (Types.all, Source));
                begin
                   Evidence (Position) :=
-                    IR.Add_Evidence (Unit.all, Represented);
+                    IR.Add_Evidence (Unit.all, Represented, Family => Family);
                   for Provider_Position in
                     1 .. Landin.Checking.Conformance_Entry_Count
                            (Types.all, Source)
@@ -17168,7 +17192,8 @@ package body Landin.Stages.Lowering is
                      begin
                         Any_Evidence (Position) :=
                           IR.Add_Evidence
-                            (Unit.all, Represented, Erased => True);
+                            (Unit.all, Represented, Erased => True,
+                             Family => Family);
                         Add_Closure (Any_Evidence (Position), Source, Seen);
                      end;
                   end if;

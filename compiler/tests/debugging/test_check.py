@@ -443,6 +443,20 @@ class WorkloadRegistrationTests(unittest.TestCase):
             CHECK.measure_workloads(lambda *_: {}, "parse")
 
 
+class WorkloadSourceInventoryTests(unittest.TestCase):
+    def test_a_differing_closure_names_its_files_and_the_regenerating_command(self) -> None:
+        recorded = CHECK.json.loads((CHECK.HERE / "workload-sources.json").read_text())
+        built = [name for name in recorded["parser"] if name != recorded["parser"][1]]
+        built.append("core/io/added.ldn")
+        CHECK.check_workload_sources("parser", recorded["parser"])
+        with self.assertRaises(ValueError) as refused:
+            CHECK.check_workload_sources("parser", built)
+        text = str(refused.exception)
+        self.assertIn("added   core/io/added.ldn", text)
+        self.assertIn("removed " + recorded["parser"][1], text)
+        self.assertIn("workload_sources.py --refine REFINE --write", text)
+
+
 class ParserTransportTests(unittest.TestCase):
     def test_native_argv_and_exact_output_are_separate_from_debugger_prose(self) -> None:
         expected = (CHECK.PARSER_FIXTURE / "output.txt").read_text()

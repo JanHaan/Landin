@@ -8,7 +8,7 @@ import core/io
 import core/mem
 import core/sort
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 --  The directory the program builds, lists and removes, in the directory
 --  it runs in.
@@ -30,8 +30,8 @@ end kept
 
 --  Byte order, the order `ls` gives in the C locale.
 before: (left: kept, right: kept) -> (yes: bool) =
-    yes = mem.compare(left.name[0..<left.length],
-                      right.name[0..<right.length]) == mem.less
+    yes = cmp.compare(left.name[0..<left.length],
+                      right.name[0..<right.length]) == cmp.less
 end before
 
 kept is cmp.ordered (less: before)
@@ -66,7 +66,7 @@ escaped: (name: []u8, inout into: text.builder) -> none ! text.no_space =
             try text.append(into, "\\x")
             digits: usize = text.length(into)
             try text.append_hex_u32(into, u32(byte))
-            try text.align_right(into, digits, 2, 48)
+            try text.align_right(into, digits, 2, u8('0'))
         end if
     end for
 end escaped
@@ -77,28 +77,26 @@ joined: (name: []u8, inout path: text.builder) -> none ! text.no_space =
     text.clear(path)
     try text.append(path, top)
     if lenof name > 0 then
-        try text.append_byte(path, 47)
+        try text.append_byte(path, u8('/'))
         try text.append(path, name)
     end if
 end joined
 
 --  Make the file NAME in the top directory, holding CONTENTS.
-make_file: (host: hosted.system, name: []u8, contents: []u8) -> none ! ... =
+make_file: (host: system.host, name: []u8, contents: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
     mut path := text.over(scratch[0..<64])
     try joined(name, path)
     opened: io.file = try io.open_write(host, text.host_over(text.used(path)))
     io.write(host, opened, contents) else (problem)
-        io.close(host, opened) else (ignored)
-            _ = ignored
-        end
+        io.close(host, opened) else none
         fail problem
     end
     try io.close(host, opened)
 end make_file
 
 --  Remove the file PATH names, or with DIRECTORY the empty directory.
-remove: (host: hosted.system, path: text.host_string, directory: bool)
+remove: (host: system.host, path: text.host_string, directory: bool)
         -> none ! ... =
     if directory then
         try io.remove_directory(host, path)
@@ -109,7 +107,7 @@ end remove
 
 --  Remove NAME from the top directory, or the top directory itself when
 --  NAME is empty, if it is there.
-forget: (host: hosted.system, name: []u8, directory: bool) -> none ! ... =
+forget: (host: system.host, name: []u8, directory: bool) -> none ! ... =
     mut scratch: [64]u8 = zeroed
     mut path := text.over(scratch[0..<64])
     try joined(name, path)
@@ -119,7 +117,7 @@ forget: (host: hosted.system, name: []u8, directory: bool) -> none ! ... =
 end forget
 
 --  Remove everything the program makes, whatever an earlier run left.
-clear: (host: hosted.system) -> none ! ... =
+clear: (host: system.host) -> none ! ... =
     try forget(host, "nested/gamma.log", false)
     try forget(host, "nested", true)
     try forget(host, "alpha.log", false)
@@ -131,7 +129,7 @@ end clear
 
 --  Make the directory NAME in the top directory, or the top directory
 --  itself when NAME is empty.
-make_directory: (host: hosted.system, name: []u8) -> none ! ... =
+make_directory: (host: system.host, name: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
     mut path := text.over(scratch[0..<64])
     try joined(name, path)
@@ -140,7 +138,7 @@ end make_directory
 
 --  Four files, one of them empty and one with a name beyond ASCII, and a
 --  subdirectory holding a fifth.
-build: (host: hosted.system) -> none ! ... =
+build: (host: system.host) -> none ! ... =
     try clear(host)
     try make_directory(host, "")
     try make_file(host, "alpha.log", "alpha\n")
@@ -158,14 +156,12 @@ end build
 
 --  Read every entry of the top directory into INTO, with each file's size,
 --  and return how many there are.
-list: (host: hosted.system, into: []mut kept) -> (count: usize) ! ... =
+list: (host: system.host, into: []mut kept) -> (count: usize) ! ... =
     count = 0
     mut buffer: [1024]u8 = zeroed
     mut listing: io.directory =
         try io.open_directory(host, text.host_over(top), buffer[0..<1024])
-    defer io.close_directory(host, listing) else (problem)
-        _ = problem
-    end
+    defer io.close_directory(host, listing) else none
     loop do
         item: io.entry = try io.read_entry(host, listing)
         name: []u8 = text.host_bytes(item.name)
@@ -203,15 +199,13 @@ end line
 
 --  Write the sorted listing and a total of the files' bytes through a
 --  buffered writer, and say whether it holds what `build` made.
-show: (host: hosted.system, entries: []mut kept) -> (ok: bool) ! ... =
+show: (host: system.host, entries: []mut kept) -> (ok: bool) ! ... =
     sort.sort(entries)
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<512])
     --  Whatever waits is written on every way out; the flush at the end
     --  is the one whose failure is reported.
-    defer io.flush(out) else (problem)
-        _ = problem
-    end
+    defer io.flush(out) else none
     mut room: [300]u8 = zeroed
     mut text_line := text.over(room[0..<300])
     mut total: u64 = 0
@@ -230,7 +224,7 @@ show: (host: hosted.system, entries: []mut kept) -> (ok: bool) ! ... =
 end show
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     build(host) else (problem)
         _ = problem

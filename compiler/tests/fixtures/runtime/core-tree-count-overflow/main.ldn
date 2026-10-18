@@ -1,12 +1,12 @@
 import core/fault
-import hosted/heap
 import core/tree
+import hosted/heap
 
 label: utf8 = "node"
 
 public main: () -> (code: i32) =
     code = 1
-    heap := heap.host()
+    heap := heap.new()
     budget: usize = 20
     mut space: fault.space = zeroed
     counted := fault.over(space, heap, budget)
@@ -78,9 +78,13 @@ public main: () -> (code: i32) =
     end
     before_release: usize = tree.length(value)
     tree.release(value, counted)
+    --  Four growths of the node list, each first asking to grow in place
+    --  (D356): every attempt that is not a growth asked of the heap is an
+    --  allocation, freed once, so the four growth attempts are what
+    --  attempts count beyond frees, however many the heap grew in place.
     if overflow and unchanged and invalid and wide_count and before_release == 94
        and final == 12200160415121876738 and small_count == 1
-       and fault.attempts(counted) == fault.frees(counted)
+       and fault.attempts(counted) - fault.frees(counted) == 4
        and fault.live(counted) == 0
     then
         code = 42

@@ -176,6 +176,57 @@ class PinnedToolchain(unittest.TestCase):
                 self.assertTrue(any(fragment in why for why in said), said)
 
 
+    def test_the_cross_lane_is_read_from_the_pins(self):
+        from check_controls import tree
+        copied = PINS + ["flake.nix"]
+        self.assertEqual(faults(checker.check_pinned_toolchain, copied=copied), [])
+        for old, new, fragment in (
+                ('pin "LANDIN_CROSS_QEMU_NIX"', '"11.1.0"',
+                 "does not hold its cross lane to LANDIN_CROSS_QEMU_NIX"),
+                ('pin "LANDIN_CROSS_GCC_NIX"', '"15.3.0"',
+                 "names LANDIN_CROSS_GCC_NIX's 15.3.0 literally")):
+            with self.subTest(fragment=fragment), tree(copied=copied) as root:
+                path = root / "flake.nix"
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new, 1))
+                said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
+        with tree(copied=copied) as root:
+            path = root / "environments/pins.sh"
+            path.write_text(path.read_text().replace("LANDIN_CROSS_GCC_NIX=", "LANDIN_CROSS_CC=", 1))
+            said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+            self.assertTrue(any("LANDIN_CROSS_GCC_NIX is not pinned" in why for why in said), said)
+
+
+class CrossLanes(unittest.TestCase):
+    """An expected host failure names a fixture its runner's lane runs."""
+
+    COPIED = ["compiler/tests/cross-lanes.json",
+              "compiler/tests/fixtures/runtime/posix-sockets/fixture.meta",
+              "compiler/tests/fixtures/runtime/environment-variables/fixture.meta",
+              "compiler/tests/fixtures/runtime/environment-variables-libc/fixture.meta",
+              "compiler/tests/fixtures/runtime/run-no-descriptor-leak/fixture.meta"]
+
+    def test_the_real_record_passes(self):
+        self.assertEqual(faults(checker.check_cross_lanes, copied=self.COPIED), [])
+
+    def test_a_renamed_fixture_or_foreign_runner_is_reported(self):
+        from check_controls import tree
+        for old, new, fragment in (
+                ('"runtime/posix-sockets"', '"runtime/posix-socket"', "names no fixture"),
+                ('"qemu-riscv64"]', '"qemu-mips"]', "runs no Linux lane")):
+            with self.subTest(fragment=fragment), tree(copied=self.COPIED) as root:
+                path = root / self.COPIED[0]
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new, 1))
+                checker._fixture_records.cache_clear()
+                said = [why for _, _, why in checker.check_cross_lanes(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
+        checker._fixture_records.cache_clear()
+
+
 class SourceLocations(unittest.TestCase):
     """The offline decoder requires build matching and preserves path bytes."""
 
@@ -883,6 +934,75 @@ class Vocabularies(unittest.TestCase):
                        copied=["compiler/tests/fixtures"])
         self.assertTrue(said)
         self.assertIn("needed by a check", said[0])
+
+
+class NoteWords(unittest.TestCase):
+    """D373: a note says its rule in words, beside any label it cites."""
+
+    INPUTS = ["compiler/ada/src/syntax/landin-syntax-parser.adb"]
+
+    def test_the_real_notes_pass(self):
+        self.assertEqual(
+            faults(checker.check_note_words,
+                   copied=["compiler/ada/src"]), [])
+
+    def _broken(self, replacement):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            parser = root / self.INPUTS[0]
+            text = parser.read_text()
+            marker = '"[1120]: an unchecked region closes with"'
+            self.assertIn(marker, text)
+            parser.write_text(text.replace(marker, replacement, 1))
+            return [why for _, _, why in checker.check_note_words(True)]
+
+    def test_a_bare_label_is_reported(self):
+        said = self._broken('"[1120]" & ""')
+        self.assertTrue(said)
+        self.assertIn("a label with no words", said[0])
+
+    def test_a_grammar_production_is_reported(self):
+        said = self._broken('"[1120]: unchecked ::= `unchecked` `begin`"'
+                            ' & ""')
+        self.assertTrue(said)
+        self.assertIn("grammar production", said[0])
+
+    def test_a_missing_source_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_note_words, copied=["spec.md"])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+
+class ForeignForms(unittest.TestCase):
+    """D367's rows name real paragraphs, unspelled words and pinned reports."""
+
+    INPUTS = ["spec.md", "tour.md",
+              "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads",
+              "compiler/tests/fixtures/negative"]
+
+    def test_the_real_table_passes(self):
+        self.assertEqual(faults(checker.check_foreign_forms,
+                                copied=self.INPUTS), [])
+
+    def test_a_keyword_spelling_is_reported(self):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            table = root / self.INPUTS[2]
+            table.write_text(table.read_text().replace(
+                'when Fn_Word           => "fn",',
+                'when Fn_Word           => "match",', 1))
+            said = [why for _, _, why in checker.check_foreign_forms(True)]
+        self.assertTrue(any("keyword rule" in why for why in said), said)
+
+    def test_an_unpinned_row_is_reported(self):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            report = (root / "compiler/tests/fixtures/negative"
+                      / "foreign-elif-is-named" / "expected.txt")
+            report.write_text("error[L0110]: something else\n")
+            said = [why for _, _, why in checker.check_foreign_forms(True)]
+        self.assertTrue(any("foreign-elif-is-named" in why for why in said),
+                        said)
 
 
 class Transcriptions(unittest.TestCase):

@@ -1,0 +1,30 @@
+error[L0316]: this writable `from` result also carries an independent storage origin
+  --> ../tests/fixtures/negative/erased-writable-view-under-from/main.ldn:53:1
+   |
+53 | mutable_module: (buffer: []mut u8) -> (result: bumping from buffer) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/erased-writable-view-under-from/main.ldn:53:40
+   |
+53 | mutable_module: (buffer: []mut u8) -> (result: bumping from buffer) =
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]/D222: pass each alternative as an explicit source, or return it separately
+error[L0316]: this writable `from` result also carries an independent storage origin
+  --> ../tests/fixtures/negative/erased-writable-view-under-from/main.ldn:58:1
+   |
+58 | writable_inside: (buffer: []mut u8) -> (result: peeking from buffer) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/erased-writable-view-under-from/main.ldn:58:41
+   |
+58 | writable_inside: (buffer: []mut u8) -> (result: peeking from buffer) =
+   |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]/D222: pass each alternative as an explicit source, or return it separately
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/erased-writable-view-under-from/main.ldn:63:1
+   |
+63 | local_storage: (buffer: []mut u8) -> (result: peeking from buffer) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/erased-writable-view-under-from/main.ldn:64:5
+   |
+64 |     held: counter = (count: 0)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

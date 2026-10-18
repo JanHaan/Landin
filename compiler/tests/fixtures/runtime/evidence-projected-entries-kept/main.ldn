@@ -1,0 +1,97 @@
+--  D374 leaves out a table entry nothing projects, and keeps one whatever
+--  table a projection reads at runtime.  `third` takes either type through
+--  `any counter`, so the checker's witness for its projection is one
+--  table while the other is also read there: both keep entry three.
+--  Every entry is projected somewhere, erased or through a generic, and
+--  the child's erased table holds its parent's entries too.
+counter: type = concept (t: type)
+    one: (self: ptr t) -> (value: i32)
+    two: (self: ptr t) -> (value: i32)
+    three: (self: ptr t) -> (value: i32)
+    never: (self: ptr t) -> (value: i32)
+end counter
+
+named: type = concept (t: type) is counter
+    name: (self: ptr t) -> (value: i32)
+end named
+
+first: type = struct
+    value: i32
+end first
+
+second: type = struct
+    value: i32
+end second
+
+one_first: (self: ptr first) -> (value: i32) =
+    value = self.val.value
+end one_first
+
+two_first: (self: ptr first) -> (value: i32) =
+    value = self.val.value * 2
+end two_first
+
+three_first: (self: ptr first) -> (value: i32) =
+    value = self.val.value * 3
+end three_first
+
+never_first: (self: ptr first) -> (value: i32) =
+    value = 1000
+end never_first
+
+name_first: (self: ptr first) -> (value: i32) =
+    value = 100
+end name_first
+
+one_second: (self: ptr second) -> (value: i32) =
+    value = self.val.value + 1
+end one_second
+
+two_second: (self: ptr second) -> (value: i32) =
+    value = self.val.value + 2
+end two_second
+
+three_second: (self: ptr second) -> (value: i32) =
+    value = self.val.value + 3
+end three_second
+
+never_second: (self: ptr second) -> (value: i32) =
+    value = 2000
+end never_second
+
+name_second: (self: ptr second) -> (value: i32) =
+    value = 200
+end name_second
+
+first is counter
+    (one: one_first, two: two_first, three: three_first, never: never_first)
+second is counter
+    (one: one_second, two: two_second, three: three_second,
+     never: never_second)
+first is named (name: name_first)
+second is named (name: name_second)
+
+third: (item: any counter) -> (value: i32) =
+    value = item.three()
+end third
+
+twice: (t: type is counter, item: ptr t) -> (value: i32) =
+    value = t.two(item)
+end twice
+
+public main: () -> (code: i32) =
+    left: first = (value: 1)
+    right: second = (value: 10)
+    a: any counter = any(addr left)
+    b: any counter = any(addr right)
+    c: any named = any(addr right)
+    -- 3 + 13
+    mut total: i32 = third(a) + third(b)
+    -- 1 + 11
+    total = total + a.one() + b.one()
+    -- 2 + 12
+    total = total + twice(addr left) + twice(addr right)
+    -- 200 + 11
+    total = total + c.name() + c.one()
+    code = if total == 253 then 0 else 1 end if
+end main

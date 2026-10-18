@@ -18,10 +18,7 @@ said: (name: []u8, problem: posix.errno) -> none =
     mut line: [64]u8 = zeroed
     mut made := text.over(line[0..<64])
     number: i32 = posix.number(problem)
-    text.format(made, "{}={}\n", [any(addr name), any(addr number)])
-        else (ignored)
-        _ = ignored
-    end
+    text.format(made, "{}={}\n", [any(addr name), any(addr number)]) else none
     say(text.used(made))
 end said
 

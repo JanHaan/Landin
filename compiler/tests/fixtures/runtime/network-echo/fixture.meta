@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the published network consumer runs a TCP server and its client and then two UDP sockets over 127.0.0.1 and over ::1 in one process, the client's lines sent through io.send and read back through a line reader, the server reading them through a line reader and echoing them through a buffered writer, each listener and socket on a free port it reads back, and reports what came back; a system without IPv6's loopback fails it and says so
+summary: the published network consumer runs a TCP server and its client and then two UDP sockets over 127.0.0.1 and over ::1 in one process, the client's lines sent through net.send and read back through a line reader, the server reading them through a line reader and echoing them through a buffered writer, each listener and socket on a free port it reads back, and reports what came back; a system without IPv6's loopback fails it and says so
 program: main.ldn
 root: ../../../../..
 run_expect: output.txt

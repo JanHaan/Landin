@@ -3,8 +3,8 @@ error[L0314]: this parameter is non-escaping, so its reference cannot be retaine
   |
 6 |     _ = tree.add_leaf(value, state, text) else (problem)
   |                                     ^^^^
-  --> ../tests/fixtures/negative/core-tree-frame-name/main.ldn:5:30
+  --> ../tests/fixtures/negative/core-tree-frame-name/main.ldn:5:28
   |
-5 |          state: heap.system, text: utf8) -> none =
-  |                              ^^^^^^^^^^ the shorter-lived reference source
+5 |          state: heap.heap, text: utf8) -> none =
+  |                            ^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

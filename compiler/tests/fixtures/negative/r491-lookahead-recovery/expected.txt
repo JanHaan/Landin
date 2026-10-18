@@ -7,7 +7,7 @@ error[L0103]: a binding names its type after `:`, not the name `b`
   |
 1 | a b c d e f g h
   | ^ declared here
-  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+  = note: [1790]: a binding is a name, `:` and its type, optionally `= value`, or a name and `:=` with the value whose type it takes
 error[L0103]: a parenthesised expression is closed with `)`, not `end`
   --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:2:30
   |

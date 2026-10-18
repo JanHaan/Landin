@@ -125,6 +125,12 @@ public message_length: (value: entry) -> (length: usize) =
     length = value.what_length
 end message_length
 
+--- Lend the retained message bytes of the entry `value` points at, for as
+--- long as the entry stays as it is.
+public message: (value: ptr entry) -> (bytes: []u8 from value) =
+    bytes = value.val.what_bytes[0..<value.val.what_length]
+end message
+
 --- Read one retained message byte. Reports `mem.out_of_bounds` past the
 --- message length.
 public message_byte: (value: entry, index: usize)
@@ -148,20 +154,21 @@ end streaming_value
 --- propagate to the caller.
 public streaming: type = streaming_value
 
-warning_prefix: [2]u8 = [87, 58]
-error_prefix: [2]u8 = [69, 58]
-separator: [1]u8 = [58]
+warning_prefix: [2]u8 = [u8('W'), u8(':')]
+error_prefix: [2]u8 = [u8('E'), u8(':')]
+separator: [1]u8 = [u8(':')]
 
 write_position: (host: any io.writer, where_to: io.file, value: usize)
                 -> none ! io.io_failed =
     --  Twenty bytes hold every decimal digit of a 64-bit usize, so the
     --  writer has room and the provider receives one position slice.
     mut digits: [20]u8 = zeroed
-    used: usize = text.write_usize(digits[0..<20], 0, value) else (problem)
+    mut line := text.over(digits[0..<20])
+    text.append_usize(line, value) else (problem)
         _ = problem
         compiler.unreachable()
     end
-    try host.write(where_to, digits[0..<used])
+    try host.write(where_to, text.used(line))
 end write_position
 
 --- Create a streaming logger over an erased writer and file identifier. The

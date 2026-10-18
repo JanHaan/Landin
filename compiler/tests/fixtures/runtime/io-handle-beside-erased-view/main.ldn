@@ -3,6 +3,7 @@
 --  erased view is used again afterwards: the writes reach one provider in
 --  program order.
 import core/io
+import core/io/fake
 import core/text
 
 
@@ -39,6 +40,6 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when count <> 1 or state.write_calls <> 3
+    return when count <> 1 or state.writes <> 3
     code = if same_bytes(io.written(memory), "abcdef") then 42 else 2 end if
 end main

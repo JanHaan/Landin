@@ -1,13 +1,14 @@
+import core/arena
 import core/mem
 import core/region
 
 exercise: () -> (ok: bool) ! mem.out_of_memory =
     ok = false
     mut backing: [64]u8 = zeroed
-    mut arena_space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(arena_space, addr backing[0], 64)
+    mut arena_space: arena.space = zeroed
+    memory := arena.over_unchecked(arena_space, addr backing[0], 64)
     mut ledger: region.space(1) = zeroed
-    scratch := region.over(ledger, arena)
+    scratch := region.over(ledger, memory)
     address := try mem.allocate(scratch, usize(4), usize(1))
     address.val = 42
     return when address.val <> 42

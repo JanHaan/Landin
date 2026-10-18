@@ -1,0 +1,9 @@
+class: negative
+summary: D372 an untyped literal argument to a generic routine is checked against the type its parameter names, and refused once when it does not fit
+program: program.ldn
+codes: L0300
+constructs: 1290, 1880
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/generic-literal-is-checked-against-its-parameter/program.ldn
+status: 1

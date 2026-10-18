@@ -2,6 +2,7 @@
 --  path has: the first spill out of the inline arm, and a later growth of the
 --  already spilled list. Nothing here uses an injected failure schedule.
 
+import core/arena
 import core/mem
 import core/pool
 import core/spill
@@ -13,12 +14,12 @@ zero_inline_first_spill: () -> (ok: bool) =
     mut backing: [2]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     extent: usize = 2 * sizeof u64
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, base, extent)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, base, extent)
     mut values := spill.new(item: i32, inline_slots: 0)
 
     mut refused: bool = false
-    spill.push(values, arena, 21) else (problem)
+    spill.push(values, memory, 21) else (problem)
         refused = problem == mem.out_of_memory
     end
     mut empty_view: bool = false
@@ -27,9 +28,9 @@ zero_inline_first_spill: () -> (ok: bool) =
         empty_view = lenof view == 0
     end
     ok = refused and empty_view and spill.length(addr values) == 0
-         and spill.capacity(addr values) == 0 and mem.arena_used(arena) == 0
-    spill.release(values, arena)
-    ok = ok and spill.length(addr values) == 0 and mem.arena_used(arena) == 0
+         and spill.capacity(addr values) == 0 and arena.used(memory) == 0
+    spill.release(values, memory)
+    ok = ok and spill.length(addr values) == 0 and arena.used(memory) == 0
 end zero_inline_first_spill
 
 --  A nonzero inline arm survives a refused first spill unchanged: the doubled
@@ -39,23 +40,23 @@ inline_arm_survives_first_spill: () -> (ok: bool) =
     mut backing: [1]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     extent: usize = sizeof u64
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, base, extent)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, base, extent)
     mut values := spill.new(item: i32, inline_slots: 2)
 
-    spill.push(values, arena, 21) else (problem)
+    spill.push(values, memory, 21) else (problem)
         _ = problem
         return
     end
-    spill.push(values, arena, 22) else (problem)
+    spill.push(values, memory, 22) else (problem)
         _ = problem
         return
     end
     --  Both pushes stayed below the inline bound and asked for nothing.
-    return when mem.arena_used(arena) <> 0 or spill.capacity(addr values) <> 2
+    return when arena.used(memory) <> 0 or spill.capacity(addr values) <> 2
 
     mut refused: bool = false
-    spill.push(values, arena, 23) else (problem)
+    spill.push(values, memory, 23) else (problem)
         refused = problem == mem.out_of_memory
     end
     mut kept: bool = false
@@ -65,8 +66,8 @@ inline_arm_survives_first_spill: () -> (ok: bool) =
     end
     --  No premature variant switch and no free of an arm that never existed.
     ok = refused and kept and spill.length(addr values) == 2
-         and spill.capacity(addr values) == 2 and mem.arena_used(arena) == 0
-    spill.release(values, arena)
+         and spill.capacity(addr values) == 2 and arena.used(memory) == 0
+    spill.release(values, memory)
     ok = ok and spill.length(addr values) == 0 and spill.capacity(addr values) == 2
 end inline_arm_survives_first_spill
 
@@ -78,13 +79,13 @@ spilled_arm_survives_growth: () -> (ok: bool) =
     mut backing: [2]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     extent: usize = 2 * sizeof u64
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, base, extent)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, base, extent)
     mut values := spill.new(item: i32, inline_slots: 2)
 
     mut at: i32 = 31
     while at < 35 do
-        spill.push(values, arena, at) else (problem)
+        spill.push(values, memory, at) else (problem)
             _ = problem
             return
         end
@@ -93,10 +94,10 @@ spilled_arm_survives_growth: () -> (ok: bool) =
     --  Four items: two copied out of the inline arm plus two admitted into
     --  the spare slots the spill reserved. The extent is now consumed.
     return when spill.length(addr values) <> 4 or spill.capacity(addr values) <> 4
-      or mem.arena_used(arena) <> extent
+      or arena.used(memory) <> extent
 
     mut refused: bool = false
-    spill.push(values, arena, 35) else (problem)
+    spill.push(values, memory, 35) else (problem)
         refused = problem == mem.out_of_memory
     end
     mut kept: bool = false
@@ -106,17 +107,17 @@ spilled_arm_survives_growth: () -> (ok: bool) =
                and view[2] == 33 and view[3] == 34
     end
     ok = refused and kept and spill.length(addr values) == 4
-         and spill.capacity(addr values) == 4 and mem.arena_used(arena) == extent
+         and spill.capacity(addr values) == 4 and arena.used(memory) == extent
 
     tail: i32 = spill.pop(values) else (problem)
         _ = problem
         return
     end
     ok = ok and tail == 34 and spill.length(addr values) == 3
-    spill.release(values, arena)
+    spill.release(values, memory)
     --  The arena's free is a no-op, so the offset does not move.
     ok = ok and spill.length(addr values) == 0 and spill.capacity(addr values) == 2
-         and mem.arena_used(arena) == extent
+         and arena.used(memory) == extent
 end spilled_arm_survives_growth
 
 --  One pool slot lets the spill happen but cannot hold the old and the new

@@ -11,8 +11,8 @@ import struct
 import subprocess
 import time
 
-from run import FLAGS, Run, gdb_listener, oracle, require, stop
-from setup import DEFAULT, HERE, inventory, sha, supported_host
+from run import FLAGS, CommandFailed, Run, gdb_listener, oracle, require, stop
+from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
 
 ROOT = HERE.parent.parent
 COUNTERPARTS = ROOT / 'compiler/tests/cortex-m'
@@ -93,13 +93,122 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m'):
             #  The stub's socket is listening before QEMU starts, so GDB's
             #  connection waits in its backlog rather than racing the start.
             require(process.poll() is None, 'QEMU exited before connection')
-            text = run.debug('gdb-backend', elf, script, timeout=20)
+            try:
+                text = run.debug('gdb-backend', elf, script, timeout=SESSION_LIMIT)
+            except CommandFailed as error:
+                if error.ended.startswith('timed out'):
+                    raise timed_out(error, process, time.monotonic() - tick) from None
+                raise
             oracle(text, 'R650_GENERATED_QEMU_PASS')
         finally:
             stop(process)
             record['seconds'] = time.monotonic() - tick
             record['exit'] = process.returncode
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
+
+
+#  How long one program may take, from GDB connecting to its result
+#  breakpoint, under single-threaded QEMU.
+SESSION_LIMIT = 20
+
+
+def timed_out(error, process, elapsed):
+    """A debugger session's timeout, saying whose time ran out.
+
+    QEMU still running when the session ends means the program never
+    reached either result breakpoint: the fixture, not the debugger, took
+    longer than the limit.  An emulator that had already exited is the
+    other case, and says so.
+    """
+    if process.poll() is None:
+        return RuntimeError(
+            'the program ran for %.1f s under QEMU and reached neither backend_done nor '
+            'backend_fault_done within the debugger\'s %d-second session limit: the fixture '
+            'takes longer than a corpus program may; inspect %s'
+            % (elapsed, SESSION_LIMIT, error.log))
+    return RuntimeError(
+        'QEMU exited with status %s %.1f s after it started, before the program reached a '
+        'result breakpoint, and the %d-second debugger session ran out waiting; inspect %s'
+        % (process.returncode, elapsed, SESSION_LIMIT, error.log))
+
+
+#  The regions the external harness's map gives a program: 32 KiB of
+#  flash, and 16 KiB of RAM of which the top 4 KiB is the stack.
+REGIONS = {'FLASH': 32768, 'RAM': 12288}
+
+
+def load_extents(path):
+    """Flash and static RAM a linked image occupies, read from its LOAD headers.
+
+    Unlike image_contract this holds the image to no bound, so it measures
+    an image linked with the enlarged map as well as a fitting one.
+    """
+    data = path.read_bytes()
+    header = struct.unpack_from('<16sHHIIIIIHHHHHH', data)
+    flash, ram = 0, 0
+    for index in range(header[10]):
+        kind, _, virtual, physical, file_size, memory_size, _, _ = struct.unpack_from(
+            '<8I', data, header[5] + index * 32)
+        if kind != 1:
+            continue
+        if file_size:
+            flash = max(flash, physical + file_size)
+        if virtual >= 0x20000000:
+            ram = max(ram, virtual + memory_size - 0x20000000)
+    return {'FLASH': flash, 'RAM': ram}
+
+
+def image_sizes(run, elf, name='sections'):
+    """Each region's use against its limit, and each allocated section's size."""
+    listing = run.command(name, [run.bin / 'arm-none-eabi-size', '-A', elf])
+    sections = {}
+    for line in listing.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[0].startswith('.') and parts[1].isdigit():
+            if parts[0] in ('.isr_vector', '.text', '.data', '.bss') and int(parts[1]):
+                sections[parts[0]] = int(parts[1])
+    used = load_extents(elf)
+    return {'regions': {region: {'used': used[region], 'limit': limit}
+                        for region, limit in REGIONS.items()},
+            'sections': sections}
+
+
+def describe_sizes(sizes):
+    """One corpus-line clause: every region against its limit, and its sections."""
+    members = {'FLASH': ('.isr_vector', '.text', '.data'), 'RAM': ('.data', '.bss')}
+    parts = []
+    for region, record in sizes['regions'].items():
+        text = '%s %d of %d' % (region, record['used'], record['limit'])
+        if record['used'] > record['limit']:
+            text += ', over by %d' % (record['used'] - record['limit'])
+        inside = ['%s %d' % (section, sizes['sections'][section])
+                  for section in members[region] if section in sizes['sections']]
+        if inside:
+            text += ' (' + ', '.join(inside) + ')'
+        parts.append(text)
+    return '; '.join(parts)
+
+
+def measure_overflow(run, level='armv6-m'):
+    """The sizes an image that overflowed the map would have had.
+
+    The objects the failed link left are relinked against a copy of the
+    probe's map with both regions enlarged and the stack reservation's
+    assertion removed.  The result is a measurement and never runs.
+    """
+    text = (HERE / 'probes/backend-memory.ld').read_text()
+    for old, new in (('LENGTH = 32K', 'LENGTH = 256M'), ('LENGTH = 16K', 'LENGTH = 256M')):
+        require(old in text, 'the probe map no longer says ' + old)
+        text = text.replace(old, new)
+    text = '\n'.join(line for line in text.splitlines()
+                     if not line.startswith('ASSERT(__bss_end'))
+    script = run.out / 'measure-memory.ld'
+    script.write_text('/* Measurement only: never executed. */\n' + text + '\n')
+    objects = sorted(run.out.glob('input-*.o'), key=lambda p: int(p.stem.split('-')[1]))
+    elf = run.out / 'measure.elf'
+    run.command('measure-link', [run.bin / 'arm-none-eabi-gcc', *level_flags(level),
+                '-Wl,-T,' + str(script) + ',--gc-sections', *objects, '-lgcc', '-o', elf])
+    return image_sizes(run, elf, 'measure-sections')
 
 
 def preflight(assembly):
@@ -192,7 +301,9 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     run.command('assemble-link', [run.bin / 'arm-none-eabi-gcc', *flags,
                 '-Wl,-T,' + str(linker or HERE / 'probes/backend-memory.ld') +
                 ',--gc-sections,-Map,program.map', *objects, '-lgcc', '-o', elf])
-    (run.out / 'image.json').write_text(json.dumps(image_contract(elf), indent=2)+'\n')
+    image = image_contract(elf)
+    image.update(image_sizes(run, elf))
+    (run.out / 'image.json').write_text(json.dumps(image, indent=2)+'\n')
     attributes = run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', elf])
     require(all(tag in attributes for tag in LEVELS[level]['attributes']),
             'ELF does not describe the selected ' + level + ' profile')
@@ -257,6 +368,7 @@ def main():
     parser.add_argument('--specialize', default='off', choices=['off', 'auto', 'all'])
     args = parser.parse_args()
     supported_host()
+    args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
     tools_before = inventory(args.tools.resolve())

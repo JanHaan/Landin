@@ -79,6 +79,13 @@ package body Landin.Tests.Driver_Suite is
       return Result;
    end Libc_Executable;
 
+   --  An assembly request on the compiler's own host, as a static link's
+   --  assembly needs platform/linux, which no fake host holds (D363).
+   function Libc_Assembly (First : String) return Landin.Platform.Path_List;
+
+   function Libc_Assembly (First : String) return Landin.Platform.Path_List
+     is ([First, "--emit=asm", "--link=libc"]);
+
    function Arguments_Of (First : String) return Landin.Platform.Path_List is
       Result : Landin.Platform.Path_List;
    begin
@@ -764,6 +771,8 @@ package body Landin.Tests.Driver_Suite is
          Args.Append (Entry_Path);
          Args.Append ("--target=linux-x86-64");
          Args.Append ("--emit=asm");
+         --  A static link's assembly needs platform/linux (D363).
+         Args.Append ("--link=libc");
          Args.Append ("-o");
          Args.Append ("out.s");
          declare
@@ -1717,6 +1726,9 @@ package body Landin.Tests.Driver_Suite is
                "public main: () -> (code: i32) =" & LF
                & "    code = 0" & LF & "end main" & LF);
             Args.Append ("--emit=asm");
+            if Ada.Strings.Fixed.Index (Built_For, "linux") > 0 then
+               Args.Append ("--link=libc");
+            end if;
             Args.Append ("-o");
             Args.Append ("out.s");
             Args.Append ("--build-report=build.json");
@@ -1829,8 +1841,11 @@ package body Landin.Tests.Driver_Suite is
         & "end site" & LF
         & "capture: (caller where: site) -> (value: u32) =" & LF
         & " value = where.line end capture" & LF
+        --  Wrapping and discarded, so no check is left whose D361 report
+        --  would put the file's name in the image for another reason.
         & "public main: () -> (code: i32) =" & LF
-        & " code = i32(capture() + capture()) end main" & LF;
+        & " _ = capture() +% capture()" & LF
+        & " code = 0 end main" & LF;
       Args : Landin.Platform.Path_List := Libc_Executable (Path);
       Result : Landin.Driver.Outcome;
       Original : Unbounded.Unbounded_String;
@@ -1966,7 +1981,7 @@ package body Landin.Tests.Driver_Suite is
       declare
          Result : constant Landin.Driver.Outcome :=
            Landin.Driver.Execute
-             (Both ("main.ldn", "--emit=asm"), Host, Tools);
+             (Libc_Assembly ("main.ldn"), Host, Tools);
       begin
          Landin.Testing.Check_Equal
            (Item, Result.Status, Landin.Driver.Status_Success,
@@ -2037,7 +2052,7 @@ package body Landin.Tests.Driver_Suite is
             declare
                Emitted : constant Landin.Driver.Outcome :=
                  Landin.Driver.Execute
-                   (Both ("main.ldn", "--emit=asm"), First, First_Tools);
+                   (Libc_Assembly ("main.ldn"), First, First_Tools);
                pragma Unreferenced (Emitted);
                Line : constant Natural := Refused_Line
                  (First.Written (Landin.Driver.Default_Assembly),
@@ -2085,16 +2100,17 @@ package body Landin.Tests.Driver_Suite is
    procedure Missing_Toolchain_Precedes_Compilation
      (Item : in out Landin.Testing.Context);
 
+   --  D364: the driver is asked for once the program is known to need
+   --  one, and before anything is written.
    procedure Missing_Toolchain_Precedes_Compilation
      (Item : in out Landin.Testing.Context)
    is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Args  : constant Landin.Platform.Path_List :=
-        ["main.ldn", "--emit=exe", "--toolchain=absent-gcc"];
+        ["main.ldn", "--emit=exe", "--link=libc", "--toolchain=absent-gcc"];
    begin
       Host.Add_File ("main.ldn", Entry_Program);
-      Host.Raise_On_Read;
       Tools.Set_Available (False);
 
       declare
@@ -2107,8 +2123,8 @@ package body Landin.Tests.Driver_Suite is
             "a missing selected toolchain is reported");
          Landin.Testing.Check
            (Item, Contains (Report, "error[L0500]: cannot run absent-gcc")
-              and then Contains (Report, "install a toolchain"),
-            "the preflight keeps the missing-tool diagnostic and advice");
+              and then Contains (Report, "install absent-gcc"),
+            "the check keeps the missing-tool diagnostic and advice");
          Landin.Testing.Check_Equal
            (Item, Host.Write_Count, 0,
             "the missing toolchain prevents artifact writes");
@@ -2132,7 +2148,7 @@ package body Landin.Tests.Driver_Suite is
             Source_Path : constant String :=
               (if Rooted then "entry/main.ldn" else "main.ldn");
             Args : Landin.Platform.Path_List :=
-              ["--emit=exe", "--toolchain=absent-gcc",
+              ["--emit=exe", "--link=libc", "--toolchain=absent-gcc",
                "--stage-report=" & Source_Path];
          begin
             if Rooted then
@@ -2149,9 +2165,11 @@ package body Landin.Tests.Driver_Suite is
                Result : constant Landin.Driver.Outcome :=
                  Landin.Driver.Execute (Args, Host, Tools);
             begin
+               --  The colliding stage report is a misuse beside it (D364
+               --  asks for the driver once the program is loaded).
                Landin.Testing.Check_Equal
-                 (Item, Result.Status, Landin.Driver.Status_Reported,
-                  "missing toolchain is reported before source loading");
+                 (Item, Result.Status, Landin.Driver.Status_Misuse,
+                  "missing toolchain and the collision are reported");
                Landin.Testing.Check
                  (Item, Contains (Unbounded.To_String (Result.Report),
                                   "error[L0500]: cannot run absent-gcc"),
@@ -2468,7 +2486,7 @@ package body Landin.Tests.Driver_Suite is
                                              else "L0501")),
                   "the external failure retains its diagnostic category");
                Landin.Testing.Check
-                 (Item, Contains (Report, "install a toolchain") = Missing
+                 (Item, Contains (Report, "--toolchain=NAME") = Missing
                   and then (Missing or else Contains (Report, Why)),
                   "only a missing tool asks the user to install one");
                Landin.Testing.Check
@@ -2635,7 +2653,7 @@ package body Landin.Tests.Driver_Suite is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Wide_Request : Landin.Platform.Path_List :=
-        Both ("wide.ldn", "--emit=asm");
+        Libc_Assembly ("wide.ldn");
    begin
       --  The seventh is SysV's first stack parameter.
       Wide_Request.Append ("--target=linux-x86-64");
@@ -3093,7 +3111,7 @@ package body Landin.Tests.Driver_Suite is
             Host  : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args  : Landin.Platform.Path_List :=
-              Arguments_Of ("--emit=asm");
+              ["--emit=asm", "--link=libc"];
             Path  : constant String :=
               (if Form = 1 then "--target=cortex-m0"
                else "./-artifact.s");
@@ -3138,7 +3156,7 @@ package body Landin.Tests.Driver_Suite is
       declare
          Result : constant Landin.Driver.Outcome :=
            Landin.Driver.Execute
-             (Both ("main.ldn", "--emit=asm"), Host, Tools);
+             (Libc_Assembly ("main.ldn"), Host, Tools);
          Report : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -3792,6 +3810,8 @@ package body Landin.Tests.Driver_Suite is
          Args.Append ("--root=root");
          Args.Append ("entry");
          Args.Append ("--emit=asm");
+         --  A static link's assembly needs platform/linux (D363).
+         Args.Append ("--link=libc");
          declare
             Result : constant Landin.Driver.Outcome :=
               Landin.Driver.Execute (Args, Host, Tools);
@@ -4844,6 +4864,9 @@ package body Landin.Tests.Driver_Suite is
                "malformed handler has its named panic-contract diagnostic");
          end if;
          Args.Append ("--emit=asm");
+         if Ada.Strings.Fixed.Index (Target, "linux") > 0 then
+            Args.Append ("--link=libc");
+         end if;
          Args.Append ("--panic-map");
          Result := Landin.Driver.Execute (Args, Host, Tools);
          Landin.Testing.Check_Equal
@@ -4956,6 +4979,8 @@ package body Landin.Tests.Driver_Suite is
             Args.Append ("--target=linux-x86-64");
             Args.Append ("app");
             Args.Append ("--emit=asm");
+            --  A static link's assembly needs platform/linux (D363).
+            Args.Append ("--link=libc");
             Args.Append ("--panic-map");
             Result := Landin.Driver.Execute (Args, Host, Tools);
             Landin.Testing.Check_Equal
@@ -5254,12 +5279,22 @@ package body Landin.Tests.Driver_Suite is
               (Item, Checked.Status, Landin.Driver.Status_Reported,
                "--check reports a source out of the layout");
             Landin.Testing.Check
-              (Item, Landin.Diagnostics.Count (Checked.Found) = 1
-                     and then Landin.Diagnostics.Code
-                                (Landin.Diagnostics.Get (Checked.Found, 1))
-                              = "L0008"
-                     and then Contains (Report, "loose.ldn:1:1"),
-               "once, at its first line that would change");
+              (Item, Landin.Diagnostics.Count (Checked.Found) = 3
+                     and then (for all Index in 1 .. 3 =>
+                                 Landin.Diagnostics.Code
+                                   (Landin.Diagnostics.Get
+                                      (Checked.Found, Index)) = "L0008")
+                     and then Contains (Report, "loose.ldn:1:1")
+                     and then Contains (Report, "loose.ldn:3:1")
+                     and then Contains (Report, "loose.ldn:4:1")
+                     and then not Contains (Report, "loose.ldn:2:1"),
+               "once for every line the layout changes (D359)");
+            Landin.Testing.Check
+              (Item, Contains (Report, "the layout writes it `a: u32 = 1`")
+                     and then Contains (Report, "the layout removes it")
+                     and then Contains
+                       (Report, "the layout ends the file's last line"),
+               "each showing the line as the layout writes it");
             Landin.Testing.Check_Equal
               (Item, Host.Write_Count, 0, "--check writes nothing");
          end;
@@ -5281,6 +5316,31 @@ package body Landin.Tests.Driver_Suite is
             Landin.Testing.Check_Equal
               (Item, Host.Write_Count, 1,
                "and nothing in the layout or refused is written");
+         end;
+         Host.Add_File ("printed.ldn", Loose);
+         declare
+            Printed : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--stdout", "printed.ldn"]));
+            Already : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--stdout", "laid.ldn"]));
+            Unparsed : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--stdout", "broken.ldn"]));
+         begin
+            Landin.Testing.Check
+              (Item, Printed.Status = Landin.Driver.Status_Success
+                     and then Unbounded.To_String (Printed.Output) = Laid_Out
+                     and then Unbounded.Length (Printed.Report) = 0,
+               "--stdout prints the source in the layout");
+            Landin.Testing.Check
+              (Item, Unbounded.To_String (Already.Output) = Laid_Out,
+               "and a source in the layout as it is");
+            Landin.Testing.Check
+              (Item, Unparsed.Status = Landin.Driver.Status_Reported
+                     and then Unbounded.Length (Unparsed.Output) = 0,
+               "and prints nothing of a source that does not parse");
+            Landin.Testing.Check_Equal
+              (Item, Host.Written ("printed.ldn"), "",
+               "--stdout writes nothing");
          end;
          declare
             Again : constant Landin.Driver.Outcome :=
@@ -5343,7 +5403,10 @@ package body Landin.Tests.Driver_Suite is
             Landin.Testing.Check
               (Item, Unwritable.Status = Landin.Driver.Status_Reported
                      and then Contains (Report, "L0005")
-                     and then Contains (Report, "cannot write: loose.ldn")
+                     and then Contains
+                       (Report, "cannot rewrite loose.ldn: the fake host"
+                                & " refuses writes")
+                     and then Contains (Report, "refine fmt --stdout")
                      and then Contains (Report, "not readable: hidden.ldn")
                      and then Contains (Report, "not found: absent.ldn"),
                "unreadable, missing and unwritable sources are reported");
@@ -5378,6 +5441,12 @@ package body Landin.Tests.Driver_Suite is
             Refused (Landin.Platform.No_Arguments, "no source");
             Refused (["--wat", "loose.ldn"], "an unknown option");
             Refused (["--check", "--check", "loose.ldn"], "--check twice");
+            Refused (["--stdout", "--stdout", "loose.ldn"],
+                     "--stdout twice");
+            Refused (["--check", "--stdout", "loose.ldn"],
+                     "--check with --stdout");
+            Refused (["--stdout", "loose.ldn", "hidden.ldn"],
+                     "--stdout with two sources");
             Refused (["module"], "a directory");
             Refused (["loose.ldn", "loose.ldn"], "one source twice");
          end;
@@ -5428,7 +5497,8 @@ package body Landin.Tests.Driver_Suite is
                      and then Contains
                        (Report, "fmt is given one source twice: path.ldn")
                      and then Contains
-                       (Report, "fmt takes no option but --check, once: --wat")
+                       (Report, "fmt takes no option but --check or"
+                                & " --stdout, once: --wat")
                      and then Refused.Named.Is_Empty
                      and then Host.Write_Count = 0,
                "exact repeats and options report every misuse before I/O");
@@ -5567,7 +5637,9 @@ package body Landin.Tests.Driver_Suite is
                  (Item, Result.Status = Landin.Driver.Status_Reported
                   and then Contains
                     (Unbounded.To_String (Result.Report),
-                     "no import root was given"),
+                     "no library was found")
+                  and then Contains
+                    (Unbounded.To_String (Result.Report), "--library=DIR"),
                   "a core six levels up is not a checkout's library");
             end if;
          end;
@@ -5735,11 +5807,12 @@ package body Landin.Tests.Driver_Suite is
          Host.Add_Directory ("project/hosted/heap");
          Host.Add_Directory ("project/platform");
          Host.Add_Directory ("project/platform/c");
-         Host.Add_Directory ("project/platform/cpu");
+         Host.Add_Directory ("project/platform/cortex_m");
          --  Harmless project overrides cannot bypass namespace policy.
          Host.Add_File ("project/hosted/heap/heap.ldn", "public x := 1");
          Host.Add_File ("project/platform/c/c.ldn", "public x := 1");
-         Host.Add_File ("project/platform/cpu/cpu.ldn", "public x := 1");
+         Host.Add_File
+           ("project/platform/cortex_m/cortex_m.ldn", "public x := 1");
          Host.Add_File
            ("project/bridge/bridge.ldn", "import " & Logical & LF
             & "public x := 1");
@@ -5775,12 +5848,12 @@ package body Landin.Tests.Driver_Suite is
          Host.Add_Directory ("root");
          Host.Add_Directory ("root/app");
          Host.Add_Directory ("root/platform");
-         Host.Add_Directory ("root/platform/cpu");
+         Host.Add_Directory ("root/platform/cortex_m");
          Host.Add_File
-           ("root/platform/cpu/cpu.ldn", "public answer: u32 = 42");
+           ("root/platform/cortex_m/cortex_m.ldn", "public answer: u32 = 42");
          Host.Add_File
-           ("root/app/main.ldn", "import platform/cpu" & LF
-            & "read: () -> (answer: u32) = answer = cpu.answer end read");
+           ("root/app/main.ldn", "import platform/cortex_m" & LF
+            & "read: () -> (answer: u32) = answer = cortex_m.answer end read");
          Args.Append ("--root=root");
          Args.Append ("--target=cortex-m0");
          Args.Append ("--level=" & Level);
@@ -5829,7 +5902,7 @@ package body Landin.Tests.Driver_Suite is
       CPU_Accepted ("armv7-m");
       CPU_Accepted ("armv7e-m");
       Refused ("cortex-m0", "hosted/heap", True);
-      Refused ("cortex-m0", "hosted/io", False);
+      Refused ("cortex-m0", "hosted/system", False);
       Refused ("cortex-m0", "hosted/heap", True, True);
       Refused ("cortex-m0", "platform/c", True);
       Refused ("synthetic-32", "platform/c", True);
@@ -5841,8 +5914,8 @@ package body Landin.Tests.Driver_Suite is
       Refused ("cortex-m0", "platform/linux/numbers", False);
       Refused ("cortex-m0", "platform/libc", True);
       Refused ("synthetic-32", "platform/posix", True);
-      Refused ("linux-x86-64", "platform/cpu", True);
-      Refused ("linux-x86-64", "platform/cpu", False);
+      Refused ("linux-x86-64", "platform/cortex_m", True);
+      Refused ("linux-x86-64", "platform/cortex_m", False);
    end Namespace_Availability;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

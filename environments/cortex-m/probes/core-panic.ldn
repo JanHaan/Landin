@@ -1,5 +1,5 @@
-import platform/cpu
 import core/panic
+import platform/cortex_m
 
 mut initialized: u32 = 0x670
 mut cleared: u32 = 0
@@ -11,7 +11,7 @@ mut entries: u32 = 0
 link(keep) mut later: u32 = 0
 
 finished: () -> noreturn =
-    loop do cpu.wait_for_interrupt() end loop
+    loop do cortex_m.wait_for_interrupt() end loop
 end finished
 never: () -> noreturn = finished() end never
 mark: () -> none = later = 99 end mark
@@ -79,7 +79,7 @@ start: () -> none =
         pending: ptr mut u32 = ptr(0xe000e200)
         compiler.volatile_store(enable, 1)
         compiler.volatile_store(pending, 1)
-        cpu.completion_barrier()
+        cortex_m.completion_barrier()
         finished()
     elsif mode == 12 then
         port: ptr u32 = ptr(0x20000001)

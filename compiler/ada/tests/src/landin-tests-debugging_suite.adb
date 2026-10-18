@@ -57,6 +57,8 @@ package body Landin.Tests.Debugging_Suite is
       Args.Append ("--target=linux-x86-64");
       Args.Append ("main.ldn");
       Args.Append ("--emit=asm");
+      --  A static link's assembly needs platform/linux (D363).
+      Args.Append ("--link=libc");
       Args.Append ("-o");
       Args.Append ("out.s");
       return Args;
@@ -184,7 +186,8 @@ package body Landin.Tests.Debugging_Suite is
         "site: type = struct file_id: u32 line: u32 column: u32 end site"
         & LF & "capture: (caller where: site) -> (value: u32) ="
         & " value = where.line end capture" & LF
-        & "public main: () -> (code: i32) = code = i32(capture()) end main";
+        --  No check is left whose D361 report would name the file.
+        & "public main: () -> (code: i32) = _ = capture() code = 0 end main";
    begin
       Host.Add_File ("main.ldn", Caller);
       Host.Add_File ("other.ldn", "other: () -> none = end other");
@@ -225,6 +228,8 @@ package body Landin.Tests.Debugging_Suite is
       Host.Add_File (Path, Simple);
       Args.Append (Path);
       Args.Append ("--emit=asm");
+      --  A static link's assembly needs platform/linux (D363).
+      Args.Append ("--link=libc");
       Args.Append ("--debug=full");
       Args.Append ("-o");
       Args.Append ("out.s");
@@ -1242,6 +1247,9 @@ package body Landin.Tests.Debugging_Suite is
          Args.Append ("--target=" & Target);
          Args.Append ("main.ldn");
          Args.Append ("--emit=asm");
+         if Ada.Strings.Fixed.Index (Target, "linux") > 0 then
+            Args.Append ("--link=libc");
+         end if;
          Args.Append ("-o");
          Args.Append ("out.s");
          Args.Append ("--debug=full");
@@ -1298,6 +1306,8 @@ package body Landin.Tests.Debugging_Suite is
       Args.Append ("--target=linux-arm64");
       Args.Append ("main.ldn");
       Args.Append ("--emit=asm");
+      --  A static link's assembly needs platform/linux (D363).
+      Args.Append ("--link=libc");
       Args.Append ("-o");
       Args.Append ("out.s");
       Args.Append ("--debug=full");
@@ -1358,6 +1368,9 @@ package body Landin.Tests.Debugging_Suite is
             Args.Append (Target);
             Args.Append ("main.ldn");
             Args.Append ("--emit=asm");
+            if Ada.Strings.Fixed.Index (Target, "linux") > 0 then
+               Args.Append ("--link=libc");
+            end if;
             Args.Append ("-o");
             Args.Append ("out.s");
             Args.Append ("--debug=full");
@@ -1447,6 +1460,9 @@ package body Landin.Tests.Debugging_Suite is
          Args.Append ("--target=" & Target);
          Args.Append ("main.ldn");
          Args.Append ("--emit=asm");
+         if Ada.Strings.Fixed.Index (Target, "linux") > 0 then
+            Args.Append ("--link=libc");
+         end if;
          Args.Append ("-o");
          Args.Append ("out.s");
          Args.Append ("--debug=full");
@@ -1496,6 +1512,8 @@ package body Landin.Tests.Debugging_Suite is
          Args.Append ("--target=linux-x86-64");
          Args.Append ("main.ldn");
          Args.Append ("--emit=asm");
+         --  A static link's assembly needs platform/linux (D363).
+         Args.Append ("--link=libc");
          Args.Append ("-o");
          Args.Append ("out.s");
          Args.Append ("--debug=full");

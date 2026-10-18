@@ -1,0 +1,11 @@
+error[L0331]: this call returns nothing, so its `else` has no result to stand in for
+  --> ../tests/fixtures/negative/none-call-else-value-becomes-else-none/program.ldn:10:24
+   |
+10 |     attempt(true) else 0
+   |                        ^
+  --> ../tests/fixtures/negative/none-call-else-value-becomes-else-none/program.ldn:5:1
+  |
+5 | attempt: (flag: bool) -> none ! refused =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this signature returns none
+  = note: [1030]: `else none` ignores the error, and `else (problem) ... end` handles it in a block; neither yields a value
+  = help: ignore the failure with `else none`

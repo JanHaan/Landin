@@ -3,4 +3,4 @@ error[L0344]: invalid constant memory ordering
   |
 5 |     _ = compiler.atomic_compare_exchange(addr a, 0, 1, compiler.seq_cst, compiler.release)
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
-  = note: [1620]/D227: explicit memory contract
+  = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes

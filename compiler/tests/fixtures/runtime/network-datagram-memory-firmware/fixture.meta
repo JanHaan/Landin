@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/io/fake's memory network loses a datagram sent to a port no socket holds and frees a closed socket's record within a 32 KiB firmware image, its table naming only the three entries the program projects
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 1030, 1290, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

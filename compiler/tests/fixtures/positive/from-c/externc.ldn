@@ -1,0 +1,8 @@
+import platform/c
+
+--- C's `atoi`, from the C library.
+extern(c) atoi: (s: cstring) -> (value: c.c_int)
+
+default_port: () -> (port: i32) =
+    port = atoi("8080") -- the literal carries its NUL
+end default_port

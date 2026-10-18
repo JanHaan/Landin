@@ -14,7 +14,7 @@ from machine import Machine, Refused
 from models import FixturePeripheral
 from packed_native import PROFILES
 from run import Run, require, FLAGS
-from setup import DEFAULT, inventory, sha, supported_host
+from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -30,7 +30,7 @@ def build(run, refine, program, optimize, specialize):
         if not line.startswith('import '):
             continue
         module = line[7:]
-        require(module in ('platform/cpu', 'core/panic') or module in
+        require(module in ('platform/cortex_m', 'core/panic') or module in
                 ('rp2040/io_bank0', 'rp2040/sio', 'rp2040/timer',
                  'rp2040/uart0', 'rp2040/uart1', 'rp2040/dma'),
                 'undeclared device consumer module: '+module)
@@ -247,7 +247,7 @@ def refusal(run, elf, name):
     }[name]
     paths = [run.out / 'source' / p for p in (
         'app/main.ldn', 'rp2040/io_bank0/device.ldn',
-        'rp2040/uart0/device.ldn', 'platform/cpu/cpu.ldn', 'core/panic/panic.ldn')]
+        'rp2040/uart0/device.ldn', 'platform/cortex_m/cortex_m.ldn', 'core/panic/panic.ldn')]
     require(set(paths) == set((run.out / 'source').rglob('*.ldn')),
             'panic oracle source inventory changed')
     offset = 0
@@ -338,6 +338,7 @@ def main():
     parser.add_argument('--case', action='append')
     args = parser.parse_args()
     supported_host()
+    args.tools = installed_tools(args.tools)
     before = inventory(args.tools)
     args.output.mkdir(parents=True, exist_ok=False)
     record = {'status': 'failed', 'tools': before, 'scope': 'development; not acceptance'}

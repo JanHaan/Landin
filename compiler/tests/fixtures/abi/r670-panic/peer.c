@@ -26,7 +26,7 @@ int main(void)
     /* Independent source-byte pins, not values read from generated assembly.
        Each byte reserves four family slots: 1 + 4*offset + family-1. */
     static const uint32_t kinds[] = {2,3,1,2,1,3,4,2,2,2,4,3,3,3};
-    static const uint32_t sites[] = {3750,3971,4281,4510,4701,4899,5080,3750,3018,3750,0,5571,5979,6783};
+    static const uint32_t sites[] = {3666,3887,4197,4426,4617,4815,4996,3666,2934,3666,0,5483,5891,6695};
     static const int32_t values[] = {1,256,2,0,-1,2,0,1,0,1,0,0,0,255};
     struct rlimit limit = {0, 0};
     if (setrlimit(RLIMIT_CORE, &limit) != 0) return 1;
@@ -40,9 +40,9 @@ int main(void)
         if (child == 0) { run_path(selected, values[selected]); _exit(99); }
         int status;
         if (waitpid(child, &status, 0) != child) return 4;
-        /* Mode 10 acquires hosted/io's argument world before any root
+        /* Mode 10 acquires hosted/system's argument world before any root
            exists.  The library stops at its own compiler.unreachable(),
-           so the handler sees unreachable at a site in hosted/io's source
+           so the handler sees unreachable at a site in hosted/system's source
            rather than this program's: only the kind and a real, nonzero
            site are pinned here. */
         if (events[0] != 1 || events[1] != kinds[selected] ||

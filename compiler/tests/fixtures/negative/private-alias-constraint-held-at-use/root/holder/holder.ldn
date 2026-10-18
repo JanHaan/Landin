@@ -1,0 +1,38 @@
+--  A private record behind a public alias, both over a constrained formal.
+
+--- A key the holder can count: one that says whether it is set.
+public keyed: type = concept (item: type)
+    --- Whether the key is set.
+    set: (self: item) -> (yes: bool)
+end keyed
+
+set_u32: (self: u32) -> (yes: bool) =
+    yes = self <> 0
+end set_u32
+
+u32 is keyed (set: set_u32)
+
+holder_value: type (key: type is keyed, item: type) = struct
+    count: usize
+end holder_value
+
+--- A count of keys, whose representation is this module's.
+public holder: type (key: type is keyed, item: type) =
+    holder_value(key, item)
+
+--- An empty holder.
+public new: (key: type is keyed, item: type) -> (result: holder(key, item)) =
+    result = (count: 0)
+end new
+
+--- One more key held.
+public add: (key: type is keyed, item: type,
+             inout value: holder(key, item)) -> none =
+    inc value.count
+end add
+
+--- How many keys are held.
+public count: (key: type is keyed, item: type, value: holder(key, item))
+              -> (n: usize) =
+    n = value.count
+end count

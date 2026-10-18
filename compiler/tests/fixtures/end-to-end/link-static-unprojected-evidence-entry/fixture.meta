@@ -1,0 +1,9 @@
+class: end-to-end
+summary: a static Linux link counts only the evidence entries something projects, so a C import only an unprojected entry names is not refused and the link goes ahead
+program: main.ldn
+constructs: 1230, 1240, 1290, 1370, 1390, 1970, 1975
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --emit=exe --dry-run -o out ../tests/fixtures/end-to-end/link-static-unprojected-evidence-entry/main.ldn
+status: 0
+stream: output

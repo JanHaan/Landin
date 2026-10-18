@@ -7,4 +7,4 @@ error[L0336]: a packed field has no independent address for an inout parameter
   |
 4 | set: (inout v: u8) -> none = v = 1 end set
   |       ^^^^^^^^^^^ this inout parameter
-  = note: [0730]: pass the containing image
+  = note: [0730]: a packed field has no address of its own; pass the whole packed value that holds it

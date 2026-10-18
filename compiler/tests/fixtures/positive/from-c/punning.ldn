@@ -1,0 +1,5 @@
+--- The bits of a float, which C reads through a union or `memcpy`.
+float_bits: (value: f32) -> (bits: u32) =
+    view: ptr u32 = ptr(usize(addr value))
+    bits = view.val
+end float_bits

@@ -1,4 +1,5 @@
 import core/io
+import core/io/fake
 import core/text
 
 mut backing: [3]u8 = [65, 66, 67]
@@ -43,7 +44,7 @@ public main: () -> (code: i32) =
     name: []u8 = "f"
     file_value: io.memory_file =
       (name: name, contents: backing[0..<3], length: 3, cursor: 0,
-       readable: true, writable: false, opened: false, writing: false)
+       readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file_value
     mut state: io.memory_space = zeroed
@@ -53,7 +54,7 @@ public main: () -> (code: i32) =
     return when not arguments_ok(world)
     missing_ok: bool = missing_file(world)
     denied_ok: bool = denied_file(world)
-    return when not missing_ok or not denied_ok or files[0].opened
+    return when not missing_ok or not denied_ok or files[0].state <> io.closed_slot
       or files[0].length <> 3
     opened: io.file = world.open_read(text.host_over(path)) else (problem)
         _ = problem
@@ -103,7 +104,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when empty_count <> 0 or state.read_calls <> 5
+    return when empty_count <> 0 or state.reads <> 5
     stdout: io.file = world.out()
     bytes: []u8 = "abcd"
     mut full: bool = false
@@ -122,8 +123,8 @@ public main: () -> (code: i32) =
         closed = problem == io.io_failed
     end
     if closed and state.output_used == 3 and not state.output_open
-      and not files[0].opened and state.close_calls == 2
-      and state.open_calls == 3 and state.read_calls == 5
+      and files[0].state == io.closed_slot and state.closes == 2
+      and state.opens == 3 and state.reads == 5
     then code = 42 end if
 end main
 

@@ -35,4 +35,10 @@ package Landin.Driver.Library is
    --  the executable is or neither layout holds one.
    function Located (Host : Landin.Platform.Filesystem'Class) return String;
 
+   --  Where Located looked, as a refusal names it (D363): the prefix's
+   --  `lib/landin` beside the executable and the checkout a build tree's
+   --  executable sits in, or that the executable's directory is unknown.
+   function Looked_In (Host : Landin.Platform.Filesystem'Class)
+     return String;
+
 end Landin.Driver.Library;

@@ -1,6 +1,6 @@
 import core/fault
-import hosted/heap
 import core/mem
+import hosted/heap
 
 no_object: atom
 object_result: type = no_object | ptr mut u32
@@ -48,7 +48,7 @@ end initial_value
 
 public main: () -> (code: i32) =
     code = 1
-    heap := heap.host()
+    heap := heap.new()
     zero: usize = 0
     four: usize = 4
     mut space: fault.space = zeroed

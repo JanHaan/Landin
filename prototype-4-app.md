@@ -79,7 +79,7 @@ contracts. The complete derived hosted application is
 `config` and the command-line root to their executable sources and support.
 
 At the system boundary D207 keeps errno in the explicit provider state,
-readable through `hosted.last_errno`, rather than adding payloads to these atoms.
+readable through `system.last_errno`, rather than adding payloads to these atoms.
 Capture follows the failing libc operation before another host call. Safe
 no-progress EINTR attempts may retry open/read/write, preserving completed
 transfers; close consumes its handle once even when it fails and is not
@@ -657,16 +657,16 @@ Hosted entry. The sketch names its argument adapter `io.args`; the complete
 derivative uses the supplied world's `argument_count` and `argument` entries,
 then admits their bytes directly into run-lifetime raw storage, over which a
 path is a host string again; the NUL a C call needs is added beneath the
-provider. Its hosted `entry` routine imports `hosted/io`
+provider. Its hosted `entry` routine imports `hosted/system`
 and is the only place that acquires the heap and system world.
 No uninitialized view constructor is implied.
 ```landin
 public main: () -> (code: i32) =
-    mut h := hosted.host()
+    mut h := system.new()
     mut w := any(addr h)
 
     begin
-        mut backing := heap.host()
+        mut backing := heap.new()
         mut program := region.new_region(addr backing)
         defer region.release_region(program)
         mut logger := diag.to(w.err())

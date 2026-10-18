@@ -94,9 +94,23 @@ def run(args: list[str], *, cwd: Path | None = None,
     return completed.stdout
 
 
-def tool(home: Path, name: str) -> str:
-    candidates = (home / "bin" / f"{LANE['triplet']}-{name}",
-                  home / "bin" / name)
+def tool(home: Path, name: str, cross: bool = False) -> str:
+    """The lane's binutils: the pinned installation's, or a cross lane's.
+
+    The pinned GNAT is built for its own host, so its bare `strip` cannot
+    read another architecture's objects.  A cross lane takes the triplet's
+    tools from PATH, where the nix shell's cross lane and Ubuntu's cross
+    binutils both put them, and refuses rather than fall back to the host's.
+    """
+    prefixed = f"{LANE['triplet']}-{name}"
+    if cross:
+        selected = shutil.which(prefixed)
+        require(selected is not None,
+                f"the {LANE['target']} lane needs {prefixed} on PATH: the nix"
+                " shell's cross lane provides it, as Ubuntu's binutils-"
+                f"{LANE['triplet']} does")
+        return selected
+    candidates = (home / "bin" / prefixed, home / "bin" / name)
     selected = next((path for path in candidates if path.is_file()), None)
     require(selected is not None, f"pinned installation lacks {name}")
     return str(selected)
@@ -1398,8 +1412,15 @@ CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in
 
 def check_workload_sources(workload, source_args):
     expected = json.loads((HERE / 'workload-sources.json').read_text())[workload]
-    require(sorted(str(Path(name)) for name in source_args) == expected,
-            'complete workload source inventory differs from its committed closure')
+    built = sorted(str(Path(name)) for name in source_args)
+    differences = ([f"  added   {name}" for name in sorted(set(built) - set(expected))]
+                   + [f"  removed {name}" for name in sorted(set(expected) - set(built))])
+    require(built == expected,
+            f"the {workload} workload's source closure differs from"
+            " compiler/tests/debugging/workload-sources.json:\n"
+            + "\n".join(differences or ["  (the same files, in another order)"])
+            + "\n  regenerate it with python3 compiler/tests/debugging/"
+              "workload_sources.py --refine REFINE --write")
 
 
 def measure(refine: Path, tools: dict[str, str], gdb: str,
@@ -1561,7 +1582,11 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
             "strip --strip-debug changed the exact GNU build ID")
     check_debug_sections(tools["readelf"], stripped, False,
                          retained / f"{key}.stripped-sections.txt")
-    stripped_bytes = stripped.read_bytes()
+    #  D361: a failed check's report names its file; outside those lines
+    #  no filename is deployed.
+    stripped_bytes = re.sub(
+        rb"[^\x00\n]*: trap: (?:out_of_range|overflow|bad_conversion|unreachable)\n\x00",
+        b"", stripped.read_bytes())
     for source_arg in source_args:
         require(os.fsencode(source_arg) not in stripped_bytes and
                 os.fsencode(Path(source_arg).name) not in stripped_bytes,
@@ -1689,9 +1714,12 @@ def main() -> None:
                         help="checksum-pinned Linux GNAT installation")
     parser.add_argument("--output", type=Path, required=True,
                         help="scratch directory and retained factual evidence")
-    parser.add_argument("--gdb", default=os.environ.get("LANDIN_GDB", "gdb"))
+    parser.add_argument("--gdb", default=os.environ.get("LANDIN_GDB"),
+                        help="the debugger; default gdb, or gdb-multiarch on a"
+                             " cross lane")
     parser.add_argument("--runner", choices=("native", "qemu"),
-                        help="debugger transport; default is strict native")
+                        help="debugger transport; default is strict native on"
+                             " this host's own lane and qemu on another's")
     parser.add_argument("--qemu", metavar="PATH",
                         help="qemu-x86_64 or qemu-aarch64 path; also"
                              " selects qemu by default")
@@ -1711,19 +1739,25 @@ def main() -> None:
             if args.target else host)
     require(LANE is not None,
             "this host's machine has no Linux lane; name --target")
-    runner = args.runner or ("qemu" if args.qemu else "native")
+    cross = LANE is not host
+    #  Another architecture's lane can only be emulated, so naming its
+    #  target selects QEMU rather than falling back to it; this host's own
+    #  lane stays strictly native unless a transport is named.
+    runner = args.runner or ("qemu" if args.qemu or cross else "native")
     if runner == "native":
         require(args.qemu is None,
                 "--qemu cannot be combined with --runner=native")
-        require(LANE is host,
+        require(not cross,
                 f"native debugging of {LANE['target']} needs that machine;"
                 " no skip is a pass")
     refine = args.refine.resolve(strict=True)
     home = args.toolchain.resolve(strict=True)
-    tools = {name: tool(home, name) for name in ("readelf", "strip")}
+    tools = {name: tool(home, name, cross) for name in ("readelf", "strip")}
     if args.driver:
         tools["gcc"] = command(args.driver)
-    gdb = command(args.gdb)
+    #  The pinned GNAT's GDB is first on PATH and reads only its own
+    #  architecture; a cross lane debugs through a multi-target GDB.
+    gdb = command(args.gdb or ("gdb-multiarch" if cross else "gdb"))
     qemu = command(args.qemu or LANE["qemu"]) if runner == "qemu" else None
     versions = {"gdb": run([gdb, "--version"]).splitlines()[0],
                 **{name: run([path, "--version"]).splitlines()[0]

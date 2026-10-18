@@ -1,0 +1,413 @@
+--  The provider of every core/io concept on hosted targets, `host`: reader,
+--  writer, files and process, and so of their composition, world, and
+--  directories, the environment, programs, entropy, the rest of the file
+--  system and terminals beside them, and core/time's clocks and core/net's
+--  network too, each in a file named as core/io names it.  It is
+--  written once, over platform/posix, which reaches Linux through its
+--  system calls and Darwin and FreeBSD through their C library: nothing
+--  here is written per system.  Import this module only at a hosted
+--  authority root.
+
+import core/cmp
+import core/io
+import core/text
+import platform/posix
+
+--  A file open_write creates gets 0666, which the process umask filters.
+created_mode: u32 = 0o666
+
+--  A directory made by make_directory gets 0777, which the umask filters.
+created_directory_mode: u32 = 0o777
+
+--  The process's last-error cell, which every handle from `host` shares,
+--  and its last-signal cell beside it.
+mut process_errno: i32
+mut process_signal: i32
+
+system_value: type = struct
+    failure: ptr mut i32
+    signal: ptr mut i32
+end system_value
+
+--- Hosted implementation of all four I/O capabilities, `io.world`,
+--- `io.directories`, `io.environment`, `io.programs`, the clocks
+--- `time.clock` and `time.wall_clock`, the system's `io.entropy`,
+--- `net.network`, `io.file_system` and `io.terminals`, over platform/posix,
+--- as a handle:
+--- copies share the process's descriptors, arguments and environment, and
+--- the last-error and last-signal cells they were made with. File
+--- identifiers belong to this provider; borrowed arguments and variables
+--- refer to process storage.
+public host: type = system_value
+
+--- A last-error cell and a last-signal cell of the caller's own, for code
+--- that must not share the process's: a C thread calling into Landin, or
+--- a library keeping its own detail. Declare it `zeroed` and make its
+--- handle with `over`.
+public space: type = struct
+    failure: i32
+    signal: i32
+end space
+
+--- Return errno captured for the terminal failing provider call. Read it
+--- immediately after failure; it belongs to the cell the handle was made
+--- with, the process's from `host` or the caller's from `over`, and is not a
+--- portable error category.
+---
+--- Zero means that the handle's most recent call of any concept did not
+--- fail with an errno: each call clears the cell before it asks the system.
+--- A nonzero value is the exact errno captured for the terminal call before
+--- the provider made any other host call: its number
+--- as the system gives it, platform/posix's `number` of the atom the call
+--- failed with.  Retriable EINTR attempts are internal and do not replace
+--- a previously reported operation with a failure.
+public last_errno: (handle: host) -> (number: i32) =
+    number = handle.failure.val
+end last_errno
+
+--- Return the number of the signal that ended the child this handle's
+--- cell last saw end through `io.wait`, as POSIX numbers it on this
+--- system: SIGTERM is 15 and SIGKILL 9 on Linux, Darwin and FreeBSD alike.
+--- Zero means that child exited with a code, or that no child has been
+--- waited for.  It is the system's detail behind `io.ending`'s portable
+--- `signalled`, as `last_errno` is behind an error atom.
+public last_signal: (handle: host) -> (number: i32) =
+    number = handle.signal.val
+end last_signal
+
+--  Keep a failure's errno in the handle's cell; `unlisted`, which no errno
+--  describes, leaves the cell at zero.
+record: (self: host, problem: posix.errno) -> none =
+    number: i32 = posix.number(problem)
+    if number > 0 then self.failure.val = number end if
+end record
+
+--  A path names nothing when a component is absent, ENOENT, or when a
+--  component before the last is not a directory, ENOTDIR: in both cases
+--  there is no file at that path for an open to find.
+absent: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.enoent or problem == posix.enotdir
+end absent
+
+--  Whether an errno says the caller may not do what it asked.
+refused: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.eperm or problem == posix.eacces
+          or problem == posix.erofs
+end refused
+
+--  Keep a failure about a path in the handle's cell and fail as the
+--  concepts say of one: `not_found` for no file there, `no_access` when it
+--  is refused, and `io_failed` for the rest.  The one mapping every call
+--  on a path uses.
+path_failure: (self: host, problem: posix.errno)
+              -> none ! io.not_found | io.no_access | io.io_failed =
+    record(self, problem)
+    fail io.not_found when absent(problem)
+    fail io.no_access when refused(problem)
+    fail io.io_failed
+end path_failure
+
+--  A socket this provider made carries this bit beside its descriptor,
+--  which is never negative and so never has it, so that `io.write` sends
+--  on it rather than writing: Linux has no option that keeps a socket's
+--  `write` from raising SIGPIPE, and only `send` takes MSG_NOSIGNAL (D322).
+socket_mark: usize = 0x80000000
+
+--- The platform/posix descriptor a file of this provider is, for a call
+--- the portable concepts do not make: a file's permission bits, a lock, a
+--- terminal's raw mode.  The file stays this provider's, to close through
+--- `io.close`.
+public descriptor_of: (opened: io.file) -> (result: posix.descriptor) =
+    result = posix.descriptor(i32(usize(opened) & (socket_mark - 1)))
+end descriptor_of
+
+--- The file of this provider a platform/posix descriptor is, so `io.read`,
+--- `io.write` and the rest take one that platform/posix opened.  Close it
+--- once, through either.  A socket platform/posix made is written with
+--- POSIX's `write` through it, which on Linux raises SIGPIPE when its peer
+--- has gone; `socket_of` makes one whose writes are sends.
+public file_of: (opened: posix.descriptor) -> (result: io.file) =
+    result = io.file(usize(i32(opened)))
+end file_of
+
+--- The file of this provider a platform/posix socket is: `io.write` sends
+--- on it as `net.send` does, so a peer that has gone fails the write with
+--- EPIPE on every system and raises no SIGPIPE, beside a C handler too.
+--- `net.connect`, `net.listen`, `net.accept` and `net.open_datagram` give
+--- their sockets so.
+public socket_of: (opened: posix.descriptor) -> (result: io.file) =
+    result = io.file(usize(i32(opened)) | socket_mark)
+end socket_of
+
+--  Write some of `bytes` to `opened`: a send on a socket, a write
+--  otherwise.
+put_some: (opened: io.file, bytes: []u8) -> (count: usize) ! posix.errno =
+    if (usize(opened) & socket_mark) <> 0 then
+        count = try posix.send(descriptor_of(opened), bytes)
+    else
+        count = try posix.write(descriptor_of(opened), bytes)
+    end if
+end put_some
+
+--  Open `path` with `options`, a file it creates getting `mode` before the
+--  umask: the one open every concept's makes.  open
+--  reports EINTR before publishing a descriptor, so the same request is
+--  retried; every other errno is kept before it is mapped to the stable
+--  atom set, a name an exclusive open finds taken `already_exists`.
+open: (self: host, path: text.host_string, options: posix.open_options,
+       mode: u32) -> (opened: io.file)
+      ! io.already_exists | io.not_found | io.no_access | io.io_failed =
+    self.failure.val = 0
+    loop do
+        made: posix.descriptor =
+            posix.open_at(posix.working_directory, path, options, mode)
+            else (problem)
+                continue when problem == posix.eintr
+                if problem == posix.eexist then
+                    record(self, problem)
+                    fail io.already_exists
+                end if
+                try path_failure(self, problem)
+                fail io.io_failed
+            end
+        opened = file_of(made)
+        return
+    end loop
+end open
+
+system_open_read: (self: host, path: text.host_string)
+                  -> (opened: io.file)
+                  ! io.not_found | io.no_access | io.io_failed =
+    opened = open(self, path, posix.reading, created_mode) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.no_access when problem == io.no_access
+        fail io.io_failed
+    end
+end system_open_read
+
+system_open_write: (self: host, path: text.host_string)
+                   -> (opened: io.file)
+                   ! io.not_found | io.no_access | io.io_failed =
+    opened = open(self, path, posix.writing, created_mode) else (problem)
+        fail io.not_found when problem == io.not_found
+        fail io.no_access when problem == io.no_access
+        fail io.io_failed
+    end
+end system_open_write
+
+--  A stable-path identity check, not an atomic check-and-open operation.
+--  Every input lookup failure refuses; only an absent output is allowed.
+system_same_file: (self: host, left: text.host_string,
+                   right: text.host_string)
+                  -> (same: bool) ! io.io_failed =
+    self.failure.val = 0
+    first: posix.status =
+        posix.status_at(posix.working_directory, left, true) else (problem)
+            record(self, problem)
+            fail io.io_failed
+        end
+    same = false
+    second: posix.status =
+        posix.status_at(posix.working_directory, right, true) else (problem)
+            return when absent(problem)
+            record(self, problem)
+            fail io.io_failed
+        end
+    same = first.device == second.device and first.inode == second.inode
+end system_same_file
+
+system_close: (self: host, sink opened: io.file)
+              -> none ! io.io_failed =
+    self.failure.val = 0
+    --  A failed close may already have released the descriptor; retrying
+    --  could close an unrelated reused descriptor, so EINTR is
+    --  deliberately terminal here.
+    posix.close(descriptor_of(opened)) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end system_close
+
+system_read: (self: host, opened: io.file, into: []mut u8)
+             -> (count: usize) ! io.io_failed =
+    self.failure.val = 0
+    if lenof into == 0 then
+        count = 0
+        return
+    end if
+    loop do
+        --  read returns EINTR only before transferring a byte, so the same
+        --  buffer and extent may be retried.  A positive partial read is
+        --  returned and is never discarded by an unnecessary retry.
+        got: usize = posix.read(descriptor_of(opened), into) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        --  A count beyond the buffer violates the system's contract and
+        --  fabricates no errno.  Zero from a nonempty read is genuine EOF.
+        fail io.io_failed when got > lenof into
+        count = got
+        return
+    end loop
+end system_read
+
+write_all: (self: host, opened: io.file, bytes: []u8)
+           -> none ! io.io_failed =
+    mut written: usize = 0
+    while written < lenof bytes do
+        remaining: []u8 = bytes[written..<lenof bytes]
+        --  write reports EINTR only before this attempt transfers data.
+        --  Retry the same remaining suffix; a preceding positive partial
+        --  write has already advanced `written` and is never repeated.
+        accepted: usize =
+            put_some(opened, remaining) else (problem)
+                continue when problem == posix.eintr
+                record(self, problem)
+                fail io.io_failed
+            end
+        --  A nonempty zero-progress success cannot complete write-all, and
+        --  an oversized count violates the system's contract.  Neither
+        --  fabricates errno.
+        fail io.io_failed when accepted == 0 or accepted > lenof remaining
+        written += accepted
+    end while
+end write_all
+
+system_write: (self: host, opened: io.file, bytes: []u8)
+              -> none ! io.io_failed =
+    self.failure.val = 0
+    return when lenof bytes == 0
+    try write_all(self, opened, bytes)
+end system_write
+
+system_write_some: (self: host, opened: io.file, bytes: []u8)
+                   -> (count: usize) ! io.io_failed =
+    self.failure.val = 0
+    if lenof bytes == 0 then
+        count = 0
+        return
+    end if
+    --  Keep a single host request within a representable, bounded extent;
+    --  the caller can send the remaining suffix after this progress.
+    mut requested: usize = lenof bytes
+    if requested > 65536 then requested = 65536 end if
+    loop do
+        --  EINTR transfers nothing on this attempt. A positive short write
+        --  returns immediately so its exact prefix reaches the caller.
+        accepted: usize = put_some(opened, bytes[0..<requested])
+            else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when accepted == 0 or accepted > requested
+        count = accepted
+        return
+    end loop
+end system_write_some
+
+system_input: (self: host) -> (stream: io.file) =
+    _ = self.failure
+    stream = file_of(posix.standard_input)
+end system_input
+
+system_out: (self: host) -> (stream: io.file) =
+    _ = self.failure
+    stream = file_of(posix.standard_output)
+end system_out
+
+system_err: (self: host) -> (stream: io.file) =
+    _ = self.failure
+    stream = file_of(posix.standard_error)
+end system_err
+
+system_argument_count: (self: host) -> (count: usize) =
+    _ = self.failure
+    table: posix.argument_table = posix.arguments()
+    count = table.count
+end system_argument_count
+
+--  The argument is lent from the process's argument root, storage that
+--  outlives every handle, which satisfies the concept's `from self`.
+system_argument: (self: host, index: usize)
+                 -> (value: text.host_string from self) ! io.no_argument =
+    _ = self.failure
+    table: posix.argument_table = posix.arguments()
+    fail io.no_argument when index >= table.count
+    value = posix.argument(table, index)
+end system_argument
+
+--  The environment is platform/posix's, read where the process's entry
+--  left it, and lent from storage that outlives every handle, as an
+--  argument is.
+system_variable_count: (self: host) -> (count: usize) =
+    _ = self.failure
+    table: posix.environment_table = posix.environment()
+    count = table.count
+end system_variable_count
+
+system_variable_at: (self: host, index: usize)
+                    -> (item: io.variable from self) ! io.no_variable =
+    _ = self.failure
+    table: posix.environment_table = posix.environment()
+    fail io.no_variable when index >= table.count
+    item = posix.variable(table, index)
+end system_variable_at
+
+system_variable_named: (self: host, name: text.host_string)
+                       -> (value: text.host_string from self)
+                       ! io.no_variable =
+    _ = self.failure
+    table: posix.environment_table = posix.environment()
+    wanted: []u8 = text.host_bytes(name)
+    for index in usize(0)..<table.count do
+        item: io.variable = posix.variable(table, index)
+        found: []u8 = text.host_bytes(item.name)
+        if cmp.compare(found, wanted) == cmp.equal then
+            value = item.value
+            return
+        end if
+    end for
+    fail io.no_variable
+end system_variable_named
+
+host is io.reader (read: system_read)
+host is io.writer (write: system_write, write_some: system_write_some)
+host is io.files
+    (open_read: system_open_read, open_write: system_open_write,
+     same_file: system_same_file, close: system_close)
+host is io.process
+    (input: system_input, out: system_out, err: system_err,
+     argument_count: system_argument_count, argument: system_argument)
+host is io.environment
+    (variable_count: system_variable_count,
+     variable_at: system_variable_at,
+     variable_named: system_variable_named)
+host is io.world ()
+
+--- Return a handle to the hosted I/O provider, exposing process arguments and
+--- the three standard streams, descriptors 0, 1 and 2. Regular open-write
+--- operations create or truncate files; close regular files explicitly. The
+--- handle borrows nothing: the argument root, the descriptors and its
+--- last-error cell belong to the process. Use `over` for a cell of the
+--- caller's own.
+---
+--- The arguments are the root platform/posix's
+--- `_landin_host_initialize_arguments` established, which the hosted entry
+--- establishes before its body runs; calling this before any root exists
+--- traps.
+public new: () -> (handle: host) =
+    _ = posix.arguments()
+    handle = (failure: addr process_errno, signal: addr process_signal)
+end new
+
+--- Fill `state` and return a handle that records its last error there
+--- rather than in the process's cell. It shares the process's arguments
+--- and descriptors like any other handle; calling this before any root
+--- exists traps, as `host` does.
+public over: (inout state: space) -> (handle: host from state) =
+    _ = posix.arguments()
+    state = (failure: 0, signal: 0)
+    handle = (failure: addr state.failure, signal: addr state.signal)
+end over

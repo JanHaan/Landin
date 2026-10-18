@@ -1,44 +1,42 @@
 --  Two actual pthreads enter this exported routine concurrently.  Each owns a
---  handle over its own last-error cell, made by `hosted.over`, so the only
+--  handle over its own last-error cell, made by `system.over`, so the only
 --  shared failure source is libc's real thread-local errno, read through
 --  platform/libc.
 
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
-extern(c) r440_run_errno_threads: (first: ptr hosted.system,
-                                    second: ptr hosted.system)
+extern(c) r440_run_errno_threads: (first: ptr system.host,
+                                    second: ptr system.host)
                                    -> (result: i32)
 
 thread_path: []u8 = "r440-thread"
 
 public extern(c) link(symbol: "r440_errno_thread_probe") thread_probe:
-    (state: ptr hosted.system, expected: i32) -> (result: i32) =
+    (state: ptr system.host, expected: i32) -> (result: i32) =
     result = 1
     opened: io.file = io.open_read(state.val, text.host_over(thread_path))
         else (problem)
             if problem == io.io_failed
-              and hosted.last_errno(state.val) == expected
+              and system.last_errno(state.val) == expected
             then
                 result = 42
             end if
             return
         end
-    io.close(state.val, opened) else (problem)
-        _ = problem
-    end
+    io.close(state.val, opened) else none
 end thread_probe
 
 public main: () -> (code: i32) =
     code = 1
-    mut first_cell: hosted.space = zeroed
-    mut second_cell: hosted.space = zeroed
-    first: hosted.system = hosted.over(first_cell)
-    second: hosted.system = hosted.over(second_cell)
+    mut first_cell: system.space = zeroed
+    mut second_cell: system.space = zeroed
+    first: system.host = system.over(first_cell)
+    second: system.host = system.over(second_cell)
     code = r440_run_errno_threads(addr first, addr second)
     return when code <> 42
     code = 1
-    return when hosted.last_errno(first) <> 5 or hosted.last_errno(second) <> 28
+    return when system.last_errno(first) <> 5 or system.last_errno(second) <> 28
     code = 42
 end main

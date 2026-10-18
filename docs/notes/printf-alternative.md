@@ -142,7 +142,7 @@ end show_off
 
 ```landin
 public main: () -> (code: i32) =
-    mut h := hosted.host()
+    mut h := system.new()
     w := any(addr h)
 
     arena program do

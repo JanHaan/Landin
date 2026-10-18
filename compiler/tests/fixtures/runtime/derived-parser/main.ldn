@@ -1,11 +1,12 @@
+import core/arena
 import core/diag
 import core/io
-import hosted/io as hosted
 import core/mem
 import core/text
-import examples/config_parser/lexer
 import core/vec
+import examples/config_parser/lexer
 import examples/config_parser/parser
+import hosted/system
 
 --  Parsed nodes are independent allocations that live as long as the backing.
 --  Give the backing storage static lifetime, not a hidden frame origin.
@@ -49,12 +50,12 @@ end depth_group_is_expected
 depth_recovery_is_expected: () -> (yes: bool) =
     yes = false
     source: []u8 = "g0 = {\ng1 = {\ng2 = {\ng3 = {\ng4 = {\ng5 = {\ng6 = {\ng7 = {\ng8 = {\ninner = {\nx = 1\n}\nafter = 9\n}\ny = 2\n}\n}\n}\n}\n}\n}\n}\n}\nz = 3\n"
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over(space, addr depth_memory[0], lenof depth_memory)
+    mut space: arena.space = zeroed
+    memory := arena.over(space, addr depth_memory[0], lenof depth_memory)
     mut notes := diag.new(capacity: 4)
     mut logger: any diag.log = any(addr notes)
     mut tree := parser.empty()
-    parser.parse_file(source, logger, arena, tree) else (problem)
+    parser.parse_file(source, logger, memory, tree) else (problem)
         _ = problem
         return
     end
@@ -267,7 +268,7 @@ end lexer_long_scans_are_expected
 
 public main: () -> (code: i32) =
     code = 1
-    host := hosted.host()
+    host := system.new()
     world: any io.world = any(addr host)
     first_argument: usize = 0
     source_argument := world.argument(first_argument) else (problem)
@@ -294,8 +295,8 @@ public main: () -> (code: i32) =
     end if
     source: []u8 = source_bytes[0..<source_length]
 
-    mut first_space: mem.arena_space = zeroed
-    first_arena := mem.arena_over_unchecked(first_space,
+    mut first_space: arena.space = zeroed
+    first_arena := arena.over_unchecked(first_space,
                                             addr first_memory[0], 4096)
     mut collected := diag.new(capacity: 8)
     mut bounded_log: any diag.log = any(addr collected)
@@ -310,8 +311,8 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut second_space: mem.arena_space = zeroed
-    second_arena := mem.arena_over_unchecked(second_space,
+    mut second_space: arena.space = zeroed
+    second_arena := arena.over_unchecked(second_space,
                                              addr second_memory[0], 4096)
     diagnostic_stream := world.err()
     writer: any io.writer = any(addr host)
@@ -327,8 +328,8 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut tiny_space: mem.arena_space = zeroed
-    tiny_arena := mem.arena_over_unchecked(tiny_space, addr tiny_memory[0], 1)
+    mut tiny_space: arena.space = zeroed
+    tiny_arena := arena.over_unchecked(tiny_space, addr tiny_memory[0], 1)
     mut quiet := diag.new(capacity: 1)
     mut quiet_log: any diag.log = any(addr quiet)
     mut missing_tree := parser.empty()
@@ -341,8 +342,8 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut third_space: mem.arena_space = zeroed
-    third_arena := mem.arena_over_unchecked(third_space,
+    mut third_space: arena.space = zeroed
+    third_arena := arena.over_unchecked(third_space,
                                             addr third_memory[0], 4096)
     mut broken := diag.stream(writer, dead_stream)
     mut broken_log: any diag.log = any(addr broken)
@@ -368,8 +369,8 @@ public main: () -> (code: i32) =
         blank_source[at] = 10
         inc at
     end while
-    mut blank_space: mem.arena_space = zeroed
-    blank_arena := mem.arena_over(blank_space, addr blank_memory[0], 1)
+    mut blank_space: arena.space = zeroed
+    blank_arena := arena.over(blank_space, addr blank_memory[0], 1)
     mut blank_notes := diag.new(capacity: 1)
     mut blank_log: any diag.log = any(addr blank_notes)
     mut blank_tree := parser.empty()
@@ -392,8 +393,8 @@ public main: () -> (code: i32) =
     long_line[100002] = 61
     long_line[100003] = 49
     long_line[100004] = 10
-    mut long_space: mem.arena_space = zeroed
-    long_arena := mem.arena_over(long_space, addr long_line_memory[0], 4096)
+    mut long_space: arena.space = zeroed
+    long_arena := arena.over(long_space, addr long_line_memory[0], 4096)
     mut long_notes := diag.new(capacity: 1)
     mut long_logger: any diag.log = any(addr long_notes)
     mut long_tree := parser.empty()

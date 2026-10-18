@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D377 an erased call of a concept no conformance answers is checked against the concept's entries and builds, since no value of it can exist
+program: main.ldn
+constructs: 0940, 0960, 1230, 1370, 1380, 1390
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

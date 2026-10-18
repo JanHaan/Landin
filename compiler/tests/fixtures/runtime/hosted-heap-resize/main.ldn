@@ -38,7 +38,7 @@ end grows
 
 --  A block of `size` bytes at `alignment` with the pattern in it, resized
 --  to `larger` and back to `size`: the bytes and the alignment are kept.
-round_trip: (memory: heap.system, size: usize, larger: usize,
+round_trip: (memory: heap.heap, size: usize, larger: usize,
              alignment: usize) -> (ok: bool) ! mem.out_of_memory =
     ok = false
     block := try mem.allocate(memory, size, alignment)
@@ -52,7 +52,7 @@ round_trip: (memory: heap.system, size: usize, larger: usize,
     ok = true
 end round_trip
 
-slots_and_mappings: (memory: heap.system) -> (ok: bool)
+slots_and_mappings: (memory: heap.heap) -> (ok: bool)
                     ! mem.out_of_memory =
     ok = false
     --  Ten bytes and the header fill 26 of a 32-byte slot: fourteen still
@@ -110,9 +110,9 @@ end slots_and_mappings
 
 --  A region over the heap: its newest block is resized through the heap,
 --  and a block behind a newer one moves into a record of its own.
-regions: (memory: heap.system) -> (ok: bool) ! mem.out_of_memory =
+regions: (memory: heap.heap) -> (ok: bool) ! mem.out_of_memory =
     ok = false
-    mut records: region.space(0) = zeroed
+    mut records: region.growing_space = zeroed
     scratch := region.over(records, memory)
     first := try mem.allocate(scratch, usize(100), usize(1))
     ramp(first, 100)
@@ -131,7 +131,7 @@ end regions
 
 --  A growing builder over the heap doubles past a mapping of its own,
 --  keeping every byte appended.
-builds: (memory: heap.system) -> (ok: bool) =
+builds: (memory: heap.heap) -> (ok: bool) =
     ok = false
     mut out := text.growing(any(addr memory))
     defer text.release(out)
@@ -156,7 +156,7 @@ builds: (memory: heap.system) -> (ok: bool) =
 end builds
 
 public main: () -> (code: i32) =
-    memory := heap.host()
+    memory := heap.new()
     code = 1
     return when not (slots_and_mappings(memory) else false)
     code = 2

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a core/tree node says what it is, a leaf or a branch, how many leaves it counts, and which earlier nodes are its children, a leaf having none
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 1290, 1360
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

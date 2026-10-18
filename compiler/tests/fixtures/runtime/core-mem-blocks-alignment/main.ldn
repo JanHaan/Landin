@@ -12,6 +12,7 @@
 --  written outside the bytes named fails it as a wrong one does.  The
 --  patterns are built once, so that the checks run within a Cortex-M0
 --  emulator's time.
+import core/arena
 import core/mem
 
 --  The bytes of a copy's source: never zero, and each unlike its
@@ -171,10 +172,10 @@ zeroes: () -> (ok: bool) =
     for at in usize(0)..<1024 do
         backing[at] = dirty
     end for
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 1024)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 1024)
     for count in usize(1)..40 do
-        buffer := mem.new_bytes(arena, count) else (problem)
+        buffer := mem.new_bytes(memory, count) else (problem)
             _ = problem
             return
         end
@@ -183,7 +184,7 @@ zeroes: () -> (ok: bool) =
         for at in usize(0)..<count do
             return when view[at] <> 0
         end for
-        return when backing[mem.arena_used(arena)] <> dirty
+        return when backing[arena.used(memory)] <> dirty
     end for
     ok = true
 end zeroes

@@ -1,9 +1,10 @@
 --  A temporary file's path is lent from the buffer `make_temporary` was
 --  given, so a temporary returned past a frame-local buffer is refused.
 import core/io
+import core/io/fake
 import core/text
 
-made: (host: io.memory_volume, names: io.scripted_entropy)
+made: (host: fake.volume, names: fake.entropy)
       -> (result: io.temporary) ! ... =
     mut room: [64]u8 = zeroed
     result = try io.make_temporary(host, names, text.host_over(""),

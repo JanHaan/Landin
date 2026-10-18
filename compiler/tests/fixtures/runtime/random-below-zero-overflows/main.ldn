@@ -1,0 +1,29 @@
+--  A bound of zero has no value below it.  random.below traps for it as
+--  a remainder by zero traps, `overflow`, and the handler ends the
+--  process with 42 for that kind and with its kind's own code for any
+--  other.
+import core/panic
+import core/random
+import platform/posix
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    _ = site
+    posix.exit(match kind
+        panic.overflow: 42
+        panic.out_of_range: 2
+        panic.bad_conversion: 3
+        panic.unreachable: 4
+    end match)
+end panic_handler
+
+--  A bound the compiler does not read as zero.
+bound_of: (count: u64) -> (bound: u64) =
+    bound = 0
+    if count > 100 then bound = count end if
+end bound_of
+
+public main: () -> (code: i32) =
+    mut source := random.new(7)
+    drawn: u64 = random.below(source, bound_of(1))
+    code = i32(drawn) + 1
+end main

@@ -232,7 +232,8 @@ class RV64Controls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             args = SimpleNamespace(kind='isa', output=Path(tmp))
             result = {'case': 'runtime/rv64-feature-fact', 'label': 'extended',
-                      'level': 'rv64gc_xtheadba', 'meta': {'status': '42'}}
+                      'level': 'rv64gc_xtheadba',
+                      'meta': {'status': '42', 'level_status': 'rv64gc_xtheadba=43'}}
             manifest = {'results': [result]}
             probe = SimpleNamespace(returncode=0, stdout=b'confirmed', stderr=b'')
             wrong = SimpleNamespace(returncode=42, stdout=b'', stderr=b'')
@@ -333,18 +334,31 @@ class RV64Controls(unittest.TestCase):
         self.assertIn('path: ${{ runner.temp }}/rv64-${{ matrix.kind }}.tar.gz', package)
         self.assertIn('compression-level: 0', package)
         self.assertIn('retention-days: 14', package)
-        # RV64 is suspended from the gates: both jobs stay defined but
-        # neither runs nor is required, and no host emits it for comparison.
+        # RV64's hardware jobs are suspended from the gates: both stay
+        # defined but neither runs nor is required.  Its lane is QEMU's user
+        # emulation, required in both shards, and every host emits it for
+        # comparison.
         for job in ('  rv64-emit:\n', '  rv64:\n'):
             body = workflow.split(job, 1)[1].split('\n\n', 1)[0]
             self.assertIn("if: false && needs.inputs.outputs.reuse != 'true'", body)
         aggregate = workflow.split('  gate:\n', 1)[1]
-        self.assertIn('arm64-release, freebsd, determinism]', aggregate)
+        self.assertIn('arm64-release, freebsd, rv64-qemu,', aggregate)
+        self.assertNotIn('rv64-emit', aggregate)
         inputs = workflow.split('  inputs:\n', 1)[1].split('  documents:\n', 1)[0]
-        self.assertNotIn('rv64', inputs)
+        self.assertIn('rv64-qemu-1 rv64-qemu-2', inputs)
+        self.assertNotIn('rv64-runtime', inputs)
+        emulated = workflow.split('  rv64-qemu:\n', 1)[1].split('\n  # Checked Linux', 1)[0]
+        self.assertIn("if: needs.inputs.outputs.reuse != 'true'", emulated)
+        self.assertIn('shard: [1, 2]', emulated)
+        self.assertIn('--target=linux-rv64 --runner=qemu-riscv64', emulated)
+        self.assertIn('--shard=${{ matrix.shard }}/2', emulated)
+        self.assertIn('QEMU_LD_PREFIX=/usr/riscv64-linux-gnu', emulated)
+        self.assertIn('-print-file-name=libm.a', emulated)
         manifest = (ROOT / 'scripts/emit_manifest.py').read_text()
         targets = manifest.split('TARGETS = ', 1)[1].split(')', 1)[0]
-        self.assertNotIn('linux-rv64', targets)
+        self.assertIn('linux-rv64', targets)
+        determinism = (ROOT / '.github/workflows/determinism.yml').read_text()
+        self.assertEqual(determinism.count('linux-rv64'), 3)
 
 
 if __name__ == '__main__':

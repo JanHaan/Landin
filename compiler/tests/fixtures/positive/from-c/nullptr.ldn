@@ -1,0 +1,16 @@
+no_entry: atom
+
+--- A pointer that may be absent.
+maybe_entry: type = no_entry | ptr mut u32
+
+first_entry: (table: []mut u32) -> (found: maybe_entry from table) =
+    found = no_entry
+    if lenof table > 0 then found = addr table[0] end if
+end first_entry
+
+bump_first: (table: []mut u32) -> none =
+    match first_entry(table)
+        no_entry: return
+        ptr (entry): entry.val += 1
+    end match
+end bump_first

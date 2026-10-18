@@ -3,7 +3,8 @@
 --  disagrees, or a brace that is neither part of `{}` nor doubled, is
 --  invalid_format, and nothing is written; a builder that fills partway
 --  through is put back as it was before no_space is reported.
-import core/mem
+import core/arena
+import core/cmp
 import core/text
 
 --  A program's own type writes itself through its own conformance.
@@ -24,7 +25,7 @@ end append_point
 point is text.formattable (append: append_point)
 
 holds: (line: text.builder, expected: []u8) -> (yes: bool) =
-    yes = mem.compare(text.used(line), expected) == mem.equal
+    yes = cmp.compare(text.used(line), expected) == cmp.equal
 end holds
 
 every_kind: () -> (ok: bool) ! text.no_space | text.invalid_format =
@@ -117,9 +118,9 @@ end partway
 grows: () -> (ok: bool) =
     ok = false
     mut backing: [128]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 128)
-    mut line := text.growing(any(addr arena))
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 128)
+    mut line := text.growing(any(addr memory))
     count: usize = 3
     what: utf8 = "entries"
     text.format(line, "{} {} in a line longer than sixteen bytes",
@@ -146,9 +147,9 @@ end main
 
 --  The point's text: its coordinates in parentheses.
 written: (spot: point, inout into: text.builder) -> none ! text.no_space =
-    try text.append_byte(into, 40)
+    try text.append_byte(into, u8('('))
     try text.append_i32(into, spot.x)
     try text.append(into, ", ")
     try text.append_i32(into, spot.y)
-    try text.append_byte(into, 41)
+    try text.append_byte(into, u8(')'))
 end written

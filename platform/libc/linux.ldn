@@ -1,0 +1,242 @@
+--  platform/libc on Linux: glibc's and musl's numbers and records, which
+--  only a program linked with --link=libc calls, and the declarations
+--  Linux has that the other systems name otherwise.  Darwin's and
+--  FreeBSD's own are in darwin.ldn and freebsd.ldn; what every system
+--  declares alike is in libc.ldn.
+
+fixed if compiler.os == linux then
+    --- The calling thread's errno cell, `__errno_location`.  Read it immediately after
+    --- the failing call, before any other call that may set it.
+    public extern(c) link(symbol: "__errno_location") errno_cell:
+        () -> (cell: ptr mut i32)
+
+    --- `open` flag: create the file if it does not exist.  Linux keeps one
+    --- value on every architecture; Darwin and FreeBSD share the BSD one.
+    public o_creat: i32 = 64
+    --- `open` flag: truncate an existing regular file to length zero.
+    public o_trunc: i32 = 512
+    --- `open` flag: with `o_creat`, fail with EEXIST if the name is taken.
+    public o_excl: i32 = 128
+    --- `open` flag: every write goes to the end of the file.
+    public o_append: i32 = 1024
+    --- `mmap` flag: the mapping is backed by no file and starts zeroed.
+    public map_anonymous: i32 = 32
+    --- `poll`'s count of records, C's `nfds_t`.
+    public poll_count: type = u64
+
+    --- `clock_gettime` clock: time since a point the system fixes, never
+    --- set back.  Each system numbers it its own way.
+    public clock_monotonic: i32 = 1
+
+    --  Full records rather than guessed opaque storage, each selected by its
+    --  system and C ABI by name, so a system or an ABI none names has no
+    --  `file_status` rather than another's.  Darwin arm64 uses the ordinary
+    --  stat symbol with its 64-bit inode ABI.
+
+    fixed if compiler.c_sysv_lp64 then
+        --- `sizeof (struct stat)` in the native C headers.
+        public file_status_size: usize = 144
+        --- C's `struct stat`, as `stat` fills it on this system.
+        public file_status: type = struct
+            device: u64
+            inode: u64
+            links: u64
+            mode: u32
+            uid: u32
+            gid: u32
+            padding: i32
+            special_device: u64
+            bytes: i64
+            block_size: i64
+            blocks: i64
+            accessed: timespec
+            modified: timespec
+            changed: timespec
+            reserved: [3]i64
+        end file_status
+    elsif (compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d) then
+        --- `sizeof (struct stat)` in the native C headers.
+        public file_status_size: usize = 128
+        --- C's `struct stat`, as `stat` fills it on this system.
+        public file_status: type = struct
+            device: u64
+            inode: u64
+            mode: u32
+            links: u32
+            uid: u32
+            gid: u32
+            special_device: u64
+            padding1: u64
+            bytes: i64
+            block_size: i32
+            padding2: i32
+            blocks: i64
+            accessed: timespec
+            modified: timespec
+            changed: timespec
+            reserved: [2]u32
+        end file_status
+    end if
+
+    fixed if compiler.arch == arm64 then
+        --- `open` flag: fail with ENOTDIR unless the path names a
+        --- directory.  Linux's arm64 keeps a value of its own.
+        public o_directory: i32 = 16384
+    else
+        --- `open` flag: fail with ENOTDIR unless the path names a
+        --- directory.  Linux's arm64 keeps a value of its own.
+        public o_directory: i32 = 65536
+    end if
+    --- `fstatat` flag: report a symbolic link itself.
+    public at_symlink_nofollow: i32 = 256
+
+    --- C's `struct dirent` as `readdir` returns it.  glibc gives no name
+    --- length: the name ends at its NUL.
+    public directory_record: type = struct
+        inode: u64
+        offset: i64
+        record_length: u16
+        kind: u8
+        name: [256]u8
+    end directory_record
+
+    --- The directory descriptor that makes an `*at` call's relative path
+    --- relative to the working directory.
+    public at_fdcwd: i32 = -100
+    --- `unlinkat` flag: remove an empty directory rather than a file.
+    public at_removedir: i32 = 512
+
+    --- Make the directory `path`, relative to `directory` (or `at_fdcwd`),
+    --- with the permission bits `mode`, which the process umask filters:
+    --- 0, or -1 with the reason in errno.
+    public extern(c) mkdirat: (directory: i32, path: ptr u8, mode: u32)
+                              -> (status: i32)
+
+    --- `open` and `pipe2` flag: the new descriptor is closed when the
+    --- process executes a program, set with it.
+    public o_cloexec: i32 = 524288
+    --- `fcntl` command: duplicate a descriptor onto the lowest free number
+    --- at or above the argument, closed on exec.
+    public f_dupfd_cloexec: i32 = 1030
+
+    --- `pipe` with `flags`, `o_cloexec` among them, set as the pipe is
+    --- made: 0, or -1 with the reason in errno.  Darwin has none.
+    public extern(c) pipe2: (ends: ptr mut i32, flags: i32) -> (status: i32)
+
+    --- `socket` domain: IPv6, AF_INET6, which each system numbers its own
+    --- way.
+    public af_inet6: i32 = 10
+    --- `setsockopt` level: the socket itself, SOL_SOCKET.
+    public sol_socket: i32 = 1
+    --- `sol_socket` option, an `i32`: a listener may bind an address that
+    --- earlier connections still hold in TIME_WAIT.
+    public so_reuseaddr: i32 = 2
+    --- `sol_socket` option, read as an `i32`: the pending error, cleared as
+    --- it is read.
+    public so_error: i32 = 4
+    --- `sol_socket` option, a `time_limit`: how long a receive waits.
+    public so_rcvtimeo: i32 = 20
+    --- `sol_socket` option, a `time_limit`: how long a send waits.
+    public so_sndtimeo: i32 = 21
+    --- `ipproto_ipv6` option, an `i32`: an IPv6 socket takes IPv6 alone.
+    public ipv6_v6only: i32 = 26
+    --- `socket`, `socketpair` and `accept4` flag: closed on exec, set with
+    --- the descriptor.  Darwin has none.
+    public sock_cloexec: i32 = 524288
+    --- `send` flag: a send to a peer that has gone fails with EPIPE and
+    --- raises no SIGPIPE.  Darwin has none.
+    public msg_nosignal: i32 = 16384
+    --- `sizeof (struct sockaddr_un)`'s path: the longest Unix-domain path
+    --- with its NUL.
+    public sockaddr_un_path: u32 = 108
+
+    --- C's `struct timeval`, which a socket time limit is.
+    public time_limit: type = struct
+        seconds: i64
+        microseconds: i64
+    end time_limit
+
+    --- glibc's `sigset_t`, 1024 bits.
+    public signal_set: type = struct
+        bits: [16]u64
+    end signal_set
+
+    --- C's `struct sigaction` as glibc declares it.
+    public signal_action: type = struct
+        handler: u64
+        mask: signal_set
+        flags: i32
+        padding: i32
+        restorer: u64
+    end signal_action
+
+    --- `accept` with `flags`, `sock_cloexec` among them, set as the socket
+    --- is made: Linux's and FreeBSD's; Darwin has none.
+    public extern(c) accept4: (descriptor: i32, address: address_filled,
+                               length: address_length, flags: i32)
+                              -> (accepted: i32)
+
+    --- Set the permission bits of the file `path` names, relative to
+    --- `directory`, to `mode`, following a final symbolic link with
+    --- `flags` zero: 0, or -1 with the reason in errno.
+    public extern(c) fchmodat: (directory: i32, path: ptr u8, mode: u32,
+                                flags: i32) -> (status: i32)
+    --- Set the permission bits of the file open as `descriptor`: 0, or -1
+    --- with the reason in errno.
+    public extern(c) fchmod: (descriptor: i32, mode: u32) -> (status: i32)
+    --- Hand the file's data to its device, and its status only where
+    --- reading the data back needs it: 0, or -1 with the reason in errno.
+    --- Darwin declares none.
+    public extern(c) fdatasync: (descriptor: i32) -> (status: i32)
+
+    --- `linkat` flag: follow a final symbolic link of the old path.
+    public at_symlink_follow: i32 = 1024
+    --- `open` flag: a terminal opened does not become the controlling one.
+    public o_noctty: i32 = 256
+    --- `fcntl` command: describe a record lock in the way, `F_GETLK`.
+    public f_getlk: i32 = 5
+    --- `fcntl` command: take or give up a record lock at once, `F_SETLK`.
+    public f_setlk: i32 = 6
+    --- `fcntl` command: take a record lock, waiting for it, `F_SETLKW`.
+    public f_setlkw: i32 = 7
+    --- A record lock's type: shared.
+    public f_rdlck: i16 = 0
+    --- A record lock's type: exclusive.
+    public f_wrlck: i16 = 1
+    --- A record lock's type: none.
+    public f_unlck: i16 = 2
+
+    --- C's `struct flock`, a record lock: its type, where its start counts
+    --- from, its start and length, zero to the end of the file however far
+    --- it reaches, and the process holding it, which `f_getlk` fills.
+    public lock_record: type = struct
+        kind: i16
+        whence: i16
+        padding: i32
+        start: i64
+        length: i64
+        process: i32
+        spare: i32
+    end lock_record
+
+    --- glibc's `struct passwd`: the account's name, password, user and
+    --- group IDs, comment, home directory and shell, the strings pointers
+    --- into the buffer the call was given.
+    public account_record: type = struct
+        name: usize
+        password: usize
+        user: u32
+        group: u32
+        comment: usize
+        home: usize
+        shell: usize
+    end account_record
+
+    --- `dlopen` mode: the object's symbols resolve no other object's
+    --- references.  Darwin's default is `rtld_global`, so it is always
+    --- given.
+    public rtld_local: i32 = 0
+    --- `dlopen` mode: the object's symbols resolve the references of an
+    --- object loaded after it.
+    public rtld_global: i32 = 256
+end if

@@ -1,0 +1,48 @@
+--  Entropy whose bytes a test gives, the fake of `io.entropy`.
+
+import core/io
+import core/mem
+
+--- Caller-owned state of scripted entropy: how many of its bytes it has
+--- given and how often it was asked.  Declare it `zeroed` and give it to
+--- `entropy_over`; it must outlive the handle, and may be read while the
+--- handle is in use.
+public entropy_space: type = struct
+    used: usize
+    requests: usize
+end entropy_space
+
+scripted_entropy_value: type = struct
+    state: ptr mut entropy_space
+    bytes: []u8
+end scripted_entropy_value
+
+--- Entropy whose bytes are the caller's, given in order, so a program
+--- that seeds itself from entropy runs the same way in every test: a
+--- provider of `entropy`.  A request for more than what is left of them
+--- fails `io_failed` and gives nothing, so a test can make the source run
+--- dry.  Copies share the state.
+public entropy: type = scripted_entropy_value
+
+--- Fill `state` for scripted entropy over `bytes`, which the handle lends;
+--- keep them alive while it is used.
+public entropy_over: (inout state: entropy_space, bytes: []u8)
+                     -> (host: entropy from state, bytes) =
+    state = (used: 0, requests: 0)
+    host = (state: addr state, bytes: bytes)
+end entropy_over
+
+scripted_fill: (self: entropy, into: []mut u8) -> none ! io.io_failed =
+    state: ptr mut entropy_space = self.state
+    inc state.val.requests
+    used: usize = state.val.used
+    given: []u8 = self.bytes
+    fail io.io_failed when used > lenof given or lenof into > lenof given - used
+    mem.copy(into, given[used..<used + lenof into]) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    state.val.used = used + lenof into
+end scripted_fill
+
+entropy is io.entropy (fill_random: scripted_fill)

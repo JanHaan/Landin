@@ -77,10 +77,10 @@ def application(run, elf):
         'frame("open","source/drivers/uart/uart.ldn",38)',
         'chain(["open","start","_landin_firmware_reset"])', 'end',
         'delete breakpoints', 'break device_barrier', 'continue', 'python',
-        'frame("device_barrier","source/platform/cpu/cpu.ldn")',
+        'frame("device_barrier","source/platform/cortex_m/cortex_m.ldn")',
         'chain(["device_barrier","open","start"])', 'end',
         'delete breakpoints', 'break wait_for_interrupt', 'continue', 'python',
-        'frame("wait_for_interrupt","source/platform/cpu/cpu.ldn")', 'end',
+        'frame("wait_for_interrupt","source/platform/cortex_m/cortex_m.ldn")', 'end',
         'delete breakpoints', 'break source/app/main.ldn:30',
         'monitor feed 49', 'monitor feed 65',
         'monitor feed 48', 'monitor tick 1000',
@@ -121,7 +121,7 @@ LIBRARY_ANCHORS = {
     'pool': ('allocate', 'source/core/mem/mem.ldn',
              'block = try provider.alloc(memory, size, alignment)'),
     'vec': ('reserve', 'source/core/vec/vec.ldn',
-            'old_count: usize = mem.length(value.values)'),
+            'try mem.reserve_storage(value.values, memory, want)'),
 }
 
 
@@ -138,16 +138,16 @@ def library(run, elf, kind):
             'python', 'assert v("*(unsigned*)&observed") == 42',
             'assert v("$sp") == 0x20004000', 'end']
     elif kind == 'cpu':
-        # [1630]: `platform/cpu` on `general` operands.  The block has its own
+        # [1630]: `platform/cortex_m` on `general` operands.  The block has its own
         # line, PRIMASK changes across it, and its output is the next line's.
-        path = 'source/platform/cpu/cpu.ldn'
+        path = 'source/platform/cortex_m/cortex_m.ldn'
         line = source_line(run, path,
             r'previous = assembler.block("mrs {mask}, primask\ncpsid i",')
         commands = [f'break {path}:{line}', 'continue', 'python',
             f'frame("disable_interrupts",{path!r},{line})',
             'chain(["disable_interrupts","start","_landin_firmware_reset"])',
             'assert v("$primask") == 0', 'end', 'next', 'python',
-            'frame("disable_interrupts","source/platform/cpu/cpu.ldn")',
+            'frame("disable_interrupts","source/platform/cortex_m/cortex_m.ldn")',
             f'assert gdb.newest_frame().find_sal().line != {line}',
             'assert v("$primask") == 1', 'end', 'bt',
             'delete breakpoints', 'break _landin_firmware_returned', 'continue',

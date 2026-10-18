@@ -29,6 +29,18 @@ does not decide anything.  And the smallest size is large enough, a
 thousand declarations, that the fixed cost of a compilation is a small part
 of every measurement, so what is left to vary is the part being measured.
 
+A shared host still moves the verdict: processor time grows under
+contention too, through shared caches and frequency, and a doubling has
+been met at 2.11 times on one run and missed at 2.71 on the next.  So
+every row records the host's load, and a doubling over its limit is not a
+verdict on its own: both sizes are measured again, alternately, up to
+`--repeats` times, and the doubling passes if any repetition meets the
+limit.  One that misses every time fails, and when every measurement of it
+was taken under contention -- a one-minute load above the processors this
+process may use, or a compilation whose wall time exceeded its processor
+time by a quarter -- the run exits 3 rather than 1 and says the verdict
+needs a quieter machine.
+
 The derived programs, the complete programs derived from the four
 prototypes, are measured too, at their one size: they are what a real
 program looks like, and a pass that none of the families exercises still
@@ -49,6 +61,7 @@ import argparse
 import json
 import math
 import os
+import resource
 import signal
 import statistics
 import subprocess
@@ -65,6 +78,13 @@ SIZES = (1000, 2000, 4000, 8000, 16000)
 RUNS = 5
 LIMIT = 2.5
 MEMORY_LIMIT = 2.5
+#  How many times a doubling over its limit is measured again, and what
+#  counts as contention: a one-minute load per usable processor above
+#  CONTENDED_LOAD, or a compilation whose wall time exceeds its processor
+#  time by more than CONTENDED_WALL.
+REPEATS = 2
+CONTENDED_LOAD = 1.0
+CONTENDED_WALL = 1.25
 #  The objectives every family runs at; the first is the default, whose
 #  measurements keep each family's own name in the JSON record.
 OBJECTIVES = ("size", "speed")
@@ -280,6 +300,34 @@ def build_launcher(work: str) -> str:
     return launcher
 
 
+def host_load() -> dict:
+    """The processors this process may use and the host's load averages."""
+    try:
+        processors = len(os.sched_getaffinity(0))
+    except AttributeError:
+        processors = os.cpu_count() or 1
+    try:
+        averages = list(os.getloadavg())
+    except OSError:
+        averages = None
+    return {"processors": processors, "load": averages}
+
+
+def describe_load(load: dict) -> str:
+    if load["load"] is None:
+        return f"{load['processors']} processors, load unavailable"
+    return (f"{load['processors']} processors, load averages "
+            + " ".join(f"{value:.2f}" for value in load["load"]))
+
+
+def contended(load: dict, *results: dict) -> bool:
+    """Whether a measurement was taken under contention."""
+    busy = (load["load"] is not None
+            and load["load"][0] / load["processors"] > CONTENDED_LOAD)
+    return busy or any(result.get("wall_ratio", 1.0) > CONTENDED_WALL
+                       for result in results)
+
+
 def run_compiler(command: list[str], timeout: float) -> subprocess.CompletedProcess:
     # The launcher and compiler share this fresh process group. A timeout
     # must stop both; killing only the launcher would leave the compiler live.
@@ -316,8 +364,13 @@ def measure(refine: str, root: str, entry: str, report: str,
     except FileNotFoundError:
         pass
     started = time.monotonic()
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
     completed = run_compiler(([launcher] + command if launcher else command),
                              timeout)
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    wall = time.monotonic() - started
+    processor = ((after.ru_utime + after.ru_stime)
+                 - (before.ru_utime + before.ru_stime))
     if completed.returncode != 0:
         raise RuntimeError(
             "%s exited %d after %.1fs\n%s" % (
@@ -345,7 +398,10 @@ def measure(refine: str, root: str, entry: str, report: str,
         peak_kib=max(row["peak_kib"] for row in data["stages"]),
         stages={name: stages[name]["processor_us"] / 1e6
                 for name in FRONTEND + EMISSION},
-        sizes=data["sizes"])
+        sizes=data["sizes"],
+        #  Wall time over the whole process's processor time: near one when
+        #  the compilation had a processor to itself.
+        wall_ratio=wall / processor if processor > 0 else 1.0)
     return result
 
 
@@ -366,6 +422,8 @@ def median_of(refine: str, root: str, entry: str, work: str, runs: int,
                 for name in FRONTEND + EMISSION},
         peak_kib=max(sample["peak_kib"] for sample in samples),
         sizes=samples[0]["sizes"],
+        wall_ratio=statistics.median(sample.get("wall_ratio", 1.0)
+                                     for sample in samples),
         samples={part: [sample[part] for sample in samples]
                  for part in [name for name, _ in PARTS] + ["peak_kib"]})
     return result
@@ -406,6 +464,9 @@ def main(argv: list[str]) -> int:
                         help="seconds one compilation may take")
     parser.add_argument("--json", default=None,
                         help="also write every measurement here")
+    parser.add_argument("--repeats", type=int, default=REPEATS,
+                        help="how many times a doubling over its limit is"
+                             " measured again before it fails (default: 2)")
     arguments = parser.parse_args(argv)
 
     refine = os.path.abspath(arguments.refine or default_refine())
@@ -414,6 +475,8 @@ def main(argv: list[str]) -> int:
         return 2
     if arguments.runs < 1:
         parser.error("--runs must be at least one")
+    if arguments.repeats < 0:
+        parser.error("--repeats may not be negative")
     if (not math.isfinite(arguments.limit) or arguments.limit <= 0
             or not math.isfinite(arguments.memory_limit)
             or arguments.memory_limit <= 0):
@@ -430,11 +493,29 @@ def main(argv: list[str]) -> int:
     objectives = [objective for objective in OBJECTIVES
                   if not arguments.optimize or objective in arguments.optimize]
 
+    started_load = host_load()
+    print("scaling: " + describe_load(started_load))
     record = {"refine": refine, "runs": arguments.runs,
               "limit": arguments.limit,
               "memory_limit": arguments.memory_limit,
+              "repeats": arguments.repeats, "host": started_load,
               "families": {}, "derived": {}}
     failures = []
+    contended_failures = []
+
+    def ratios_of(smaller: dict | None, larger: dict) -> dict:
+        ratios = {part: (larger[part] / smaller[part]
+                         if smaller and smaller[part] > 0 else None)
+                  for part, _ in PARTS}
+        ratios["peak_kib"] = (larger["peak_kib"] / smaller["peak_kib"]
+                              if smaller else None)
+        return ratios
+
+    def over(ratios: dict) -> list[tuple[str, float, float]]:
+        limits = {**{part: arguments.limit for part, _ in PARTS},
+                  "peak_kib": arguments.memory_limit}
+        return [(part, ratios[part], limits[part]) for part in limits
+                if ratios[part] is not None and ratios[part] > limits[part]]
     with tempfile.TemporaryDirectory(prefix="landin-scaling-") as work:
         try:
             launcher = build_launcher(work)
@@ -465,13 +546,9 @@ def main(argv: list[str]) -> int:
                         f"{name} at {size}: no positive peak memory measurement")
                     print(f"  {size:>6}  failed")
                     break
-                ratios = {part: (result[part] / rows[-1][part]
-                                 if rows and rows[-1][part] > 0 else None)
-                          for part, _ in PARTS}
-                ratios["peak_kib"] = (result["peak_kib"] / rows[-1]["peak_kib"]
-                                     if rows else None)
-                result.update(size=size, ratios=ratios)
-                rows.append(result)
+                load = host_load()
+                ratios = ratios_of(rows[-1] if rows else None, result)
+                result.update(size=size, ratios=ratios, load=load)
                 shown = "".join(
                     f"  {part} {result[part]:8.3f}s "
                     + (f"{ratios[part]:5.2f}x" if ratios[part] is not None
@@ -482,20 +559,64 @@ def main(argv: list[str]) -> int:
                 print(f"  {size:>6}{shown}"
                       f"  {result['peak_kib'] / 1024:8.1f} MiB"
                       f"{memory_shown}"
-                      f"  {result['sizes']['declarations']:>6} declarations")
-                for part, _ in PARTS:
-                    ratio = ratios[part]
-                    if ratio is not None and ratio > arguments.limit:
-                        failures.append(
-                            f"{name}: {part} {rows[-2]['size']} -> {size}"
-                            f" grew {ratio:.2f}x, more than"
-                            f" {arguments.limit}x")
-                ratio = ratios["peak_kib"]
-                if ratio is not None and ratio > arguments.memory_limit:
-                    failures.append(
-                        f"{name}: peak memory {rows[-2]['size']} -> {size}"
-                        f" grew {ratio:.2f}x, more than"
-                        f" {arguments.memory_limit}x")
+                      f"  {result['sizes']['declarations']:>6} declarations"
+                      + ("" if load["load"] is None
+                         else f"  load {load['load'][0]:.2f}"))
+                missed = over(ratios)
+                busy = [contended(load, rows[-1], result)] if missed else []
+                repeats = []
+                previous = (os.path.join(work, f"{family}-{rows[-1]['size']}")
+                            if rows else None)
+                while missed and len(repeats) < arguments.repeats:
+                    #  Both sizes again, alternately, so the two halves of
+                    #  the ratio share whatever the host is doing now.
+                    try:
+                        smaller = median_of(refine, previous, previous, work,
+                                            arguments.runs, arguments.timeout,
+                                            launcher, objective)
+                        larger = median_of(refine, directory, directory, work,
+                                           arguments.runs, arguments.timeout,
+                                           launcher, objective)
+                    except (RuntimeError, subprocess.TimeoutExpired) as error:
+                        failures.append(f"{name} at {size}, repeated: {error}")
+                        break
+                    load = host_load()
+                    again = ratios_of(smaller, larger)
+                    missed = over(again)
+                    busy.append(contended(load, smaller, larger))
+                    repeats.append({"ratios": again, "load": load,
+                                    "contended": busy[-1]})
+                    print(f"  {size:>6}  repeated: "
+                          + ", ".join(f"{'peak memory' if part == 'peak_kib' else part}"
+                                      f" {again[part]:.2f}x"
+                                      for part in [p for p, _ in PARTS] + ["peak_kib"]
+                                      if again[part] is not None)
+                          + ("" if load["load"] is None
+                             else f"  load {load['load'][0]:.2f}")
+                          + ("  within the bound" if not missed else ""))
+                    if not missed:
+                        #  The later measurement is the one the next
+                        #  doubling compares with.
+                        larger.update(size=size, ratios=again, load=load)
+                        result = larger
+                if repeats:
+                    result["repeats"] = repeats
+                rows.append(result)
+                for part, _, limit in missed:
+                    what = "peak memory" if part == "peak_kib" else part
+                    tried = ([ratios[part]]
+                             + [one["ratios"][part] for one in repeats])
+                    text = (f"{name}: {what} {rows[-2]['size']} -> {size}"
+                            f" grew {tried[0]:.2f}x, more than {limit}x"
+                            + (", and " + ", ".join(f"{value:.2f}x"
+                                                    for value in tried[1:])
+                               + " measured again" if repeats else ""))
+                    if busy and all(busy):
+                        text += (f"; every measurement was under contention"
+                                 f" ({describe_load(load)}), so this needs a"
+                                 " quieter machine to be a verdict")
+                        contended_failures.append(text)
+                    failures.append(text)
             record["families"][name] = rows
 
         if not arguments.no_derived:
@@ -527,6 +648,11 @@ def main(argv: list[str]) -> int:
         print("scaling: " + failure, file=sys.stderr)
     if len(sizes) < len(SIZES):
         print("scaling: a partial range is not a verdict", file=sys.stderr)
+    print("scaling: finished with " + describe_load(host_load()))
+    if failures and len(contended_failures) == len(failures):
+        print("scaling: refused: every failure was measured under contention",
+              file=sys.stderr)
+        return 3
     return 1 if failures else 0
 
 

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a spill list, as the second reading of the library left it, is cleared, gives its last item and reserves room inline and spilled
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0900, 1290, 1360
+targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m

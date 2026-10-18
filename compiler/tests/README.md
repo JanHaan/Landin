@@ -121,14 +121,40 @@ runs through `--runner=PROGRAM` and links with `--toolchain=DRIVER`:
 
 ```sh
 ./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 \
-    --toolchain=aarch64-unknown-linux-gnu-gcc --suite='fixture execution'
+    --suite='fixture execution'
+QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh --target=linux-rv64 \
+    --runner=qemu-riscv64 --suite='fixture execution'
 ```
 
-That is QEMU's user emulation with nixpkgs' cross driver, which is
-evidence that the emitted code is right and none about the pinned
-toolchain on its own host; the gate's `ubuntu-24.04-arm` jobs are that.
-A level above the default is not asked of the host on a cross run, since
-the emulator offers every level its lane has.
+That is QEMU's user emulation with a cross driver, which is evidence that
+the emitted code is right and none about the pinned toolchain on its own
+host; the gate's `ubuntu-24.04-arm` jobs are that for arm64, and its
+`rv64-qemu` jobs run the second command's lane with Ubuntu's cross
+packages. `nix develop` provides the whole cross lane, pinned by
+`environments/pins.sh` to the versions `flake.lock`'s nixpkgs has:
+`qemu-aarch64` and `qemu-riscv64`, the cross drivers and binutils under
+the triplet names `refine` asks for, `aarch64-linux-gnu-gcc` and
+`riscv64-linux-gnu-gcc`, each finding glibc's static `libm.a`, and a
+multi-target `gdb-multiarch`; so no `--toolchain` is needed there, and
+none of those tools has to be found by hand. On Ubuntu, QEMU needs
+`QEMU_LD_PREFIX=/usr/riscv64-linux-gnu` to find the cross loader. A level
+above the default runs only once the runner's own `/proc/cpuinfo`, read
+by a program the lane's driver links, confirms it: `Features` on arm64,
+and on RV64 the `isa` line, whose ISA string names each extension. QEMU's
+`max` RV64 CPU lacks T-Head's `xtheadba`, which `QEMU_CPU` adds.
+
+An emulator is not the lane's own Linux, and a few fixtures fail under it
+for the host's reasons on every run. `cross-lanes.json` lists each one:
+the fixture, the runners it fails under, every failure line it may fail
+with, and why. Today those are a program that starts itself again by its
+own name, which QEMU runs only through a `binfmt_misc` handler (such a row
+does not apply where one is registered), and QEMU answering
+`getsockopt(SO_RCVTIMEO)` with a zero-length record. A listed fixture
+that fails only with its lines is reported on standard error as an
+expected host failure and not counted; one that fails any other way fails
+the run as a regression, and one that passes fails too, naming the row to
+remove. The listed failures are therefore told apart from a regression
+without building an unchanged compiler to compare with.
 The retired routine acceptance policy used this scope for the debug compiler
 and ran the complete runtime/ABI matrix with the release compiler; milestone
 acceptance ran the complete suite in both modes. Those exact-revision
@@ -288,8 +314,21 @@ benchmark evidence. A non-Linux host fails rather than claiming a skip as a pass
 
 After building the compiler, `./scripts/debug.sh` runs the Linux
 source-debugger acceptance in `debugging/check.py` for this host's own Linux
-target, x86-64 or arm64; `--target=linux-arm64` with `--qemu` and `--driver`
-selects the other under QEMU's GDB stub, as cross evidence. It uses GDB to test the
+target, x86-64 or arm64; `--target=` naming the other runs it under QEMU's
+GDB stub, as cross evidence, with that triplet's `readelf` and `strip` and
+`gdb-multiarch` from `PATH`, which the nix shell provides, so
+`./scripts/debug.sh --target=linux-arm64` needs nothing more there.
+`--qemu`, `--driver` and `--gdb` name other tools.
+
+`debugging/workload-sources.json` records every source each complete
+debugger workload is built from, and the GDB and LLDB sessions hold each
+build to it. A library file added to or removed from a module the
+workloads import changes it, so the test program's `debugger workload
+inventories are their closures` compares it on every run, from the build
+report the sessions read, and names each file added or removed and the
+command that rewrites the record,
+`python3 compiler/tests/debugging/workload_sources.py --refine REFINE --write`;
+without `--write` it only reports. It uses GDB to test the
 emitted program's line information, breakpoints, stepping, stack frames and
 selected parameters and locals. At speed it debugs `debugging/registers.ldn`
 alone, stopping past the last use of variables speed may keep in registers,
@@ -535,7 +574,8 @@ emits assembly text.
 | `class` | yes | must match the directory the fixture sits in |
 | `summary` | yes | one line, what the fixture proves |
 | `profiles` | yes for runtime and ABI only | `standard` for the four baseline compiler profiles, or `specialization` for all six; independent of fixture name |
-| `levels` | no, and runtime only | comma-separated CPU feature levels (D255), each some product target's, at which the program is also built and executed under every profile; each lane runs its own family's (Linux x86-64 the x86-64 ones, Linux arm64 and Darwin the arm64 ones, the Cortex-M corpus the M-profile ones), and the default level always runs. A level runs only once the processor that runs the lane confirms every feature of it: a Linux lane reads `/proc/cpuinfo`, a native one its host's and a cross one as its runner presents it, through a C program the lane's driver links; Darwin asks `sysctl`. An unconfirmed level fails as `UNVERIFIED` rather than being skipped or inferred from another lane. On Linux arm64, which has no ISA note, the image built at a level is held to its LSE instructions and to no exclusive-monitor loop, and the default's image of the same fixture to no LSE instruction |
+| `levels` | no, and runtime only | comma-separated CPU feature levels (D255), each some product target's, at which the program is also built and executed under every profile; each lane runs its own family's (Linux x86-64 the x86-64 ones, Linux arm64 and Darwin the arm64 ones, the Cortex-M corpus the M-profile ones), and the default level always runs. A level runs only once the processor that runs the lane confirms every feature of it: a Linux lane reads `/proc/cpuinfo`, a native one its host's and a cross one as its runner presents it, through a C program the lane's driver links; Darwin asks `sysctl`. An unconfirmed level fails as `UNVERIFIED` rather than being skipped or inferred from another lane. On Linux arm64, which has no ISA note, the image built at a level is held to its LSE instructions and to no exclusive-monitor loop, and the default's image of the same fixture to no LSE instruction; on Linux RV64, which has none either, it is held to its `Tag_RISCV_arch` attribute naming each of the level's extensions, and the processor's `isa` line to naming them too |
+| `level_status` | no, and only with `levels` | comma-separated `LEVEL=STATUS` entries, each a level `levels` names: the status the program returns when built at that level, where its result is the level's feature fact; `status` otherwise |
 | `program` | yes for runtime, ABI, and a rooted positive or negative | the `.ldn` program the fixture runs or uses as its compile-only corpus file |
 | `with` | no | the rest of the Landin module, when one file is not enough; never a C source |
 | `root` | no | a positive, negative, runtime or ABI fixture's import root, relative to its directory; the directory itself becomes the entry module |
@@ -550,6 +590,7 @@ emits assembly text.
 | `run_expect` | no | the file holding a runtime or ABI program's expected bytes on the selected `stream` |
 | `status` | no | the exit status `refine` or a compiled program must produce (default 1 for a negative, 0 otherwise) |
 | `traps` | no | `yes` if a runtime or ABI program must end without returning a status |
+| `trap_report` | no, and only with `traps: yes` | D361's line the trap writes before it ends, its file named by the base name, `main.ldn:4:9: trap: out_of_range`: some line of the program's output must be it, or end with `/` and it, since each lane names the fixture's directory its own way |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order, errors and warnings alike; on a positive, runtime or ABI fixture, the warnings its accepted program reports |
@@ -843,6 +884,12 @@ program ended without returning a status and may not assert which signal ended
 it. Naming both is a reported fault: a program that trapped has no status, and
 a fixture claiming one is claiming an answer nobody can observe. Nothing in the
 format or in `Landin.Platform` carries a signal number, deliberately.
+With no `panic_handler`, a hosted program writes D361's line,
+`FILE:LINE:COLUMN: trap: KIND`, to standard error before its terminal
+instruction; `trap_report:` holds a fixture to that line on every lane, the
+file named by its base name because each lane names the fixture's directory
+its own way, and Darwin's lane does not count the line as unexpected
+standard error.
 
 What that can and cannot tell apart is worth knowing before writing one.
 `runtime/checked-overflow-traps` adds one to a `255u8` the compiler cannot

@@ -1,0 +1,7 @@
+error[L0110]: Landin writes `elsif`, not `elseif`, for another condition of an `if`
+  --> ../tests/fixtures/negative/foreign-elseif-is-named/program.ldn:4:5
+  |
+4 |     elseif x == 0 then
+  |     ^^^^^^
+  = note: [1810]: an `if` goes on with `elsif condition then` and ends with an optional `else` and `end if`
+  = help: write `elsif`

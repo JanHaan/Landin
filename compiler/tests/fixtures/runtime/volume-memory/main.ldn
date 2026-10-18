@@ -3,7 +3,9 @@
 --  `directories`, each with its failure oracles; and core/io's memory
 --  terminals.  The volume's nodes and their storage are the program's,
 --  so it runs the same everywhere, firmware included.
+import core/cmp
 import core/io
+import core/io/fake
 import core/mem
 import core/text
 
@@ -19,7 +21,7 @@ mut paths: [8][32]u8 = zeroed
 mut contents: [8][32]u8 = zeroed
 
 --  A free node over the room at INDEX.
-free_node: (index: usize) -> (node: io.volume_node) =
+free_node: (index: usize) -> (node: fake.volume_node) =
     node = (path: paths[index][0..<32], path_length: 0,
             contents: contents[index][0..<32], length: 0, kind: io.regular,
             read_only: false, modified: (seconds: 0, nanoseconds: 0))
@@ -27,7 +29,7 @@ end free_node
 
 --  Give the node at INDEX the path PATH, the kind KIND and the bytes
 --  BYTES, as a test sets up a tree.
-given: (inout node: io.volume_node, path: []u8, kind: io.entry_kind,
+given: (inout node: fake.volume_node, path: []u8, kind: io.entry_kind,
         bytes: []u8) -> none ! ... =
     try mem.copy(node.path[0..<lenof path], path)
     node.path_length = lenof path
@@ -38,11 +40,11 @@ end given
 
 --  Whether BYTES are WANTED.
 same: (bytes: []u8, wanted: []u8) -> (yes: bool) =
-    yes = mem.compare(bytes, wanted) == mem.equal
+    yes = cmp.compare(bytes, wanted) == cmp.equal
 end same
 
 --  Whether opening PATH with OPTIONS fails as WANTED says.
-refused: (host: io.memory_volume, path: []u8, options: io.open_options,
+refused: (host: fake.volume, path: []u8, options: io.open_options,
           wanted: failure) -> (yes: bool) =
     yes = false
     opened: io.file = io.open_file(host, text.host_over(path), options)
@@ -50,13 +52,11 @@ refused: (host: io.memory_volume, path: []u8, options: io.open_options,
         yes = problem == wanted
         return
     end
-    io.close(host, opened) else (ignored)
-        _ = ignored
-    end
+    io.close(host, opened) else none
 end refused
 
 --  Whether renaming OLD to NEW fails as WANTED says.
-rename_refused: (host: io.memory_volume, old: []u8, new: []u8,
+rename_refused: (host: fake.volume, old: []u8, new: []u8,
                  wanted: failure) -> (yes: bool) =
     yes = false
     io.rename(host, text.host_over(old), text.host_over(new)) else (problem)
@@ -65,10 +65,10 @@ rename_refused: (host: io.memory_volume, old: []u8, new: []u8,
 end rename_refused
 
 --  Whether the status of PATH fails as WANTED says.
-status_refused: (host: io.memory_volume, path: []u8, follow: bool,
+status_refused: (host: fake.volume, path: []u8, links: io.link_handling,
                  wanted: failure) -> (yes: bool) =
     yes = false
-    found: io.status = io.status_of(host, text.host_over(path), follow)
+    found: io.status = io.status_of(host, text.host_over(path), links)
         else (problem)
         yes = problem == wanted
         return
@@ -77,12 +77,10 @@ status_refused: (host: io.memory_volume, path: []u8, follow: bool,
 end status_refused
 
 --  The bytes of the file at PATH, read into INTO.
-read_back: (host: io.memory_volume, path: []u8, into: []mut u8)
+read_back: (host: fake.volume, path: []u8, into: []mut u8)
            -> (bytes: []u8 from into) ! ... =
     opened: io.file = try io.open_read(host, text.host_over(path))
-    defer io.close(host, opened) else (problem)
-        _ = problem
-    end
+    defer io.close(host, opened) else none
     count: usize = try io.read(host, opened, into)
     bytes = into[0..<count]
 end read_back
@@ -90,7 +88,7 @@ end read_back
 --  Opening, writing and reading: a new file, a taken name, a missing
 --  directory, a path too long for any node, appending, a write past the
 --  end, a read past it and a file that fills its room.
-files: (host: io.memory_volume) -> none ! ... =
+files: (host: fake.volume) -> none ! ... =
     made: io.file = try io.open_file(host, text.host_over("docs/new.txt"),
                                      io.creating)
     try io.write(host, made, "abc")
@@ -130,20 +128,20 @@ end files
 
 --  A link's status followed and not, a dangling link, and a read-only file
 --  refusing an open for writing until it is writable again.
-statuses: (host: io.memory_volume) -> none ! ... =
+statuses: (host: fake.volume) -> none ! ... =
     followed: io.status = try io.status_of(host, text.host_over("pointer"),
-                                           true)
+                                           io.following)
     itself: io.status = try io.status_of(host, text.host_over("pointer"),
-                                         false)
+                                         io.not_following)
     fail wrong when followed.kind <> io.regular or followed.size <> 7
       or itself.kind <> io.symbolic_link or itself.size <> 11
-    fail wrong when not status_refused(host, "dangling", true, io.not_found)
-      or not status_refused(host, "absent", false, io.not_found)
-    root: io.status = try io.status_of(host, text.host_over("."), false)
+    fail wrong when not status_refused(host, "dangling", io.following, io.not_found)
+      or not status_refused(host, "absent", io.not_following, io.not_found)
+    root: io.status = try io.status_of(host, text.host_over("."), io.not_following)
     fail wrong when root.kind <> io.subdirectory
     try io.set_read_only(host, text.host_over("docs/readme"), true)
     locked: io.status = try io.status_of(host, text.host_over("docs/readme"),
-                                         false)
+                                         io.not_following)
     fail wrong when not locked.read_only
       or not refused(host, "docs/readme", io.updating, io.no_access)
     try io.set_read_only(host, text.host_over("docs/readme"), false)
@@ -151,7 +149,7 @@ statuses: (host: io.memory_volume) -> none ! ... =
                                        io.updating)
     try io.truncate(host, opened, u64(2))
     try io.truncate(host, opened, u64(4))
-    try io.synchronize(host, opened, false)
+    try io.synchronize(host, opened, io.data_and_status)
     cut: io.status = try io.status_of_file(host, opened)
     try io.close(host, opened)
     fail wrong when cut.size <> 4
@@ -160,7 +158,7 @@ end statuses
 --  Renaming: onto a taken name, which it replaces; a directory, which
 --  takes what is in it along; a directory into itself; a missing name;
 --  and a name a file is open on.
-renames: (host: io.memory_volume) -> none ! ... =
+renames: (host: fake.volume) -> none ! ... =
     mut buffer: [16]u8 = zeroed
     try io.rename(host, text.host_over("docs/new.txt"),
                   text.host_over("docs/readme"))
@@ -168,7 +166,7 @@ renames: (host: io.memory_volume) -> none ! ... =
                                            buffer[0..<16]), "abc\x00\x00\x00xyz")
     try io.rename(host, text.host_over("docs"), text.host_over("notes"))
     moved: io.status = try io.status_of(host, text.host_over("notes/readme"),
-                                        false)
+                                        io.not_following)
     fail wrong when moved.size <> 9
     fail wrong when not rename_refused(host, "notes", "notes/inner",
                                        io.io_failed)
@@ -181,7 +179,7 @@ end renames
 
 --  Listing: the root's entries and their kinds, sizes by name, and a
 --  directory that is not empty refusing removal.
-listing: (host: io.memory_volume) -> none ! ... =
+listing: (host: fake.volume) -> none ! ... =
     mut buffer: [64]u8 = zeroed
     mut opened: io.directory =
         try io.open_directory(host, text.host_over("."), buffer[0..<64])
@@ -214,11 +212,11 @@ end listing
 
 --  Temporary files named from scripted entropy, the second name taken and
 --  tried again, and the working directory.
-temporaries: (host: io.memory_volume) -> none ! ... =
+temporaries: (host: fake.volume) -> none ! ... =
     bytes: [24]u8 = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8,
                      10, 11, 12, 13, 14, 15, 16, 17]
-    mut entropy_state: io.entropy_space = zeroed
-    names := io.entropy_over(entropy_state, bytes[0..<24])
+    mut entropy_state: fake.entropy_space = zeroed
+    names := fake.entropy_over(entropy_state, bytes[0..<24])
     mut first_room: [40]u8 = zeroed
     first: io.temporary = try io.make_temporary(host, names,
                                                 text.host_over("fresh"),
@@ -240,18 +238,18 @@ temporaries: (host: io.memory_volume) -> none ! ... =
 end temporaries
 
 --  The call the test chose fails, and the next succeeds.
-injected: (host: io.memory_volume) -> none ! ... =
-    fail wrong when not status_refused(host, "data", true, io.io_failed)
-    again: io.status = try io.status_of(host, text.host_over("data"), true)
+injected: (host: fake.volume) -> none ! ... =
+    fail wrong when not status_refused(host, "data", io.following, io.io_failed)
+    again: io.status = try io.status_of(host, text.host_over("data"), io.following)
     fail wrong when again.size <> 7
 end injected
 
 --  Memory terminals: one screen is a terminal of its size, and every other
 --  file none.
 screens: () -> none ! ... =
-    given: [1]io.screen = [(stream: io.file(1), size: (rows: 25,
-                                                       columns: 80))]
-    host := io.terminals_over(given[0..<1])
+    given: [1]fake.screen = [(stream: io.file(1), size: (rows: 25,
+                                                         columns: 80))]
+    host := fake.terminals_over(given[0..<1])
     size: io.window = try io.window_size(host, io.file(1))
     fail wrong when not io.is_terminal(host, io.file(1))
       or io.is_terminal(host, io.file(2)) or size.columns <> 80
@@ -265,9 +263,9 @@ end screens
 
 public main: () -> (code: i32) =
     code = 1
-    mut nodes: [8]io.volume_node = [free_node(0), free_node(1), free_node(2),
-                                    free_node(3), free_node(4), free_node(5),
-                                    free_node(6), free_node(7)]
+    mut nodes: [8]fake.volume_node = [free_node(0), free_node(1), free_node(2),
+                                      free_node(3), free_node(4), free_node(5),
+                                      free_node(6), free_node(7)]
     given(nodes[0], "docs", io.subdirectory, "") else (problem)
         _ = problem
         return
@@ -288,8 +286,8 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    mut state: io.volume_space = zeroed
-    host := io.volume_over(state, nodes[0..<8], "/volume")
+    mut state: fake.volume_space = zeroed
+    host := fake.volume_over(state, nodes[0..<8], "/volume")
     code = 2
     files(host) else (problem)
         _ = problem

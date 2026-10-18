@@ -4,6 +4,7 @@
 --  ledger refuses the move, the parent taking back the block it gave for
 --  it; and releasing the region frees every block with the extent it ended
 --  with, a zero extent among them.
+import core/arena
 import core/mem
 import core/region
 
@@ -35,7 +36,7 @@ end ledger_state
 
 ledger: type = struct
     state: ptr mut ledger_state
-    inner: mem.arena
+    inner: arena.arena
 end ledger
 
 ledger_alloc: (self: ledger, size: usize, alignment: usize)
@@ -73,10 +74,10 @@ ledger is mem.allocator (alloc: ledger_alloc, grow: ledger_grow,
 region_resizes: () -> (ok: bool) ! mem.out_of_memory =
     ok = false
     mut backing: [128]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 128)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 128)
     mut counts: ledger_state = (resizes: 0, frees: 0, freed: 0)
-    parent: ledger = (state: addr counts, inner: arena)
+    parent: ledger = (state: addr counts, inner: memory)
     mut records: region.space(3) = zeroed
     scratch := region.over(records, parent)
     first := try mem.allocate(scratch, usize(4), usize(1))

@@ -82,15 +82,19 @@ end refill
 --- A line that does not fit the buffer with its ending reports
 --- `line_too_long`, and the rest of that line is skipped, so the read after
 --- it gives the line that follows.  A reader's failure is its `io_failed`,
---- and keeps every byte already read for the next call.
+--- and keeps every byte already read for the next call.  A reader over an
+--- empty buffer has room for no line, and reports every one
+--- `line_too_long` without reading: it never takes the empty read its
+--- buffer would give for the end of the input.
 public read_line: (provider: type is reader,
                    inout lines: line_reader(provider))
                   -> (item: line from lines)
                   ! line_too_long | io_failed =
+    fail line_too_long when lenof lines.buffer == 0
     loop do
         if lines.skipping then
             waiting: usize = lines.filled - lines.start
-            at: usize = mem.find(lines.buffer[lines.start..<lines.filled], 10)
+            at: usize = mem.find(lines.buffer[lines.start..<lines.filled], u8('\n'))
             if at < waiting then
                 lines.start += at + 1
                 lines.skipping = false
@@ -105,12 +109,12 @@ public read_line: (provider: type is reader,
             end if
         else
             waiting: usize = lines.filled - lines.start
-            at: usize = mem.find(lines.buffer[lines.start..<lines.filled], 10)
+            at: usize = mem.find(lines.buffer[lines.start..<lines.filled], u8('\n'))
             if at < waiting then
                 begins: usize = lines.start
                 mut ends: usize = begins + at
                 lines.start = ends + 1
-                if ends > begins and lines.buffer[ends - 1] == 13 then
+                if ends > begins and lines.buffer[ends - 1] == u8('\r') then
                     dec ends
                 end if
                 item = (bytes: lines.buffer[begins..<ends], finished: false)

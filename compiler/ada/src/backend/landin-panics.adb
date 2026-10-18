@@ -1,9 +1,11 @@
+with Ada.Strings.Fixed;
 with Landin.Backend;
 with Landin.Checking;
 with Landin.Machine;
 with Landin.Modules;
 with Landin.Resolution;
 with Landin.Source.Names;
+with Landin.Targets.Capabilities;
 with Landin.Types;
 
 package body Landin.Panics is
@@ -28,7 +30,59 @@ package body Landin.Panics is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Types.Type_Kind;
 
+   use type Landin.Targets.Capabilities.Hosted_System;
+
    function Handler (Of_Plan : Plan) return IR.Item_Id is (Of_Plan.Selected);
+
+   function Reports_Default (Of_Plan : Plan) return Boolean
+     is (Of_Plan.Hosted and then Of_Plan.Selected = IR.No_Item);
+
+   function Calls_Out (Of_Plan : Plan) return Boolean
+     is (Of_Plan.Selected /= IR.No_Item or else Of_Plan.Hosted);
+
+   function Kind_Name (Reason : Kind) return String is
+     (case Reason is
+         when Out_Of_Range => "out_of_range",
+         when Overflow => "overflow",
+         when Bad_Conversion => "bad_conversion",
+         when Unreachable => "unreachable");
+
+   function Report
+     (Of_Plan : Plan; Origin : Landin.Provenance.Origin;
+      Reason : Kind) return String
+   is
+      function Image (Value : Natural) return String is
+        (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Left));
+   begin
+      if not Landin.Provenance.Is_Known (Origin)
+        or else Natural (Origin.Source) > Natural (Of_Plan.Sources.Length)
+      then
+         return "trap: " & Kind_Name (Reason) & ASCII.LF;
+      end if;
+      declare
+         Held : Source_Range renames
+           Of_Plan.Sources (Positive (Origin.Source));
+         Offset : constant Landin.Source.Byte_Offset := Origin.Where.First;
+         Low : Positive := 1;
+         High : Natural := Natural (Held.Lines.Length);
+      begin
+         --  The last line starting at or before the offset.
+         while Low < High loop
+            declare
+               Middle : constant Positive := (Low + High + 1) / 2;
+            begin
+               if Held.Lines (Middle) <= Offset then
+                  Low := Middle;
+               else
+                  High := Middle - 1;
+               end if;
+            end;
+         end loop;
+         return US.To_String (Held.Name) & ":" & Image (Low) & ":"
+           & Image (Natural (Offset - Held.Lines (Low)) + 1)
+           & ": trap: " & Kind_Name (Reason) & ASCII.LF;
+      end;
+   end Report;
    function Code (Of_Plan : Plan; Reason : Kind) return Positive
      is (Of_Plan.Codes (Reason));
 
@@ -107,12 +161,33 @@ package body Landin.Panics is
       function Spelling (Id : IR.Declaration_Id) return String is
         (Landin.Source.Names.Spelling (Names, R.Name_Of (Meanings, Id)));
 
-      function Kind_Name (Reason : Kind) return String is
-        (case Reason is
-            when Out_Of_Range => "out_of_range",
-            when Overflow => "overflow",
-            when Bad_Conversion => "bad_conversion",
-            when Unreachable => "unreachable");
+      --  A file in a module outside the entry is named under its module's
+      --  logical path, a library file's as `core/vec/vec.ldn`, so that an
+      --  image's report says the same wherever the library is installed.
+      function Displayed (Source : Landin.Source.Source_Id) return String;
+      function Displayed (Source : Landin.Source.Source_Id) return String is
+         Name : constant String := Landin.Source.Name
+           (Landin.Stages.Source (Context, Source));
+         Module : constant Landin.Modules.Module_Id :=
+           (if Natural (Source) <= Landin.Modules.Source_Count (Modules)
+            then Landin.Modules.Module_Of (Modules, Source)
+            else Landin.Modules.No_Module);
+         Base : Natural := Name'First;
+      begin
+         if Module = Landin.Modules.No_Module
+           or else Module = Landin.Modules.Entry_Module
+           or else Landin.Modules.Logical_Path (Modules, Module) = ""
+         then
+            return Name;
+         end if;
+         for Index in Name'Range loop
+            if Name (Index) = '/' then
+               Base := Index + 1;
+            end if;
+         end loop;
+         return Landin.Modules.Logical_Path (Modules, Module) & "/"
+           & Name (Base .. Name'Last);
+      end Displayed;
 
       function Valid return Boolean;
       function Valid return Boolean is
@@ -201,18 +276,25 @@ package body Landin.Panics is
    begin
       Into := (others => <>);
       Problem := US.Null_Unbounded_String;
+      Into.Hosted := Landin.Targets.Capabilities.Hosted_System_Of
+        (Landin.Stages.Target (Context))
+        /= Landin.Targets.Capabilities.No_Hosted_System;
       for Index in 1 .. Landin.Stages.Source_Count (Context) loop
          declare
+            Id : constant Landin.Source.Source_Id :=
+              Landin.Stages.Nth_Source (Context, Index);
             Length : constant Landin.Source.Byte_Offset := Landin.Source.Length
-              (Landin.Stages.Source
-                 (Context, Landin.Stages.Nth_Source (Context, Index)));
+              (Landin.Stages.Source (Context, Id));
+            Held : Source_Range;
          begin
             if Site_Number (Length) >= (Site_Number'Last - Next) / 4 then
                Problem := US.To_Unbounded_String
                  ("source snapshots exceed the u32 panic-site space");
                return;
             end if;
-            Into.Sources.Append (Source_Range'(Next, Length));
+            Held.First := Next;
+            Held.Length := Length;
+            Into.Sources.Append (Held);
             Next := Next + 4 * (Site_Number (Length) + 1);
          end;
       end loop;
@@ -243,6 +325,25 @@ package body Landin.Panics is
          end;
       end loop;
       if Selected = IR.No_Declaration then
+         --  D361's report needs each file's name and line starts; a
+         --  selected handler or a firmware target never reads them.
+         if Into.Hosted then
+            for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+               declare
+                  Id : constant Landin.Source.Source_Id :=
+                    Landin.Stages.Nth_Source (Context, Index);
+                  Snap : Landin.Source.Snapshot renames
+                    Landin.Stages.Source (Context, Id);
+                  Held : Source_Range renames Into.Sources (Index);
+               begin
+                  Held.Name := US.To_Unbounded_String (Displayed (Id));
+                  for Line in 1 .. Landin.Source.Line_Count (Snap) loop
+                     Held.Lines.Append
+                       (Landin.Source.Line_Span (Snap, Line).First);
+                  end loop;
+               end;
+            end loop;
+         end if;
          return;
       end if;
       if not Valid then

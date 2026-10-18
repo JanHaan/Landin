@@ -4,7 +4,7 @@
 --  memory.  The totals are u64, and core/text formats them into a line.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 counts: type = struct
     lines: u64
@@ -52,15 +52,13 @@ render: (totals: counts, inout line: text.builder)
 end render
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     input: io.file = io.input(host)
     mut buffer: [4096]u8 = zeroed
     totals := count(host, input, buffer[0..<4096]) else (problem)
         _ = problem
         message: []u8 = "wc: standard input could not be read\n"
-        io.write(host, io.err(host), message) else (ignored)
-            _ = ignored
-        end
+        io.write(host, io.err(host), message) else none
         code = 1
         return
     end

@@ -3,4 +3,4 @@ error[L0344]: memory operation or width unavailable on target
   |
 2 |     _ = compiler.atomic_add(p, 1, compiler.relaxed)
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
-  = note: [1620]/D227: explicit memory contract
+  = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes

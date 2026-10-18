@@ -126,7 +126,22 @@ It follows calls and addresses taken from `_landin_start`, a C name to the
 routine that defines it, `main`, the argument initializer and the panic
 handler, and counts whatever a datum or an evidence table names whole. `-v`,
 `--dry-run` and the build report name the mode. An emitted `.s` under static
-mode includes `platform/linux`, and it still links under an ordinary C driver.
+mode includes `platform/linux`, and it still links under an ordinary C driver;
+with no library holding `platform/linux`, `--emit=asm` is refused as an
+executable is rather than written without its entry (D363).
+
+The driver is the first of the GCCs a distribution installs that the host can
+start (D364): the target's own triplet name, `x86_64-pc-linux-gnu-gcc` on
+x86-64, then `MACHINE-linux-gnu-gcc` (Debian and Ubuntu),
+`MACHINE-redhat-linux-gcc` (Fedora) and the other vendor spelling, then `gcc`
+when the target is the compiler's own host and never for a cross target.
+`--toolchain=NAME` is the only one tried when given. Whether one can be
+started is asked after the program's own refusals, D280's among them, and
+before anything is written; with none, L0500 names every name looked for and
+the package to install. The executable's assembly is removed after the link
+unless `--keep-asm` keeps it or a source map beside the executable names it,
+and `refine compile program.s -o program` links an assembly file with the
+same driver and arguments (D362).
 
 ## Linux arm64
 
@@ -142,14 +157,14 @@ rather than by comparing it with Darwin's:
 | hosted system (`Hosted_System_Of`) | `__error`, `open` flags `0x601` | system calls through `platform/linux`, beneath `platform/posix`; under `--link=libc` too, with C's `__errno_location` and `open` flags 577 left to a program that calls C |
 
 The driver is `aarch64-linux-gnu-gcc`, the name the pinned aarch64 GNAT
-installs. Under `--link=libc` the program links as a position-independent
+installs and Debian's cross compiler too, then the others D364 names. Under `--link=libc` the program links as a position-independent
 executable, the driver's default, which the arm64 addressing already is; the
 default static link is fixed-address, as on x86-64. Linux's archive
 spelling and build identity apply as on x86-64. The assembler is held to the
 level at every level with `-Wa,-march=`, the baseline's `armv8-a` included;
 an arm64 executable carries no level note. x18 is never allocated and stays
 reserved for assembly blocks, as on Darwin. The hosted entry and the panic
-edges are Darwin's instructions; `hosted/io` makes Linux system calls through
+edges are Darwin's instructions; `hosted/system` makes Linux system calls through
 `platform/posix` and `platform/linux`.
 
 ## C aliases and generated bindings
@@ -234,7 +249,7 @@ respectively, with the existing C ABI configuration facts, plain-char
 signedness, alignment and arm64 register rules. The hosted system is selected
 separately: `__error` supplies thread-local errno and the create/truncate open
 flags are BSD values. `compiler.os == freebsd` selects the private 224-byte
-`stat` record in `hosted/io`; a C peer checks the actual headers, record
+`stat` record in `hosted/system`; a C peer checks the actual headers, record
 extent, alignment and field offsets on each architecture.
 
 The cross driver is Clang against the checked FreeBSD 14.4 sysroot, using
@@ -383,7 +398,7 @@ record; eligible leaves describe SP-relative homes without that record. Interrup
 routine CFI explicitly makes LR undefined: ordinary unwinding stops there.
 EXC_RETURN is never an ordinary return PC. Hardware exception entry, alignment
 padding, nested exception records and restoration have independent executable
-controls. An ordinary block has its source line, and the `platform/cpu` source session
+controls. An ordinary block has its source line, and the `platform/cortex_m` source session
 stops on `disable_interrupts`' block with PRIMASK clear and steps past it to
 find it set. Naked assembly has a source function/declaration boundary, not
 line-by-line locations inside its assembly string or an inferred stack frame.
@@ -764,7 +779,7 @@ which no block may name and every block may overwrite, and stores it last. A
 branch then skips the literal pool the text may have used. D230's shorthand is
 one `inout` operand at r0. The existing low-register/flag clobbers and full
 opaque effects remain; no high-register, frame or naked-body restriction is
-relaxed. `platform/cpu` uses MRS PRIMASK/CPSID I, MSR PRIMASK/ISB SY and DSB
+relaxed. `platform/cortex_m` uses MRS PRIMASK/CPSID I, MSR PRIMASK/ISB SY and DSB
 SY/WFI through `general` operands. CPU functions retain ordinary framed Landin calls in both thread and
 handler mode. Its explicit barriers preserve D227, including the difference
 between a compiler boundary and device completion. The freestanding consumers

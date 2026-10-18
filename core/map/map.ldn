@@ -23,19 +23,7 @@ bucket: type = struct
     next_used: usize
 end bucket
 
---- Insertion-ordered hash map with public composition of slot metadata and
---- dense key/value prefixes. Keep those fields consistent by using the module
---- operations. Providers are supplied per operation.
----
---- This is deliberately a public composition, not an encapsulated object.
---- Callers can pass each storage to mem's public operations, can reach the
---- initialized K/V prefixes (including removed dense entries), and can copy
---- inferred whole bucket values despite bucket's private identity. They must
---- preserve equal capacities, a fully initialized bucket array, paired K/V
---- prefixes, one valid used/dead bucket per dense position, exact
---- count/tombstone totals, and a linked walk of exactly the used buckets
---- when composing below the map operations.
-public map: type (key: type is cmp.hashable, item: type) = struct
+map_value: type (key: type is cmp.hashable, item: type) = struct
     buckets: mem.storage(bucket)
     keys: mem.storage(key)
     values: mem.storage(item)
@@ -43,20 +31,28 @@ public map: type (key: type is cmp.hashable, item: type) = struct
     tombstones: usize
     first_used: usize
     last_used: usize
-end map
+end map_value
+
+cursor_value: type = struct
+    next_slot: usize
+end cursor_value
+
+--- Insertion-ordered hash map over slot metadata and dense key/value
+--- prefixes. Providers are supplied per operation. Its representation is the
+--- module's own, so nothing outside `core/map` can break the invariants its
+--- operations keep (D354).
+public map: type (key: type is cmp.hashable, item: type) =
+    map_value(key, item)
 
 --- Position in an insertion-order entry walk. Start with `entries`; do not
 --- mutate the map during a walk.
 ---
---- Enumeration deliberately exposes ordinary public value shapes, matching
---- map's public-composition boundary above. A cursor is a manual
---- live-bucket position, not an ownership or snapshot token: it has no map
---- identity or generation check and is not transferable between maps. Any mutation,
---- including insert, remove, rehash, clear and release, invalidates an active
---- walk; callers must discard its cursor and restart.
-public cursor: type = struct
-    next_slot: usize
-end cursor
+--- A cursor is a manual live-bucket position, not an ownership or snapshot
+--- token: it has no map identity or generation check and is not
+--- transferable between maps. Any mutation, including insert, remove,
+--- rehash, clear and release, invalidates an active walk; callers must
+--- discard its cursor and restart.  Its slot is the module's own.
+public cursor: type = cursor_value
 
 --- A copied key/value pair returned by `next_entry`. References inside either
 --- value still depend on their original backing.
@@ -94,6 +90,13 @@ public capacity: (key: type is cmp.hashable, item: type,
                   value: map(key, item)) -> (count: usize) =
     count = crowding_threshold(slots(value))
 end capacity
+
+--- Return how many removed entries still hold their slots until the next
+--- rebuild, and so bring it sooner.
+public removed: (key: type is cmp.hashable, item: type,
+                 value: map(key, item)) -> (count: usize) =
+    count = value.tombstones
+end removed
 
 --- Return the number of hash slots, the table size `capacity` is three
 --- quarters of.
@@ -145,38 +148,6 @@ public next_entry: (key: type is cmp.hashable, item: type,
     end
     result = (key: found_key, item: found_item)
 end next_entry
-
-byte_extent: (value: type, slots: usize)
-             -> (extent: usize) ! mem.out_of_memory =
-    size: usize = sizeof value
-    if size == 0 then
-        extent = 0
-        return
-    end if
-    maximum: usize = 0 -% 1
-    fail mem.out_of_memory when slots > maximum / size
-    extent = slots * size
-end byte_extent
-
-free_empty: (value: type, provider: type is mem.allocator,
-             inout storage: mem.storage(value),
-             memory: provider) -> none =
-    slots: usize = mem.capacity(storage)
-    return when slots == 0
-    extent: usize = slots * sizeof value
-    block: ptr mut u8 = mem.dispose(storage) else (problem)
-        _ = problem
-        return
-    end
-    provider.free(memory, block, extent)
-end free_empty
-
-discard_storage: (value: type, provider: type is mem.allocator,
-                  inout storage: mem.storage(value),
-                  memory: provider) -> none =
-    mem.clear(storage)
-    free_empty(storage, memory)
-end discard_storage
 
 replace_value: (value: type, inout storage: mem.storage(value),
                 index: usize, escaping replacement: value) -> (ok: bool) =
@@ -435,15 +406,15 @@ rehash: (key: type is cmp.hashable, item: type,
     fail mem.out_of_memory when want == 0 or want < value.count
 
     --  Preflight every byte product before the first provider effect.
-    bucket_extent: usize = try byte_extent(value: bucket, slots: want)
-    key_extent: usize = try byte_extent(value: key, slots: want)
-    value_extent: usize = try byte_extent(value: item, slots: want)
+    bucket_extent: usize = try mem.storage_extent(item: bucket, slots: want)
+    key_extent: usize = try mem.storage_extent(item: key, slots: want)
+    value_extent: usize = try mem.storage_extent(item: item, slots: want)
 
     bucket_block: ptr mut u8 = try provider.alloc
         (memory, bucket_extent, alignof bucket)
     mut new_buckets := mem.storage_over
         (item: bucket, base: bucket_block, slots: want)
-    undo discard_storage(new_buckets, memory)
+    undo mem.release_storage(new_buckets, memory)
 
     mut initialized: usize = 0
     while initialized < want do
@@ -463,12 +434,12 @@ rehash: (key: type is cmp.hashable, item: type,
     key_block: ptr mut u8 = try provider.alloc
         (memory, key_extent, alignof key)
     mut new_keys := mem.storage_over(item: key, base: key_block, slots: want)
-    undo discard_storage(new_keys, memory)
+    undo mem.release_storage(new_keys, memory)
 
     value_block: ptr mut u8 = try provider.alloc
         (memory, value_extent, alignof item)
     mut new_values := mem.storage_over(item: item, base: value_block, slots: want)
-    undo discard_storage(new_values, memory)
+    undo mem.release_storage(new_values, memory)
 
     old_slots: usize = slots(value)
     mut old_at: usize = value.first_used
@@ -541,9 +512,9 @@ rehash: (key: type is cmp.hashable, item: type,
 
     --  Migration has succeeded. Everything below is infallible: retire all
     --  three old extents exactly once and publish the replacement last.
-    discard_storage(value.values, memory)
-    discard_storage(value.keys, memory)
-    discard_storage(value.buckets, memory)
+    mem.release_storage(value.values, memory)
+    mem.release_storage(value.keys, memory)
+    mem.release_storage(value.buckets, memory)
     value.buckets = new_buckets
     value.keys = new_keys
     value.values = new_values
@@ -748,9 +719,9 @@ public release: (key: type is cmp.hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item),
                  memory: provider) -> none =
-    discard_storage(value.values, memory)
-    discard_storage(value.keys, memory)
-    discard_storage(value.buckets, memory)
+    mem.release_storage(value.values, memory)
+    mem.release_storage(value.keys, memory)
+    mem.release_storage(value.buckets, memory)
     value = new(key: key, item: item)
 end release
 
@@ -776,12 +747,17 @@ public clear: (key: type is cmp.hashable, item: type,
     value.last_used = slots
 end clear
 
---- Ensure room for at least `want` entries without a growth allocation: the
---- table is doubled from eight slots until its `capacity` holds `want`, and
---- the map is rebuilt once at that size, allocating the replacement storage
---- before committing it. A map already that large is left alone, including
---- its tombstones. Allocation failure frees the partial replacement and
---- preserves every entry; success can invalidate pointers and cursors.
+--- Ensure room for at least `want` entries without a growth allocation:
+--- until `length` reaches `want`, inserting a new key neither grows nor
+--- rebuilds the table, as long as nothing is removed in between.  The
+--- table is doubled from eight slots until its `capacity` holds `want`,
+--- and the map is rebuilt once at that size.  A table already that large
+--- keeps its size: it is rebuilt at it when its removed entries, which
+--- hold their slots until a rebuild, leave less room than `want`, and is
+--- otherwise left alone.  A rebuild allocates the replacement storage
+--- before committing it.  Allocation failure frees the partial
+--- replacement and preserves every entry; success can invalidate pointers
+--- and cursors.
 public reserve: (key: type is cmp.hashable, item: type,
                  provider: type is mem.allocator,
                  inout value: map(key, item), memory: provider,
@@ -793,6 +769,14 @@ public reserve: (key: type is cmp.hashable, item: type,
         fail mem.out_of_memory when want_slots > maximum / 2
         want_slots = want_slots * 2
     end while
-    return when want_slots <= slots(value)
+    have_slots: usize = slots(value)
+    if want_slots <= have_slots then
+        --  A new key that takes a free bucket rebuilds once the live
+        --  entries and the tombstones fill the capacity, so `want` new
+        --  and live entries fit beside the tombstones only while the two
+        --  together do; `want` fits in the capacity here.
+        return when value.tombstones <= crowding_threshold(have_slots) - want
+        want_slots = have_slots
+    end if
     try rehash(value, memory, want_slots)
 end reserve

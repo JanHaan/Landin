@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: core diagnostic streaming over a caller-backed memory world writes a partial note, reports the write failure and marks the log failed
+program: main.ldn
+root: ../../../../..
+constructs: 0570, 0600, 0940, 1370, 1380, 1390, 1650, 1660, 1680
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m
+codes: L0326

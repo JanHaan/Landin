@@ -1,0 +1,110 @@
+--  Time: a monotonic clock and sleeping on it, and a wall clock, two
+--  concepts beside core/io's and outside `world`, so a provider without
+--  a clock, and a firmware image that never asks for the time, carries
+--  none of them.  Time is counted in nanoseconds in a `u64`: no floating
+--  point, the same arithmetic on every target, and room for 584 years.
+
+duration_value: type = distinct u64
+instant_value: type = distinct u64
+
+--- A span of time, a whole number of nanoseconds from zero to 2^64 - 1,
+--- about 584 years.  `u64(span)` is the count and `io.duration(n)` makes
+--- one, as `nanoseconds` does; `milliseconds` and the others make one from
+--- a coarser count and trap when it would not fit.  Two spans compare with
+--- `==`, `<>`, `<`, `<=`, `>` and `>=`, as their counts do; the type has
+--- no arithmetic of its own, so an instant is never added to an instant.
+public duration: type = duration_value
+
+--- A reading of a monotonic clock: nanoseconds since a start the provider
+--- fixes, which is the system's boot on Linux.  Only the difference
+--- between two readings of one provider means anything, `elapsed`; the
+--- count is `u64(at)`.  Two instants compare with `==`, `<>`, `<`, `<=`,
+--- `>` and `>=`, as their counts do.
+public instant: type = instant_value
+
+--- A reading of the wall clock: UTC seconds since 1970-01-01T00:00:00,
+--- negative before it, and the nanoseconds after them, from 0 to
+--- 999,999,999.  Leap seconds are not counted, as POSIX counts none.
+--- Calendars, time zones and formatting a date are not this library's.
+public wall_time: type = struct
+    seconds: i64
+    nanoseconds: u32
+end wall_time
+
+--- A monotonic clock and sleeping on it.  `now` never goes back: a later
+--- reading of one provider is never less than an earlier one, whatever
+--- the wall clock does.  `sleep` returns once at least `span` has passed
+--- on this clock, measured from when it was called; it may return later,
+--- as late as the system schedules it, and never sooner.
+public clock: type = concept (provider: type)
+    --- The clock's reading now.
+    now: (self: provider) -> (at: instant)
+    --- Wait until at least `span` has passed on this clock.
+    sleep: (self: provider, span: duration) -> none
+end clock
+
+--- The wall clock: what time it is in UTC, as the system keeps it.  It is
+--- a concept of its own because a firmware image may count time without
+--- knowing the date, and because the system may set this clock, so two
+--- readings may go back; time a task with `clock`, never with this.
+public wall_clock: type = concept (provider: type)
+    --- The wall clock's reading now.
+    wall_now: (self: provider) -> (at: wall_time)
+end wall_clock
+
+--- The reading of a monotonic clock now, through `clock` evidence.
+public now: (provider: type is clock, host: provider) -> (at: instant) =
+    at = provider.now(host)
+end now
+
+--- Wait until at least `span` has passed on the provider's monotonic
+--- clock.  A sleep a signal interrupts on a hosted system sleeps on for
+--- what is left; a sleep of zero returns at once.
+public sleep: (provider: type is clock, host: provider, span: duration)
+              -> none =
+    provider.sleep(host, span)
+end sleep
+
+--- The wall clock's reading now, through `wall_clock` evidence.
+public wall_now: (provider: type is wall_clock, host: provider)
+                 -> (at: wall_time) =
+    at = provider.wall_now(host)
+end wall_now
+
+--- A span of `count` nanoseconds.
+public nanoseconds: (count: u64) -> (span: duration) =
+    span = duration_value(count)
+end nanoseconds
+
+--- A span of `count` microseconds; it traps beyond 584 years.
+public microseconds: (count: u64) -> (span: duration) =
+    span = duration_value(count * 1000)
+end microseconds
+
+--- A span of `count` milliseconds; it traps beyond 584 years.
+public milliseconds: (count: u64) -> (span: duration) =
+    span = duration_value(count * 1000000)
+end milliseconds
+
+--- A span of `count` seconds; it traps beyond 584 years.
+public seconds: (count: u64) -> (span: duration) =
+    span = duration_value(count * 1000000000)
+end seconds
+
+--- The span from `earlier` to `later`, two readings of one clock taken in
+--- that order.  It traps when `later` is the earlier of the two, which
+--- two readings of one monotonic clock taken in order never are.
+public elapsed: (earlier: instant, later: instant) -> (span: duration) =
+    span = duration_value(u64(later) - u64(earlier))
+end elapsed
+
+--- The instant `span` after `at`, a deadline; it traps past the clock's
+--- last instant, 584 years after its start.
+public later: (at: instant, span: duration) -> (result: instant) =
+    result = instant_value(u64(at) + u64(span))
+end later
+
+--- The whole milliseconds in `span`, rounded down.
+public in_milliseconds: (span: duration) -> (count: u64) =
+    count = u64(span) / 1000000
+end in_milliseconds

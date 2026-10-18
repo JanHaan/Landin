@@ -1,5 +1,5 @@
-import hosted/heap
 import core/vec
+import hosted/heap
 
 counter: type = concept (t: type)
     bump: (self: ptr mut t) -> (result: i32)
@@ -28,7 +28,7 @@ node_ptr: type = ptr mut one
 
 public main: () -> (code: i32) =
     code = 1
-    allocator := heap.host()
+    allocator := heap.new()
     mut pointers := vec.new(item: node_ptr)
     mut erased := vec.new(item: any counter)
     a: any counter = any(addr left)

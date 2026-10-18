@@ -92,15 +92,17 @@ package Landin.Driver is
    --  reach it; it reads and writes no file.
    Explain_Command : constant String := "explain";
 
-   --  `refine fmt [--check] FILE ...`: every named source in D252's one
-   --  layout, rewritten in place when it is not in it already.  With
-   --  `--check` nothing is written and each source out of the layout is an
-   --  L0008 at its first line that would change.  A source that does not
-   --  scan or parse is refused with its own report and left as it is, and
-   --  the others are formatted all the same.  Each file stands alone: no
-   --  import is followed and no other stage runs, so an operand is always
-   --  a file and never a module directory.  `--check` is the only option:
-   --  it chooses whether the layout is written and never what it is.
+   --  `refine fmt [--check | --stdout] FILE ...`: every named source in
+   --  D252's one layout, written into its file when it is not in it
+   --  already (D358).  With `--check` nothing is written and every line
+   --  out of the layout is an L0008 that shows the line as the layout
+   --  writes it (D359).  With `--stdout` the one source named is written
+   --  to standard output in the layout, and its file is left as it is.  A
+   --  source that does not scan or parse is refused with its own report
+   --  and left as it is, and the others are formatted all the same.  Each
+   --  file stands alone: no import is followed and no other stage runs, so
+   --  an operand is always a file and never a module directory.  The two
+   --  options choose where the layout goes and never what it is.
    Format_Command : constant String := "fmt";
 
    --  `refine lsp [--stdio]`: a language server over standard input and
@@ -116,7 +118,10 @@ package Landin.Driver is
 
    --  What `--emit=exe` writes beside its output, and reads back as the
    --  assembler's input.  Named here because a test asserts the path and a
-   --  reader should not have to infer it from a concatenation.
+   --  reader should not have to infer it from a concatenation.  On a
+   --  hosted target it is removed after the link unless `--keep-asm`
+   --  asks to keep it or a source map beside the executable names it
+   --  (D362); firmware keeps it with its link's object, script and map.
    function Assembly_Beside (Output : String) return String
      is (Output & ".s");
 
@@ -134,5 +139,6 @@ package Landin.Driver is
 
    Default_Executable : constant String := "a.out";
    Default_Assembly   : constant String := "a.s";
+   Default_IR         : constant String := "a.ir";
 
 end Landin.Driver;

@@ -1,3 +1,4 @@
+import core/arena
 import core/mem
 
 canvas: type = struct marker: i32 end canvas
@@ -44,7 +45,7 @@ make_widget: (provider: type is mem.allocator, memory: provider)
     item = any(b)
 end make_widget
 
-probe: (memory: mem.arena) -> none ! mem.out_of_memory =
+probe: (memory: arena.arena) -> none ! mem.out_of_memory =
     mut buffers := try new_buffers(memory, usize(2))
     chosen := try make_widget(memory)
     mut target: canvas = (marker: 0)

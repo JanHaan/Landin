@@ -367,13 +367,20 @@ package body Landin.Testing.Fakes is
      (Host    : Fake_Filesystem;
       Path    : String;
       Content : String;
-      Status  : out Landin.Platform.Write_Status)
+      Status  : out Landin.Platform.Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String)
    is
    begin
+      Reason := Unbounded.Null_Unbounded_String;
       if not Host.Exists (Path) then
          Status := Landin.Platform.Not_Writable;
+         Reason := Unbounded.To_Unbounded_String ("cannot find it");
       else
          Host.Write_File (Path, Content, Status);
+         if Status /= Landin.Platform.Write_Ok then
+            Reason := Unbounded.To_Unbounded_String
+              ("the fake host refuses writes");
+         end if;
       end if;
    end Replace_File;
 
@@ -625,13 +632,15 @@ package body Landin.Testing.Fakes is
       Host.Tool_Available := Found;
    end Set_Available;
 
+   procedure Set_Absent
+     (Host : in out Fake_Tool_Runner; Program : String) is
+   begin
+      Host.Absent.Append (Program);
+   end Set_Absent;
+
    overriding function Available
      (Host : Fake_Tool_Runner; Program : String) return Boolean
-   is
-      pragma Unreferenced (Program);
-   begin
-      return Host.Tool_Available;
-   end Available;
+   is (Host.Tool_Available and then not Host.Absent.Contains (Program));
 
    function Last_Capture
      (Host : Fake_Tool_Runner) return Landin.Platform.Capture_Mode

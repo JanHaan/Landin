@@ -746,10 +746,13 @@ module.exports = grammar({
       commaSep1($._expression),
       repeat(seq(',', $.assembly_operand)),
     ),
+    // D376: `else none` ignores the failure of a call that returns none.
+    // `none` begins no expression, so it is never the value form.
     recovery_clause: $ => seq(
       'else',
       choice(
         $._expression,
+        'none',
         seq('(', field('error', $.identifier), ')', optional($.block), 'end'),
       ),
     ),

@@ -8,7 +8,7 @@ import core/io
 import core/mem
 import core/text
 import hosted/heap
-import hosted/io as hosted
+import hosted/system
 
 --  Each IUB code and the code it pairs with.  A lowercase code pairs with
 --  the same uppercase complement as its uppercase form.
@@ -29,7 +29,7 @@ complements: () -> (table: [256]u8) =
 end complements
 
 --  Append all of standard input to WHOLE, a read at a time.
-read_all: (host: hosted.system, inout whole: text.builder)
+read_all: (host: system.host, inout whole: text.builder)
           -> none ! io.io_failed | text.no_space =
     input: io.file = io.input(host)
     mut chunk: [65536]u8 = zeroed
@@ -43,7 +43,7 @@ end read_all
 --  Write SEQUENCE to OUT from its last base to its first, each replaced by
 --  its complement, leaving out its line breaks and breaking it again into
 --  lines of sixty.
-write_reversed: (inout out: io.buffered_writer(hosted.system),
+write_reversed: (inout out: io.buffered_writer(system.host),
                  sequence: []u8, table: [256]u8) -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
     mut width: usize = 0
@@ -69,64 +69,53 @@ end write_reversed
 --  Write every record of INPUT to OUT: its header line, which begins with
 --  `>`, as it is, and then its sequence, every line up to the next header,
 --  turned around.
-records: (inout out: io.buffered_writer(hosted.system), input: []u8)
+records: (inout out: io.buffered_writer(system.host), input: []u8)
          -> none ! io.io_failed =
     table: [256]u8 = complements()
     mut at: usize = 0
     while at < lenof input do
         if input[at] == 62 then
-            ends: usize = at + mem.find(input[at..<lenof input], 10)
+            ends: usize = at + mem.find(input[at..<lenof input], u8('\n'))
             try io.put(out, input[at..<ends])
             try io.put(out, "\n")
             at = ends
             if at < lenof input then inc at end if
         end if
-        ends: usize = at + mem.find(input[at..<lenof input], 62)
+        ends: usize = at + mem.find(input[at..<lenof input], u8('>'))
         try write_reversed(out, input[at..<ends], table)
         at = ends
     end while
 end records
 
 public main: () -> (code: i32) =
-    host := hosted.host()
-    memory := heap.host()
+    host := system.new()
+    memory := heap.new()
     mut storage: [65536]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<65536])
-    defer io.flush(out) else (problem)
-        _ = problem
-    end
+    defer io.flush(out) else none
     mut whole := text.growing(any(addr memory))
     defer text.release(whole)
     code = 1
 
     read_all(host, whole) else (problem)
         if problem == text.no_space then
-            io.write(host, io.err(host), "revcomp: out of memory\n")
-                else (ignored)
-                _ = ignored
-            end
+            io.write(host, io.err(host), "revcomp: out of memory\n") else none
         else
             io.write(host, io.err(host), "revcomp: standard input could not be read\n")
-                else (ignored)
-                _ = ignored
-            end
+                else none
         end if
         return
     end
     records(out, text.used(whole)) else (problem)
         _ = problem
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
-            else (ignored)
-            _ = ignored
-        end
+            else none
         return
     end
     io.flush(out) else (problem)
         _ = problem
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
-            else (ignored)
-            _ = ignored
-        end
+            else none
         return
     end
     code = 0

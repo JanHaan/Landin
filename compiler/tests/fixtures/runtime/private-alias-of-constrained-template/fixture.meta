@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a public alias of a private generic struct whose type formal is constrained is checked once with that formal symbolic, which once stopped the checker with an internal defect; the constraint is held at each use, where a key with the evidence compiles and runs
+program: main.ldn
+root: root
+status: 42
+constructs: 1290, 1420
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

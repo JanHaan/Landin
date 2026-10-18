@@ -1,3 +1,4 @@
+import core/arena
 import core/fault
 import core/mem
 
@@ -15,8 +16,8 @@ public main: () -> (code: i32) =
     mut bytes: [64]u8 = zeroed
     base: ptr mut u8 = addr bytes[0]
     extent: usize = 64
-    mut space: mem.arena_space = zeroed
-    bump := mem.arena_over_unchecked(space, base, extent)
+    mut space: arena.space = zeroed
+    bump := arena.over_unchecked(space, base, extent)
 
     three: usize = 3
     one: usize = 1
@@ -36,8 +37,8 @@ public main: () -> (code: i32) =
     limited_base: ptr mut u8 = addr limited_bytes[0]
     limited_extent: usize = 32
     allowance: usize = 1
-    mut limited_space: mem.arena_space = zeroed
-    limited_arena := mem.arena_over_unchecked(limited_space, limited_base,
+    mut limited_space: arena.space = zeroed
+    limited_arena := arena.over_unchecked(limited_space, limited_base,
                                               limited_extent)
     mut counted_space: fault.space = zeroed
     limited := fault.over(counted_space, limited_arena, allowance)
@@ -51,10 +52,10 @@ public main: () -> (code: i32) =
 
     if usize(first) == usize(base)
       and usize(second) % eight == 0
-      and mem.arena_used(bump) == usize(second) - usize(base) + eight
+      and arena.used(bump) == usize(second) - usize(base) + eight
       and is_absent(refused)
       and usize(accepted) % eight == 0
-      and mem.arena_used(limited_arena) == usize(accepted) - usize(limited_base) + eight
+      and arena.used(limited_arena) == usize(accepted) - usize(limited_base) + eight
       and is_absent(budget_refused)
       and fault.successes(limited) == 1 and fault.remaining(limited) == 0
       and fault.frees(limited) == 1

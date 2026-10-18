@@ -1,0 +1,12 @@
+narrowing: (measured: u32, total: i64) -> (low: u8, ratio: f64) =
+    low = u8(measured & 0xFF) -- the low byte, which the mask says is wanted
+    ratio = f64(total) / 1000.0
+end narrowing
+
+checked: (measured: u32) -> (small: u8) =
+    small = u8(measured) -- traps when measured is above 255
+end checked
+
+as_address: (cell: ptr mut u32) -> (address: usize) =
+    address = usize(cell) -- the integer has no origin from here on
+end as_address

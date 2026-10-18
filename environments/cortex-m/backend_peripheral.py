@@ -9,7 +9,7 @@ from models import EncodingPeripheral, PrototypePeripheral
 from packed import TRACE
 from packed_native import PROFILES
 from run import Run, require
-from setup import DEFAULT, HERE, sha, supported_host
+from setup import DEFAULT, HERE, installed_tools, sha, supported_host
 
 def symbols(run, elf):
     text = run.command('symbols', [run.bin / 'arm-none-eabi-nm', elf])
@@ -106,6 +106,7 @@ def main():
     parser.add_argument('--all-profiles', action='store_true')
     args = parser.parse_args()
     supported_host()
+    args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
     results = []

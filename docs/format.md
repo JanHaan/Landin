@@ -13,8 +13,11 @@ changes a token, never changes a comment's bytes, never breaks a long line and
 never joins two lines. It decides where each line starts, the space between
 two things on one line, which blank lines survive and how line ends outside
 raw literals and block comments are normalized.
-There is no option that changes any of that. `refine fmt --check` reports a
-file that is not in the layout instead of rewriting it.
+There is no option that changes any of that. `refine fmt --check` writes
+nothing and reports every line that is not in the layout, each with the line
+as the layout writes it, a blank line it removes or a line end it changes;
+`refine fmt --stdout` writes one source to standard output in the layout and
+leaves its file as it is (D359).
 
 A file that does not scan or parse is refused with the report a compilation
 would give it, and nothing is written. Formatting reads nothing later than the
@@ -35,22 +38,26 @@ The bytes inside a raw literal [0280] and inside a block comment [1780] are
 the literal's and the comment's, their line ends included, and never change.
 Formatted source can therefore retain CR LF or lone CR line ends inside them.
 
-Replacement writes a sibling temporary file and renames it only after all
-bytes and mode bits have been written successfully. Failures leave the
-original bytes intact. The formatter follows symlinks, refuses hard-linked,
-read-only or differently owned targets, and needs write permission in the
-target directory.
-Owner, group and all mode bits are preserved. Files carrying ACLs or extended
-attributes are refused without replacement; an inability to establish their
-absence is also a refusal. Linux may hide privileged `trusted.*` attributes
-from an ordinary caller: when the formatter cannot establish visibility of
-that namespace, even a seemingly metadata-free file is refused. This can
-prevent native replacement under ordinary user privileges; editor formatting
-still returns edits without replacing files. The formatter does not request
-elevated privileges. This conservative policy avoids dropping metadata.
-Timestamps may change. The file is synced, but the directory is not, so
-power-loss durability of the renamed directory entry is not promised.
-Concurrent changes to source contents or filesystem metadata are unsupported.
+`refine fmt` writes the formatted bytes into the file it read, the same
+file, so that everything the file carries stays with it: its owner and group,
+its extended attributes and ACLs, those the caller cannot even list among
+them, and every other name a hard link gives it, which sees the formatted
+bytes too (D358). It needs no privilege. It follows a symlink to its target,
+and needs a writable ordinary file and write permission in that file's
+directory, because before the first byte changes it copies the original bytes
+into a file beside it, `NAME.fmt-original-` and six characters, and syncs
+that copy and the directory. When the new bytes are synced the copy is
+removed. A write that fails puts the original bytes back and removes the
+copy; one that cannot even do that keeps the copy and says where it is, as a
+crash during the write leaves it. Writing clears a set-user-ID or
+set-group-ID bit, so the formatter sets it again and reads the mode back; a
+file whose bit the caller could not set again, because it is not the owner
+or for set-group-ID not in the file's group, is refused before it is
+written, as is a Linux file with capabilities, which a write removes. A
+read-only file is refused. Each refusal says which of these it met, and
+leaves the original bytes as they were. The modification time changes, as
+for any write. Concurrent changes to the file while it is formatted are
+unsupported, except that one replaced by a rename is refused.
 
 ## Rules
 
@@ -254,12 +261,46 @@ f: () -> none =
 end f
 ```
 
+### Parentheses
+
+Inside parentheses an operation continues under its first operand, one column
+past the `(`, because that is where its left operand begins. Outside them a
+parenthesized left operand begins at its `(`, so a line that continues the
+operation stands under the `(`, or in a condition two spaces in as any other.
+
+```landin
+f: () -> none =
+    ok = (first
+        and second)
+    both = (first or second)
+        and third
+    if (first or second)
+            and third then
+        g()
+    end if
+end f
+```
+
+```landin
+f: () -> none =
+    ok = (first
+          and second)
+    both = (first or second)
+           and third
+    if (first or second)
+      and third then
+        g()
+    end if
+end f
+```
+
 ### Recovery
 
 A recovery clause's body is indented from the line its call begins on, and
 its `end` stands on that line's indentation, however the `else` that opens
 it is placed. An `else` that begins a line continues the call, and a bound
-recovery in an `if` arm is laid out as it is anywhere else.
+recovery in an `if` arm is laid out as it is anywhere else. `else none` has
+no body, so it is laid out as the one-value form is.
 
 ```landin
 f: () -> none =

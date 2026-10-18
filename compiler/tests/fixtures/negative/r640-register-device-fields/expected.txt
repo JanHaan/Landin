@@ -3,4 +3,4 @@ error[L0344]: memory access needs an unsigned scalar pointer without a subtype
   |
 8 |     _ = compiler.register_read(addr image, compiler.normal_read)
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
-  = note: [1620]/D227: explicit memory contract
+  = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes

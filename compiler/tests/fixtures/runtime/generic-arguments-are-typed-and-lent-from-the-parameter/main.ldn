@@ -1,0 +1,35 @@
+count: (t: type, items: []t) -> (n: usize) =
+    n = lenof items
+end count
+
+first: (t: type, items: []t) -> (v: t) =
+    v = items[0]
+end first
+
+clear: (t: type, items: []mut t, value: t) -> none =
+    for item in items do
+        item = value
+    end for
+end clear
+
+pick: (t: type, value: t, size: usize) -> (r: usize) =
+    _ = value
+    r = size
+end pick
+
+second: (t: type, a: t, b: t) -> (c: t) =
+    _ = a
+    c = b
+end second
+
+public main: () -> (code: i32) =
+    storage: [4]u8 = [5, 2, 3, 4]
+    mut cleared: [2]u8 = [1, 1]
+    clear(cleared, 3)
+    n := count(storage)
+    s := pick(true, 8)
+    late := second(4, u16(30))
+    early := second(u16(30), 4)
+    total := i32(n) + i32(s) + i32(first(storage)) + i32(late)
+    code = total + i32(early) + i32(cleared[1])
+end main

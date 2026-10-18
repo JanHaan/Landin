@@ -59,10 +59,13 @@ symbol_room: type = [4096]u8
 --- `RTLD_NOW`, so a missing one is `no_library` here and never a failure
 --- at a later call.  The library, or `no_library`; a path holding a NUL
 --- is `einval` and one longer than the system takes `enametoolong`, as
---- every path of this module is.
+--- every path of this module is, and an empty path is `enoent`, as it is
+--- to every other call here: the loader would give the program itself
+--- for it, which is no library this layer loads (D336).
 public link(symbol: "_landin_posix_open_library") open_library:
     (path: text.host_string, scope: symbol_scope)
     -> (loaded: library) ! errno | no_library =
+    fail enoent when lenof text.host_bytes(path) == 0
     mut room: path_room = zeroed
     terminated: ptr u8 = try terminate(path, room[0..<lenof room])
     match libc.dlopen(terminated, mode_of(scope))

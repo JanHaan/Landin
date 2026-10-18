@@ -921,15 +921,24 @@ package Landin.IR is
      is (Id /= No_Evidence
          and then Natural (Id) <= Evidence_Count (Of_Unit));
 
+   --  Family names the concept whose layout the table has: nonzero and the
+   --  same for every table of one concept, so that with Erased it says
+   --  which tables a projection's table may be at runtime (D374).  Zero
+   --  claims nothing, and a backend keeps every entry of such a table.
    function Add_Evidence
      (Into : in out Unit; Represented : Field_Shape;
-      Erased : Boolean := False) return Evidence_Id
+      Erased : Boolean := False;
+      Family : Natural := 0) return Evidence_Id
      with Pre  => Is_Prepared (Into),
           Post => Evidence_Count (Into) = Evidence_Count (Into)'Old + 1
                   and then Holds (Into, Add_Evidence'Result);
 
    function Evidence_Is_Erased
      (Of_Unit : Unit; Id : Evidence_Id) return Boolean
+     with Pre => Holds (Of_Unit, Id);
+
+   function Evidence_Family
+     (Of_Unit : Unit; Id : Evidence_Id) return Natural
      with Pre => Holds (Of_Unit, Id);
 
    function Evidence_Represented
@@ -1112,6 +1121,11 @@ package Landin.IR is
       Process : not null access procedure (Item : Item_Id));
    function Has_Address_Exposure
      (Of_Unit : Unit; Item : Item_Id) return Boolean;
+   --  The same visit without the evidence-table entries: what exposes a
+   --  routine's address whichever of its tables' entries are kept (D374).
+   procedure Visit_Address_Exposures_Beside_Evidence
+     (Of_Unit : Unit;
+      Process : not null access procedure (Item : Item_Id));
 
    function Kind_Of (Of_Unit : Unit; Id : Item_Id) return Item_Kind
      with Pre => Holds (Of_Unit, Id);
@@ -4344,6 +4358,7 @@ private
       Represented : Field_Shape;
       Entries     : Run;
       Erased      : Boolean := False;
+      Family      : Natural := 0;
    end record;
 
    package Evidence_Vectors is new Ada.Containers.Vectors

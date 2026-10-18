@@ -66,6 +66,7 @@ FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/documents.md",
                      "docs/library.md",
+                     "docs/from-c.md",
                      "docs/environments.md",
                      "docs/diagnostics.md",
                      "docs/format.md",
@@ -526,11 +527,15 @@ def check_numbered_code(lines):
         if not re.match(r"^(break|continue|return|fail)\b", s):
             out.append((n, "'when' outside an exit statement"))
 
-    #  3. a convention marker at a call site, removed at 0.0.10
+    #  3. a convention marker at a call site, removed at 0.0.10.  A match
+    #  arm's pattern, `inline(inout buf):`, is no call: the layout writes
+    #  its `(` against the case's name, and a `:` follows it.
     for n, line in lines:
         if not looks_like_code(line):
             continue
-        if re.search(r"[a-z_][a-z0-9_.]*\(\s*(?:inout|sink)\s+[a-z_]", line):
+        marker = r"[a-z_][a-z0-9_.]*\(\s*(?:inout|sink)\s+[a-z_]"
+        if re.search(marker, line) \
+                and not re.search(marker + r"[^()]*\)\s*:(?!=)", line):
             out.append((n, "convention marker at a call site"))
 
     #  4. spellings a decision retired
@@ -2166,7 +2171,11 @@ def check_pinned_toolchain(full_run):
 
 
 GATE_TOOL_PINS = ("LANDIN_CLANG_UBUNTU", "LANDIN_TREE_SITTER_VERSION",
-                  "LANDIN_TREE_SITTER_SHA256_X86_64_LINUX")
+                  "LANDIN_TREE_SITTER_SHA256_X86_64_LINUX",
+                  "LANDIN_CROSS_QEMU_NIX", "LANDIN_CROSS_GCC_NIX")
+#  The cross lane's versions, which the nix shell holds its package set to:
+#  read from the pins by name, and never written in flake.nix itself.
+CROSS_LANE_PINS = ("LANDIN_CROSS_QEMU_NIX", "LANDIN_CROSS_GCC_NIX")
 
 
 def gate_tool_pin_problems(pins, pins_text, record, record_text):
@@ -2208,6 +2217,18 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
     if not clang.startswith("1:19."):
         out.append((pins, 1, "LANDIN_CLANG_UBUNTU %s is not a clang-19 package "
                              "version" % clang))
+    flake = os.path.join(ROOT, "flake.nix")
+    if not os.path.exists(flake):
+        return out
+    flake_text = io.open(flake, encoding="utf-8").read()
+    for name in CROSS_LANE_PINS:
+        if 'pin "%s"' % name not in flake_text:
+            out.append((flake, 1, "flake.nix does not hold its cross lane to "
+                                  "%s from environments/pins.sh" % name))
+        if '"%s"' % values[name] in flake_text:
+            out.append((flake, 1, "flake.nix names %s's %s literally instead "
+                                  "of reading it from environments/pins.sh"
+                        % (name, values[name])))
     return out
 
 
@@ -3148,6 +3169,198 @@ def check_precedence_table(full_run):
                         % (name, shown(said) or "nothing", rule,
                            shown(meant))))
 
+    return out
+
+
+def ada_note_runs(text):
+    """Each note an Ada source writes as literals alone, and its line.
+
+    A note is the value of a `Note =>` argument or a `Note : String :=`
+    declaration, written as a run of string literals joined by `&` and
+    broken over lines by the 79-column rule, sometimes inside an `if` or
+    `case` expression that chooses between two runs.  A run joined by `&`
+    to something computed is a part of a note whose rest this cannot read,
+    and is passed over.
+    """
+    opener = re.compile(
+        r"\bNote\s*(?:=>|:\s*(?:constant\s+)?String\s*:=)\s*")
+    for found in opener.finditer(text):
+        i, depth, n = found.end(), 0, len(text)
+        runs, current, joined, after = [], None, False, False
+        while i < n:
+            c = text[i]
+            if text.startswith("--", i):
+                i = text.find("\n", i)
+                i = n if i < 0 else i
+                continue
+            if c == '"':
+                k = i + 1
+                while k < n:
+                    if text[k] == '"' and k + 1 < n and text[k + 1] == '"':
+                        k += 2
+                        continue
+                    if text[k] == '"':
+                        break
+                    k += 1
+                piece = text[i + 1:k].replace('""', '"')
+                if current is None:
+                    current = [text.count("\n", 0, i) + 1, piece, after]
+                else:
+                    current[1] += piece
+                i = k + 1
+                after = False
+                joined = False
+                continue
+            if c == "&":
+                if current is None:
+                    after = True
+                joined = True
+                i += 1
+                continue
+            if c.isspace():
+                i += 1
+                continue
+            #  Anything else ends a run of literals.
+            if current is not None:
+                runs.append((current[0], current[1], current[2] or joined))
+                current, joined = None, False
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                if depth == 0:
+                    break
+                depth -= 1
+            elif c in ",;" and depth == 0:
+                break
+            after = False
+            joined = False
+            i += 1
+        if current is not None:
+            runs.append((current[0], current[1], current[2]))
+        for line, said, partial in runs:
+            if not partial:
+                yield line, said
+
+
+#  A note's label: one or more paragraphs or decisions, joined by `/` or a
+#  space, and the colon after them.
+NOTE_LABEL = re.compile(
+    r"^((?:\[\d{4}\]|D\d+)(?:(?:/| |, )(?:\[\d{4}\]|D\d+))*)(:?)(.*)$",
+    re.S)
+
+
+def check_note_words(full_run):
+    """D373: a note explains in words; a label stands beside them.
+
+    A note is what a reader who does not know the rule reads, and many
+    quoted a decision label or a grammar production and nothing more:
+    `D77: match expression case : arm end match`, or a bare `[1150]`.
+    Every note the compiler writes as literals must go on past its label
+    in words, and none may quote a production's `::=`.
+    """
+    if not full_run:
+        return []
+    source = os.path.join(ROOT, "compiler/ada/src")
+    out = absent((source,))
+    if out:
+        return out
+    for directory, _, names in sorted(os.walk(source)):
+        for name in sorted(names):
+            if not name.endswith(".adb"):
+                continue
+            path = os.path.join(directory, name)
+            relative = os.path.relpath(path, ROOT)
+            text = io.open(path, encoding="utf-8").read()
+            for line, said in ada_note_runs(text):
+                if "::=" in said:
+                    out.append((relative, line,
+                                "this note quotes a grammar production; say"
+                                " the rule in words (D373)"))
+                    continue
+                label = NOTE_LABEL.match(said.strip())
+                if label and len(re.findall(r"[a-z]{2,}",
+                                            label.group(3))) < 3:
+                    out.append((relative, line,
+                                "this note is %r, a label with no words to"
+                                " explain it (D373)" % said.strip()))
+    return out
+
+
+def check_foreign_forms(full_run):
+    """D367's table names Landin forms, and each row's report is pinned.
+
+    A row is a spelling another language gives a construct.  It must not be
+    one the keyword rule spells, or the scanner would meet it first and the
+    row could never fire; its paragraph must be one a document defines; and
+    its fixture must be a recorded negative whose report names both the
+    foreign spelling and the Landin form.
+    """
+    if not full_run:
+        return []
+    table = os.path.join(
+        ROOT, "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads")
+    tour = os.path.join(ROOT, SPEC_NAME)
+    out = absent((table, tour))
+    if out:
+        return out
+    relative = os.path.relpath(table, ROOT)
+    text = io.open(table, encoding="utf-8").read()
+
+    def column(function):
+        found = re.search(r"function %s \(Item : Foreign_Form\)(.*?)\);"
+                          % function, text, re.S)
+        if not found:
+            return None
+        rows = {}
+        for names, value in re.findall(
+                r"when\s+([A-Za-z0-9_|\s]+?)\s*=>\s*\"([^\"]*)\"",
+                found.group(1)):
+            for one in re.split(r"\s*\|\s*", names.strip()):
+                rows[one] = value
+        return rows
+
+    declared = re.search(r"type Foreign_Form is\s*\((.*?)\);", text, re.S)
+    spelled = column("Foreign_Spelling")
+    cited = column("Foreign_Construct")
+    pinned = column("Foreign_Fixture")
+    if not declared or None in (spelled, cited, pinned):
+        return [(relative, 1, "the foreign-form table could not be read")]
+    rows = re.findall(r"[A-Za-z0-9_]+", declared.group(1))
+    rules, _, problems = read_grammar(tour)
+    keywords = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+    defined = construct_ids()
+    for row in rows:
+        word = spelled.get(row)
+        paragraph = cited.get(row, "")
+        fixture = pinned.get(row)
+        if word is None or fixture is None or not paragraph:
+            out.append((relative, 1, "%s is missing a column of the"
+                        " foreign-form table" % row))
+            continue
+        if word in keywords:
+            out.append((relative, 1, "%s spells %r, which the keyword rule"
+                        " spells, so the row can never fire" % (row, word)))
+        if paragraph.strip("[]") not in defined:
+            out.append((relative, 1, "%s cites %s, which neither document"
+                        " defines" % (row, paragraph)))
+        meta = os.path.join(ROOT, "compiler/tests/fixtures/negative",
+                            fixture, "fixture.meta")
+        if not os.path.exists(meta):
+            out.append((relative, 1, "%s is pinned by negative/%s, which is"
+                        " not there" % (row, fixture)))
+            continue
+        expect = re.search(r"^expect:\s*(\S+)",
+                           io.open(meta, encoding="utf-8").read(), re.M)
+        report = ""
+        if expect:
+            recorded = os.path.join(os.path.dirname(meta), expect.group(1))
+            if os.path.exists(recorded):
+                report = io.open(recorded, encoding="utf-8").read()
+        if not re.search(r"`[^`\n]*%s[^`\n]*`" % re.escape(word), report) \
+                or "Landin writes" not in report:
+            out.append((relative, 1, "negative/%s does not record a report"
+                        " that names `%s` and the Landin form" % (fixture,
+                                                                 word)))
     return out
 
 
@@ -4289,9 +4502,36 @@ def unplaced_target_problems():
         for target in sorted((named & set(PRODUCT_TARGETS))
                              - set(claims.get(name, {}))):
             problems.append((os.path.relpath(path, ROOT), 0,
-                             "%s claims %s and no record places it"
-                             % (name, target)))
+                             "%s claims %s and no record places it%s"
+                             % (name, target, unplaced_hint(name, target))))
     return problems
+
+
+def unplaced_hint(name, target):
+    """What would place a Cortex-M claim, read from the corpus row it lacks.
+
+    The corpus's rules are environments/cortex-m/README.md's; a refusal that
+    says only that nothing places the claim sends its reader to the code.
+    """
+    if target != "cortex-m" or name.split("/")[0] not in ("runtime", "abi"):
+        return ""
+    with io.open(os.path.join(ROOT, CORTEX_CORPUS), encoding="utf-8") as stream:
+        corpus = json.load(stream)["fixtures"]
+    row = corpus.get(name)
+    rules = " (environments/cortex-m/README.md, The corpus inventory)"
+    if row is None:
+        return ("; %s has no row for it: add an \"execute\" row, or drop "
+                "cortex-m from its targets:%s" % (CORTEX_CORPUS, rules))
+    if "profile_limit" in row:
+        return ("; its %s row records a profile_limit, and an image that "
+                "overflows is no execution: drop cortex-m from its targets:, "
+                "or remove the limit once every profile fits%s"
+                % (CORTEX_CORPUS, rules))
+    return ("; its %s row's mode is %s, which places no verdict: drop cortex-m "
+            "from its targets:%s" % (CORTEX_CORPUS, row.get("mode"), rules))
+
+
+CORTEX_CORPUS = "compiler/tests/cortex-m/corpus.json"
 
 
 CORTEX_PROBES = "compiler/tests/cortex-m/probes.json"
@@ -5933,6 +6173,129 @@ def check_layout_page(full_run):
     return out
 
 
+TOUR_NAME = "tour.md"
+
+#  A tour example that deliberately shows a source outside the one layout
+#  says so in its own first line, a comment a reader sees: this, then what
+#  it shows.  This side holds the line's form; the test program's
+#  `formatting/the tour is in the layout` refuses the line on an example
+#  that parses and is in the layout after all.
+TOUR_LAYOUT_EXEMPTION = "-- not in the layout: "
+
+
+def tour_layout_problems(source, tokens):
+    """What in one example the layout would change, as (line, complaint).
+
+    `refine fmt` decides space and nothing else (D252), and the test
+    program formats every tour example that parses and requires it
+    unchanged.  This is the part of the layout a scan can see without a
+    parse, held over every example, those that are fragments too: one
+    space between two tokens on a line, one between code and the comment
+    after it, no blank or tab at a line's end, no run of blank lines and
+    none at either end of the example.  Raw literals, comments and the
+    space inside them are theirs and not looked at.
+    """
+    out = []
+    covered = [False] * (len(source) + 1)
+    for _, spelling, at in tokens:
+        for k in range(at, at + len(spelling)):
+            covered[k] = True
+
+    def line_of(offset):
+        return source.count("\n", 0, offset) + 1
+
+    previous = None
+    for _, spelling, at in list(tokens) + [(None, "", len(source))]:
+        if previous is not None:
+            gap = source[previous:at]
+            first_line = gap.split("\n", 1)[0]
+            if "\n" not in gap and "--" not in gap and gap != " " \
+                    and gap != "" and not gap.strip(" \t") \
+                    and at < len(source):
+                out.append((line_of(previous), "%d spaces between two tokens,"
+                            " where the layout has one or none" % len(gap)))
+            elif first_line.lstrip(" \t").startswith("--") \
+                    and first_line[:len(first_line)
+                                   - len(first_line.lstrip(" \t"))] != " ":
+                out.append((line_of(previous), "a comment after code stands"
+                            " one space after it"))
+        previous = at + len(spelling)
+    lines = source.split("\n")
+    offset = 0
+    for number, line in enumerate(lines, 1):
+        end = offset + len(line)
+        if line != line.rstrip(" \t") and not covered[end - 1]:
+            out.append((number, "space at the end of a line"))
+        if "\t" in line[:len(line) - len(line.lstrip(" \t"))] \
+                and not covered[offset]:
+            out.append((number, "a tab in a line's indentation"))
+        offset = end + 1
+    body = (source[:-1] if source.endswith("\n") else source).split("\n")
+    if body and (body[0].strip() == "" or body[-1].strip() == ""):
+        out.append((1, "a blank line at an end of the example"))
+    offset = 0
+    for number, line in enumerate(body, 1):
+        if number > 1 and line.strip() == "" \
+                and body[number - 2].strip() == "" and not covered[offset]:
+            out.append((number, "a run of blank lines, which the layout"
+                        " makes one"))
+        offset += len(line) + 1
+    return out
+
+
+def check_tour_layout(full_run):
+    """The tour's examples are in the one layout.
+
+    A reader copies them, so they are held to the layout as `core` is,
+    except for an example whose first line is TOUR_LAYOUT_EXEMPTION and a
+    reason.  WHAT WAS TRIED AND DROPPED keeps its rejected wording as it
+    was written.
+    """
+    if not full_run:
+        return []
+    path = os.path.join(ROOT, TOUR_NAME)
+    missing = absent([path])
+    if missing:
+        return missing
+    _, trees, problems = read_grammar(os.path.join(ROOT, SPEC_NAME))
+    if problems:
+        return []
+    signs = grammar_signs(trees)
+    with io.open(path, encoding="utf-8") as stream:
+        text = stream.read()
+    live = re.split(r"^## WHAT WAS TRIED AND DROPPED", text, maxsplit=1,
+                    flags=re.M)[0]
+    out = []
+    lines = live.split("\n")
+    n = 0
+    while n < len(lines):
+        if lines[n] == "```landin":
+            start = n + 1
+            n += 1
+            while n < len(lines) and lines[n] != "```":
+                n += 1
+            body = lines[start:n]
+            n += 1
+            if body and body[0].startswith(TOUR_LAYOUT_EXEMPTION.rstrip()):
+                if not body[0].startswith(TOUR_LAYOUT_EXEMPTION) \
+                        or not body[0][len(TOUR_LAYOUT_EXEMPTION):].strip():
+                    out.append((TOUR_NAME, start + 1, "an example outside the"
+                                " layout says what it shows after %r"
+                                % TOUR_LAYOUT_EXEMPTION))
+                continue
+            source = "\n".join(body) + "\n"
+            source = source.encode("utf-8").decode("latin-1")
+            tokens, complaint = landin_tokens(source, signs)
+            if tokens is None:
+                continue  # live_example_tokens reports it.
+            for at, complaint in tour_layout_problems(source, tokens):
+                out.append((TOUR_NAME, start + at, "not in the layout"
+                            " refine fmt gives: " + complaint))
+            continue
+        n += 1
+    return out
+
+
 def check_diagnostic_matrix(full_run):
     if not full_run:
         return []
@@ -6540,6 +6903,66 @@ def check_first_program(full_run):
         out.append(("README.md", start + 1,
                     "the first program's shown output differs from"
                     " %s/output.txt" % FIRST_PROGRAM))
+    return out
+
+
+FROM_C = "docs/from-c.md"
+FROM_C_FIXTURE = "compiler/tests/fixtures/positive/from-c"
+
+
+def check_from_c_page(full_run):
+    """The page for C programmers shows sources the compiler accepts.
+
+    Each `landin` block on the page is one file of a positive fixture,
+    byte for byte, and each file of that fixture is one block, so the
+    test program's acceptance and emission of the fixture is a check of
+    every example a reader copies, and its formatting case holds the
+    blocks to the layout.  The fixture is one module, so a block may use
+    a name another declares, as `main.ldn` uses `print_arguments`.
+    """
+    if not full_run:
+        return []
+    page = os.path.join(ROOT, FROM_C)
+    directory = os.path.join(ROOT, FROM_C_FIXTURE)
+    missing = absent([page, os.path.join(directory, "fixture.meta")])
+    if missing:
+        return missing
+    sources = {}
+    for name in sorted(os.listdir(directory)):
+        if name.endswith(".ldn"):
+            with io.open(os.path.join(directory, name),
+                         encoding="utf-8", newline="") as stream:
+                sources[name] = stream.read()
+    lines = io.open(page, encoding="utf-8").read().split("\n")
+    out, shown = [], {}
+    n = 0
+    while n < len(lines):
+        if lines[n] != "```landin":
+            n += 1
+            continue
+        start = n + 1
+        n += 1
+        while n < len(lines) and lines[n] != "```":
+            n += 1
+        if n == len(lines):
+            out.append((FROM_C, start, "a landin block is never closed"))
+            break
+        block = "\n".join(lines[start:n]) + "\n"
+        n += 1
+        named = [name for name, text in sources.items() if text == block]
+        if not named:
+            out.append((FROM_C, start, "this block is no file of %s; the"
+                        " page shows only what the fixture compiles"
+                        % FROM_C_FIXTURE))
+        for name in named:
+            if name in shown:
+                out.append((FROM_C, start, "this block repeats the one at"
+                            " line %d" % shown[name]))
+            shown[name] = start
+    for name in sorted(set(sources) - set(shown)):
+        out.append((FROM_C_FIXTURE + "/" + name, 1, "the page shows no block"
+                    " with this file's text; a file of the fixture is one"
+                    " of the page's examples"))
     return out
 
 
@@ -7452,6 +7875,58 @@ def debugger_workload_problems(debugger):
     return []
 
 
+CROSS_LANES = "compiler/tests/cross-lanes.json"
+#  The lane each emulator a row may name runs.
+CROSS_RUNNERS = {"qemu-aarch64": "linux-arm64", "qemu-riscv64": "linux-rv64",
+                 "qemu-x86_64": "linux-x86-64"}
+
+
+def check_cross_lanes(full_run):
+    """Every expected host failure names a fixture its runner's lane runs.
+
+    The test program matches a row to a fixture by name and to a lane by
+    its runner, so a row whose fixture was renamed, or whose runner's lane
+    the fixture does not run, matches nothing and says nothing: the row
+    goes stale where nobody reads it.
+    """
+    if not full_run:
+        return []
+    path = os.path.join(ROOT, CROSS_LANES)
+    out = absent([path])
+    if out:
+        return out
+    try:
+        with io.open(path, encoding="utf-8") as stream:
+            rows = json.load(stream)["expected"]
+    except (ValueError, KeyError, TypeError) as error:
+        return [(path, 1, "cross-lane record: %s" % error)]
+    records = fixture_records()
+    seen = set()
+    for row in rows:
+        name = row.get("fixture", "")
+        if name in seen:
+            out.append((path, 1, "%s has two rows" % name))
+        seen.add(name)
+        if not row.get("reason") or not row.get("failures"):
+            out.append((path, 1, "%s needs a reason and its failure lines"
+                        % name))
+        if name not in records:
+            out.append((path, 1, "%s names no fixture" % name))
+            continue
+        targets = {one.strip() for one in
+                   records[name][1].get("targets", "").split(",")}
+        for runner in row.get("runners", []):
+            lane = CROSS_RUNNERS.get(runner)
+            if lane is None:
+                out.append((path, 1, "%s names %s, which runs no Linux lane"
+                            % (name, runner)))
+            elif lane not in targets:
+                out.append((path, 1, "%s lists %s, whose lane %s the fixture "
+                                     "does not name in its targets:"
+                            % (name, runner, lane)))
+    return out
+
+
 def check_debugger_contract(full_run):
     """Keep complete workloads wired to both native compiler modes."""
     if not full_run:
@@ -7726,11 +8201,14 @@ def main(argv):
     extra += check_token_vocabulary(full_run)
     extra += check_precedence_table(full_run)
     extra += check_refused_constructs(full_run)
+    extra += check_foreign_forms(full_run)
+    extra += check_note_words(full_run)
     extra += check_comment_forms(full_run)
     extra += check_ascii_dashes(full_run)
     extra += check_unfenced_code(full_run)
     extra += check_running_examples(full_run)
     extra += check_first_program(full_run)
+    extra += check_from_c_page(full_run)
     extra += check_library_documentation(full_run)
     extra += check_benchmark_game_oracles(full_run)
     extra += check_table_shape(full_run)
@@ -7740,6 +8218,7 @@ def main(argv):
     extra += check_highlight_vocabulary(full_run)
     extra += check_binding_generator(full_run)
     extra += check_debugger_contract(full_run)
+    extra += check_cross_lanes(full_run)
     extra += check_hosted_derivation(full_run)
     extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
@@ -7749,6 +8228,7 @@ def main(argv):
     extra += check_diagnostic_matrix(full_run)
     extra += check_explanations(full_run)
     extra += check_layout_page(full_run)
+    extra += check_tour_layout(full_run)
     extra += check_coverage_registers(full_run)
     if full_run:
         extra += fixture_constructs()

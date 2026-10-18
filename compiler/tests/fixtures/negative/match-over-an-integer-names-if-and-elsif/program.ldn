@@ -1,0 +1,6 @@
+classify: (x: i32) -> (code: i32) =
+    match x
+        1: code = 10
+        _: code = 0
+    end match
+end classify

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from backend import build, execute
 from run import Run
-from setup import DEFAULT, HERE, sha, supported_host
+from setup import DEFAULT, HERE, installed_tools, sha, supported_host
 
 
 def frame_control(run, refine, opt, spec, veneer=False):
@@ -87,6 +87,7 @@ def main():
     parser.add_argument('--specialize', default='off')
     args = parser.parse_args()
     supported_host()
+    args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
     for name in ('abi', 'veneer', 'memory', 'boundaries', 'words', 'symbols',

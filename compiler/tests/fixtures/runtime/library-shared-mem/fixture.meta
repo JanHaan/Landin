@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: Small shared core/mem consumer preserves its portable interface and behavior
+summary: Small shared core/mem consumer fills, copies and searches byte blocks with their lengths checked and keeps typed storage over caller bytes
 program: main.ldn
 root: ../../../../..
 status: 42

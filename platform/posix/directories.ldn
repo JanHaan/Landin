@@ -1,0 +1,251 @@
+--  Directories: opening one as a stream of entries read through the
+--  caller's buffer, and making and removing directories and files, each
+--  relative to an open directory or the working one.
+
+import core/text
+import platform/libc
+import platform/linux
+
+--- The least a buffer `read_directory` reads into holds: room for any
+--- entry any of the three systems gives, its record and its NUL included.
+public directory_buffer: usize = 1024
+
+--- An open directory stream, POSIX's `DIR`: a value its caller keeps and
+--- passes `inout` to `read_directory`, with the same buffer each time.
+--- Its fields belong to this module: the directory's descriptor, the C
+--- library's stream where there is one, and how much of the buffer the
+--- system has filled and the caller has read.
+public directory_stream: type = struct
+    descriptor: descriptor
+    stream: usize
+    filled: usize
+    cursor: usize
+    finished: bool
+end directory_stream
+
+--- An entry of a directory: its name, lent from the buffer it was read
+--- into until the next read, and its kind, `unknown_kind` where the file
+--- system records none.
+public directory_entry: type = struct
+    name: text.host_string
+    kind: file_kind
+end directory_entry
+
+--- Open the directory `path` names, relative to `at`, for reading, its
+--- descriptor closed on exec as `open_at`'s is: `enotdir` when it is not
+--- a directory, `enoent` when it is missing.
+--- Close it with `close_directory`, which also closes its descriptor.
+public link(symbol: "_landin_posix_open_directory") open_directory:
+    (at: descriptor, path: text.host_string)
+    -> (opened: directory_stream) ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    opened = try system_open_directory(at, terminated)
+end open_directory
+
+--- The directory's next entry, read into `buffer`, which must be the
+--- buffer every earlier read of this stream was given and hold at least
+--- `directory_buffer` bytes, or `einval`.  The entry lends its name from
+--- `buffer` until the next read.  An entry with an empty name is the end
+--- of the directory.  Entries come in the system's order, `.` and `..`
+--- among them, as POSIX's `readdir` gives them.
+public link(symbol: "_landin_posix_read_directory") read_directory:
+    (inout opened: directory_stream, buffer: []mut u8)
+    -> (item: directory_entry from buffer) ! errno =
+    fail einval when lenof buffer < directory_buffer
+    item = try system_read_directory(opened, buffer)
+end read_directory
+
+--- Close the directory stream and its descriptor, which are released even
+--- when this fails.
+public link(symbol: "_landin_posix_close_directory") close_directory:
+    (opened: directory_stream) -> none ! errno =
+    try system_close_directory(opened)
+end close_directory
+
+--- Make the directory `path` names, relative to `at`, with the permission
+--- bits `permissions`, which the process umask filters: `eexist` when the
+--- name is taken, `enoent` when its parent is missing.
+public link(symbol: "_landin_posix_make_directory_at") make_directory_at:
+    (at: descriptor, path: text.host_string,
+     permissions: u32) -> none ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_make_directory(at, terminated, permissions)
+end make_directory_at
+
+--- Remove the name `path`, relative to `at`, of a file that is not a
+--- directory, POSIX's `unlinkat`.
+public link(symbol: "_landin_posix_unlink_at") unlink_at:
+    (at: descriptor, path: text.host_string) -> none ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_remove(at, terminated, false)
+end unlink_at
+
+--- Remove the empty directory `path` names, relative to `at`, POSIX's
+--- `unlinkat` with `AT_REMOVEDIR`: `enotempty` when it holds anything.
+public link(symbol: "_landin_posix_remove_directory_at") remove_directory_at:
+    (at: descriptor, path: text.host_string)
+    -> none ! errno =
+    mut room: path_room = zeroed
+    terminated: ptr u8 = try terminate(path, room[0..<lenof room])
+    try system_remove(at, terminated, true)
+end remove_directory_at
+
+--  The system's own calls beneath the facility above: Linux's system
+--  calls through platform/linux, and the C library through
+--  platform/libc on Darwin and FreeBSD, whose system interface it is.
+
+fixed if compiler.os == linux then
+    system_open_directory: (at: descriptor, path: ptr u8)
+                           -> (opened: directory_stream) ! errno =
+        result: i32 = linux.openat(i32(at), path,
+                                   linux.o_rdonly | linux.o_directory
+                                   | linux.o_cloexec, 0)
+        fail errno_of(-result) when result < 0
+        opened = (descriptor: descriptor(result), stream: 0, filled: 0,
+                  cursor: 0, finished: false)
+    end system_open_directory
+
+    --  A record's little-endian u16 at `at`.
+    record_u16: (bytes: []u8, at: usize) -> (value: usize) =
+        value = usize(bytes[at]) | (usize(bytes[at + 1]) << 8)
+    end record_u16
+
+    --  The next record in the buffer, refilling it from getdents64 when
+    --  every record in it has been read.  A record is checked to lie
+    --  within what the kernel filled before any byte of it is read, and
+    --  its name to end within it, so a buffer's last record is never read
+    --  past; one that does not is `unlisted`, which no errno describes.
+    system_read_directory: (inout opened: directory_stream, buffer: []mut u8)
+                           -> (item: directory_entry from buffer) ! errno =
+        loop do
+            if opened.cursor >= opened.filled then
+                if opened.finished then
+                    item = (name: text.host_over(buffer[0..<0]),
+                            kind: unknown_kind)
+                    return
+                end if
+                got: isize = linux.getdents64(i32(opened.descriptor),
+                                              addr buffer[0], lenof buffer)
+                fail errno_of(i32(-got)) when got < 0
+                fail unlisted when usize(got) > lenof buffer
+                if got == 0 then
+                    opened.finished = true
+                else
+                    opened.filled = usize(got)
+                    opened.cursor = 0
+                end if
+            else
+                at: usize = opened.cursor
+                --  The fixed part is 19 bytes and the name at least one
+                --  byte and its NUL.
+                fail unlisted when opened.filled - at < 21
+                length: usize = record_u16(buffer, at + 16)
+                fail unlisted when length < 21
+                  or length > opened.filled - at
+                opened.cursor = at + length
+                mut stop: usize = at + 19
+                while stop < at + length and buffer[stop] <> 0 do
+                    inc stop
+                end while
+                fail unlisted when stop == at + length
+                item = (name: text.host_over(buffer[at + 19..<stop]),
+                        kind: kind_of_type(buffer[at + 18]))
+                return
+            end if
+        end loop
+    end system_read_directory
+
+    system_close_directory: (opened: directory_stream) -> none ! errno =
+        try system_close(opened.descriptor)
+    end system_close_directory
+
+    system_make_directory: (at: descriptor, path: ptr u8, permissions: u32)
+                           -> none ! errno =
+        result: i32 = linux.mkdirat(i32(at), path, permissions)
+        fail errno_of(-result) when result < 0
+    end system_make_directory
+
+    system_remove: (at: descriptor, path: ptr u8, directory: bool)
+                   -> none ! errno =
+        result: i32 = linux.unlinkat(i32(at), path,
+                                     if directory then linux.at_removedir
+                                     else 0 end if)
+        fail errno_of(-result) when result < 0
+    end system_remove
+elsif compiler.os == darwin or compiler.os == freebsd then
+    --  The directory is opened with o_directory, which makes anything else
+    --  ENOTDIR, and a C directory stream made over it, which then owns the
+    --  descriptor.
+    system_open_directory: (at: descriptor, path: ptr u8)
+                           -> (opened: directory_stream) ! errno =
+        result: i32 = opened_at(at, path,
+                                libc.o_rdonly | libc.o_directory
+                                | libc.o_cloexec, 0)
+        fail failure() when result < 0
+        made: libc.directory_stream = libc.fdopendir(result)
+        match made
+            libc.no_directory: begin
+                problem: errno = failure()
+                _ = libc.close(result)
+                fail problem
+            end
+            ptr (stream): opened = (descriptor: descriptor(result),
+                                    stream: usize(stream), filled: 0,
+                                    cursor: 0, finished: false)
+        end match
+    end system_open_directory
+
+    --  The stream's next record, its name copied into the buffer with a
+    --  NUL after it, since the record is the C library's and good only
+    --  until the next readdir.  The buffer holds any name a record can:
+    --  `directory_buffer` is larger than every d_name.  readdir's end and
+    --  its failure are told apart by errno, zeroed before the call.
+    system_read_directory: (inout opened: directory_stream, buffer: []mut u8)
+                           -> (item: directory_entry from buffer) ! errno =
+        cell: ptr mut i32 = libc.errno_cell()
+        cell.val = 0
+        if opened.finished then
+            item = (name: text.host_over(buffer[0..<0]), kind: unknown_kind)
+            return
+        end if
+        stream: ptr mut u8 = ptr(opened.stream)
+        record: libc.directory_entry = libc.readdir(stream)
+        match record
+            libc.no_directory: begin
+                fail errno_of(cell.val) when cell.val <> 0
+                opened.finished = true
+                item = (name: text.host_over(buffer[0..<0]),
+                        kind: unknown_kind)
+            end
+            ptr (found): begin
+                length: usize = usize(found.val.name_length)
+                fail unlisted when length >= lenof buffer
+                for at in usize(0)..<length do
+                    buffer[at] = found.val.name[at]
+                end for
+                buffer[length] = 0
+                item = (name: text.host_over(buffer[0..<length]),
+                        kind: kind_of_type(found.val.kind))
+            end
+        end match
+    end system_read_directory
+
+    system_close_directory: (opened: directory_stream) -> none ! errno =
+        stream: ptr mut u8 = ptr(opened.stream)
+        fail failure() when libc.closedir(stream) <> 0
+    end system_close_directory
+
+    system_make_directory: (at: descriptor, path: ptr u8, permissions: u32)
+                           -> none ! errno =
+        fail failure() when libc.mkdirat(i32(at), path, u16(permissions)) <> 0
+    end system_make_directory
+
+    system_remove: (at: descriptor, path: ptr u8, directory: bool)
+                   -> none ! errno =
+        flags: i32 = if directory then libc.at_removedir else 0 end if
+        fail failure() when libc.unlinkat(i32(at), path, flags) <> 0
+    end system_remove
+end if

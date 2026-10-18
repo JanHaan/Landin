@@ -4,15 +4,13 @@
 --  failure passes through a copy's own call, and recovery takes the value
 --  or the atom the call would have given it.  Every profile runs this.
 import core/io
-import hosted/io as hosted
+import hosted/system
 
 odd: atom
 large: atom
 
-say: (host: hosted.system, text: []u8) -> none =
-    io.write(host, io.out(host), text) else (ignored)
-        _ = ignored
-    end
+say: (host: system.host, text: []u8) -> none =
+    io.write(host, io.out(host), text) else none
 end say
 
 half: (value: u32) -> (result: u32) ! odd =
@@ -27,7 +25,7 @@ quarter: (value: u32) -> (result: u32) ! odd | large =
 end quarter
 
 --  Cleanup that runs on both of the copy's ways out.
-counted_half: (host: hosted.system, inout count: u32, value: u32)
+counted_half: (host: system.host, inout count: u32, value: u32)
               -> (result: u32) ! odd =
     defer say(host, "cleanup\n")
     inc count
@@ -35,13 +33,13 @@ counted_half: (host: hosted.system, inout count: u32, value: u32)
 end counted_half
 
 --  Propagation through a caller's own `try`, past its own cleanup.
-halves: (host: hosted.system, value: u32) -> (result: u32) ! odd | large =
+halves: (host: system.host, value: u32) -> (result: u32) ! odd | large =
     defer say(host, "halves done\n")
     result = try quarter(value) + try half(value)
 end halves
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     mut count: u32 = 0
     code = 1
     a: u32 = half(10) else 99

@@ -42,7 +42,7 @@ package Landin.Backend.Entry_Point is
    --  The program's C-callable definition of `Landin.Hosted`'s argument
    --  initializer, which a hosted entry calls with C's argc, argv and envp
    --  before its body, or `Landin.IR.No_Item` when no module defines one.  The
-   --  library's `hosted/io` defines it, so a hosted program that never
+   --  library's `hosted/system` defines it, so a hosted program that never
    --  imports that module has no argument root and nothing to call.
    --  Checking has already held the definition to its exact signature.
    function Argument_Initializer
@@ -59,7 +59,8 @@ package Landin.Backend.Entry_Point is
    --  a C name to the routine defining it, `main`, the argument
    --  initializer and the panic handler the entry and the backend call,
    --  and whatever any datum or evidence table names, which is counted
-   --  whole because a datum is cheap to keep.  In item order, each name
+   --  whole because a datum is cheap to keep, a table's entries as far
+   --  as D374 keeps them.  In item order, each name
    --  once.  Beside each, in Referrers, what in the program first refers
    --  to it, so a refusal can say which routine asked for the C library:
    --  `main` for one of the entry module's, `platform/posix`'s

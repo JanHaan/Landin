@@ -1,6 +1,6 @@
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 extern(c) identity_select: (scenario: i32) -> none
 extern(c) identity_check: (expected_calls: i32) -> (good: bool)
@@ -15,7 +15,7 @@ path_of: (which: i32) -> (path: text.host_string) =
 end path_of
 
 public main: () -> (code: i32) =
-    state: hosted.system = hosted.host()
+    state: system.host = system.new()
     world: any io.world = any(addr state)
     left: text.host_string = text.host_over("left")
     right: text.host_string = text.host_over("right")
@@ -29,21 +29,21 @@ public main: () -> (code: i32) =
         end
         if scenario <= 3 then
             return when failed or same <> (scenario == 1)
-              or hosted.last_errno(state) <> 0 or not identity_check(2)
+              or system.last_errno(state) <> 0 or not identity_check(2)
         elsif scenario == 4 then
-            return when failed or same or hosted.last_errno(state) <> 0
+            return when failed or same or system.last_errno(state) <> 0
               or not identity_check(2)
         elsif scenario == 5 then
-            return when not failed or hosted.last_errno(state) <> 2
+            return when not failed or system.last_errno(state) <> 2
               or not identity_check(1)
         elsif scenario == 7 then
-            return when not failed or hosted.last_errno(state) <> 13
+            return when not failed or system.last_errno(state) <> 13
               or not identity_check(1)
         elsif scenario == 8 then
-            return when not failed or hosted.last_errno(state) <> 5
+            return when not failed or system.last_errno(state) <> 5
               or not identity_check(2)
         else
-            return when not failed or hosted.last_errno(state) <> 13
+            return when not failed or system.last_errno(state) <> 13
               or not identity_check(2)
         end if
     end for

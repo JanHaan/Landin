@@ -1,0 +1,8 @@
+class: negative
+summary: platform/linux's ppoll takes its time limit as a writable record, since the kernel writes the time left back into it, so the address of a limit the program may not change is refused
+program: main.ldn
+root: ../../../../..
+status: 1
+codes: L0301
+constructs: 0430, 0440, 0570
+targets: linux-x86-64, linux-arm64, linux-rv64

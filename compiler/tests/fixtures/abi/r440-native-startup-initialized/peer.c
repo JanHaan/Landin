@@ -57,7 +57,7 @@ int main(int argc, char **argv)
     if (argc != 3 || strcmp(argv[1], "alpha") || strcmp(argv[2], "42"))
         return 1;
     /* Genuine read/write plus core/io copying before any argv initialization.
-       Merely retaining hosted/io's unused argument routines must still link. */
+       Merely retaining hosted/system's unused argument routines must still link. */
     if (!plain_io())
         return 2;
     original_argc = argc;

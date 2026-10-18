@@ -1,12 +1,12 @@
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 import platform/linux
 
 --  A static Linux executable starts at platform/linux's
 --  `_landin_start`, which reads argc, argv, the environment and the
 --  auxiliary vector from the initial stack and calls `main` as C's runtime
---  would.  The arguments reach hosted/io's world; the environment and the
+--  would.  The arguments reach hosted/system's world; the environment and the
 --  vector stay with platform/linux.
 
 --  Whether the NUL-terminated `entry` holds an `=`.
@@ -26,7 +26,7 @@ end has_equals
 
 public main: () -> (code: i32) =
     code = 1
-    state: hosted.system = hosted.host()
+    state: system.host = system.new()
     return when io.argument_count(state) <> 2
     code = 2
     first: text.host_string = io.argument_at(state, usize(0)) else (problem)

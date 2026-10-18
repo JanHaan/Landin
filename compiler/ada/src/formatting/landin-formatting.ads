@@ -65,4 +65,31 @@ package Landin.Formatting is
       Name    : String;
       Text    : String) return Result;
 
+   --  How one line of a source differs from the layout, for a reader who
+   --  is told rather than given a rewritten file (`refine fmt --check`).
+   --  The layout breaks and joins no line, so every line that holds a
+   --  token or a comment is one line of the formatted text, and each blank
+   --  line either stays one, the first of its run, or goes.  Respaced: the
+   --  line's bytes change, and Wanted is the line as the layout writes it.
+   --  Removed: a blank line the layout drops.  Ended: only the line end
+   --  after it changes, to LF, or to one where the file had none.
+   type Difference_Kind is (Respaced, Removed, Ended);
+
+   type Difference is record
+      Line   : Landin.Source.Line_Number := 1;
+      Kind   : Difference_Kind := Respaced;
+      Wanted : Ada.Strings.Unbounded.Unbounded_String;
+   end record;
+
+   package Difference_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Difference);
+
+   subtype Difference_List is Difference_Vectors.Vector;
+
+   --  Every line of Original, the snapshot Answer formatted, that the
+   --  layout changes, in line order.  Empty when Answer has no edits.
+   function Differences
+     (Original : Landin.Source.Snapshot;
+      Answer   : Result) return Difference_List;
+
 end Landin.Formatting;

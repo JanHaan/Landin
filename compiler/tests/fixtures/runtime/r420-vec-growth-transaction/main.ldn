@@ -125,14 +125,14 @@ public main: () -> (code: i32) =
     auditor: audit = (state: addr state)
     mut values := vec.new(item: ptr node)
 
-    vec.push(values, auditor, addr n0) else (ignored) _ = ignored end
-    vec.push(values, auditor, addr n1) else (ignored) _ = ignored end
-    vec.push(values, auditor, addr n2) else (ignored) _ = ignored end
-    vec.push(values, auditor, addr n3) else (ignored) _ = ignored end
-    vec.push(values, auditor, addr n4) else (ignored) _ = ignored end
-    vec.push(values, auditor, addr n5) else (ignored) _ = ignored end
-    vec.push(values, auditor, addr n6) else (ignored) _ = ignored end
-    vec.push(values, auditor, addr n7) else (ignored) _ = ignored end
+    vec.push(values, auditor, addr n0) else none
+    vec.push(values, auditor, addr n1) else none
+    vec.push(values, auditor, addr n2) else none
+    vec.push(values, auditor, addr n3) else none
+    vec.push(values, auditor, addr n4) else none
+    vec.push(values, auditor, addr n5) else none
+    vec.push(values, auditor, addr n6) else none
+    vec.push(values, auditor, addr n7) else none
 
     maximum: usize = 0 -% 1
     impossible: usize = maximum / sizeof ptr node + 1
@@ -166,7 +166,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    vec.push(values, auditor, addr n8) else (ignored) _ = ignored end
+    vec.push(values, auditor, addr n8) else none
     if not (vec.length(values) == 9) or not (vec.capacity(values) == 16)
       or not after_contents(values)
       or not (state.attempts == 3) or not (state.allocations == 2)

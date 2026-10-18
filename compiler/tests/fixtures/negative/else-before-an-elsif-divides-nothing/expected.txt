@@ -1,0 +1,7 @@
+error[L0110]: this `else` comes before an `elsif`, and divides nothing
+  --> ../tests/fixtures/negative/else-before-an-elsif-divides-nothing/program.ldn:12:22
+   |
+12 |         count(total) else
+   |                      ^^^^
+  = note: [1810]: an `if`'s `else` is its last branch; a call's recovery is `else value`, `else none` or `else (problem) ... end`
+  = help: remove `else`

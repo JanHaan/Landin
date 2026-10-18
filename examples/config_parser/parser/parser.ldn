@@ -2,6 +2,7 @@
 --  Syntax mistakes are reported through an erased diagnostic capability;
 --  allocation and diagnostic delivery failures use the error channel.
 
+import core/arena
 import core/diag
 import core/io
 import core/mem
@@ -122,7 +123,7 @@ end parse_digits
 
 parse_entry: (source: []u8, inout parser: parser_state,
               inout logger: any diag.log,
-              arena: mem.arena)
+              memory: arena.arena)
              -> (item: entry)
              ! entry_failure =
     if parser.look.what <> lexer.identifier then
@@ -148,7 +149,7 @@ parse_entry: (source: []u8, inout parser: parser_state,
         ends: text.position = text.copied(parser.look.ends)
         advance(source, parser)
         block: ptr mut u8 = try mem.allocate
-            (arena, sizeof value, alignof value)
+            (memory, sizeof value, alignof value)
         allocated: ptr mut value = ptr(usize(block))
         allocated.val = (name_begins: name_begins, name_ends: name_ends,
                          body: text_value(begins: begins, ends: ends))
@@ -167,7 +168,7 @@ parse_entry: (source: []u8, inout parser: parser_state,
         end
         advance(source, parser)
         block: ptr mut u8 = try mem.allocate
-            (arena, sizeof value, alignof value)
+            (memory, sizeof value, alignof value)
         allocated: ptr mut value = ptr(usize(block))
         allocated.val = (name_begins: name_begins, name_ends: name_ends,
                          body: integer_value(number: number))
@@ -180,9 +181,9 @@ parse_entry: (source: []u8, inout parser: parser_state,
         defer lower_depth(parser)
         advance(source, parser)
         mut children := vec.new(item: ptr mut value)
-        try parse_sequence(source, parser, logger, arena, children, true)
+        try parse_sequence(source, parser, logger, memory, children, true)
         block: ptr mut u8 = try mem.allocate
-            (arena, sizeof value, alignof value)
+            (memory, sizeof value, alignof value)
         allocated: ptr mut value = ptr(usize(block))
         allocated.val = (name_begins: name_begins, name_ends: name_ends,
                          body: group_value(count: vec.length(children),
@@ -216,23 +217,23 @@ end recover_entry_failure
 
 parse_and_append: (source: []u8, inout parser: parser_state,
                    inout logger: any diag.log,
-                   arena: mem.arena,
+                   memory: arena.arena,
                    inout items: vec.list(ptr mut value))
                   -> none ! mem.out_of_memory | io.io_failed =
-    parsed := parse_entry(source, parser, logger, arena) else (problem)
+    parsed := parse_entry(source, parser, logger, memory) else (problem)
         issue: entry_failure = problem
         try recover_entry_failure(issue, source, parser, logger)
         return
     end
     match parsed
         no_entry: _ = no_entry
-        ptr (item): try vec.push(items, arena, item)
+        ptr (item): try vec.push(items, memory, item)
     end match
 end parse_and_append
 
 parse_sequence: (source: []u8, inout parser: parser_state,
                  inout logger: any diag.log,
-                 arena: mem.arena,
+                 memory: arena.arena,
                  inout items: vec.list(ptr mut value),
                  nested: bool)
                 -> none ! mem.out_of_memory | io.io_failed =
@@ -260,7 +261,7 @@ parse_sequence: (source: []u8, inout parser: parser_state,
             continue
         end if
 
-        try parse_and_append(source, parser, logger, arena, items)
+        try parse_and_append(source, parser, logger, memory, items)
     end loop
 end parse_sequence
 
@@ -269,13 +270,13 @@ public empty: () -> (result: document) =
 end empty
 
 public parse_file: (source: []u8, inout logger: any diag.log,
-                    arena: mem.arena, inout result: document)
+                    memory: arena.arena, inout result: document)
                    -> none ! mem.out_of_memory | io.io_failed =
     mut scanning := lexer.open()
     first: lexer.token = lexer.next(source, scanning)
     mut parser: parser_state = (lexer: scanning, look: first, depth: 0)
     result = empty()
-    try parse_sequence(source, parser, logger, arena, result.items, false)
+    try parse_sequence(source, parser, logger, memory, result.items, false)
 end parse_file
 
 public length: (tree: document) -> (count: usize) =

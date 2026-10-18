@@ -1,5 +1,6 @@
 #  The gate: every target, unless verified explanatory edits reuse a full pass.
-#  RV64 is the exception: suspended until further notice (see rv64-emit).
+#  RV64 runs under QEMU's user emulation (rv64-qemu); its physical RISE jobs
+#  stay suspended until they are dependable (see rv64-emit).
 #
 #  Verification lanes have separate verdicts.  Debug and release build jobs
 #  supply artifacts to their same-host lanes (Linux arm64's release lane
@@ -70,6 +71,7 @@ jobs:
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime-1 freebsd-arm64-runtime-2 \
             freebsd-arm64-debugger freebsd-arm64-abi build-modes-1 build-modes-2 \
+            rv64-qemu-1 rv64-qemu-2 outside-user-stock \
             'determinism / manifest (x86_64-linux 1)' \
             'determinism / manifest (x86_64-linux 2)' \
             'determinism / manifest (aarch64-linux 1)' \
@@ -249,6 +251,7 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           LANDIN_REFINE="$refine" python3 -m unittest scripts.tests.test_cli_native
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
@@ -351,6 +354,7 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           LANDIN_REFINE="$refine" python3 -m unittest scripts.tests.test_cli_native
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
@@ -359,7 +363,8 @@ jobs:
       #  examples.md program, compiled with no option and run with no
       #  environment beyond PATH, against the documents' own oracles.  On
       #  Linux that PATH holds the pinned GNAT, whose driver is the one
-      #  refine names; a stock distribution's is not yet found.
+      #  refine tries first; `outside-user-stock` runs it on Linux with the
+      #  distribution's driver alone.
       - name: An installed toolchain outside the checkout
         run: |
           set -eu
@@ -387,6 +392,48 @@ jobs:
   #  standard profiles, and must emit the same bytes.  Emission needs no
   #  assembler; the debug compiler is most of the cost, so the targets are
   #  dealt across two runners.
+  #  D364: the same outside user on a stock Ubuntu, with the release
+  #  compiler as a downloaded archive and only the image's own GCC, its
+  #  `x86_64-linux-gnu-gcc`: no pinned toolchain is installed, and the
+  #  job refuses to run if one is reachable, since then it would prove
+  #  nothing a stock system can do.
+  outside-user-stock:
+    needs: [inputs, linux-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+
+      - name: The distribution's compiler and no other
+        run: |
+          set -eu
+          if ! PATH=/usr/bin:/bin command -v x86_64-linux-gnu-gcc; then
+            sudo apt-get update
+            sudo apt-get install -y gcc
+          fi
+          if PATH=/usr/bin:/bin command -v x86_64-pc-linux-gnu-gcc; then
+            echo "the pinned driver is reachable; this is not a stock system" >&2
+            exit 1
+          fi
+
+      - name: An installed toolchain outside the checkout, on a stock system
+        run: |
+          set -eu
+          outside="$RUNNER_TEMP/outside"
+          rm -rf "$outside"
+          mkdir -p "$outside/release" "$outside/prefix"
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" -C "$outside/release"
+          ./scripts/package.sh "$outside/release/bin/refine" "$outside/landin.tar.gz"
+          tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
+          PATH=/usr/bin:/bin python3 scripts/outside_user.py --stock \
+            --prefix "$outside/prefix" --work "$outside/work"
+
   build-modes:
     name: build-modes-${{ matrix.part }}
     needs: [inputs, linux-debug-build, linux-release-build]
@@ -553,7 +600,9 @@ jobs:
   #  each with the release compiler.  A doubling whose median frontend or
   #  emission time grows more than 2.5 times fails.  A ratio compares two
   #  runs on this runner a few seconds apart, so the verdict does not
-  #  depend on its speed.
+  #  depend on its speed.  A doubling over the bound is measured twice
+  #  more, both sizes alternately, and fails only if every measurement
+  #  misses; the log gives the runner's load beside each row.
   scaling:
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
@@ -774,7 +823,8 @@ jobs:
       #  examples.md program, compiled with no option and run with no
       #  environment beyond PATH, against the documents' own oracles.  On
       #  Linux that PATH holds the pinned GNAT, whose driver is the one
-      #  refine names; a stock distribution's is not yet found.
+      #  refine tries first; `outside-user-stock` runs it on Linux with the
+      #  distribution's driver alone.
       - name: An installed toolchain outside the checkout
         run: |
           set -eu
@@ -1001,6 +1051,7 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  Linux arm64 with the release compiler: the corpus, the GDB sessions
@@ -1050,6 +1101,7 @@ jobs:
           refine="$PWD/compiler/ada/build/linux-arm64/release/bin/refine"
           python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
       #  The release toolchain installed as the README says, then used from
@@ -1057,7 +1109,8 @@ jobs:
       #  examples.md program, compiled with no option and run with no
       #  environment beyond PATH, against the documents' own oracles.  On
       #  Linux that PATH holds the pinned GNAT, whose driver is the one
-      #  refine names; a stock distribution's is not yet found.
+      #  refine tries first; `outside-user-stock` runs it on Linux with the
+      #  distribution's driver alone.
       - name: An installed toolchain outside the checkout
         run: |
           set -eu
@@ -1180,15 +1233,77 @@ jobs:
             ${{ runner.temp }}/freebsd-evidence/bundle/*.status
           retention-days: 14
 
+  #  The RV64 Linux lane under QEMU's user emulation: the release compiler's
+  #  whole test program with linux-rv64 as its lane, every executable linked
+  #  by Ubuntu's riscv64 cross driver and run by qemu-riscv64.  It is
+  #  evidence about the emitted code and none about RV64 hardware or its
+  #  native toolchain, which the suspended RISE jobs below were.  QEMU's
+  #  `max` CPU with T-Head's address extension added confirms every RV64
+  #  level the corpus runs; the emulator's own failures, a self-started
+  #  program with no binfmt_misc handler and SO_RCVTIMEO, are the rows
+  #  compiler/tests/cross-lanes.json lists, reported and not counted.  Two
+  #  shards of the program, as the x86-64 debug suite is divided.
+  rv64-qemu:
+    name: rv64-qemu-${{ matrix.shard }}
+    needs: [inputs, linux-release-build]
+    if: needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/linux-amd64/release
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
+            -C compiler/ada/build/linux-amd64/release
+          ./scripts/build.sh -q
+
+      - name: Install QEMU's user emulation and the LP64D cross toolchain
+        timeout-minutes: 25
+        run: |
+          set -eu
+          ./scripts/ci_packages.sh qemu-user \
+            gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu libc6-dev-riscv64-cross
+          qemu-riscv64 --version | sed -n '1p'
+          riscv64-linux-gnu-gcc --version | sed -n '1p'
+          riscv64-linux-gnu-objdump --version | sed -n '1p'
+          test -f "$(riscv64-linux-gnu-gcc -print-file-name=libm.a)"
+          ls /proc/sys/fs/binfmt_misc 2>/dev/null || echo "no binfmt_misc"
+
+      #  Ubuntu's cross executables ask for /lib/ld-linux-riscv64-lp64d.so.1,
+      #  which QEMU finds under its prefix.
+      - name: The test program on the RV64 lane, shard ${{ matrix.shard }} of 2
+        run: >-
+          QEMU_LD_PREFIX=/usr/riscv64-linux-gnu QEMU_CPU=max,xtheadba=true
+          LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1
+          ./scripts/test.sh --target=linux-rv64 --runner=qemu-riscv64
+          --shard=${{ matrix.shard }}/2
+
   # Checked Linux compiler cross-emits; RISE runs the transferred payloads on
   # physical RV64. ISA execution probes hardware before extended code runs.
   #
-  #  RV64 is suspended from the gates until further notice (2026-10-13): RISE
-  #  queued the hardware jobs for hours, which held every gate verdict, and
-  #  RV64 is left to regress until it has better CI.  Both jobs stay defined
-  #  but skipped.  To resume, drop `false &&` from both conditions, restore
+  #  The hardware jobs are suspended from the gates until further notice
+  #  (2026-10-13): RISE queued them for hours, which held every gate verdict.
+  #  rv64-qemu above is RV64's lane meanwhile.  Both jobs stay defined but
+  #  skipped.  To resume, drop `false &&` from both conditions, and restore
   #  `rv64-emit, rv64` to the gate's needs and their eight leg names to the
-  #  inputs list, and restore linux-rv64 to scripts/emit_manifest.py.
+  #  inputs list.
   rv64-emit:
     name: rv64-emit-${{ matrix.kind }}
     needs: [inputs, linux-release-build]
@@ -1313,11 +1428,13 @@ jobs:
   gate:
     if: always()
     needs: [inputs, documents, scripts, linux-debug-build, compiler,
-            compiler-checks, linux-release-build, release, build-modes,
+            compiler-checks, linux-release-build, release,
+            outside-user-stock, build-modes,
             bindings, editor-grammar, cortex-m, scaling, darwin-debug-build,
             darwin-release-build, darwin-host, darwin-host-release,
             darwin-parity, lldb, arm64-debug-build, arm64-compiler,
-            arm64-compiler-checks, arm64-release, freebsd, determinism]
+            arm64-compiler-checks, arm64-release, freebsd, rv64-qemu,
+            determinism]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

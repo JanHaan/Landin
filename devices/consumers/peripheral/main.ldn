@@ -1,10 +1,10 @@
 -- Explicit synthetic bases. This is not an RP2040 board or vendor emulator.
+import platform/cortex_m
+import rp2040/dma
 import rp2040/io_bank0
 import rp2040/sio
-import rp2040/uart0
 import rp2040/timer
-import rp2040/dma
-import platform/cpu
+import rp2040/uart0
 
 gpio_base: usize = 0x40070000
 sio_base: usize = 0x40070100
@@ -25,11 +25,11 @@ extern(interrupt) device_irq: () -> none =
     notifications += 1
     if pending.f_intr <> 0 then
         remaining := dma.ch0_trans_count_decode(dma.ch0_trans_count_read(dma_base))
-        cpu.device_barrier()
+        cortex_m.device_barrier()
         if remaining.f_ch0_trans_count == 0 then completed = 1 end if
     end if
     dma.intr_write(dma_base, 1)
-    cpu.completion_barrier()
+    cortex_m.completion_barrier()
 end device_irq
 
 receive: (buf: []mut u8) -> (value: u32) =
@@ -46,17 +46,17 @@ receive: (buf: []mut u8) -> (value: u32) =
     cfg.f_incr_write = 1
     dma.ch0_ctrl_trig_write(dma_base, dma.ch0_ctrl_trig_encode(cfg))
     dma.inte0_write(dma_base, 1)
-    cpu.device_barrier()
+    cortex_m.device_barrier()
     cfg.f_en = 1
     dma.ch0_ctrl_trig_write(dma_base, dma.ch0_ctrl_trig_encode(cfg))
     stage = 1
-    while stage == 1 do cpu.compiler_barrier() end while
-    saved := cpu.disable_interrupts()
+    while stage == 1 do cortex_m.compiler_barrier() end while
+    saved := cortex_m.disable_interrupts()
     stage = 3
-    while stage == 3 do cpu.compiler_barrier() end while
-    cpu.restore_interrupts(saved)
-    while completed == 0 do cpu.compiler_barrier() end while
-    cpu.device_barrier()
+    while stage == 3 do cortex_m.compiler_barrier() end while
+    cortex_m.restore_interrupts(saved)
+    while completed == 0 do cortex_m.compiler_barrier() end while
+    cortex_m.device_barrier()
     value = u32(buf[0]) + u32(buf[1]) + u32(buf[2]) + u32(buf[3])
 end receive
 
@@ -82,5 +82,5 @@ start: () -> none =
     compiler.volatile_store(enable, 1)
     result = receive(buffer[0..<lenof buffer])
     stage = 5
-    loop do cpu.wait_for_interrupt() end loop
+    loop do cortex_m.wait_for_interrupt() end loop
 end start

@@ -1,10 +1,10 @@
 error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
-  --> ../tests/fixtures/negative/library-at-live-inout/main.ldn:11:18
+  --> ../tests/fixtures/negative/library-at-live-inout/main.ldn:12:18
    |
-11 |     try vec.push(numbers, arena, 2)
+12 |     try vec.push(numbers, memory, 2)
    |                  ^^^^^^^
-  --> ../tests/fixtures/negative/library-at-live-inout/main.ldn:10:5
+  --> ../tests/fixtures/negative/library-at-live-inout/main.ldn:11:5
    |
-10 |     slot: ptr mut i32 = try vec.at(numbers, usize(0))
+11 |     slot: ptr mut i32 = try vec.at(numbers, usize(0))
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
   = note: [0800]/[0830]: take the view again after mutating its source

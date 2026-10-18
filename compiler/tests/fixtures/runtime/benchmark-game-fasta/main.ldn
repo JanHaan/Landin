@@ -6,7 +6,7 @@
 --  nucleotide.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 
 alu: []u8 = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA"
 iub_symbols: []u8 = "acgtBDHKMNRSVWY"
@@ -58,7 +58,7 @@ select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
     selected = symbols[index]
 end select_symbol
 
-write_repeated: (inout out: io.buffered_writer(hosted.system),
+write_repeated: (inout out: io.buffered_writer(system.host),
                  source: []u8, count: usize) -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
     mut emitted: usize = 0
@@ -80,7 +80,7 @@ write_repeated: (inout out: io.buffered_writer(hosted.system),
     end while
 end write_repeated
 
-write_random: (inout out: io.buffered_writer(hosted.system), symbols: []u8,
+write_random: (inout out: io.buffered_writer(system.host), symbols: []u8,
                cumulative: []f64, inout seed: u32, count: usize)
               -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
@@ -100,7 +100,7 @@ write_random: (inout out: io.buffered_writer(hosted.system), symbols: []u8,
 end write_random
 
 --  The three sequences for N, written through OUT.
-fasta: (inout out: io.buffered_writer(hosted.system), n: usize)
+fasta: (inout out: io.buffered_writer(system.host), n: usize)
        -> none ! io.io_failed =
     mut seed: u32 = 42
     mut iub: [15]f64 = iub_probabilities
@@ -117,7 +117,7 @@ fasta: (inout out: io.buffered_writer(hosted.system), n: usize)
 end fasta
 
 --  The sequence length named by the first argument.
-sequence_size: (host: hosted.system)
+sequence_size: (host: system.host)
                -> (n: usize)
                ! io.no_argument | text.invalid_number | text.number_overflow =
     first: usize = 0
@@ -126,21 +126,17 @@ sequence_size: (host: hosted.system)
 end sequence_size
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     n := sequence_size(host) else (problem)
         _ = problem
-        io.write(host, io.err(host), "usage: fasta N\n") else (ignored)
-            _ = ignored
-        end
+        io.write(host, io.err(host), "usage: fasta N\n") else none
         return
     end
 
     mut storage: [16384]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<16384])
-    defer io.flush(out) else (problem)
-        _ = problem
-    end
+    defer io.flush(out) else none
     fasta(out, n) else (problem)
         _ = problem
         return

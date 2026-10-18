@@ -1,8 +1,18 @@
 import core/mem
 import core/text
 
+--- A memory file slot that no file is open on.
+public closed_slot: atom
+--- A memory file slot open for reading.
+public reading_slot: atom
+--- A memory file slot open for writing.
+public writing_slot: atom
+--- What a memory file slot is open for: `closed_slot`, `reading_slot` or
+--- `writing_slot`, the provider's to change.
+public slot_state: type = closed_slot | reading_slot | writing_slot
+
 --- Caller-supplied in-memory file slot holding its path, readable bytes and
---- writable capacity. Keep all referenced ranges alive and initialize the
+--- writable capacity.  The caller gives it `closed_slot`. Keep all referenced ranges alive and initialize the
 --- fields before constructing the provider.
 ---
 --- Finite caller-backed provider of every io concept. Handles are indexes,
@@ -15,8 +25,7 @@ public memory_file: type = struct
     cursor: usize
     readable: bool
     writable: bool
-    opened: bool
-    writing: bool
+    state: slot_state
 end memory_file
 
 --- Caller-owned state of an in-memory world: how much standard input, output
@@ -37,10 +46,10 @@ public memory_space: type = struct
     fail_read_at: usize
     fail_write_at: usize
     fail_close_at: usize
-    read_calls: usize
-    write_calls: usize
-    close_calls: usize
-    open_calls: usize
+    reads: usize
+    writes: usize
+    closes: usize
+    opens: usize
 end memory_space
 
 memory_value: type = struct
@@ -73,14 +82,14 @@ public memory_over: (inout state: memory_space, files: []mut memory_file,
              input_open: true, output_open: true, errors_open: true,
              read_limit: 0 -% 1, write_limit: 0 -% 1,
              fail_read_at: 0, fail_write_at: 0, fail_close_at: 0,
-             read_calls: 0, write_calls: 0, close_calls: 0, open_calls: 0)
+             reads: 0, writes: 0, closes: 0, opens: 0)
     host = (state: addr state, files: files, arguments: arguments,
             input: input, output: output, errors: errors)
 end memory_over
 
 memory_open: (self: memory, path: text.host_string, writing: bool)
              -> (opened: file) ! not_found | no_access | io_failed =
-    inc self.state.val.open_calls
+    inc self.state.val.opens
     wanted: []u8 = text.host_bytes(path)
     mut at: usize = 0
     while at < lenof self.files do
@@ -88,11 +97,11 @@ memory_open: (self: memory, path: text.host_string, writing: bool)
         if memory_same_bytes(wanted, current.val.name) then
             fail no_access when writing and not current.val.writable
             fail no_access when not writing and not current.val.readable
-            fail io_failed when current.val.opened
+            fail io_failed when current.val.state <> closed_slot
               or current.val.length > lenof current.val.contents
             current.val.cursor = 0
-            current.val.opened = true
-            current.val.writing = writing
+            current.val.state = if writing then writing_slot
+                                else reading_slot end if
             if writing then current.val.length = 0 end if
             opened = file_value(at + 3)
             return
@@ -136,7 +145,7 @@ end memory_same_file
 
 memory_close: (self: memory, sink opened: file) -> none ! io_failed =
     state: ptr mut memory_space = self.state
-    inc state.val.close_calls
+    inc state.val.closes
     if usize(opened) == 0 then
         fail io_failed when not state.val.input_open
         state.val.input_open = false
@@ -151,10 +160,10 @@ memory_close: (self: memory, sink opened: file) -> none ! io_failed =
         index: usize = usize(opened) - 3
         fail io_failed when index >= lenof self.files
         current: ptr mut memory_file = addr self.files[index]
-        fail io_failed when not current.val.opened
-        current.val.opened = false
+        fail io_failed when current.val.state == closed_slot
+        current.val.state = closed_slot
     end if
-    fail io_failed when state.val.close_calls == state.val.fail_close_at
+    fail io_failed when state.val.closes == state.val.fail_close_at
 end memory_close
 
 --  Copy what remains of SOURCE after START into INTO, at most LIMIT bytes:
@@ -180,8 +189,8 @@ memory_read: (self: memory, opened: file, into: []mut u8)
         count = 0
         return
     end if
-    inc state.val.read_calls
-    fail io_failed when state.val.read_calls == state.val.fail_read_at
+    inc state.val.reads
+    fail io_failed when state.val.reads == state.val.fail_read_at
     if usize(opened) == 0 then
         fail io_failed when not state.val.input_open
         count = try memory_take(self.input, state.val.input_used, into,
@@ -193,7 +202,7 @@ memory_read: (self: memory, opened: file, into: []mut u8)
     index: usize = usize(opened) - 3
     fail io_failed when index >= lenof self.files
     current: ptr mut memory_file = addr self.files[index]
-    fail io_failed when not current.val.opened or current.val.writing
+    fail io_failed when current.val.state <> reading_slot
       or current.val.length > lenof current.val.contents
     count = try memory_take(current.val.contents[0..<current.val.length],
                             current.val.cursor, into, state.val.read_limit)
@@ -207,8 +216,8 @@ memory_write_some: (self: memory, opened: file, bytes: []u8)
         count = 0
         return
     end if
-    inc state.val.write_calls
-    fail io_failed when state.val.write_calls == state.val.fail_write_at
+    inc state.val.writes
+    fail io_failed when state.val.writes == state.val.fail_write_at
       or state.val.write_limit == 0
     count = lenof bytes
     if count > state.val.write_limit then count = state.val.write_limit end if
@@ -241,7 +250,7 @@ memory_write_some: (self: memory, opened: file, bytes: []u8)
         index: usize = usize(opened) - 3
         fail io_failed when index >= lenof self.files
         current: ptr mut memory_file = addr self.files[index]
-        fail io_failed when not current.val.opened or not current.val.writing
+        fail io_failed when current.val.state <> writing_slot
           or current.val.length > lenof current.val.contents
         available: usize = lenof current.val.contents - current.val.length
         fail io_failed when available == 0
@@ -311,7 +320,7 @@ memory_under: (name: []u8, prefix: []u8) -> (yes: bool) =
     for at in usize(0)..<lenof prefix do
         return when name[at] <> prefix[at]
     end for
-    yes = name[lenof prefix] == 47
+    yes = name[lenof prefix] == u8('/')
 end memory_under
 
 --  The first slot under the directory at PATH, or the slot count when no
@@ -338,7 +347,7 @@ memory_component: (name: []u8, prefix: []u8)
     return when not memory_under(name, prefix)
     start: usize = lenof prefix + 1
     mut stop: usize = start
-    while stop < lenof name and name[stop] <> 47 do
+    while stop < lenof name and name[stop] <> u8('/') do
         inc stop
     end while
     component = name[start..<stop]
@@ -373,7 +382,7 @@ memory_open_directory: (self: memory, path: text.host_string,
                         buffer: []mut u8)
                        -> (opened: directory from buffer)
                        ! not_found | no_access | io_failed =
-    inc self.state.val.open_calls
+    inc self.state.val.opens
     slot: usize = memory_directory_slot(self, path)
     fail not_found when slot == lenof self.files
     opened = (handle: slot, stream: lenof text.host_bytes(path), position: 0,
@@ -441,7 +450,7 @@ memory_entry_size: (self: memory, opened: directory,
     wanted: []u8 = text.host_bytes(name)
     fail not_found when lenof wanted == 0
     for byte in wanted do
-        fail not_found when byte == 0 or byte == 47
+        fail not_found when byte == 0 or byte == u8('/')
     end for
     fail io_failed when opened.handle >= lenof self.files
     prefix: []u8 = self.files[opened.handle].name[0..<opened.stream]
@@ -460,8 +469,8 @@ memory_close_directory: (self: memory, sink opened: directory)
                         -> none ! io_failed =
     _ = opened.handle
     state: ptr mut memory_space = self.state
-    inc state.val.close_calls
-    fail io_failed when state.val.close_calls == state.val.fail_close_at
+    inc state.val.closes
+    fail io_failed when state.val.closes == state.val.fail_close_at
 end memory_close_directory
 
 --  The memory world's tree is its caller's slots, which it cannot add to
@@ -538,7 +547,7 @@ end variables_over
 --  The bytes of an environment entry before its first `=`, and those
 --  after it; an entry with no `=` is all name.
 memory_split: (entry: []u8) -> (name: []u8 from entry, value: []u8 from entry) =
-    at: usize = mem.find(entry, 61)
+    at: usize = mem.find(entry, u8('='))
     name = entry[0..<at]
     value = entry[lenof entry..<lenof entry]
     if at < lenof entry then value = entry[at + 1..<lenof entry] end if
@@ -586,13 +595,13 @@ end scripted_value
 --- `output` and `errors` all at once when it starts, to the world's own
 --- standard output and error when a stream is inherited, to nothing when
 --- one is discarded, and into its pipe when one is piped, from which
---- `read_child` reads them, output first; and `wait` reports that it
---- exited with `code`, or was `signalled` when that is true.  What the
+--- `read_child` reads them, output first; and `wait` reports `ending`,
+--- that it exited with a code or was signalled.  What the
 --- parent writes to its piped input with `write_child` is kept in `input`,
 --- its first `input_length` bytes, and a write that does not fit is
 --- `io_failed`, where a real pipe would wait.  The child's pipes are no
 --- files of the world: `reader` and `writer` refuse them.  The caller sets
---- those six fields and zeroes the rest, which the provider keeps: how many
+--- those five fields and zeroes the rest, which the provider keeps: how many
 --- times it was started, how many arguments and variables its last start
 --- gave it, how much of its output and errors the parent has read, and
 --- whether it is running.  One record is one child at a time: starting a
@@ -601,8 +610,7 @@ public scripted_program: type = struct
     path: []u8
     output: []u8
     errors: []u8
-    code: i32
-    signalled: bool
+    ending: ending
     input: []mut u8
     input_length: usize
     starts: usize
@@ -667,7 +675,7 @@ end memory_inherit
 --  Whether a variable's name is one a child can be given: nonempty, with
 --  no `=` and no NUL, as a real system requires.
 memory_name_valid: (name: []u8) -> (yes: bool) =
-    yes = lenof name > 0 and mem.find(name, 61) == lenof name
+    yes = lenof name > 0 and mem.find(name, u8('=')) == lenof name
           and mem.find(name, 0) == lenof name
 end memory_name_valid
 
@@ -675,7 +683,7 @@ memory_spawn: (self: scripted_programs, path: text.host_string,
                arguments: []text.host_string, environment: []variable,
                streams: child_streams)
               -> (started: child) ! not_found | no_access | io_failed =
-    inc self.world.state.val.open_calls
+    inc self.world.state.val.opens
     for item in environment do
         name: []u8 = text.host_bytes(item.name)
         fail io_failed when not memory_name_valid(name)
@@ -737,8 +745,8 @@ end memory_close_input
 memory_take_child: (self: scripted_programs, source: []u8, read: usize, into: []mut u8)
                    -> (count: usize) ! io_failed =
     state: ptr mut memory_space = self.world.state
-    inc state.val.read_calls
-    fail io_failed when state.val.read_calls == state.val.fail_read_at
+    inc state.val.reads
+    fail io_failed when state.val.reads == state.val.fail_read_at
     count = try memory_take(source, read, into, state.val.read_limit)
 end memory_take_child
 
@@ -747,7 +755,7 @@ end memory_take_child
 memory_read_child: (self: scripted_programs, inout started: child, into: []mut u8)
                    -> (taken: child_read) ! io_failed =
     program: ptr mut scripted_program = try memory_child(self, started)
-    taken = (count: 0, errors: false,
+    taken = (count: 0, stream: child_output,
              finished: not started.output_open and not started.errors_open)
     return when lenof into == 0
     taken.finished = true
@@ -756,7 +764,7 @@ memory_read_child: (self: scripted_programs, inout started: child, into: []mut u
                                              program.val.output_read, into)
         if count > 0 then
             program.val.output_read += count
-            taken = (count: count, errors: false, finished: false)
+            taken = (count: count, stream: child_output, finished: false)
             return
         end if
         started.output_open = false
@@ -766,7 +774,7 @@ memory_read_child: (self: scripted_programs, inout started: child, into: []mut u
                                              program.val.errors_read, into)
         if count > 0 then
             program.val.errors_read += count
-            taken = (count: count, errors: true, finished: false)
+            taken = (count: count, stream: child_errors, finished: false)
             return
         end if
         started.errors_open = false
@@ -794,8 +802,7 @@ memory_wait: (self: scripted_programs, sink started: child)
              -> (ended: ending) ! io_failed =
     program: ptr mut scripted_program = try memory_child(self, started)
     program.val.running = false
-    ended = if program.val.signalled then (how: signalled)
-            else (how: exited(code: program.val.code)) end if
+    ended = program.val.ending
 end memory_wait
 
 scripted_programs is programs

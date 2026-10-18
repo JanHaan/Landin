@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "about": "Fixtures a cross lane's emulator fails for a reason of its own, which the test program reports as expected host failures on that runner rather than counting. Each row names the fixture, the runners it fails under, every failure line it may fail with, and why; a listed fixture that fails any other way, or passes, fails the run. A row with needs_binfmt does not apply where a binfmt_misc handler for the runner is registered. See compiler/tests/README.md, Lanes.",
+  "expected": [
+    {
+      "fixture": "runtime/environment-variables",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "needs_binfmt": true,
+      "failures": ["recorded standard output", "the program's own exit status (expected 42, actual 3)"],
+      "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+    },
+    {
+      "fixture": "runtime/environment-variables-libc",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "needs_binfmt": true,
+      "failures": ["recorded standard output", "the program's own exit status (expected 42, actual 3)"],
+      "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+    },
+    {
+      "fixture": "runtime/run-no-descriptor-leak",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "needs_binfmt": true,
+      "failures": ["recorded standard output", "the program's own exit status (expected 42, actual 2)"],
+      "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+    },
+    {
+      "fixture": "runtime/posix-sockets",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "failures": ["the program's own exit status (expected 42, actual 6)"],
+      "reason": "QEMU's user emulation answers getsockopt(SO_RCVTIMEO) with a zero-length record, so the receive limit the fixture set does not read back"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+import core/io
+import core/text
+import hosted/system
+
+--- Write each argument on a line of its own.
+print_arguments: (host: system.host) -> none ! io.io_failed =
+    for index in usize(0)..<io.argument_count(host) do
+        argument := io.argument_at(host, index) else (problem)
+            _ = problem
+            return
+        end
+        try io.write(host, io.out(host), text.host_bytes(argument))
+        try io.write(host, io.out(host), "\n")
+    end for
+end print_arguments

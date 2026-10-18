@@ -1,6 +1,6 @@
 import core/fault
-import hosted/heap
 import core/vec
+import hosted/heap
 
 filter: type = concept (item: type)
     keep: (self: ptr mut item, value: i32) -> (yes: bool)
@@ -30,8 +30,11 @@ mut alternate: alternating = (sentinel: 917, calls: 0, total: 0)
 
 public main: () -> (code: i32) =
     code = 1
-    host := heap.host()
-    budget: usize = 3
+    host := heap.new()
+    --  A first block of eight and two growths, each asked in place first
+    --  (D356); the heap's size classes hold neither growth in place, so the
+    --  list moves twice: five attempts, three blocks.
+    budget: usize = 5
     mut space: fault.space = zeroed
     allocator := fault.over(space, host, budget)
     mut filters := vec.new(item: any filter)
@@ -58,7 +61,7 @@ public main: () -> (code: i32) =
         if selected.keep(20) then inc second_pass end if
     end for
     shape_ok: bool = vec.length(filters) == 20
-      and fault.attempts(allocator) == 3
+      and fault.attempts(allocator) == 5 and fault.growths(allocator) == 0
       and fault.live(allocator) == 1
     vec.release(filters, allocator)
     if shape_ok and accepted == 10 and second_pass == 15

@@ -1,5 +1,5 @@
 import core/io
-import core/diag
+import core/io/fake
 import core/text
 
 delivery: type = concept (implementation: type)
@@ -91,7 +91,7 @@ public main: () -> (code: i32) =
     name: []u8 = "delivery"
     configured: io.memory_file =
       (name: name, contents: delivered_bytes[0..<12], length: 0, cursor: 0,
-       readable: true, writable: true, opened: false, writing: false)
+       readable: true, writable: true, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = configured
     no_arguments: [][]u8 = []
@@ -160,18 +160,6 @@ public main: () -> (code: i32) =
     end
     return when not close_failed
 
-    diagnostic_stream: io.file = world.err()
-    writer: any io.writer = any(addr memory)
-    mut streaming := diag.stream(writer, diagnostic_stream)
-    mut logger: any diag.log = any(addr streaming)
-    message: []u8 = "bad"
-    where: text.position = text.cursor(message, 7)
-    logger.note(where, diag.error, message) else (problem)
-        _ = problem
-        return
-    end
-    return when not logger.failed()
-
     mut closed_emit_failed: bool = false
     selected.emit(world, remainder) else (problem)
         closed_emit_failed = problem == io.io_failed
@@ -181,7 +169,7 @@ public main: () -> (code: i32) =
     if closed_emit_failed and lenof written == 3
       and written[0] == 50 and written[1] == 58 and written[2] == 55
       and files[0].length == 5 and files[0].cursor == 5
-      and not files[0].opened and files[0].writing
+      and files[0].state == io.closed_slot
       and delivered_bytes[0] == 65 and delivered_bytes[1] == 66
       and delivered_bytes[2] == 67 and delivered_bytes[3] == 68
       and delivered_bytes[4] == 69 and delivered_bytes[5] == 0
@@ -191,13 +179,9 @@ public main: () -> (code: i32) =
       and file_state.closed
       and count_state.messages == 2 and count_state.bytes == 7
       and count_state.finish_calls == 1 and count_state.closed
-      and state.open_calls == 1 and state.write_calls == 11
-      and state.close_calls == 2 and state.output_used == 3
-      and state.errors_used == 7
-      and error_bytes[0] == 69 and error_bytes[1] == 58
-      and error_bytes[2] == 55 and error_bytes[3] == 58
-      and error_bytes[4] == 98 and error_bytes[5] == 97
-      and error_bytes[6] == 100 and error_bytes[7] == 0
+      and state.opens == 1 and state.writes == 6
+      and state.closes == 2 and state.output_used == 3
+      and state.errors_used == 0 and error_bytes[0] == 0
       and not state.output_open
       and state.errors_open
     then

@@ -97,4 +97,28 @@ package body Landin.Driver.Library is
       return "";
    end Located;
 
+   function Looked_In (Host : Landin.Platform.Filesystem'Class)
+     return String
+   is
+      Binaries : constant String := Host.Executable_Directory;
+      Prefix : constant String :=
+        (if Binaries = "" then "" else Parent (Binaries));
+      Repository : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String (Binaries);
+   begin
+      if Binaries = "" then
+         return "refine could not tell which directory it was started from";
+      end if;
+      for Level in 1 .. 6 loop
+         Repository := Unbounded.To_Unbounded_String
+           (Parent (Unbounded.To_String (Repository)));
+      end loop;
+      return "refine looked in "
+        & (if Prefix = "" then "no prefix above " & Binaries
+           else Landin.Driver.Loading.Joined_Path (Prefix, "lib/landin"))
+        & (if Unbounded.Length (Repository) = 0 then ""
+           else " and in " & Unbounded.To_String (Repository)
+             & ", the checkout a build tree's refine is in");
+   end Looked_In;
+
 end Landin.Driver.Library;

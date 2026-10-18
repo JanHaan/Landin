@@ -1,0 +1,18 @@
+--  Byte strings are ordered by core/cmp's own evidence: a sort of them
+--  needs none of the program's.
+import core/cmp
+import core/sort
+
+public main: () -> (code: i32) =
+    code = 1
+    mut names: [5][]u8 = ["beta", "alpha", "b", "\xff", "alphabet"]
+    sort.sort(names[0..<5])
+    wanted: [5][]u8 = ["alpha", "alphabet", "b", "beta", "\xff"]
+    for at in usize(0)..<5 do
+        return when cmp.compare(names[at], wanted[at]) <> cmp.equal
+    end for
+    code = 2
+    return when cmp.compare("a", "ab") <> cmp.less
+      or cmp.compare("b", "ab") <> cmp.greater
+    code = 42
+end main

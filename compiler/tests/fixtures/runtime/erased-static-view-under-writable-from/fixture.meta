@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a writable result under a from clause also carries an erased read-only view of module storage, immutable or mutable, and a literal, since no store can reach them and they outlive every source
+program: main.ldn
+status: 42
+constructs: 0790, 0840, 1370
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m

@@ -1,0 +1,200 @@
+--  core/io's memory volume follows symbolic links where a system follows
+--  them, and fails where the hosted provider fails: each step below
+--  reports its own code, so a failure says which promise was broken.
+import core/cmp
+import core/io
+import core/io/fake
+import core/mem
+import core/text
+
+--  Something came back other than what the volume promises.
+wrong: atom
+
+--  Rooms for the nodes' paths and contents.
+mut paths: [12][32]u8 = zeroed
+mut contents: [12][32]u8 = zeroed
+
+--  A free node over the room at INDEX.
+free_node: (index: usize) -> (node: fake.volume_node) =
+    node = (path: paths[index][0..<32], path_length: 0,
+            contents: contents[index][0..<32], length: 0, kind: io.regular,
+            read_only: false, modified: (seconds: 0, nanoseconds: 0))
+end free_node
+
+--  Give NODE the path PATH, the kind KIND and the bytes BYTES.
+given: (inout node: fake.volume_node, path: []u8, kind: io.entry_kind,
+        bytes: []u8) -> none ! ... =
+    try mem.copy(node.path[0..<lenof path], path)
+    node.path_length = lenof path
+    try mem.copy(node.contents[0..<lenof bytes], bytes)
+    node.length = lenof bytes
+    node.kind = kind
+end given
+
+--  Whether BYTES are WANTED.
+same: (bytes: []u8, wanted: []u8) -> (yes: bool) =
+    yes = cmp.compare(bytes, wanted) == cmp.equal
+end same
+
+--  How many nodes have the path PATH.
+holding: (nodes: []fake.volume_node, path: []u8) -> (count: usize) =
+    count = 0
+    for node in nodes do
+        if node.path_length > 0
+          and same(node.path[0..<node.path_length], path) then
+            inc count
+        end if
+    end for
+end holding
+
+--  The bytes of the file at PATH, read into INTO.
+read_back: (host: fake.volume, path: []u8, into: []mut u8)
+           -> (bytes: []u8 from into) ! ... =
+    opened: io.file = try io.open_read(host, text.host_over(path))
+    defer io.close(host, opened) else none
+    count: usize = try io.read(host, opened, into)
+    bytes = into[0..<count]
+end read_back
+
+--  Writing through the dangling link `d/later` makes `d/target`, its
+--  target read from the link's directory, and leaves the link alone.
+created: (host: fake.volume, nodes: []fake.volume_node) -> none ! ... =
+    opened: io.file = try io.open_write(host, text.host_over("d/later"))
+    try io.write(host, opened, "made")
+    try io.close(host, opened)
+    fail wrong when holding(nodes, "d/later") <> 1
+      or holding(nodes, "d/target") <> 1 or holding(nodes, "target") <> 0
+    mut buffer: [8]u8 = zeroed
+    bytes: []u8 = try read_back(host, "d/target", buffer[0..<8])
+    fail wrong when not same(bytes, "made")
+    itself: io.status = try io.status_of(host, text.host_over("d/later"),
+                                         io.not_following)
+    fail wrong when itself.kind <> io.symbolic_link
+end created
+
+--  Reading through relative, rooted and climbing targets, and through a
+--  link that is a directory part of the path.
+followed: (host: fake.volume) -> none ! ... =
+    mut buffer: [8]u8 = zeroed
+    near: []u8 = try read_back(host, "d/near", buffer[0..<8])
+    fail wrong when not same(near, "inside")
+    mut second: [8]u8 = zeroed
+    rooted: []u8 = try read_back(host, "d/rooted", second[0..<8])
+    fail wrong when not same(rooted, "inside")
+    mut third: [8]u8 = zeroed
+    up: []u8 = try read_back(host, "d/up", third[0..<8])
+    fail wrong when not same(up, "top")
+    mut fourth: [8]u8 = zeroed
+    through: []u8 = try read_back(host, "into/file", fourth[0..<8])
+    fail wrong when not same(through, "inside")
+    --  A link before the last part is followed even where the call does
+    --  not follow its last part.
+    seen: io.status = try io.status_of(host, text.host_over("into/near"),
+                                       io.not_following)
+    fail wrong when seen.kind <> io.symbolic_link
+end followed
+
+--  A loop of links is io_failed, as ELOOP is.
+looped: (host: fake.volume) -> (yes: bool) =
+    yes = false
+    opened: io.file = io.open_read(host, text.host_over("loop")) else (problem)
+        yes = problem == io.io_failed
+        return
+    end
+    io.close(host, opened) else none
+end looped
+
+--  Removing: a directory asked of a file is not_found, and removing a link
+--  takes the link and leaves its target.
+removed: (host: fake.volume, nodes: []fake.volume_node) -> none ! ... =
+    mut met: bool = false
+    io.remove_directory(host, text.host_over("top")) else (problem)
+        met = problem == io.not_found
+    end
+    fail wrong when not met or holding(nodes, "top") <> 1
+    try io.remove_file(host, text.host_over("d/near"))
+    fail wrong when holding(nodes, "d/near") <> 0
+      or holding(nodes, "d/file") <> 1
+end removed
+
+--  A routine that asks only for `file_system` opens a file and closes it
+--  with `files`' close, which `file_system` refines.
+reopened: (provider: type is io.file_system, host: provider, path: []u8)
+          -> none ! ... =
+    opened: io.file = try io.open_file(host, text.host_over(path),
+                                       io.updating)
+    try io.close(host, opened)
+end reopened
+
+public main: () -> (code: i32) =
+    code = 1
+    mut nodes: [12]fake.volume_node =
+        [free_node(0), free_node(1), free_node(2), free_node(3),
+         free_node(4), free_node(5), free_node(6), free_node(7),
+         free_node(8), free_node(9), free_node(10), free_node(11)]
+    given(nodes[0], "d", io.subdirectory, "") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[1], "d/file", io.regular, "inside") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[2], "top", io.regular, "top") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[3], "d/later", io.symbolic_link, "target") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[4], "d/near", io.symbolic_link, "file") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[5], "d/rooted", io.symbolic_link, "/d/file") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[6], "d/up", io.symbolic_link, "../top") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[7], "into", io.symbolic_link, "d") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[8], "loop", io.symbolic_link, "round") else (problem)
+        _ = problem
+        return
+    end
+    given(nodes[9], "round", io.symbolic_link, "loop") else (problem)
+        _ = problem
+        return
+    end
+    mut state: fake.volume_space = zeroed
+    host := fake.volume_over(state, nodes[0..<12], "/volume")
+    code = 2
+    created(host, nodes[0..<12]) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    followed(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 4
+    return when not looped(host)
+    code = 5
+    removed(host, nodes[0..<12]) else (problem)
+        _ = problem
+        return
+    end
+    code = 6
+    reopened(host, "d/file") else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

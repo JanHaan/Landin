@@ -3,6 +3,7 @@
 --  headers, and platform/posix's clocks, which the peer reads its own
 --  around: on Darwin and FreeBSD through the C library, and on Linux, the
 --  C runtime having started the program, through the system call.
+import core/time
 import platform/libc
 import platform/linux
 import platform/posix
@@ -31,11 +32,11 @@ end if
 --  The clock `clock` in nanoseconds, or -1 when it cannot be read.
 nanoseconds: (clock: posix.clock_kind) -> (at: i64) =
     at = -1
-    time: posix.time_value = posix.clock_time(clock) else (problem)
+    reading: posix.time_value = posix.clock_time(clock) else (problem)
         _ = problem
         return
     end
-    at = time.seconds * 1000000000 + i64(time.nanoseconds)
+    at = reading.seconds * 1000000000 + i64(reading.nanoseconds)
 end nanoseconds
 
 public extern(c) l_monotonic: () -> (at: i64) =

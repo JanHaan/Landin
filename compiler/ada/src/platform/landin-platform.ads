@@ -108,21 +108,23 @@ package Landin.Platform is
       Content : String;
       Status  : out Write_Status) is abstract;
 
-   --  Replace an existing ordinary file only after all new bytes have been
-   --  written.  On failure its original bytes remain.  The native adapter
-   --  follows a symlink to its target and refuses hard-linked targets. It
-   --  needs write permission in the target's directory to create and rename
-   --  the sibling file. On success it copies owner, group, and mode bits
-   --  (including special bits). ACLs and xattrs cause safe refusal, as does
-   --  failure to establish their absence. Linux may refuse ordinary users
-   --  who cannot inspect privileged attributes. Timestamps may change.
-   --  It syncs the file, not the parent directory, so crash durability of
-   --  the renamed directory entry is not guaranteed.
+   --  Write new bytes into an existing ordinary file, the same file, so
+   --  that everything it carries stays with it (D358).  The native adapter
+   --  follows a symlink to its target, keeps a synced copy of the original
+   --  bytes beside it until the new ones are synced, and on a failed write
+   --  puts the original bytes back.  It needs write permission in the
+   --  file's directory for that copy, and no privilege.  Every name a hard
+   --  link gives the file sees the new bytes.  Mode bits a write clears are
+   --  set again; a file whose bits or capabilities could not be is refused
+   --  before it is written.  Timestamps change, as for any write.  On
+   --  failure Reason says why in words a person can act on; on success it
+   --  is empty.
    procedure Replace_File
      (Host    : Filesystem;
       Path    : String;
       Content : String;
-      Status  : out Write_Status) is abstract;
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
 
    --  Remove one file, never a directory. Missing files already meet the
    --  absence requirement. Establish fresh output without reading old bytes.

@@ -13,6 +13,7 @@ with Landin.Backend.RiscV_ABI;
 with Landin.Backend.RiscV_Instructions;
 with Landin.Backend.ELF;
 with Landin.Backend.Entry_Point;
+with Landin.Backend.Trap_Reports;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
 
@@ -911,6 +912,14 @@ package body Landin.Backend.RiscV is
 
       Local_Prefix : constant String := Unused_Local_Prefix;
 
+      --  D361's report lines, each a read-only string, and the one routine
+      --  that writes a line to standard error and ends the process.
+      Reports : Landin.Backend.Trap_Reports.Table;
+      Reporter : constant String := Local_Prefix & "landin_trap_report";
+      function Report_Label (Index : Positive) return String
+        is (Local_Prefix & "landin_trap_line_"
+            & Trimmed (Positive'Image (Index)));
+
       --  Internal code labels use the collision-checked ELF prefix.
       Step_Prefix : constant String :=
         Local_Prefix;
@@ -1220,8 +1229,7 @@ package body Landin.Backend.RiscV is
 
          function Trap (Reason : Landin.Panics.Kind) return String is
          begin
-            if Panic = null or else Landin.Panics.Handler (Panic.all)
-              = Landin.IR.No_Item
+            if Panic = null or else not Landin.Panics.Calls_Out (Panic.all)
             then
                return Hard_Trap;
             end if;
@@ -3287,8 +3295,8 @@ package body Landin.Backend.RiscV is
                   Emit ("li x31, 0");
                   Finish_Exit;
                when Landin.IR.Halt =>
-                  if Panic = null or else Landin.Panics.Handler (Panic.all)
-                    = Landin.IR.No_Item
+                  if Panic = null
+                    or else not Landin.Panics.Calls_Out (Panic.all)
                   then
                      Emit ("unimp");
                   else
@@ -3577,10 +3585,23 @@ package body Landin.Backend.RiscV is
             if Debug /= null then
                Put (Dwarf.Source_Line (Debug.all, Edge.Origin));
             end if;
-            Immediate ("x10", Pattern (Landin.Panics.Code
-              (Panic.all, Edge.Reason)));
-            Immediate ("x11", Pattern (Edge.Site));
-            Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+            if Landin.Panics.Handler (Panic.all) /= Landin.IR.No_Item then
+               Immediate ("x10", Pattern (Landin.Panics.Code
+                 (Panic.all, Edge.Reason)));
+               Immediate ("x11", Pattern (Edge.Site));
+               Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+            else
+               --  D361: the line for this operation, and its length, to
+               --  the routine that writes it and ends the process.
+               declare
+                  Line : constant String := Landin.Panics.Report
+                    (Panic.all, Edge.Origin, Edge.Reason);
+               begin
+                  Emit ("lla x10, " & Report_Label (Reports.Index_Of (Line)));
+                  Immediate ("x11", Pattern (Line'Length));
+                  Emit ("call " & Reporter);
+               end;
+            end if;
             Emit ("unimp");
          end loop;
          Put (Hard_Trap & ":");
@@ -5012,44 +5033,100 @@ package body Landin.Backend.RiscV is
          end;
       end;
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
-            declare
-               Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
-                 (Index);
-               Alias_Previous : constant Boolean := Index > 1
-                 and then Shares_Evidence_Table
-                   (Of_Unit, Landin.IR.Evidence_Id (Index - 1), Id);
-               Alias_Next : constant Boolean :=
-                 Index < Landin.IR.Evidence_Count (Of_Unit)
-                   and then Shares_Evidence_Table
-                     (Of_Unit, Id, Landin.IR.Evidence_Id (Index + 1));
-               Bytes : Landin.Targets.Byte_Count;
-               Alignment : Landin.Targets.Byte_Alignment;
-            begin
-               if not Alias_Previous then
-                  Emit (ELF_Spelling.Item_Section
-                    ("data.rel.ro.local", "evidence", Index));
-                  Field_Extent
-                    (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
-                     Facts, Bytes, Alignment);
-                  Emit (".balign 8");
-                  Put (Evidence_Symbol (Id) & ":");
-                  if Alias_Next then
-                     Put (Evidence_Symbol
-                       (Landin.IR.Evidence_Id (Index + 1)) & ":");
+         declare
+            Kept : constant Kept_Entries :=
+              Kept_Evidence_Entries
+                (Of_Unit,
+                 (if Panic = null then Landin.IR.No_Item
+                  else Landin.Panics.Handler (Panic.all)));
+         begin
+            for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
+               declare
+                  Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
+                    (Index);
+                  Alias_Previous : constant Boolean := Index > 1
+                    and then Shares_Evidence_Table
+                      (Of_Unit, Landin.IR.Evidence_Id (Index - 1), Id);
+                  Alias_Next : constant Boolean :=
+                    Index < Landin.IR.Evidence_Count (Of_Unit)
+                      and then Shares_Evidence_Table
+                        (Of_Unit, Id, Landin.IR.Evidence_Id (Index + 1));
+                  Bytes : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  if not Alias_Previous then
+                     Emit (ELF_Spelling.Item_Section
+                       ("data.rel.ro.local", "evidence", Index));
+                     Field_Extent
+                       (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
+                        Facts, Bytes, Alignment);
+                     Emit (".balign 8");
+                     Put (Evidence_Symbol (Id) & ":");
+                     if Alias_Next then
+                        Put (Evidence_Symbol
+                          (Landin.IR.Evidence_Id (Index + 1)) & ":");
+                     end if;
+                     Emit (".quad " & Trimmed (Landin.Targets.Byte_Count'Image
+                       (Bytes)));
+                     Emit (".quad " & Trimmed
+                       (Landin.Targets.Byte_Alignment'Image (Alignment)));
+                     for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
+                       (Of_Unit, Id) loop
+                        --  D374: an entry nothing can project is a zero word.
+                        if Is_Kept (Kept, Id, Entry_Index) then
+                           Emit (".quad " & Symbol
+                             (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
+                               Entry_Index)));
+                        else
+                           Emit (".quad 0");
+                        end if;
+                     end loop;
                   end if;
-                  Emit (".quad " & Trimmed (Landin.Targets.Byte_Count'Image
-                    (Bytes)));
-                  Emit (".quad " & Trimmed
-                    (Landin.Targets.Byte_Alignment'Image (Alignment)));
-                  for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
-                    (Of_Unit, Id) loop
-                     Emit (".quad " & Symbol
-                       (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
-                         Entry_Index)));
-                  end loop;
-               end if;
-            end;
+               end;
+            end loop;
+         end;
+      end if;
+      --  D361's writer: Linux's write system call to descriptor 2, with the
+      --  line's address and length as a call's first two arguments.  It
+      --  keeps a frame record, as every routine here does, and does not
+      --  return: the terminal instruction follows.
+      if Reports.Count > 0 then
+         Emit (".section .text.landin_trap_report,""ax"",@progbits");
+         Emit (".p2align 2");
+         Emit (".type " & Reporter & ", @function");
+         Put (Reporter & ":");
+         if Debug /= null then
+            Emit (".cfi_startproc");
+         end if;
+         Emit ("addi sp, sp, -16");
+         Emit ("sd x8, 0(sp)");
+         Emit ("sd ra, 8(sp)");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 16");
+            Emit (".cfi_offset x8, -16");
+            Emit (".cfi_offset x1, -8");
+         end if;
+         Emit ("addi x8, sp, 16");
+         if Debug /= null then
+            Emit (".cfi_def_cfa x8, 0");
+         end if;
+         Emit ("mv x12, x11");
+         Emit ("mv x11, x10");
+         Emit ("li x10, 2");
+         Emit ("li x17, 64");
+         Emit ("ecall");
+         Emit ("unimp");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
+         Platform_Directive (ELF_Spelling.Size_To_Here (Reporter));
+         for Index in 1 .. Reports.Count loop
+            Emit (".section .rodata.str1.1.landin_trap_"
+                  & Trimmed (Positive'Image (Index))
+                  & ",""aMS"",@progbits,1");
+            Put (Report_Label (Index) & ":");
+            Emit (".asciz " & Landin.Backend.Trap_Reports.Quoted
+              (Reports.Text (Index)));
          end loop;
       end if;
       if Debug /= null then

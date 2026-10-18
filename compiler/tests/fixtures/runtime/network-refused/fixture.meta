@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: a connection over 127.0.0.1 and over ::1 to a port whose listener was just closed is io.refused, the hosted provider keeping ECONNREFUSED as its last errno
+summary: a connection over 127.0.0.1 and over ::1 to a port whose listener was just closed is net.refused, the hosted provider keeping ECONNREFUSED as its last errno
 program: main.ldn
 root: ../../../../..
 status: 42

@@ -8,7 +8,7 @@ import core/mem
 import core/region
 import core/text
 import hosted/heap
-import hosted/io as hosted
+import hosted/system
 
 bad_depth: atom
 
@@ -22,7 +22,7 @@ node: type = struct
     right: child
 end node
 
-nodes_region: type = region.region(heap.system)
+nodes_region: type = region.region(heap.heap)
 
 min_depth: usize = 4
 
@@ -52,9 +52,9 @@ check_child: (branch: child) -> (count: usize) =
 end check_child
 
 --  Build a tree of DEPTH in a region of its own, check it and free it.
-checked_tree: (memory: heap.system, depth: usize)
+checked_tree: (memory: heap.heap, depth: usize)
               -> (count: usize) ! mem.out_of_memory =
-    mut ledger: region.space(0) = zeroed
+    mut ledger: region.growing_space = zeroed
     nodes := region.over(ledger, memory)
     defer region.release(ledger, memory)
     tree: ptr mut node = try build(nodes, depth)
@@ -62,7 +62,7 @@ checked_tree: (memory: heap.system, depth: usize)
 end checked_tree
 
 --  Write one line of the report.
-say: (host: hosted.system, template: utf8, values: []any text.formattable)
+say: (host: system.host, template: utf8, values: []any text.formattable)
      -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [96]u8 = zeroed
     mut line := text.over(storage)
@@ -70,10 +70,10 @@ say: (host: hosted.system, template: utf8, values: []any text.formattable)
     try io.write(host, io.out(host), text.used(line))
 end say
 
-binary_trees: (host: hosted.system, n: usize)
+binary_trees: (host: system.host, n: usize)
               -> none ! mem.out_of_memory | io.io_failed | text.no_space
                       | text.invalid_format =
-    memory := heap.host()
+    memory := heap.new()
     max_depth: usize = if n > min_depth + 2 then n else min_depth + 2 end if
 
     stretch_depth: usize = max_depth + 1
@@ -81,7 +81,7 @@ binary_trees: (host: hosted.system, n: usize)
     try say(host, "stretch tree of depth {}\t check: {}\n",
             [any(addr stretch_depth), any(addr stretch_check)])
 
-    mut long_ledger: region.space(0) = zeroed
+    mut long_ledger: region.growing_space = zeroed
     long_lived := region.over(long_ledger, memory)
     defer region.release(long_ledger, memory)
     long_tree: ptr mut node = try build(long_lived, max_depth)
@@ -107,7 +107,7 @@ end binary_trees
 
 --  The depth named by the first argument; above fifty-nine the nodes counted
 --  at depth four would not fit in a usize.
-tree_depth: (host: hosted.system)
+tree_depth: (host: system.host)
             -> (n: usize) ! io.no_argument | text.invalid_number
                           | text.number_overflow | bad_depth =
     first: usize = 0
@@ -117,24 +117,19 @@ tree_depth: (host: hosted.system)
 end tree_depth
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     code = 1
     n := tree_depth(host) else (problem)
         _ = problem
         io.write(host, io.err(host),
-                 "usage: binary-trees N, where N is 0 to 59\n")
-            else (ignored)
-            _ = ignored
-        end
+                 "usage: binary-trees N, where N is 0 to 59\n") else none
         return
     end
 
     binary_trees(host, n) else (problem)
         return when problem <> mem.out_of_memory
         message: []u8 = "binary-trees: out of memory\n"
-        io.write(host, io.err(host), message) else (ignored)
-            _ = ignored
-        end
+        io.write(host, io.err(host), message) else none
         return
     end
     code = 0

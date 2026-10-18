@@ -1,14 +1,15 @@
+import core/arena
 import core/mem
 import core/spill
 
 exercise: () -> (ok: bool) ! mem.out_of_memory | mem.empty | mem.out_of_bounds =
     ok = false
     mut backing: [32]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 32)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 32)
     mut values := spill.new(item: i32, inline_slots: 1)
-    try spill.push(values, arena, i32(41))
-    return when spill.length(addr values) <> 1 or mem.arena_used(arena) <> 0
+    try spill.push(values, memory, i32(41))
+    return when spill.length(addr values) <> 1 or arena.used(memory) <> 0
     slot: ptr mut i32 = try spill.at(values, usize(0))
     slot.val = 42
     value := try spill.pop(values)

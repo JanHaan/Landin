@@ -32,7 +32,7 @@ package body Landin.Modules.Availability is
            Landin.Targets.Capabilities.Linux
            | Landin.Targets.Capabilities.Darwin
            | Landin.Targets.Capabilities.FreeBSD;
-      elsif Under (Logical, "platform/cpu") then
+      elsif Under (Logical, "platform/cortex_m") then
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.Cortex_M0;
       elsif Under (Logical, "platform/c") then
@@ -56,8 +56,8 @@ package body Landin.Modules.Availability is
       elsif POSIX_Module (Logical) then
          return "D267: " & Logical & " requires a hosted POSIX system:"
            & " Linux, Darwin or FreeBSD";
-      elsif Under (Logical, "platform/cpu") then
-         return "D267: platform/cpu requires an M-profile target";
+      elsif Under (Logical, "platform/cortex_m") then
+         return "D267: platform/cortex_m requires an M-profile target";
       else
          return "D267: platform/c requires an enabled LP64 C ABI";
       end if;

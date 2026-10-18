@@ -1,0 +1,77 @@
+--  A clock a test sets and advances, the fake of core/time's two clocks.
+
+import core/time
+
+--- Caller-owned state of a manual clock: what its monotonic clock reads,
+--- in nanoseconds, what its wall clock reads, and how often each was read
+--- and slept on and how long.  Declare it `zeroed` and give it to
+--- `clock_over`, which fills it; it must outlive the clock's handle.  Its
+--- fields may be read, and the readings set, while the handle is in use:
+--- set `monotonic` only forward, as a monotonic clock never goes back, and
+--- `wall_seconds` either way, as a system's wall clock may be set.
+public clock_space: type = struct
+    monotonic: u64
+    wall_seconds: i64
+    wall_nanoseconds: u32
+    readings: usize
+    sleeps: usize
+    slept: u64
+end clock_space
+
+manual_value: type = struct
+    state: ptr mut clock_space
+end manual_value
+
+--- A clock that moves only when it is told: `advance` moves it, and
+--- `sleep` advances it by exactly the span asked and returns at once, so a
+--- test of code that sleeps or times itself takes no time and gives the
+--- same answer every run.  Both of its clocks move together.  A provider
+--- of `clock` and `wall_clock`; copies share the state.
+public clock: type = manual_value
+
+--- Fill `state` for a manual clock whose monotonic clock reads `start` and
+--- whose wall clock reads `wall`, and return its handle.
+public clock_over: (inout state: clock_space, start: time.instant,
+                    wall: time.wall_time) -> (host: clock from state) =
+    state = (monotonic: u64(start), wall_seconds: wall.seconds,
+             wall_nanoseconds: wall.nanoseconds, readings: 0, sleeps: 0,
+             slept: 0)
+    host = (state: addr state)
+end clock_over
+
+--- Move a manual clock's monotonic and wall clocks forward by `span`; it
+--- traps past the monotonic clock's last instant.
+public advance: (host: clock, span: time.duration) -> none =
+    state: ptr mut clock_space = host.state
+    state.val.monotonic = state.val.monotonic + u64(span)
+    whole: u64 = u64(span) / 1000000000
+    mut part: u32 = state.val.wall_nanoseconds
+                    + u32(u64(span) - whole * 1000000000)
+    mut carried: i64 = i64(whole)
+    if part >= 1000000000 then
+        part -= 1000000000
+        inc carried
+    end if
+    state.val.wall_seconds = state.val.wall_seconds + carried
+    state.val.wall_nanoseconds = part
+end advance
+
+manual_now: (self: clock) -> (at: time.instant) =
+    inc self.state.val.readings
+    at = time.instant(self.state.val.monotonic)
+end manual_now
+
+manual_sleep: (self: clock, span: time.duration) -> none =
+    inc self.state.val.sleeps
+    self.state.val.slept = self.state.val.slept + u64(span)
+    advance(self, span)
+end manual_sleep
+
+manual_wall_now: (self: clock) -> (at: time.wall_time) =
+    inc self.state.val.readings
+    at = (seconds: self.state.val.wall_seconds,
+          nanoseconds: self.state.val.wall_nanoseconds)
+end manual_wall_now
+
+clock is time.clock (now: manual_now, sleep: manual_sleep)
+clock is time.wall_clock (wall_now: manual_wall_now)

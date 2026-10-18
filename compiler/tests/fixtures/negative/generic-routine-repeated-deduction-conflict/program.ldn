@@ -2,5 +2,6 @@ same: (t: type, left: t, right: t) -> (result: t) = left end same
 
 public main: () -> (code: i32) =
     small: u8 = 7
-    code = same(small, 9)
+    wide: u16 = 9
+    code = i32(same(small, wide))
 end main

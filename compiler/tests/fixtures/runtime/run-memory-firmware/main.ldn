@@ -4,6 +4,7 @@
 --  waited for with the code it was scripted to end with; an environment
 --  declared as data is looked up by name.
 import core/io
+import core/io/fake
 import core/text
 
 entries: [2][]u8 = ["NAME=landin", "EMPTY="]
@@ -13,11 +14,12 @@ public main: () -> (code: i32) =
     mut state: io.memory_space = zeroed
     mut slots: [1]io.memory_file =
         [(name: "unused", contents: [], length: 0, cursor: 0, readable: false,
-          writable: false, opened: false, writing: false)]
+          writable: false, state: io.closed_slot)]
     world := io.memory_over(state, slots[0..<1], [], "", [], [])
     mut programs: [1]io.scripted_program =
-        [(path: "/bin/tool", output: "done\n", errors: "", code: 3,
-          signalled: false, input: [], input_length: 0, starts: 0,
+        [(path: "/bin/tool", output: "done\n", errors: "",
+          ending: (how: io.exited(code: 3)), input: [], input_length: 0,
+          starts: 0,
           arguments: 0, variables: 0, output_read: 0, errors_read: 0,
           running: false)]
     host := io.scripted_over(world, programs[0..<1])
@@ -45,7 +47,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when part.finished or part.errors or part.count <> 5
+    return when part.finished or part.stream == io.child_errors or part.count <> 5
       or buffer[0] <> 100 or buffer[4] <> 10
     code = 4
     ended: io.ending = io.wait(host, child) else (problem)

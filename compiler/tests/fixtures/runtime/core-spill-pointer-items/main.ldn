@@ -1,3 +1,4 @@
+import core/arena
 import core/mem
 import core/spill
 
@@ -22,28 +23,28 @@ third: node = (value: 3)
 exercise: () -> (ok: bool) ! mem.out_of_memory | mem.out_of_bounds =
     ok = false
     mut backing: [256]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], 256)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 256)
 
     mut nodes := spill.new(item: ptr node, inline_slots: 2)
-    try spill.push(nodes, arena, addr first)
-    try spill.push(nodes, arena, addr second)
-    return when mem.arena_used(arena) <> 0
-    try spill.push(nodes, arena, addr third)
-    return when mem.arena_used(arena) == 0 or spill.length(addr nodes) <> 3
+    try spill.push(nodes, memory, addr first)
+    try spill.push(nodes, memory, addr second)
+    return when arena.used(memory) <> 0
+    try spill.push(nodes, memory, addr third)
+    return when arena.used(memory) == 0 or spill.length(addr nodes) <> 3
     spilled: ptr node = try spill.get(addr nodes, usize(2))
     return when spilled.val.value <> 3
 
     mut readings := spill.new(item: reading, inline_slots: 1)
     quiet: reading = (at: low, value: 10)
     loud: reading = (at: high, value: 20)
-    try spill.push(readings, arena, quiet)
-    try spill.push(readings, arena, loud)
+    try spill.push(readings, memory, quiet)
+    try spill.push(readings, memory, loud)
     later: reading = try spill.get(addr readings, usize(1))
     return when later.at <> high or later.value <> 20
 
-    spill.release(readings, arena)
-    spill.release(nodes, arena)
+    spill.release(readings, memory)
+    spill.release(nodes, memory)
     ok = spill.length(addr nodes) == 0
 end exercise
 

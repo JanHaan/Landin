@@ -18,7 +18,7 @@ import threading
 import time
 
 from gdb_server import GdbServer
-from setup import DEFAULT, HERE, inventory, sha, supported_host
+from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
 
 #  The GDB every session on one thread shares; `Run.debug` starts it.  One
 #  per thread, because a GDB serves one session at a time and the corpus
@@ -61,6 +61,24 @@ def gdb_listener():
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
+
+
+class CommandFailed(RuntimeError):
+    """A recorded command or debugger session that failed or ran out of time.
+
+    The message names the command, how it ended and the log it left, so a
+    failure line is enough to find what the tool said.  `name` and `log`
+    let a caller decide what the failure means, as the corpus does for a
+    link that overflowed its region.
+    """
+
+    def __init__(self, name, log, ended):
+        super().__init__('%s %s; inspect %s' % (name, ended, log))
+        self.name, self.log, self.ended = name, log, ended
+
+
+def limit_text(seconds):
+    return '%g-second' % seconds
 
 
 def stop(process):
@@ -117,14 +135,17 @@ class Run:
                 record["exit"] = 0 if server.session(elf, script, log, timeout) else 1
             except TimeoutError:
                 record['timed_out'] = True
-                raise RuntimeError(name + ' timed out')
+                raise CommandFailed(name, log, 'timed out: the session reached its %s limit %.1f s'
+                                    ' after it started' % (limit_text(timeout),
+                                                           time.monotonic() - tick))
             except OSError as error:
                 record['exit'] = None
-                raise RuntimeError(name + ' lost its debugger: ' + str(error))
+                raise CommandFailed(name, log, 'lost its debugger: ' + str(error))
         finally:
             record['seconds'] = time.monotonic() - tick
             (self.out / 'commands.json').write_text(json.dumps(self.commands, indent=2)+'\n')
-        require(record['exit'] == 0, name + ' failed; inspect retained log')
+        if record['exit'] != 0:
+            raise CommandFailed(name, log, 'failed')
         return log.read_text(errors='replace')
 
     def command(self, name, argv, timeout=30, env=None):
@@ -140,11 +161,16 @@ class Run:
                 except subprocess.TimeoutExpired:
                     record['timed_out'] = True
                     stop(p)
-                    raise RuntimeError(name + ' timed out')
+                    raise CommandFailed(name, self.out / (name + '.log'),
+                                        'timed out: it reached its %s limit %.1f s after it'
+                                        ' started' % (limit_text(timeout),
+                                                      time.monotonic() - tick))
             finally:
                 record['seconds'] = time.monotonic() - tick
                 (self.out / 'commands.json').write_text(json.dumps(self.commands, indent=2)+'\n')
-        require(record['exit'] == 0, name + ' failed; inspect retained log')
+        if record['exit'] != 0:
+            raise CommandFailed(name, self.out / (name + '.log'),
+                                'failed with exit %d' % record['exit'])
         return (self.out / (name + '.log')).read_text(errors='replace')
 
     def build(self, name, extra=()):
@@ -318,12 +344,13 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--refine', type=Path, required=True)
     args = parser.parse_args()
+    tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     record = {'status': 'failed', 'inputs': inventory(HERE), 'platform': os.uname().sysname,
               'machine': os.uname().machine, 'kernel': os.uname().release}
     try:
-        Run(out, args.tools.resolve()).execute(args.refine)
+        Run(out, tools).execute(args.refine)
         require(record['inputs'] == inventory(HERE), 'probe inputs changed')
         record['status'] = 'passed'
     except Exception as exc:

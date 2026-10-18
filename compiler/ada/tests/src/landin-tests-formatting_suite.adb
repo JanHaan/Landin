@@ -140,6 +140,96 @@ package body Landin.Tests.Formatting_Suite is
       return "";
    end Edits_Problem;
 
+   --  Whether `refine fmt --check`'s account of the edits is the layout:
+   --  reading Text line by line, dropping each line it says is removed and
+   --  writing each it says is respaced as it says, gives the formatted
+   --  lines in order, and every line it does not name ends as the
+   --  formatted line it becomes does (D359).
+   function Differences_Problem
+     (Text : String; Answer : Landin.Formatting.Result) return String;
+
+   function Differences_Problem
+     (Text : String; Answer : Landin.Formatting.Result) return String
+   is
+      use type Landin.Formatting.Difference_Kind;
+      use type Landin.Source.Line_Number;
+      package Src renames Landin.Source;
+      Original : constant Src.Snapshot := Src.Create (1, "probe.ldn", Text);
+      Laid_Out : constant Src.Snapshot :=
+        Src.Create (2, "probe.ldn", Unbounded.To_String (Answer.Text));
+      Changes : constant Landin.Formatting.Difference_List :=
+        Landin.Formatting.Differences (Original, Answer);
+
+      function Ends_A_Line (Item : Src.Snapshot) return Boolean
+        is (Src.Length (Item) > 0
+            and then (for some Byte of Src.Slice
+                        (Item, (Src.Length (Item) - 1, Src.Length (Item)))
+                      => Byte in LF | CR));
+
+      function Lines (Item : Src.Snapshot) return Natural
+        is (if Src.Length (Item) = 0 then 0
+            else Natural (Src.Line_Count (Item))
+              - (if Ends_A_Line (Item) then 1 else 0));
+
+      function Ending (Item : Src.Snapshot; Line : Src.Line_Number)
+        return String
+      is (Src.Slice (Item, (Src.Line_Text_Span (Item, Line).Last,
+                            Src.Line_Span (Item, Line).Last)));
+
+      Next   : Positive := 1;
+      Laid   : Natural := 0;
+   begin
+      if Changes.Is_Empty /= Answer.Edits.Is_Empty then
+         return "the differences and the edits disagree on whether there"
+           & " are any";
+      end if;
+      for Line in 1 .. Lines (Original) loop
+         declare
+            Number : constant Src.Line_Number := Src.Line_Number (Line);
+            Named  : constant Boolean :=
+              Next <= Natural (Changes.Length)
+              and then Changes (Next).Line = Number;
+            Kind   : constant Landin.Formatting.Difference_Kind :=
+              (if Named then Changes (Next).Kind
+               else Landin.Formatting.Respaced);
+         begin
+            if not (Named and then Kind = Landin.Formatting.Removed) then
+               Laid := Laid + 1;
+               if Laid > Lines (Laid_Out) then
+                  return "line" & Line'Image & " has no formatted line";
+               end if;
+               declare
+                  Want : constant String :=
+                    (if Named then Unbounded.To_String (Changes (Next).Wanted)
+                     else Src.Line_Text (Original, Number));
+               begin
+                  if Want /= Src.Line_Text (Laid_Out, Src.Line_Number (Laid))
+                  then
+                     return "line" & Line'Image & " becomes `"
+                       & Src.Line_Text (Laid_Out, Src.Line_Number (Laid))
+                       & "`, not `" & Want & "`";
+                  elsif not Named
+                    and then Ending (Original, Number)
+                      /= Ending (Laid_Out, Src.Line_Number (Laid))
+                  then
+                     return "line" & Line'Image & "'s end changes unnamed";
+                  end if;
+               end;
+            end if;
+            if Named then
+               Next := Next + 1;
+            end if;
+         end;
+      end loop;
+      if Next /= Natural (Changes.Length) + 1 then
+         return "a difference names no line of the source, or names one"
+           & " out of order";
+      elsif Laid /= Lines (Laid_Out) then
+         return "the formatted text has lines no source line becomes";
+      end if;
+      return "";
+   end Differences_Problem;
+
    --  Formats Text and requires everything the layout promises of it:
    --  space-only edits, the same tokens and comments, no extra line end,
    --  one final LF after nonblank content (unless empty), and a second
@@ -187,6 +277,13 @@ package body Landin.Tests.Formatting_Suite is
       begin
          if Problem /= "" then
             Landin.Testing.Fail (Item, Label & ": " & Problem);
+         end if;
+      end;
+      declare
+         Problem : constant String := Differences_Problem (Text, Once);
+      begin
+         if Problem /= "" then
+            Landin.Testing.Fail (Item, Label & ": --check: " & Problem);
          end if;
       end;
       if Things (Out_Text) /= Things (Text) then
@@ -593,7 +690,9 @@ package body Landin.Tests.Formatting_Suite is
    --  What the gate holds: the library, the example programs and the
    --  running examples are formatted, so what a reader copies from them is
    --  the layout.  The running examples are read from examples.md, whose
-   --  listings check.py holds to the runtime sources byte for byte.
+   --  listings check.py holds to the runtime sources byte for byte; the
+   --  examples of docs/from-c.md are read from the fixture whose files
+   --  check.py holds its listings to, one file each.
    procedure Core_And_Examples_Are_Formatted
      (Item : in out Landin.Testing.Context);
 
@@ -626,6 +725,17 @@ package body Landin.Tests.Formatting_Suite is
       Landin.Testing.Check
         (Item, Files >= 30, "core and the examples were read, and"
          & Files'Image & " sources were");
+      declare
+         Before : constant Natural := Files;
+      begin
+         Walk_Sources
+           (Item, Root & "/compiler/tests/fixtures/positive/from-c",
+            Visit'Access);
+         Landin.Testing.Check
+           (Item, Files - Before >= 20, "docs/from-c.md's examples were"
+            & " read from their fixture, and" & Natural'Image (Files - Before)
+            & " were");
+      end;
 
       Host.Read_File (Root & "/examples.md", Content, Status);
       if Status /= Landin.Platform.Read_Ok then
@@ -745,6 +855,158 @@ package body Landin.Tests.Formatting_Suite is
               & "end f" & LF);
    end Parser_Frictions_Are_Laid_Out;
 
+   --  Every example of the tour before WHAT WAS TRIED AND DROPPED
+   --  that reads as a source, or as the body of a routine, is in the
+   --  layout, so what a reader copies from it is.  Read at its own margin,
+   --  an example indented as statements are is read as a routine's body.
+   --  One whose first line is check.py's exemption says it is not, and
+   --  must be outside the layout or no source at all.  check.py holds the
+   --  rest, the fragments no parse reads, to what a scan can see.
+   --  Deliberate real-host exception: the tour is what is under test.
+   procedure The_Tour_Is_In_The_Layout
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Tour_Is_In_The_Layout
+     (Item : in out Landin.Testing.Context)
+   is
+      Host      : Landin.Platform.Native.Native_Filesystem;
+      Content   : Unbounded.Unbounded_String;
+      Status    : Landin.Platform.Read_Status;
+      Exemption : constant String := "-- not in the layout: ";
+      Held_Count, Fragments : Natural := 0;
+
+      type Reading is (Unread, In_Layout, Out_Of_Layout);
+      type Readings is array (1 .. 2) of Unbounded.Unbounded_String;
+
+      function Read (Lines : Landin.Platform.Path_List) return Reading;
+
+      function Read (Lines : Landin.Platform.Path_List) return Reading is
+         Margin : Natural := Natural'Last;
+         Flat, Wrapped : Unbounded.Unbounded_String;
+         Verdict : Reading := Unread;
+      begin
+         for Line of Lines loop
+            if Ada.Strings.Fixed.Index_Non_Blank (Line) /= 0 then
+               Margin := Natural'Min
+                 (Margin, Ada.Strings.Fixed.Index_Non_Blank (Line)
+                            - Line'First);
+            end if;
+         end loop;
+         if Margin = Natural'Last then
+            Margin := 0;
+         end if;
+         Unbounded.Append (Wrapped, "probe: () -> none =" & LF);
+         for Line of Lines loop
+            declare
+               Rest : constant String :=
+                 (if Line'Length > Margin
+                  then Line (Line'First + Margin .. Line'Last) else "");
+            begin
+               Unbounded.Append (Flat, Rest & LF);
+               Unbounded.Append
+                 (Wrapped, (if Rest = "" then "" else "    " & Rest) & LF);
+            end;
+         end loop;
+         Unbounded.Append (Wrapped, "end probe" & LF);
+         for Candidate of Readings'(Flat, Wrapped) loop
+            declare
+               Answer : constant Landin.Formatting.Result :=
+                 Format (Unbounded.To_String (Candidate));
+            begin
+               if Answer.Outcome = Landin.Formatting.Formatted then
+                  if Answer.Edits.Is_Empty then
+                     return In_Layout;
+                  end if;
+                  Verdict := Out_Of_Layout;
+               end if;
+            end;
+         end loop;
+         return Verdict;
+      end Read;
+   begin
+      Host.Read_File (Root & "/tour.md", Content, Status);
+      if Status /= Landin.Platform.Read_Ok then
+         Landin.Testing.Fail (Item, "tour.md cannot be read");
+         return;
+      end if;
+
+      declare
+         Page   : constant String := Unbounded.To_String (Content);
+         Cursor : Natural := Page'First;
+         Number : Natural := 0;
+         Fence  : Natural := 0;
+         Lines  : Landin.Platform.Path_List;
+         In_Block : Boolean := False;
+      begin
+         while Cursor <= Page'Last loop
+            declare
+               Stop : Natural := Ada.Strings.Fixed.Index (Page, [LF], Cursor);
+            begin
+               if Stop = 0 then
+                  Stop := Page'Last + 1;
+               end if;
+               declare
+                  Line : constant String := Page (Cursor .. Stop - 1);
+               begin
+                  Number := Number + 1;
+                  exit when not In_Block and then Line'Length >= 28
+                    and then Line (Line'First .. Line'First + 27)
+                             = "## WHAT WAS TRIED AND DROPPE";
+                  if In_Block and then Line = "```" then
+                     In_Block := False;
+                     declare
+                        Exempt : constant Boolean :=
+                          not Lines.Is_Empty
+                          and then Lines.First_Element'Length
+                                     >= Exemption'Length
+                          and then Lines.First_Element
+                            (Lines.First_Element'First
+                             .. Lines.First_Element'First
+                                + Exemption'Length - 1) = Exemption;
+                        Verdict : constant Reading := Read (Lines);
+                        Where : constant String :=
+                          "tour.md:" & Ada.Strings.Fixed.Trim
+                            (Fence'Image, Ada.Strings.Left);
+                     begin
+                        case Verdict is
+                           when Unread =>
+                              Fragments := Fragments + 1;
+                           when In_Layout =>
+                              Held_Count := Held_Count + 1;
+                              Landin.Testing.Check
+                                (Item, not Exempt,
+                                 Where & ": the example says it is not in"
+                                 & " the layout, and it is");
+                           when Out_Of_Layout =>
+                              Held_Count := Held_Count + 1;
+                              Landin.Testing.Check
+                                (Item, Exempt,
+                                 Where & ": the example is not in the"
+                                 & " layout; refine fmt --check on it"
+                                 & " shows each line as the layout"
+                                 & " writes it");
+                        end case;
+                     end;
+                     Lines.Clear;
+                  elsif In_Block then
+                     Lines.Append (Line);
+                  elsif Line = "```landin" then
+                     In_Block := True;
+                     Fence := Number;
+                  end if;
+               end;
+               Cursor := Stop + 1;
+            end;
+         end loop;
+      end;
+
+      Landin.Testing.Check
+        (Item, Held_Count >= 120,
+         "the tour's examples that parse were read, and"
+         & Held_Count'Image & " were, beside" & Fragments'Image
+         & " fragments");
+   end The_Tour_Is_In_The_Layout;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -756,6 +1018,9 @@ package body Landin.Tests.Formatting_Suite is
       Landin.Testing.Register
         (Into, "formatting", "the page is the layout",
          The_Page_Is_The_Layout'Access);
+      Landin.Testing.Register
+        (Into, "formatting", "the tour is in the layout",
+         The_Tour_Is_In_The_Layout'Access);
       Landin.Testing.Register
         (Into, "formatting", "space is normalized",
          Space_Is_Normalized'Access);

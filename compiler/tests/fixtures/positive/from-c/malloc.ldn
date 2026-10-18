@@ -1,0 +1,26 @@
+import core/arena
+import core/mem
+import hosted/heap
+
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+--- Allocate a point, move it and free it, through the caller's allocator.
+moved_point: (provider: type is mem.allocator, memory: provider, start: point)
+             -> (x: i32) ! mem.out_of_memory =
+    cell := try mem.new(memory, start)
+    defer mem.delete(memory, cell)
+    cell.val.x += 1
+    x = cell.val.x
+end moved_point
+
+from_heap_or_arena: () -> (sum: i32) ! mem.out_of_memory =
+    origin: point = (x: 0, y: 0)
+    sum = try moved_point(heap.new(), origin)
+    mut backing: [64]u8 = zeroed
+    mut state: arena.space = zeroed
+    scratch := arena.over_unchecked(state, addr backing[0], 64)
+    sum += try moved_point(scratch, origin)
+end from_heap_or_arena

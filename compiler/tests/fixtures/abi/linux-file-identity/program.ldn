@@ -1,9 +1,9 @@
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 import platform/linux
 
---  On Linux hosted/io reads file identity through platform/posix with
+--  On Linux hosted/system reads file identity through platform/posix with
 --  platform/linux's statx, which no C function stands between and no C
 --  peer can replace.
 --  The peer instead holds platform/linux's record to the C header's
@@ -41,7 +41,7 @@ public main: () -> (code: i32) =
 
     --  The file, its hard link and a symbolic link to it are one file;
     --  another file is not, and neither is a path that does not exist.
-    state: hosted.system = hosted.host()
+    state: system.host = system.new()
     for which in i32(0)..<i32(5) do
         code = 20 + which
         mut failed: bool = false
@@ -64,6 +64,6 @@ public main: () -> (code: i32) =
         false
     end
     identity_cleanup()
-    return when same or not failed or hosted.last_errno(state) <> 2
+    return when same or not failed or system.last_errno(state) <> 2
     code = 42
 end main

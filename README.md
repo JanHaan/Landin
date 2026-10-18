@@ -40,6 +40,7 @@ targets and the microcontrollers people buy.**
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
 | `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the x86-64, arm64 and Cortex-M backends and their toolchain paths, and its own test harness. |
+| `docs/from-c.md` | [Landin for C programmers](docs/from-c.md): the Landin form of each C habit, from `#include` to `exit`, and the habits with no answer yet. Its examples are a fixture the test program compiles. Derived; never an authority. |
 | `docs/documents.md` | how `spec.md` and `tour.md` are arranged, where a new rule goes, and what the arrangement is and is not evidence of. Derived; never an authority. |
 | `docs/diagnostics.md` | [what each diagnostic code means](docs/diagnostics.md) and what to change, the text `refine explain` prints. Derived from the catalogue and the specification; never an authority. |
 | `docs/format.md` | [how a source is laid out](docs/format.md): the one layout `refine fmt` gives every source, each rule with a program as written and as formatted. Derived from D252 and the implementation; never an authority. |
@@ -104,14 +105,14 @@ configured to upload diagnostic output if present and retain it for 14 days;
 it retains no successful exact-revision acceptance record and accepts no
 revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
 x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for every
-target but RV64 in both build modes, and compares emitted assembly digests
+target in both build modes, and compares emitted assembly digests
 across hosts; disagreement fails the aggregate gate. Those manifests come
 from debug compilers, so the gate's `build-modes` jobs also require the debug
 and release compilers of one tree to emit the same bytes for the positive and
-runtime corpora on Linux x86-64, Linux arm64 and Cortex-M. RV64 is suspended from
-the gates until it has better CI, so the manifests leave it out and its
-emission and physical execution jobs are skipped; only the compiler's own
-test program still checks it. It does not assemble, link or run those programs.
+runtime corpora on Linux x86-64, Linux arm64 and Cortex-M. It does not
+assemble, link or run those programs. RV64's corpus runs under QEMU's user
+emulation in the gate's `rv64-qemu` jobs, while its jobs on physical RISE
+runners stay skipped until they are dependable.
 `.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
 input changes on `main` or when dispatched manually, without running a
 compiler test.
@@ -176,10 +177,10 @@ Save this anywhere as `hello/main.ldn`:
 
 ```landin
 import core/io
-import hosted/io as hosted
+import hosted/system
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     io.write(host, io.out(host), "Hello from Landin\n") else (problem)
         _ = problem
         code = 1
@@ -202,11 +203,23 @@ It prints
 Hello from Landin
 ```
 
+The compile leaves `hello` and nothing else: the assembly it links is removed
+afterwards, and `--keep-asm` keeps it as `hello.s`. On Linux it links
+through the GCC your distribution installs, `x86_64-linux-gnu-gcc` on Debian
+and Ubuntu, `x86_64-redhat-linux-gcc` on Fedora, or `gcc`; without one,
+`refine` says what to install. A check that fails, such as an index past
+the end of an array, ends the program with a line naming the file, line,
+column and kind, `main.ldn:4:12: trap: out_of_range`, before the system
+reports the trap.
+
 `refine` finds its standard library, `core`, `hosted` and `platform`, beside
 its own executable, so importing it needs no option; `refine version` names
-the directory it uses. Your own modules are found under the roots you give
+the directory it uses, and a copied `refine` that finds none says where it
+looked and names `--library=DIR`. Your own modules are found under the roots you give
 with `--root` [1480]. [`examples.md`](examples.md) has larger programs, and
 [the tour](tour.md) teaches the language.
+If you write C, [Landin for C programmers](docs/from-c.md) gives the Landin
+form of each habit you bring, and names those with no answer yet.
 
 ## Building
 
@@ -238,7 +251,10 @@ On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
 `refine check program.ldn ...` runs the frontend, lowering and verification
 on the named sources as one whole program, without writing an artifact.
 `refine compile program.ldn -o program` assembles and links an executable;
-`refine compile --emit asm program.ldn -o program.s` writes assembly.
+`refine compile --emit asm program.ldn -o program.s` writes assembly, and
+`refine compile program.s -o program` links an assembly file as a compiled
+program is linked. `refine compile --emit ir program.ldn -o program.ir`
+writes the IR the backend would receive.
 The default target is the compiler's own host; cross-compilation names a
 `--target`. `build` is reserved for future project orchestration.
 Bare source requests and `--emit=asm|exe` remain compatibility spellings.
@@ -286,7 +302,8 @@ the last matching control winning. Only live warning codes are accepted.
 warning, which it suppresses. Denial returns status 1 before producing
 artifacts; ordinary warnings retain status 0 and the same generated bytes.
 Quiet mode retains selected diagnostics. Both current warning families are
-recommended, so `default` and `all` currently agree. A warning can report an
+recommended, so `default` and `all` currently agree; so is L0016, which says
+a `--root` holds a module the library supplies instead. A warning can report an
 observation without an edit; exact fixes remain available where their edits
 preserve meaning and comments.
 
@@ -305,15 +322,19 @@ specialization and debug information remain independent controls.
 A program it refuses gets a report with a
 span, a caret and a note, one per mistake and on the token it is about: what
 a mistake leaves behind is not reported again, and where one change of a
-token mends a line the report says which change and offers it as a fix. If
+token mends a line the report says which change and offers it as a fix. A
+spelling from another language, such as `elif`, `fn`, `x as i32`, `x++`,
+`*u8`, `&&` or `!=`, is refused naming what Landin writes instead. If
 what you wrote is a construct the tour describes and the kernel omits, the
 note names the paragraph that describes it and says whether the form is a
 recorded boundary, withdrawn or transferred to a successor.
 
 `refine fmt source.ldn ...` rewrites each named source in the one layout
 [`docs/format.md`](docs/format.md) shows, changing its space and nothing
-else; `refine fmt --check` writes nothing and reports each source that is not
-in it. The library roots and the examples are kept in that layout.
+else; `refine fmt --check` writes nothing and reports every line that is not
+in it, showing the line as the layout writes it, and `refine fmt --stdout`
+prints one source in the layout. The library roots, the examples and the
+tour's examples are kept in that layout.
 
 `refine lsp` is a language server over standard input and output: an editor
 started with it gets diagnostics, definitions, hover types, formatting and
@@ -340,10 +361,16 @@ This is the maintained inventory of what the compiler does today:
   `unchecked` regions. An atom union may be written in place as a
   binding's, parameter's, return's or field's type, `lenof` measures a field
   or element path or a call's result, and `else (problem)` recovers a call in
-  an `if` arm as anywhere else. Generics take fixed parameters by compile-time
-  substitution; concepts carry a whole-program conformance register. Generic
+  an `if` arm as anywhere else; `else none` ignores the failure of a call
+  that returns none. A module binding of function type may be
+  written on one line, `chosen: () -> (v: i32) = seven`. Generics take fixed
+  parameters by compile-time substitution, an untyped literal argument takes
+  its parameter's type, and a fixed array is lent to a generic slice
+  parameter; concepts carry a whole-program conformance register. Generic
   calls pass only the evidence their checked bodies use; direct and `any C`
-  dispatch share table storage only when their layouts and entries match.
+  dispatch share table storage only when their layouts and entries match,
+  and an `any C` call no conformance of C answers builds as a trap no value
+  reaches.
   Pointers and slices
   get local origin, borrow, `escaping`, `from` and consume checks. Directory
   modules have file-local imports, aliases, selected imports, typed global
@@ -352,7 +379,7 @@ This is the maintained inventory of what the compiler does today:
   checked encoded fields. `compiler/tests/constructs.matrix` records every
   normative construct's state, targets and evidence, and `check.py` refuses a
   stale or unexplained row.
-- **The library.** The fourteen shared `core/*` modules thread arena and pool
+- **The library.** The eighteen shared `core/*` modules thread arena and pool
   allocators and a failure injector as capabilities and supply raw memory,
   vectors, inline-prefix spill lists, maps, trees, sorting, byte-oriented and
   validated text, caller-backed I/O, bulk cleanup, panic dispatch and the
@@ -390,7 +417,10 @@ This is the maintained inventory of what the compiler does today:
   under names drawn from entropy, and the working directory's path; and
   terminals, whether a stream is one and its size, one more. A memory
   volume over the caller's nodes fakes the file system, and memory
-  terminals the terminals.
+  terminals the terminals. Time is the module `core/time`, the network
+  `core/net`, and the fakes of a system's providers are `core/io/fake`'s,
+  each named for what it fakes: `fake.volume`, `fake.network`,
+  `fake.clock`, `fake.entropy` and `fake.terminals`.
   `core/random` is a deterministic generator, xoshiro256**, seeded from a
   fixed seed or from entropy, which draws the same sequence on every target,
   Cortex-M0 included, with unbiased bounded draws and shuffles; a buffered
@@ -410,7 +440,7 @@ This is the maintained inventory of what the compiler does today:
   integer keys and ordering, Boolean and byte slice keys, and UTF-8 keys and
   ordering. A closed set of named values, such as a diagnostic's severity, is
   an atom set.
-  `hosted/heap` and `hosted/io` supply the hosted heap and
+  `hosted/heap` and `hosted/system` supply the hosted heap and
   system I/O capabilities, written once over `platform/posix`, which gives
   POSIX's files, directories, memory mappings, `poll`, pipes, spawning,
   waiting and sockets, Unix-domain ones among them, reading and writing at
@@ -429,8 +459,11 @@ This is the maintained inventory of what the compiler does today:
   the static process entry, with a raw `system_call` that reaches any call
   by the number `platform/linux/numbers` names, generated from a pinned kernel
   release; Linux executables link with no C library by
-  default (`--link=libc` keeps it). `platform/c` supplies aliases for the supported
-  LP64 C ABIs, and `platform/cpu` supplies M-profile CPU operations. An import
+  default (`--link=libc` keeps it), through the first GCC a distribution
+  installs that the host can start. A failed check in a hosted program with
+  no `panic_handler` writes its kind and source site to standard error before
+  its terminal instruction; firmware keeps the bare instruction. `platform/c` supplies aliases for the supported
+  LP64 C ABIs, and `platform/cortex_m` supplies M-profile CPU operations. An import
   outside a module's target scope is refused by name, including through a
   project-root override. D212 withdraws the former builtin arena syntax in
   favour of ordinary allocator capabilities. The [library reference](docs/library.md)
@@ -444,10 +477,11 @@ This is the maintained inventory of what the compiler does today:
 - **Targets.** Linux x86-64, Linux arm64, Linux RV64, Darwin arm64 and
   FreeBSD x86-64 and arm64 build hosted executables; FreeBSD is emitted on Linux and runs
   in [architecture-specific VMs](environments/freebsd/README.md) with separate
-  runtime, C ABI and debugger gate verdicts. RV64 uses LP64D and cross-emitted
-  payloads on [physical RISE runners](compiler/tests/rv64/README.md), with
-  separate runtime, native GDB, C ABI and ISA-level verdicts; those lanes
-  are suspended from the gate until further notice.
+  runtime, C ABI and debugger gate verdicts. RV64 uses LP64D; the gate runs
+  its whole test program under QEMU's user emulation, and its
+  [physical RISE lanes](compiler/tests/rv64/README.md), with separate
+  runtime, native GDB, C ABI and ISA-level verdicts, are suspended from the
+  gate until they are dependable.
   Darwin checks a host-dependent large-image loader limitation against a native
   Clang control. Cortex-M0 builds
   ARMv6-M firmware with compiler-owned reset, data and RAM-code copying, BSS
@@ -471,8 +505,7 @@ This is the maintained inventory of what the compiler does today:
   an assembly block to the level, and a level runs only on a processor that
   confirms it; an unconfirmed level fails as unverified.
 - **Code generation.** Target code and the build report are byte-identical
-  whatever the build directory, environment or order, on all seven targets,
-  though RV64's cross-host comparison is suspended from the gate;
+  whatever the build directory, environment or order, on all seven targets;
   the hosted linked image is not claimed. Compact numeric-array loops,
   explicit `layout(optimal)` placement and optional evidence-proved
   specialization are independent switches.
@@ -493,9 +526,10 @@ This is the maintained inventory of what the compiler does today:
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0. The recurring gate runs Linux and Darwin programs
 natively, FreeBSD programs in accelerated VMs and Cortex-M firmware under
-QEMU, with separate runtime, C ABI and debugger verdicts. RV64 Linux's
-emission and its execution on physical RISE runners are suspended from the
-gate until further notice. The recorded boundaries stand as measured: the 32 KiB capacity
+QEMU, with separate runtime, C ABI and debugger verdicts. RV64 Linux runs
+under QEMU's user emulation, which is evidence about its emitted code and
+none about RV64 hardware; its execution on physical RISE runners is
+suspended from the gate until further notice. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
 shared-region placement limit observed on some hosts.
 
@@ -550,7 +584,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.70 — The newcomer's path (planned).**
+**Next roadmap item: R13.71 — What the newcomer's path met (planned).**
 
 ## Questions, bugs and ideas
 

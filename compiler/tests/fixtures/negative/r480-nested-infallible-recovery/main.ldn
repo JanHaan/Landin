@@ -38,7 +38,7 @@ run: (t: type is display, value: ptr mut t, erased: any action, broken: bool)
      -> (result: i32) ! unavailable =
     object := (select(value, broken) else (problem)
         _ = infallible(value) else (close_problem) value end
-        cleanup(value, erased) else (close_problem) _ = close_problem end
+        cleanup(value, erased) else none
         fail problem
     end)
     shown: any display = any(object)

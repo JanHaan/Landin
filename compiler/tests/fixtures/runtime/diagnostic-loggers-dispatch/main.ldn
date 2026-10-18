@@ -1,7 +1,8 @@
 import core/diag
 import core/io
-import hosted/io as hosted
+import core/io/fake
 import core/text
+import hosted/system
 
 message_a: [2]u8 = [65, 10]
 message_b: [2]u8 = [66, 10]
@@ -47,7 +48,7 @@ check_position_writes: () -> (ok: bool) =
         return
     end
     bytes: []u8 = io.written_errors(memory)
-    ok = state.write_calls == 12 and
+    ok = state.writes == 12 and
          same_bytes(bytes, "W:0:AE:1234567890:BW:18446744073709551615:C")
 end check_position_writes
 
@@ -171,7 +172,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    host := hosted.host()
+    host := system.new()
     world: any io.world = any(addr host)
     host_writer: any io.writer = any(addr host)
     mut immediate := diag.stream(host_writer, io.err(host))

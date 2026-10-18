@@ -244,6 +244,11 @@ package body Landin.Syntax.Parser is
             Declaration_Indent : Integer := 0;
             --  Whether the declaration being read reported outside a body.
             Header_Reported : Boolean := False;
+            --  D368: the keywords a statement of this file wrote where a
+            --  binding's name belongs.  That statement was the one report;
+            --  a later use of the word as a value is the same mistake.
+            Taken_Words : array (Tok.Reserved_Word) of Boolean :=
+              [others => False];
 
             --  The constructs open around the block being read, outermost
             --  first, and the `end name` index a function is fenced by.
@@ -1540,6 +1545,37 @@ package body Landin.Syntax.Parser is
                return Landin.Source.Empty_Span;
             end Before_On_Line;
 
+            --  The token written just after the span Where, on the same
+            --  line, or nothing.
+            function After_On_Line
+              (Where : Landin.Source.Span) return Landin.Source.Span;
+
+            function After_On_Line
+              (Where : Landin.Source.Span) return Landin.Source.Span
+            is
+               Low  : Tok.Token_Index := 1;
+               High : Tok.Token_Index := Last;
+            begin
+               while Low < High loop
+                  declare
+                     Middle : constant Tok.Token_Index :=
+                       Low + (High - Low) / 2;
+                  begin
+                     if Tok.Where (From, Middle).First < Where.Last then
+                        Low := Middle + 1;
+                     else
+                        High := Middle;
+                     end if;
+                  end;
+               end loop;
+               if Low < Last and then not Begins_Line (Low)
+                 and then Tok.Kind (From, Low) in Tok.Kernel_Kind
+               then
+                  return Tok.Where (From, Low);
+               end if;
+               return Landin.Source.Empty_Span;
+            end After_On_Line;
+
             --  The first token after an empty gap, when one follows it on
             --  a later line, or nothing.
             function After_Gap
@@ -1701,11 +1737,73 @@ package body Landin.Syntax.Parser is
                Fixes   : Landin.Diagnostics.Fix_List :=
                  Landin.Diagnostics.No_Fixes)
             is
-               function Inequality_Typo return Boolean;
+               --  D367: the row of the foreign-form table the tokens this
+               --  report stands on spell, if any, with the span the report
+               --  moves to and the Landin spelling a fix writes there.
+               type Foreign_Hit is record
+                  Found   : Boolean := False;
+                  Form    : Syn.Foreign_Form := Syn.Bang_Equal;
+                  Span    : Landin.Source.Span := Landin.Source.Empty_Span;
+                  Written : Unbounded.Unbounded_String;
+               end record;
 
-               function Inequality_Typo return Boolean is
+               function Foreign_At return Foreign_Hit;
+
+               function Foreign_At return Foreign_Hit is
                   Low : Tok.Token_Index := 1;
                   High : Tok.Token_Index := Last;
+
+                  function Kind_At (At_Index : Tok.Token_Index)
+                    return Tok.Token_Kind
+                    is (if At_Index in 1 .. Last
+                        then Tok.Kind (From, At_Index)
+                        else Tok.End_Of_Input);
+
+                  function Word_At
+                    (At_Index : Tok.Token_Index; Word : String)
+                     return Boolean
+                    is (Kind_At (At_Index) = Tok.Identifier
+                        and then Landin.Source.Names.Spelling
+                          (Names, Tok.Name (Tok.Token_At (From, At_Index)))
+                          = Word);
+
+                  function Touching (Left : Tok.Token_Index) return Boolean
+                    is (Left < Last
+                        and then Tok.Where (From, Left + 1).First
+                          = Tok.Where (From, Left).Last);
+
+                  function Pair
+                    (Left : Tok.Token_Index;
+                     Form : Syn.Foreign_Form;
+                     Word : String) return Foreign_Hit;
+
+                  function Pair
+                    (Left : Tok.Token_Index;
+                     Form : Syn.Foreign_Form;
+                     Word : String) return Foreign_Hit
+                  is
+                     Before : constant String :=
+                       (if Left > 1 and then Tok.Where (From, Left).First
+                                     = Tok.Where (From, Left - 1).Last
+                        then " " else "");
+                     After : constant String :=
+                       (if Touching (Left + 1) then " " else "");
+                  begin
+                     return
+                       (Found   => True,
+                        Form    => Form,
+                        Span    => Join (Tok.Where (From, Left),
+                                         Tok.Where (From, Left + 1)),
+                        Written => Unbounded.To_Unbounded_String
+                          (Before & Word & After));
+                  end Pair;
+
+                  function Ends_Operand (At_Index : Tok.Token_Index)
+                    return Boolean
+                    is (Kind_At (At_Index)
+                          in Tok.Identifier | Tok.Integer_Literal
+                           | Tok.Float_Literal | Tok.Right_Paren
+                           | Tok.Right_Bracket);
                begin
                   --  Recovery may already have advanced past this report's
                   --  primary span. Find its first token without rescanning
@@ -1722,15 +1820,143 @@ package body Landin.Syntax.Parser is
                         end if;
                      end;
                   end loop;
-                  if Tok.Kind (From, Low) = Tok.Equal and then Low > 1 then
-                     Low := Low - 1;
+
+                  --  `!=`, with the report at either of its two tokens.
+                  declare
+                     At_Bang : constant Tok.Token_Index :=
+                       (if Kind_At (Low) = Tok.Equal and then Low > 1
+                        then Low - 1 else Low);
+                  begin
+                     if At_Bang < Last
+                       and then Kind_At (At_Bang) = Tok.Bang
+                       and then Kind_At (At_Bang + 1) = Tok.Equal
+                       and then Touching (At_Bang)
+                     then
+                        return Pair (At_Bang, Syn.Bang_Equal, "<>");
+                     end if;
+                  end;
+
+                  --  `&&` and `||`, read as two bitwise operators.
+                  for Left in Tok.Token_Index'Max (1, Low - 1) .. Low loop
+                     if Left < Last and then Touching (Left)
+                       and then Kind_At (Left) in Tok.Ampersand | Tok.Bar
+                       and then Kind_At (Left + 1) = Kind_At (Left)
+                       and then Left > 1
+                       and then Ends_Operand (Left - 1)
+                     then
+                        return Pair
+                          (Left,
+                           (if Kind_At (Left) = Tok.Ampersand
+                            then Syn.Double_Ampersand else Syn.Double_Bar),
+                           (if Kind_At (Left) = Tok.Ampersand
+                            then "and" else "or"));
+                     end if;
+                  end loop;
+
+                  --  `name++` ending its line.
+                  for Left in Tok.Token_Index'Max (2, Low - 1) .. Low loop
+                     if Left < Last and then Touching (Left)
+                       and then Kind_At (Left) = Tok.Plus
+                       and then Kind_At (Left + 1) = Tok.Plus
+                       and then Ends_Operand (Left - 1)
+                       and then (Left + 2 >= Last
+                                 or else Begins_Line (Left + 2))
+                     then
+                        declare
+                           Name_At : constant Tok.Token_Index := Left - 1;
+                           Simple : constant Boolean :=
+                             Kind_At (Name_At) = Tok.Identifier
+                             and then Begins_Line (Name_At);
+                        begin
+                           return
+                             (Found   => True,
+                              Form    => Syn.Postfix_Increment,
+                              Span    =>
+                                (if Simple
+                                 then Join (Tok.Where (From, Name_At),
+                                            Tok.Where (From, Left + 1))
+                                 else Join (Tok.Where (From, Left),
+                                            Tok.Where (From, Left + 1))),
+                              Written =>
+                                (if Simple
+                                 then Unbounded.To_Unbounded_String
+                                   ("inc "
+                                    & Landin.Source.Names.Spelling
+                                        (Names,
+                                         Tok.Name
+                                           (Tok.Token_At (From, Name_At))))
+                                 else Unbounded.Null_Unbounded_String));
+                        end;
+                     end if;
+                  end loop;
+
+                  --  `*T` where a type belongs.
+                  if Item = Syn.Type_Expected and then Kind_At (Low) = Tok.Star
+                  then
+                     return
+                       (Found   => True,
+                        Form    => Syn.Star_Pointer,
+                        Span    => Tok.Where (From, Low),
+                        Written => Unbounded.To_Unbounded_String
+                          (if Touching (Low) then "ptr " else "ptr"));
                   end if;
-                  return Low < Last
-                    and then Tok.Kind (From, Low) = Tok.Bang
-                    and then Tok.Kind (From, Low + 1) = Tok.Equal
-                    and then Tok.Where (From, Low + 1).First
-                      = Tok.Where (From, Low).Last;
-               end Inequality_Typo;
+
+                  for Word_Index in Tok.Token_Index'Max (1, Low - 1) .. Low
+                  loop
+                     --  `elif` and `elseif` beginning a line of a body,
+                     --  read as a name and stopped on the condition.
+                     if Body_Level > 0 and then Begins_Line (Word_Index)
+                       and then Word_Index < Last
+                       and then not Begins_Line (Word_Index + 1)
+                       and then (Word_At (Word_Index, "elif")
+                                 or else Word_At (Word_Index, "elseif"))
+                     then
+                        return
+                          (Found   => True,
+                           Form    =>
+                             (if Word_At (Word_Index, "elif")
+                              then Syn.Elif_Word else Syn.Elseif_Word),
+                           Span    => Tok.Where (From, Word_Index),
+                           Written =>
+                             Unbounded.To_Unbounded_String ("elsif"));
+                     end if;
+
+                     --  `fn name(` beginning a declaration.
+                     if Body_Level = 0 and then Begins_Line (Word_Index)
+                       and then Word_At (Word_Index, "fn")
+                       and then Kind_At (Word_Index + 1) = Tok.Identifier
+                       and then Kind_At (Word_Index + 2) = Tok.Left_Paren
+                     then
+                        return
+                          (Found   => True,
+                           Form    => Syn.Fn_Word,
+                           Span    => Tok.Where (From, Word_Index),
+                           Written => Unbounded.Null_Unbounded_String);
+                     end if;
+                  end loop;
+
+                  --  `value as type` inside a body, stopped on the word or
+                  --  on the type after it.
+                  for Word_Index in Tok.Token_Index'Max (2, Low - 1) .. Low
+                  loop
+                     if Body_Level > 0 and then Word_At (Word_Index, "as")
+                       and then not Begins_Line (Word_Index)
+                       and then Ends_Operand (Word_Index - 1)
+                       and then Kind_At (Word_Index + 1)
+                         in Tok.Identifier | Tok.Kw_Ptr | Tok.Left_Bracket
+                     then
+                        return
+                          (Found   => True,
+                           Form    => Syn.As_Conversion,
+                           Span    => Tok.Where (From, Word_Index),
+                           Written => Unbounded.Null_Unbounded_String);
+                     end if;
+                  end loop;
+
+                  return (others => <>);
+               end Foreign_At;
+
+               Foreign : constant Foreign_Hit := Foreign_At;
             begin
                --  Unclosed_Construct is the one exemption from P3: it is
                --  identified by the construct it could not close and not
@@ -1772,6 +1998,56 @@ package body Landin.Syntax.Parser is
                Mark_Reported;
                if Body_Level = 0 then
                   Header_Reported := True;
+               end if;
+
+               --  D367: the tokens the parser stopped on spell a form of
+               --  another language, so the report names the Landin form
+               --  and stands on the foreign spelling.  The code, and the
+               --  second place the caller named, are the parser's own.
+               if Foreign.Found then
+                  declare
+                     Written : constant String :=
+                       Unbounded.To_String (Foreign.Written);
+                     --  The caller's second place may be a token of the
+                     --  foreign spelling itself, which the report now
+                     --  stands on; then the neighbour on its line is.
+                     Inside : constant Boolean :=
+                       Because /= ""
+                       and then Related.First >= Foreign.Span.First
+                       and then Related.First < Foreign.Span.Last;
+                     Neighbour : constant Landin.Source.Span :=
+                       (if not Inside then Related
+                        elsif Before_On_Line (Foreign.Span)
+                                /= Landin.Source.Empty_Span
+                        then Before_On_Line (Foreign.Span)
+                        else After_On_Line (Foreign.Span));
+                  begin
+                     Syn.Report
+                       (Item    => Item,
+                        Source  => Origin_Of,
+                        Where   => Foreign.Span,
+                        Message => Syn.Foreign_Message (Foreign.Form),
+                        Note    => Syn.Foreign_Note (Foreign.Form),
+                        Related => Neighbour,
+                        Because =>
+                          (if not Inside then Because
+                           elsif Before_On_Line (Foreign.Span)
+                                   /= Landin.Source.Empty_Span
+                           then "written after this"
+                           else "written before this"),
+                        Fixes   =>
+                          (if Written = ""
+                           then Landin.Diagnostics.No_Fixes
+                           else
+                             [1 => Landin.Diagnostics.Fixes.Landin_Form
+                                     (Origin_Of, Foreign.Span, Written,
+                                      (if Foreign.Form in Syn.Postfix_Increment
+                                       then Written
+                                       else Syn.Landin_Spelling
+                                              (Foreign.Form)))]),
+                        Into    => Report);
+                     return;
+                  end;
                end if;
 
                --  A report that would stand on the token its label
@@ -1834,11 +2110,7 @@ package body Landin.Syntax.Parser is
                     (if not Asks_For_A_Token (Message)
                      then Message
                      else Message & Found_Instead (Where, Item)),
-                  Note    =>
-                    (if Inequality_Typo
-                     then Note & " [0350]: write `<>` for inequality;"
-                       & " `!=` is not an operator."
-                     else Note),
+                  Note    => Note,
                   Related => Related,
                   Because => Because,
                   Refused => Refused,
@@ -3058,7 +3330,10 @@ package body Landin.Syntax.Parser is
                           (Wanted => Tok.Right_Paren,
                            Message => "the selected import list is not"
                                       & " closed",
-                           Note => "[1440]: import path (name, name)",
+                           Note => "[1440]: a selected import lists the"
+                                   & " names it takes in parentheses after"
+                                   & " the path, as in `import core/io"
+                                   & " (file, read)`",
                            Related => Opened, Because => "opened here");
                      begin
                         pragma Unreferenced (Closed);
@@ -3095,8 +3370,10 @@ package body Landin.Syntax.Parser is
                begin
                   Complain
                     (Syn.Token_Expected, Here, Message,
-                     Note => "[1640]: link(section: text, align: integer,"
-                       & " vector: integer, keep, symbol: text)",
+                     Note => "[1640]: a link annotation takes `section` and"
+                             & " `symbol` with text, `align` and `vector`"
+                             & " with an integer, and `keep` alone, each"
+                             & " once",
                      Related => Opened, Because => "this annotation");
                end Refuse_Link;
             begin
@@ -3117,7 +3394,8 @@ package body Landin.Syntax.Parser is
                      if Label /= "keep" then
                         if not Expect
                           (Tok.Colon, "a link label requires `:`",
-                           "[1640]: labelled link attributes", Opened,
+                           "[1640]: each attribute of a link annotation but"
+                           & " `keep` is a label, `:` and its value", Opened,
                            "this annotation")
                         then
                            exit;
@@ -3168,7 +3446,8 @@ package body Landin.Syntax.Parser is
                end if;
                if not Expect
                  (Tok.Right_Paren, "a link annotation closes with `)`",
-                  "[1640]: link attributes", Opened, "this annotation")
+                  "[1640]: a link annotation's attributes are written"
+                  & " between its parentheses", Opened, "this annotation")
                then
                   Recover_Annotation_Closer;
                end if;
@@ -3197,6 +3476,74 @@ package body Landin.Syntax.Parser is
             function Parse_Declaration return Node_Id is
                Exported  : Boolean := False;
                Public_At : Landin.Source.Span := Landin.Source.Empty_Span;
+
+               --  D371: `name: (...) -> returns = value` is a binding of
+               --  function type when the value is a name, or a name
+               --  selected from a module, that ends its line, and no `end`
+               --  begins the next.  A function always closes with `end`, so
+               --  this one line declares no function; [1800]'s grammar
+               --  already derives it as [1790]'s binding.
+               function Function_Binding_Ahead return Boolean;
+
+               function Function_Binding_Ahead return Boolean is
+                  Position : Tok.Token_Index := Index + 2;
+                  Depth    : Natural := 0;
+               begin
+                  --  The parameter list.
+                  loop
+                     exit when Position >= Last;
+                     case Tok.Kind (From, Position) is
+                        when Tok.Left_Paren | Tok.Left_Bracket =>
+                           Depth := Depth + 1;
+                        when Tok.Right_Paren | Tok.Right_Bracket =>
+                           Depth := Depth - 1;
+                        when others =>
+                           null;
+                     end case;
+                     exit when Depth = 0;
+                     Position := Position + 1;
+                  end loop;
+                  --  The returns and errors, to the `=` on this line.
+                  loop
+                     Position := Position + 1;
+                     if Position >= Last or else Begins_Line (Position) then
+                        return False;
+                     end if;
+                     case Tok.Kind (From, Position) is
+                        when Tok.Left_Paren | Tok.Left_Bracket =>
+                           Depth := Depth + 1;
+                        when Tok.Right_Paren | Tok.Right_Bracket =>
+                           exit when Depth = 0;
+                           Depth := Depth - 1;
+                        when Tok.Equal =>
+                           exit when Depth = 0;
+                        when others =>
+                           null;
+                     end case;
+                  end loop;
+                  if Tok.Kind (From, Position) /= Tok.Equal then
+                     return False;
+                  end if;
+                  --  The value: `name` or `module.name`, ending its line.
+                  Position := Position + 1;
+                  if Position >= Last or else Begins_Line (Position)
+                    or else Tok.Kind (From, Position) /= Tok.Identifier
+                  then
+                     return False;
+                  end if;
+                  while Position + 2 <= Last
+                    and then Tok.Kind (From, Position + 1) = Tok.Dot
+                    and then not Begins_Line (Position + 1)
+                    and then Tok.Kind (From, Position + 2) = Tok.Identifier
+                  loop
+                     Position := Position + 2;
+                  end loop;
+                  Position := Position + 1;
+                  return Tok.Kind (From, Position) = Tok.End_Of_Input
+                    or else (Begins_Line (Position)
+                             and then Tok.Kind (From, Position)
+                               /= Tok.Kw_End);
+               end Function_Binding_Ahead;
             begin
                Declaration_First := Index;
                if Peek = Tok.Kw_Public then
@@ -3238,7 +3585,9 @@ package body Landin.Syntax.Parser is
                      if Expect
                        (Wanted => Tok.Colon,
                         Message => "an option needs an explicit type",
-                        Note => "[1530]: option name: type = expression",
+                        Note => "[1530]: an option is declared `option name:"
+                                & " type = default`, with a type and a"
+                                & " default value",
                         Related => Opened, Because => "this option")
                      then
                         Declared := Parse_Type (False, At_Name);
@@ -3246,7 +3595,9 @@ package body Landin.Syntax.Parser is
                      if Expect
                        (Wanted => Tok.Equal,
                         Message => "an option needs a default value",
-                        Note => "[1530]: option name: type = expression",
+                        Note => "[1530]: an option is declared `option name:"
+                                & " type = default`, with a type and a"
+                                & " default value",
                         Related => Opened, Because => "this option")
                      then
                         Value := Parse_Expression;
@@ -3285,7 +3636,9 @@ package body Landin.Syntax.Parser is
                           (Item => Syn.Token_Expected, Where => Opened,
                            Message => "tool directive arguments are"
                                       & " positional",
-                           Note => "[1560]: tool.member(expression)",
+                           Note => "[1560]: a tool directive is a call of a"
+                                   & " member of `compiler`, `assembler` or"
+                                   & " `linker` with positional arguments",
                            Related => Opened, Because => "this directive");
                      end if;
                      if Exported then
@@ -3425,6 +3778,7 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Identifier
                  and then Ahead (1) = Tok.Colon
                  and then Ahead (2) = Tok.Left_Paren
+                 and then not Function_Binding_Ahead
                then
                   return Parse_Function (Exported, Public_At);
                end if;
@@ -3560,8 +3914,9 @@ package body Landin.Syntax.Parser is
                   Kept : constant Boolean := Expect
                     (Wanted  => Tok.Kw_If,
                      Message => "`fixed` conditional is followed by `if`",
-                     Note    => "D139: fixed if expression then"
-                                & " declaration* end if",
+                     Note    => "D139: a fixed conditional is `fixed if"
+                                & " condition then`, the declarations it"
+                                & " selects, and `end if`",
                      Related => At_Fixed,
                      Because => "this `fixed`");
                begin
@@ -3579,8 +3934,9 @@ package body Landin.Syntax.Parser is
                           (Wanted  => Tok.Kw_Then,
                            Message => "a fixed conditional condition is"
                                       & " followed by `then`",
-                           Note    => "D139: fixed if expression then"
-                                      & " declaration*",
+                           Note    => "D139: a fixed conditional's condition"
+                                      & " is followed by `then` and the"
+                                      & " declarations it selects",
                            Related => At_Fixed,
                            Because => "this fixed conditional arm");
                      begin
@@ -3677,8 +4033,8 @@ package body Landin.Syntax.Parser is
                     (Item    => Syn.Unclosed_Construct,
                      Where   => After_Previous,
                      Message => "this fixed conditional is never closed",
-                     Note    => "D139: a fixed conditional closes with `end`"
-                                & " `if`",
+                     Note    => "D139: a fixed conditional closes with `end"
+                                & " if`",
                      Related => At_Fixed,
                      Because => "opened here",
                      Gate    => False);
@@ -4262,7 +4618,8 @@ package body Landin.Syntax.Parser is
                if not Expect
                  (Wanted  => Tok.Right_Paren,
                   Message => "a type application's arguments close with `)`",
-                  Note    => "D135: `(` opens the positional arguments",
+                  Note    => "D135: a type application's arguments are"
+                             & " positional, between `(` and `)`",
                   Related => Starts,
                   Because => "the applied type")
                then
@@ -4586,8 +4943,10 @@ package body Landin.Syntax.Parser is
                           (Wanted  => Tok.Right_Paren,
                            Message => "the function type's parameter list"
                                       & " is never closed",
-                           Note    => "D117: a function type is `(`"
-                                      & " parameters? `)` `->` returns",
+                           Note    => "D117: a function type is its"
+                                      & " parameter list in parentheses,"
+                                      & " `->` and its returns, as in `(x:"
+                                      & " i32) -> (y: i32)`",
                            Related => Declared_At,
                            Because => "the type written here")
                         then
@@ -4601,8 +4960,10 @@ package body Landin.Syntax.Parser is
                           (Wanted  => Tok.Minus_Greater,
                            Message => "a function type says what it returns"
                                       & " after `->`",
-                           Note    => "D117: a function type is `(`"
-                                      & " parameters? `)` `->` returns",
+                           Note    => "D117: a function type is its"
+                                      & " parameter list in parentheses,"
+                                      & " `->` and its returns, as in `(x:"
+                                      & " i32) -> (y: i32)`",
                            Related => Declared_At,
                            Because => "the type written here")
                         then
@@ -4862,8 +5223,9 @@ package body Landin.Syntax.Parser is
                     (Item    => Syn.Type_Expected,
                      Where   => After_Previous,
                      Message => "a type belongs here",
-                     Note    => "[1790]: the kernel's types are the scalar"
-                                & " names only",
+                     Note    => "[1790]: a type is a scalar name, a declared"
+                                & " type's name, `ptr T`, `[]T`, `[n]T`, a"
+                                & " function type or `any C`",
                      Related => Declared_At,
                      Because => "declared here");
                   return Add (Error_Type, After_Previous);
@@ -4873,8 +5235,9 @@ package body Landin.Syntax.Parser is
                  (Item    => Syn.Type_Expected,
                   Where   => At_Type,
                   Message => "this is not a type",
-                  Note    => "[1790]: the kernel's types are the scalar"
-                             & " names only",
+                  Note    => "[1790]: a type is a scalar name, a declared"
+                             & " type's name, `ptr T`, `[]T`, `[n]T`, a"
+                             & " function type or `any C`",
                   Related => Declared_At,
                   Because => "declared here");
                Advance;
@@ -4941,7 +5304,8 @@ package body Landin.Syntax.Parser is
                      Where   => After_Previous,
                      Message => "a parameterized alias has at least one"
                                 & " formal",
-                     Note    => "D135: type_formals is a nonempty list",
+                     Note    => "D135: a parameterized type declares at"
+                                & " least one formal between its parentheses",
                      Related => Opened,
                      Because => "opened here");
                end if;
@@ -5030,7 +5394,8 @@ package body Landin.Syntax.Parser is
                Closed := Expect
                  (Wanted  => Tok.Right_Paren,
                   Message => "a type declaration's formals close with `)`",
-                  Note    => "D135: `(` opens the type formal list",
+                  Note    => "D135: a parameterized type's formals are"
+                             & " written between `(` and `)`",
                   Related => Opened,
                   Because => "opened here");
                if not Closed then
@@ -5078,7 +5443,8 @@ package body Landin.Syntax.Parser is
                elsif Expect
                     (Wanted  => Tok.Equal,
                      Message => "a type declaration names a type after `=`",
-                     Note    => "[1795]: name `:` `type` `=` type",
+                     Note    => "[1795]: a type declaration is `name: type"
+                                & " =` and the type it names",
                      Related => At_Name,
                      Because => "declared here")
                then
@@ -5130,8 +5496,10 @@ package body Landin.Syntax.Parser is
                            Complain
                              (Syn.Type_Expected, Here,
                               "a layout annotation requires a struct body",
-                              Note => "[0750]: layout(optimal) struct fields"
-                                & " end",
+                              Note => "[0750]: a layout annotation precedes"
+                                      & " a struct body, `layout(optimal)"
+                                      & " struct` and its fields, closed by"
+                                      & " `end`",
                               Related => At_Name, Because => "this type");
                            Aliased_Type := Add (Error_Type, Here);
                         end if;
@@ -5508,8 +5876,9 @@ package body Landin.Syntax.Parser is
                     (Wanted  => Tok.Left_Paren,
                      Message => "a concept names its type formals in `(`"
                                 & " `)`",
-                     Note    => "[1230]: concept (T: type, ...) is its"
-                                & " requirement signature",
+                     Note    => "[1230]: a concept names the types it is"
+                                & " about first, as in `concept (t: type)`,"
+                                & " then its requirements",
                      Related => At_Concept,
                      Because => "this concept");
                end if;
@@ -5641,8 +6010,9 @@ package body Landin.Syntax.Parser is
                      Where   => After_Previous,
                      Message => "a conformance puts `is` after its target"
                                 & " type",
-                     Note    => "[1240]: target_type is concept_name"
-                                & " (label: RHS, ...)",
+                     Note    => "[1240]: a conformance is the target type,"
+                                & " `is`, the concept's name and its entries"
+                                & " in parentheses",
                      Related => Start,
                      Because => "this conformance");
                   Concept := Add (Concept_Reference, After_Previous);
@@ -5651,8 +6021,8 @@ package body Landin.Syntax.Parser is
                if Expect
                  (Wanted  => Tok.Left_Paren,
                   Message => "a conformance opens its entries with `(`",
-                  Note    => "[1240]: a conformance supplies labelled"
-                             & " source RHS entries",
+                  Note    => "[1240]: a conformance's entries are written in"
+                             & " parentheses after the concept's name",
                   Related => Start,
                   Because => "this conformance")
                then
@@ -5665,7 +6035,9 @@ package body Landin.Syntax.Parser is
                            Where   => Here,
                            Message => "a conformance entry begins with a"
                                       & " label",
-                           Note    => "[1240]: entries are `label: RHS`");
+                           Note    => "[1240]: each conformance entry is the"
+                                      & " requirement's label, `:` and what"
+                                      & " supplies it");
                         Resync (List_Anchor);
                         exit;
                      end if;
@@ -5681,7 +6053,9 @@ package body Landin.Syntax.Parser is
                           (Wanted  => Tok.Colon,
                            Message => "a conformance label has a RHS after"
                                       & " `:`",
-                           Note    => "[1240]: entries are `label: RHS`",
+                           Note    => "[1240]: each conformance entry is the"
+                                      & " requirement's label, `:` and what"
+                                      & " supplies it",
                            Related => At_Label,
                            Because => "the label named here")
                         then
@@ -5705,7 +6079,8 @@ package body Landin.Syntax.Parser is
                   if not Expect
                     (Wanted  => Tok.Right_Paren,
                      Message => "a conformance's entries close with `)`",
-                     Note    => "[1240]: `(` opens the labelled entry run",
+                     Note    => "[1240]: a conformance's entries follow the"
+                                & " concept's name between `(` and `)`",
                      Related => Start,
                      Because => "this conformance")
                   then
@@ -6255,8 +6630,10 @@ package body Landin.Syntax.Parser is
                elsif Expect
                        (Wanted  => Tok.Colon,
                         Message => "a binding names its type after `:`",
-                        Note    => "[1790]: `mut`? name `:` type, or name"
-                                   & " `:=` expression",
+                        Note    => "[1790]: a binding is a name, `:` and its"
+                                   & " type, optionally `= value`, or a name"
+                                   & " and `:=` with the value whose type it"
+                                   & " takes",
                         Related => At_Name,
                         Because => "declared here")
                then
@@ -6465,7 +6842,9 @@ package body Landin.Syntax.Parser is
                Kept := Expect
                  (Wanted  => Tok.Right_Paren,
                   Message => "a result binding closes its names with `)`",
-                  Note    => "[0990]: `(name: local, _) := result`",
+                  Note    => "[0990]: a result binding names the returned"
+                             & " fields it keeps in parentheses, `_` for the"
+                             & " rest, then `:=` and the call",
                   Related => Start,
                   Because => "opened here");
                pragma Unreferenced (Kept);
@@ -6473,7 +6852,9 @@ package body Landin.Syntax.Parser is
                if Expect
                  (Wanted  => Tok.Colon_Equal,
                   Message => "a result binding reads its value after `:=`",
-                  Note    => "[0990]: `(name: local, _) := result`",
+                  Note    => "[0990]: a result binding names the returned"
+                             & " fields it keeps in parentheses, `_` for the"
+                             & " rest, then `:=` and the call",
                   Related => Start,
                   Because => "this result binding")
                then
@@ -6703,8 +7084,9 @@ package body Landin.Syntax.Parser is
                if not Expect
                         (Wanted  => Tok.Left_Paren,
                          Message => "returns are named, or `none`",
-                         Note    => "[1800]: returns ::= `(` named_return"
-                                    & " (`,` named_return)* `)` | `none`",
+                         Note    => "[1800]: a function's returns are named"
+                                    & " in parentheses, as in `(code: i32)`,"
+                                    & " or written `none`",
                          Related => Declared_At,
                          Because => "declared here")
                then
@@ -6727,8 +7109,8 @@ package body Landin.Syntax.Parser is
                        (Wanted  => Tok.Colon,
                         Message => "a named return names its type after"
                                    & " `:`",
-                        Note    => "[1800]: named_return ::= identifier"
-                                   & " `:` type",
+                        Note    => "[1800]: a named return is a name, `:`"
+                                   & " and its type",
                         Related => At_Name,
                         Because => "the return");
                      Type_Node := Parse_Declared_Type (False, At_Name);
@@ -6803,8 +7185,9 @@ package body Landin.Syntax.Parser is
                if not Expect
                         (Wanted  => Tok.Right_Paren,
                          Message => "the named returns close with `)`",
-                         Note    => "[1800]: returns ::= `(` named_return"
-                                    & " (`,` named_return)* `)` | `none`",
+                         Note    => "[1800]: a function's returns are named"
+                                    & " in parentheses, as in `(code: i32)`,"
+                                    & " or written `none`",
                          Related => Start,
                          Because => "opened here")
                then
@@ -7193,13 +7576,16 @@ package body Landin.Syntax.Parser is
                         Complain
                           (Syn.Token_Expected, Here,
                            "`link` requires the label `symbol`",
-                           Note => "[1610]: link(symbol: text)",
+                           Note => "[1610]: a link symbol is written"
+                                   & " `link(symbol: ""name"")` before the"
+                                   & " declaration it names",
                            Related => Opened, Because => "this annotation");
                      end if;
                      if Expect
                        (Tok.Colon, "`symbol` is followed by `:`",
-                        "[1610]: link(symbol: text)", Opened,
-                        "this annotation")
+                        "[1610]: a link symbol is written `link(symbol:"
+                        & " ""name"")` before the declaration it names",
+                        Opened, "this annotation")
                      then
                         if Peek = Tok.Text_Literal then
                            Link_Name := Here;
@@ -7208,15 +7594,18 @@ package body Landin.Syntax.Parser is
                            Complain
                              (Syn.Token_Expected, Here,
                               "a link symbol is a string literal",
-                              Note => "[1610]: link(symbol: text)",
+                              Note => "[1610]: a link symbol is written"
+                                      & " `link(symbol: ""name"")` before the"
+                                      & " declaration it names",
                               Related => Opened,
                               Because => "this annotation");
                         end if;
                      end if;
                      if not Expect
                        (Tok.Right_Paren, "a link annotation closes with `)`",
-                        "[1610]: link(symbol: text)", Opened,
-                        "this annotation")
+                        "[1610]: a link symbol is written `link(symbol:"
+                        & " ""name"")` before the declaration it names",
+                        Opened, "this annotation")
                      then
                         Recover_Annotation_Closer;
                      end if;
@@ -7229,8 +7618,9 @@ package body Landin.Syntax.Parser is
                         (Wanted  => Tok.Colon,
                          Message => "a function names its signature after"
                                     & " `:`",
-                         Note    => "[1800]: identifier `:` signature `=`"
-                                    & " body `end`",
+                         Note    => "[1800]: a function is its name, `:`,"
+                                    & " its signature and `=`, and its body"
+                                    & " closes with `end name`",
                          Related => At_Name,
                          Because => "declared here")
                then
@@ -7244,8 +7634,8 @@ package body Landin.Syntax.Parser is
                if Expect
                     (Wanted  => Tok.Left_Paren,
                      Message => "a signature opens with `(`",
-                     Note    => "[1800]: signature ::= `(` parameters? `)`"
-                                & " `->` returns",
+                     Note    => "[1800]: a signature is the parameter list"
+                                & " in parentheses, `->` and the returns",
                      Related => At_Name,
                      Because => "declared here")
                then
@@ -7256,8 +7646,9 @@ package body Landin.Syntax.Parser is
                            (Wanted  => Tok.Right_Paren,
                             Message => "the parameter list is never"
                                        & " closed",
-                            Note    => "[1800]: signature ::= `(`"
-                                       & " parameters? `)` `->` returns",
+                            Note    => "[1800]: a signature is the parameter"
+                                       & " list in parentheses, `->` and the"
+                                       & " returns",
                             Related => At_Name,
                             Because => "declared here")
                   then
@@ -7273,8 +7664,8 @@ package body Landin.Syntax.Parser is
                     (Wanted  => Tok.Minus_Greater,
                      Message => "a signature says what it returns after"
                                 & " `->`",
-                     Note    => "[1800]: signature ::= `(` parameters? `)`"
-                                & " `->` returns",
+                     Note    => "[1800]: a signature is the parameter list"
+                                & " in parentheses, `->` and the returns",
                      Related => At_Name,
                      Because => "declared here")
                then
@@ -7835,6 +8226,33 @@ package body Landin.Syntax.Parser is
                        or else Peek not in Tok.Kernel_Kind
                      then
                         Append_Parsed (Items, Parse_Statement (Context));
+                     elsif Peek in Tok.Reserved_Word
+                       and then Ahead (1)
+                         in Tok.Colon | Tok.Colon_Equal | Tok.Equal
+                          | Tok.Compound_Assign
+                     then
+                        --  D368: a keyword in a binding's or an
+                        --  assignment's place was meant as a name.  Said
+                        --  once, as a keyword, and the word is noted so
+                        --  that its later uses in the file, which read as
+                        --  a missing value, are the same mistake.
+                        declare
+                           From_Here : constant Landin.Source.Span := Here;
+                        begin
+                           Taken_Words (Peek) := True;
+                           Complain
+                             (Item    => Syn.Name_Expected,
+                              Where   => From_Here,
+                              Message => "`" & Tok.Spelling (Peek)
+                                         & "` is a keyword, and no keyword"
+                                         & " is available as a name",
+                              Note    => "[1760]: a word the keyword rule"
+                                         & " spells is that keyword"
+                                         & " everywhere, so the binding"
+                                         & " needs another name");
+                           Advance;
+                           Skip_Rest_Of_Line;
+                        end;
                      else
                         declare
                            From_Here : constant Landin.Source.Span := Here;
@@ -7941,8 +8359,9 @@ package body Landin.Syntax.Parser is
                        (Item    => Syn.Expression_Expected,
                         Where   => Start,
                         Message => "a statement is missing here",
-                        Note    => "[1810]: a statement follows its"
-                                   & " introducer",
+                        Note    => "[1810]: the source ended where a"
+                                   & " statement belongs, inside a body that"
+                                   & " `end` never closed",
                         Related => Context.Owner,
                         Because => "this function's body");
                      return Add (Error_Statement, Start);
@@ -8436,8 +8855,11 @@ package body Landin.Syntax.Parser is
                                  then After_Previous else Here),
                      Message => "a loop body opens with `do`",
                      Note    => (if Is_While
-                                 then "[1140]: `while condition do`"
-                                 else "[1130]: `loop do`"),
+                                 then "[1140]: a while loop is `while"
+                                      & " condition do`, its body and `end"
+                                      & " while`"
+                                 else "[1130]: an unconditional loop is"
+                                      & " `loop do`, its body and `end loop`"),
                      Related => Opened,
                      Because => "this loop");
                   Resume_After (Tok.Kw_Do);
@@ -8519,7 +8941,12 @@ package body Landin.Syntax.Parser is
                                        else "an unconditional loop closes"
                                          & " with `end loop`"),
                            Note    =>
-                             (if Is_While then "[1140]" else "[1130]"),
+                             (if Is_While
+                              then "[1140]: a while loop closes with `end"
+                                   & " while`, or with `end` and its label"
+                              else "[1130]: an unconditional loop closes"
+                                   & " with `end loop`, or with `end` and"
+                                   & " its label"),
                            Related => Opened,
                            Because => "this loop");
                      end if;
@@ -8599,7 +9026,9 @@ package body Landin.Syntax.Parser is
                        (Item    => Syn.Token_Expected,
                         Where   => At_Name,
                         Message => "a for loop names its " & Role,
-                        Note    => "[1150]: `for item, idx in source do`",
+                        Note    => "[1150]: a for loop names the element,"
+                                   & " and optionally its position, before"
+                                   & " `in`: `for item, idx in source do`",
                         Related => Opened,
                         Because => "this traversal");
                   end if;
@@ -8630,7 +9059,8 @@ package body Landin.Syntax.Parser is
                if Expect
                  (Wanted  => Tok.Kw_In,
                   Message => "a for loop traverses with `in`",
-                  Note    => "[1150]: `for item in source do`",
+                  Note    => "[1150]: a for loop is `for item in source do`,"
+                             & " its body and `end for`",
                   Related => Opened,
                   Because => "this traversal")
                then
@@ -8653,7 +9083,8 @@ package body Landin.Syntax.Parser is
                                    or else Here_Begins_Line
                                  then After_Previous else Here),
                      Message => "a for loop body opens with `do`",
-                     Note    => "[1150]: `for item in source do`",
+                     Note    => "[1150]: a for loop is `for item in source"
+                                & " do`, its body and `end for`",
                      Related => Opened,
                      Because => "this traversal");
                   Resume_After (Tok.Kw_Do);
@@ -8711,7 +9142,8 @@ package body Landin.Syntax.Parser is
                              "a for loop closes with `end "
                              & (if Label /= Landin.Source.Names.No_Name
                                 then "<label>`" else "for`"),
-                           Note    => "[1150]",
+                           Note    => "[1150]: a for loop closes with `end"
+                                      & " for`, or with `end` and its label",
                            Related => Opened,
                            Because => "this traversal");
                      end if;
@@ -8883,7 +9315,8 @@ package body Landin.Syntax.Parser is
                        (Wanted  => Tok.Kw_Then,
                         Message => "a branch's condition is followed by"
                                    & " `then`",
-                        Note    => "[1810]: if condition `then` block",
+                        Note    => "[1810]: an `if` is its condition, `then`"
+                                   & " and the branch it runs",
                         Related => At_If,
                         Because => "this branch");
                      if not Kept then
@@ -8921,6 +9354,29 @@ package body Landin.Syntax.Parser is
                                    & " `end if`");
                      Advance;
                   end if;
+                  --  An `else` with an `elsif` after it divides nothing:
+                  --  an `if`'s `else` comes last.  A call's recovery that
+                  --  lost what follows its `else` leaves one; it is said
+                  --  once, and the `elsif` goes on with the `if`.
+                  if Peek = Tok.Kw_Else and then Ahead (1) = Tok.Kw_Elsif then
+                     Complain
+                       (Item    => Syn.Stray_Token,
+                        Where   => Here,
+                        Message => "this `else` comes before an `elsif`,"
+                                   & " and divides nothing",
+                        Note    => "[1810]: an `if`'s `else` is its last"
+                                   & " branch; a call's recovery is"
+                                   & " `else value`, `else none` or"
+                                   & " `else (problem) ... end`",
+                        Fixes   =>
+                          [1 => Landin.Diagnostics.Fixes.Delete_Token
+                                  (Origin_Of,
+                                   (First => Previous.Last,
+                                    Last  => Here.Last),
+                                   "", "else",
+                                   Landin.Diagnostics.Likely)]);
+                     Advance;
+                  end if;
                   exit when Peek /= Tok.Kw_Elsif;
                end loop;
 
@@ -8956,7 +9412,7 @@ package body Landin.Syntax.Parser is
                   Opened     => At_If,
                   Unclosed   => "this branch is never closed",
                   Wrong_Word => "a branch closes with `end if`",
-                  Note       => "[1810]: a branch closes with `end` `if`",
+                  Note       => "[1810]: an `if` closes with `end if`",
                   Because    => "this branch") /= Absent
                then
                   null;
@@ -8968,7 +9424,7 @@ package body Landin.Syntax.Parser is
                     (Item    => Syn.Unclosed_Construct,
                      Where   => After_Previous,
                      Message => "this branch is never closed",
-                     Note    => "[1810]: a branch closes with `end` `if`",
+                     Note    => "[1810]: an `if` closes with `end if`",
                      Related => At_If,
                      Because => "opened here",
                      Gate    => False);
@@ -9073,7 +9529,8 @@ package body Landin.Syntax.Parser is
                                        then After_Previous else Here),
                            Message => "a labelled bare block closes with"
                                       & " `end <label>`",
-                           Note    => "[1180]",
+                           Note    => "[1180]: a labelled block closes with"
+                                      & " `end` and the label it opened with",
                            Related => At_Begin,
                            Because => "this block");
                      end if;
@@ -9152,7 +9609,9 @@ package body Landin.Syntax.Parser is
                   Opened : constant Boolean := Expect
                     (Wanted  => Tok.Kw_Begin,
                      Message => "an unchecked region opens with `begin`",
-                     Note    => "[1120]: `unchecked begin`",
+                     Note    => "[1120]: an unchecked region is `unchecked"
+                                & " begin`, its statements and `end"
+                                & " unchecked`",
                      Related => At_Word,
                      Because => "this region");
                   pragma Unreferenced (Opened);
@@ -9196,7 +9655,8 @@ package body Landin.Syntax.Parser is
                                        then After_Previous else Here),
                            Message => "an unchecked region closes with"
                                       & " `end unchecked`",
-                           Note    => "[1120]",
+                           Note    => "[1120]: an unchecked region closes"
+                                      & " with `end unchecked`",
                            Related => At_Word,
                            Because => "this region");
                      end if;
@@ -9255,15 +9715,37 @@ package body Landin.Syntax.Parser is
                      Refuse_Stray_Closer;
                      goto Next_Arm;
                   end if;
-                  if Peek not in Tok.Identifier | Tok.Underscore
+                  if Peek in Tok.Integer_Literal | Tok.Float_Literal
+                           | Tok.Hex_Float_Literal | Tok.Character_Literal
+                           | Tok.Text_Literal
+                           | Tok.Raw_Literal | Tok.Minus
+                           | Tok.Kw_True | Tok.Kw_False
+                  then
+                     --  D369: a value where a case belongs is a switch
+                     --  over a number written as a `match`.
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => Here,
+                        Message => "a match arm names a case or an atom,"
+                                   & " never a value; compare a number"
+                                   & " with `if` and `elsif`",
+                        Note    => "[1210]: a `match` selects one case of a"
+                                   & " variant or one atom of a set, and"
+                                   & " `if x == 1 then ... elsif x == 2"
+                                   & " then ... end if` compares values");
+                     Resync_Statement;
+                     exit;
+                  elsif Peek not in Tok.Identifier | Tok.Underscore
                                  | Tok.Kw_Ptr
                   then
                      Complain
                        (Item    => Syn.Name_Expected,
                         Where   => Here,
                         Message => "a match arm begins with a case name",
-                        Note    => "D77: match expression case `:`"
-                                   & " arm `end match`");
+                        Note    => "[1210]: each arm names a case of the"
+                                   & " variant, an atom of the set or `_`,"
+                                   & " then `:` and what it runs; `end"
+                                   & " match` closes them");
                      Resync_Statement;
                      exit;
                   end if;
@@ -9316,8 +9798,11 @@ package body Landin.Syntax.Parser is
                                     Where   => Here,
                                     Message => "a payload binding needs a"
                                                & " name",
-                                    Note    => "D78: case(name, inout name)"
-                                               & " `:` statement");
+                                    Note    => "D78: an arm binds its case's"
+                                               & " payload by position in"
+                                               & " parentheses, a name for"
+                                               & " each field, `inout`"
+                                               & " before one it writes");
                                  Resync (List_Anchor);
                                  exit;
                               end if;
@@ -9339,8 +9824,10 @@ package body Landin.Syntax.Parser is
                         Kept := Expect
                           (Wanted  => Tok.Right_Paren,
                            Message => "payload bindings end with `)`",
-                           Note    => "D78: case(name, inout name)"
-                                      & " `:` statement",
+                           Note    => "D78: an arm binds its case's payload"
+                                      & " by position in parentheses, a name"
+                                      & " for each field, `inout` before one"
+                                      & " it writes",
                            Related => At_Case,
                            Because => "this match arm");
                      end if;
@@ -9348,7 +9835,8 @@ package body Landin.Syntax.Parser is
                      Kept := Expect
                        (Wanted  => Tok.Colon,
                         Message => "a match arm puts `:` after its case",
-                        Note    => "D77: case `:` statement",
+                        Note    => "D77: an arm is its case, `:` and what it"
+                                   & " runs",
                         Related => At_Case,
                         Because => "this case");
                      pragma Unreferenced (Kept);
@@ -10011,9 +10499,9 @@ package body Landin.Syntax.Parser is
                               (Wanted  => Tok.Right_Bracket,
                                Message => "an array literal is closed with"
                                           & " `]`",
-                               Note    => "[0520]: array literal ::= `[`"
-                                          & " expression (`,' expression)*"
-                                          & " `]`",
+                               Note    => "[0520]: an array literal is its"
+                                          & " elements between `[` and `]`,"
+                                          & " separated by commas",
                                Related => At_Item,
                                Because => "opened here")
                      then
@@ -10075,7 +10563,8 @@ package body Landin.Syntax.Parser is
                   if not Expect
                     (Wanted  => Tok.Left_Paren,
                      Message => "`any` opens its pointer with `(`",
-                     Note    => "[1380]: construction is `any(pointer)`",
+                     Note    => "[1380]: an `any` value is made from a"
+                                & " pointer written in parentheses, `any(p)`",
                      Related => At_Item,
                      Because => "the erased value construction")
                   then
@@ -10518,6 +11007,12 @@ package body Landin.Syntax.Parser is
                         else "[1810]: a statement stands on its own line"),
                      Related => Previous,
                      Because => "a value is required by this");
+               elsif Peek in Tok.Reserved_Word
+                 and then Taken_Words (Peek)
+               then
+                  --  D368: reported where the binding named it.
+                  Advance;
+                  return Add (Error_Expression, At_Item);
                else
                   Complain
                     (Item    => Syn.Expression_Expected,
@@ -10573,8 +11068,8 @@ package body Landin.Syntax.Parser is
                         Where   => (if Peek = Tok.End_Of_Input
                                     then After_Previous else Here),
                         Message => "a struct literal field name belongs here",
-                        Note    => "[1810]: field_value ::= identifier `:`"
-                                   & " expression");
+                        Note    => "[1810]: each field of a struct value is"
+                                   & " its name, `:` and its value");
                      Failed := True;
                      exit;
                   end if;
@@ -10590,8 +11085,8 @@ package body Landin.Syntax.Parser is
                        (Wanted  => Tok.Colon,
                         Message => "a struct literal field separates its"
                                    & " name and value with `:`",
-                        Note    => "[1810]: field_value ::= identifier `:`"
-                                   & " expression",
+                        Note    => "[1810]: each field of a struct value is"
+                                   & " its name, `:` and its value",
                         Related => At_Field,
                         Because => "the field named here")
                      then
@@ -10628,8 +11123,8 @@ package body Landin.Syntax.Parser is
                if not Expect
                  (Wanted  => Tok.Right_Paren,
                   Message => "a struct literal is closed with `)`",
-                  Note    => "[1810]: struct_literal keeps its fields"
-                             & " between parentheses",
+                  Note    => "[1810]: a struct value's fields are written"
+                             & " between its parentheses",
                   Related => At_Paren,
                   Because => "opened here")
                then
@@ -10888,8 +11383,8 @@ package body Landin.Syntax.Parser is
                if not Expect
                         (Wanted  => Tok.Left_Paren,
                          Message => "a call opens its arguments with `(`",
-                         Note    => "[1820]: call ::= callable `(`"
-                                    & " arguments? `)`",
+                         Note    => "[1820]: a call is what it calls and its"
+                                    & " arguments between `(` and `)`",
                          Related => Starts,
                          Because => "the value called")
                then
@@ -11135,8 +11630,8 @@ package body Landin.Syntax.Parser is
                if not Expect
                         (Wanted  => Tok.Right_Paren,
                          Message => "a call's arguments are never closed",
-                         Note    => "[1820]: call ::= callable `(`"
-                                    & " arguments? `)`",
+                         Note    => "[1820]: a call is what it calls and its"
+                                    & " arguments between `(` and `)`",
                          Related => Starts,
                          Because => "the value called")
                then
@@ -11206,13 +11701,18 @@ package body Landin.Syntax.Parser is
                                       Spelled)]);
                      end;
                   elsif Allow_Recovery and then Peek = Tok.Kw_Else
-                    and then (not Else_Closes_Arm or else Binds_Error)
+                    and then (not Else_Closes_Arm or else Binds_Error
+                              or else Ahead (1) = Tok.Kw_None)
                   then
+                     --  D376: `none` begins no block an `if`'s own `else`
+                     --  could hold, so `else none` is this call's recovery
+                     --  in an arm too.
                      declare
                         At_Else : constant Landin.Source.Span := Here;
                         Error_Name : Landin.Source.Names.Name_Id :=
                           Landin.Source.Names.No_Name;
                         Recovery_Body : Node_Id;
+                        Ignores : Boolean := False;
                         --  A recovery is its own block: a call inside it
                         --  closes no arm of an `if` around this call.
                         Saved_Arm : constant Boolean := Else_Closes_Arm;
@@ -11236,8 +11736,9 @@ package body Landin.Syntax.Parser is
                                  Where   => Join (Opened, Previous),
                                  Message => "an error binding names the"
                                             & " error, and `_` names none",
-                                 Note    => "[1030]: `else value` recovers"
-                                            & " without the error, and"
+                                 Note    => "[1030]: `else none` ignores"
+                                            & " the error, `else value`"
+                                            & " recovers without it, and"
                                             & " `else (error)` binds it",
                                  Fixes   =>
                                    [1 => Landin.Diagnostics.Fixes.Delete_Token
@@ -11248,7 +11749,18 @@ package body Landin.Syntax.Parser is
                                             Landin.Diagnostics.Likely)]);
                            end;
                         end if;
-                        if Peek = Tok.Left_Paren
+                        if Peek = Tok.Kw_None then
+                           --  D376: the failure is ignored.  The body is
+                           --  the empty block a bound recovery with
+                           --  nothing in it would be, standing on `none`.
+                           Ignores := True;
+                           Recovery_Body := Add
+                             (Of_Kind  => Block,
+                              At_Token => Here,
+                              Extent   => Here,
+                              Children => [1 => No_Node]);
+                           Advance;
+                        elsif Peek = Tok.Left_Paren
                           and then Ahead (1) = Tok.Identifier
                           and then Ahead (2) = Tok.Right_Paren
                         then
@@ -11287,6 +11799,50 @@ package body Landin.Syntax.Parser is
                                  Because => "opened here",
                                  Gate    => False);
                            end if;
+                        elsif Begins_Line (Index)
+                          and then
+                            (Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
+                                    | Tok.Kw_Return | Tok.Kw_Fail
+                                    | Tok.Kw_Defer | Tok.Kw_Undo
+                                    | Tok.Underscore
+                             or else (Peek = Tok.Identifier
+                                      and then Ahead (1)
+                                        in Tok.Equal | Tok.Colon
+                                         | Tok.Colon_Equal
+                                         | Tok.Compound_Assign))
+                        then
+                           --  D370: a bare `else` takes the value that
+                           --  stands in for the call's result, and a block
+                           --  of statements under it was meant as the bound
+                           --  recovery.  Said once at the `else`, and the
+                           --  block is read as that recovery to its `end`.
+                           Complain
+                             (Item    => Syn.Name_Expected,
+                              Where   => At_Else,
+                              Message => "a recovery that runs statements"
+                                         & " names the error after `else`:"
+                                         & " write `else (problem)`",
+                              Note    => "[1030]: `else value` stands in for"
+                                         & " the call's result; `else"
+                                         & " (problem)` opens a block that"
+                                         & " closes with `end`, and `_ ="
+                                         & " problem` discards an error the"
+                                         & " block does not use",
+                              Fixes   =>
+                                [1 => Landin.Diagnostics.Fixes.Insert_Token
+                                        (Origin_Of,
+                                         (First => At_Else.Last,
+                                          Last  => At_Else.Last),
+                                         " (problem)", "(problem)",
+                                         Landin.Diagnostics.Likely,
+                                         Neighbour => "else")]);
+                           Push ((Kind => End_Closer, others => <>));
+                           Recovery_Body := Parse_Block
+                             (Active_Frame, Allow_Value => True);
+                           Pop;
+                           if Peek = Tok.Kw_End then
+                              Advance;
+                           end if;
                         else
                            declare
                               Value : constant Node_Id := Parse_Expression;
@@ -11308,7 +11864,8 @@ package body Landin.Syntax.Parser is
                            At_Token => At_Else,
                            Extent   => Join (At_Else, After_Previous),
                            Children => [Recovery_Body],
-                           Named    => Error_Name);
+                           Named    => Error_Name,
+                           Fills    => Ignores);
                         Else_Closes_Arm := Saved_Arm;
                      end;
                   elsif Allow_Recovery and then Peek = Tok.Kw_Else then

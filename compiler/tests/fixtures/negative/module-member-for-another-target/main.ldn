@@ -1,0 +1,9 @@
+--  A call its module declares only for another target, written for this
+--  one, is a call this system does not have, and is told so rather than
+--  offered a spelling: platform/linux's calls written for Darwin are
+--  refused the same way.
+import firmware
+
+public main: () -> (code: i32) =
+    code = firmware.wait()
+end main

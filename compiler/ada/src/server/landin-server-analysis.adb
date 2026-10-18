@@ -191,7 +191,6 @@ package body Landin.Server.Analysis is
          From    : Landin.Platform.Filesystem'Class;
          Previous : access Landin.Stages.Compilation := null)
       is
-         Outcome  : Landin.Stages.Stage_Outcome;
          Library  : constant String := Unbounded.To_String (Asked.Library);
       begin
          if Rooted then
@@ -204,15 +203,10 @@ package body Landin.Server.Analysis is
             if Landin.Stages.Source_Count (Context) > 0
               and then not Landin.Stages.Failed (Context)
             then
-               --  Either parses what was read; with a library the named
-               --  file's imports of it are loaded too, as `refine` does.
-               if Library /= "" then
-                  Landin.Driver.Loading.Load_Library_Imports
-                    (Context, From, Library, Previous, Watch_Syntax, Cache);
-               else
-                  Landin.Stages.Syntax.Run_Using
-                    (Context, Outcome, Previous, Watch_Syntax, Cache);
-               end if;
+               --  Parses what was read and loads the named file's imports
+               --  of the library, refusing the others, as `refine` does.
+               Landin.Driver.Loading.Load_Library_Imports
+                 (Context, From, Library, Previous, Watch_Syntax, Cache);
             end if;
          end if;
       end Load;

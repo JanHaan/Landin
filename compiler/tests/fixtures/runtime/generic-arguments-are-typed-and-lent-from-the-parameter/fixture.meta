@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D372 an untyped literal argument to a generic routine takes its parameter's type, whichever argument decides it and in either order, and a fixed array is lent whole to a generic slice parameter
+constructs: 0200, 0520, 0570, 1290, 1880
+program: main.ldn
+status: 54
+targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

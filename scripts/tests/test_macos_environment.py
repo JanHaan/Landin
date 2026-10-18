@@ -163,9 +163,18 @@ class MacOSEnvironment(unittest.TestCase):
                     f"Path({str(pid_file)!r}).write_text(str(child.pid))\n"
                     "time.sleep(60)\n")
             try:
-                capture = macos.Capture(Path(tmp))
-                capture.run("group-timeout", [sys.executable, "-c", code],
-                            timeout=2, check=False)
+                #  The limit has to outlast the program's own start, which
+                #  on a loaded host took longer than two seconds and left no
+                #  pid to check.  What is under test is that the limit stops
+                #  the whole group, so a start the limit cut short is
+                #  repeated with a longer one rather than counted.
+                for limit in (2, 8, 30):
+                    (Path(tmp) / f"within-{limit}").mkdir()
+                    capture = macos.Capture(Path(tmp) / f"within-{limit}")
+                    capture.run("group-timeout", [sys.executable, "-c", code],
+                                timeout=limit, check=False)
+                    if pid_file.exists():
+                        break
                 child = int(pid_file.read_text())
                 status = subprocess.run(["ps", "-o", "stat=", "-p", str(child)],
                                         capture_output=True, text=True, timeout=5)

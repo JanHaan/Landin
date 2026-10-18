@@ -14,13 +14,13 @@ from machine import Machine
 from models import DriverPeripheral
 from packed_native import PROFILES
 from run import Run, require, workers
-from setup import DEFAULT, inventory, sha, supported_host
+from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SOURCE = ROOT / 'compiler/tests/driver'
 MODULES = ('drivers/uart', 'rp2040/io_bank0', 'rp2040/uart0', 'rp2040/dma',
-           'rp2040/sio', 'rp2040/timer', 'platform/cpu')
+           'rp2040/sio', 'rp2040/timer', 'platform/cortex_m')
 
 
 def build(run, refine, name, optimize, specialize, debug='none'):
@@ -443,7 +443,7 @@ def main():
     p.add_argument('--all-profiles',action='store_true')
     p.add_argument('--case',action='append')
     p.add_argument('--profile', choices=[o+'-'+s for o,s in PROFILES])
-    a=p.parse_args();supported_host();before=inventory(a.tools)
+    a=p.parse_args();supported_host();a.tools=installed_tools(a.tools);before=inventory(a.tools)
     require(a.case is None or set(a.case) <= {'app','protocol','layout'},'unknown driver case')
     a.output.mkdir(parents=True,exist_ok=False)
     record={'status':'failed','tools':before,'scope':'development; not acceptance'}

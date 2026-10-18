@@ -1,14 +1,14 @@
-import core/io
-import hosted/io as hosted
 import core/diag
-import hosted/heap
+import core/io
 import core/region
+import hosted/heap
+import hosted/system
 
 public entry: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     world: any io.world = any(addr host)
-    heap := heap.host()
-    mut ledger: region.space(0) = zeroed
+    heap := heap.new()
+    mut ledger: region.growing_space = zeroed
     program := region.over(ledger, heap)
     defer region.release(ledger, heap)
     writer: any io.writer = any(addr host)
@@ -16,9 +16,7 @@ public entry: () -> (code: i32) =
     log: any diag.log = any(addr logger)
     kept: usize = run_logged(program, world, usize(4096), log) else (problem)
         _ = problem
-        world.write(world.err(), "log filter failed\n") else (write_problem)
-            _ = write_problem
-        end
+        world.write(world.err(), "log filter failed\n") else none
         code = 1
         return
     end

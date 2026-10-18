@@ -127,6 +127,129 @@ package Landin.Diagnostics.Syntactic is
             when Volatile_Reference    => "[0850]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
+   --  D367: spellings another language gives a construct Landin writes
+   --  another way.  The parser never reads one as anything: it refuses
+   --  the line as it always did, and only when the tokens it stopped on
+   --  spell a row here does the report it makes name the Landin form
+   --  instead of what the parser needed.  A row is the spelling, the
+   --  Landin form, the paragraph that defines that form and the fixture
+   --  that pins the one report; check.py holds each to the grammar and
+   --  to its fixture.  A foreign form with no single Landin construct to
+   --  name, such as `++` between two operands for concatenation, has no
+   --  row and keeps the parser's own report.
+   type Foreign_Form is
+     (Elif_Word,
+      Elseif_Word,
+      Fn_Word,
+      As_Conversion,
+      Postfix_Increment,
+      Star_Pointer,
+      Double_Ampersand,
+      Double_Bar,
+      Bang_Equal);
+
+   function Foreign_Spelling (Item : Foreign_Form) return String
+     is (case Item is
+            when Elif_Word         => "elif",
+            when Elseif_Word       => "elseif",
+            when Fn_Word           => "fn",
+            when As_Conversion     => "as",
+            when Postfix_Increment => "++",
+            when Star_Pointer      => "*",
+            when Double_Ampersand  => "&&",
+            when Double_Bar        => "||",
+            when Bang_Equal        => "!=");
+
+   --  What the form is written as in Landin, the word a fix writes where
+   --  it has one.
+   function Landin_Spelling (Item : Foreign_Form) return String
+     is (case Item is
+            when Elif_Word | Elseif_Word => "elsif",
+            when Fn_Word           => "name: (parameters) -> (returns) =",
+            when As_Conversion     => "type(value)",
+            when Postfix_Increment => "inc",
+            when Star_Pointer      => "ptr",
+            when Double_Ampersand  => "and",
+            when Double_Bar        => "or",
+            when Bang_Equal        => "<>");
+
+   function Foreign_Construct (Item : Foreign_Form)
+     return Landin.Tokens.Construct_Reference
+     is (case Item is
+            when Elif_Word | Elseif_Word => "[1810]",
+            when Fn_Word           => "[1800]",
+            when As_Conversion     => "[0310]",
+            when Postfix_Increment => "[0400]",
+            when Star_Pointer      => "[0430]",
+            when Double_Ampersand
+               | Double_Bar        => "[0340]",
+            when Bang_Equal        => "[0350]")
+     with Post => Landin.Tokens.Is_Valid_Construct
+                    (Foreign_Construct'Result);
+
+   --  The negative fixture whose recorded report is this row's.
+   function Foreign_Fixture (Item : Foreign_Form) return String
+     is (case Item is
+            when Elif_Word         => "foreign-elif-is-named",
+            when Elseif_Word       => "foreign-elseif-is-named",
+            when Fn_Word           => "foreign-fn-is-named",
+            when As_Conversion     => "foreign-as-is-named",
+            when Postfix_Increment => "foreign-postfix-increment-is-named",
+            when Star_Pointer      => "foreign-star-pointer-is-named",
+            when Double_Ampersand  => "foreign-double-ampersand-is-named",
+            when Double_Bar        => "foreign-double-bar-is-named",
+            when Bang_Equal        => "foreign-bang-equal-is-named");
+
+   --  The report's sentence.  Every one begins "Landin writes", which is
+   --  also how D261's repair search knows the report is already the
+   --  smallest change and leaves it standing.
+   function Foreign_Message (Item : Foreign_Form) return String
+     is (case Item is
+            when Elif_Word | Elseif_Word =>
+               "Landin writes `elsif`, not `" & Foreign_Spelling (Item)
+               & "`, for another condition of an `if`",
+            when Fn_Word =>
+               "Landin writes a function as `name: (parameters) ->"
+               & " (returns) =`, with no `fn`",
+            when As_Conversion =>
+               "Landin writes a conversion as its type applied to the"
+               & " value, `type(value)`, not with `as`",
+            when Postfix_Increment =>
+               "Landin writes `inc name` to add one, not `name++`",
+            when Star_Pointer =>
+               "Landin writes a pointer type as `ptr T`, not `*T`",
+            when Double_Ampersand =>
+               "Landin writes `and`, not `&&`",
+            when Double_Bar =>
+               "Landin writes `or`, not `||`",
+            when Bang_Equal =>
+               "Landin writes `<>` for inequality, not `!=`");
+
+   function Foreign_Note (Item : Foreign_Form) return String
+     is (Foreign_Construct (Item) & ": "
+         & (case Item is
+               when Elif_Word | Elseif_Word =>
+                  "an `if` goes on with `elsif condition then` and ends"
+                  & " with an optional `else` and `end if`",
+               when Fn_Word =>
+                  "a function is its name, a colon, its signature and `=`,"
+                  & " and its body closes with `end name`",
+               when As_Conversion =>
+                  "nothing converts on its own, and a conversion is a call"
+                  & " of the type converted to, as in `u32(count)`",
+               when Postfix_Increment =>
+                  "`inc` and `dec` are statements of their own, and"
+                  & " there is no `++` or `--`",
+               when Star_Pointer =>
+                  "`ptr T` points at a `T` it may read, and `ptr mut T`"
+                  & " at one it may also write",
+               when Double_Ampersand | Double_Bar =>
+                  "the logical operators are the words `and`, `or` and"
+                  & " `not`; `&` and `|` are bitwise",
+               when Bang_Equal =>
+                  "the comparisons are `==`, `<>`, `<`, `<=`, `>` and"
+                  & " `>=`"));
+
    --  What the parser hands over: a rule, a place, and the sentence a user
    --  reads.  Refused is meaningful only for Construct_Not_Enabled, and
    --  Related is the second place a reader looks -- the `if` that was never

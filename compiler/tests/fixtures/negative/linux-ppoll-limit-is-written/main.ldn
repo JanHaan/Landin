@@ -1,0 +1,9 @@
+--  The kernel writes the time that was left back into ppoll's limit, so
+--  the limit must be writable: a read-only one is refused.
+import platform/linux
+
+public main: () -> (code: i32) =
+    limit: linux.timespec = (seconds: 0, nanoseconds: 0)
+    mut record: linux.poll_record = (descriptor: -1, events: 0, returned: 0)
+    code = linux.ppoll(addr record, 1, addr limit)
+end main

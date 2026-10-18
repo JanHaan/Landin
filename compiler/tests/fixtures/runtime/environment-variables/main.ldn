@@ -8,12 +8,12 @@
 --  and under --link=libc, the one the C runtime gave `main`.
 import core/io
 import core/text
-import hosted/io as hosted
+import hosted/system
 import platform/posix
 
 --  A value as the listing shows it: as it is when it is UTF-8, and
 --  otherwise each byte in hexadecimal.
-show: (host: hosted.system, value: text.host_string) -> none ! ... =
+show: (host: system.host, value: text.host_string) -> none ! ... =
     out := io.out(host)
     as_text: utf8 = text.from_host(value) else (problem)
         _ = problem
@@ -21,7 +21,7 @@ show: (host: hosted.system, value: text.host_string) -> none ! ... =
         mut line := text.over(room[0..<64])
         try text.append(line, "bytes")
         for byte in text.host_bytes(value) do
-            try text.append_byte(line, 32)
+            try text.append_byte(line, u8(' '))
             try text.append_hex_u32(line, u32(byte))
         end for
         try io.write(host, out, text.used(line))
@@ -31,7 +31,7 @@ show: (host: hosted.system, value: text.host_string) -> none ! ... =
 end show
 
 --  What the started copy does: list its environment and look up names.
-listed: (host: hosted.system) -> none ! ... =
+listed: (host: system.host) -> none ! ... =
     out := io.out(host)
     count: usize = io.variable_count(host)
     for index in usize(0)..<count do
@@ -50,7 +50,7 @@ listed: (host: hosted.system) -> none ! ... =
 end listed
 
 --  Look NAME up and write what it finds.
-looked: (host: hosted.system, name: []u8) -> none ! ... =
+looked: (host: system.host, name: []u8) -> none ! ... =
     out := io.out(host)
     try io.write(host, out, "looked up ")
     try io.write(host, out, name)
@@ -65,7 +65,7 @@ looked: (host: hosted.system, name: []u8) -> none ! ... =
     try io.write(host, out, "\n")
 end looked
 
-copy: (host: hosted.system) -> none ! ... =
+copy: (host: system.host) -> none ! ... =
     try listed(host)
     try looked(host, "TWICE")
     try looked(host, "EMPTY")
@@ -75,7 +75,7 @@ end copy
 
 --  The parent: start the program again, as its own name says it was
 --  started, with the argument `copy`.
-parent: (host: hosted.system) -> (code: i32) ! ... =
+parent: (host: system.host) -> (code: i32) ! ... =
     bytes: [3]u8 = [0xc3, 0x28, 0xff]
     variables: [6]io.variable =
         [(name: text.host_over("TEXT"), value: text.host_over("grüße")),
@@ -96,7 +96,7 @@ parent: (host: hosted.system) -> (code: i32) ! ... =
 end parent
 
 --  The copy's part, which reports how it went as its code.
-copied: (host: hosted.system) -> (code: i32) =
+copied: (host: system.host) -> (code: i32) =
     code = 1
     copy(host) else (problem)
         _ = problem
@@ -106,7 +106,7 @@ copied: (host: hosted.system) -> (code: i32) =
 end copied
 
 public main: () -> (code: i32) =
-    host := hosted.host()
+    host := system.new()
     if io.argument_count(host) <> 0 then
         code = copied(host)
         return

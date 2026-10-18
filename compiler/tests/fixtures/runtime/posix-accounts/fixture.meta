@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: platform/posix parses lines of /etc/passwd's and /etc/group's form given on standard input, refusing a comment, an NIS line, a field missing or too many, an empty name and an ID that is not a decimal below 0xFFFFFFFF, and skipping empty member names; then looks root and group zero up by ID and by name in the real databases, through /etc/passwd and /etc/group on a static Linux program and the C library elsewhere, finds the process's own account by name when it has one, and refuses an ID and a name no database holds, a name holding a colon and a buffer too small with ERANGE
+summary: platform/posix parses lines of /etc/passwd's and /etc/group's form given on standard input, refusing a comment, an NIS line, a field missing or too many, an empty name and an ID that is not a decimal below 0xFFFFFFFF, and skipping empty member names; then looks root and group zero up by ID and by name in the real databases, through /etc/passwd and /etc/group on a static Linux program and the C library elsewhere, finds the process's own account by name when it has one, and refuses an ID and a name no database holds, a name holding a colon or longer than any system's LOGIN_NAME_MAX, and a buffer too small with ERANGE
 program: main.ldn
 root: ../../../../..
 stdin: database.txt

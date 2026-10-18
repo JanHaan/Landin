@@ -1,0 +1,16 @@
+--  [1810]: an `if`'s `else` is its last branch, so an `else` with an
+--  `elsif` after it divides nothing.  It is the one report, at that
+--  `else`, and the `elsif` goes on with the `if`; removing the `else`
+--  mends the line.
+count: (inout total: u32) -> none =
+    inc total
+end count
+
+tally: (flag: bool) -> (total: u32) =
+    total = 0
+    if flag then
+        count(total)
+    elsif not flag then
+        count(total)
+    end if
+end tally

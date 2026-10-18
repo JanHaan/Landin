@@ -1,0 +1,36 @@
+--  The system's random bytes, fit for keys.
+
+import platform/libc
+import platform/linux
+
+--- Fill as much of `into` as the system gives at once with random bytes
+--- from its own source, which is fit for keys: how many, or the errno.  On
+--- Linux it is `getrandom`, which waits while the kernel's pool is not yet
+--- ready, only early in boot, may fill a request over 256 bytes short and
+--- fails `eintr` when a signal came before any byte.  On Darwin and
+--- FreeBSD it is the C library's `arc4random_buf`, which fills all of
+--- `into` and never fails.
+public link(symbol: "_landin_posix_random_bytes") random_bytes:
+    (into: []mut u8) -> (count: usize) ! errno =
+    count = 0
+    return when lenof into == 0
+    count = try system_random_bytes(into)
+end random_bytes
+
+--  The system's own calls beneath the facility above: Linux's system
+--  calls through platform/linux, and the C library through
+--  platform/libc on Darwin and FreeBSD, whose system interface it is.
+
+fixed if compiler.os == linux then
+    system_random_bytes: (into: []mut u8) -> (count: usize) ! errno =
+        result: isize = linux.getrandom(addr into[0], lenof into, 0)
+        fail errno_of(i32(-result)) when result < 0
+        fail unlisted when usize(result) > lenof into
+        count = usize(result)
+    end system_random_bytes
+elsif compiler.os == darwin or compiler.os == freebsd then
+    system_random_bytes: (into: []mut u8) -> (count: usize) ! errno =
+        libc.arc4random_buf(addr into[0], lenof into)
+        count = lenof into
+    end system_random_bytes
+end if

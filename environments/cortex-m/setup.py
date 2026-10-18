@@ -40,6 +40,28 @@ def supported_host():
         raise RuntimeError("embedded profile requires glibc %d.%d or later" % GLIBC)
 
 
+def installed_tools(path):
+    """The resolved tool root, refused before any build if nothing is installed there.
+
+    Every lane runs `root/usr/bin/arm-none-eabi-gcc` and friends under the
+    root its --tools names, which defaults to DEFAULT; without this a host
+    whose tools are elsewhere failed each profile with "No such file or
+    directory" from a compile, naming neither where it looked nor how to
+    look elsewhere.
+    """
+    root = Path(path).expanduser().resolve()
+    missing = [relative for relative in ('installation.json', 'root/usr/bin/arm-none-eabi-gcc',
+                                         'root/usr/bin/qemu-system-arm', 'root/usr/bin/gdb-multiarch')
+               if not (root / relative).is_file()]
+    if missing:
+        raise SystemExit(
+            'cortex-m: the locked Cortex-M tools are not installed at %s (no %s).\n'
+            'Pass --tools DIRECTORY where `python3 environments/cortex-m/setup.py --tools DIRECTORY`'
+            ' installed them, or install them there; the default is %s.'
+            % (root, ', '.join(missing), DEFAULT))
+    return root
+
+
 def compile_gdb_python(root):
     """Byte-compile the Python GDB embeds, with GDB's own interpreter.
 

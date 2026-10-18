@@ -1,3 +1,4 @@
+import core/arena
 import core/fault
 import core/mem
 
@@ -24,15 +25,15 @@ allocator_view: type = concept (provider: type)
            -> (block: ptr mut u8) ! mem.out_of_memory
     free: (self: ptr provider, block: ptr mut u8, size: usize) -> none
 end allocator_view
-arena_alloc: (self: ptr mem.arena, size: usize, alignment: usize)
+arena_alloc: (self: ptr arena.arena, size: usize, alignment: usize)
              -> (block: ptr mut u8) ! mem.out_of_memory =
     block = try mem.allocate(self.val, size, alignment)
 end arena_alloc
-arena_free: (self: ptr mem.arena, block: ptr mut u8, size: usize)
+arena_free: (self: ptr arena.arena, block: ptr mut u8, size: usize)
             -> none =
     mem.free(self.val, block, size)
 end arena_free
-mem.arena is allocator_view (alloc: arena_alloc, free: arena_free)
+arena.arena is allocator_view (alloc: arena_alloc, free: arena_free)
 
 pair: type = struct
     first: ptr mut u8
@@ -47,57 +48,57 @@ extern(c) invoke: (state: ptr mut u8) -> (value: u8) =
     value = state.val
 end invoke
 
-helper: (provider: type is mem.allocator, arena: provider,
+helper: (provider: type is mem.allocator, memory: provider,
          value: u8) -> (result: ptr mut u8) ! mem.out_of_memory =
-    result = try mem.new(arena, value)
+    result = try mem.new(memory, value)
 end helper
 
-retain: (provider: type is mem.allocator, arena: provider)
+retain: (provider: type is mem.allocator, memory: provider)
         -> none ! mem.out_of_memory =
     --  W7's missing path: this result never returns through the caller block.
-    saved = try helper(arena, u8(37))
+    saved = try helper(memory, u8(37))
 end retain
 
-aggregate: (provider: type is mem.allocator, arena: provider)
+aggregate: (provider: type is mem.allocator, memory: provider)
            -> (result: pair) ! mem.out_of_memory =
-    first := try helper(arena, u8(11))
-    second := try helper(arena, u8(13))
+    first := try helper(memory, u8(11))
+    second := try helper(memory, u8(13))
     result = (first: first, second: second)
 end aggregate
 
-view: (provider: type is mem.allocator, arena: provider)
+view: (provider: type is mem.allocator, memory: provider)
       -> (result: []mut u8) ! mem.out_of_memory =
     initial: [2]u8 = [17, 19]
-    storage := try mem.new(arena, initial)
+    storage := try mem.new(memory, initial)
     result = storage.val[0..<2]
 end view
 
-erased: (provider: type is mem.allocator, arena: provider)
+erased: (provider: type is mem.allocator, memory: provider)
         -> (result: any readable) ! mem.out_of_memory =
-    object := try helper(arena, u8(23))
+    object := try helper(memory, u8(23))
     result = any(object)
 end erased
 
-callback_result: (provider: type is mem.allocator, arena: provider)
+callback_result: (provider: type is mem.allocator, memory: provider)
                  -> (result: callback_state) ! mem.out_of_memory =
-    object := try helper(arena, u8(29))
+    object := try helper(memory, u8(29))
     result = (call: invoke, state: object)
 end callback_result
 
 run: () -> (ok: bool) ! mem.out_of_memory =
     ok = false
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over(space, addr backing[0], 128)
-    mut first := try mem.allocate(arena, usize(1), usize(1))
+    mut space: arena.space = zeroed
+    memory := arena.over(space, addr backing[0], 128)
+    mut first := try mem.allocate(memory, usize(1), usize(1))
     first.val = 7
-    second := try helper(arena, u8(9))
-    held := try aggregate(arena)
-    bytes := try view(arena)
-    dynamic := try erased(arena)
-    state := try callback_result(arena)
-    try retain(arena)
+    second := try helper(memory, u8(9))
+    held := try aggregate(memory)
+    bytes := try view(memory)
+    dynamic := try erased(memory)
+    state := try callback_result(memory)
+    try retain(memory)
     --  Erased allocator dispatch is the same ordinary conformance.
-    mut erased_arena: any allocator_view = any(addr arena)
+    mut erased_arena: any allocator_view = any(addr memory)
     mut last := try erased_arena.alloc(1, 1)
     last.val = 31
     ok = first.val == 7 and second.val == 9
@@ -116,8 +117,8 @@ public main: () -> (code: i32) =
         absent: false
         ptr (retained): retained.val == 37
     end match
-    mut arena_space: mem.arena_space = zeroed
-    counted_arena := mem.arena_over(arena_space, addr counted_backing[0], 8)
+    mut arena_space: arena.space = zeroed
+    counted_arena := arena.over(arena_space, addr counted_backing[0], 8)
     mut space: fault.space = zeroed
     counted := fault.over(space, counted_arena, usize(1))
     counted_block: ptr mut u8 =

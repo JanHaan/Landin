@@ -2,8 +2,9 @@
 --  eight-byte buffer: a line and its ending must fit in it, so seven bytes
 --  is the longest line.  The same input is read whole, three bytes a read
 --  and with a read failing partway, and must give the same lines.
+import core/cmp
 import core/io
-import core/mem
+import core/io/fake
 
 mut output: [1]u8 = zeroed
 mut errors: [1]u8 = zeroed
@@ -23,10 +24,10 @@ next_is: (inout lines: io.line_reader(io.memory), expected: []u8)
             return
         end
         yes = not again.finished
-              and mem.compare(again.bytes, expected) == mem.equal
+              and cmp.compare(again.bytes, expected) == cmp.equal
         return
     end
-    yes = not item.finished and mem.compare(item.bytes, expected) == mem.equal
+    yes = not item.finished and cmp.compare(item.bytes, expected) == cmp.equal
 end next_is
 
 too_long: (inout lines: io.line_reader(io.memory)) -> (yes: bool) =
@@ -52,7 +53,7 @@ reads: (limit: usize, fail_at: usize) -> (ok: bool) =
     name: []u8 = "unused"
     file: io.memory_file =
         (name: name, contents: unused[0..<1], length: 0, cursor: 0,
-         readable: false, writable: false, opened: false, writing: false)
+         readable: false, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     no_arguments: [][]u8 = []
@@ -75,7 +76,7 @@ long_last: () -> (ok: bool) =
     name: []u8 = "unused"
     file: io.memory_file =
         (name: name, contents: unused[0..<1], length: 0, cursor: 0,
-         readable: false, writable: false, opened: false, writing: false)
+         readable: false, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     no_arguments: [][]u8 = []
@@ -88,6 +89,24 @@ long_last: () -> (ok: bool) =
     ok = next_is(lines, "a") and too_long(lines) and finished(lines)
 end long_last
 
+--  A reader over an empty buffer has room for no line: each read is
+--  line_too_long, and none claims the input has ended.
+empty_buffer: () -> (ok: bool) =
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: false, writable: false, state: io.closed_slot)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: [][]u8 = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<0], no_arguments, "a\n",
+                           output[0..<1], errors[0..<1])
+    mut buffer: [1]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer[0..<0])
+    ok = too_long(lines) and too_long(lines) and state.reads == 0
+end empty_buffer
+
 public main: () -> (code: i32) =
     code = 1
     return when not reads(0 -% 1, 0)
@@ -97,5 +116,7 @@ public main: () -> (code: i32) =
     return when not reads(3, 4)
     code = 4
     return when not long_last()
+    code = 5
+    return when not empty_buffer()
     code = 42
 end main

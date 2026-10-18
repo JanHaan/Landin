@@ -15025,11 +15025,20 @@ package body Landin.Tests.Checking_Suite is
                & "= r = (store: held(view: if flag then source else addr "
                & "anchor end if)) end f",
                "L0316", Facts);
+            --  D375: a sibling reaching static storage only through a
+            --  read-only view is no destination; a writable one still is.
             Check_Source
-              ("aggregate sibling origins join",
+              ("aggregate read-only static sibling",
                "box: type = struct view: ptr mut i32 text: ptr i32 end box "
                & "anchor: i32 = 1 f: (source: ptr mut i32) -> (r: box from "
                & "source) = r = (view: source, text: addr anchor) end f",
+               "", Facts);
+            Check_Source
+              ("aggregate sibling origins join",
+               "box: type = struct view: ptr mut i32 text: ptr mut i32 end "
+               & "box mut anchor: i32 = 1 f: (source: ptr mut i32) -> (r: "
+               & "box from source) = r = (view: source, text: addr anchor) "
+               & "end f",
                "L0316", Facts);
             Check_Source
               ("anonymous provider body",
@@ -15039,11 +15048,28 @@ package body Landin.Tests.Checking_Suite is
                & "if end _ = operation end f",
                "L0316", Facts);
             Check_Source
-              ("erased carrier",
+              ("writable call result widens a read-only static source",
+               "widen: (p: ptr i32) -> (r: ptr mut i32 from p) = r = "
+               & "ptr(usize(p)) end widen anchor: i32 = 1 f: (source: ptr "
+               & "mut i32, flag: bool) -> (r: ptr mut i32 from source) = r "
+               & "= if flag then source else widen(addr anchor) end if end f",
+               "L0316", Facts);
+            --  D375: an erased read-only view is judged by what it erased.
+            Check_Source
+              ("erased read-only static carrier",
                "cap: type = concept (t: type) read: (self: ptr t) -> (r: "
                & "i32) end cap read: (self: ptr i32) -> (r: i32) = r = "
                & "self.val end read i32 is cap (read: read) anchor: i32 = 1 "
                & "f: (source: any cap, flag: bool) -> (r: any cap from "
+               & "source) = r = if flag then source else any(addr anchor) "
+               & "end if end f",
+               "", Facts);
+            Check_Source
+              ("erased carrier",
+               "cap: type = concept (t: type) bump: (self: ptr mut t) -> "
+               & "none end cap bump: (self: ptr mut i32) -> none = inc "
+               & "self.val end bump i32 is cap (bump: bump) mut anchor: i32 "
+               & "= 1 f: (source: any cap, flag: bool) -> (r: any cap from "
                & "source) = r = if flag then source else any(addr anchor) "
                & "end if end f",
                "L0316", Facts);

@@ -77,6 +77,12 @@ package Landin.Testing.Fixtures is
    --  again at each.  The empty string when the fixture names none.
    function Levels (Item : Fixture) return String;
 
+   --  The status a runtime fixture returns when built at LEVEL: its
+   --  `level_status:` entry for that level, `LEVEL=STATUS` in a
+   --  comma-separated list, when it has one, and its `status:` otherwise.
+   --  A program whose result is a feature fact returns the level's own.
+   function Status_At (Item : Fixture; Level : String) return Integer;
+
    --  The levels `levels:` names that are x86-64's, which the Linux lane
    --  runs; each lane reads its own family's.
    function Levels_Of_Family
@@ -89,6 +95,12 @@ package Landin.Testing.Fixtures is
    --  status -- never which signal ended it.  A trapping fixture therefore
    --  carries no `status`, and `Status` says nothing about one.
    function Traps (Item : Fixture) return Boolean;
+
+   --  D361's line a trapping program must write before it ends, its file
+   --  named by the base name the harness compiled it from, or "": the
+   --  program's output must hold a line that is this, or ends with `/`
+   --  and this, wherever a lane put the fixture.
+   function Trap_Report (Item : Fixture) return String;
 
    --  The constructs this fixture is evidence about, in the order it named
    --  them: `[NNNN]` ids without their brackets.  The construct matrix indexes
@@ -238,6 +250,7 @@ private
       Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;
       Traps   : Boolean := False;
+      Trap_Report : Ada.Strings.Unbounded.Unbounded_String;
       Made_Of   : Ada.Strings.Unbounded.Unbounded_String;
       Beside    : Ada.Strings.Unbounded.Unbounded_String;
       Root      : Ada.Strings.Unbounded.Unbounded_String;
@@ -249,6 +262,7 @@ private
       Stream    : Stream_Choice := Merged;
       Profiles  : Profile_Policy := Standard;
       Levels    : Ada.Strings.Unbounded.Unbounded_String;
+      Level_Status : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    package Fixture_Vectors is new Ada.Containers.Indefinite_Vectors

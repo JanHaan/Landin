@@ -1,0 +1,24 @@
+import core/net
+
+--  Loopback addresses of both families, a port put in place, which makes
+--  another address, and the unspecified address told from them.
+exercise: () -> (ok: bool) =
+    ok = false
+    four: net.address = net.loopback(net.ipv4, 80)
+    six: net.address = net.loopback(net.ipv6, 80)
+    return when four.family <> net.ipv4 or six.family <> net.ipv6
+      or four.port <> 80 or four.octets[0] <> 127
+    moved: net.address = net.with_port(four, 8080)
+    return when moved.port <> 8080 or net.same_address(moved, four)
+      or not net.same_address(net.with_port(moved, 80), four)
+    ok = net.is_unspecified(net.unspecified(net.ipv4, 0))
+         and not net.is_unspecified(four)
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise()
+    if ok then
+        code = 42
+    end if
+end main

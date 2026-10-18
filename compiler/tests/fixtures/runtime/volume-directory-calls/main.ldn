@@ -1,0 +1,146 @@
+--  The memory volume counts every call of its `directories`, `read_entry`
+--  and `entry_size` among them, and `same_file`, and the call `fail_at`
+--  names fails `io_failed`, so a test can fail a listing, an entry's size
+--  or a comparison of two files (D380).  Reading an entry, whether it
+--  refilled the directory's buffer or read what an earlier refill left
+--  there, once did not count, nor did `entry_size` or `same_file`, so
+--  `close_directory` received the failure meant for them.  A failed call
+--  reads nothing: the next one gives the entry it would have.  The failing
+--  step's number is the exit code.
+import core/cmp
+import core/io
+import core/io/fake
+import core/text
+
+--  Whether NAME is the entry's name.
+named: (item: io.entry, name: []u8) -> (yes: bool) =
+    yes = cmp.compare(text.host_bytes(item.name), name) == cmp.equal
+end named
+
+--  Read the next entry of OPENED, or report whether the call failed
+--  `io_failed`.
+read_or_fail: (host: fake.volume, inout opened: io.directory)
+              -> (failed: bool) =
+    failed = false
+    item: io.entry = io.read_entry(host, opened) else (problem)
+        failed = problem == io.io_failed
+        return
+    end
+    _ = item
+end read_or_fail
+
+public main: () -> (code: i32) =
+    code = 1
+    mut first_path: [4]u8 = [u8('d'), u8('a'), u8('t'), u8('a')]
+    mut second_path: [4]u8 = [u8('m'), u8('o'), u8('r'), u8('e')]
+    mut first_bytes: [1]u8 = [42]
+    mut second_bytes: [3]u8 = [1, 2, 3]
+    mut nodes: [2]fake.volume_node = [
+        (path: first_path[0..<4], path_length: 4,
+         contents: first_bytes[0..<1], length: 1, kind: io.regular,
+         read_only: false, modified: (seconds: 0, nanoseconds: 0)),
+        (path: second_path[0..<4], path_length: 4,
+         contents: second_bytes[0..<3], length: 3, kind: io.regular,
+         read_only: false, modified: (seconds: 0, nanoseconds: 0))]
+    mut state: fake.volume_space = zeroed
+    host := fake.volume_over(state, nodes[0..<2], "/volume")
+    mut buffer: [64]u8 = zeroed
+    mut opened: io.directory = io.open_directory(host, text.host_over("."),
+                                                 buffer[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when state.calls <> 1
+    --  The first read refills the buffer with both entries, and counts.
+    entry: io.entry = io.read_entry(host, opened) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when state.calls <> 2 or not named(entry, "data")
+    --  A read from what the refill left fails when it is the one named.
+    state.fail_at = state.calls + 1
+    code = 4
+    return when not read_or_fail(host, opened) or state.calls <> 3
+    second: io.entry = io.read_entry(host, opened) else (problem)
+        _ = problem
+        code = 5
+        return
+    end
+    code = 6
+    return when state.calls <> 4 or not named(second, "more")
+    ending: io.entry = io.read_entry(host, opened) else (problem)
+        _ = problem
+        code = 7
+        return
+    end
+    code = 8
+    return when state.calls <> 5 or not named(ending, "")
+    size: u64 = io.entry_size(host, opened, text.host_over("more"))
+        else (problem)
+        _ = problem
+        code = 9
+        return
+    end
+    code = 10
+    return when state.calls <> 6 or size <> 3
+    state.fail_at = state.calls + 1
+    mut refused: bool = false
+    _ = io.entry_size(host, opened, text.host_over("data")) else (problem)
+        refused = problem == io.io_failed
+        0
+    end
+    code = 11
+    return when not refused or state.calls <> 7
+    state.fail_at = state.calls + 1
+    refused = false
+    _ = io.same_file(host, text.host_over("data"),
+                     text.host_over("data")) else (problem)
+        refused = problem == io.io_failed
+        false
+    end
+    code = 12
+    return when not refused or state.calls <> 8
+    same: bool = io.same_file(host, text.host_over("data"),
+                              text.host_over("data")) else (problem)
+        _ = problem
+        code = 13
+        return
+    end
+    code = 14
+    return when not same or state.calls <> 9
+    --  A read that would refill the buffer fails when it is named, and
+    --  the next refills it from the first entry.
+    mut again_buffer: [64]u8 = zeroed
+    mut again: io.directory = io.open_directory(host, text.host_over("."),
+                                                again_buffer[0..<64])
+        else (problem)
+        _ = problem
+        code = 15
+        return
+    end
+    state.fail_at = state.calls + 1
+    code = 16
+    return when not read_or_fail(host, again) or state.calls <> 11
+    refilled: io.entry = io.read_entry(host, again) else (problem)
+        _ = problem
+        code = 17
+        return
+    end
+    code = 18
+    return when state.calls <> 12 or not named(refilled, "data")
+    io.close_directory(host, again) else (problem)
+        _ = problem
+        code = 19
+        return
+    end
+    io.close_directory(host, opened) else (problem)
+        _ = problem
+        code = 20
+        return
+    end
+    code = 21
+    return when state.calls <> 14
+    code = 42
+end main

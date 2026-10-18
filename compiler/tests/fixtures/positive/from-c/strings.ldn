@@ -1,0 +1,9 @@
+greeting: utf8 = "héllo"
+greeting_bytes: []u8 = "héllo" -- six bytes; the NUL is not counted
+
+spaces_in: (line: utf8) -> (count: u32) =
+    count = 0
+    for character in line do
+        if character == ' ' then inc count end if
+    end for
+end spaces_in

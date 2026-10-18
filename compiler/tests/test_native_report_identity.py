@@ -120,7 +120,8 @@ class NativeReportIdentity(unittest.TestCase):
                     self.assertEqual(result.returncode, 1, result.stderr)
                     self.assertTrue((self.root / "tool-invoked").exists())
                     (self.root / "tool-invoked").unlink()
-                    (self.root / (output + ".s")).unlink()
+                    # D362: a failed link leaves no intermediate assembly.
+                    self.assertFalse((self.root / (output + ".s")).exists())
 
     def test_alias_parent_missing_destinations(self):
         (self.root / "real").mkdir()

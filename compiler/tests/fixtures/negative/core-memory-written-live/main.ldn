@@ -1,4 +1,5 @@
 import core/io
+import core/io/fake
 import core/text
 refill: (inout state: io.memory_space) -> none =
     state.output_used = 0

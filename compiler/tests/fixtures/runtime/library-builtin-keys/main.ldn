@@ -1,3 +1,4 @@
+import core/arena
 import core/map
 import core/mem
 import core/sort
@@ -8,14 +9,14 @@ import core/text
 exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text =
     ok = false
     mut backing: [1536]u8 = zeroed
-    mut space: mem.arena_space = zeroed
-    arena := mem.arena_over_unchecked(space, addr backing[0], lenof backing)
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], lenof backing)
 
     least: i32 = (0 - 2147483647) - 1
     mut signed := map.new(key: i32, item: u8)
-    try map.insert(signed, arena, -1, u8(1))
-    try map.insert(signed, arena, 0, u8(2))
-    try map.insert(signed, arena, least, u8(3))
+    try map.insert(signed, memory, -1, u8(1))
+    try map.insert(signed, memory, 0, u8(2))
+    try map.insert(signed, memory, least, u8(3))
     first: u8 = try map.get(signed, -1)
     second: u8 = try map.get(signed, 0)
     third: u8 = try map.get(signed, least)
@@ -25,8 +26,8 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
     alpha: []u8 = "alpha"
     beta: []u8 = "beta"
     mut names := map.new(key: []u8, item: u32)
-    try map.insert(names, arena, alpha, u32(1))
-    try map.insert(names, arena, beta, u32(2))
+    try map.insert(names, memory, alpha, u32(1))
+    try map.insert(names, memory, beta, u32(2))
     mut spelled: [5]u8 = zeroed
     mut at: usize = 0
     while at < lenof alpha do
@@ -39,9 +40,9 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
     return when found <> 1 or map.length(names) <> 2
 
     mut words := map.new(key: utf8, item: u32)
-    try map.insert(words, arena, "one", u32(1))
-    try map.insert(words, arena, "two", u32(2))
-    try map.insert(words, arena, "one", u32(10))
+    try map.insert(words, memory, "one", u32(1))
+    try map.insert(words, memory, "two", u32(2))
+    try map.insert(words, memory, "one", u32(10))
     one: u32 = try map.get(words, "one")
     return when one <> 10 or map.length(words) <> 2
     typed: utf8 = try text.from_bytes("two")
@@ -60,9 +61,9 @@ exercise: () -> (ok: bool) ! mem.out_of_memory | map.missing | text.invalid_text
     sort.sort_selection(bytes[0..<3])
     return when bytes[0] <> 2 or bytes[2] <> 9
 
-    map.release(words, arena)
-    map.release(names, arena)
-    map.release(signed, arena)
+    map.release(words, memory)
+    map.release(names, memory)
+    map.release(signed, memory)
     ok = true
 end exercise
 

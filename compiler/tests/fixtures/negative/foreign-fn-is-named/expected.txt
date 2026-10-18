@@ -1,0 +1,10 @@
+error[L0103]: Landin writes a function as `name: (parameters) -> (returns) =`, with no `fn`
+  --> ../tests/fixtures/negative/foreign-fn-is-named/program.ldn:1:1
+  |
+1 | fn add(a: i32, b: i32) -> (r: i32) =
+  | ^^
+  --> ../tests/fixtures/negative/foreign-fn-is-named/program.ldn:1:4
+  |
+1 | fn add(a: i32, b: i32) -> (r: i32) =
+  |    ^^^ written before this
+  = note: [1800]: a function is its name, a colon, its signature and `=`, and its body closes with `end name`

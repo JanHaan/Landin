@@ -312,6 +312,34 @@ class NativeCLI(unittest.TestCase):
         self.assertGreater(len(diagnostic['labels']), 1)
         self.assertTrue(any(row['kind'] == 'trace' for row in rows))
 
+    def test_fmt_check_stdout_and_rewrite(self):
+        # D358 and D359 as a user meets them, unprivileged: every
+        # line out of the layout is reported with the line it should be,
+        # --stdout prints the layout and writes nothing, and the plain
+        # command rewrites the file it was given.
+        loose = 'f: () -> none =\n  g()\n\n\n      h()\nend f\n'
+        laid = 'f: () -> none =\n    g()\n\n    h()\nend f\n'
+        source = self.root / 'loose.ldn'
+        source.write_text(loose)
+        checked = self.run_cli('fmt', '--check', 'loose.ldn', status=1)
+        self.assertEqual(checked.stderr.count('error[L0008]'), 3)
+        self.assertIn('loose.ldn:2:1', checked.stderr)
+        self.assertIn('the layout writes it `    g()`', checked.stderr)
+        self.assertIn('loose.ldn:4:1', checked.stderr)
+        self.assertIn('the layout removes it', checked.stderr)
+        self.assertIn('the layout writes it `    h()`', checked.stderr)
+        printed = self.run_cli('fmt', '--stdout', 'loose.ldn')
+        self.assertEqual(printed.stdout, laid)
+        self.assertEqual(source.read_text(), loose)
+        self.assertIn('--stdout', self.run_cli('fmt', '--help').stdout)
+        self.run_cli('fmt', '--check', '--stdout', 'loose.ldn', status=2)
+        inode = source.stat().st_ino
+        rewritten = self.run_cli('fmt', 'loose.ldn')
+        self.assertEqual(rewritten.stderr, '')
+        self.assertEqual(source.read_text(), laid)
+        self.assertEqual(source.stat().st_ino, inode)
+        self.run_cli('fmt', '--check', 'loose.ldn')
+
     def test_bash_completion_scope(self):
         if not shutil.which('bash'):
             self.skipTest('bash is unavailable')
@@ -323,6 +351,7 @@ class NativeCLI(unittest.TestCase):
         words = subprocess.check_output(['bash', '-c', command, 'test', str(completion)],
                                         text=True).splitlines()
         self.assertIn('--check', words)
+        self.assertIn('--stdout', words)
         self.assertNotIn('--emit', words)
         command = command.replace('refine fmt --', 'refine compile --')
         words = subprocess.check_output(['bash', '-c', command, 'test', str(completion)],

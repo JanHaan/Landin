@@ -1,0 +1,15 @@
+--  An empty path names no library.  The loader would give the program
+--  itself for one, which D336 keeps out of what a library is.
+import core/text
+import platform/posix
+
+public main: () -> (code: i32) =
+    code = 1
+    loaded: posix.library = posix.open_library(text.host_over(""),
+                                               posix.local_symbols)
+        else (problem)
+        code = if problem == posix.enoent then 42 else 2 end if
+        return
+    end
+    posix.close_library(loaded) else none
+end main

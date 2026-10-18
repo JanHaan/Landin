@@ -1,0 +1,8 @@
+--  A module whose one call exists only on firmware, as platform/linux's
+--  exist only on Linux.
+fixed if compiler.os == freestanding then
+    --- Stop the processor until an interrupt; firmware's alone.
+    public wait: () -> (code: i32) =
+        code = 0
+    end wait
+end if
