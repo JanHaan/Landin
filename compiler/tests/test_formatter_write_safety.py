@@ -267,8 +267,10 @@ class FormatterWriteSafety(unittest.TestCase):
         self.assertEqual(run.returncode, 1)
         kept = list(self.root.glob("source.ldn.fmt-original-*"))
         self.assertEqual(len(kept), 1)
-        self.assertIn(b"its original bytes are kept in " + bytes(kept[0]),
-                      run.stdout)
+        # The adapter works on the resolved path, so it names the copy that
+        # way: on macOS /tmp is a link to /private/tmp.
+        self.assertIn(b"its original bytes are kept in "
+                      + os.fsencode(os.path.realpath(kept[0])), run.stdout)
         self.assertEqual(kept[0].read_bytes(), LOOSE)
         kept[0].unlink()
         # Keeping the copy fails: nothing has been written.
