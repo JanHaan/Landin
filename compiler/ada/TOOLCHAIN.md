@@ -88,8 +88,12 @@ cross GCC `15.3.0`, the versions `environments/pins.sh` names as
 build from a lock whose package set has others. Its drivers carry the
 triplet names `refine` asks for, and its multi-target GDB is
 `gdb-multiarch`, because the GDB the pinned GNAT bundles reads only its own
-architecture. The gate's `rv64-qemu` jobs install Ubuntu 24.04's `qemu-user`
-and riscv64 cross packages, whose versions their logs print.
+architecture. The gate's `rv64-qemu` jobs install nix and run the flake's
+`qemu-user`, refusing any version but `LANDIN_CROSS_QEMU_NIX`, and link with
+Ubuntu 24.04's riscv64 cross packages, whose versions their logs print.
+Ubuntu's own `qemu-user`, 8.2.2, is not a substitute: it gives a riscv64
+`sigaction` the `sa_restorer` word Linux's lacks, so `rt_sigaction` writes
+32 bytes into a 24-byte record.
 
 ### Archives and checksums
 

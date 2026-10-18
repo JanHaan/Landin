@@ -132,8 +132,9 @@ def measure(refine, output, capture, tools, selected=None, profile=None):
             run(key + '-strip', [tools['strip']['path'], '-S', '-x', stripped])
             assert macho_identity.match(table, stripped, dsym) == identity
             assert b'__debug_info' not in stripped.read_bytes()
-            for source in sources:
-                assert os.fsencode(source.name) not in stripped.read_bytes()
+            #  D361: names only in trap reports, and only logical ones.
+            deployed = shared.deployed_source_names(stripped.read_bytes(), sources)
+            assert not deployed, deployed
             run(key + '-stripped-execute', [stripped, *arguments], 42)
             assert (output / (key + '-stripped-execute.stdout')).read_text() == ''
             assert (output / (key + '-stripped-execute.stderr')).read_text() == expected_stderr

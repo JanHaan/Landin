@@ -70,7 +70,8 @@ MAX_WORKERS = 4
 
 #  These source/target pairs deliberately refuse in both modes.  Most use
 #  target-specific C or machine facilities; the fixed-conditional fixtures
-#  select an x86-64-only declaration.  Keep this list explicit: a new shared
+#  select an x86-64-only declaration; from-c and the hosted initializer
+#  import hosted services Cortex-M has none of.  Keep this list explicit: a new shared
 #  refusal must not become evidence of equal assembly merely by agreeing on
 #  every host.
 REFUSAL_PAIRS = {
@@ -103,6 +104,7 @@ REFUSAL_PAIRS = {
     ("r440-c-aliases", "linux-rv64"),
     ("r440-c-layout-recursive-callback", "cortex-m0"),
     ("r440-c-signatures", "cortex-m0"),
+    ("from-c", "cortex-m0"),
     ("hosted-initializer-normalized", "cortex-m0"),
     ("r440-checker-recursive-callback-contexts", "cortex-m0"),
     ("r440-checker-recursive-contexts", "cortex-m0"),

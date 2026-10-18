@@ -45,10 +45,11 @@ package Landin.Panics is
 
    --  The line D361's default writes for a check at Origin, newline
    --  included: `FILE:LINE:COLUMN: trap: KIND`, or `trap: KIND` for a
-   --  site with no source.  A library module's file is named by its
-   --  module path, `core/vec/vec.ldn`, so the bytes do not depend on
-   --  where the library is installed; an entry-module file by the name it
-   --  was read under, as a diagnostic names it.
+   --  site with no source.  A file is named by its path relative to its
+   --  module's root: a library module's by its module path,
+   --  `core/vec/vec.ldn`, an entry-module file by its own name,
+   --  `main.ldn`, so the bytes depend neither on where the program or the
+   --  library is nor on how a path was spelled.
    function Report
      (Of_Plan : Plan; Origin : Landin.Provenance.Origin;
       Reason : Kind) return String

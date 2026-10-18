@@ -245,15 +245,21 @@ def refusal(run, elf, name):
         'reserved': ('rp2040/uart0/device.ldn', b'compiler.register_write(port, raw, compiler.one_clears'),
         'alignment': ('rp2040/io_bank0/device.ldn', b'compiler.register_read(port, compiler.normal_read)'),
     }[name]
-    paths = [run.out / 'source' / p for p in (
-        'app/main.ldn', 'rp2040/io_bank0/device.ldn',
-        'rp2040/uart0/device.ldn', 'platform/cortex_m/cortex_m.ldn', 'core/panic/panic.ldn')]
-    require(set(paths) == set((run.out / 'source').rglob('*.ldn')),
+    # No imported module imports another, so FIFO order is the program
+    # followed by its imports as written: reordering them moves every site.
+    source = run.out / 'source'
+    paths = [source / 'app/main.ldn']
+    for line in paths[0].read_text().splitlines():
+        if line.startswith('import '):
+            files = sorted((source / line[7:]).glob('*.ldn'))
+            require(len(files) == 1, 'panic oracle module is not one file: ' + line[7:])
+            paths += files
+    require(set(paths) == set(source.rglob('*.ldn')),
             'panic oracle source inventory changed')
     offset = 0
     for path in paths:
         data = path.read_bytes()
-        if str(path.relative_to(run.out / 'source')) == filename:
+        if str(path.relative_to(source)) == filename:
             # First UART one-clears call is UARTICR; UARTRSR has no write.
             offset += data.index(token)
             break

@@ -161,9 +161,12 @@ package body Landin.Panics is
       function Spelling (Id : IR.Declaration_Id) return String is
         (Landin.Source.Names.Spelling (Names, R.Name_Of (Meanings, Id)));
 
-      --  A file in a module outside the entry is named under its module's
-      --  logical path, a library file's as `core/vec/vec.ldn`, so that an
-      --  image's report says the same wherever the library is installed.
+      --  Every file is named by its path relative to its module's root:
+      --  a library file's as `core/vec/vec.ldn`, an entry-module file's by
+      --  its own name, `main.ldn`.  Nothing of how a path was spelled or
+      --  where the build ran enters the image, so the report says the
+      --  same wherever the program and the library are, and equivalent
+      --  closures emit the same bytes.
       function Displayed (Source : Landin.Source.Source_Id) return String;
       function Displayed (Source : Landin.Source.Source_Id) return String is
          Name : constant String := Landin.Source.Name
@@ -174,17 +177,16 @@ package body Landin.Panics is
             else Landin.Modules.No_Module);
          Base : Natural := Name'First;
       begin
-         if Module = Landin.Modules.No_Module
-           or else Module = Landin.Modules.Entry_Module
-           or else Landin.Modules.Logical_Path (Modules, Module) = ""
-         then
-            return Name;
-         end if;
          for Index in Name'Range loop
             if Name (Index) = '/' then
                Base := Index + 1;
             end if;
          end loop;
+         if Module = Landin.Modules.No_Module
+           or else Landin.Modules.Logical_Path (Modules, Module) = ""
+         then
+            return Name (Base .. Name'Last);
+         end if;
          return Landin.Modules.Logical_Path (Modules, Module) & "/"
            & Name (Base .. Name'Last);
       end Displayed;

@@ -3,10 +3,8 @@
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 import platform
-import re
 import shutil
 import sys
 
@@ -137,14 +135,10 @@ def main():
             '-o', 'quit'])
         assert 'no locations (pending)' in stripped_session, stripped_session
         assert macho_identity.match(table, stripped, dsym) == identity
-        #  D361: a failed check's report names its file; outside those
-        #  lines no filename is deployed.
-        stripped_bytes = re.sub(
-            rb'[^\x00\n]*: trap: (?:out_of_range|overflow|bad_conversion|unreachable)\n\x00',
-            b'', stripped.read_bytes())
-        assert b'__debug_info' not in stripped_bytes
-        for source in linux.SOURCES:
-            assert os.fsencode(source.name) not in stripped_bytes
+        assert b'__debug_info' not in stripped.read_bytes()
+        #  D361: names only in trap reports, and only logical ones.
+        deployed = linux.deployed_source_names(stripped.read_bytes(), linux.SOURCES)
+        assert not deployed, deployed
         lookup = [sys.executable, ROOT / 'scripts/source-location.py', table_path,
                   '2', str(linux.CALLER_LINE), str(linux.CALLER_COLUMN), '--macho', stripped, '--dsym', dsym]
         resolved = run(key + '-lookup', lookup)
@@ -218,8 +212,9 @@ def main():
     assert json.loads(Path(str(plain) + '.sources.json').read_text()) == original_table
     assert len(original_table['files']) == 1 and original_table['files'][0]['file_id'] == 2
     assert not Path(str(plain) + '.dSYM').exists()
-    for source in copied:
-        assert os.fsencode(source.name) not in plain.read_bytes()
+    #  D361: names only in trap reports, and only logical ones.
+    deployed = linux.deployed_source_names(plain.read_bytes(), copied)
+    assert not deployed, deployed
     run('plain-execute', [plain], 42)
     shutil.copyfile(plain, output / 'before-comment')
     (output / 'before-comment.sources.json').write_text(json.dumps(original_table))

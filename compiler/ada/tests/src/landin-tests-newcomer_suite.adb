@@ -387,6 +387,15 @@ package body Landin.Tests.Newcomer_Suite is
      & "    code = i32(t.at(5))" & LF
      & "end main" & LF;
 
+   Trapping_Entry : constant String :=
+     "mut words: [4]u32" & LF & LF
+     & "at: (i: usize) -> (r: u32) =" & LF
+     & "    r = words[i]" & LF
+     & "end at" & LF & LF
+     & "public main: () -> (code: i32) =" & LF
+     & "    code = i32(at(4))" & LF
+     & "end main" & LF;
+
    procedure A_Trap_Names_Its_Site (Item : in out Landin.Testing.Context);
 
    procedure A_Trap_Names_Its_Site (Item : in out Landin.Testing.Context) is
@@ -422,6 +431,36 @@ package body Landin.Tests.Newcomer_Suite is
                Level & ": the report names the library file and its site");
          end;
       end loop;
+      --  An entry-module file by its own name, wherever it is and however
+      --  the path to it was spelled, so assembly without a source map
+      --  does not follow the spelling.
+      Host.Add_Directory ("app");
+      Host.Add_File ("app/main.ldn", Trapping_Entry);
+      Host.Add_Directory ("elsewhere");
+      Host.Add_Directory ("elsewhere/deeper");
+      Host.Add_File ("elsewhere/deeper/main.ldn", Trapping_Entry);
+      declare
+         Near : constant Landin.Driver.Outcome := Run
+           (["--target=linux-x86-64", "--link=libc", "--library=lib",
+             "app/main.ldn", "--emit=asm", "-o", "near.s"], Host, Tools);
+         Far : constant Landin.Driver.Outcome := Run
+           (["--target=linux-x86-64", "--link=libc", "--library=lib",
+             "elsewhere/deeper/main.ldn", "--emit=asm", "-o", "far.s"],
+            Host, Tools);
+         Text : constant String := Host.Written ("near.s");
+      begin
+         Landin.Testing.Check
+           (Item, Near.Status = Landin.Driver.Status_Success
+              and then Far.Status = Landin.Driver.Status_Success
+              and then Contains
+                (Text, ".asciz ""main.ldn:4:9: trap: out_of_range\012""")
+              and then not Contains (Text, "app/main.ldn"),
+            "the report names the entry file by its own name: "
+            & Report (Near) & Report (Far));
+         Landin.Testing.Check
+           (Item, Text = Host.Written ("far.s"),
+            "the entry's directory does not reach the assembly");
+      end;
       declare
          Result : constant Landin.Driver.Outcome := Run
            (["--target=cortex-m0", "--library=lib", "main.ldn",

@@ -53,11 +53,12 @@ def execute(run, refine):
         hole(run, refine, optimization, specialization)
 
 
-def transport(run, name, executable, model, limit):
+def transport(run, name, executable, model, limit, report=b''):
     """Serve the peer's line transport against MODEL until it exits.
 
     Returns the lines it wrote and its exit status.  The peer may write at
-    most LIMIT lines; everything it writes to stderr fails the lane.
+    most LIMIT lines, and to stderr exactly REPORT: a trapping program's
+    one report line, and nothing from one that completes.
     """
     record = {'name': name, 'argv': [str(executable)], 'timeout_seconds': 10}
     run.commands.append(record)
@@ -92,22 +93,28 @@ def transport(run, name, executable, model, limit):
             stop(peer)
             record.update(seconds=round(time.monotonic() - tick, 3), exit=peer.returncode)
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2) + '\n')
-    require((run.out / (name + '.stderr')).read_bytes() == b'', name + ' wrote to stderr')
+    written = (run.out / (name + '.stderr')).read_bytes()
+    require(written == report, name + ' wrote %r to stderr, not %r' % (written, report))
     return commands, status
 
 
 def hole(run, refine, optimization, specialization):
     name = 'packed-native-hole-' + optimization + '-' + specialization
     assembly, executable = run.out / (name + '.s'), run.out / name
+    source = HERE / 'probes/packed-native-hole.ldn'
     run.command(name + '-compile', [refine, '--target=linux-x86-64',
                 '--optimize=' + optimization, '--specialize=' + specialization,
-                '--emit=asm', '-o', assembly, HERE / 'probes/packed-native-hole.ldn'],
+                '--emit=asm', '-o', assembly, source],
                 timeout=60)
     run.command(name + '-link', ['gcc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-g', '-fno-pie', '-no-pie', assembly,
                 HERE / 'probes/packed-transport.c', '-o', executable])
     model = EncodingPeripheral()
-    commands, status = transport(run, name, executable, model, 1)
+    # A hosted program with no panic handler reports a failed check on
+    # stderr, naming the source as it was spelled to refine and the
+    # extraction `image.mode`, before it traps.
+    report = ('%s:16:13: trap: bad_conversion\n' % source).encode()
+    commands, status = transport(run, name, executable, model, 1, report)
     # The peer traps on the unnamed encoding after its one read (SIGILL).
     require(commands == ['R32 4'], name + ' wrote ' + repr(commands))
     require(status == -4, name + ' exited %d, not by SIGILL' % status)

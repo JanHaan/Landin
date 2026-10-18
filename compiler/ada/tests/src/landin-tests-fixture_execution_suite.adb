@@ -343,9 +343,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
          when Landin.Platform.Signaled  => Traps,
          when Landin.Platform.Timed_Out => False);
 
-   --  D361: some line of Output is Line, or ends with `/` and Line, since
-   --  the report names the file by the path it was compiled from and each
-   --  lane names the fixture's directory its own way.
+   --  D361: some line of Output is exactly Line.  The report names the
+   --  file relative to its module's root, so where a lane put the fixture
+   --  and how it spelled the path cannot change the line.
    function Reports_Trap (Output, Line : String) return Boolean;
 
    function Reports_Trap (Output, Line : String) return Boolean is
@@ -356,12 +356,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             declare
                Text : constant String := Output (First .. Index - 1);
             begin
-               if Text = Line
-                 or else (Text'Length > Line'Length
-                   and then Text (Text'Last - Line'Length + 1 .. Text'Last)
-                     = Line
-                   and then Text (Text'Last - Line'Length) = '/')
-               then
+               if Text = Line then
                   return True;
                end if;
             end;

@@ -77,6 +77,37 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+#  D361: with no panic handler, a hosted image's failed checks each carry
+#  one report line, `FILE:LINE:COLUMN: trap: KIND`, as a NUL-terminated
+#  string, FILE named relative to its module's root.
+TRAP_REPORT_LINE = re.compile(
+    rb"[^\x00\n]*: trap: (?:out_of_range|overflow|bad_conversion|unreachable)"
+    rb"\n\x00")
+
+
+def deployed_source_names(image: bytes, sources) -> list[str]:
+    """What a stripped image still says about where its sources were.
+
+    The one rule for GDB, LLDB and every Darwin lane: a stripped hosted
+    image names a source file only inside D361's report lines, and only by
+    its logical name, so the directory a source was read from appears
+    nowhere in it -- not in a report, and not outside one.  A source is a
+    path relative to the repository root or an absolute one.
+    """
+    outside = TRAP_REPORT_LINE.sub(b"", image)
+    problems = []
+    for source in sources:
+        path = Path(os.fsdecode(source))
+        if not path.is_absolute():
+            path = ROOT / path
+        if os.fsencode(path.name) in outside:
+            problems.append(f"{path.name!r} outside a trap report")
+        if os.fsencode(str(path.resolve().parent)) in image:
+            problems.append(f"the directory of {path.name!r}, "
+                            f"{str(path.resolve().parent)!r}")
+    return problems
+
+
 def run(args: list[str], *, cwd: Path | None = None,
         expected_status: int = 0, empty_output: bool = False,
         timeout: int = 120) -> str:
@@ -1582,15 +1613,10 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
             "strip --strip-debug changed the exact GNU build ID")
     check_debug_sections(tools["readelf"], stripped, False,
                          retained / f"{key}.stripped-sections.txt")
-    #  D361: a failed check's report names its file; outside those lines
-    #  no filename is deployed.
-    stripped_bytes = re.sub(
-        rb"[^\x00\n]*: trap: (?:out_of_range|overflow|bad_conversion|unreachable)\n\x00",
-        b"", stripped.read_bytes())
-    for source_arg in source_args:
-        require(os.fsencode(source_arg) not in stripped_bytes and
-                os.fsencode(Path(source_arg).name) not in stripped_bytes,
-                f"stripped executable still deploys filename {source_arg!r}")
+    stripped_bytes = stripped.read_bytes()
+    deployed = deployed_source_names(stripped_bytes, source_args)
+    require(not deployed,
+            f"stripped executable still deploys {', '.join(deployed)}")
     stripped_output = run(guest_command(stripped, runner, qemu, arguments),
                           cwd=debugger_cwd, expected_status=42)
     require(stripped_output == expected_output,

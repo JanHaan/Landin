@@ -33,15 +33,15 @@ def hash_file(path):
 
 
 #  D361: the line a trap with no panic handler writes to standard error
-#  before its terminal instruction.  A fixture's `trap_report:` names it
-#  by the file's base name, so it matches a line ending in `/` and that.
+#  before its terminal instruction.  A fixture's `trap_report:` is that
+#  line exactly: the file is named relative to its module's root, so where
+#  the lane put the fixture cannot change it.
 TRAP_REPORT = re.compile(rb"^(?:.*: )?trap: (?:out_of_range|overflow|bad_conversion|unreachable)\n\Z")
 
 
 def reports_trap(output, line):
     wanted = line.encode()
-    return any(text == wanted or text.endswith(b"/" + wanted)
-               for text in output.split(b"\n"))
+    return wanted in output.split(b"\n")
 
 
 def outcome(meta, status, stdout, stderr, expected=None):

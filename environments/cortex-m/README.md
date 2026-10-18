@@ -352,7 +352,9 @@ fresh peripheral, reads the destructive register once, and extracts its
 unnamed mode inside `unchecked`. The independently specified reply is `0x9b`
 and the complete trace is `r32:4:0000009b`. The native process must terminate
 with SIGILL, without a second access or
-the normal completion reply. Discarding the extracted value cannot remove
+the normal completion reply, after writing one line to stderr: the hosted
+trap report naming the probe's source as it was spelled to `refine`, line
+16, column 13, and `bad_conversion`. Discarding the extracted value cannot remove
 validation. The transport disables core dumps; it still contains no encoding
 logic. This negative compiler-generated lane complements the positive raw
 copy of the same invalid image and the independent C membership control.
@@ -362,7 +364,7 @@ the native GCC identity, Landin/C input hashes, assembly, executable, transport
 commands, device trace and assertions. Compilation is bounded to 60 seconds;
 the native peer has a 10-second bound and a 17-command positive limit; the
 negative case permits exactly one command, and anything the peer writes to
-stderr fails the lane. Tool inventories are checked before and after
+stderr other than the negative case's one trap report fails the lane. Tool inventories are checked before and after
 execution. The retired exact-revision acceptance built the committed debug
 compiler in its documents job and retained this lane in its verified `cortex-m`
 export. The current gate runs the lane through `run.py` with its built compiler.

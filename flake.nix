@@ -507,6 +507,12 @@
           #  hash is recorded.
           hasRelease = releaseHashes ? ${system};
 
+          #  The cross lane's emulator on its own, for a host that runs the
+          #  lane without the shell: the gate's rv64-qemu jobs take it from
+          #  here, so they run the QEMU environments/pins.sh pins.
+          isLinux = pkgs.stdenv.hostPlatform.isLinux;
+          inherit qemuUser;
+
           shell = pkgs.mkShell {
             packages = [
               gnat
@@ -569,6 +575,11 @@
         #  is a download nobody checked, so the package is absent rather
         #  than broken, as a system with no pinned toolchain is.
         // (if built.hasRelease then { refine-bin = built.refineBin; } else { })
+        #  QEMU's user emulation, held to LANDIN_CROSS_QEMU_NIX as the
+        #  shell's is.  Ubuntu 24.04's packaged 8.2 is not a substitute:
+        #  it writes a riscv64 sigaction four words long where Linux's is
+        #  three, overwriting the word after a correct program's buffer.
+        // (if built.isLinux then { qemu-user = built.qemuUser; } else { })
       ) perSystem;
     };
 }

@@ -332,12 +332,13 @@ class Lane:
             if expected is not None:
                 require(stdout == expected, f'{label}: output mismatch {stdout[:400]!r}, expected {expected[:400]!r}')
             if meta.get('trap_report'):
-                #  D361: the line the trap wrote before it ended, named by
-                #  the file's base name wherever this lane put the fixture.
+                #  D361: the line the trap wrote before it ended, exactly:
+                #  the file is named relative to its module's root, so
+                #  where this lane put the fixture cannot change it.
                 written = stdout + (b'' if meta.get('stream', 'merged') == 'merged'
                                     else Path(str(path) + '.stderr').read_bytes())
                 wanted = meta['trap_report'].encode()
-                require(any(line == wanted or line.endswith(b'/' + wanted) for line in written.split(b'\n')),
+                require(wanted in written.split(b'\n'),
                         f'{label}: trap report missing: {wanted!r}')
             if meta.get('stream', 'merged') != 'merged':
                 require(not Path(str(path) + '.stderr').read_bytes(), label + ': unexpected stderr')

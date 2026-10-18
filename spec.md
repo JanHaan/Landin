@@ -16964,11 +16964,17 @@ still stops on that instruction. The line is
 `FILE:LINE:COLUMN: trap: KIND`, the kind one of `core/panic`'s four atom
 names and the site the failed operation's own, the one D232's site number
 and the panic map name: under D339's inlining at `speed` a copied check
-reports the routine's line, as the call's would have. A file in the entry
-module is named as it was read, as a diagnostic names it; a file of any
-other module by its module path, `core/vec/vec.ldn`, so an image says the
-same wherever the library is installed and every host emits the same bytes.
-A site with no source, D232's site zero, writes `trap: KIND`.
+reports the routine's line, as the call's would have. Each file is named by
+its path relative to its module's root: a file of the entry module by its
+own name, `main.ldn`, and a file of any other module under its module path,
+`core/vec/vec.ldn`. No part of how a path was spelled on the command line,
+of the build directory or of where the library is installed enters the
+line, so equivalent closures emit the same bytes on every host and under
+every spelling, as `compiler/tests/test_determinism.py` requires of
+assembly that carries no source map. A diagnostic still names a file as it
+was read, because a diagnostic is read where the build ran; a trap report
+is read wherever the image runs. A site with no source, D232's site zero,
+writes `trap: KIND`.
 
 Each distinct line is one read-only string the link may merge, in a section
 of its own on ELF, so a link keeps only the lines a retained routine
@@ -16986,8 +16992,10 @@ default's report, as the instruction after it is: its text is the
 compiler's, not Landin program behaviour [1960], and a program that needs a
 report of its own selects a handler. The file names a hosted image carries
 are these reports' alone: with its debugging sections stripped no other name
-of a source is deployed, and a program that must carry none selects a
-handler, so no filename is mandatory, as [1670] requires.
+of a source is deployed, and no directory a source was read from is deployed
+at all, since a report carries only the logical name. A program that must
+carry none selects a handler, so no filename is mandatory, as [1670]
+requires.
 
 **The alternatives:** a signal handler installed at startup that maps the
 faulting address to a site, which keeps each check's code as small as a
@@ -16995,14 +17003,20 @@ bare instruction but needs a per-system handler, its frame layout and an
 address table, and reports faults that are not checks; passing D232's
 `(kind, site)` and decoding the site at run time, which needs every
 source's line table in the image; writing the line in pieces, which two
-threads trapping together interleave; and keeping the bare instruction,
-which leaves the newcomer the shell's sentence.
+threads trapping together interleave; naming an entry-module file as it
+was read, as a diagnostic does, which the first version did and which made
+assembly without a source map change with the spelling of the source path;
+and keeping the bare instruction, which leaves the newcomer the shell's
+sentence.
 
 **Pinned by** `runtime/inline-copies-trap-in-place` at every profile and
 `runtime/computed-array-index-traps`, each with `trap_report:` on every
-hosted target, the `newcomer` case `a trap names its site`, and
+hosted target, the `newcomer` case `a trap names its site`,
 `scripts/outside_user.py --stock`, which the gate's `outside-user-stock` job
-runs on a stock Ubuntu.
+runs on a stock Ubuntu, `compiler/tests/test_determinism.py`, whose
+equivalent closures spell each source path two ways, and the stripped-image
+check the GDB and LLDB sessions share, `deployed_source_names` in
+`compiler/tests/debugging/check.py`.
 
 ### D365 — `--emit=ir` writes the IR the backend receives
 

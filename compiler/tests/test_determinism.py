@@ -14,13 +14,16 @@ Two compilations are EQUIVALENT CLOSURES when they agree on the source bytes,
 the module closure, the target, the selected CPU feature level (default or
 explicit), `--optimize`, `--specialize`, `--build-mode` and the pinned compiler.
 They are free to differ in the absolute build directory, the working
-directory, the output path and file name, the whole environment (locale,
+directory, the spelling of the source path, the output path and file name,
+the whole environment (locale,
 timezone, SOURCE_DATE_EPOCH, everything), in how often and in what order they
 are run, and in THE HOST THEY RUN ON.
 
 Tier 1, TARGET CODE, is deterministic under that whole relation:
 
-  * the assembly emitted without `--debug` when no source map is produced;
+  * the assembly emitted without `--debug` when no source map is produced,
+    D361's trap reports included: they name each file relative to its
+    module's root, never as its path was spelled;
   * the build report, apart from its `sources[].path_hex` entries.
 
 Tier 2, SOURCE-IDENTIFYING ARTIFACTS, is deterministic under Tier 1's relation
@@ -150,7 +153,7 @@ def compile(refine: Path, source, output: Path, *, target: str,
             profile: tuple[str, str], cwd: Path, report: Path | None = None,
             debug: str | None = None, root: Path | None = None,
             emit: str = "asm", environment: dict | None = None,
-            panic_map: bool = False):
+            panic_map: bool = False, keep_asm: bool = False):
     args = [str(refine), str(source), "--emit=" + emit, "-o", str(output),
             "--target=" + target, "--optimize=" + profile[0],
             "--specialize=" + profile[1]]
@@ -162,6 +165,8 @@ def compile(refine: Path, source, output: Path, *, target: str,
         args.append("--root=" + str(root))
     if panic_map:
         args.append("--panic-map")
+    if keep_asm:
+        args.append("--keep-asm")
     completed = subprocess.run(args, cwd=cwd, capture_output=True, timeout=120,
                                env=environment)
     require(completed.returncode == 0,
@@ -250,8 +255,9 @@ def equivalent_closures(refine: Path, source, root: Path | None, target: str,
                         profile: tuple[str, str], label: str, area: Path):
     """One corpus member on one target under one profile."""
     #  Two differently named build directories, two different output names,
-    #  and two deliberately hostile environments.  Nothing a build is allowed
-    #  to differ in is held fixed here.
+    #  two spellings of the source path, absolute and relative to the
+    #  working directory, and two deliberately hostile environments.
+    #  Nothing a build is allowed to differ in is held fixed here.
     alpha, beta = area / "alpha", area / "b-considerably-longer-name"
     alpha.mkdir(parents=True)
     beta.mkdir(parents=True)
@@ -264,7 +270,9 @@ def equivalent_closures(refine: Path, source, root: Path | None, target: str,
             (alpha, "out", stripped), (beta, "a-different-name", hostile))):
         assembly = directory / (name + ".s")
         report = directory / (name + ".json")
-        compile(refine, source, assembly, target=target, profile=profile,
+        spelled = (source if index == 0 else
+                   Path(os.path.relpath(source, directory)))
+        compile(refine, spelled, assembly, target=target, profile=profile,
                 cwd=directory, report=report, root=root,
                 environment=environment)
         runs.append((assembly.read_bytes(), report.read_bytes()))
@@ -387,7 +395,8 @@ def linked_image(refine: Path, source, target: str, area: Path, label: str):
     """The assembly handed to the platform linker, and what the link adds.
 
     Landin's side of `--emit=exe` is the assembly; the object and the image
-    are the platform driver's.  Measured on the pinned toolchains, that
+    are the platform driver's.  D362 removes that assembly after the link,
+    so `--keep-asm` asks for the very file the link consumed.  Measured on the pinned toolchains, that
     matters: `x86_64-pc-linux-gnu-gcc` records its own random temporary
     object name (`ccXXXXXX.o`) in the symbol table, so two Linux links of
     one unchanged assembly differ in those bytes -- in the same directory,
@@ -404,10 +413,11 @@ def linked_image(refine: Path, source, target: str, area: Path, label: str):
     for directory in (alpha, beta):
         image = directory / "program"
         compile(refine, source, image, target=target, profile=("size", "auto"),
-                cwd=directory, emit="exe")
+                cwd=directory, emit="exe", keep_asm=True)
         images.append(image.read_bytes())
         assembly = directory / "program.s"
-        require(assembly.is_file(), label + ": --emit=exe kept no assembly")
+        require(assembly.is_file(),
+                label + ": --emit=exe --keep-asm kept no assembly")
         assemblies.append(assembly.read_bytes())
     require(assemblies[0] == assemblies[1],
             label + ": the assembly handed to the linker is not deterministic")

@@ -285,8 +285,31 @@ package body Landin.Stages.Checking.References is
          Invalid    : Boolean := False;
          From       : Parameter_Bits := [others => False];
          Derives    : Declaration_Bits := [others => False];
+         --  The lowest and highest local Derives names, both 0 when it
+         --  names none.  A fact names few of the function's locals, so a
+         --  join reads only the bytes between them: ORing every byte made
+         --  each join cost the function's size, and a routine of N locals
+         --  cost N squared.  Derive keeps them exact, so they add nothing
+         --  to a fact's equality that its bits do not already say.
+         Derives_First : Natural := 0;
+         Derives_Last  : Natural := 0;
          Presence   : Value_Fact := Unknown_Value;
       end record;
+
+      --  Record that a fact derives from LOCAL.  Every bit Derives gains
+      --  is set here, or joined from another fact's.
+      procedure Derive (Fact : in out Reference_Fact; Local : Local_Id);
+
+      procedure Derive (Fact : in out Reference_Fact; Local : Local_Id) is
+      begin
+         Fact.Derives (Local) := True;
+         if Fact.Derives_First = 0 or else Local < Fact.Derives_First then
+            Fact.Derives_First := Local;
+         end if;
+         if Local > Fact.Derives_Last then
+            Fact.Derives_Last := Local;
+         end if;
+      end Derive;
 
       No_Reference : constant Reference_Fact := (others => <>);
 
@@ -357,8 +380,32 @@ package body Landin.Stages.Checking.References is
                Into_Fact.Untracked := False;
             end if;
          end loop;
-         --  Both are packed, so this joins a machine word at a time.
-         Into_Fact.Derives := Into_Fact.Derives or Other.Derives;
+         --  Only the bytes holding Other's locals can add one.  Bits past
+         --  the last local in the final byte are padding, zero in both.
+         if Other.Derives_First /= 0 then
+            declare
+               type Byte_View is array (1 .. (Declarations + 7) / 8)
+                 of Interfaces.Unsigned_8;
+               Into_View : Byte_View
+                 with Import, Address => Into_Fact.Derives'Address;
+               Other_View : constant Byte_View
+                 with Import, Address => Other.Derives'Address;
+               use type Interfaces.Unsigned_8;
+            begin
+               for Byte in (Other.Derives_First - 1) / 8 + 1
+                 .. (Other.Derives_Last - 1) / 8 + 1
+               loop
+                  Into_View (Byte) := Into_View (Byte) or Other_View (Byte);
+               end loop;
+            end;
+            if Into_Fact.Derives_First = 0
+              or else Other.Derives_First < Into_Fact.Derives_First
+            then
+               Into_Fact.Derives_First := Other.Derives_First;
+            end if;
+            Into_Fact.Derives_Last :=
+              Natural'Max (Into_Fact.Derives_Last, Other.Derives_Last);
+         end if;
       end Join;
 
       procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
@@ -2359,12 +2406,12 @@ package body Landin.Stages.Checking.References is
          --  capture their target's storage during the ordinary expression
          --  walk, before evaluating their indexes; no syntax is replayed.
          if Id /= Res.No_Declaration then
-            Result.Derives (Local_Of (Id)) := True;
+            Derive (Result, Local_Of (Id));
             case Res.Sort_Of (Meanings.all, Id) is
                when Res.Local_Binding | Res.Named_Return =>
                   if Runtime_Alias (Id) then
                      Result := Alias_Storage (Local_Of (Id));
-                     Result.Derives (Local_Of (Id)) := True;
+                     Derive (Result, Local_Of (Id));
                   else
                      Result.Frame := True;
                      Result.Frame_Witness := Id;
@@ -2395,7 +2442,7 @@ package body Landin.Stages.Checking.References is
                   --  D85/D121: this is the payload's actual backing place,
                   --  distinct from origins carried by its copied value.
                   Result := Alias_Storage (Local_Of (Id));
-                  Result.Derives (Local_Of (Id)) := True;
+                  Derive (Result, Local_Of (Id));
                when others =>
                   null;
             end case;
@@ -2651,7 +2698,7 @@ package body Landin.Stages.Checking.References is
                     Root_Declaration (Tree, Node);
                begin
                   if Id /= Res.No_Declaration then
-                     Result.Storage.Derives (Local_Of (Id)) := True;
+                     Derive (Result.Storage, Local_Of (Id));
                   end if;
                   if Syn.Kind (Tree, Node)
                        in Syn.Member_Selection | Syn.Element_Index
@@ -2661,7 +2708,7 @@ package body Landin.Stages.Checking.References is
                      Result.Value := No_Reference;
                      Result.Results.Clear;
                   elsif Id /= Res.No_Declaration then
-                     Result.Value.Derives (Local_Of (Id)) := True;
+                     Derive (Result.Value, Local_Of (Id));
                      if Parameter_Of (Id) > 0
                        and then Syn.Kind (Tree, Node)
                          in Syn.Member_Selection | Syn.Element_Index
@@ -2802,8 +2849,7 @@ package body Landin.Stages.Checking.References is
                                                  then Fact.Storage
                                                  else Fact.Value));
                                              if Id /= Res.No_Declaration then
-                                                Part.Derives
-                                                  (Local_Of (Id)) := True;
+                                                Derive (Part, Local_Of (Id));
                                              end if;
                                           end;
                                        end if;
@@ -2959,7 +3005,7 @@ package body Landin.Stages.Checking.References is
                  Root_Declaration (Tree, Node);
             begin
                if Id /= Res.No_Declaration and then Local_Of (Id) /= 0 then
-                  Result.Value.Derives (Local_Of (Id)) := True;
+                  Derive (Result.Value, Local_Of (Id));
                end if;
             end;
          end if;
@@ -4060,7 +4106,7 @@ package body Landin.Stages.Checking.References is
                      Parameter : Origin_Fact := Origin (Local_Of (Id));
                   begin
                      Parameter.Value.From (Position) := True;
-                     Parameter.Value.Derives (Local_Of (Id)) := True;
+                     Derive (Parameter.Value, Local_Of (Id));
                      Set_Origin (Local_Of (Id), Parameter);
                   end;
                end if;

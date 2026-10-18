@@ -32,8 +32,10 @@ LANDIN_TREE_SITTER_SHA256_X86_64_LINUX=9ce82137caa65864e7ca8b869fd391cef88c9bd2a
 #  another Linux target's executables.  The nix shell takes both from
 #  flake.lock's nixpkgs and refuses to build when that revision's versions
 #  are not these, so moving the lock moves these on purpose.  The gate's
-#  linux-rv64 lane installs Ubuntu 24.04's packages of the same tools and
-#  prints their versions; check.py holds flake.nix to reading these.
+#  linux-rv64 lane runs the same QEMU, the flake's qemu-user, and refuses
+#  another; it links with Ubuntu 24.04's riscv64 cross packages, whose
+#  version is not this GCC and which it prints.  check.py holds flake.nix
+#  to reading these.
 LANDIN_CROSS_QEMU_NIX=11.1.0
 LANDIN_CROSS_GCC_NIX=15.3.0
 

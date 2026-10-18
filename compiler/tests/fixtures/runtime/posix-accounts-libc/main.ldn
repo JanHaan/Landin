@@ -106,11 +106,13 @@ looked_up: () -> none ! ... =
     fail mismatched when not met
 end looked_up
 
---  The smallest buffer the C library finds group zero in.
-c_needs: () -> (least: usize) =
-    mut room: [1024]u8 = zeroed
+--  The smallest buffer starting at ROOM's first byte that the C library
+--  finds group zero in.  It depends on where the buffer starts as well as
+--  on the database: glibc aligns its table of members, and reads the
+--  group's line into the buffer from its files but not from nscd.
+c_needs: (room: []mut u8) -> (least: usize) =
     least = 1
-    while least < 1024 do
+    while least < lenof room do
         mut record: libc.group_record = zeroed
         mut found: usize = 0
         error: i32 = libc.getgrgid_r(0, addr record, addr room[0], least,
@@ -120,30 +122,39 @@ c_needs: () -> (least: usize) =
     end while
 end c_needs
 
---  The C library is given the caller's whole buffer: group zero is found
---  in one that holds what the C library needs and the joined copy beside
---  it, and in none smaller but for the table's alignment.
+--  The bytes group zero's joined copy takes: its name, its password and
+--  its members joined by commas.
+copy_size: () -> (size: usize) ! ... =
+    mut full: [1024]u8 = zeroed
+    entry: posix.group_entry =
+        try posix.group_with_id(posix.group_id(0), full[0..<1024])
+    size = lenof text.host_bytes(entry.name)
+           + lenof text.host_bytes(entry.password)
+           + lenof text.host_bytes(entry.members)
+end copy_size
+
+--  The C library is given the caller's whole buffer, and then what is
+--  past the joined copy: group zero is found in exactly the smallest
+--  buffer in which both lookups succeed, each measured at the address
+--  the library gives it.  Given half the buffer, as it once was, it
+--  would need about twice what the C library needs.
 whole_buffer: () -> none ! ... =
-    needs: usize = c_needs()
+    copy: usize = try copy_size()
     mut room: [1024]u8 = zeroed
+    whole: usize = c_needs(room[0..<1024])
+    beside: usize = copy + c_needs(room[copy..<1024])
+    mut expected: usize = whole
+    if beside > whole then expected = beside end if
     mut least: usize = 1
     loop do
         fail mismatched when least >= 1024
-        entry: posix.group_entry =
-            posix.group_with_id(posix.group_id(0), room[0..<least])
+        _ = posix.group_with_id(posix.group_id(0), room[0..<least])
             else (problem)
-                fail problem when problem <> posix.erange
-                inc least
-                continue
-            end
-        copy: usize = lenof text.host_bytes(entry.name)
-                      + lenof text.host_bytes(entry.password)
-                      + lenof text.host_bytes(entry.members)
-        --  The copy is beside what the C library needs, which may align
-        --  its table after an unaligned copy; given half the buffer, as
-        --  it once was, it would need twice what it needs.
-        fail mismatched when least < needs + copy
-          or least > needs + copy + sizeof usize or least >= 2 * needs
+            fail problem when problem <> posix.erange
+            inc least
+            continue
+        end
+        fail mismatched when least <> expected
         return
     end loop
 end whole_buffer

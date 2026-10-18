@@ -354,6 +354,14 @@ class RV64Controls(unittest.TestCase):
         self.assertIn('--shard=${{ matrix.shard }}/2', emulated)
         self.assertIn('QEMU_LD_PREFIX=/usr/riscv64-linux-gnu', emulated)
         self.assertIn('-print-file-name=libm.a', emulated)
+        # The emulator is the flake's pinned qemu-user, never Ubuntu's 8.2,
+        # whose riscv64 sigaction is a word longer than Linux's.
+        self.assertIn('nix build --out-link "$RUNNER_TEMP/qemu-user" .#qemu-user',
+                      emulated)
+        self.assertIn('$LANDIN_CROSS_QEMU_NIX', emulated)
+        self.assertNotIn('ci_packages.sh qemu-user', emulated)
+        flake = (ROOT / 'flake.nix').read_text()
+        self.assertIn('qemu-user = built.qemuUser;', flake)
         manifest = (ROOT / 'scripts/emit_manifest.py').read_text()
         targets = manifest.split('TARGETS = ', 1)[1].split(')', 1)[0]
         self.assertIn('linux-rv64', targets)

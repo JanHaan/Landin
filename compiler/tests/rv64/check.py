@@ -287,11 +287,11 @@ def execute(args, manifest):
         actual = completed.stdout
         require(actual == expected, label + ': output mismatch ' + repr(actual[:500]))
         if meta.get('trap_report'):
-            #  D361: the line the trap wrote before it ended, named by the
-            #  file's base name wherever this lane put the fixture.
+            #  D361: the line the trap wrote before it ended, exactly: the
+            #  file is named relative to its module's root, so where this
+            #  lane put the fixture cannot change it.
             wanted = meta['trap_report'].encode()
-            require(any(line == wanted or line.endswith(b'/' + wanted)
-                        for line in (completed.stdout + (completed.stderr or b'')).split(b'\n')),
+            require(wanted in (completed.stdout + (completed.stderr or b'')).split(b'\n'),
                     f'{label}: trap report missing: {wanted!r}')
         if meta.get('stream', 'merged') != 'merged':
             require(not completed.stderr, label + ': unexpected stderr')

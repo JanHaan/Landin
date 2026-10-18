@@ -38,7 +38,7 @@ probes.
 RV64 Linux LP64D runs in the gate's `rv64-qemu` jobs: the release
 compiler's whole test program with `linux-rv64` as its lane on
 `ubuntu-24.04`, linked by Ubuntu's riscv64 cross packages and run under
-QEMU's user emulation, the emulator's own failures listed in
+the flake's pinned QEMU user emulation, the emulator's own failures listed in
 `compiler/tests/cross-lanes.json`. That is evidence about the emitted code,
 none about RV64 hardware. Its physical lanes, cross-emitted for the RISE
 service's runners with the sole label `ubuntu-24.04-riscv`, with separate

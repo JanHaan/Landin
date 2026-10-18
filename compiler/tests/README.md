@@ -129,9 +129,10 @@ QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh --target=linux-rv64 \
 That is QEMU's user emulation with a cross driver, which is evidence that
 the emitted code is right and none about the pinned toolchain on its own
 host; the gate's `ubuntu-24.04-arm` jobs are that for arm64, and its
-`rv64-qemu` jobs run the second command's lane with Ubuntu's cross
-packages. `nix develop` provides the whole cross lane, pinned by
-`environments/pins.sh` to the versions `flake.lock`'s nixpkgs has:
+`rv64-qemu` jobs run the second command's lane under the flake's
+pinned QEMU with Ubuntu's cross packages. `nix develop` provides the
+whole cross lane, pinned by `environments/pins.sh` to the versions
+`flake.lock`'s nixpkgs has:
 `qemu-aarch64` and `qemu-riscv64`, the cross drivers and binutils under
 the triplet names `refine` asks for, `aarch64-linux-gnu-gcc` and
 `riscv64-linux-gnu-gcc`, each finding glibc's static `libm.a`, and a
@@ -590,7 +591,7 @@ emits assembly text.
 | `run_expect` | no | the file holding a runtime or ABI program's expected bytes on the selected `stream` |
 | `status` | no | the exit status `refine` or a compiled program must produce (default 1 for a negative, 0 otherwise) |
 | `traps` | no | `yes` if a runtime or ABI program must end without returning a status |
-| `trap_report` | no, and only with `traps: yes` | D361's line the trap writes before it ends, its file named by the base name, `main.ldn:4:9: trap: out_of_range`: some line of the program's output must be it, or end with `/` and it, since each lane names the fixture's directory its own way |
+| `trap_report` | no, and only with `traps: yes` | D361's line the trap writes before it ends, `main.ldn:4:9: trap: out_of_range`, its file named relative to its module's root: some line of the program's output must be exactly it, wherever the lane put the fixture |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order, errors and warnings alike; on a positive, runtime or ABI fixture, the warnings its accepted program reports |
@@ -886,10 +887,10 @@ a fixture claiming one is claiming an answer nobody can observe. Nothing in the
 format or in `Landin.Platform` carries a signal number, deliberately.
 With no `panic_handler`, a hosted program writes D361's line,
 `FILE:LINE:COLUMN: trap: KIND`, to standard error before its terminal
-instruction; `trap_report:` holds a fixture to that line on every lane, the
-file named by its base name because each lane names the fixture's directory
-its own way, and Darwin's lane does not count the line as unexpected
-standard error.
+instruction; `trap_report:` holds a fixture to that exact line on every
+lane, the file named relative to its module's root so that no lane's
+directory reaches it, and Darwin's lane does not count the line as
+unexpected standard error.
 
 What that can and cannot tell apart is worth knowing before writing one.
 `runtime/checked-overflow-traps` adds one to a `255u8` the compiler cannot

@@ -1237,7 +1237,10 @@ jobs:
   #  whole test program with linux-rv64 as its lane, every executable linked
   #  by Ubuntu's riscv64 cross driver and run by qemu-riscv64.  It is
   #  evidence about the emitted code and none about RV64 hardware or its
-  #  native toolchain, which the suspended RISE jobs below were.  QEMU's
+  #  native toolchain, which the suspended RISE jobs below were.  The
+  #  emulator is the flake's qemu-user, LANDIN_CROSS_QEMU_NIX, not Ubuntu's
+  #  8.2.2: that one gives a riscv64 sigaction a fourth word Linux's has
+  #  not, so every program's rt_sigaction overwrote its own frame.  QEMU's
   #  `max` CPU with T-Head's address extension added confirms every RV64
   #  level the corpus runs; the emulator's own failures, a self-started
   #  program with no binfmt_misc handler and SO_RCVTIMEO, are the rows
@@ -1274,13 +1277,24 @@ jobs:
             -C compiler/ada/build/linux-amd64/release
           ./scripts/build.sh -q
 
-      - name: Install QEMU's user emulation and the LP64D cross toolchain
+      - name: Install nix for the pinned emulator
+        uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+
+      - name: Install the pinned QEMU user emulation and the LP64D cross toolchain
         timeout-minutes: 25
         run: |
           set -eu
-          ./scripts/ci_packages.sh qemu-user \
+          nix build --out-link "$RUNNER_TEMP/qemu-user" .#qemu-user
+          echo "$RUNNER_TEMP/qemu-user/bin" >> "$GITHUB_PATH"
+          ./scripts/ci_packages.sh \
             gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu libc6-dev-riscv64-cross
-          qemu-riscv64 --version | sed -n '1p'
+          . ./environments/pins.sh
+          version=$("$RUNNER_TEMP/qemu-user/bin/qemu-riscv64" --version | sed -n '1p')
+          echo "$version"
+          case "$version" in
+            "qemu-riscv64 version $LANDIN_CROSS_QEMU_NIX"*) ;;
+            *) echo "not the pinned QEMU $LANDIN_CROSS_QEMU_NIX" >&2; exit 1 ;;
+          esac
           riscv64-linux-gnu-gcc --version | sed -n '1p'
           riscv64-linux-gnu-objdump --version | sed -n '1p'
           test -f "$(riscv64-linux-gnu-gcc -print-file-name=libm.a)"
