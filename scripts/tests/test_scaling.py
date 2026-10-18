@@ -17,6 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import scaling
 
 SCALING = pathlib.Path(__file__).resolve().parents[1] / "scaling.py"
+#  A quiet host, for the cases that test verdicts rather than load: the
+#  real one is whatever else the machine runs, and a busy gate runner
+#  made every simulated failure read as contention.
+QUIET = {"processors": 4, "load": [0.0, 0.0, 0.0]}
 
 
 class ScalingArguments(unittest.TestCase):
@@ -76,6 +80,7 @@ class ScalingMemory(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "measurements.json"
             with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "host_load", return_value=QUIET),
                   mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
                   mock.patch.object(scaling, "write_program"),
                   mock.patch.object(scaling, "median_of", side_effect=lambda *args: next(samples)),
@@ -213,6 +218,7 @@ class ScalingObjectives(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "measurements.json"
             with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "host_load", return_value=QUIET),
                   mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
                   mock.patch.object(scaling, "write_program"),
                   mock.patch.object(scaling, "median_of", side_effect=sample),
