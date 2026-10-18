@@ -353,7 +353,7 @@ unnamed mode inside `unchecked`. The independently specified reply is `0x9b`
 and the complete trace is `r32:4:0000009b`. The native process must terminate
 with SIGILL, without a second access or
 the normal completion reply, after writing one line to stderr: the hosted
-trap report naming the probe's source as it was spelled to `refine`, line
+trap report naming the probe's source by its file name, line
 16, column 13, and `bad_conversion`. Discarding the extracted value cannot remove
 validation. The transport disables core dumps; it still contains no encoding
 logic. This negative compiler-generated lane complements the positive raw

@@ -111,9 +111,9 @@ def hole(run, refine, optimization, specialization):
                 HERE / 'probes/packed-transport.c', '-o', executable])
     model = EncodingPeripheral()
     # A hosted program with no panic handler reports a failed check on
-    # stderr, naming the source as it was spelled to refine and the
-    # extraction `image.mode`, before it traps.
-    report = ('%s:16:13: trap: bad_conversion\n' % source).encode()
+    # stderr, naming the source by its file name, which is its name in its
+    # module, and the extraction `image.mode`, before it traps.
+    report = ('%s:16:13: trap: bad_conversion\n' % Path(source).name).encode()
     commands, status = transport(run, name, executable, model, 1, report)
     # The peer traps on the unnamed encoding after its one read (SIGILL).
     require(commands == ['R32 4'], name + ' wrote ' + repr(commands))

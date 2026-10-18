@@ -205,11 +205,15 @@ class FormatterWriteSafety(unittest.TestCase):
     def harness(self, name, prelude, main):
         """The adapter itself, with a fault put at one of its calls.
 
-        Darwin fixes its feature level at the first system header, so the
-        adapter's own `_DARWIN_C_SOURCE` comes before the fault's headers.
+        A C library fixes its feature level at the first system header, so
+        the adapter's own feature macros, `_DARWIN_C_SOURCE`,
+        `_POSIX_C_SOURCE` and `_XOPEN_SOURCE`, come before the fault's
+        headers; without them glibc under `-std=c11` declares no `realpath`.
         """
         source = self.root / (name + ".c")
         source.write_text('#ifdef __APPLE__\n#define _DARWIN_C_SOURCE\n#endif\n'
+                          '#define _POSIX_C_SOURCE 200809L\n'
+                          '#define _XOPEN_SOURCE 700\n'
                           + prelude + '#include "' + str(ADAPTER) + '"\n'
                           + main)
         binary = self.root / name

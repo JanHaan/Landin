@@ -271,7 +271,8 @@ def equivalent_closures(refine: Path, source, root: Path | None, target: str,
         assembly = directory / (name + ".s")
         report = directory / (name + ".json")
         spelled = (source if index == 0 else
-                   Path(os.path.relpath(source, directory)))
+                   Path(os.path.relpath(os.path.realpath(source),
+                                       os.path.realpath(directory))))
         compile(refine, spelled, assembly, target=target, profile=profile,
                 cwd=directory, report=report, root=root,
                 environment=environment)
