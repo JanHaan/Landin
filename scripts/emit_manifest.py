@@ -108,6 +108,9 @@ REFUSAL_PAIRS = {
     ("r440-c-layout-recursive-callback", "cortex-m0"),
     ("r440-c-signatures", "cortex-m0"),
     ("from-c", "cortex-m0"),
+    #  So is D410 to D414's, whose C records and C signature cortex-m0's
+    #  absent C ABI refuses.
+    ("c-packed-records", "cortex-m0"),
     ("hosted-initializer-normalized", "cortex-m0"),
     ("r440-checker-recursive-callback-contexts", "cortex-m0"),
     ("r440-checker-recursive-contexts", "cortex-m0"),
