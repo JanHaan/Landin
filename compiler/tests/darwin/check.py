@@ -255,9 +255,16 @@ def main(argv=None):
                 meta.update({k: str(v) for k, v in differences[name].items() if k != "reason"})
             candidates.append((name, base, meta))
         for case in PROFILES["darwin"]:
-            candidates.append((case["name"], HERE, fixture_meta.Metadata.of(
-                {**{k: str(v) for k, v in case.items()},
-                 "class": case.get("class", "abi"), "c-sources": case.get("c", "")},
+            #  A rooted module is its program's directory, as a rooted
+            #  fixture is its own; so a case whose program sits below
+            #  HERE is read from that directory, its root relative to it.
+            fields = {k: str(v) for k, v in case.items()}
+            case_base = HERE / Path(fields["program"]).parent
+            fields["program"] = Path(fields["program"]).name
+            if "root" in fields:
+                fields["root"] = os.path.relpath(HERE / fields["root"], case_base)
+            candidates.append((case["name"], case_base, fixture_meta.Metadata.of(
+                {**fields, "class": case.get("class", "abi"), "c-sources": case.get("c", "")},
                 case.get("class", "abi") + "/" + case["name"])))
         names = {name for name, _, _ in candidates}
         require(not args.case or set(args.case) <= names, "unknown exact case")
