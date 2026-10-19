@@ -102,14 +102,14 @@ public extern(c) landin_check: () -> (result: i32) =
 
     -- Invoke every callback in every Landin static image by its own index.
     if pair_image.handlers[0](100) <> 110
-       or pair_image.handlers[1](100) <> 120
-       or triple_image.handlers[0](100) <> 110
-       or triple_image.handlers[1](100) <> 120
-       or triple_image.handlers[2](100) <> 130
-       or nested_image.handlers[0][0](100) <> 110
-       or nested_image.handlers[0][1](100) <> 120
-       or nested_image.handlers[1][0](100) <> 130
-       or nested_image.handlers[1][1](100) <> 140
+      or pair_image.handlers[1](100) <> 120
+      or triple_image.handlers[0](100) <> 110
+      or triple_image.handlers[1](100) <> 120
+      or triple_image.handlers[2](100) <> 130
+      or nested_image.handlers[0][0](100) <> 110
+      or nested_image.handlers[0][1](100) <> 120
+      or nested_image.handlers[1][0](100) <> 130
+      or nested_image.handlers[1][1](100) <> 140
     then
         result = 1
     end if
@@ -119,14 +119,14 @@ public extern(c) landin_check: () -> (result: i32) =
     from_c_triple := c_triple_image()
     from_c_nested := c_nested_image()
     if from_c_pair.handlers[0](100) <> 101
-       or from_c_pair.handlers[1](100) <> 102
-       or from_c_triple.handlers[0](100) <> 101
-       or from_c_triple.handlers[1](100) <> 102
-       or from_c_triple.handlers[2](100) <> 103
-       or from_c_nested.handlers[0][0](100) <> 101
-       or from_c_nested.handlers[0][1](100) <> 102
-       or from_c_nested.handlers[1][0](100) <> 103
-       or from_c_nested.handlers[1][1](100) <> 104
+      or from_c_pair.handlers[1](100) <> 102
+      or from_c_triple.handlers[0](100) <> 101
+      or from_c_triple.handlers[1](100) <> 102
+      or from_c_triple.handlers[2](100) <> 103
+      or from_c_nested.handlers[0][0](100) <> 101
+      or from_c_nested.handlers[0][1](100) <> 102
+      or from_c_nested.handlers[1][0](100) <> 103
+      or from_c_nested.handlers[1][1](100) <> 104
     then
         result = 2
     end if
@@ -135,9 +135,9 @@ public extern(c) landin_check: () -> (result: i32) =
     call_pair: pair_call = c_pair
     indirect_pair := call_pair(pair_image)
     if direct_pair.handlers[0](100) <> 120
-       or direct_pair.handlers[1](100) <> 110
-       or indirect_pair.handlers[0](100) <> 120
-       or indirect_pair.handlers[1](100) <> 110
+      or direct_pair.handlers[1](100) <> 110
+      or indirect_pair.handlers[0](100) <> 120
+      or indirect_pair.handlers[1](100) <> 110
     then
         result = 3
     end if
@@ -146,11 +146,11 @@ public extern(c) landin_check: () -> (result: i32) =
     call_triple: triple_call = c_triple
     indirect_triple := call_triple(triple_image)
     if direct_triple.handlers[0](100) <> 130
-       or direct_triple.handlers[1](100) <> 110
-       or direct_triple.handlers[2](100) <> 120
-       or indirect_triple.handlers[0](100) <> 130
-       or indirect_triple.handlers[1](100) <> 110
-       or indirect_triple.handlers[2](100) <> 120
+      or direct_triple.handlers[1](100) <> 110
+      or direct_triple.handlers[2](100) <> 120
+      or indirect_triple.handlers[0](100) <> 130
+      or indirect_triple.handlers[1](100) <> 110
+      or indirect_triple.handlers[2](100) <> 120
     then
         result = 4
     end if
@@ -159,13 +159,13 @@ public extern(c) landin_check: () -> (result: i32) =
     call_nested: nested_call = c_nested
     indirect_nested := call_nested(nested_image)
     if direct_nested.handlers[0][0](100) <> 140
-       or direct_nested.handlers[0][1](100) <> 130
-       or direct_nested.handlers[1][0](100) <> 120
-       or direct_nested.handlers[1][1](100) <> 110
-       or indirect_nested.handlers[0][0](100) <> 140
-       or indirect_nested.handlers[0][1](100) <> 130
-       or indirect_nested.handlers[1][0](100) <> 120
-       or indirect_nested.handlers[1][1](100) <> 110
+      or direct_nested.handlers[0][1](100) <> 130
+      or direct_nested.handlers[1][0](100) <> 120
+      or direct_nested.handlers[1][1](100) <> 110
+      or indirect_nested.handlers[0][0](100) <> 140
+      or indirect_nested.handlers[0][1](100) <> 130
+      or indirect_nested.handlers[1][0](100) <> 120
+      or indirect_nested.handlers[1][1](100) <> 110
     then
         result = 5
     end if
@@ -183,11 +183,11 @@ public extern(c) landin_check: () -> (result: i32) =
     handlers_pointer: ptr mut [2]handler = addr copied_handlers
     handlers_pointer.val[0] = c_add_four
     if local_pair.handlers[0](100) <> 101
-       or local_pair.handlers[1](100) <> 102
-       or pair_pointer.val.handlers[0](100) <> 103
-       or pair_pointer.val.handlers[pair_index](100) <> 104
-       or handlers_pointer.val[0](100) <> 104
-       or handlers_pointer.val[1](100) <> 102
+      or local_pair.handlers[1](100) <> 102
+      or pair_pointer.val.handlers[0](100) <> 103
+      or pair_pointer.val.handlers[pair_index](100) <> 104
+      or handlers_pointer.val[0](100) <> 104
+      or handlers_pointer.val[1](100) <> 102
     then
         result = 6
     end if
@@ -196,7 +196,7 @@ public extern(c) landin_check: () -> (result: i32) =
         handlers: [c_add_one, c_add_two])
     c_touch_pair(addr pointed_pair)
     if pointed_pair.handlers[0](100) <> 103
-       or pointed_pair.handlers[1](100) <> 104
+      or pointed_pair.handlers[1](100) <> 104
     then
         result = 7
     end if
@@ -208,9 +208,9 @@ public extern(c) landin_check: () -> (result: i32) =
     nested_pointer: ptr mut callback_nested = addr pointed_nested
     c_touch_nested(nested_pointer)
     if nested_pointer.val.handlers[0][0](100) <> 104
-       or nested_pointer.val.handlers[0][1](100) <> 102
-       or nested_pointer.val.handlers[1][0](100) <> 103
-       or nested_pointer.val.handlers[1][1](100) <> 101
+      or nested_pointer.val.handlers[0][1](100) <> 102
+      or nested_pointer.val.handlers[1][0](100) <> 103
+      or nested_pointer.val.handlers[1][1](100) <> 101
     then
         result = 8
     end if
@@ -218,22 +218,22 @@ public extern(c) landin_check: () -> (result: i32) =
     column: usize = 1
     nested_pointer.val.handlers[row][column] = c_add_two
     if nested_pointer.val.handlers[0][0](100) <> 104
-       or nested_pointer.val.handlers[0][1](100) <> 102
-       or nested_pointer.val.handlers[1][0](100) <> 103
-       or nested_pointer.val.handlers[row][column](100) <> 102
+      or nested_pointer.val.handlers[0][1](100) <> 102
+      or nested_pointer.val.handlers[1][0](100) <> 103
+      or nested_pointer.val.handlers[row][column](100) <> 102
     then
         result = 9
     end if
 
     if not c_layout(0, sizeof callback_pair, alignof callback_pair)
-       or not c_layout(1, sizeof callback_triple, alignof callback_triple)
-       or not c_layout(2, sizeof callback_nested, alignof callback_nested)
-       or sizeof callback_pair <> 16
-       or alignof callback_pair <> 8
-       or sizeof callback_triple <> 24
-       or alignof callback_triple <> 8
-       or sizeof callback_nested <> 32
-       or alignof callback_nested <> 8
+      or not c_layout(1, sizeof callback_triple, alignof callback_triple)
+      or not c_layout(2, sizeof callback_nested, alignof callback_nested)
+      or sizeof callback_pair <> 16
+      or alignof callback_pair <> 8
+      or sizeof callback_triple <> 24
+      or alignof callback_triple <> 8
+      or sizeof callback_nested <> 32
+      or alignof callback_nested <> 8
     then
         result = 10
     end if

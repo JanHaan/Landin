@@ -210,8 +210,9 @@ examples are included from their original files.
 
 The bounded source reader uses the shared scanner to ignore comments and
 strings, handles multiline routines, public structs and concepts, aliases,
-atoms and values, and preserves conditional declarations with their target
-conditions. It does not type-check, evaluate target conditions or infer
+atoms and values, a value whose expression begins on the next line or
+continues on more deeply indented ones included, and preserves conditional
+declarations with their target conditions. It does not type-check, evaluate target conditions or infer
 private representations. An unsupported public form, missing public doc
 comment, missing overview or ambiguous item anchor stops generation.
 
@@ -224,8 +225,19 @@ keeps search working from disk without a server or network. Search matches
 API names, module paths, kinds and summaries. A declaration's own name in its
 signature is not a link to itself; every other exported name there is. With
 the index gone, a page is its shell and its declarations: the median page is
-about 80 KB, and `platform/linux/numbers`, at more than a thousand target
-variants, is the largest at about 750 KB. Source links point to generated
+about 80 KB.
+
+A module that declares the same plain values once per target, as
+`platform/linux/numbers` does for three architectures and `platform/libc`
+for three systems, shows them as one table: a row per name, a column per
+target condition, each value linked to its source line, and the
+documentation once, with the words that differ between targets joined.
+The columns are the conditions most of the repeated names use; a name with
+any other condition keeps its own section. Each column's full condition is
+listed above the table, and the build checks every cell against the
+declaration it comes from. As a section per declaration the numbers page
+repeated 387 names for three architectures and was 758 KB; as a table it is
+about 260 KB. Source links point to generated
 listings from the same build, avoiding drift to another branch or revision.
 The machine-readable inventory is `library-index.json`. JavaScript-free
 readers can use the module and item indexes. The site navigation and sitemap

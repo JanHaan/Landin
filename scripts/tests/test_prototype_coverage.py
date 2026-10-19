@@ -94,7 +94,7 @@ class Derivations(unittest.TestCase):
         self.refused(self.problems(self.altered(PARSER, program=None)),
                      "derivation runtime/derived-parser names no program")
         self.refused(self.problems(self.altered(
-            PARSER, program=None, root=None, run_args=None)),
+            PARSER, program=None, root=None, run_files=None)),
             "derivation runtime/derived-parser records no inputs")
         self.refused(self.problems(self.altered(
             DRIVER, source=None, driver=None, protocol=None, layout=None)),
@@ -102,8 +102,8 @@ class Derivations(unittest.TestCase):
 
     def test_an_input_the_record_stops_naming_leaves_the_column(self):
         inputs, _, _ = CHECK.prototype_row_evidence(
-            PARSER, self.altered(PARSER, run_args=None)[PARSER][1])
-        self.assertNotIn("run_args", inputs)
+            PARSER, self.altered(PARSER, run_files=None)[PARSER][1])
+        self.assertNotIn("run_files", inputs)
         self.assertIn("main.ldn", inputs)
 
     #  ------------------------------------------------------------ outputs

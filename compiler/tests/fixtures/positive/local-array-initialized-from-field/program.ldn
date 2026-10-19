@@ -22,5 +22,5 @@ from_fields: (at: usize) -> (result: usize) =
 
     mut state := state.row
     result = typed[at] + inferred[at] + local_typed[at]
-      + local_inferred[at] + state[at]
+             + local_inferred[at] + state[at]
 end from_fields

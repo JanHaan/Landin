@@ -31,12 +31,12 @@ arguments_match: (state: ptr system.host) -> (ok: bool) =
     ok = false
     return when io.argument_count(state.val) <> 2
     first: text.host_string = io.argument_at(state.val, usize(0))
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
     second: text.host_string = io.argument_at(state.val, usize(1))
-      else (problem)
+        else (problem)
         _ = problem
         return
     end

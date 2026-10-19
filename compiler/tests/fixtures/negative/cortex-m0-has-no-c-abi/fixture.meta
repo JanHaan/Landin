@@ -1,0 +1,9 @@
+class: negative
+summary: on cortex-m0, a layout(c) record of C fields and a C signature are refused naming the target's missing C ABI
+program: program.ldn
+codes: L0346, L0346
+constructs: 0750, 1580
+targets: cortex-m0
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/cortex-m0-has-no-c-abi/program.ldn
+status: 1

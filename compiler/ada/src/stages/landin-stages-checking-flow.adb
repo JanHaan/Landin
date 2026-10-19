@@ -1,4 +1,5 @@
 with Ada.Containers;
+with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
@@ -45,6 +46,12 @@ package body Landin.Stages.Checking.Flow is
 
    package Call_Places is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Syn.Node_Id);
+
+   --  D433: each `ptr (sink l)` binding and the subject it was matched
+   --  from, so that sinking the binding consumes that place.
+   package Sink_Subject_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Landin.Provenance.Declaration_Id,
+      Element_Type => Syn.Node_Id);
 
    --  A field's declaration-order number, zero for the name itself.  The
    --  numbers a compilation tracks stop at its widest struct, known only
@@ -437,6 +444,9 @@ package body Landin.Stages.Checking.Flow is
       --  only lexical frames entered since that loop began, then either
       --  reaches the loop exit or its next condition test.
       Loop_Cleanup_Stack : Loop_Cleanup_Entries.Vector;
+
+      --  D433's bindings met so far in this routine; see Sink_Subject_Maps.
+      Sink_Subjects : Sink_Subject_Maps.Map;
 
       function Transfer_Loop
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Positive;
@@ -970,8 +980,8 @@ package body Landin.Stages.Checking.Flow is
                         Report_Unassigned
                           ("the whole of `"
                            & Spelled (Res.Name_Of (Meanings.all, Id))
-                           & "` is read here and no path that arrives"
-                           & " assigned its `"
+                           & "` is read here and a path that arrives"
+                           & " has not assigned its `"
                            & Field_Named
                                (Landin.Checking.Nominal_Of (Types.all, Id),
                                 Each)
@@ -1372,8 +1382,8 @@ package body Landin.Stages.Checking.Flow is
                Where   => Syn.Where (Of_Tree, Node),
                Message => "the whole of `"
                           & Array_Label (Id, Path)
-                          & "` is read here and no path that arrives assigned"
-                          & " every element",
+                          & "` is read here and a path that arrives has not"
+                          & " assigned every element",
                Note    =>
                  (case Whole_As is
                      when Assignment_Source =>
@@ -1493,8 +1503,8 @@ package body Landin.Stages.Checking.Flow is
                Where   => Syn.Where (Of_Tree, Node),
                Message => "`" & Array_Label (Id, Path)
                           & "[" & Written (Ty.Folded (Position))
-                          & "]` is read here and no path that arrives"
-                          & " assigned it",
+                          & "]` is read here and a path that arrives"
+                          & " has not assigned it",
                Note    => "D19: compiler-known elements of a local array"
                           & " are assigned independently",
                Related => Landin.Provenance.Origin'
@@ -1579,6 +1589,34 @@ package body Landin.Stages.Checking.Flow is
             State.Dead_Fields.Include ((Id, Last (Path)));
          else
             Nested_Sets.Include (State.Dead_Nested, (Id, Path));
+         end if;
+         --  D433: a `sink` binding and the place it was matched from are
+         --  one resource, so consuming either consumes the other.
+         if Sink_Subjects.Contains (Id) then
+            Consume_Place (Of_Tree, Sink_Subjects.Element (Id), State);
+         else
+            for Cursor in Sink_Subjects.Iterate loop
+               declare
+                  Subject_Id : Res.Declaration_Id;
+                  Subject_Path : Field_Path;
+                  Subject_Below : Field_Path;
+                  Subject_Position : Ty.Magnitude;
+                  Subject_Element : Boolean;
+                  Subject_Valid : Boolean;
+               begin
+                  Place_Identity
+                    (Of_Tree, Sink_Subject_Maps.Element (Cursor),
+                     Subject_Id, Subject_Path, Subject_Below,
+                     Subject_Position, Subject_Element, Subject_Valid);
+                  if Subject_Valid and then Subject_Id = Id
+                    and then not Is_Element
+                    and then Prefix (Path, Subject_Path)
+                  then
+                     State.Dead_Fields.Include
+                       ((Sink_Subject_Maps.Key (Cursor), 0));
+                  end if;
+               end;
+            end loop;
          end if;
       end Consume_Place;
 
@@ -1949,8 +1987,8 @@ package body Landin.Stages.Checking.Flow is
                        (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
                         Id, State,
                         "`" & Spelled (Syn.Name (Of_Tree, Node))
-                        & "` is read here and no path that arrives assigned"
-                        & " it");
+                        & "` is read here and a path that arrives has not"
+                        & " assigned it");
                   end if;
                end;
             end if;
@@ -2019,8 +2057,8 @@ package body Landin.Stages.Checking.Flow is
                        (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
                         Nested_Id, State,
                         "`" & Array_Label (Nested_Id, Path)
-                        & "` is read here and no path that arrives assigned"
-                        & " it",
+                        & "` is read here and a path that arrives has not"
+                        & " assigned it",
                         Field => Path (1));
                   end if;
                   return;
@@ -2056,8 +2094,8 @@ package body Landin.Stages.Checking.Flow is
                            Syn.Where (Of_Tree, Node), Id, State,
                            "`" & Spelled (Syn.Name (Of_Tree, From)) & "."
                            & Spelled (Syn.Name (Of_Tree, Node))
-                           & "` is read here and no path that arrives"
-                           & " assigned it",
+                           & "` is read here and a path that arrives"
+                           & " has not assigned it",
                            Field => Which);
                      end if;
                   end;
@@ -2252,9 +2290,9 @@ package body Landin.Stages.Checking.Flow is
                   --  the join of the edges that actually leave: a while's
                   --  false test and a for's exhaustion, through `complete`
                   --  when there is one, and every `break`.  An unconditional
-                  --  loop without a break has no exit. D156/D157 limit new
-                  --  assignment facts after this join: only entry and
-                  --  condition facts may establish a post-loop assignment.
+                  --  loop without a break has no exit.  D430 lets this
+                  --  join establish assignments, which D156/D157 limited
+                  --  to entry and condition facts.
                   declare
                      Entry_State : constant Assigned_Set := State;
                      Head : Assigned_Set := State;
@@ -2465,27 +2503,11 @@ package body Landin.Stages.Checking.Flow is
                      end if;
 
                      if Exits then
-                        --  [1810]: body/completion writes cannot establish
-                        --  a new assignment after the loop. The fixed point
-                        --  still owns consumed places and actual exits.
-                        --  Tested contains only head/condition facts; union
-                        --  with entry retains assignments from before a
-                        --  loop, including its once-evaluated for bounds.
-                        Field_Sets.Union
-                          (Tested.Fields, Entry_State.Fields);
-                        Element_Sets.Union
-                          (Tested.Elements, Entry_State.Elements);
-                        Array_Sets.Union
-                          (Tested.Whole_Arrays, Entry_State.Whole_Arrays);
-                        Nested_Sets.Union
-                          (Tested.Nested, Entry_State.Nested);
-                        --  This is an assignment ceiling, not another CFG
-                        --  edge: do not reintroduce a consumed fact that an
-                        --  actual exit has restored, or erase a live one.
-                        Tested.Dead_Fields.Clear;
-                        Tested.Dead_Elements.Clear;
-                        Tested.Dead_Nested.Clear;
-                        Merge (Exit_State, First => False, Branch => Tested);
+                        --  [1810], D430: the state after the loop is the
+                        --  join of the edges that actually leave it, each
+                        --  taken from the converged head, so an assignment
+                        --  made on every exit, before a `break` or in
+                        --  `complete`, holds after the loop.
                         State := Exit_State;
                      end if;
                      Edges := (Falls_Through => Exits, Returns => Returned);
@@ -2624,6 +2646,26 @@ package body Landin.Stages.Checking.Flow is
                            Branch : Assigned_Set := Incoming;
                            Branch_Edges : Edge_Facts;
                         begin
+                           for Position in
+                             1 .. Syn.Match_Binding_Count (Of_Tree, This)
+                           loop
+                              declare
+                                 Binding : constant Syn.Node_Id :=
+                                   Syn.Nth_Match_Binding
+                                     (Of_Tree, This, Position);
+                                 Id : constant Res.Declaration_Id :=
+                                   Declaration_At
+                                     (Syn.Source_Of (Of_Tree), Binding);
+                              begin
+                                 if Syn.Convention_Of (Of_Tree, Binding)
+                                      = Syn.Sink_Convention
+                                   and then Id /= Res.No_Declaration
+                                 then
+                                    Sink_Subjects.Include
+                                      (Id, Syn.Match_Subject (Of_Tree, Node));
+                                 end if;
+                              end;
+                           end loop;
                            Flow_Block
                              (Of_Tree, Syn.Body_Of (Of_Tree, This),
                               Result, Syn.Origin (Of_Tree, Node),
@@ -3748,8 +3790,8 @@ package body Landin.Stages.Checking.Flow is
                            if Cleanup_Edges.Falls_Through then
                               Require_Returns_Assigned
                                 (Syn.Anchor (Of_Tree, Item), Return_State,
-                                 "this returns and no path that arrives"
-                                 & " assigned the return");
+                                 "this returns, and a path that arrives"
+                                 & " has not assigned the return");
                               Require_Inout_Places_Live
                                 (Syn.Anchor (Of_Tree, Item), Return_State);
                            end if;
@@ -3963,6 +4005,19 @@ package body Landin.Stages.Checking.Flow is
                   & " return");
             end if;
          end;
+      end if;
+      --  D431: a body that is a control answering only by diverging is a
+      --  statement, so its fallthrough edges must have assigned the
+      --  returns themselves.
+      if Syn.Kind (Of_Tree, Body_Node) /= Syn.Block
+        and then Edges.Falls_Through
+        and then Landin.Checking.Type_Of (Types.all, Of_Tree, Body_Node)
+          = Ty.No_Value
+      then
+         Require_Returns_Assigned
+           (Syn.Anchor (Of_Tree, Function_Node), State,
+            "this function can reach its `end` without assigning the"
+            & " return");
       end if;
       if Edges.Falls_Through then
          Require_Inout_Places_Live

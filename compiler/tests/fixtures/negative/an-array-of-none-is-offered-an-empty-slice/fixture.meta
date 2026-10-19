@@ -1,0 +1,9 @@
+class: negative
+summary: a zeroed zero-length array of a type with no zero image is offered an empty slice rather than a fill from one element
+program: program.ldn
+codes: L0328
+constructs: 0520, 0540, 0570
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/an-array-of-none-is-offered-an-empty-slice/program.ldn
+status: 1

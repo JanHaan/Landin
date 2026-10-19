@@ -3873,10 +3873,12 @@ package body Landin.Checking is
    end Finalize_Inferred_Errors;
 
    function Parts_Agree
-     (Of_Table : Table; A, B : Signature_Part) return Boolean;
+     (Of_Table : Table; A, B : Signature_Part;
+      Ignore_Escaping : Boolean := False) return Boolean;
 
    function Parts_Agree
-     (Of_Table : Table; A, B : Signature_Part) return Boolean
+     (Of_Table : Table; A, B : Signature_Part;
+      Ignore_Escaping : Boolean := False) return Boolean
    is
    begin
       --  D188: [0660]'s constraint is part of the type, so a `(v: u8)`
@@ -3884,7 +3886,7 @@ package body Landin.Checking is
       --  cannot lose the check.
       if A.Kind /= B.Kind
         or else A.Convention /= B.Convention
-        or else A.Escaping /= B.Escaping
+        or else (A.Escaping /= B.Escaping and then not Ignore_Escaping)
         or else A.Caller /= B.Caller
         or else A.Constraint /= B.Constraint
       then
@@ -3925,8 +3927,39 @@ package body Landin.Checking is
       end case;
    end Parts_Agree;
 
+   --  Ignore_Escaping compares the signatures' own parameters as if
+   --  neither wrote `escaping`, which only says why two are not one.
+   function Signatures_Agree_Ignoring
+     (Of_Table : Table; Left, Right : Signature_Id;
+      Ignore_Escaping : Boolean) return Boolean;
+
    function Signatures_Agree
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
+     is (Signatures_Agree_Ignoring
+           (Of_Table, Left, Right, Ignore_Escaping => False));
+
+   function Escaping_Difference
+     (Of_Table : Table; Left, Right : Signature_Id) return Natural is
+   begin
+      if Signatures_Agree (Of_Table, Left, Right)
+        or else not Signatures_Agree_Ignoring
+          (Of_Table, Left, Right, Ignore_Escaping => True)
+      then
+         return 0;
+      end if;
+      for Index in 1 .. Signature_Parameter_Count (Of_Table, Left) loop
+         if Nth_Signature_Parameter (Of_Table, Left, Index).Escaping
+           /= Nth_Signature_Parameter (Of_Table, Right, Index).Escaping
+         then
+            return Index;
+         end if;
+      end loop;
+      return 0;
+   end Escaping_Difference;
+
+   function Signatures_Agree_Ignoring
+     (Of_Table : Table; Left, Right : Signature_Id;
+      Ignore_Escaping : Boolean) return Boolean
    is
    begin
       if Left = Right then
@@ -3962,7 +3995,8 @@ package body Landin.Checking is
          if not Parts_Agree
            (Of_Table,
             Nth_Signature_Parameter (Of_Table, Left, Index),
-            Nth_Signature_Parameter (Of_Table, Right, Index))
+            Nth_Signature_Parameter (Of_Table, Right, Index),
+            Ignore_Escaping)
          then
             return False;
          end if;
@@ -3991,7 +4025,7 @@ package body Landin.Checking is
          end loop;
       end loop;
       return True;
-   end Signatures_Agree;
+   end Signatures_Agree_Ignoring;
 
    type Spelled_Atom is record
       Atom     : Declaration_Id;

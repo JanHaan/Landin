@@ -53,7 +53,7 @@ bounded_pool: () -> (ok: bool) =
     again.val = 33
     region.release(ledger, parent)
     ok = pool.live(parent) == 0 and pool.allocations(parent) == 4
-      and pool.frees(parent) == 4 and pool.rejected_frees(parent) == 0
+         and pool.frees(parent) == 4 and pool.rejected_frees(parent) == 0
 end bounded_pool
 
 public main: () -> (code: i32) =

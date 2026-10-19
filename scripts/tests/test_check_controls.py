@@ -155,6 +155,38 @@ class FailureWords(unittest.TestCase):
         self.assertTrue(any("mem.ordered" in why for why in said), said)
 
 
+class CoreModulePlaces(unittest.TestCase):
+    """A new core module is told every place it is missing from at once."""
+
+    PROBE = ("MODULES = tuple('core/'+name for name in\n"
+             "                ('mem',)) + ('platform/cortex_m',)\n")
+
+    def written(self, **extra):
+        files = {"core/mem/mem.ldn": "x: i32 = 1\n",
+                 "environments/cortex-m/freestanding.py": self.PROBE,
+                 "compiler/tests/fixtures/runtime/library-shared-mem/"
+                 "fixture.meta": "class: runtime\n",
+                 "compiler/tests/cortex-m/corpus.json":
+                     '{"fixtures": {"runtime/library-shared-mem":'
+                     ' {"mode": "execute"}}, "schema": 1}\n',
+                 "docs/library.md": "## core/mem\n"}
+        files.update(extra)
+        return files
+
+    def test_a_module_known_everywhere_passes(self):
+        self.assertEqual(faults(checker.check_core_module_places,
+                                written=self.written()), [])
+
+    def test_a_new_module_is_told_every_missing_place(self):
+        said = reasons(checker.check_core_module_places,
+                       written=self.written(**{"core/new/new.ldn":
+                                               "x: i32 = 1\n"}))
+        self.assertEqual(len(said), 1, said)
+        for place in ("MODULES", "library-shared-new", "corpus.json",
+                      "## core/new"):
+            self.assertIn(place, said[0])
+
+
 PINS = ["environments/linux-amd64/Containerfile",
         "compiler/ada/TOOLCHAIN.md",
         "environments/pins.sh",
@@ -351,6 +383,8 @@ QUALITY = ["compiler/tests/quality", "scripts/quality.sh",
            "scripts/tests/test_build_lock.py",
            #  Reached through the quality checker this one runpy's.
            "scripts/build.sh", "scripts/env.sh", "environments/pins.sh",
+           #  check.py asks it for the build manifest's inputs.
+           "scripts/build_identity.py",
            "compiler/ada/landin_lib.gpr", "compiler/ada/landin_common.gpr",
            "compiler/ada/refine.gpr", "compiler/tests",
            #  The quality checker reads the derived programs' own sources

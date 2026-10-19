@@ -216,6 +216,11 @@ class RecordInfo:
         return self.node.get("tagUsed") == "union"
 
     @property
+    def packed(self) -> bool:
+        # C's __attribute__((packed)) on the record itself (D410).
+        return any(item.get("kind") == "PackedAttr" for item in self.node.get("inner", []))
+
+    @property
     def c_name(self) -> str:
         if self.typedef_names:
             return self.typedef_names[0]
@@ -1234,6 +1239,10 @@ class Generator:
         if resolved.kind == "record":
             record = self.record_for(resolved)
             require(record.complete, f"{context}: incomplete record is not a by-value type")
+            require(self.flexible_field(record) is None,
+                    f"{context}: record {record.display_name!r} ends in a flexible array member, "
+                    "whose elements are not part of its value; C reaches it only through a "
+                    "pointer (D413, D414)")
             return
         if resolved.kind == "enum":
             require(bool(self.enum_for(resolved).constants), f"{context}: empty enum is unsupported")
@@ -1350,11 +1359,70 @@ class Generator:
         return values
 
     def record_has_forbidden_attribute(self, record: RecordInfo) -> str | None:
+        # A record's own packed attribute is D410's layout(c, packed); every
+        # other record attribute, `#pragma pack` and `aligned` among them,
+        # changes a layout that form does not describe.
         for item in record.node.get("inner", []):
             kind = item.get("kind", "")
-            if kind.endswith("Attr"):
+            if kind.endswith("Attr") and kind != "PackedAttr":
                 return kind
         return None
+
+    def flexible_field(self, record: RecordInfo) -> dict[str, Any] | None:
+        """The last field when it is C's flexible array member (D413)."""
+        fields = record.fields
+        if not record.complete or record.union or not fields:
+            return None
+        resolved = self.resolve_alias(self.types.from_info(fields[-1]["type"]))
+        if resolved.kind == "array" and resolved.count <= 0:
+            return fields[-1]
+        return None
+
+    def byte_aligned(self, ctype: CType) -> bool:
+        """Whether a packed record may hold this array element or record (D410)."""
+        resolved = self.resolve_alias(ctype)
+        if resolved.kind == "builtin":
+            return BUILTIN_LAYOUT.get(resolved.name, (0, 0))[0] == 1
+        if resolved.kind == "enum":
+            return self.layout_of(resolved)[0] == 1
+        if resolved.kind == "array":
+            return resolved.child is not None and self.byte_aligned(resolved.child)
+        if resolved.kind == "record":
+            nested = self.records_by_id[resolved.name]
+            return (nested.complete and nested.packed and
+                    self.record_classification(nested) == "native-layout-c")
+        return False
+
+    def pointer_only(self, ctype: CType, visiting: frozenset[str] = frozenset()) -> bool:
+        """Whether C reaches this native record only through a pointer (D414).
+
+        A byte-packed record, a record with a flexible array member, and a
+        record holding either by value cross no C signature by value."""
+        resolved = self.resolve_alias(ctype)
+        if resolved.kind == "array":
+            return resolved.child is not None and self.pointer_only(resolved.child, visiting)
+        if resolved.kind != "record" or resolved.name in visiting:
+            return False
+        record = self.records_by_id[resolved.name]
+        if not record.complete or self.record_classification(record) != "native-layout-c":
+            return False
+        if record.packed or self.flexible_field(record) is not None:
+            return True
+        return any(self.pointer_only(self.types.from_info(field["type"]),
+                                     visiting | {resolved.name})
+                   for field in record.fields)
+
+    def by_address(self, ctype: CType) -> bool:
+        """Whether an adapter moves this value through an address."""
+        return self.opaque_by_value(ctype) or self.pointer_only(ctype)
+
+    def address_type(self, ctype: CType, *, mutable: bool) -> str:
+        """The Landin pointer an adapter takes in place of a by-address value."""
+        target = "mut " if mutable else ""
+        if self.pointer_only(ctype):
+            record = self.records_by_id[self.resolve_alias(ctype).name]
+            return f"ptr {target}{self.landin_name_for_record(record)}"
+        return f"ptr {target}u8"
 
     def native_field_possible(self, ctype: CType) -> bool:
         resolved = self.resolve_alias(ctype)
@@ -1368,6 +1436,14 @@ class Generator:
             return (nested.complete and
                     self.record_classification(nested) == "native-layout-c")
         return False
+
+    def packed_field_possible(self, ctype: CType) -> bool:
+        # D410: a packed record's scalar and pointer fields may sit anywhere;
+        # an array or nested record it holds by value has alignment one.
+        resolved = self.resolve_alias(ctype)
+        if resolved.kind in {"array", "record"}:
+            return self.byte_aligned(ctype)
+        return True
 
     def record_classification(self, record: RecordInfo) -> str:
         cached = self._record_classifications.get(record.identity)
@@ -1403,6 +1479,7 @@ class Generator:
         require(not stale, f"record {record.display_name!r}: field {(stale[0] if stale else '<none>')!r} is absent (stale policy)")
         nullable_field = False
         native_fields = True
+        flexible = None
         for index, field in enumerate(fields, 1):
             require(field.get("name") or field.get("isBitfield"),
                     f"record {record.display_name!r} field {index}: anonymous aggregate field is unsupported")
@@ -1411,8 +1488,26 @@ class Generator:
             require(not field_attributes,
                     f"record {record.display_name!r} field {field.get('name') or index}: unsupported field attribute {(field_attributes[0] if field_attributes else '<none>')}")
             ctype = self.types.from_info(field["type"])
-            self.ensure_supported(ctype, f"record {record.display_name!r} field {field.get('name') or index}")
-            native_fields = native_fields and self.native_field_possible(ctype)
+            field_context = f"record {record.display_name!r} field {field.get('name') or index}"
+            resolved_field = self.resolve_alias(ctype)
+            if resolved_field.kind == "array" and resolved_field.count <= 0:
+                # D413: C's flexible array member, `[]` or GNU `[0]`, is a
+                # struct's last field after at least one other.
+                require(not record.union and index == len(fields) and index > 1,
+                        f"{field_context}: flexible or zero-size array is unsupported except as "
+                        "a struct's last field after another field (D413)")
+                element = resolved_field.child
+                self.ensure_supported(element, field_context + " element")  # type: ignore[arg-type]
+                require(self.resolve_alias(element).kind != "array" or  # type: ignore[arg-type]
+                        self.resolve_alias(element).count > 0,  # type: ignore[arg-type]
+                        f"{field_context}: flexible or zero-size array is unsupported")
+                native_fields = native_fields and self.native_field_possible(element)  # type: ignore[arg-type]
+                flexible = field
+            else:
+                self.ensure_supported(ctype, field_context)
+                native_fields = native_fields and self.native_field_possible(ctype)
+                if record.packed:
+                    native_fields = native_fields and self.packed_field_possible(ctype)
             require(not self.resolve_alias(ctype).const,
                     f"record {record.display_name!r} field {field.get('name') or index}: const field unsupported")
             if self.contains_reference(ctype):
@@ -1430,9 +1525,18 @@ class Generator:
                         f"record {record.display_name!r} field {field['name']!r}: stale policy for non-reference value")
         native_possible = (not record.union and not has_bitfield and not unnamed and
                            not nullable_field and native_fields)
+        if flexible is not None:
+            # A C-owned copy would keep sizeof bytes and drop the trailing
+            # elements, so a flexible member's record has only D413's form.
+            require(requested != "opaque" and native_possible,
+                    f"record {record.display_name!r}: a record with a flexible array member has only "
+                    "a native layout(c) form (D413), and needs no bitfield, unnamed or nullable "
+                    "field and a C element")
         if requested == "native":
             require(native_possible,
-                    f"record {record.display_name!r}: selected native representation is incompatible with union, bitfield, unnamed, or nullable field")
+                    f"record {record.display_name!r}: selected native representation is incompatible with union, bitfield, unnamed, or nullable field"
+                    + (", or with a packed record's field of alignment above one (D410)"
+                       if record.packed else ""))
             self._record_classifications[record.identity] = "native-layout-c"
             return "native-layout-c"
         if requested == "opaque":
@@ -1547,23 +1651,29 @@ class Generator:
             record = self.records_by_id[resolved.name]
             require(self.record_classification(record) == "native-layout-c",
                     f"record {record.display_name!r} has no native Landin layout")
-            size = 0
-            alignment = 1
-            for field in record.fields:
-                field_size, field_alignment = self.layout_of(
-                    self.types.from_info(field["type"]), stack + (resolved.name,))
-                size = align_up(size, field_alignment) + field_size
-                alignment = max(alignment, field_alignment)
-            return align_up(size, alignment), alignment
+            size, alignment, _ = self.record_layout(record, stack)
+            return size, alignment
         raise BindingError(f"unsupported layout type {resolved.spelling}")
 
-    def record_layout(self, record: RecordInfo) -> tuple[int, int, list[tuple[str, int]]]:
+    def record_layout(self, record: RecordInfo, stack: tuple[str, ...] = ()
+                      ) -> tuple[int, int, list[tuple[str, int]]]:
+        # D410: a packed record places every field at alignment one.  D413: a
+        # flexible array member has size zero and its element's alignment.
         size = 0
         alignment = 1
         offsets: list[tuple[str, int]] = []
+        flexible = self.flexible_field(record)
         for field in record.fields:
-            field_size, field_alignment = self.layout_of(self.types.from_info(field["type"]),
-                                                         (record.identity,))
+            ctype = self.types.from_info(field["type"])
+            if field is flexible:
+                field_size = 0
+                _, field_alignment = self.layout_of(
+                    self.resolve_alias(ctype).child,  # type: ignore[arg-type]
+                    stack + (record.identity,))
+            else:
+                field_size, field_alignment = self.layout_of(ctype, stack + (record.identity,))
+            if record.packed:
+                field_alignment = 1
             size = align_up(size, field_alignment)
             offsets.append((field["name"], size))
             size += field_size
@@ -1610,7 +1720,8 @@ class Generator:
                 name = f"(*{qualifier}{name})"
             return self.c_declarator(resolved.result, f"{name}({params})")  # type: ignore[arg-type]
         if resolved.kind == "array":
-            return self.c_declarator(resolved.child, f"{name}[{resolved.count}]")  # type: ignore[arg-type]
+            extent = "" if resolved.count < 0 else str(resolved.count)
+            return self.c_declarator(resolved.child, f"{name}[{extent}]")  # type: ignore[arg-type]
         if resolved.kind == "pointer":
             qualifier = " const " if resolved.const else ""
             name = f"*{qualifier}{name}"
@@ -1672,10 +1783,17 @@ class Generator:
             self.needed_records.add(resolved.name)
             return self.landin_name_for_record(self.records_by_id[resolved.name])
         if resolved.kind == "array":
-            return f"[{resolved.count}]{self.landin_type(resolved.child, site=site)}"  # type: ignore[arg-type]
+            # D413: C's flexible member, `[]` or `[0]`, is Landin's last `[0]T`.
+            extent = max(resolved.count, 0)
+            return f"[{extent}]{self.landin_type(resolved.child, site=site)}"  # type: ignore[arg-type]
         if resolved.kind == "pointer":
             pointee = self.resolve_alias(resolved.child)  # type: ignore[arg-type]
-            if pointee.kind in {"record", "unsupported"} or pointee.kind == "builtin" and pointee.name == "void":
+            if (pointee.kind == "record" and pointee.name in self.record_entries and
+                    self.pointer_only(pointee)):
+                # D414: C reaches a selected packed or flexible-member record
+                # only through a pointer, so the pointer carries its type.
+                inner = self.landin_name_for_record(self.records_by_id[pointee.name])
+            elif pointee.kind in {"record", "unsupported"} or pointee.kind == "builtin" and pointee.name == "void":
                 inner = "u8"
             else:
                 inner = self.landin_type(resolved.child, pointer_as_opaque=True, site=site)  # type: ignore[arg-type]
@@ -1736,7 +1854,7 @@ class Generator:
         # The adapter copies the C value from this address. Any retained inner
         # references must still be visible to the caller's escape analysis.
         escaping = self.escaping_prefix(ctype, annotation, output_store=output_store)
-        return f"{escaping}{sanitize_landin(name)}: ptr u8"
+        return f"{escaping}{sanitize_landin(name)}: {self.address_type(ctype, mutable=False)}"
 
     def landin_parameter(self, ctype: CType, c_name: str, annotation: Mapping[str, Any] | None,
                          site: str, *, output_store: bool = False) -> str:
@@ -1859,8 +1977,14 @@ class Generator:
         for index, parameter in enumerate(callback.parameters, 1):
             require(not self.opaque_by_value(parameter),
                     f"callback {name!r} parameter {index}: C-owned opaque by-value type is unsupported")
+            require(not self.pointer_only(parameter),
+                    f"callback {name!r} parameter {index}: a packed record by value has no "
+                    "extern(c) transport; C passes it only through a pointer (D414)")
         require(not self.opaque_by_value(callback.result),  # type: ignore[arg-type]
                 f"callback {name!r} result: C-owned opaque by-value type is unsupported")
+        require(not self.pointer_only(callback.result),  # type: ignore[arg-type]
+                f"callback {name!r} result: a packed record by value has no "
+                "extern(c) transport; C passes it only through a pointer (D414)")
         annotations, result_annotation = self.callback_annotation_maps(name, callback)
         l_name = self.landin_name_for_alias(name)
         parameters = [
@@ -2012,7 +2136,8 @@ class Generator:
 
     def render_native_record(self, record: RecordInfo) -> None:
         name = self.landin_name_for_record(record)
-        lines = [f"public {name}: type = layout(c) struct"]
+        layout = "layout(c, packed)" if record.packed else "layout(c)"
+        lines = [f"public {name}: type = {layout} struct"]
         fields_metadata: list[dict[str, Any]] = []
         for index, field in enumerate(record.fields, 1):
             c_name = field["name"]
@@ -2027,16 +2152,20 @@ class Generator:
         size, alignment, offsets = self.record_layout(record)
         c_type = record.c_name
         self.c_assertions.extend([
-            f'_Static_assert(sizeof({c_type}) == {size}, "{c_type} size disagrees with Landin layout(c)");',
-            f'_Static_assert(_Alignof({c_type}) == {alignment}, "{c_type} alignment disagrees with Landin layout(c)");',
+            f'_Static_assert(sizeof({c_type}) == {size}, "{c_type} size disagrees with Landin {layout}");',
+            f'_Static_assert(_Alignof({c_type}) == {alignment}, "{c_type} alignment disagrees with Landin {layout}");',
         ])
         for field_name, offset in offsets:
             self.c_assertions.append(
-                f'_Static_assert(__builtin_offsetof({c_type}, {field_name}) == {offset}, "{c_type}.{field_name} offset disagrees with Landin layout(c)");')
+                f'_Static_assert(__builtin_offsetof({c_type}, {field_name}) == {offset}, "{c_type}.{field_name} offset disagrees with Landin {layout}");')
+        flexible = self.flexible_field(record)
         entry = self.record_entries.get(record.identity)
         self.metadata_declarations.append({
             "kind": "record", "c_name": c_type, "landin_name": name,
             "representation": "native-layout-c", "size": size, "alignment": alignment,
+            "packed": record.packed,
+            "flexible_member": flexible["name"] if flexible is not None else None,
+            "pointer_only": self.pointer_only(CType("record", c_type, name=record.identity)),
             "fields": fields_metadata, "offsets": {key: value for key, value in offsets},
             "selected": entry is not None,
         })
@@ -2138,7 +2267,7 @@ class Generator:
             require(not (element_resolved.kind == "callback" and annotation and
                          annotation["nullability"] == "nullable"),
                     f"record {record.display_name!r} field {field_name!r}: nullable callback array accessor is unsupported")
-            if self.opaque_by_value(element):
+            if self.by_address(element):
                 self.add_c_function("void", get_name,
                                     [f"const void *{object_local}", f"__SIZE_TYPE__ {index_local}", f"void *{value_local}"], [
                                         f"if ({index_local} >= {resolved.count}) __builtin_trap();",
@@ -2151,7 +2280,8 @@ class Generator:
                                     ])
                 self.ldn_declarations.extend([
                     self.ldn_extern(get_name, stem + "_get",
-                                    [self.opaque_get_source(element), "index: usize", "value: ptr mut u8"], "none"),
+                                    [self.opaque_get_source(element), "index: usize",
+                                     f"value: {self.address_type(element, mutable=True)}"], "none"),
                     self.ldn_extern(set_name, stem + "_set",
                                     ["object: ptr mut u8", "index: usize",
                                      self.landin_opaque_parameter(element, "value", annotation)], "none"),
@@ -2204,7 +2334,7 @@ class Generator:
                 self.ldn_extern(access, stem + "_access", ["object: ptr u8"], self.field_return(ctype, l_type)),
             ])
             return {"clear": clear, "set": set_name, "present": present, "access": access}
-        if self.opaque_by_value(ctype):
+        if self.by_address(ctype):
             get_name = self.c_symbol(stem, "get")
             set_name = self.c_symbol(stem, "set")
             nested = self.c_type(ctype)
@@ -2213,7 +2343,8 @@ class Generator:
             self.add_c_function("void", set_name, [f"void *{object_local}", f"const void *{value_local}"],
                                 [f"(({c_type} *){object_local})->{field_name} = *(const {nested} *){value_local};"])
             self.ldn_declarations.extend([
-                self.ldn_extern(get_name, stem + "_get", [self.opaque_get_source(ctype), "value: ptr mut u8"], "none"),
+                self.ldn_extern(get_name, stem + "_get", [self.opaque_get_source(ctype),
+                                f"value: {self.address_type(ctype, mutable=True)}"], "none"),
                 self.ldn_extern(set_name, stem + "_set",
                                 ["object: ptr mut u8", self.landin_opaque_parameter(ctype, "value", annotation)], "none"),
             ])
@@ -2276,11 +2407,15 @@ class Generator:
             c_name = parameter.get("name") or f"argument_{index}"
             if self.opaque_by_value(ctype):
                 wrapper_reasons.append(f"opaque-parameter:{c_name}")
+            elif self.pointer_only(ctype):
+                wrapper_reasons.append(f"pointer-only-parameter:{c_name}")
             if self.resolve_alias(ctype).kind == "callback" and annotations.get(c_name, {}).get("nullability") == "nullable":
                 self.require_nullable_cell(ctype, f"{entry.context} parameter {c_name!r}")
                 wrapper_reasons.append(f"nullable-callback:{c_name}")
         if self.opaque_by_value(result):
             wrapper_reasons.append("opaque-result")
+        elif self.pointer_only(result):
+            wrapper_reasons.append("pointer-only-result")
         if self.resolve_alias(result).kind == "callback" and result_annotation and result_annotation["nullability"] == "nullable":
             self.require_nullable_cell(result, f"{entry.context} result")
             wrapper_reasons.append("nullable-callback-result")
@@ -2307,7 +2442,8 @@ class Generator:
         ldn_parameters: list[str] = []
         output_local, *argument_locals = self.c_locals(
             "result", *(f"argument_{index}" for index in range(1, len(params) + 1)))
-        output_result = "opaque-result" in wrapper_reasons or "nullable-callback-result" in wrapper_reasons
+        output_result = bool({"opaque-result", "pointer-only-result",
+                              "nullable-callback-result"} & set(wrapper_reasons))
         output_sources = list(result_annotation["from"]) if output_result and result_annotation else []
         parameter_landin_names = {
             sanitize_landin(parameter.get("name") or f"argument_{index}")
@@ -2322,7 +2458,7 @@ class Generator:
             local = argument_locals[index - 1]
             annotation = annotations.get(c_name)
             resolved = self.resolve_alias(ctype)
-            if self.opaque_by_value(ctype):
+            if self.by_address(ctype):
                 c_parameter_decls.append(f"const void *{local}")
                 call_arguments.append(f"*(const {self.c_type(ctype)} *){local}")
                 ldn_parameters.append(self.landin_opaque_parameter(
@@ -2351,9 +2487,9 @@ class Generator:
             link_symbol = adapter
             call = f"{entry.name}({', '.join(call_arguments)})"
             resolved_result = self.resolve_alias(result)
-            if self.opaque_by_value(result):
+            if self.by_address(result):
                 c_parameter_decls.insert(0, f"void *{output_local}")
-                ldn_parameters.insert(0, f"{output_landin_name}: ptr mut u8")
+                ldn_parameters.insert(0, f"{output_landin_name}: {self.address_type(result, mutable=True)}")
                 body = [f"*({self.c_type(result)} *){output_local} = {call};"]
                 c_result = "void"
                 ldn_result = "none"
@@ -2440,6 +2576,10 @@ class Generator:
                 f"{entry.context}: opaque fixed parameter is unsupported for incoming varargs")
         require(not self.opaque_by_value(result),
                 f"{entry.context}: opaque result is unsupported for incoming varargs")
+        require(not any(self.pointer_only(value) for value in
+                        [result, *(self.ctype_for_parameter(parameter) for parameter in params)]),
+                f"{entry.context}: a packed record by value has no extern(c) transport for "
+                "an incoming varargs handler; C passes it only through a pointer (D414)")
         names = [parameter.get("name") or f"argument_{index}"
                  for index, parameter in enumerate(params, 1)]
         handler_names = [sanitize_landin(name) for name in names]
@@ -2588,6 +2728,7 @@ class Generator:
         nullable_callback = (resolved.kind == "callback" and annotation is not None and
                              annotation["nullability"] == "nullable")
         opaque = self.opaque_by_value(ctype)
+        by_address = opaque or self.pointer_only(ctype)
         extra_accessors: dict[str, str] = {}
         local_value, = self.c_locals("value")
         if nullable_callback:
@@ -2621,9 +2762,9 @@ class Generator:
                     self.ldn_extern(write_name, stem + "_write", [l_callback_parameter], "none"),  # type: ignore[arg-type]
                 ])
             extra_accessors = {"clear": clear_name, "present": present_name}
-        elif opaque:
+        elif by_address:
             address_c_type = "const void *" if read_only else "void *"
-            address_landin_type = "ptr u8" if read_only else "ptr mut u8"
+            address_landin_type = self.address_type(ctype, mutable=not read_only)
             self.add_c_function(address_c_type, address, [],
                                 [f"return ({address_c_type})&{entry.name};"])
             unqualified = dataclasses.replace(ctype, const=False)
@@ -2634,7 +2775,8 @@ class Generator:
                                     [f"{entry.name} = *(const {self.c_type(unqualified)} *){local_value};"])
             self.ldn_declarations.extend([
                 self.ldn_extern(address, stem + "_address", [], f"(address: {address_landin_type})"),
-                self.ldn_extern(read_name, stem + "_read", ["value: ptr mut u8"], "none"),
+                self.ldn_extern(read_name, stem + "_read",
+                                [f"value: {self.address_type(ctype, mutable=True)}"], "none"),
             ])
             if writable:
                 self.ldn_declarations.append(

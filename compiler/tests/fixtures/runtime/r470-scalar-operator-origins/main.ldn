@@ -33,8 +33,8 @@ end touch
 
 slice_length_survives: (inout source: []mut u32) -> (ok: bool) =
     mut saved: saved_scalars =
-      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
-       sum: 0, same: false, negated: false, all: false)
+        (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+         sum: 0, same: false, negated: false, all: false)
     saved.length = lenof source
     advance(source)
     ok = saved.length == 2 and lenof source == 1
@@ -42,8 +42,8 @@ end slice_length_survives
 
 sink_length_survives: (sink source: []mut u32) -> (ok: bool) =
     mut saved: saved_scalars =
-      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
-       sum: 0, same: false, negated: false, all: false)
+        (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+         sum: 0, same: false, negated: false, all: false)
     saved.length = lenof source
     discard(source)
     ok = saved.length == 2
@@ -52,8 +52,8 @@ end sink_length_survives
 array_field_length_survives: () -> (ok: bool) =
     mut source: array_source = (words: [3, 5, 7])
     mut saved: saved_scalars =
-      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
-       sum: 0, same: false, negated: false, all: false)
+        (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+         sum: 0, same: false, negated: false, all: false)
     words: [3]u32 = source.words
     saved.field_length = lenof words
     change(source)
@@ -65,8 +65,8 @@ operators_discard_origins: () -> (ok: bool) =
     mut source: []mut u32 = words[0..<2]
     mut calls: u32 = 0
     mut saved: saved_scalars =
-      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
-       sum: 0, same: false, negated: false, all: false)
+        (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+         sum: 0, same: false, negated: false, all: false)
     saved.bits = ~lenof source
     saved.negative = -isize(lenof source)
     saved.sum = lenof source + 4
@@ -85,8 +85,8 @@ public main: () -> (code: i32) =
     mut source: []mut u32 = words[0..<2]
     consumed: []mut u32 = words[0..<2]
     code = if slice_length_survives(source)
-              and sink_length_survives(consumed)
-              and array_field_length_survives()
-              and operators_discard_origins()
+      and sink_length_survives(consumed)
+      and array_field_length_survives()
+      and operators_discard_origins()
            then 42 else 1 end if
 end main

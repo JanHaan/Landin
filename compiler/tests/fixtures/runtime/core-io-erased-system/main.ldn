@@ -63,7 +63,7 @@ path_rules_code: (state: system.host) -> (code: i32) =
 
     long: [5000]u8 = [5000 of 97]
     opened = io.open_read(state, text.host_over(long[0..<5000]))
-      else (problem)
+        else (problem)
         if problem <> io.io_failed
           or system.last_errno(state) <> posix.number(posix.enametoolong)
         then
@@ -234,7 +234,7 @@ public main: () -> (code: i32) =
     code = 22
     mut result: [8]u8 = zeroed
     result_length: usize = io.read(generic_host, verify, result[0..<8])
-      else (problem)
+        else (problem)
         _ = problem
         return
     end

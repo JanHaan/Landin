@@ -256,6 +256,65 @@ public used: (item: type, store: storage(item))
     view = store.prefix
 end used
 
+--- Lend the bytes past a byte storage's initialized prefix, its spare
+--- capacity, for the caller to write before `admit_bytes` counts them: the
+--- buffer a read fills.  They hold whatever the backing held.  End uses of
+--- the view before the storage is reserved, released or disposed.
+public spare_bytes: (store: storage(u8)) -> (room: []mut u8 from store) =
+    room = store.prefix[0..<0]
+    count: usize = length(store)
+    spare: usize = store.capacity_count - count
+    return when spare == 0
+    match store.base
+        no_storage: return
+        ptr (base): begin
+            first: ptr mut [1]u8 = ptr(usize(base) + count)
+            mut whole: []mut u8 = first.val[0..<1]
+            unchecked begin
+                --  The backing holds `capacity_count` bytes from `base`.
+                whole = whole[0..<spare]
+            end unchecked
+            room = whole
+        end
+    end match
+end spare_bytes
+
+--- Count the first `count` bytes of the spare capacity, which the caller
+--- has written, as initialized: the prefix ends past them.  Reports `full`,
+--- changing nothing, when fewer than `count` bytes are spare.
+public admit_bytes: (inout store: storage(u8), count: usize) -> none ! full =
+    have: usize = length(store)
+    fail full when count > store.capacity_count - have
+    return when count == 0
+    match store.base
+        no_storage: fail full
+        ptr (base): begin
+            first: ptr mut [1]u8 = ptr(usize(base))
+            mut whole: []mut u8 = first.val[0..<1]
+            unchecked begin
+                --  The backing holds `capacity_count` bytes from `base`.
+                whole = whole[0..<have + count]
+            end unchecked
+            store.prefix = whole
+        end
+    end match
+end admit_bytes
+
+--- Copy `bytes` after a byte storage's initialized prefix and count them in
+--- it, with `copy`, a word at a time where it moves words.  Reports `full`,
+--- changing nothing, when the spare capacity is shorter than `bytes`.
+public admit_copy: (inout store: storage(u8), bytes: []u8) -> none ! full =
+    count: usize = lenof bytes
+    return when count == 0
+    room: []mut u8 = spare_bytes(store)
+    fail full when count > lenof room
+    copy(room[0..<count], bytes) else (problem)
+        _ = problem
+        fail full
+    end
+    try admit_bytes(store, count)
+end admit_copy
+
 --- Append a complete value into a spare slot and return its index. Reports
 --- `full` without publishing a new prefix when no slot is available.
 public admit: (item: type, inout store: storage(item), escaping value: item)
@@ -347,12 +406,25 @@ public transfer_prefix: (item: type, source: storage(item),
     return when count == 0
 
     if sizeof item <> 0 then
-        mut at: usize = 0
-        while at < count do
-            admitted: usize = try transfer(source, at, target)
-            _ = admitted
-            inc at
-        end while
+        --  The items' bytes move whole, with `copy`, a word at a time where
+        --  it moves words: the source holds `count` items, so their extent
+        --  is representable, and the target's capacity holds them.
+        extent: usize = count * sizeof item
+        match target.base
+            no_storage: fail full
+            ptr (base): begin
+                held: ptr mut u8 = ptr(usize(addr source.prefix[0]))
+                copy(block_bytes(base, extent), block_bytes(held, extent))
+                    else none
+                first: ptr mut [1]item = ptr(usize(base))
+                mut kept: []mut item = first.val[0..<1]
+                unchecked begin
+                    --  The target's backing holds at least `count` items.
+                    kept = kept[0..<count]
+                end unchecked
+                target.prefix = kept
+            end
+        end match
         return
     end if
 

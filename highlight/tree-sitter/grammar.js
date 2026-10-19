@@ -574,7 +574,7 @@ module.exports = grammar({
       )),
       ':', field('body', choice($._statement, $._expression)),
     ),
-    match_binding: $ => seq(optional('inout'), field('name', $._declaration_name)),
+    match_binding: $ => seq(optional(choice('inout', 'sink')), field('name', $._declaration_name)),
     bare_block: $ => prec.dynamic(4, seq('begin', optional($.block), 'end')),
     // D234: a labelled bare block is left by a `break` naming it.
     labeled_block: $ => prec.dynamic(4, seq(

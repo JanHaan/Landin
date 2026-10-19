@@ -1,0 +1,10 @@
+error[L0202]: `alloc` is an entry of a concept this type conforms to, and the type's representation is module-internal
+  --> ../tests/fixtures/negative/a-concept-entry-names-its-public-operation/main.ldn:9:21
+  |
+9 |     block := memory.alloc(64, 1) else (problem) return end
+  |                     ^^^^^
+  --> ../../hosted/heap/heap.ldn:13:1
+   |
+13 | system_value: type = struct
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+  = note: [1240]: a concept's entry is reached through the operations its module makes public; call `mem.allocate(memory, ...)`

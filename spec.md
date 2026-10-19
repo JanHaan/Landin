@@ -463,7 +463,10 @@ signature and body are a separate routine whose outer scope is the module.
 Forming it produces a static code address and does not execute its body.
 A body is one block. Its statements run in source order and an optional final
 expression fills the one named return or the complete anonymous aggregate of a
-multiple return list. One token past a leading name decides
+multiple return list. A final `if` or `match` whose every answer is a call
+that does not return answers nothing and is a statement, whose arms assign
+the named returns (D431). One token past
+ a leading name decides
 between a first statement and a direct expression: ':' opens a binding and an
 assignment operator opens an assignment; anything else means the body begins
 with its value. A
@@ -589,8 +592,10 @@ condition is evaluated once and must be `bool`; its false edge continues with
 the following statement. Both transfers leave every lexical block between the
 statement and the loop edge, so [1100]'s `defer` runs and [1110]'s `undo` does
 not. A conditional loop's optional `complete` block runs only when its
-condition becomes false; a `break` skips it. Facts established only in a loop
-body or completion block do not establish definite assignment after the loop.
+condition becomes false; a `break` skips it. After a loop, a name is
+definitely assigned when it is assigned on every edge that leaves the loop:
+a `while`'s false test and a `for`'s exhaustion, through `complete` when there
+is one, and every `break` (D430).
 `break with` and value-producing loops are D158's extension. D159 enables the
 integer-range form of `for`: both bounds are evaluated once, from left to
 right, and have one integer type. `a..<b` visits the ascending values for
@@ -723,7 +728,7 @@ match_arm   ::= (match_label | "_")
                 ":" (statement | expression)
               | match_label ("," match_label)+ ":" (statement | expression)
 match_label ::= declaration_reference | "ptr"
-match_binding ::= "inout"? identifier
+match_binding ::= ("inout" | "sink")? identifier
 unchecked   ::= "unchecked" "begin" block "end" "unchecked"
 bare_block  ::= "begin" block "end"
 labeled_block ::= identifier ":" "begin" block "end" identifier
@@ -1102,7 +1107,8 @@ kernel these positions give a literal a type:
 
 - a binding's declared type [1790]
 - the type of the place an assignment writes [1810]
-- the type of the parameter an argument fills [1800]
+- the type of the parameter an argument fills [1800], in a generic routine
+  too when that type names no formal the call deduces (D419)
 - the named return's type, or the complete anonymous result aggregate for a
   multiple-return expression body [0880] [0990]
 - the result expected from an `if`, `match`, bare `begin`, or call-site `else`
@@ -1559,9 +1565,11 @@ sees what the call's latest run formed. Neither form is a
 text view, so a `utf8` parameter takes neither. The lent slice has the
 origin of what it views: a literal's is the caller's frame, so a result
 `from` that parameter cannot leave the caller [0780], and a place's is the
-place's own. A generic routine's argument is typed on its own (D138), before
-its parameter is known, so it lends nothing and takes a named array's range
-slice. An atom argument whose parameter is written as an atom set that names
+place's own. A generic routine's parameter whose written type names no formal
+is such a parameter, and its argument is checked as here (D419). One whose
+element type is a formal lends a place, matched through its element (D372),
+and refuses a literal, which has no type of its own to deduce from (D138).
+An atom argument whose parameter is written as an atom set that names
 no formal of the routine has nothing to deduce there, and widens into that
 set as [0640] lets an ordinary call's argument widen: `net.shutdown(host,
 socket, net.sending)` needs no local of the set's type first.
@@ -1676,6 +1684,9 @@ bound to a module binding whose value is known. Not a call.
 There is no compile-time execution in this language, so a
 call is not a value the compiler holds, and [1830] refuses
 it as the construct it is rather than as a type error.
+A compiler fact the build holds is known as well: D437 lets a module image
+read a bool or integer fact, or an atom fact compared with one of its atoms,
+as the value configuration found.
 Ordinary integer `+`, `-`, `*`, `/` and `%` in a module image fold in the
 signed range from `-(2**64 - 1)` through `2**64 - 1`, independently of the host
 and destination width. Every intermediate must fit that fold range; the final
@@ -1776,6 +1787,8 @@ Beside the selected entry, a bodyless `extern(c) link(symbol: "main")` of
 `(i32, ptr ptr u8, ptr ptr u8) -> i32` is admitted as C's view of the same
 symbol; it is how `platform/linux`'s process entry calls `main` under a static
 Linux link, which passes the returned code to `exit_group` (D279).
+A `public main` in the entry module that is not this shape is refused when
+the program is checked or emitted as assembly, as when it is linked (D443).
 
 ### [1975] The selected hosted C boundaries
 
@@ -4070,7 +4083,9 @@ the language does not otherwise describe.
 
 D235 later gives two or more atoms beside a pointer a two-cell union and
 retires `Reference_Union_Extent`'s two-atom arm; the one-atom representation
-below is unchanged.
+below is unchanged. D429 later admits a comparison with one of the union's
+own atoms, so the comparison refused below is one between two unions or with
+a pointer.
 
 **The tour said** that there is no null, that "maybe a pointer" is an ordinary
 union of an atom and a pointer type, that with one atom the compiler
@@ -4111,7 +4126,8 @@ reserves it, and which is a syntax node of its own rather than a name, so
 resolution has nothing to look up. A `ptr` arm may carry one binding of the
 plain pointer type; it is optional, definitely assigned on entry to the arm,
 and read-only, and `inout` on it is L0333 citing [1220] because writing
-through it would write the union's own carrier and not a payload. A case
+through it would write the union's own carrier and not a payload; D433 later
+admits `sink` on it. A case
 named twice is L0311, a case named by neither an arm nor `_` is L0312, and
 `_` must be last, which are the same three rules an atom set already has. A
 `ptr` arm on an atom-set or variant subject is L0333.
@@ -4407,6 +4423,37 @@ another function.
 `negative/inout-pointer-field-is-exact`,
 `negative/inout-pointer-forwarded-is-exact` and
 `negative/inout-pointer-match-payload-is-exact`.
+
+### D429 — A pointer union compares with one of its own atoms
+
+**The tour said** at [0480] that coming back out of a pointer union is a
+match, and D189 refused a comparison among the six positions that would read
+the carrier as an address, because comparing two carriers would tell the
+empty case from a pointer without matching. Asking only whether a union
+holds its atom therefore took a whole `match` ending in `true` or `false`;
+`platform/posix` converted a union to `usize` through one to compare it.
+
+**Chosen:** `u == a` and `u <> a`, where `u` is a pointer union of one atom
+or of several and `a` is an atom value whose atoms all belong to `u`'s set,
+answer whether `u` holds that atom, with the atom on either side. No address
+is read and none can be obtained: the pointer still comes out only through a
+`ptr` arm. A one-atom union holds its atom exactly when its carrier is zero;
+a union of several atoms holds one exactly when its code cell holds that
+atom's code, which is zero for the pointer case (D235). Both operands are
+evaluated, left first. Comparing two unions, or a union with a pointer, stays
+L0335, and its note now names both routes, the atom test and `match` with
+`ptr (p):`.
+
+**The alternatives:** equality between two unions, the same atom or both
+present with equal addresses, which is what `platform/posix` wanted, but adds
+pointer identity through the union and a compare-and-branch over two cells;
+it waits for a second consumer. Keeping every comparison refused and naming
+the `match` route. Neither revives D189's declined `_` narrowing: the
+subject keeps its type, and no binding is made.
+
+**Pinned by** `runtime/pointer-union-atom-comparison`, and by
+`negative/pointer-union-comparison` and `negative/pointer-union-many-comparison`,
+which compare two unions.
 
 ## DECISIONS: ARRAYS, SLICES AND TEXT
 
@@ -5870,7 +5917,8 @@ A boolean or a comparison/logical result is not an integer count. Wrapping,
 bitwise, complement and shift operations need an operand width and are not in
 this target-independent fold. A runtime or storage name is not a fixed formal;
 a type formal or another non-value name is diagnosed as such rather than called
-runtime storage. A call is syntactically valid in the brackets but is not a fixed expression:
+runtime storage. D438 later admits an immutable module integer whose own image
+is in this fold, and refuses a `mut` one as storage the program may write. A call is syntactically valid in the brackets but is not a fixed expression:
 the compiler rejects it and never executes its body. No other expression form
 is admitted, and an implementation becoming better at ordinary constant
 folding does not enlarge this set.
@@ -6442,6 +6490,48 @@ refuse an unowned promise.
 `runtime/r450-array-arithmetic-composition`, `negative/r630-m0-rmw` and
 `runtime/r630-memory-scalars`.
 
+### D438 — An immutable module integer is an array bound
+
+**The tour said** at [0520] that an array's length is part of its type, and
+at [1940] that a module value is known when the compiler reads it. D136 folded
+a bound from literals, fixed formals and arithmetic and called every other
+name runtime storage, so `[path_max]u8` with `path_max: usize = 4096` was
+L0305, "this name is runtime storage", and `platform/posix` declared its
+`PATH_MAX` buffer as a type alias in each arm of a `fixed if`.
+
+**Chosen:** an array bound may name an immutable module integer binding, in
+its own module or through another's name (D324), when that binding's image is
+itself a count: integer literals, D437's integer compiler facts, other such
+bindings, unary `-` and D136's mathematical `+ - * / %`. The name folds to its
+mathematical value, so with `half: usize = 32`, `[half + 1]u8` is the type
+`[33]u8`, and D17, D18 and template validation treat the count as a literal.
+A `mut` module value is refused, since the program may write it; so is a
+binding of a type other than an integer scalar, or one whose image leaves the
+fold, a measurement, a conversion or a bitwise operator, each with L0305 at
+the bound. A cycle, a call or an overflow in the image is the module value's
+own L0305 and is not reported again at the bound.
+
+A count derived from a compiler fact is admitted: `word: usize =
+compiler.word_size / 8` sizes `[word]u8`. Configuration reads facts and
+selects arms before checking begins, so the count is fixed before any type is
+interned, exactly as a type alias a `fixed if` selects per target already
+is; type identity has depended on the selected target since D139. D136's
+objection, a fold at a target's width, does not arise: the fold stays
+mathematical. A fact written in the brackets themselves is not admitted;
+D437 admits facts in module values, and the bound names the value.
+
+**Why not more:** a module value admits more than D136's fold, measurements,
+conversions and wrapping arithmetic among it, and admitting those in a bound
+would carry target-width answers into type identity, which D136 declined.
+
+**The alternatives:** keeping the refusal and naming the type-alias route in
+L0305's note; and admitting any module value the ordinary folder knows, which
+moves a bound's legality with D224's folder. Both were declined.
+
+**Pinned by** `runtime/fixed-array-bound-module-constant` on every target,
+Cortex-M0 included, `negative/fixed-array-bound-module-value` and the checker
+case `invalid parameterized templates are checked when unused`.
+
 ## DECISIONS: DECLARED TYPES, RANGES AND LAYOUT
 
 The types a program declares for itself, and what a target may do with
@@ -6686,15 +6776,18 @@ operations. Copying, assignment, parameter passing and returning preserve the
 identity; arithmetic, indexing, dereferencing, field selection and calls
 require an explicit extraction first. D302 admits equality and ordering
 between two values of one distinct scalar type, and flag operators over an
-unsigned base. No representation field is
+unsigned base; D427 extends equality to every base that has it and admits
+the flag operators' updating assignments. No representation field is
 visible in source. In particular, two values of the same distinct numeric
 type still inherit no arithmetic operation.
 
 Generic deduction, signature identity, reference referents and conformance keys
 retain the nominal identity. A distinct type may declare its own conformance,
 and that conformance supports ordinary constrained and erased dispatch. It
-inherits neither a user conformance nor compiler-owned `zeroable` membership,
-so `zeroed` is not an implicit construction. Wrapping or extracting a
+inherits no user conformance. D428 reversed this paragraph's original
+"nor compiler-owned `zeroable` membership": a distinct type has a zero image,
+and so is `zeroable`, exactly when its base is, though `zeroed` written for
+the distinct type itself is still not an implicit construction. Wrapping or extracting a
 reference-bearing value preserves the existing origin and escape facts; these
 conversions neither erase provenance nor extend backing lifetime.
 
@@ -6743,7 +6836,8 @@ keys.
 `negative/r490-distinct-static-address`,
 `negative/r490-distinct-identity`,
 `negative/r490-distinct-no-operators`, `negative/r490-distinct-exact-base`,
-`negative/r490-distinct-no-fields`, `negative/r490-distinct-zeroable`,
+`negative/r490-distinct-no-fields`, `positive/r490-distinct-zeroable` (a
+negative fixture until D428 turned it),
 `negative/r490-distinct-origin`, `negative/r490-distinct-reference-identity`,
 `negative/r490-distinct-conformance`, `negative/r490-distinct-generic-identity`,
 `negative/r490-distinct-c-array`, `negative/r490-distinct-module-cycle`,
@@ -6766,7 +6860,9 @@ base's own order, an amendment D315's durations and instants prompted: integers 
 `bool` with false first, and floats by IEEE comparison with NaN unordered.
 Arithmetic, shifts and updating assignment stay refused, `|=` with a note to
 write it out. A distinct value never meets its base or another distinct type
-without a conversion, and the refusal says so.
+without a conversion, and the refusal says so. D427 later extended equality
+to distinct atoms, pointers and function values and admitted `&=`, `^=` and
+`|=` over an unsigned base.
 
 **The alternatives:** equality for every distinct type, though an aggregate
 has none (D200); refusing ordering because an identifier is not ordered, as
@@ -6780,8 +6876,8 @@ path would need of its own.
 
 **Pinned by** `runtime/distinct-equality-and-flags`, `runtime/distinct-ordering`,
 `negative/distinct-compare-across-types` and
-`negative/distinct-ordering-and-signed-flags`, which refuses signed flags,
-arithmetic and `|=`. `cmp.ordered` evidence remains the way to give a distinct
+`negative/distinct-ordering-and-signed-flags`, which refuses signed flags and
+arithmetic, and refused `|=` until D427. `cmp.ordered` evidence remains the way to give a distinct
 type a different order for maps and sorting.
 
 ### D228 — A packed image holds bits; extraction produces a validated value
@@ -7179,6 +7275,80 @@ from C's, which is exactly the disagreement this form exists to remove.
 `runtime/flexible-member-trailing-bytes`, `abi/c-packed-records`,
 `negative/flexible-member-placement`, `negative/r440-c-layout-zero-array`
 and `negative/parameterized-c-layout-repeated-invalid`.
+
+### D427 — A distinct type has its base's equality, and flags update in place
+
+**The tour said** at [0650] that a distinct type inherits no operations, and
+D302 gave equality only to a distinct type over a scalar, ordering in the
+base's order, and `&`, `^`, `|` and `~` over an unsigned base, refusing
+`|=` because "the updating path would need [it] of its own". A distinct
+atom set, a distinct pointer and a distinct callback therefore had no
+equality although each base has [1890]'s, and the refusal called them "a
+struct", reading the opaque nominal descriptor D213 stores as an aggregate.
+A set of flags was updated by writing `set = set | more`.
+
+**Chosen:** `==` and `<>` take two values of one distinct type whose base
+has equality: a scalar, an atom or atom set, a pointer or a function value.
+The answer is the base's own comparison of the two representations; a
+pointer union, which has no equality (D189, D429), stays without one when it
+is a distinct base. Ordering stays a scalar base's. Over an unsigned integer
+base, `x &= y`, `x ^= y` and `x |= y` mean `x = x op y` with the place `x`
+reached once, its index and any call in it evaluated once, as every updating
+assignment's place is [0390]; the target must already be assigned, because
+the operator reads it. A distinct type whose base has no equality, a struct,
+an array, a slice or a pointer union, is refused as that, "a distinct type
+whose base has no equality", rather than as a struct.
+
+The comparison reads the one representation child as the base's carrier: an
+atom's code, a pointer's or function's address. No origin is created or
+consumed, the result is `bool`, and the representation is unchanged, so no
+backend or layout moves.
+
+**The alternatives:** keeping the refusal and naming the route,
+`dir(a) == dir(b)` and `set = set | more`, which writes out an extraction
+for an operation the base already has; equality without the updating forms,
+which leaves D302's own stated reason the only obstacle; and an opt-in
+declaration of equality, the word in the grammar D302 already declined for
+ordering. Ordering for atom and pointer bases was not taken: an atom set has
+no order and a pointer's is not one the language has chosen.
+
+**Pinned by** `runtime/distinct-equality-over-atoms-and-pointers`, with a
+computed-index `^=` whose place is reached once, and
+`negative/distinct-equality-only`, which refuses order and bit operators over
+an atom set or a pointer, `|=` over a signed base and equality of a distinct
+struct.
+
+### D428 — A distinct type has a zero image when its base has one
+
+**The tour said** at [0540] that a type *has* a zero image when all-zero is a
+valid value of it, which lets a surrounding struct or array be zeroed, and
+separately *accepts* the word `zeroed` only when that image has one obvious
+reading; [0550] makes the first property the compiler's `zeroable` concept.
+D213 gave a distinct type neither, so a record holding a `user_id` could not
+be zeroed and `posix.status` lost its zeroed form when it gained one;
+L0328's note listed every cause but this one.
+
+**Chosen:** a distinct type has a zero image exactly when its base has one,
+because its representation is its base's, and it is then in `zeroable`'s
+compiler family. A record, an array or a variant payload holding one is
+zeroed as it would be holding the base, in a body and in module data, whose
+image is all zeros. The word `zeroed` written for the distinct type itself
+is refused, L0328 with the route `name(0)`: an identity has no obvious
+reading of zero, which is [0540]'s second property. Inside a generic
+routine's instance whose type actual is the distinct type, `zeroed` for the
+formal is the image `zeroable` promised and is accepted. L0328's note now
+names a distinct type over a type without a zero image among the causes.
+
+**The alternatives:** keeping the refusal and adding the cause to L0328's
+note, which leaves every record holding an identity without a zeroed form;
+an opt-in `distinct zeroable u32`, the grammar word D302 declined for
+ordering; and letting `zeroed` construct the identity too, which [0540]
+withholds from named value sets for the same reason. The risk taken is that a
+zeroed record holds `user_id(0)`, which on POSIX is root; a record holding a
+plain `u32` already did.
+
+**Pinned by** `runtime/distinct-zero-images`, `positive/r490-distinct-zeroable`
+(the negative fixture D213 named, turned) and `negative/distinct-bare-zeroed`.
 
 ## DECISIONS: STRUCTS, VARIANTS AND NESTING
 
@@ -9825,6 +9995,7 @@ increment. D94--D116 later close the internal argument and result contexts.
 D82 adds finite and repeated fixed-array
 payload images, D83 copies those images from module array storage, D84 adds
 their contextual runtime write forms, and D85 adds indexed match aliases.
+D435 lets a module array literal's elements be such images.
 
 **Why one extended descriptor run:** target bytes would duplicate the image per
 target and abandon the IR boundary; startup stores would contradict [1460]; a
@@ -11036,6 +11207,60 @@ example as written, `runtime/match-arm-names-several-cases`,
 `negative/match-arm-binding-names-several-cases` and
 `negative/match-wildcard-among-labels`.
 
+### D434 — A wildcard atom arm binds the atoms no other arm named
+
+**The tour said** at [0640] that an atom value widens only into a union that
+contains it, at [1210] that `_` is an arm of its own, and at [1220] that a
+pattern binding carries a convention. A `_` arm did not narrow its subject,
+so a failure set mixing a program's own atom with library atoms could not
+pass the rest to `failure.words` (D388), and each library atom was named in
+an arm of its own. The grammar already parsed `_ (rest):`; the checker
+refused it as an atom arm with a payload.
+
+**Chosen:** on an atom-set subject, the last arm `_ (rest):` binds one new
+read-only name to the subject's value, typed as the structural set of the
+subject's atoms that no other arm names. The subject keeps its own type: this
+is a binding, as a pointer union's `ptr (p):` is, and not the flow-sensitive
+narrowing D189 declined. The name is definitely assigned on entry to the arm
+and carries no origin, and `rest` widens wherever that set does. Lowering
+stores the subject's code into the binding under the narrower set; an atom's
+code does not change with its set (D235), and the store tests each
+candidate but the last so the IR verifier sees an atom of the narrower set.
+A `_` arm that binds when every atom has its own arm, more than one name, an
+`inout` or a `sink` binding, or a binding on a named atom arm, is L0333.
+
+**The alternatives:** keeping the refusal with a note naming the per-atom
+route, which for a failure set means thirty-two arms; and a checked
+narrowing conversion that traps outside the set, a runtime trap where a
+static form exists, for a type that has no conversions.
+
+**Pinned by** `runtime/failure-words-own-atom` (a negative fixture until
+this decision) and `negative/wildcard-rest-binding`.
+
+### D435 — A module array's elements may be selected-case images
+
+**The tour said** at [0040] and [1940] that a module binding holds a value
+the compiler knows, and at [0680]–[0700] what a variant case is. D81 made a
+module struct literal selecting a case a static image, and that included a
+payload-free case, local or imported and written qualified, but a module
+array literal whose elements were such literals, `[(kind: leaf)]`, was L0305:
+the known-value test did not know a case name or a case construction, and no
+decision covered the array.
+
+**Chosen:** a case name, plain or qualified, and a case construction are
+known wherever D81 accepts them, so each element of a module array literal,
+nested arrays included, is D81's selected-case image inside D67's element
+run. Nothing new is represented: an array of variant-bearing structs copied
+from named module images already built one, and the image validation reads a
+qualified payload-free case as it reads a plain one.
+
+**The alternatives:** keeping the refusal with a note naming each element as
+a module binding, `[one, one]`, which is the same image written twice; and
+leaving the gap until a program needed it, which the image builder made
+unnecessary.
+
+**Pinned by** `runtime/module-variant-images`, on every target.
+
 ## DECISIONS: LIFETIME, ESCAPE AND ALLOCATION
 
 Which origin a reference carries, where it may reach, and who owns the
@@ -11381,6 +11606,92 @@ region is used afterwards; and a binding per handle, which still refuses it.
 Both are declined.
 
 **Pinned by** `runtime/defer-at-return-edge`.
+
+### D433 — A pointer arm's binding may be `sink`, and consumes the matched place
+
+**The tour said** at [1220] that a pattern binding carries a parameter
+convention, the conventions of [0900] being the mechanism, and at [0910] that
+`sink` takes a place rooted in a binding. A `ptr` arm's binding was neither:
+`ptr (l): free_tree(memory, l)` was L0337, and the route, `m := l` then
+sinking `m`, consumed only a copy and left the matched union live, so the
+check proved nothing about it.
+
+**Chosen:** `match_binding` admits `sink` beside `inout`. On a pointer
+union's `ptr` arm, `ptr (sink l):` binds the pointer read-only, as a plain
+binding does, and makes `l` a sink place: passing it to a `sink` parameter
+consumes `l` and the place the match read, which flow marks dead on that
+arm's path until it is assigned again, and consuming the matched place
+consumes `l` too, because they are one resource. The subject must be a place
+a sink argument could name, a binding or a field of one with no dereference
+or computed index (D220); a computed subject is L0337. `sink` on a payload or
+a wildcard binding is L0333, because a payload is part of its subject, which
+is sunk whole. A plain arm binding passed to a `sink` parameter stays L0337,
+and the note names `ptr (sink l)`. The binding lowers as a plain one; only
+the checker's flow facts differ.
+
+**The alternatives:** admitting a plain binding as a sink place implicitly,
+which consumes storage through a name that reads as an `in` alias; and
+keeping the refusal with a note naming the subject as the thing to sink.
+Neither this nor the chosen form is ownership or an affine value ([0910]):
+the check is still use-after-consume on one place.
+
+**Pinned by** `runtime/match-sink-binding`, for unions of one atom and of
+several, and `negative/match-sink-binding-refusals`; the grammar's
+derivation in `check.py`, the parser's tests and the structural grammar's
+`match-labels` corpus hold the new production.
+
+### D440 — An untracked step re-enters tracking through a written contract
+
+**The tour said** at [0470] and [0810] that an integer-made pointer carries no
+origin, and at [1630] that a pointer crosses an assembly block as `usize(p)`.
+D248 declined pointer operands and D196 kept `mem.offset` out of the library.
+Neither said what a routine that indexes a C table, or hands storage to a
+system call, promises its callers, and an outside program handed the kernel
+an immutable module buffer to write without anything objecting.
+
+**Chosen:** no new conversion. Origin and permission end at an integer step
+and the compiler does not recover them; what a caller is checked against is
+the routine's signature. A routine that indexes a raw table writes its result
+`from` the table, as `platform/posix`'s `argument` writes `from table`; a
+routine around an assembly block takes the storage as `ptr mut u8` or
+`[]mut u8`, as `platform/linux`'s `read` does. Callers are then held to that
+`from`, mutability and `escaping` as to any other signature's, and an
+immutable buffer is refused at the call. The routine's own body is not checked
+against them: an integer-made pointer satisfies any `from` clause [0470], so
+the written contract is the routine author's claim, the unsafe backing
+obligation [1720] already gives allocator internals. Such a routine is kept
+small, and private where it can be, so that the claim has one author. This is
+a deliberate non-guarantee, not a gap a later check is expected to close.
+L0330's note for a pointer operand names the typed parameter.
+
+A C table whose extent the program knows from C, an `argv` beside its `argc`,
+may keep its origin instead: type the pointer `ptr [1]t`, take `p.val[0..<1]`
+and widen that slice inside `unchecked` to the extent C gives. The slice
+derives from `p`, so indexing and returning it are tracked and a missing
+`from` is L0316. The widening is the program's claim about the extent and
+stays inside `unchecked`, as [0510]'s narrow extension and `core/mem`'s
+`block_bytes` do. It is sanctioned only over storage that holds initialised
+`t`s, which a table C filled does; it is not [0510]'s `slice_from`, whose
+fault is a typed view over storage that holds no `t`.
+
+A concept entry whose result has no `from`, as `mem.allocator`'s `resize`
+declares, returns the block it was given as `ptr(usize(block))`: an
+allocation borrows nothing, and [0810]'s conversion says so. Returning `block`
+itself is L0316, since the result would derive from a parameter the clause
+does not name, and writing `from block` is L0316 too, on the edge that returns
+a fresh allocation (D222). L0316's explanation names this route.
+
+**The alternatives:** an origin-preserving retype from `ptr t` to `ptr [1]t`,
+which with the unchecked widening is `slice_from` under another name; pointer
+or slice assembly operands, which reopen D248's declined row; and a `from`
+form meaning "this parameter or nothing", which weakens D222's rule that a
+caller sees every writable destination. All were declined until a program
+needs one.
+
+**Pinned by** `negative/assembly-operand-types`, whose L0330 note names the
+typed parameter; `runtime/posix-libraries`, which reads arguments through
+`argument`; and `runtime/core-mem-resize`, `runtime/core-pool-resize` and
+`runtime/core-region-resize`, whose providers resize this way.
 
 ## DECISIONS: FUNCTIONS, CALLS AND RETURNS
 
@@ -12784,14 +13095,15 @@ a module array, a parameter, a named return or an admitted array field, lends
 its own storage for its type's whole length and keeps the place's origin. A
 `[]mut T` parameter takes a writable place, as a range slice of it would, and
 never a literal. A `utf8` parameter takes neither. A generic routine's slice
-parameter takes a place as any other routine's does (D372), and still refuses
-a literal, because D138 types an array literal before the parameter is known.
+parameter takes a place as any other routine's does (D372), and a literal when
+its element type names no formal (D419); one whose element type is a formal
+still refuses a literal, which D138 types before the parameter is known.
 
 **The alternatives:** a slice binding, field or return taking a literal, none
 of which has a call whose run bounds the storage; a literal lent to `[]mut T`,
-whose writes nobody could see; lending a literal to a generic parameter, which
-needs it typed after deduction; and requiring `[0..<n]`, the count written
-twice.
+whose writes nobody could see; lending a literal to a generic parameter whose
+element type is a formal, which needs it typed after deduction; and requiring
+`[0..<n]`, the count written twice.
 
 **Pinned by** `runtime/array-lent-to-slice` on every target,
 `negative/array-literal-lent-escapes` and `negative/array-lent-refusals`.
@@ -12929,6 +13241,29 @@ hiding a missing value behind a plausible one.
 
 **Pinned by** `runtime/discard-else-none-ignores-a-value-call-failure` and
 `negative/else-none-on-a-call-that-returns-a-value`.
+
+### D432 — A destructured name is a local place
+
+**The tour said** at [0990] that a result list is an anonymous struct that
+may be destructured, and [1920] that a bare name binds a local. The checker
+admitted a local, a parameter, a named return and a match binding as a place,
+but not a name a result binding wrote, so `(found, bytes) := f(data)` then
+`addr bytes[0]` was L0337, as were `addr count` and passing `count` to a
+`sink` parameter, while the same values held in an ordinary local were
+accepted. Admitting the address alone would have let `addr count` escape,
+because the origin walk gave such a name no frame origin.
+
+**Chosen:** a destructured name is a local in every place analysis asks: it
+is addressable, a sink place and a frame-storage root, with a frame witness,
+so returning `addr count` is L0314 and a sunk destructured name is dead until
+assigned, as an ordinary local's would be. It stays read-only. Lowering
+already gave each such name a frame slot.
+
+**The alternatives:** keeping the refusal, which contradicts [1920], and
+admitting the address without the origin, which loses the escape refusal.
+
+**Pinned by** `runtime/destructured-locals-are-places` and
+`negative/destructured-local-escape`.
 
 ## DECISIONS: CONTROL FLOW
 
@@ -13243,7 +13578,7 @@ classified failure boundary before the repository gate can pass.
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0150, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/refused-widths-name-their-owner`, `negative/type-name-is-not-a-type`, `negative/wide-integer-not-enabled` |
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350, 1940 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime and module arithmetic and comparison, preserving exact hexadecimal values, nearest-even rounding, gradual underflow, signed zero and unordered NaN behavior; arithmetic NaNs use the canonical quiet pattern, L0300 rejects a finite literal that becomes infinity, and L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials`, `runtime/module-float-arithmetic` |
-| `distinct.identity` | static | 0310, 0430, 0650, 0700, 1280, 1290, 1940, 1975 | a distinct declaration and each normalized generic application retain nominal identity with exact base size, alignment and bytes; explicit construction and extraction preserve origins, static images and compatible C transport; L0301 rejects identity mixing and inherited operations, L0308 refuses representation fields, L0318 refuses inherited conformance and zeroable membership, and L0314 preserves escape refusals | `runtime/r490-distinct-scalars`, `runtime/r490-distinct-generic-representations`, `runtime/r490-distinct-generic-dispatch`, `runtime/r490-distinct-module-images`, `abi/r490-distinct-c-roundtrip`, `runtime/r490-review-generic-distinct-bool`, `runtime/r490-distinct-generic-bool-images`, `runtime/r490-distinct-generic-pointer-images`, `runtime/r490-generic-fixed-conversion-discovery`, `negative/r490-distinct-type-value`, `negative/r490-distinct-alias-type-value`, `negative/r490-distinct-generic-type-value`, `negative/r490-distinct-discard-type-value`, `negative/r490-distinct-static-address`, `negative/r490-distinct-identity`, `negative/r490-distinct-no-operators`, `negative/r490-distinct-no-fields`, `negative/r490-distinct-conformance`, `negative/r490-distinct-zeroable`, `negative/r490-distinct-origin` |
+| `distinct.identity` | static | 0310, 0430, 0650, 0700, 1280, 1290, 1940, 1975 | a distinct declaration and each normalized generic application retain nominal identity with exact base size, alignment and bytes; explicit construction and extraction preserve origins, static images and compatible C transport; L0301 rejects identity mixing and inherited operations, L0308 refuses representation fields, L0318 refuses inherited conformance, D428 gives zeroable membership exactly when the base has it while L0328 refuses a bare `zeroed` of the identity, and L0314 preserves escape refusals | `runtime/r490-distinct-scalars`, `runtime/r490-distinct-generic-representations`, `runtime/r490-distinct-generic-dispatch`, `runtime/r490-distinct-module-images`, `abi/r490-distinct-c-roundtrip`, `runtime/r490-review-generic-distinct-bool`, `runtime/r490-distinct-generic-bool-images`, `runtime/r490-distinct-generic-pointer-images`, `runtime/r490-generic-fixed-conversion-discovery`, `negative/r490-distinct-type-value`, `negative/r490-distinct-alias-type-value`, `negative/r490-distinct-generic-type-value`, `negative/r490-distinct-discard-type-value`, `negative/r490-distinct-static-address`, `negative/r490-distinct-identity`, `negative/r490-distinct-no-operators`, `negative/r490-distinct-no-fields`, `negative/r490-distinct-conformance`, `positive/r490-distinct-zeroable`, `runtime/distinct-zero-images`, `negative/distinct-bare-zeroed`, `negative/r490-distinct-origin` |
 | `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1120, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation, outside [1120]'s region | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
 | `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
@@ -13302,7 +13637,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0302, L0308 or L0331 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1070, 1080, 1090 | L0200 or L0201 at a condition-binding scope boundary; L0301, L0302 or L0332 at every condition, reachable join and exit | `negative/condition-declaration-body-shadowing`, `negative/condition-declaration-not-bool`, `negative/condition-declaration-out-of-scope`, `negative/if-expression-missing-else`, `runtime/condition-declarations`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1090, 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence or an untried fallible traversal, incomplete/inconsistent value exit, or a value given to a labelled bare block's break; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named loop or labelled block edge, or the nearest loop, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal`, `runtime/r480-recovery-loop-transfer`, `runtime/r480-loop-fresh-view`, `runtime/r720-labelled-block-transfers`, `negative/r720-labelled-block-break-value` |
+| `control.loops` | static | 1090, 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence or an untried fallible traversal, incomplete/inconsistent value exit, or a value given to a labelled bare block's break; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named loop or labelled block edge, or the nearest loop, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal`, `runtime/r480-recovery-loop-transfer`, `runtime/r480-loop-fresh-view`, `runtime/r720-labelled-block-transfers`, `negative/r720-labelled-block-break-value`, `runtime/r491-loop-assignment`, `negative/loop-exit-skips-assignment` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110, 1200 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1490, 1500, 1520, 1540, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313, L0318 or L0340; a concrete `ptr T` field retains the exact referent and permission descriptor | `negative/generic-routine-undeduced-formal`, `negative/generic-reference-field-permission-distinct`, `runtime/generic-explicit-static`, `runtime/generic-reference-fields`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage`, `runtime/r480-generic-nested-recovery`, `runtime/r480-concrete-error-deduction`, `runtime/r490-generic-inferred-recovery`, `runtime/r490-generic-recovery-frontier`, `runtime/r490-generic-union-alias`, `runtime/r490-generic-erased-recovery-views`, `negative/r490-generic-recovery-conflict`, `negative/r490-recovery-expanding-generic` |
@@ -13315,7 +13650,7 @@ classified failure boundary before the repository gate can pass.
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1100, 1110, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays, and a [1100] `defer` or [1110] `undo` call keeps the edges of the place its registration is written rather than those of the exit that runs it | `positive/unchecked-regions`, `positive/unchecked-marks-only-the-edges-it-removes`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `runtime/unchecked-keeps-bool-conversion-traps`, `runtime/unchecked-keeps-float-conversion-traps`, `runtime/unchecked-pointer-conversion-truncates`, `runtime/unchecked-does-not-reach-an-outer-cleanup`, `runtime/unchecked-reaches-a-cleanup-written-inside`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
 | `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; a successful guard on an ordinary integer does not itself elide this check; [1120]'s region does not remove this edge; L0304 records D236's boundary for a struct field, an array element, a reference target, `addr` of a constrained place and a generic argument | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice`, `negative/range-subtype-struct-field`, `negative/r720-range-subtype-array-element` |
-| `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0335 for every use that would read an atom case as an address, for a union of one atom and a pointer and for one of several atoms and a pointer alike — `.val` in a read, in an assignment target and under `addr`, an integer conversion, `any` construction, a comparison, a `ptr T` position, and `ptr(n)` into one — L0333 for an `inout` arm binding and L0338 for a union of two pointer types; L0328 rejects a many-atom union without a zero image, while the one-atom `zeroed` context remains L0301; L0333 for an arm outside the union, L0301 for a widening atom outside it, for a narrowing, for a permission the member does not relax to, and for an `inout` place of another union; L0311 for a case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and an atom case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-assignment-target`, `negative/pointer-union-address-of-referent`, `negative/pointer-union-any-construction`, `negative/pointer-union-case-named-twice`, `negative/pointer-union-present-arm-named-twice`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/r440-parser-frame-arena`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom`, `positive/pointer-union-several-atoms`, `positive/pointer-union-many-declarations`, `positive/pointer-union-many-widening`, `runtime/pointer-union-many`, `negative/pointer-union-many-dereference`, `negative/pointer-union-many-assignment-target`, `negative/pointer-union-many-address-of-referent`, `negative/pointer-union-many-any-construction`, `negative/pointer-union-many-comparison`, `negative/pointer-union-many-integer-conversion`, `negative/pointer-union-many-is-not-a-pointer`, `negative/pointer-union-many-result-is-not-a-pointer`, `negative/pointer-union-many-from-an-integer`, `negative/pointer-union-many-zeroed`, `negative/pointer-union-many-inout-binding`, `negative/pointer-union-many-case-named-twice`, `negative/pointer-union-many-pointer-arm-named-twice`, `negative/pointer-union-many-match-not-exhaustive`, `negative/pointer-union-many-foreign-atom-arm`, `negative/pointer-union-many-atom-outside-the-set`, `negative/pointer-union-many-does-not-narrow`, `negative/pointer-union-many-permission-does-not-widen`, `negative/pointer-union-many-inout-is-exact`, `negative/pointer-union-many-frame-escape`, `negative/pointer-union-many-return-frame`, `negative/pointer-union-many-two-pointers` |
+| `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0335 for every use that would read an atom case as an address, for a union of one atom and a pointer and for one of several atoms and a pointer alike — `.val` in a read, in an assignment target and under `addr`, an integer conversion, `any` construction, a comparison with another union or a pointer (D429 admits one with the union's own atom), a `ptr T` position, and `ptr(n)` into one — L0333 for an `inout` arm binding and L0338 for a union of two pointer types; L0328 rejects a many-atom union without a zero image, while the one-atom `zeroed` context remains L0301; L0333 for an arm outside the union, L0301 for a widening atom outside it, for a narrowing, for a permission the member does not relax to, and for an `inout` place of another union; L0311 for a case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and an atom case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `runtime/pointer-union-atom-comparison`, `negative/pointer-union-dereference`, `negative/pointer-union-assignment-target`, `negative/pointer-union-address-of-referent`, `negative/pointer-union-any-construction`, `negative/pointer-union-case-named-twice`, `negative/pointer-union-present-arm-named-twice`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/r440-parser-frame-arena`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom`, `positive/pointer-union-several-atoms`, `positive/pointer-union-many-declarations`, `positive/pointer-union-many-widening`, `runtime/pointer-union-many`, `negative/pointer-union-many-dereference`, `negative/pointer-union-many-assignment-target`, `negative/pointer-union-many-address-of-referent`, `negative/pointer-union-many-any-construction`, `negative/pointer-union-many-comparison`, `negative/pointer-union-many-integer-conversion`, `negative/pointer-union-many-is-not-a-pointer`, `negative/pointer-union-many-result-is-not-a-pointer`, `negative/pointer-union-many-from-an-integer`, `negative/pointer-union-many-zeroed`, `negative/pointer-union-many-inout-binding`, `negative/pointer-union-many-case-named-twice`, `negative/pointer-union-many-pointer-arm-named-twice`, `negative/pointer-union-many-match-not-exhaustive`, `negative/pointer-union-many-foreign-atom-arm`, `negative/pointer-union-many-atom-outside-the-set`, `negative/pointer-union-many-does-not-narrow`, `negative/pointer-union-many-permission-does-not-widen`, `negative/pointer-union-many-inout-is-exact`, `negative/pointer-union-many-frame-escape`, `negative/pointer-union-many-return-frame`, `negative/pointer-union-many-two-pointers` |
 | `configuration.fixed` | static | 1480, 1500, 1510, 1530, 1540, 1560, 1590, 1980 | L0200 for duplicate option names; L0203 for reserved tool names; L0300, L0301, L0305 or L0306 for invalid fixed evaluation; L0324 for a false compiler assertion; L0390 for invalid option declarations; L0391 for invalid tool directives | `negative/fixed-conditional-evaluator`, `negative/r430-assertion-false`, `negative/r430-option-cycle`, `negative/r430-option-duplicate`, `negative/r430-option-reserved`, `negative/r430-library-injection`, `positive/r430-fixed-options`, `runtime/r430-fixed-tools`, `runtime/r430-static-library` |
 
 This is a coverage register, not an optimizer contract. D187 adds
@@ -13392,6 +13727,9 @@ facts because that analysis is monotone union. Labels, `break with`,
 `complete`, value-producing loops and iterable `for` remain later loop work
 rather than being approximated in this first increment; D157 subsequently enables
 the labels and completion edge without changing this representation.
+D430 reversed this paragraph's assignment rule once the checker computed the
+loop head's fixed point: the state after a loop is the join of the edges that
+actually leave it, so an assignment made on every exit now holds after it.
 
 **The alternatives:** lower a loop to recursion, add a neutral loop opcode,
 skip cleanup on iteration edges, or treat one body pass as proof of assignment
@@ -13423,8 +13761,8 @@ condition edge enters the completion block, whose ordinary fallthrough then
 enters the post-loop block. Every `break` targets the post-loop block directly
 and therefore skips completion. `continue` still targets the condition header.
 An unconditional `loop` has no natural exhaustion edge and consequently
-cannot carry `complete`. Definite assignment remains D156's conservative
-incoming state after either exit.
+cannot carry `complete`. Definite assignment remained D156's conservative
+incoming state after either exit until D430 made it the join of the exits.
 
 **The alternatives:** introduce labels into ordinary lexical name resolution,
 encode target depths in the syntax tree, add labelled IR jumps, or route
@@ -13961,6 +14299,87 @@ would change what every existing `break` inside a labelled block means.
 `labelled block refusals` for the closer and `continue` reports, and the
 `control.loops` guarantee row.
 
+### D430 — An assignment on every edge that leaves a loop holds after it
+
+**The tour said** at [1910] that a name must be assigned on every path before
+it is read, and at [1130] and [1170] that `break` leaves a loop and `complete`
+runs when a conditional loop runs out. D156 and D157 kept only entry and
+condition facts after a loop, "to avoid claiming a fixed point the checker has
+not computed", so `loop do r = n; break end loop` left `r` unassigned, and a
+local assigned the same way was "read here and no path that arrives assigned
+it", which was untrue of the one path there was. A wait loop needed a helper
+with `return`.
+
+**Chosen:** the checker iterates a loop's head to its fixed point, so the
+state after the loop is the join of the edges that actually leave it, each
+taken from the converged head: a `while`'s false test and a `for`'s
+exhaustion, through `complete` when there is one, and every `break` with the
+cleanups it runs. A name assigned on every one of them is assigned after the
+loop, a named return as well as a local. This is sound for zero iterations
+because the false-test edge carries only the facts the head had before any
+body ran. Consumption (D223) was already the join of the actual exits. The
+IR verifier's own slot walk is path-based and needed no change. Where a path
+does leave a name unassigned, L0302 now says that a path that arrives has not
+assigned it, rather than that none did.
+
+**The alternatives:** relaxing only an unconditional `loop`'s `break` edges,
+which keeps `complete` unequal to the `break` it parallels; and keeping the
+ceiling with a refusal naming `break with` or an assignment before the loop,
+which refuses programs the checker has already proved.
+
+**Pinned by** `runtime/r491-loop-assignment` (the negative fixture that
+pinned the ceiling, turned) and `negative/loop-exit-skips-assignment`.
+
+### D431 — A final control whose only answers diverge is a statement
+
+**The tour said** at [1800] that a final expression fills the named return,
+at [0890] that a `noreturn` routine never returns, and at [1560] that
+`compiler.unreachable()` is a call that never returns. Because a call is also
+an expression, a routine whose last item was a `match` with an arm
+`box: compiler.unreachable()` was taken as a value-producing `match`, and an
+arm that assigned the return as a statement was L0332, "this control block
+can fall through without producing a value"; the same held for `if` and any
+`noreturn` callee. Binding the match as a value was the route, which nothing
+said.
+
+**Chosen:** a routine's final `if` or `match` whose every answer is a call
+that does not return, or a nested `if` or `match` of the same kind, answers
+nothing, and the checker takes it as the statement it then is: its arms are
+checked as statements, and each arm that falls through must have assigned the
+named returns, as after any statement. The parser cannot know this, since
+`noreturn` is a signature's, so the checker decides it. A final control with
+one real answer stays a value, its diverging arms needing no value [1560].
+
+**The alternatives:** keeping the refusal and naming the route, `r = match
+...`, which leaves a trap that the tour's own wording contradicts; and a
+syntactic rule for `compiler.unreachable()` alone, which a user's `noreturn`
+routine would not meet.
+
+**Pinned by** `runtime/trapping-arm-leaves-a-statement` and
+`negative/trapping-arm-unassigned-return`.
+
+### D436 — A guarded trap is written as a one-line `if`
+
+**The tour said** at [1810] that only exits carry `when`, and `return when`
+gives a guarded return one line. A library check that traps was thought to
+take three lines, `if … then compiler.unreachable() end if`, and a guarded
+trap form was asked for.
+
+**Chosen:** none is added. `if broken then compiler.unreachable() end if` on
+one line is already a statement, and `refine fmt` keeps it on one line, since
+it never joins or breaks lines; `docs/format.md` says so. A trap is not one of
+[1810]'s exits, whose `when` names where control goes next.
+
+**The alternatives:** `compiler.unreachable() when broken`, a statement form
+with its grammar, flow edge, formatter and highlighter changes, for a line the
+language already writes. A library helper such as `require(condition)` meets
+a different limit: its trap reports the helper's site rather than its
+caller's, which a `caller` site argument to `compiler.unreachable` would
+answer; that waits for library contract helpers that need it.
+
+**Pinned by** the "Blocks" rule in `docs/format.md`, which the test program
+holds the formatter to.
+
 ## DECISIONS: CONCEPTS, GENERICS AND RUNTIME DISPATCH
 
 Concepts, the evidence that satisfies them, the instances a generic
@@ -14188,7 +14607,10 @@ may participate in deduction.
 **Chosen:** a generic routine template has no standalone function value or IR
 item. A direct call first synthesizes each runtime argument without an expected
 parameter type, except an untyped numeric literal, which D372 types from its
-parameter after the others. The checker then recursively unifies each written
+parameter after the others; an argument that needs a context and fills a
+parameter whose written type names no open formal, which D419 leaves to the
+instance's ordinary call check; and a named construction, whose written type
+D420 matches. The checker then recursively unifies each written
 runtime parameter pattern with that independently synthesized normalized
 descriptor. Scalar and atom-set
 constants agree exactly. A direct type formal binds the complete scalar,
@@ -14918,8 +15340,9 @@ as before. Because every literal waits for every other argument,
 fixed-array place, a binding, a parameter, a named return or an admitted
 field, matches an outer slice pattern `[]t` through its element, and the
 instance's ordinary call check then lends it as D309 does, refusing a
-read-only place where `[]mut t` is written. An array literal is still typed
-before the parameter is known.
+read-only place where `[]mut t` is written. An array literal for a pattern
+that names a formal is still typed before the parameter is known; D419 lends
+one to a parameter whose type names none.
 
 **The alternatives:** naming the conversion in L0340's note and keeping D138's
 order, which leaves the commonest generic call in the library needing one;
@@ -15007,6 +15430,88 @@ of an entry naming a C import is in a routine only an unprojected entry
 names, so that a static Linux link refused it, at every profile, while a
 block kept every routine live.
 
+### D419 — A parameter whose type names no generic formal is an ordinary context
+
+**The discrepancy:** [1880] lists the type of the parameter an argument
+fills as a context, and D138 synthesized every argument of a generic call
+without one, so every form that needs a context failed in a generic call
+even where the parameter's written type names no formal. `io.format`, the
+buffered writer's printf, refused the inline list `text.format` takes:
+`io.format(out, "{} was born in {}.\n", [any(addr name), any(addr year)])`
+was L0304, because `io.format` is generic over its provider although its
+`values: []any text.formattable` does not depend on it, and the inferred
+binding the refusal offered was then L0342. `any(addr host)` for an
+`any io.writer` parameter, `ptr(integer)` for a `ptr mut u8` one and a
+struct literal for a struct one were refused the same way.
+
+**Chosen:** a runtime parameter of a generic routine whose written type
+names no formal of the routine, other than formals an explicit static list
+already fixed, is an ordinary context, as [1880] defines one. An argument
+that needs a context and fills one, an array literal or repetition,
+`ptr(integer)`, `any(pointer)`, a struct literal or construction, or
+`zeroed`, takes no part in deduction and contributes no equation: the
+instance's ordinary call check types it against the concrete parameter,
+exactly as a non-generic call does. An array literal for a closed slice
+parameter `[]E` is therefore lent on D309's terms: each element is checked
+against E, so `any(addr x)` takes its concept from `[]any C`; it is formed
+in written order in the caller's frame, lent read-only with frame origin,
+so a result `from` that parameter cannot leave the caller; `[]mut E` and
+`utf8` still take none. A parameter whose type names an open formal keeps
+D138's context-free deduction, and `pick([1, 2])` against `values: []item`
+is still L0304: its refusal now names the binding that gives the literal a
+type, `values := [...]` when no element needs a context and
+`values: [N]E = [...]`, with the count written, when one does. An
+`any(pointer)` with more than one exact concept, L0342, names the pointee
+and every concept it conforms to, so the `any C` to write is one of them.
+
+**The alternatives:** keeping the refusal and naming the typed local in it,
+which leaves `io.format` needing a hand-counted `[2]any text.formattable`
+that `text.format` does not; typing every argument after deduction, which
+makes a deduced binding depend on argument order, as D372 declined; and a
+shorter erasure in an `any C` context, an implicit `any` of a pointer
+`[addr name, addr year]`, `any(name)` of a non-pointer place meaning
+`any(addr name)`, or a bare place `[name, year]`. Each revises [1380]'s
+"building one is explicit"; the last also hides a borrow, the pair carrying
+the pointee's frame origin into `from` and escape checks with no `addr` in
+sight, and the second makes `any(p)` mean one thing for a pointer and
+another for a value. All are declined: the context now supplies C, and the
+cost left is `any(` and `)` around a visible `addr`. D309 declined lending
+a literal to a generic parameter because it would need typing after
+deduction; a closed parameter types it before deduction and needs nothing
+from it, which answers that reason rather than reviving the alternative.
+
+**Pinned by** `runtime/generic-closed-parameter-takes-context` and
+`runtime/buffered-writer-format` on every target,
+`negative/generic-closed-parameter-refusals`,
+`negative/generic-literal-lent-escapes`, `negative/array-lent-refusals`
+and `negative/any-construction-needs-context`.
+
+### D420 — A named construction carries its type into deduction
+
+**The discrepancy:** D72 lets `T(field: ...)` fill an argument, and D138
+synthesized a generic call's argument with no context, where a
+construction was L0334, "this position does not take one". So
+`first_of(holder(held: 1))`, for `first_of: (provider: type is lender,
+host: provider)`, needed `value: holder = holder(held: 1)` first, although
+the construction names its type.
+
+**Chosen:** a named construction is self-typed. In a generic call its
+written type's body is the descriptor deduction matches with the
+parameter's pattern, binding a formal there as a struct place would, and
+the instance's ordinary call check then builds it in the caller's frame as
+it builds any struct argument. An untyped struct literal `(f: ...)` still
+needs a context: D419 gives it a closed parameter's, and a parameter whose
+type is a formal gives it none.
+
+**The alternatives:** naming the binding in L0334's note, which leaves a
+form that names its type needing a context that only the order deduction
+runs in denies it; and typing a bare literal from a formal's other
+occurrences, which makes deduction depend on argument order. Both are
+declined.
+
+**Pinned by** `runtime/generic-closed-parameter-takes-context` on every
+target.
+
 ## DECISIONS: MODULES AND COMPILE TIME
 
 The module graph, what an import binds, and what is settled before
@@ -15059,6 +15564,15 @@ scalar measurements, compiler facts and module tool directives. Its explicit
 rules supersede this first slice's exclusions of those forms; user execution
 and runtime-name lookup remain excluded.
 
+A `fixed if` that begins a statement stays L0110, and its note names the two
+routes: a routine declared per system in a module-level `fixed if`, and an
+ordinary `if` on a module bool that D437 lets hold a fact, `on_linux: bool =
+compiler.os == linux`. Selection inside a body would make every walker of a
+body, from resolution to lowering and the editor tools, honour an activity
+view; the module bool already covers every case whose arms are valid source
+on every system, and the per-system routine covers the rest, which is how the
+library writes them.
+
 **Pinned by** the target-description constructor and configuration-stage
 public-seam cases; `positive/fixed-conditional-selects-declarations`,
 `positive/fixed-conditional-nested-inactive`,
@@ -15072,7 +15586,8 @@ active-reference-to-inactive cases
 `negative/fixed-conditional-active-reference-inactive`,
 `negative/fixed-conditional-active-generic-error` and
 `negative/fixed-conditional-inactive-parser-error`; the lowering and verifier
-cases, generated lexical, construct and IR records; and
+cases, generated lexical, construct and IR records;
+`negative/fixed-if-in-a-body`; and
 `runtime/fixed-conditional-runtime` and
 `runtime/fixed-conditional-generic-runtime` on Linux x86-64. The selected
 nested generic and inactive-template boundaries are
@@ -15261,7 +15776,7 @@ D204, D226 and D256 add the C ABI bools `compiler.c_sysv_lp64`,
 `compiler.feature.NAME`, a bool for each feature of the selected CPU feature
 level. D264 adds `compiler.os` in its own equality domain, with `linux`,
 `darwin`, `freebsd` and `freestanding` values. These facts are fixed
-configuration values. Word size is eight times
+configuration values, which D437 also lets a module value read. Word size is eight times
 `sizeof usize`, including on a synthetic 32-bit target hosted by a 64-bit
 compiler.
 
@@ -15562,6 +16077,87 @@ across modules as an import cycle, though mutual imports are legal.
 **Pinned by** `runtime/module-values-across-modules` on every target,
 Cortex-M0 included, `negative/module-value-cycle-across-modules` and
 `negative/module-value-imported-field`.
+
+### D437 — A module value reads a compiler fact
+
+**The tour said** at [1500] that `compiler.arch`, `compiler.os`, the C ABI
+bools, `compiler.word_size` and `compiler.feature.NAME` are fixed facts, and
+at [1940] that a module value is known when the compiler reads it. D202 and
+D255 read a fact only in a fixed configuration expression:
+`baseline: bool = not compiler.feature.popcnt` was L0203, so each arm of a
+`fixed if` declared its own copy of a value that restated the condition, and
+`is_linux: bool = compiler.os == linux` drew a second report, L0201, on
+`linux`.
+
+**Chosen:** a module value's image may read a compiler fact, and reads the
+value the configuration stage found once it selected the arms. A bool fact,
+a feature, a C ABI bool or `compiler.c_runtime`, is that bool.
+`compiler.word_size` is an integer that takes its type from context as a
+literal does, and is held to that type's range as any module fold is. An atom
+fact, `compiler.arch`, `compiler.os`, `compiler.byte_order` or
+`compiler.build_mode`, has no value outside configuration, so a module value
+reads it only compared with `==` or `<>`, and the other operand is a
+configuration atom as it is in a condition: `on_linux: bool = compiler.os ==
+linux` means the system even in a file that imports a module named `linux`.
+A fact folds into the static image as the literal it stands for; it has no
+origin, storage or address. It may stand anywhere in a module binding's image,
+an array or record image included.
+
+A routine body, an anonymous one included, still reads no fact: L0203, whose
+note names the module value that holds it, which the body reads and branches
+on with an ordinary `if`. An atom fact alone, `compiler.os`, is L0203 in
+either place, and `compiler.os == linux` in a body is that one report rather
+than a second on `linux`. Options stay configuration-only (D202); reading one
+as a module value is a separate decision no program has asked for. D438
+decides whether a value derived from a fact sizes an array.
+
+**Why:** a fact is a value the build holds before resolution begins, so
+reading it runs nothing and [1540]'s line stands; it is [1940]'s "known when
+the compiler reads it" exactly. `fixed if` remains the way to select
+declarations that differ by more than a value.
+
+**The alternatives:** keeping the refusal with a note naming the `fixed if`
+route, which leaves one declaration per arm for one bool; and admitting facts
+anywhere an expression may appear, bodies included, which lets a routine read
+the configuration directly where D139 kept selection at module level. Both
+were declined.
+
+**Pinned by** `runtime/module-values-read-compiler-facts` on every target,
+Cortex-M0 included, `negative/atom-fact-without-a-comparison`,
+`negative/feature-outside-configuration` and
+`negative/system-outside-configuration`.
+
+### D439 — A system's own module is empty elsewhere, not conditionally imported
+
+**The tour said** at [1420] that an import binds a module found in the ordered
+roots, and at [1500] that `fixed if` selects module declarations. A module only
+one system needs, `platform/linux`, cannot be imported only there:
+`fixed if compiler.os == linux then import platform/linux end if` is L0110,
+since D139's arm holds declarations, so D279 imports it on every hosted
+system and it declares nothing off Linux.
+
+**Chosen:** that shape is the way. A system's own module is imported
+unconditionally and declares its routines inside its own `fixed if`; on
+another system it declares nothing, and a call to one of them there is L0201
+saying the module declares it only for another target: a call this system
+does not have, not a misspelling, which a misspelling's near names would
+suggest. Firmware still refuses such a module by its namespace (D267).
+
+**Why not a conditional import:** D150 completes the module graph before
+configuration runs, and D202 collects every option from the modules that
+graph reached before it evaluates any. An import guarded by an option would
+decide which modules are reached from values those modules declare, which is
+circular; one guarded only by compiler facts would need facts evaluated per
+file while loading, and would make the module graph's identity depend on the
+target. No second system-specific module needs one yet.
+
+**The alternatives:** a conditional import of either kind; and scoping
+`platform/linux` to Linux by an assertion, which without a conditional import
+breaks `hosted/system` on Darwin and FreeBSD (D279). Both were declined.
+
+**Pinned by** `negative/rooted-negative-selects-its-target`, a
+`platform/linux` call written for Darwin, and
+`negative/module-member-for-another-target`.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
@@ -15888,6 +16484,12 @@ byte-identical reports without clocks or temporary output paths. Routine
 metrics are emitted instruction sites and frame/register/spill/save and static
 stack-traffic counts. Actual assembled text bytes are measured externally by
 `compiler/tests/quality/check.py`, not fabricated from an IR count.
+Each item carries its `name`, the spelling its symbol has (D417, D421), and
+`left_indirect` lists every evidence call the emitted program still makes
+through a table: its routine, its source line and column, the provider the
+table holds when it is concrete, and why it stayed indirect in words, a call
+through `any`, `--specialize=off`, an instance whose address is taken or
+whose callers' tables are unproved, or `auto`'s cost test.
 For a successful Cortex-M0 executable link, `firmware` adds measured
 `flash_used` and `static_ram_used` as the highest ELF PT_LOAD physical
 payload end from flash origin and RAM memory end from RAM origin, respectively.
@@ -16584,7 +17186,8 @@ changes byte offsets, so a caller location (D192), a panic site (D232) and
 debug information follow the formatted source; nothing else a program does
 can change. How the layout reaches the file is D358's, how it reaches a
 reader who will not have the file written is D359's, and where a
-parenthesized operand begins is D360's.
+parenthesized operand begins is D360's, and how an `if` inside a line is
+laid out is D424's.
 
 **The alternatives:** a style with options, which is a second opinion the
 language would then have to settle between two programs that follow different
@@ -17029,8 +17632,16 @@ in the table. A feature of another family is false rather than refused, so
 `fixed if compiler.feature.lse then` needs no architecture test before it,
 and a name no family has is L0305. `compiler.feature` is a member chain the
 grammar already derives; it adds no reserved word and no configuration atom,
-so no option name collides with one. Like every other fact it is read only
-in a fixed configuration expression.
+so no option name collides with one. Like every other fact it is read in a
+fixed configuration expression and, since D437, in a module value.
+
+No fact names the selected level. `platform/linux`'s entry check states each
+level's name and, in this table's order, the features it holds a processor
+to, beside the CPUID and HWCAP masks that find them; a level fact would
+remove neither the masks nor the order. The targets case `the library and the
+compiler state D255's levels` reads this table and holds both the compiler's
+level model and that library source to it, so the three cannot drift apart
+unseen.
 
 A level changes which instructions the backend selects, which Cortex assembly
 text the checker admits, and which instructions the toolchain accepts, and
@@ -17074,6 +17685,7 @@ Apple's floor as Darwin's default, which changes the code every existing
 Darwin build emits.
 
 **Pinned by** `targets/levels are stated per family`,
+`targets/the library and the compiler state D255's levels`,
 `targets/names select their descriptions`, `driver/a level is selected
 within its family`, `positive/feature-level-selects-declarations`,
 `negative/feature-unknown-name`, `negative/feature-outside-configuration`,
@@ -17376,7 +17988,10 @@ the lowering, temporary trace code or a diff of two assemblies.
 the program as the backend would receive it, after every pass the request's
 `--optimize` and `--specialize` run, to `-o` or `a.ir`, and stops there.
 The text is the dump the test program records, which `docs/ir.md` explains:
-not a stable interface, never read back and printing no origin. `--link`
+not a stable interface, never read back and printing no origin. Each
+evidence entry's line in it also ends `kept` or `dropped`, D374's answer for
+this program as every backend gives it, which the recorded dump, written
+before any backend decides, leaves out. `--link`
 still decides whether `platform/linux` joins the program, and `--debug` and
 `--panic-map`, which describe machine code, are a misuse with it.
 
@@ -17749,6 +18364,203 @@ instance of a local type in two programs.
 **Pinned by** `abi/r440-native-link-namespace`, whose routine `foo` beside
 C's `foo` takes `main.foo.2` once a C function and an exported datum hold
 `main.foo` and `main.foo.1`, and the backend suite's namespace case.
+
+### D421 — A generic instance is a symbol named after its routine
+
+**The discrepancy:** D417 said how the second instance of one generic
+routine is spelled, but no backend gave an instance its routine's name.
+An instance declares nothing of its own, so every backend emitted it under
+an assembler-local label, `.Llandin_anonymous_473`, which reaches no symbol
+table: `perf` attributed 45 per cent of a binary-trees profile to bare
+addresses, `mem.new` and `region_alloc` among them, and an evidence
+provider that binds an instance's tables was as anonymous.
+
+**Chosen:** an instance's symbol is spelled from the generic routine it was
+made from, and an evidence provider's from the routine whose evidence it
+binds. Neither is an export, so under D415 each is a local symbol, and the
+spelling follows D417: the bare name when nothing else holds it, otherwise
+the qualified one and then `.1`, `.2` in item order. Only an anonymous
+function and literal data keep a local label. The build report's items carry
+the same spelling as `name`.
+
+**The alternatives:** spelling the type arguments into the symbol, which
+D417 declines for its mangling and composition dependence; and a global
+symbol, which D415 declines for everything that is not an export.
+
+**Pinned by** the backend suite's `generic evidence is ordered indirect and
+shared`, whose two instances of `is_less` are `main.is_less` and its alias
+`main.is_less.1`, and `opt driver/build reports name calls left indirect`.
+
+### D422 — A library file is recorded under `/landin-library/`
+
+**The discrepancy:** debug information and the source map named each source
+by the path it was read from, and the library is read from where it was
+installed, so a program's debug information, its source map and the build
+identity hashed from them differed between two installations of one
+compiler. D361's trap report had already stopped naming the installation.
+
+**Chosen:** a file of a `core`, `hosted` or `platform` module is recorded in
+DWARF's file table and the source map as `/landin-library/`, its module
+path and its own name: `/landin-library/core/vec/vec.ldn`, the name D361's
+report gives it behind one fixed prefix. Every other file keeps the path it
+was read from, and the compilation directory is still the one the build ran
+in, which is how a debugger finds a program's own sources. A debugger finds
+the library's by mapping the prefix to the directory `refine version`
+names: `set substitute-path /landin-library DIR` in GDB, `settings set
+target.source-map /landin-library DIR` in LLDB. The build report keeps every
+path as it was read, because it describes the build rather than the image.
+
+**The alternatives:** relative library paths, which a debugger resolves
+against the compilation directory and so finds nothing; recording the
+installed path, which is the dependence this removes; and an option naming
+the prefix, a second spelling of one image for no reader's benefit.
+
+**Pinned by** the GDB sessions of `compiler/tests/debugging/check.py`, whose
+source maps must name library files so and whose stops still read library
+lines, the Cortex-M source sessions, which map the prefix to their copied
+library, and `scripts/cortex_debug.py`'s snapshot check.
+
+### D423 — An atom set is an enumeration to a debugger
+
+**The discrepancy:** an atom is a `u32` carrying a code the program gives
+it, D130's dense codes in declaration order, so a debugger showed
+`look.what = 6`, and the number meant a different atom in another program.
+The derived parser kept
+its token kind a `u8` with numbered constants so that its sessions could
+read a stable number at all.
+
+**Chosen:** every DWARF type of an atom-set value, a slot, a field, a
+module datum or a parameter, is an enumeration over the set's atoms with
+the code this program gives each, its carrier the type it refers to, on
+every target whose debug information describes types: Linux x86-64, Linux
+arm64, Linux RV64, FreeBSD and Darwin, which share one encoder. Cortex-M0's
+`--debug=lines` describes no types, as `docs/targets.md` says, and is
+unchanged. The set has no name in the IR, so the enumeration has none
+either; GDB and LLDB print a
+value as its atom's name. The derived parser's token kind is now an atom
+set, and its sessions read `number` and `newline`.
+
+**The alternatives:** naming the type after its source declaration, which
+the IR does not keep and an anonymous set does not have; and a fixed code
+per atom across programs, which would give up D130's dense codes.
+
+**Pinned by** the parser workload's GDB and LLDB sessions, which read
+`parser.look.what` by name.
+
+### D424 — An `if` inside a line is laid out from its `if`
+
+**The discrepancy:** D252's layout stood an `if` that began inside a line
+on its line's indentation unless its first value shared the `if`'s line,
+so a multi-line `if` expression's `else` and `end if` stood at the
+statement's margin, a `then` beginning a line looked like a statement, and
+one inside a call's parentheses closed at the margin too. Writers took the
+value into locals instead.
+
+**Chosen:** an `if` that begins inside a line is laid out from its `if`:
+a `then` that begins a line, each `elsif` and `else` and its `end if` stand
+under the `if`, and each arm's body four columns in from it. The table D252
+measured is the case of it whose arms each fit one line. An `if` that
+begins its line is laid out as before.
+
+**The alternatives:** keeping the margin, which is what made the expression
+unreadable; and indenting the arms from the line, which separates an
+argument's `if` from its own parentheses.
+
+**Pinned by** `docs/format.md`'s rule `An if inside a line`, which
+`formatting/the page is the layout` holds the formatter to.
+
+### D426 — The binding generator writes packed and flexible-member records, and types their pointers
+
+**The tour said** nothing of the binding generator, and D410 and D413 gave
+a byte-packed C record and one with a flexible array member a Landin form,
+which D414 lets C reach only through a pointer. `bindings/generate.py`
+still refused both, so a header declaring either had no generated binding,
+and a pointer to any selected record was generated as `ptr u8`.
+
+**Chosen:** a struct carrying its own `__attribute__((packed))`, with every
+field of alignment one as D410 requires, is written `layout(c, packed)`, and
+a struct whose last field, after at least one other, is `T name[]` or GNU's
+`T name[0]` is written with a last `[0]T` field, its member at its element's
+alignment, or at one inside a packed record. `#pragma pack`, `packed` on a
+single member, `aligned` beside `packed`, a packed field of alignment above
+one under the `native` policy and a flexible member elsewhere or alone stay
+refused, each naming the decision it would break; `auto` keeps a packed
+record that breaks D410 C-owned and opaque, and a flexible-member record has
+no opaque form. Where the header passes either by value, D414 decides: an
+imported function gets a generated wrapper taking and returning it through
+`ptr record` or `ptr mut record`, a global gets typed address, read and
+write adapters, and an opaque record's field gets accessors through typed
+pointers; an export, a callback or an incoming-varargs handler carrying one
+by value is refused. A pointer to a selected packed or flexible-member
+record is `ptr [mut] record`, so its fields are reached without a cast;
+a pointer to any other record stays `ptr u8`, so no binding generated
+before changes. `bindings.json` records `packed`, `flexible_member` and
+`pointer_only` for every native record.
+
+**The alternatives:** byte pointers for these records too, which leaves a
+caller casting to reach any field of a record that can only be reached
+through a pointer; typing every record pointer at once, which changes
+every binding generated so far; and implementing each ABI's by-value
+transport, which D414 declined.
+
+**Pinned by** `abi/r440-bindings-generated`, which the Linux arm64 and
+Darwin bindings runners regenerate for their own ABIs, and `bindings/test.py`'s
+packed, flexible-member and refusal cases.
+
+### D441 — `escaping` stays part of C-symbol compatibility
+
+**The tour said** at [1610] that a link symbol denotes one compatible
+function, and [1975] that pointer permission, `escaping` and written `from`
+contracts remain Landin checks. An `extern(c)` import sharing a Landin
+definition's symbol had to repeat the definition's `escaping`, a word C does
+not have, and L0347 said only that the symbol collided.
+
+**Chosen:** the comparison keeps `escaping`. A Landin caller of the import is
+checked against what the import says, so an import without `escaping` would
+let a caller pass `addr local` to a definition that keeps the pointer, a frame
+escape no check sees [0780]. When two declarations of one symbol differ in
+nothing but `escaping`, L0347 says so, names the parameter and says to repeat
+it on both.
+
+**The alternatives:** ignoring `escaping` in the comparison, which opens the
+hole above; and letting an import add `escaping` but never drop it, which is
+sound but no help to the import that left it out. Both were declined.
+
+**Pinned by** `negative/c-symbol-differs-only-in-escaping`.
+
+### D443 — A check and an assembly refuse what the link would refuse first
+
+**The tour said** at [1970] that a hosted program's entry is one public
+`main` of one shape, and D280 that a static Linux link refuses, before any
+tool runs, a C library asked for and a C symbol nothing in the program
+defines. Neither said whether `refine check` or `--emit=asm`, which link
+nothing, give those refusals, and neither did: a program checked clean and
+was refused when compiled, and an assembly file with a `public main` of
+another shape failed its link only with "undefined reference to `main`".
+
+**Chosen:** a `public main` in a hosted program's entry module that is not
+[1970]'s entry, a result named other than `code` among them, is refused with
+L0502 by `check`, by `--emit=asm` and by `--emit=exe` alike, at the `main` it
+names. A C-convention `main` is [1650]'s own form and is not asked about, and
+a program with no `public main` still checks and emits assembly, as a library
+does. `check` on a target that links statically gives D280's refusals of a C
+library asked for with `linker.library` and of a C symbol nothing in the
+program defines, as compiling does. It loads no `platform/linux` for them,
+which defines no C symbol a program could import, so a check still needs no
+library; the refusal for want of `platform/linux` stays with the compilation
+that starts at it.
+
+**The alternatives:** leave a check and an assembly silent, which is the
+mismatch above; treat a `public main` of another shape in the entry module as
+an ordinary public function, as an imported module's is, which keeps
+assembly emission and fails every executable built from it; or load
+`platform/linux` for a check, which gives the same answer for twenty times the
+time of a small check and asks a check for a library it otherwise does not
+need.
+
+**Pinned by** `end-to-end/check-refuses-a-public-main-that-is-not-the-entry`,
+`end-to-end/assembly-refuses-a-public-main-that-is-not-the-entry` and
+`end-to-end/check-refuses-a-static-c-import`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -19664,6 +20476,8 @@ platform/posix's open_library refers to`, so a program loading a library
 learns which of its calls asked for the C library (D336).
 `-v`, `--dry-run` and the build report name the mode. An emitted `.s` under
 static mode includes `platform/linux` and still links under a C driver.
+`refine check` gives the refusals of a C library asked for and of a C symbol
+nothing defines, as compiling does (D443).
 
 **The alternatives:** libc as the default, which leaves every Linux
 executable a dynamic dependency it does not use. Letting the linker report
@@ -19992,7 +20806,8 @@ functions taking `ptr provider`, which makes a caller write `addr host` for a
 handle and `host` for the write beside it; free functions taking `inout state:
 provider`, which locks the provider while an argument lent from it lives, so
 a second argument or a write beside the first is refused (D288); `stdin:` relative to the
-harness's directory as `run_args` is, or inline bytes in the metadata; and
+harness's directory as a path among `run_args` then was, or inline bytes in
+the metadata; and
 inheriting the harness's input, which waits on a terminal until the time
 limit.
 
@@ -21987,9 +22802,10 @@ after a subject and a colon, static text that borrows nothing, the same on
 every target and in every locale. A call's failure set widens to
 `failure.reason` whatever subset of it the call declares, so `else
 (problem)` passes it straight on. A set that also holds the program's own
-atom does not widen, and a `match` arm of `_` does not narrow its subject,
-so such a program names each library atom it passes on; that refusal is
-[0640]'s L0301. Atoms that are values rather than failures, a directory
+atom does not widen, so a `match` names the program's atoms and passes the
+rest on through D434's `_ (rest):` binding, which holds only the library's;
+the subject itself still does not widen, and that refusal is [0640]'s
+L0301. Atoms that are values rather than failures, a directory
 entry's kind or an order, have no words, and `platform/posix`'s errno
 detail stays with its provider (D207). A program that never calls `words`
 links none of it (D296); one that does carries every phrase, about 6 KB on
@@ -22003,7 +22819,8 @@ after a colon; and a locale, which the library consults nowhere.
 
 **Pinned by** `runtime/failure-words` and `runtime/library-shared-failure`
 on every target, Cortex-M0 among them, `runtime/failure-words-report` on
-every hosted target and `negative/failure-words-own-atom`.
+every hosted target and `runtime/failure-words-own-atom`, a negative
+fixture until D434 gave the `_` arm its binding.
 
 ### D418 — The POSIX and Linux layers keep their routines' own names
 
@@ -22029,3 +22846,78 @@ those routines a global symbol and a D296 root.
 
 **Pinned by** every hosted fixture, unchanged in behaviour, and
 `abi/library-names-beside-libc`.
+
+### D425 — A list of bytes is the growable byte container
+
+**The tour said** at [1360] that containers take their allocator as an
+argument, and D356 made `mem.reserve_storage` their one way of taking
+slots. A program gathering an unknown number of bytes had no container for
+them: `core/text`'s growing builder is named for text and lends a read-only
+view, a `mem.byte_buffer` cannot grow, and a `vec.list(u8)` grew a `push`
+per byte, its reserve moving the items one at a time when the provider
+could not grow the block where it stood. Reading reverse-complement's
+250 MB input took 34 seconds through a list pushed a byte at a time.
+
+**Chosen:** `vec.list(u8)` is the growable byte container, with three
+operations over it. `vec.append_bytes` copies a slice after the bytes the
+list holds; `vec.spare_bytes` lends the spare capacity past them, at least
+the bytes asked for, as the buffer a read fills; and `vec.extend_bytes`
+counts the bytes written there as appended. The first two grow the list as
+`push` does, doubling, or to exactly what is asked when doubling is not
+enough, and report `mem.out_of_memory` changing nothing; counting more than
+the spare capacity is `mem.out_of_bounds`, also changing nothing. Beneath
+them `core/mem` gives the byte storage the same three: `spare_bytes`,
+`admit_bytes` and `admit_copy`, the last failing with `full`. The spare
+capacity holds whatever the backing held, which every byte value is, so
+the view is only for bytes: a spare slot of another item type could hold
+no value of it, an atom set's among them. The copy is `mem.copy`, a word at
+a time where it moves words and a byte at a time on firmware, and so is
+the move when the list grows: `mem.transfer_prefix`, which
+`mem.reserve_storage` moves a block's items with when the provider cannot
+grow it in place, copies their bytes whole rather than a typed transfer per
+item, and D356's protocol, a growth asked in place before an allocation,
+stays as it was. Reading reverse-complement's input on Linux x86-64 at
+`--optimize speed` into a list through `spare_bytes` takes 0.40 seconds,
+and 0.44 through `append_bytes` from a 64 KiB buffer, against 2.5 to 3.7
+with the reserve moving items one at a time and 0.23 through `core/text`'s
+growing builder, whose `resize` lets `hosted/heap` move a large block's
+pages rather than copy them. Reverse-complement keeps the builder: through
+a list it took 0.94 seconds against the builder's 0.79.
+
+**The alternatives:** a generic `append` and spare view for every item
+type, which would lend uninitialized slots as values and copy items
+holding references past their origins; a byte container of its own beside
+the list, a second growth rule for the same storage; and a builder renamed
+for bytes, which would keep its fixed text-oriented operations.
+
+**Pinned by** `runtime/core-vec-bytes`, `runtime/core-mem-zero-prefix`,
+`runtime/r420-vec-large-list`, `runtime/core-vec-pointer-storage` and
+`runtime/r420-stateful-filter-list`.
+
+### D442 — `platform/linux`'s path parameters take `ptr u8`
+
+**The tour said** at [0260] that a text literal takes `cstring` from its
+context, and an outside program passed literal paths straight to its own
+`extern(c)` `openat` taking a `cstring`. `platform/linux`'s `openat`, `statx`,
+`mkdirat`, `unlinkat` and other path calls take `ptr u8`, so a literal cannot
+be passed to them, and L0301's note said only that a literal takes `[]u8`.
+
+**Chosen:** they keep `ptr u8`. Their caller is `platform/posix`, which copies
+a host string into a room, ends it with NUL and passes `terminate`'s `ptr u8
+from room`; D199 converts neither bytes nor a pointer to `cstring`, so a
+`cstring` parameter could not be filled there at all. Portable paths are host
+strings through `platform/posix`, and the raw wrappers serve that module and
+programs that hold bytes. A program with a literal binds it, `name: []u8 =
+"/etc/hostname"`, and passes `addr name[0]`: the literal ends in NUL [0260],
+and the pointer keeps the literal's static origin. L0301 gives that route when
+a literal meets a `ptr u8` context, and names `cstring` among a literal's
+contexts.
+
+**The alternatives:** `cstring` parameters with a checked bytes-to-`cstring`
+conversion, which reopens D199's matrix; and a text literal taking a `ptr u8`
+context, which blurs `cstring`'s distinct identity and lets every `ptr u8`
+parameter accept text. Both were declined until a second consumer passes
+literal paths to the raw wrappers.
+
+**Pinned by** `negative/text-literal-needs-pointer`, whose note gives the
+route, and `runtime/linux-system-calls`.

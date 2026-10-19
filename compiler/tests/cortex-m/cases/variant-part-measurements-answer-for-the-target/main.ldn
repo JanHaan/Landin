@@ -33,9 +33,9 @@ end variant_first
 
 public main: () -> (code: i32) =
     if sizeof bare_only == 1 and alignof bare_only == 1
-        and sizeof single_payload == 8 and alignof single_payload == 4
-        and sizeof mixed == 20 and alignof mixed == 4
-        and sizeof variant_first == 16 and alignof variant_first == 4
+      and sizeof single_payload == 8 and alignof single_payload == 4
+      and sizeof mixed == 20 and alignof mixed == 4
+      and sizeof variant_first == 16 and alignof variant_first == 4
     then
         code = 42
     else

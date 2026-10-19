@@ -1,0 +1,40 @@
+--  Another module's array named through its module, `table.values`, is
+--  read as the same name unqualified in its own module is [1940]: copied
+--  into a typed and an inferred binding, passed to a fixed-array
+--  parameter, and lent whole to a slice parameter, a generic routine's
+--  among them, and lent writable when the binding is `mut`.
+import table
+
+sum: (values: []i32) -> (total: i32) =
+    total = 0
+    for value in values do
+        total += value
+    end for
+end sum
+
+bump: (values: []mut u8) -> none =
+    values[0] = 9
+end bump
+
+middle: (values: [3]i32) -> (value: i32) =
+    value = values[1]
+end middle
+
+count: (t: type, items: []t) -> (n: usize) =
+    n = lenof items
+end count
+
+public main: () -> (code: i32) =
+    copy: [3]i32 = table.values
+    inferred := table.values
+    code = 1
+    return when copy[0] <> 1 or inferred[2] <> 3
+    code = 2
+    return when sum(table.values) <> 6 or middle(table.values) <> 2
+    code = 3
+    return when count(table.values) <> 3
+    code = 4
+    bump(table.cells)
+    return when table.cells[0] <> 9 or table.cells[1] <> 5
+    code = 42
+end main

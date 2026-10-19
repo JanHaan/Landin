@@ -2,5 +2,5 @@ class: negative
 summary: a generic signature's name that names nothing is refused at the declaration, applied or bare, called or not, rather than reaching the lowering
 constructs: 1230, 1350, 1860
 program: program.ldn
-codes: L0304, L0201
+codes: L0201, L0201
 targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

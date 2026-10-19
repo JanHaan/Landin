@@ -30,8 +30,11 @@ class QualityTests(unittest.TestCase):
 
     def test_parser_uses_original_request_and_oracle(self):
         config = CHECK.fixture_configuration("derived-parser")
-        self.assertEqual(config["run_args"],
-                         ("../tests/fixtures/runtime/derived-parser/input.txt",))
+        #  `run_files: input.txt`, below the fixture, where the program
+        #  is handed it wherever it runs.
+        self.assertEqual(config["run_args"], (str(
+            Path(__file__).resolve().parents[1]
+            / "fixtures/runtime/derived-parser/input.txt"),))
         self.assertEqual(config["expected_status"], 42)
         self.assertEqual(config["expected_output"],
                          (config["source"] / "output.txt").read_bytes())

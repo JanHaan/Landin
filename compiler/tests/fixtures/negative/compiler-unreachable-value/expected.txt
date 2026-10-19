@@ -1,4 +1,4 @@
-error[L0331]: this hands back nothing, and a value belongs here
+error[L0331]: this call never returns, and a value belongs here
   --> ../tests/fixtures/negative/compiler-unreachable-value/program.ldn:2:9
   |
 2 |     x = compiler.unreachable()
@@ -7,4 +7,4 @@ error[L0331]: this hands back nothing, and a value belongs here
   |
 2 |     x = compiler.unreachable()
   |     ^ the place written here
-  = note: [1920]: a call of a function returning none is not a value
+  = note: [0890]: this call is `noreturn`: it never returns, so it is not a value; write it as a statement of its own

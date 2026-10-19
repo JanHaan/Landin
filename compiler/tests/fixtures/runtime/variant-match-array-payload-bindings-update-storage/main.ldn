@@ -39,11 +39,11 @@ public main: () -> (code: i32) =
     match state.kind
         leaf: answer = 1
         row(inout values): if true then
-            values[0] = answer
-            values[at] = zeroed
-            inc values[2]
-            answer = values[0] + values[at] + values[2]
-        end if
+                               values[0] = answer
+                               values[at] = zeroed
+                               inc values[2]
+                               answer = values[0] + values[at] + values[2]
+                           end if
     end match
 
     if answer == 65 and traversed == 41 and generic_sum == 41

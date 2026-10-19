@@ -8282,19 +8282,43 @@ package body Landin.Syntax.Parser is
                      else
                         declare
                            From_Here : constant Landin.Source.Span := Here;
+                           --  D139: `fixed if` selects module declarations,
+                           --  so in a body it is a form met in the wrong
+                           --  place, and the note says where it goes.
+                           Selection : constant Boolean :=
+                             Peek = Tok.Kw_Fixed
+                             and then Ahead (1) = Tok.Kw_If;
                         begin
                            Advance;
                            Skip_Rest_Of_Line;
-                           Complain
-                             (Item    => Syn.Stray_Token,
-                              Where   => Join (From_Here, Previous),
-                              Message => "this begins no statement",
-                              Note    => "[1810]: a statement is a"
-                                         & " binding, an assignment, an"
-                                         & " `inc` or `dec`, a discard, a"
-                                         & " call, a `return` or a"
-                                         & " control expression",
-                              Gate    => False);
+                           if Selection then
+                              Complain
+                                (Item    => Syn.Stray_Token,
+                                 Where   => Join (From_Here, Previous),
+                                 Message => "`fixed if` selects module"
+                                            & " declarations, not"
+                                            & " statements",
+                                 Note    => "[1500]/D139: declare each"
+                                            & " system's routine in a"
+                                            & " module-level `fixed if`,"
+                                            & " or branch with `if` on a"
+                                            & " module value such as"
+                                            & " `on_linux: bool ="
+                                            & " compiler.os == linux`"
+                                            & " (D437)",
+                                 Gate    => False);
+                           else
+                              Complain
+                                (Item    => Syn.Stray_Token,
+                                 Where   => Join (From_Here, Previous),
+                                 Message => "this begins no statement",
+                                 Note    => "[1810]: a statement is a"
+                                            & " binding, an assignment, an"
+                                            & " `inc` or `dec`, a discard,"
+                                            & " a call, a `return` or a"
+                                            & " control expression",
+                                 Gate    => False);
+                           end if;
                         end;
                      end if;
 
@@ -9873,11 +9897,20 @@ package body Landin.Syntax.Parser is
                         loop
                            declare
                               Mutable : Boolean := False;
+                              Convention : Parameter_Convention :=
+                                Implicit_In;
                               At_Name : Landin.Source.Span;
                               Bound   : Landin.Source.Names.Name_Id;
                            begin
+                              --  [1220]: a pattern binding carries a
+                              --  convention; D433 admits `sink` beside
+                              --  `inout`.
                               if Peek = Tok.Kw_Inout then
                                  Mutable := True;
+                                 Convention := Inout_Convention;
+                                 Advance;
+                              elsif Peek = Tok.Kw_Sink then
+                                 Convention := Sink_Convention;
                                  Advance;
                               end if;
 
@@ -9891,7 +9924,9 @@ package body Landin.Syntax.Parser is
                                                & " payload by position in"
                                                & " parentheses, a name for"
                                                & " each field, `inout`"
-                                               & " before one it writes");
+                                               & " before one it writes"
+                                               & " and `sink` before one it"
+                                               & " consumes");
                                  Resync (List_Anchor);
                                  exit;
                               end if;
@@ -9903,7 +9938,8 @@ package body Landin.Syntax.Parser is
                                 (Add (Of_Kind  => Match_Binding,
                                       At_Token => At_Name,
                                       Named    => Bound,
-                                      Mutable  => Mutable));
+                                      Mutable  => Mutable,
+                                      Convention => Convention));
                            end;
 
                            exit when Peek /= Tok.Comma;
@@ -10327,6 +10363,35 @@ package body Landin.Syntax.Parser is
                if not Kept then
                   return Add (Error_Expression, Starts, Children => [Target]);
                end if;
+               --  `list(i32)(items: ..., len: 3)`: a labelled field after an
+               --  applied type is a struct value, which is not made by
+               --  converting to the type but written against it [1350].
+               if Peek = Tok.Identifier and then Ahead (1) = Tok.Colon
+                 and then Kind (Result, Target) = Type_Application
+               then
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => Here,
+                     Message => "an applied type is not called to make a"
+                                & " value",
+                     Note    => "[1350]: a value of an applied type is its"
+                                & " fields in parentheses where the type is"
+                                & " declared, as in `value: "
+                                & Landin.Source.Names.Spelling
+                                    (Names,
+                                     Name (Result,
+                                           Applied_Type (Result, Target)))
+                                & "(...) = ("
+                                & Landin.Source.Names.Spelling
+                                    (Names, Named_Here)
+                                & ": ...)`",
+                     Related => Starts,
+                     Because => "the applied type");
+                  Resync_Parentheses;
+                  return Add
+                    (Error_Expression, Starts,
+                     Join (Starts, After_Previous), [Target]);
+               end if;
                Value := Parse_Delimited_Expression;
                Kept := Expect
                  (Wanted => Tok.Right_Paren,
@@ -10637,14 +10702,48 @@ package body Landin.Syntax.Parser is
                     (Of_Kind => Character_Literal, At_Token => At_Item);
                end if;
 
-               if Peek = Tok.Text_Literal then
-                  Advance;
-                  return Add (Of_Kind => Text_Literal, At_Token => At_Item);
-               end if;
-
-               if Peek = Tok.Raw_Literal then
-                  Advance;
-                  return Add (Of_Kind => Raw_Literal, At_Token => At_Item);
+               if Peek in Tok.Text_Literal | Tok.Raw_Literal then
+                  declare
+                     Is_Text : constant Boolean := Peek = Tok.Text_Literal;
+                     Literal : Node_Id;
+                  begin
+                     Advance;
+                     Literal :=
+                       (if Is_Text
+                        then Add (Of_Kind => Text_Literal,
+                                  At_Token => At_Item)
+                        else Add (Of_Kind => Raw_Literal,
+                                  At_Token => At_Item));
+                     --  [0570]: only a name is indexed.  Deleting the
+                     --  literal would mend the line and change what it
+                     --  means, so the refusal names the form that works.
+                     if Peek = Tok.Left_Bracket then
+                        Complain
+                          (Item    => Syn.Token_Expected,
+                           Where   => Here,
+                           Message => "a text literal is a value, and only"
+                                      & " a name is indexed",
+                           Note    => "[0570]: give the text a name first,"
+                                      & " as `word := ""beta""`, and index"
+                                      & " the name, `word[i]`",
+                           Related => At_Item,
+                           Because => "the literal");
+                        Advance;
+                        declare
+                           Index : constant Node_Id :=
+                             Parse_Delimited_Expression;
+                        begin
+                           if Peek = Tok.Right_Bracket then
+                              Advance;
+                           end if;
+                           return Add
+                             (Error_Expression, At_Item,
+                              Join (At_Item, After_Previous),
+                              [Literal, Index]);
+                        end;
+                     end if;
+                     return Literal;
+                  end;
                end if;
 
                --  [1380]: `any(pointer)` is explicit but takes its concept

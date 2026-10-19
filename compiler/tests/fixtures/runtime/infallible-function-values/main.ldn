@@ -42,11 +42,11 @@ public main: () -> (code: i32) =
 
     code = 1
     if first.left == 20 and first.right == 22
-       and replaced.left == 21 and replaced.right == 20
-       and from_result.left == 21 and from_result.right == 20
-       and from_module.left == 21 and from_module.right == 20
-       and from_alias.left == 21 and from_alias.right == 20
-       and from_anonymous.left == 22 and from_anonymous.right == 20
+      and replaced.left == 21 and replaced.right == 20
+      and from_result.left == 21 and from_result.right == 20
+      and from_module.left == 21 and from_module.right == 20
+      and from_alias.left == 21 and from_alias.right == 20
+      and from_anonymous.left == 22 and from_anonymous.right == 20
     then
         code = 42
     end if

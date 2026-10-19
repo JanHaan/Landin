@@ -25,7 +25,7 @@ collect_state: (self: ptr state, packet: payload, numbers: [2]i32,
                 view: []i32, source: any reader, later: i32) -> (value: i32) =
     inc consume_calls
     value = self.val.value + packet.value + numbers[0] + numbers[1]
-        + view[0] + view[1] + source.read() + later
+            + view[0] + view[1] + source.read() + later
 end collect_state
 
 state is reader (read: read_state)
@@ -97,7 +97,7 @@ public main: () -> (code: i32) =
 
     --  The callee saw the old values and descriptors, not the new bindings.
     code = if total == 42 and trace == 123456 and consume_calls == 1
-              and original_packet.value == 100 and original_numbers[0] == 100
-              and view[0] == 90 and source.read() == 99
+      and original_packet.value == 100 and original_numbers[0] == 100
+      and view[0] == 90 and source.read() == 99
            then 42 else 1 end if
 end main

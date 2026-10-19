@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a core/vec list of bytes appends slices of every length from 0 to 32 from every offset of a word as a byte-at-a-time model says, lends its spare capacity for a read and counts what was written there, and leaves its bytes, length and capacity as they were when an extension is longer than the spare capacity or a growth is refused
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0310, 0600, 1000, 1410, 1420, 1480, 1950
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

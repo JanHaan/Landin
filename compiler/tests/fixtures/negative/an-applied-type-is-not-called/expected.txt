@@ -1,0 +1,10 @@
+error[L0103]: an applied type is not called to make a value
+  --> ../tests/fixtures/negative/an-applied-type-is-not-called/program.ldn:9:20
+  |
+9 |     l := list(i32)(items: [1, 2, 3, 4], len: 3)
+  |                    ^^^^^
+  --> ../tests/fixtures/negative/an-applied-type-is-not-called/program.ldn:9:10
+  |
+9 |     l := list(i32)(items: [1, 2, 3, 4], len: 3)
+  |          ^^^^ the applied type
+  = note: [1350]: a value of an applied type is its fields in parentheses where the type is declared, as in `value: list(...) = (items: ...)`

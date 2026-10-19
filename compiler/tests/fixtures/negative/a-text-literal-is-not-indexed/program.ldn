@@ -1,0 +1,7 @@
+--  Only a name is indexed, so a text literal followed by `[` is refused
+--  with the route, a name given to the text first; removing the literal
+--  would mend the line and change what it computes.
+public main: () -> (code: i32) =
+    i: usize = 1
+    code = i32("beta"[i])
+end main

@@ -2,5 +2,9 @@ error[L0348]: this type has no [1320] iterable conformance
   --> ../tests/fixtures/negative/for-fallible-requires-try/main.ldn:30:17
    |
 30 |     for item in value do
-   |                 ^^^^^ this traversal source
+   |                 ^^^^^
+  --> ../tests/fixtures/negative/for-fallible-requires-try/main.ldn:30:5
+   |
+30 |     for item in value do
+   |     ^^^^^^^^^^^^^^^^^^^^ the loop that traverses it
   = note: [1150]: a struct or `any C` traversal uses the named iterable evidence

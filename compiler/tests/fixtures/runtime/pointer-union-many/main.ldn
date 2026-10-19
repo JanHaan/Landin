@@ -169,7 +169,7 @@ public main: () -> (code: i32) =
     total = total + code_of(module_state)
     match s.kind
         empty: total = total + 1000
-        full (at, weight): total = total + code_of(at) + weight
+        full(at, weight): total = total + code_of(at) + weight
     end match
     bump(present)
     total = total + cell + consume(refused)

@@ -392,6 +392,46 @@ package body Landin.Tests.Newcomer_Suite is
            (Item, Debugged.Status = Landin.Driver.Status_Misuse,
             "--debug with --emit=ir is a misuse: " & Report (Debugged));
       end;
+
+      --  D374: the dump says which entries an emitted table names.  Only
+      --  `area` is projected, so `sides`' entry is left out of the table.
+      Host.Add_File
+        ("shape.ldn",
+         "shape: type = concept (t: type)" & LF
+         & "    area: (self: t) -> (a: i32)" & LF
+         & "    sides: (self: t) -> (n: i32)" & LF
+         & "end shape" & LF
+         & "square_area: (self: i32) -> (a: i32) =" & LF
+         & "    a = self * self" & LF
+         & "end square_area" & LF
+         & "square_sides: (self: i32) -> (n: i32) =" & LF
+         & "    n = 4" & LF
+         & "end square_sides" & LF
+         & "i32 is shape (area: square_area, sides: square_sides)" & LF
+         & "area_of: (t: type is shape, v: t) -> (a: i32) =" & LF
+         & "    a = t.area(v)" & LF
+         & "end area_of" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    x: i32 = 3" & LF
+         & "    code = area_of(x)" & LF
+         & "end main" & LF);
+      declare
+         Result : constant Landin.Driver.Outcome := Run
+           (["--target=linux-x86-64", "--link=libc", "--specialize=off",
+             "shape.ldn",
+             "--emit=ir", "-o", "shape.ir"], Host, Tools);
+         Dump : constant String := Host.Written ("shape.ir");
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "the evidence program's IR is written: " & Report (Result));
+         Landin.Testing.Check
+           (Item, Contains (Dump, "  entry 1 target 1 provider 1 dispatch 1"
+                                  & " kept" & LF)
+              and then Contains (Dump, "  entry 2 target 2 provider 2"
+                                       & " dispatch 2 dropped" & LF),
+            "the projected entry is kept and the other dropped: " & Dump);
+      end;
    end The_IR_Is_Written_On_Request;
 
    ---------------------------------------------------------------------

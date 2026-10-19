@@ -1,0 +1,10 @@
+error[L0341]: this conformance does not supply `process`
+  --> ../tests/fixtures/negative/a-missing-conformance-entry-is-one-report/program.ldn:21:1
+   |
+21 | job is worker (start: start_job)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/a-missing-conformance-entry-is-one-report/program.ldn:5:5
+  |
+5 |     process: (self: ptr mut t, item: i32) -> (value: i32)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required here
+  = note: [1240]: every concept input and entry is supplied once

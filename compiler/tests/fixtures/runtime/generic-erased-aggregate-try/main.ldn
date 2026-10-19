@@ -23,7 +23,7 @@ right_state: type = struct
 end right_state
 
 open_left: (receiver: ptr mut left_state, wanted: i32)
-      -> (answer: receipt) ! unavailable =
+           -> (answer: receipt) ! unavailable =
     inc receiver.val.calls
     fail unavailable when receiver.val.reject
     answer = (value: receiver.val.base + wanted,
@@ -31,7 +31,7 @@ open_left: (receiver: ptr mut left_state, wanted: i32)
 end open_left
 
 open_right: (provider: ptr mut right_state, amount: i32)
-      -> (opened: receipt) ! unavailable =
+            -> (opened: receipt) ! unavailable =
     inc provider.val.calls
     fail unavailable when provider.val.reject
     opened = (value: provider.val.base + amount * 2,
@@ -42,7 +42,7 @@ left_state is opener (open: open_left)
 right_state is opener (open: open_right)
 
 acquire: (tag: type, marker: tag, world: any opener, request: i32)
-      -> (answer: i32) ! unavailable =
+         -> (answer: i32) ! unavailable =
     _ = marker
     opened: receipt = try world.open(request: request)
     answer = opened.value * 10 + opened.serial

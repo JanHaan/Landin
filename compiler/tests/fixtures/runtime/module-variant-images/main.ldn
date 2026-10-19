@@ -1,0 +1,66 @@
+--  D435: module data holds variant-bearing structs as D81's
+--  selected-case images: a payload-free case, local or imported and
+--  written qualified, and arrays whose elements are struct literals each
+--  selecting its own case, nested arrays among them.  Nothing runs before
+--  the entry point to build them.
+import core/io
+
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u16) |
+        row: (values: [2]u32)
+    end kind
+    tail: u8
+end choice
+
+bare: choice = (prefix: 1, kind: leaf, tail: 2)
+mut ended: io.ending = (how: io.signalled)
+table: [3]choice = [
+    choice(prefix: 1, kind: leaf, tail: 2),
+    (prefix: 3, kind: pair(first: 4, second: 5), tail: 6),
+    (prefix: 7, kind: row(values: [8, 9]), tail: 10)
+]
+mut grid: [2][2]choice = [
+    [(prefix: 1, kind: leaf, tail: 1), (prefix: 2, kind: row(values: zeroed), tail: 2)],
+    [(prefix: 3, kind: pair(first: 1, second: 300), tail: 3), (prefix: 4, kind: leaf, tail: 4)]
+]
+endings: [2]io.ending = [(how: io.signalled), (how: io.exited(code: 3))]
+
+score: (c: choice) -> (total: u32) =
+    total = u32(c.prefix) + u32(c.tail)
+    match c.kind
+        leaf: total = total + 100
+        pair(first, second): total = total + u32(first) + u32(second)
+        row(values): total = total + values[0] + values[1]
+    end match
+end score
+
+code_of: (e: io.ending) -> (value: i32) =
+    match e.how
+        io.exited(code): value = code
+        io.signalled: value = 50
+    end match
+end code_of
+
+public main: () -> (code: i32) =
+    code = 1
+    return when score(bare) <> 103
+    code = 2
+    return when code_of(ended) <> 50 or code_of(endings[0]) <> 50
+    code = 3
+    return when code_of(endings[1]) <> 3
+    code = 4
+    return when score(table[0]) + score(table[1]) + score(table[2]) <> 155
+    code = 5
+    grid[1][1] = table[1]
+    mut total: u32 = 0
+    for line in grid do
+        for c in line do
+            total = total + score(c)
+        end for
+    end for
+    return when total <> 431
+    code = 42
+end main

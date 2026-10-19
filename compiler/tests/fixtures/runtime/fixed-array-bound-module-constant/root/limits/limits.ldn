@@ -1,0 +1,4 @@
+--- D438: counts another module sizes its arrays by.
+public small: u8 = 3
+--- A pointer's bytes on the target, from D437's fact.
+public word: usize = compiler.word_size / 8

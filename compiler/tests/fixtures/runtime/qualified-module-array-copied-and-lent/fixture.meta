@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: another module's array named through its module is copied into a typed and an inferred binding, passed to a fixed-array parameter and lent whole to a slice parameter, generic or writable, as the same name unqualified in its own module is
+program: main.ldn
+root: root
+status: 42
+constructs: 0520, 0570, 1420, 1940
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

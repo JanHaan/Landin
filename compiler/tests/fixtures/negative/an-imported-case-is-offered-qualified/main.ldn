@@ -1,0 +1,12 @@
+--  A payload-free case of a variant another module declares is written
+--  with that module's name; written bare, it is offered qualified.
+import shapes
+
+public main: () -> (code: i32) =
+    mut t: shapes.tagged = zeroed
+    t.kind = leaf
+    match t.kind
+        leaf: code = 1
+        shapes.pair(first, second): code = first + second
+    end match
+end main

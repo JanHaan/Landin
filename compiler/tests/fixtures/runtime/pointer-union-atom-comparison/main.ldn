@@ -1,0 +1,41 @@
+--  D429: a pointer union compares with one of its own atoms, which asks
+--  which case it holds and reads no address: a one-atom union holds its
+--  atom when its carrier is zero, a union of several atoms when its code
+--  cell holds that atom.  The atom may stand on either side.
+absent: atom
+denied: atom
+cell: type = absent | ptr u32
+many: type = absent | denied | ptr u32
+
+pick: (p: ptr u32, which: u32) -> (r: many from p) =
+    if which == 0 then
+        r = absent
+    elsif which == 1 then
+        r = denied
+    else
+        r = p
+    end if
+end pick
+
+public main: () -> (code: i32) =
+    x: u32 = 3
+    empty: cell = absent
+    full: cell = addr x
+    code = 1
+    return when empty <> absent or full == absent
+    code = 2
+    return when not (absent == empty) or absent == full
+    code = 3
+    first := pick(addr x, 0)
+    second := pick(addr x, 1)
+    third := pick(addr x, 2)
+    return when first <> absent or first == denied
+    code = 4
+    return when second <> denied or absent == second
+    code = 5
+    return when third == absent or third == denied
+    code = 6
+    held := second == denied
+    return when not held
+    code = 42
+end main

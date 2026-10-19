@@ -26,23 +26,23 @@ public extern(c) landin_check: (cell: ptr mut i32) -> (result: i32) =
     fixed_call: fixed_collector = c_fixed
     observe: collector = observe_slots
     direct := c_collect(12, signed_byte, unsigned_byte, signed_half,
-        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+                        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
     indirect := call(12, signed_byte, unsigned_byte, signed_half,
-        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+                     unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
     fixed_direct := c_fixed(12.5, 12, signed_byte, unsigned_byte,
-        signed_half, unsigned_half, truth, single, 1.5, wide, pattern, cell,
-        absent, 9.25)
+                            signed_half, unsigned_half, truth, single, 1.5, wide, pattern, cell,
+                            absent, 9.25)
     fixed_indirect := fixed_call(12.5, 12, signed_byte, unsigned_byte,
-        signed_half, unsigned_half, truth, single, 1.5, wide, pattern, cell,
-        absent, 9.25)
+                                 signed_half, unsigned_half, truth, single, 1.5, wide, pattern, cell,
+                                 absent, 9.25)
     placed := observe_slots(12, signed_byte, unsigned_byte, signed_half,
-        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+                            unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
     placed_indirect := observe(12, signed_byte, unsigned_byte, signed_half,
-        unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
+                               unsigned_half, truth, single, 1.5, wide, pattern, cell, absent, 9.25)
     result = 1
     if direct == 42 and indirect == 42
-       and fixed_direct == 42 and fixed_indirect == 42
-       and placed == 42 and placed_indirect == 42
+      and fixed_direct == 42 and fixed_indirect == 42
+      and placed == 42 and placed_indirect == 42
     then
         result = 42
     end if

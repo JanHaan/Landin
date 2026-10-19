@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: module data holds variant-bearing structs selecting a payload-free case, local or imported and qualified, and arrays and nested arrays of struct literals each selecting its own case, as static images
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0040, 0680, 0690, 0700, 1460, 1940
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

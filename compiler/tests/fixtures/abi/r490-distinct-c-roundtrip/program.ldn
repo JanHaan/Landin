@@ -26,8 +26,8 @@ public main: () -> (code: i32) =
     returned := address(c_address(opaque_address(addr value)))
     result := pair(c_pair(opaque_pair((x: 2.5, y: 39))))
     if u32(c_number(number(40))) == 42
-       and f32(c_real(real(2.5))) == 4.5
-       and returned.val == 9 and result.x == 4.5 and result.y == 41 then
+      and f32(c_real(real(2.5))) == 4.5
+      and returned.val == 9 and result.x == 4.5 and result.y == 41 then
         code = 42
     else
         code = 1

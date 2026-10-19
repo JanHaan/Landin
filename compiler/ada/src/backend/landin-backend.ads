@@ -476,6 +476,18 @@ package Landin.Backend is
       Declared : Landin.IR.Declaration_Id;
       Spelling : String) return String;
 
+   --  The declaration an item's symbol is spelled from: its own, or, for a
+   --  generic routine's instance, which declares nothing of its own, the
+   --  generic routine it was made from.  An instance is therefore a local
+   --  symbol named after its routine, as a profiler and `nm` show it, and
+   --  a second instance of one routine is qualified as D417 says.  An
+   --  evidence provider binding an instance's evidence is named after the
+   --  same routine (Landin.IR.Named_After).  No declaration only for an
+   --  anonymous function.
+   function Symbol_Declaration
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id) return Landin.IR.Declaration_Id;
+
    --  [1630]: one block's operands with every `general` register chosen,
    --  each at the width its type selects.  Every backend emits the same
    --  choice, so the text a target assembles is a function of the IR and

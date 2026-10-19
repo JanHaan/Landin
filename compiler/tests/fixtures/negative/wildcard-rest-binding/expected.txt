@@ -1,0 +1,40 @@
+error[L0333]: this wildcard arm binds no atom, because every atom has an arm of its own
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:15:9
+   |
+15 |         _ (rest): n = 4
+   |         ^
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:11:11
+   |
+11 |     match c
+   |           ^ this atom subject
+  = note: [0640]: `_ (rest):` names the atoms no other arm took; remove the arm
+error[L0333]: a wildcard atom arm binds one read-only name or none
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:22:9
+   |
+22 |         _ (inout rest): n = 2
+   |         ^
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:20:11
+   |
+20 |     match c
+   |           ^ this atom subject
+  = note: [0640]: `_ (rest):` names the atoms no other arm took; it is a value, not the subject's place
+error[L0301]: this is not an atom admitted by the set required here
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:30:23
+   |
+30 |         _ (rest): w = rest
+   |                       ^^^^
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:30:19
+   |
+30 |         _ (rest): w = rest
+   |                   ^ the atom place written here
+  = note: [0640]: an atom value may widen only into a union that contains its identity
+error[L0333]: an atom arm has no payload to bind
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:36:9
+   |
+36 |         red(shade): n = 1
+   |         ^^^
+  --> ../tests/fixtures/negative/wildcard-rest-binding/main.ldn:35:11
+   |
+35 |     match c
+   |           ^ this atom subject
+  = note: [0630]: an atom is identity without payload; only the last arm, `_`, binds the atoms no other arm names, as `_ (rest):`

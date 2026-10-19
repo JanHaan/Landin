@@ -65,16 +65,16 @@ public extern(c) landin_check: () -> (result: i32) =
 
     -- The module image and the farthest leaf pin recursive static emission.
     if large_image.values[0][0] <> 1.0
-       or large_image.values[0][1] <> 2.0
-       or large_image.values[0][2] <> 3.0
-       or large_image.values[1][0] <> 4.0
-       or large_image.values[1][1] <> 5.0
-       or large_image.values[1][2] <> 6.0
-       or small_image.values[0][0] <> 7.0
-       or small_image.values[1][0] <> 8.0
-       or mixed_image.tag <> 9
-       or mixed_image.values[0][0] <> 10.0
-       or mixed_image.values[1][0] <> 11.0
+      or large_image.values[0][1] <> 2.0
+      or large_image.values[0][2] <> 3.0
+      or large_image.values[1][0] <> 4.0
+      or large_image.values[1][1] <> 5.0
+      or large_image.values[1][2] <> 6.0
+      or small_image.values[0][0] <> 7.0
+      or small_image.values[1][0] <> 8.0
+      or mixed_image.tag <> 9
+      or mixed_image.values[0][0] <> 10.0
+      or mixed_image.values[1][0] <> 11.0
     then
         result = 1
     end if
@@ -83,18 +83,18 @@ public extern(c) landin_check: () -> (result: i32) =
     call_large: large_call = c_large
     indirect_large := call_large(large_image)
     if direct_large.values[0][0] <> 2.0
-       or direct_large.values[0][1] <> 4.0
-       or direct_large.values[0][2] <> 6.0
-       or direct_large.values[1][0] <> 8.0
-       or direct_large.values[1][1] <> 10.0
-       or direct_large.values[1][2] <> 12.0
-       or indirect_large.values[0][0] <> 2.0
-       or indirect_large.values[0][1] <> 4.0
-       or indirect_large.values[0][2] <> 6.0
-       or indirect_large.values[1][0] <> 8.0
-       or indirect_large.values[1][1] <> 10.0
-       or indirect_large.values[1][2] <> 12.0
-       or large_image.values[1][2] <> 6.0
+      or direct_large.values[0][1] <> 4.0
+      or direct_large.values[0][2] <> 6.0
+      or direct_large.values[1][0] <> 8.0
+      or direct_large.values[1][1] <> 10.0
+      or direct_large.values[1][2] <> 12.0
+      or indirect_large.values[0][0] <> 2.0
+      or indirect_large.values[0][1] <> 4.0
+      or indirect_large.values[0][2] <> 6.0
+      or indirect_large.values[1][0] <> 8.0
+      or indirect_large.values[1][1] <> 10.0
+      or indirect_large.values[1][2] <> 12.0
+      or large_image.values[1][2] <> 6.0
     then
         result = 2
     end if
@@ -103,9 +103,9 @@ public extern(c) landin_check: () -> (result: i32) =
     call_small: small_call = c_small
     indirect_small := call_small(small_image)
     if direct_small.values[0][0] <> 10.0
-       or direct_small.values[1][0] <> 12.0
-       or indirect_small.values[0][0] <> 10.0
-       or indirect_small.values[1][0] <> 12.0
+      or direct_small.values[1][0] <> 12.0
+      or indirect_small.values[0][0] <> 10.0
+      or indirect_small.values[1][0] <> 12.0
     then
         result = 3
     end if
@@ -114,11 +114,11 @@ public extern(c) landin_check: () -> (result: i32) =
     call_mixed: mixed_call = c_mixed
     indirect_mixed := call_mixed(mixed_image)
     if direct_mixed.tag <> 10
-       or direct_mixed.values[0][0] <> 12.0
-       or direct_mixed.values[1][0] <> 14.0
-       or indirect_mixed.tag <> 10
-       or indirect_mixed.values[0][0] <> 12.0
-       or indirect_mixed.values[1][0] <> 14.0
+      or direct_mixed.values[0][0] <> 12.0
+      or direct_mixed.values[1][0] <> 14.0
+      or indirect_mixed.tag <> 10
+      or indirect_mixed.values[0][0] <> 12.0
+      or indirect_mixed.values[1][0] <> 14.0
     then
         result = 4
     end if
@@ -128,23 +128,23 @@ public extern(c) landin_check: () -> (result: i32) =
     c_touch_large(pointer)
     pointer.val.values[0][1] = pointer.val.values[0][1] + 200.0
     if pointer.val.values[0][0] <> 101.0
-       or pointer.val.values[0][1] <> 202.0
-       or pointer.val.values[1][2] <> 606.0
-       or large_image.values[0][0] <> 1.0
-       or large_image.values[1][2] <> 6.0
+      or pointer.val.values[0][1] <> 202.0
+      or pointer.val.values[1][2] <> 606.0
+      or large_image.values[0][0] <> 1.0
+      or large_image.values[1][2] <> 6.0
     then
         result = 5
     end if
 
     if not c_layout(0, sizeof large_matrix, alignof large_matrix)
-       or not c_layout(1, sizeof small_matrix, alignof small_matrix)
-       or not c_layout(2, sizeof mixed_matrix, alignof mixed_matrix)
-       or sizeof large_matrix <> 48
-       or alignof large_matrix <> 8
-       or sizeof small_matrix <> 16
-       or alignof small_matrix <> 8
-       or sizeof mixed_matrix <> 12
-       or alignof mixed_matrix <> 4
+      or not c_layout(1, sizeof small_matrix, alignof small_matrix)
+      or not c_layout(2, sizeof mixed_matrix, alignof mixed_matrix)
+      or sizeof large_matrix <> 48
+      or alignof large_matrix <> 8
+      or sizeof small_matrix <> 16
+      or alignof small_matrix <> 8
+      or sizeof mixed_matrix <> 12
+      or alignof mixed_matrix <> 4
     then
         result = 6
     end if

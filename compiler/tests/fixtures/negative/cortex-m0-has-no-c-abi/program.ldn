@@ -1,0 +1,17 @@
+--  Cortex-M0 has no C ABI yet: a layout(c) record whose fields are all C
+--  fields and a C signature are each refused naming the target, and a
+--  byte-packed layout(c, packed) record stands.
+header: type = layout(c) struct
+    kind: u8
+    length: u32
+end header
+
+wire: type = layout(c, packed) struct
+    kind: u8
+    length: u32
+end wire
+
+extern(c) send: (packet: ptr wire) -> (status: i32)
+
+public main: () -> none =
+end main

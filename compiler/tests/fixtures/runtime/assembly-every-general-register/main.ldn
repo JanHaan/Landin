@@ -30,7 +30,7 @@ elsif compiler.arch == arm64 then
                 out o: u64 at general, out p: u64 at general,
                 out q: u64 at general, out r: u64 at general)
         total = a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p
-          + q + r
+                + q + r
     end spread
     public main: () -> (code: i32) =
         --  18 * 10 + 153

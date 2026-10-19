@@ -23,11 +23,11 @@ end take_pair
 write: (leave: bool) -> (result: i32) =
     mut row: [1]i32 = [0]
     row[if leave then
-        result = 42
-        return
-    else
-        0
-    end if] = bump()
+            result = 42
+            return
+        else
+            0
+        end if] = bump()
     result = calls
 end write
 

@@ -178,9 +178,33 @@
               };
             });
 
+          #  The pinned Linux archive bundles its own binutils, and the
+          #  pin covers them as much as it covers GCC: without this the
+          #  wrapper below linked with nixpkgs' binutils, a different `ld`
+          #  from the one the gate's Ubuntu jobs run.  They are wrapped
+          #  the way nixpkgs wraps its own, so the libc, start files and
+          #  interpreter still come from the store; only the programs are
+          #  the archive's.  The Darwin archive bundles none, and Apple's
+          #  linker is the one every Darwin host uses.
+          pinnedBinutils = pkgs.runCommand "landin-binutils-${gnatVersion}" {
+            passthru.isGNU = true;
+          } ''
+            mkdir -p "$out/bin"
+            for tool in addr2line ar as c++filt elfedit gprof ld.bfd nm \
+                objcopy objdump ranlib readelf size strings strip; do
+              if [ -e ${gnatUnwrapped}/bin/$tool ]; then
+                ln -s ${gnatUnwrapped}/bin/$tool "$out/bin/$tool"
+              elif [ "$tool" = as ] || [ "$tool" = ld.bfd ]; then
+                echo "landin: the pinned archive has no $tool" >&2
+                exit 1
+              fi
+            done
+            ln -s ld.bfd "$out/bin/ld"
+          '';
+
           #  This still executes the pinned compiler.  The wrapper gives that
-          #  compiler the target libraries and tools from the nix store.
-          gnat = pkgs.wrapCCWith {
+          #  compiler the target libraries from the nix store.
+          gnat = pkgs.wrapCCWith ({
             cc = gnatUnwrapped;
             isAlireGNAT = true;
 
@@ -201,7 +225,9 @@
                 ln -sf gcc "$out/bin/$(basename "$driver")"
               done
             '';
-          };
+          } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+            bintools = pkgs.wrapBintoolsWith { bintools = pinnedBinutils; };
+          });
 
           gprbuild =
             (fromArchive {
@@ -353,10 +379,45 @@
             ln -s ${pkgs.gdb}/bin/gdb "$out/bin/gdb-multiarch"
           '';
 
+          #  LLVM 19 under the versioned names Debian and Ubuntu give it and
+          #  the gate's commands use: `CLANG=clang-19 bindings/test.py` and
+          #  the FreeBSD lanes' default --clang, --lld and --objdump.
+          #  Ubuntu's clang-19 is one compiler that finds the host's libc for
+          #  a host program and only the named sysroot for another target.
+          #  nixpkgs splits that in two: its wrapper adds this system's glibc
+          #  and hardening to every compilation, a FreeBSD one included, and
+          #  the bare compiler has no resource directory, so neither alone is
+          #  clang-19.  This one takes the bare compiler, with the wrapper's
+          #  resource directory, when the command names a target or a
+          #  sysroot, and the wrapper otherwise.
+          llvmVersioned =
+            let
+              llvm19 = pkgs.llvmPackages_19;
+            in
+            pkgs.runCommand "landin-llvm-19" { } ''
+              mkdir -p "$out/bin"
+              cat > "$out/bin/clang-19" <<'SCRIPT'
+              #!${pkgs.runtimeShell}
+              for Argument do
+                  case "$Argument" in
+                      --target=* | --sysroot=*)
+                          exec ${llvm19.clang-unwrapped}/bin/clang \
+                              -resource-dir=${llvm19.clang}/resource-root "$@" ;;
+                  esac
+              done
+              exec ${llvm19.clang}/bin/clang "$@"
+              SCRIPT
+              chmod +x "$out/bin/clang-19"
+              ln -s ${llvm19.lld}/bin/ld.lld "$out/bin/ld.lld-19"
+              ln -s ${llvm19.llvm}/bin/llvm-objdump "$out/bin/llvm-objdump-19"
+            '';
+
           crossTools = lib.optionals pkgs.stdenv.hostPlatform.isLinux (
             [
               qemuUser
               gdbMultiarch
+              #  bsdtar, which unpacks the FreeBSD lanes' base system.
+              pkgs.libarchive
             ]
             ++ map crossLane crossLanes
           );
@@ -560,7 +621,11 @@
           inherit qemuUser;
 
           shell = pkgs.mkShell {
-            packages = [
+            #  First, so its clang-19 comes before the bare compiler of that
+            #  name the LLVM 19 package set also puts on PATH.
+            packages = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              llvmVersioned
+            ] ++ [
               gnat
               gprbuild
               pkgs.python3 #  check.py and docs/site/render_html.py
@@ -578,6 +643,14 @@
               #  than following nixpkgs' moving default Clang.
               pkgs.llvmPackages_19.clang
               pkgs.gdb #  scripts/debug.sh; native Linux source debugging
+              #  Profiling refine, or a program it emitted, to the routine,
+              #  and counting calls per routine and per caller: perf
+              #  samples, valgrind's callgrind counts.  Neither is pinned in
+              #  environments/pins.sh, because no result they give is a
+              #  gate's evidence; flake.lock holds their versions.  See
+              #  "Profiling" in compiler/ada/README.md.
+              pkgs.perf
+              pkgs.valgrind
             ] ++ crossTools;
 
             #  The binding generator's Linux C model comes from the same
@@ -598,6 +671,12 @@
             hardeningDisable = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               "stackclashprotection"
             ];
+
+            #  stdenv's setup adds `-rpath $out/lib` to every link, and in
+            #  a shell `$out` is ./outputs/out in the checkout: a `refine`
+            #  built here carried that directory in its run path, which
+            #  names a path nothing installs and differs between checkouts.
+            NIX_NO_SELF_RPATH = true;
 
             #  Keep each host's shell objects apart in a shared checkout,
             #  as well as apart from the macOS loop and Linux container.

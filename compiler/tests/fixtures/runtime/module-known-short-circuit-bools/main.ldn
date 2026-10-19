@@ -12,7 +12,7 @@ short_and: bool = false and later
 short_or: bool = true or short_and
 
 array_image: [8]bool = [not true, true and false, false or true,
-    chain and compared, 7 == 7, 9 < 2, short_and, short_or]
+                        chain and compared, 7 == 7, 9 < 2, short_and, short_or]
 struct_image: sample = sample(
     first: not chain,
     second: forward and compared)

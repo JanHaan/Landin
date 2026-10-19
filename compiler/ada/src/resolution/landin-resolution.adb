@@ -279,6 +279,38 @@ package body Landin.Resolution is
       end loop;
    end Each_Visible;
 
+   procedure Each_Imported_Module
+     (Of_Table : Table;
+      Scope    : Scope_Id;
+      Visit    : not null access procedure
+        (Name : Landin.Source.Names.Name_Id;
+         Module : Landin.Modules.Module_Id))
+   is
+      Where : Scope_Id := Scope;
+   begin
+      while Where /= No_Scope loop
+         declare
+            Import_Index : Natural :=
+              Of_Table.Scopes.Element (Positive (Where)).First_Import;
+         begin
+            while Import_Index /= 0 loop
+               declare
+                  Bound : constant Import_Binding :=
+                    Of_Table.Import_Order.Element (Import_Index);
+               begin
+                  if Bound.Member = No_Declaration
+                    and then Bound.Target /= Landin.Modules.No_Module
+                  then
+                     Visit (Bound.Name, Bound.Target);
+                  end if;
+                  Import_Index := Bound.Next_In_Scope;
+               end;
+            end loop;
+         end;
+         Where := Enclosing (Of_Table, Where);
+      end loop;
+   end Each_Imported_Module;
+
    procedure Each_Public_In_Module
      (Of_Table : Table;
       Module   : Landin.Modules.Module_Id;

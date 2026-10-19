@@ -45,7 +45,7 @@ consume: (provider: type is mem.allocator, memory: provider,
     sum = 0
     loop do
         count: usize = world.read(value.opened, value.buffer.val[0..<2])
-          else (problem)
+            else (problem)
             release_reader(memory, world, value) else none
             fail problem
         end
@@ -74,8 +74,8 @@ public main: () -> (code: i32) =
     code = 1
     name: []u8 = "f"
     file_value: io.memory_file =
-      (name: name, contents: input[0..<5], length: 5, cursor: 0,
-       readable: true, writable: false, state: io.closed_slot)
+        (name: name, contents: input[0..<5], length: 5, cursor: 0,
+         readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file_value
     args: [][]u8 = []

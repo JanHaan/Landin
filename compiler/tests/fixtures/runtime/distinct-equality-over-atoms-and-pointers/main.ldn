@@ -1,0 +1,84 @@
+--  D427: a distinct type whose base has equality compares with `==` and
+--  `<>`: over an atom set, a single atom, a pointer and a function value
+--  as over a scalar.  Over an unsigned base, `|=`, `&=` and `^=` update a
+--  set of flags in place, in a binding, a field, an array element at a
+--  computed index (whose place is reached once) and through `inout`.
+north: atom
+south: atom
+compass: type = north | south
+heading: type = distinct compass
+pole: type = distinct north
+cell: type = distinct ptr u32
+handler: type = distinct (n: i32) -> (r: i32)
+events: type = distinct u16
+
+readable: events = events(1)
+writable: events = events(4)
+fixed_heading: heading = heading(south)
+
+holder: type = struct
+    asked: events
+end holder
+
+twice: (n: i32) -> (r: i32) =
+    r = n * 2
+end twice
+
+thrice: (n: i32) -> (r: i32) =
+    r = n * 3
+end thrice
+
+add_writable: (inout set: events) -> none =
+    set |= writable
+end add_writable
+
+mut reached: i32 = 0
+
+next: () -> (position: usize) =
+    reached = reached + 1
+    position = 1
+end next
+
+public main: () -> (code: i32) =
+    code = 1
+    a := heading(north)
+    b := heading(south)
+    return when a == b or not (a <> b)
+    code = 2
+    return when b <> fixed_heading
+    code = 3
+    return when pole(north) <> pole(north)
+    code = 4
+    x: u32 = 3
+    y: u32 = 3
+    p := cell(addr x)
+    q := cell(addr y)
+    r := cell(addr x)
+    return when p == q or p <> r
+    code = 5
+    f := handler(twice)
+    return when f <> handler(twice) or f == handler(thrice)
+    code = 6
+    mut set := readable
+    set |= writable
+    return when u16(set) <> 5
+    code = 7
+    set &= writable
+    return when set <> writable
+    code = 8
+    set ^= events(3)
+    return when u16(set) <> 7
+    code = 9
+    mut held := holder(asked: readable)
+    held.asked |= writable
+    return when held.asked <> events(5)
+    code = 10
+    mut many: [2]events = [readable, readable]
+    many[next()] ^= readable
+    return when u16(many[1]) <> 0 or u16(many[0]) <> 1 or reached <> 1
+    code = 11
+    mut passed := readable
+    add_writable(passed)
+    return when u16(passed) <> 5
+    code = 42
+end main

@@ -105,8 +105,8 @@ package body Landin.Backend.Dwarf is
       end if;
       for Index in 1 .. Landin.Debugging.Count (Info) loop
          US.Append (Result, HT & ".file " & N (Index) & " "
-           & Quoted (Landin.Source.Name (Landin.Debugging.Source
-               (Info, Landin.Source.Source_Id (Index)))) & LF);
+           & Quoted (Landin.Debugging.Recorded_Name
+               (Info, Landin.Source.Source_Id (Index))) & LF);
       end loop;
       return US.To_String (Result);
    end Preamble;
@@ -154,7 +154,7 @@ package body Landin.Backend.Dwarf is
       Put (HT & ".asciz ""Landin refine (lines)""");
       Put (HT & ".short 0x0002");
       Put (HT & ".asciz " & Quoted
-        (Landin.Source.Name (Landin.Debugging.Source (Info, 1))));
+        (Landin.Debugging.Recorded_Name (Info, 1)));
       Put (HT & ".asciz " & Quoted (Landin.Debugging.Directory (Info)));
       Put (HT & ".long " & Prefix & "debug_line");
       for Index in 1 .. Item_Count (Of_Unit) loop
@@ -225,6 +225,9 @@ package body Landin.Backend.Dwarf is
         (Positive, Description);
       Types : Descriptions.Vector;
       Type_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
+      --  The code each atom has in this program, which D423's enumerators
+      --  give it.
+      Codes : constant Atom_Codes := Ranked (Of_Unit);
 
       procedure Put (Text : String);
       procedure Put (Text : String) is
@@ -467,6 +470,23 @@ package body Landin.Backend.Dwarf is
                   U (Natural (Size));
                   Ref (T (Shape_Type (Pointee_Shape
                     (Of_Unit, Shape.Pointee))));
+               elsif Shape.Atoms /= No_Atom_Set then
+                  --  D423: an atom set is an enumeration of its atoms,
+                  --  each with the code this program gives it, so a
+                  --  debugger prints a value by its atom's name.  The set
+                  --  has no name of its own in the IR, so neither has the
+                  --  type; its carrier is the type it refers to.
+                  U (23);
+                  U (Natural (Size));
+                  Ref (T (Shape_Type ((Element => Shape.Element,
+                                       others => <>))));
+                  for Index in 1 .. Atom_Count (Of_Unit, Shape.Atoms) loop
+                     U (24);
+                     Str (Decl_Name (Nth_Atom (Of_Unit, Shape.Atoms, Index)));
+                     U (Atom_Code
+                       (Codes, Nth_Atom (Of_Unit, Shape.Atoms, Index)));
+                  end loop;
+                  U (0);
                else
                   U (4);
                   Str (Landin.Types.Spelling (Shape.Element));
@@ -677,6 +697,7 @@ package body Landin.Backend.Dwarf is
          else
             Shape := (Element => Type_Of (Of_Unit, Item, Slot),
                       Pointee => Pointee_Of (Of_Unit, Item, Slot),
+                      Atoms => Atom_Set_Of (Of_Unit, Item, Slot),
                       others => <>);
          end if;
          return (if Shape.Kind = Aggregate_Field_Shape
@@ -1474,7 +1495,8 @@ package body Landin.Backend.Dwarf is
          elsif Result_Of (Of_Unit, Item) in Landin.Types.Scalar_Name then
             Typ := Shape_Type
               ((Element => Result_Of (Of_Unit, Item),
-                Pointee => Pointee_Of (Of_Unit, Item), others => <>));
+                Pointee => Pointee_Of (Of_Unit, Item),
+                Atoms => Atom_Set_Of (Of_Unit, Item), others => <>));
          else
             return;
          end if;
@@ -1558,6 +1580,13 @@ package body Landin.Backend.Dwarf is
          Abbreviation (21, 16#34#, False, "0x31,0x13,0x02,0x17");
          Abbreviation (22, 16#0b#, True, "0x31,0x13,0x55,0x17");
       end if;
+      --  D423's atom sets, only where a unit has one, as above: an
+      --  enumeration with its size and carrier type, and each enumerator
+      --  with its name and unsigned code.
+      if Atom_Set_Count (Of_Unit) > 0 then
+         Abbreviation (23, 16#04#, True, "0x0b,0x0f,0x49,0x13");
+         Abbreviation (24, 16#28#, False, "0x03,0x08,0x1c,0x0f");
+      end if;
       U (0);
       Put (Section ("info", Mach_O));
       Put (CU & ":");
@@ -1571,7 +1600,7 @@ package body Landin.Backend.Dwarf is
       --  C's expression/display rules are a debugger presentation, not a
       --  language claim.  Landin expressions are not evaluated by GDB.
       Put (HT & ".short 0x0002");
-      Str (Landin.Source.Name (Landin.Debugging.Source (Info, 1)));
+      Str (Landin.Debugging.Recorded_Name (Info, 1));
       Str (Landin.Debugging.Directory (Info));
       Put (HT & ".long " & (if Mach_O then "0"
         else Prefix & "debug_line"));

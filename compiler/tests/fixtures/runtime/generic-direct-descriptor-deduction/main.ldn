@@ -35,9 +35,9 @@ public main: () -> (code: i32) =
     second: other = other(x: 19, y: 23)
     copied_second: other = identity(second)
     if copied_color == red and copied_problem == missing
-       and operation(20) == 40 and test(1)
-       and copied_first.x + copied_first.y == 42
-       and copied_second.x + copied_second.y == 42
+      and operation(20) == 40 and test(1)
+      and copied_first.x + copied_first.y == 42
+      and copied_second.x + copied_second.y == 42
     then
         code = 42
     else

@@ -31,8 +31,8 @@ public main: () -> (code: i32) =
     -- pages; the returned MEMORY object also exercises the hidden address.
     returned := r450_large(value)
     if registers == 0 and returned.bytes[0] == 8
-       and returned.bytes[4095] == 12 and returned.bytes[8198] == 14
-       and returned.marker == 18 and value.marker == 17
+      and returned.bytes[4095] == 12 and returned.bytes[8198] == 14
+      and returned.marker == 18 and value.marker == 17
     then
         code = 0
     else

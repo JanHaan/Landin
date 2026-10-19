@@ -1,0 +1,15 @@
+mut room: usize = 8
+flag: bool = true
+called: usize = width()
+
+width: () -> (w: usize) =
+    w = 4
+end width
+
+written: type = [room]u8
+truth: type = [flag]u8
+run: type = [called]u8
+
+public main: () -> (code: i32) =
+    code = 0
+end main

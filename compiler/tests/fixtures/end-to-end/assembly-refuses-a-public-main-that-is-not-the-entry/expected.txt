@@ -1,0 +1,5 @@
+error[L0502]: a hosted program needs public main: () -> (code: i32)
+  --> ../tests/fixtures/end-to-end/assembly-refuses-a-public-main-that-is-not-the-entry/main.ldn:4:8
+  |
+4 | public main: () -> (status: i32) =
+  |        ^^^^

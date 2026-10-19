@@ -1,5 +1,5 @@
 count: type = u32
-size:  type = count
+size: type = count
 
 n: count = 7
 m: size = 9

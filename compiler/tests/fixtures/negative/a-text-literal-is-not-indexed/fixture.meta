@@ -1,0 +1,9 @@
+class: negative
+summary: an indexed text literal is refused naming the route, a name for the text, and offers no fix that removes the literal
+program: program.ldn
+codes: L0103
+constructs: 0260, 0570, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/a-text-literal-is-not-indexed/program.ldn
+status: 1

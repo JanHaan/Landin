@@ -1,0 +1,39 @@
+--  D434: `_ (rest):` binds the atoms no other arm named, one read-only
+--  name, and only where some atom is left: a named arm binds nothing, the
+--  rest is no wider than what it holds, and it is not the subject's place.
+red: atom
+green: atom
+blue: atom
+colour: type = red | green | blue
+warm: type = red | green
+
+nothing_left: (c: colour) -> (n: i32) =
+    match c
+        red: n = 1
+        green: n = 2
+        blue: n = 3
+        _ (rest): n = 4
+    end match
+end nothing_left
+
+writable_rest: (c: colour) -> (n: i32) =
+    match c
+        red: n = 1
+        _ (inout rest): n = 2
+    end match
+end writable_rest
+
+too_wide: (c: colour) -> (w: warm) =
+    w = red
+    match c
+        green: w = green
+        _ (rest): w = rest
+    end match
+end too_wide
+
+named_binds: (c: colour) -> (n: i32) =
+    match c
+        red(shade): n = 1
+        _: n = 2
+    end match
+end named_binds

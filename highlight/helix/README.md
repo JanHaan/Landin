@@ -3,9 +3,10 @@
 Merge `languages.toml` into the Helix language configuration, copy
 `runtime/queries/landin` into the matching runtime directory, then run
 `hx --grammar fetch` and `hx --grammar build`. The grammar source is pinned to
-the commit that contains this package's queries. After changing the grammar
-or queries, update the revision in `languages.toml` to a commit containing
-those changes. For testing uncommitted changes, replace the grammar source
+the commit that contains this package's queries. After committing a change
+to the grammar or queries, `python3 highlight/grammar_pin.py` moves the
+revision in `languages.toml`, and in the Zed and Emacs packages, to that
+commit. For testing uncommitted changes, replace the grammar source
 with an absolute `path` to `../tree-sitter`. The query set supplies highlights plus
 indentation, folds, and text objects.
 

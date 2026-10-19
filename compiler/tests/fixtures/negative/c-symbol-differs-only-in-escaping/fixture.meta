@@ -1,0 +1,9 @@
+class: negative
+summary: an extern(c) import sharing a Landin definition's symbol without the definition's escaping is L0347 saying escaping is the only difference and on which parameter, since a Landin caller through the import is checked against what the import says (D441)
+program: main.ldn
+root: root
+codes: L0347
+constructs: 0780, 1610
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+status: 1

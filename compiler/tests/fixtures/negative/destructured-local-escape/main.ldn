@@ -1,0 +1,20 @@
+--  D432: a destructured name is a frame local, so its address cannot leave
+--  the routine, and once it is sunk it is dead until assigned again.
+pair: () -> (count: i32, other: i32) =
+    count = 1
+    other = 2
+end pair
+
+consume: (sink n: i32) -> none =
+end consume
+
+leaked: () -> (at: ptr i32) =
+    (count, other) := pair()
+    at = addr count
+end leaked
+
+sunk_twice: () -> none =
+    (count, other) := pair()
+    consume(count)
+    consume(count)
+end sunk_twice

@@ -67,6 +67,39 @@ public value: i32 = 1
         self.assertTrue(result[2].signature.endswith('-> none'))
         self.assertNotIn('result =', result[2].signature)
 
+    def test_attributes_alone_above_the_name_are_read(self):
+        # The layout puts a declaration below its own attributes
+        # when they would make its first line long.
+        text = '''--- Renamed.
+public extern(c) link(symbol: "__error")
+errno_cell: () -> (cell: ptr mut i32)
+--- Exported.
+public link(symbol: "landin_checksum")
+checksum: (data: []u8)
+          -> (sum: u32) =
+    sum = 0
+end checksum
+--- A constant.
+public
+limit: u32 = 4
+--- After.
+public value: i32 = 1
+'''
+        result = self.read(text)
+        self.assertEqual([i.name for i in result],
+                         ['errno_cell', 'checksum', 'limit', 'value'])
+        self.assertEqual([i.kind for i in result],
+                         ['function', 'function', 'value', 'value'])
+        self.assertEqual(result[0].signature,
+                         'public extern(c) link(symbol: "__error")\n'
+                         'errno_cell: () -> (cell: ptr mut i32)')
+        self.assertTrue(result[1].signature.endswith('-> (sum: u32)'))
+        self.assertIn('link(symbol: "landin_checksum")\nchecksum:',
+                      result[1].signature)
+        self.assertNotIn('sum = 0', result[1].signature)
+        self.assertEqual(result[2].signature, 'public\nlimit: u32 = 4')
+        self.assertEqual(result[0].line, 2)
+
     def test_concept_entries_and_struct_fields_are_preserved(self):
         text = '''--- Input capability.
 public reader: type = concept (provider: type)
@@ -97,6 +130,31 @@ end if
         self.assertEqual(items[0].condition, 'compiler.c_aapcs64_lp64')
         self.assertEqual(items[1].condition, 'not (compiler.c_aapcs64_lp64)')
         self.assertEqual(items[0].anchor, items[1].anchor)
+
+    def test_value_may_begin_on_the_next_line(self):
+        """`refine fmt --check` accepts each of these layouts."""
+        text = '''--- Next line.
+public limit: i64 =
+    4096
+--- Continued.
+public sum: i64 = 4096
+                + 1
+--- Bracketed.
+public table: [3]i64 =
+    [1, 2,
+     3]
+--- After.
+public after: atom
+'''
+        result = self.read(text)
+        self.assertEqual([i.name for i in result], ['limit', 'sum', 'table', 'after'])
+        self.assertEqual([i.kind for i in result], ['value'] * 3 + ['atom'])
+        self.assertEqual(result[0].signature, 'public limit: i64 =\n    4096')
+        self.assertEqual(result[1].signature, 'public sum: i64 = 4096\n                + 1')
+        self.assertEqual(result[2].signature,
+                         'public table: [3]i64 =\n    [1, 2,\n     3]')
+        with self.assertRaisesRegex(ValueError, 'unsupported public value'):
+            self.read('--- Nothing.\npublic empty: i64 =\n--- After.\npublic after: atom\n')
 
     def test_unknown_public_form_and_unclosed_type_fail(self):
         with self.assertRaisesRegex(ValueError, 'unsupported public'):
@@ -132,6 +190,64 @@ public real: atom
                                  r'public (?:extern\((?:c|naked)\) )?'
                                  r'(?:link\(symbol: "[^"]*"\) )?'
                                  + re.escape(item.name) + ':')
+
+
+class ValueTables(unittest.TestCase):
+    """A value declared once per target is one row, a column each."""
+    SOURCE = '''fixed if compiler.arch == x86_64 then
+    --- `read`'s number on x86-64.
+    public read_number: i64 = 0
+    --- `write`'s number on x86-64.
+    public write_number: i64 = 1
+    --- `fork`'s number on x86-64.
+    public fork_number: i64 = 57
+    --- Only here.
+    public odd: i64 = 1
+elsif compiler.arch == arm64 then
+    --- `read`'s number on arm64.
+    public read_number: i64 = 63
+    --- `write`'s number on arm64.
+    public write_number: i64 = 64
+else
+    --- `read`'s number on RV64.
+    public read_number: i64 = 63
+    --- `write`'s number on RV64.
+    public write_number: i64 = 64
+end if
+fixed if compiler.hosted then
+    --- Elsewhere.
+    public odd: i64 = 2
+end if
+'''
+
+    def grouped(self, text):
+        grouped = {}
+        for item in library.read_items(text, 'platform/demo/demo.ldn'):
+            grouped.setdefault(item.name, []).append(item)
+        return grouped
+
+    def test_rows_columns_and_labels(self):
+        table = library.value_table(self.grouped(self.SOURCE))
+        self.assertEqual(list(table.rows), ['read_number', 'write_number', 'fork_number'])
+        self.assertEqual(table.labels, ['compiler.arch == x86_64',
+                                        'compiler.arch == arm64', 'otherwise'])
+        self.assertEqual(table.columns[1],
+                         'not (compiler.arch == x86_64) and (compiler.arch == arm64)')
+        kind, items, values = table.rows['read_number']
+        self.assertEqual(kind, 'i64')
+        self.assertEqual(list(values.values()), ['0', '63', '63'])
+        self.assertEqual(list(table.rows['fork_number'][2]), [table.columns[0]])
+        self.assertEqual(table.documentation('read_number'),
+                         "`read`'s number on x86-64 / arm64 / RV64.")
+
+    def test_no_table_without_a_repeated_name(self):
+        self.assertIsNone(library.value_table(self.grouped(
+            '--- A.\npublic a: i64 = 1\n--- B.\npublic b: i64 = 2\n')))
+
+    def test_documentation_that_differs_in_more_than_a_label_is_kept_whole(self):
+        texts = ['Counts the open files.', 'Says which processes are running now.']
+        self.assertEqual(library.merged_documentation(texts), ' / '.join(texts))
+        self.assertEqual(library.merged_documentation(['Same.', 'Same.']), 'Same.')
 
 
 class GeneratedReference(unittest.TestCase):
@@ -248,11 +364,52 @@ class GeneratedReference(unittest.TestCase):
                 self.assertNotIn('api-search-data', text)
                 content = sum(len(m) for m in re.findall(
                     r'<section class="api-item".*?</section>'
+                    r'|<section class="api-values".*?</section>'
                     r'|<pre class="api-signature">.*?</pre>'
                     r'|<details id="example">.*?</details>', text, re.S))
                 self.assertLess(len(text) - content, 96 * 1024)
         self.assertLess(max((self.destination / n).stat().st_size
                             for n in self.pages), 1024 * 1024)
+
+    def test_linux_numbers_are_one_row_per_name(self):
+        """The page was 758 KB, every name repeated per architecture."""
+        module = 'platform/linux/numbers'
+        names = {item.name for item in self.modules[module]}
+        text = (self.destination / library.page_name(module)).read_text()
+        rows = re.findall(r'<tr class="api-item" id="item-(\w+)">', text)
+        self.assertEqual(sorted(rows), sorted(names))
+        self.assertNotIn('<section class="api-item"', text)
+        head = re.search(r'<table class="api-table"><thead>(.*?)</thead>', text, re.S)[1]
+        for arch in ('x86_64', 'arm64', 'rv64'):
+            self.assertIn(f'compiler.arch == {arch}', head)
+        self.assertLess(len(text.encode()), 384 * 1024)
+
+    def test_changed_value_cell_is_detected(self):
+        target = self.destination / library.page_name('platform/linux/numbers')
+        original = target.read_text()
+        row = original.index('<tr class="api-item" id="item-read_number">')
+        changed = original[:row] + re.sub(r'<code>0</code>', '<code>1</code>',
+                                          original[row:], count=1)
+        self.assertNotEqual(original, changed)
+        try:
+            target.write_text(changed)
+            with self.assertRaisesRegex(ValueError, 'value table row changed'):
+                library.verify(self.destination, self.pages, self.modules, render_html)
+        finally:
+            target.write_text(original)
+
+    def test_lost_row_documentation_is_detected(self):
+        target = self.destination / library.page_name('platform/linux/numbers')
+        original = target.read_text()
+        row = original.index('<tr class="api-item" id="item-read_number">')
+        changed = original[:row] + original[row:].replace('system-call', 'call', 1)
+        try:
+            target.write_text(changed)
+            with self.assertRaisesRegex(ValueError, 'lost words'):
+                library.verify(self.destination, self.pages, self.modules, render_html)
+        finally:
+            target.write_text(original)
+
 
 if __name__ == '__main__':
     unittest.main()

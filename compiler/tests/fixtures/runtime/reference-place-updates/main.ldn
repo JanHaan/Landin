@@ -34,8 +34,8 @@ public main: () -> (code: i32) =
     dec pointer.val.value
     pointer.val.value = if local.value == 10 then 42 else 1 end if
     code = if calls == 2 and values[0] == 11 and values[1] == 19
-              and values[2] == 30 and rhs_calls == 1 and order == 12
-              and numbers[0] == 12 and numbers[1] == 20 and numbers[2] == 30
-              and local.before == 7 and local.value == 42 and local.after == 9
+      and values[2] == 30 and rhs_calls == 1 and order == 12
+      and numbers[0] == 12 and numbers[1] == 20 and numbers[2] == 30
+      and local.before == 7 and local.value == 42 and local.after == 9
            then 42 else 1 end if
 end main

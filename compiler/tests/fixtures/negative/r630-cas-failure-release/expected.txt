@@ -1,4 +1,8 @@
 error[L0344]: invalid constant memory ordering
+  --> ../tests/fixtures/negative/r630-cas-failure-release/program.ldn:5:74
+  |
+5 |     _ = compiler.atomic_compare_exchange(addr a, 0, 1, compiler.seq_cst, compiler.release)
+  |                                                                          ^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/r630-cas-failure-release/program.ldn:5:9
   |
 5 |     _ = compiler.atomic_compare_exchange(addr a, 0, 1, compiler.seq_cst, compiler.release)

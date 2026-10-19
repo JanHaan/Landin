@@ -13,11 +13,11 @@ end fib
 
 public main: () -> (code: i32) =
     if fib(0) == 0
-        and fib(1) == 1
-        and fib(2) == 1
-        and fib(10) == 55
-        and fib(20) == 6765
-        and fib(25) == 75025
+      and fib(1) == 1
+      and fib(2) == 1
+      and fib(10) == 55
+      and fib(20) == 6765
+      and fib(25) == 75025
     then
         code = 42
     else

@@ -19,9 +19,16 @@ package Landin.Debugging is
    is tagged limited private;
 
    --  Describes the next of Sources' snapshots, which must be that one.
+   --  Recorded is the path debug information names it by: the path it was
+   --  read from, or for a library module's file a logical one that does
+   --  not say where the library was installed (D422,
+   --  Landin.Source_Maps.Recorded_Name); "" records the read path.
    procedure Append
-     (Into : in out Information; Snapshot : Landin.Source.Snapshot);
+     (Into : in out Information; Snapshot : Landin.Source.Snapshot;
+      Recorded : String := "");
    function Count (Info : Information) return Natural;
+   function Recorded_Name
+     (Info : Information; Id : Landin.Source.Source_Id) return String;
    function Source
      (Info : aliased Information; Id : Landin.Source.Source_Id)
       return Landin.Source.Snapshot_Reference;
@@ -49,11 +56,16 @@ private
    package Result_Vectors is new Ada.Containers.Vectors
      (Positive, Name_Vectors.Vector, "=" => Name_Vectors."=");
 
+   package Path_Vectors is new Ada.Containers.Vectors
+     (Positive, Ada.Strings.Unbounded.Unbounded_String,
+      "=" => Ada.Strings.Unbounded."=");
+
    type Information
      (Trees   : not null access constant Landin.Syntax.Forest.Table;
       Sources : not null access constant Landin.Source.Sets.Source_Set)
    is tagged limited record
       Described : Natural := 0;
+      Recorded : Path_Vectors.Vector;
       Compile_Directory : Ada.Strings.Unbounded.Unbounded_String;
       Result_Names : Result_Vectors.Vector;
    end record;

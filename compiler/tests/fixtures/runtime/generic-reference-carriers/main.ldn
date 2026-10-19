@@ -112,5 +112,5 @@ public main: () -> (code: i32) =
     third := get(explicit_carrier)
     _ = third.bump()
     code = if left.value == 18 and right.value == 25
-              and lenof erased_view == 2 then 42 else 4 end if
+      and lenof erased_view == 2 then 42 else 4 end if
 end main

@@ -2171,7 +2171,7 @@ package body Landin.Backend.Arm64 is
 
       function Source_Symbol (Item : Landin.IR.Item_Id) return String is
          Declared : constant Landin.IR.Declaration_Id :=
-           Landin.IR.Declares (Of_Unit, Item);
+           Landin.Backend.Symbol_Declaration (Of_Unit, Item);
       begin
          if Landin.IR.Link_Symbol (Of_Unit, Item)
            /= Landin.Source.Names.No_Name
@@ -2234,6 +2234,13 @@ package body Landin.Backend.Arm64 is
       procedure Allocate_Symbols is
          Allocated : Spelling_Counts;
          Sources : Spelling_Counts;
+         --  For each base a colliding item probes, how many of its
+         --  attempts, the base itself first, an earlier item found taken.
+         --  Nothing is freed while names are given and Sources is fixed,
+         --  so those stay taken: every instance of a generic routine
+         --  shares its routine's spelling (D421), and probing each from
+         --  the start made giving them names quadratic.
+         Tried : Spelling_Counts;
 
          function Available
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean;
@@ -2286,7 +2293,7 @@ package body Landin.Backend.Arm64 is
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Position);
                Declared : constant Landin.IR.Declaration_Id :=
-                 Landin.IR.Declares (Of_Unit, Item);
+                 Landin.Backend.Symbol_Declaration (Of_Unit, Item);
                Spelling : constant String := Source_Symbol (Item);
             begin
                if not Is_Forced (Item) then
@@ -2300,13 +2307,17 @@ package body Landin.Backend.Arm64 is
                            then Spelling
                            else Landin.Backend.Qualified_Symbol
                              (Meanings, Declared, Spelling));
+                        Attempt : Natural := Count (Tried, Base);
                         Candidate : Unbounded.Unbounded_String :=
-                          Unbounded.To_Unbounded_String (Base);
-                        Attempt : Natural := 0;
+                          Unbounded.To_Unbounded_String
+                            (if Attempt = 0 then Base
+                             else Base & "." & Trimmed
+                               (Natural'Image (Attempt)));
                      begin
                         while not Available
                           (Unbounded.To_String (Candidate), Item)
                         loop
+                           Add (Tried, Base);
                            Attempt := Attempt + 1;
                            Candidate := Unbounded.To_Unbounded_String
                              (Base & "." & Trimmed (Natural'Image (Attempt)));
@@ -2742,12 +2753,7 @@ package body Landin.Backend.Arm64 is
             Atoms : constant Landin.IR.Atom_Set_Id :=
               Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
          begin
-            if Atoms /= Landin.IR.No_Atom_Set
-              and then Landin.IR.Op_Of (Of_Unit, Item, Value) in
-                Landin.IR.Load | Landin.IR.Load_Indirect
-                | Landin.IR.Load_Datum | Landin.IR.Load_Field
-                | Landin.IR.Load_Element | Landin.IR.Load_Variant_Field
-            then
+            if Landin.IR.Validates_Atoms (Of_Unit, Item, Value) then
                declare
                   Done : constant String := Fresh;
                begin
@@ -5744,26 +5750,47 @@ package body Landin.Backend.Arm64 is
                                      when others => "sxtw ")
                                  & Tested & ", " & Short (Source));
                         end if;
-                        Bound (Landin.IR.Range_Lower (Of_Unit, Item, Value),
-                               (if Signed then "lt" else "lo"));
-                        Bound (Landin.IR.Range_Upper (Of_Unit, Item, Value),
-                               (if Signed then "gt" else "hi"));
+                        --  An edge at the type's own extreme passes every
+                        --  value, so it is not tested: `ptr(n)`'s upper
+                        --  edge is the largest `usize`.
+                        if Landin.IR.Range_Lower (Of_Unit, Item, Value)
+                          > Landin.Types.Lowest (Kind (Value), Facts)
+                        then
+                           Bound (Landin.IR.Range_Lower
+                                    (Of_Unit, Item, Value),
+                                  (if Signed then "lt" else "lo"));
+                        end if;
+                        if Landin.IR.Range_Upper (Of_Unit, Item, Value)
+                          < Landin.Types.Highest (Kind (Value), Facts)
+                        then
+                           Bound (Landin.IR.Range_Upper
+                                    (Of_Unit, Item, Value),
+                                  (if Signed then "gt" else "hi"));
+                        end if;
                         Deliver (Value, Source, Extended => True);
                      end;
                      return;
                   end if;
                   Load_Value (Operand (1));
                   Extend ("x9", Kind (Value));
-                  Immediate ("x10", To_Pattern
-                    (Landin.IR.Range_Lower (Of_Unit, Item, Value), 64));
-                  Emit ("cmp x9, x10");
-                  Emit ((if Landin.Types.Is_Signed (Kind (Value))
-                    then "b.lt " else "b.lo ") & Trap);
-                  Immediate ("x10", To_Pattern
-                    (Landin.IR.Range_Upper (Of_Unit, Item, Value), 64));
-                  Emit ("cmp x9, x10");
-                  Emit ((if Landin.Types.Is_Signed (Kind (Value))
-                    then "b.gt " else "b.hi ") & Trap);
+                  if Landin.IR.Range_Lower (Of_Unit, Item, Value)
+                    > Landin.Types.Lowest (Kind (Value), Facts)
+                  then
+                     Immediate ("x10", To_Pattern
+                       (Landin.IR.Range_Lower (Of_Unit, Item, Value), 64));
+                     Emit ("cmp x9, x10");
+                     Emit ((if Landin.Types.Is_Signed (Kind (Value))
+                       then "b.lt " else "b.lo ") & Trap);
+                  end if;
+                  if Landin.IR.Range_Upper (Of_Unit, Item, Value)
+                    < Landin.Types.Highest (Kind (Value), Facts)
+                  then
+                     Immediate ("x10", To_Pattern
+                       (Landin.IR.Range_Upper (Of_Unit, Item, Value), 64));
+                     Emit ("cmp x9, x10");
+                     Emit ((if Landin.Types.Is_Signed (Kind (Value))
+                       then "b.gt " else "b.hi ") & Trap);
+                  end if;
                   Store_Value (Value);
                when Landin.IR.Conversion | Landin.IR.Pointer_Address
                   | Landin.IR.Code_Address =>

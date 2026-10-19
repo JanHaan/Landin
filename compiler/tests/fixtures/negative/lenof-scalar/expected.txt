@@ -2,5 +2,9 @@ error[L0301]: this is not an array or slice, so it has no length
   --> ../tests/fixtures/negative/lenof-scalar/program.ldn:2:15
   |
 2 |     r = lenof value
-  |               ^^^^^ what it names
+  |               ^^^^^
+  --> ../tests/fixtures/negative/lenof-scalar/program.ldn:1:5
+  |
+1 | f: (value: u32) -> (r: usize) =
+  |     ^^^^^^^^^^ what it names
   = note: [0370]: `lenof` measures a fixed array, array literal or slice

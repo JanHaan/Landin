@@ -50,7 +50,7 @@ module_element: () -> (result: ptr u32) =
 end module_element
 
 traversal_match: (source: []mut box, index: usize)
-    -> (result: ptr u32 from source) =
+                 -> (result: ptr u32 from source) =
     result = addr source[0].fallback
     for container in source do
         match container.kind

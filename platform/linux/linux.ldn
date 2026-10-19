@@ -1253,7 +1253,14 @@ fixed if compiler.os == linux then
 
     --- The auxiliary-vector entry tagged `tag` (`6` is the page size), as
     --- `_landin_start` found it, or `adopt_start` under `--link=libc`:
-    --- whether there is one, and its value.
+    --- whether there is one, and its value.  Every entry is the kernel's
+    --- own.  A C library's `getauxval` can differ: on x86-64 glibc answers
+    --- AT_HWCAP (`16`) from its own `dl_hwcap`, which it sets while it
+    --- detects the processor and which holds glibc's library-search bits
+    --- (`HWCAP_X86_64` and its AVX-512 bit), not the processor's `cpuid`
+    --- word the kernel put in the vector, so the two disagree under
+    --- `--link=libc`.  For the processor's features, `read_cpu_words`
+    --- asks the processor itself.
     public auxiliary:
         (tag: u64) -> (found: bool, value: u64) =
         found = false

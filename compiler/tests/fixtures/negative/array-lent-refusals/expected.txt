@@ -28,7 +28,7 @@ error[L0301]: an array lends an ordinary slice, and this parameter is a text vie
 9 | shown: (value: utf8) -> (count: usize) =
   |         ^^^^^^^^^^^ this parameter
   = note: [0600]: text is validated where it is made; convert the bytes to the view
-error[L0304]: an array literal takes its shape from an array destination, an inferred binding or a non-generic slice parameter
+error[L0304]: an array literal takes no shape from a slice parameter whose element type names a generic formal; bind it, `values := [...]`, and pass the name
   --> ../tests/fixtures/negative/array-lent-refusals/main.ldn:21:38
    |
 21 |     count = shown([104, 105]) + pick([1, 2])

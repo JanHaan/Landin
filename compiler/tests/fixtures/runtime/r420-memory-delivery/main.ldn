@@ -90,8 +90,8 @@ public main: () -> (code: i32) =
     code = 1
     name: []u8 = "delivery"
     configured: io.memory_file =
-      (name: name, contents: delivered_bytes[0..<12], length: 0, cursor: 0,
-       readable: true, writable: true, state: io.closed_slot)
+        (name: name, contents: delivered_bytes[0..<12], length: 0, cursor: 0,
+         readable: true, writable: true, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = configured
     no_arguments: [][]u8 = []
@@ -103,17 +103,17 @@ public main: () -> (code: i32) =
     world: any io.world = any(addr memory)
 
     file_handle: io.file = world.open_write(text.host_over(delivery_path))
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
     output_handle: io.file = world.out()
     mut file_state: file_delivery =
-      (opened: file_handle, attempts: 0, completed: 0, completed_bytes: 0,
-       failures: 0, finish_calls: 0, finish_failures: 0, closed: false)
+        (opened: file_handle, attempts: 0, completed: 0, completed_bytes: 0,
+         failures: 0, finish_calls: 0, finish_failures: 0, closed: false)
     mut count_state: count_delivery =
-      (opened: output_handle, messages: 0, bytes: 0,
-       finish_calls: 0, closed: false)
+        (opened: output_handle, messages: 0, bytes: 0,
+         finish_calls: 0, closed: false)
     file_target: any delivery = any(addr file_state)
     count_target: any delivery = any(addr count_state)
     mut selected: any delivery = file_target

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: values of a distinct type over an atom set, an atom, a pointer or a function value compare with == and <>, and flags over an unsigned base update in place with |=, &= and ^= in bindings, fields, computed array elements and inout parameters
+program: main.ldn
+status: 42
+constructs: 0330, 0350, 0390, 0650, 1890
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

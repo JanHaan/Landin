@@ -324,8 +324,25 @@ versions or language rules.
 
 Debuggers display Landin's represented types through their C presentation.
 A variant is a truthful tag plus named payload overlays; users select the
-active payload using the tag. LLDB canonicalizes scalar display names, such as
-`i32` to `int`. It does not evaluate Landin expressions. Source aliases from
+active payload using the tag. An atom set is an enumeration of its atoms
+with this program's codes, so a value prints as its atom's name (D423).
+A generic instance is a local symbol named after its routine (D421), as
+`nm`, `perf` and a backtrace show it.
+
+A file of a library module is recorded in the line table and the source map
+as `/landin-library/`, its module path and its name (D422), so neither
+depends on where the library was installed. Map the prefix to the directory
+`refine version` prints to read those files in a debugger:
+
+```sh
+gdb -ex "set substitute-path /landin-library $(refine version | sed -n 's/^library: //p')" ./program
+lldb -o "settings set target.source-map /landin-library /path/to/library" ./program
+```
+
+In GDB a breakpoint by a library file's module path, `core/vec/vec.ldn:120`,
+needs no mapping; showing its source does.
+
+LLDB canonicalizes scalar display names, such as `i32` to `int`. It does not evaluate Landin expressions. Source aliases from
 matches, named-result destructuring and loops remain inspectable in their
 live scopes. On arm64 source slots keep stack homes without optimization
 and at size; at speed a slot may hold a general or d register, and its
@@ -349,6 +366,9 @@ source maps, with the frame base x29 and the CFA at x29+16 that Darwin's
 CFI describes. `./scripts/debug.sh` on an arm64 Linux host runs them with the
 GDB the pinned aarch64 GNAT bundles; `--target=linux-arm64 --qemu
 qemu-aarch64 --driver DRIVER` runs them anywhere else under QEMU's GDB stub.
+On either, GDB's backtrace ends at `main` by default; `set backtrace past-main
+on` shows the `_landin_start_main` and `_landin_start` frames below it, as
+the panic sessions do.
 
 ### Exact identity and optional deployment
 
@@ -496,8 +516,8 @@ and in what order they run.
 | assembly without `--debug` and without a source map | equivalent closures | nothing about where it was built |
 | assembly without `--debug`, with caller coordinates or `--panic-map` | equivalent closures with source-path spelling fixed | the source-map build identity in a comment and, on some targets, a section |
 | build report | equivalent closures, apart from `sources[].path_hex` | the caller-spelled source paths, and a content hash beside each |
-| source/panic map (`*.sources.json`) | equivalent closures with source-path spelling fixed; also compilation directory fixed when `--debug` is set | caller-spelled paths, a build identity hashed over the file entries and assembly, and the SHA-256 of the final assembly |
-| `--debug=full`, `--debug=lines` assembly | equivalent closures with the compilation directory and source spelling fixed | DWARF `comp_dir` and `.file`, and the build identity hashed over them |
+| source/panic map (`*.sources.json`) | equivalent closures with source-path spelling fixed; also compilation directory fixed when `--debug` is set | caller-spelled paths, a library file's as `/landin-library/` and its module path wherever the library is (D422), a build identity hashed over the file entries and assembly, and the SHA-256 of the final assembly |
+| `--debug=full`, `--debug=lines` assembly | equivalent closures with the compilation directory and source spelling fixed | DWARF `comp_dir` and `.file`, a library file's under `/landin-library/` (D422), and the build identity hashed over them |
 | Cortex-M device fixture ELF, object, assembly, linker script and linker map | paired builds with fixed source-path spelling in [`devices.py`](../environments/cortex-m/devices.py) | — |
 | hosted linked executable | **not claimed** | the platform driver's own temporary object name |
 

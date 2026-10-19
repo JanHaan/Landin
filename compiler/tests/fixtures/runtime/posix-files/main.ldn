@@ -49,7 +49,7 @@ refused: (at: posix.descriptor, path: text.host_string,
          -> (yes: bool) =
     yes = false
     opened: posix.descriptor = posix.open_at(at, path, options, 0o644)
-      else (problem)
+        else (problem)
         said(name, problem)
         yes = problem == wanted
         return
@@ -71,9 +71,9 @@ public main: () -> (code: i32) =
                       (access: posix.read_only, create: false,
                        exclusive: false, truncate: false, append: false,
                        directory: true), 0) else (problem)
-        said("folder", problem)
-        return
-    end
+            said("folder", problem)
+            return
+        end
 
     --  A file made relative to the directory's descriptor, written and
     --  read back through a second descriptor.
@@ -81,9 +81,9 @@ public main: () -> (code: i32) =
     written: posix.descriptor =
         posix.open_at(folder, text.host_over("data"), posix.writing,
                       0o644) else (problem)
-        said("create", problem)
-        return
-    end
+            said("create", problem)
+            return
+        end
     count: usize = posix.write(written, "posix\n") else (problem)
         said("write", problem)
         return
@@ -97,9 +97,9 @@ public main: () -> (code: i32) =
     reading: posix.descriptor =
         posix.open_at(posix.working_directory, text.host_over(inner),
                       posix.reading, 0) else (problem)
-        said("open", problem)
-        return
-    end
+            said("open", problem)
+            return
+        end
     mut buffer: [16]u8 = zeroed
     got: usize = posix.read(reading, buffer[0..<16]) else (problem)
         said("read", problem)
@@ -121,21 +121,21 @@ public main: () -> (code: i32) =
     code = 5
     file: posix.status =
         posix.status_at(folder, text.host_over("data"), false) else (problem)
-        said("stat", problem)
-        return
-    end
+            said("stat", problem)
+            return
+        end
     again: posix.status =
         posix.status_at(posix.working_directory, text.host_over(inner),
                         true) else (problem)
-        said("stat", problem)
-        return
-    end
+            said("stat", problem)
+            return
+        end
     holder: posix.status =
         posix.status_at(posix.working_directory, text.host_over(top),
                         true) else (problem)
-        said("stat", problem)
-        return
-    end
+            said("stat", problem)
+            return
+        end
     return when file.kind <> posix.regular or file.size <> 6
       or file.device <> again.device or file.inode <> again.inode
       or holder.kind <> posix.directory or holder.inode == file.inode
@@ -178,12 +178,12 @@ public main: () -> (code: i32) =
         return
     end
     posix.unlink_at(posix.working_directory, text.host_over(inner))
-      else (problem)
+        else (problem)
         said("unlink", problem)
         return
     end
     posix.remove_directory_at(posix.working_directory, text.host_over(top))
-      else (problem)
+        else (problem)
         said("rmdir", problem)
         return
     end

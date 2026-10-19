@@ -12,15 +12,14 @@ from pathlib import Path
 import re
 
 from check import ROOT, Run, hash_file, require
+import fixture_meta
 
 
 def candidates(root):
-    for cls in ('negative', 'positive', 'end-to-end'):
-        for path in sorted((root / 'compiler/tests/fixtures' / cls).glob('*/fixture.meta')):
-            meta = dict(line.split(': ', 1) for line in path.read_text().splitlines()
-                        if ': ' in line and not line.startswith('#'))
-            if 'darwin-arm64' in meta['targets'].split(', ') and ('program' in meta or 'args' in meta):
-                yield str(path.parent.relative_to(root / 'compiler/tests/fixtures')), meta
+    for meta in fixture_meta.discover(('negative', 'positive', 'end-to-end'),
+                                      root / 'compiler/tests/fixtures'):
+        if meta.applies_to('darwin-arm64') and ('program' in meta or 'args' in meta):
+            yield meta.label, meta
 
 
 def main():
@@ -42,18 +41,11 @@ def main():
         for name, meta in selected:
             if args.case and name != args.case:
                 continue
-            meta = {**meta, **{k: v for k, v in differences.get(name, {}).items() if k != 'reason'}}
-            base = Path('../tests/fixtures') / name
-            #  A rooted fixture's `args` are options before the module its
-            #  root gives (compiler/tests/README.md).
-            if 'root' in meta:
-                argv = meta.get('args', '').split() + [
-                    '--root=' + str(base / meta['root']), str(base)]
-            elif 'args' in meta:
-                argv = meta['args'].split()
-            else:
-                argv = [str(base / meta['program'])]
-                argv += [str(base / part.strip()) for part in meta.get('with', '').split(',') if part.strip()]
+            meta = fixture_meta.Metadata.of(
+                {**meta, **{k: v for k, v in differences.get(name, {}).items() if k != 'reason'}}, name)
+            #  What the test program runs refine with, from compiler/ada
+            #  (compiler/tests/fixture_meta.py).
+            argv = meta.source_arguments('../tests/fixtures/' + name)
             # Explicit target-refusal fixtures retain their own request; the
             # ordinary shared source selects Darwin, including recorded errors.
             argv = [a.replace('--target=linux-x86-64', '--target=darwin-arm64') for a in argv]
@@ -63,13 +55,13 @@ def main():
             status, stdout, stderr = run.command([args.refine.resolve(), *argv], label,
                                                  ROOT / 'compiler/ada', expected=None, timeout=180,
                                                  merged=meta.get('stream', 'merged') == 'merged')
-            expected_status = int(meta.get('status', '1' if meta['class'] == 'negative' else '0'))
+            expected_status = meta.status
             require(status == expected_status, f'{name}: expected {expected_status}, got {status}')
             actual = stdout + stderr
             # A fixture's `codes:` pins warnings as it pins errors, in report
             # order (D251), and a diagnostic's level and code begin its line.
             codes = re.findall(rb'(?m)^(?:error|warning)\[(L[0-9]{4})\]', actual)
-            expected_codes = [c.strip().encode() for c in meta.get('codes', '').split(',') if c.strip()]
+            expected_codes = [c.encode() for c in meta.codes]
             # An end-to-end fixture pins its whole report through `expect`
             # rather than `codes`, so its codes are the ones that report holds.
             if meta['class'] == 'end-to-end' and 'codes' not in meta and 'expect' in meta:

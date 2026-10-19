@@ -32,8 +32,13 @@ is read as an editor shows it, a byte that is not UTF-8 as U+FFFD.
 
 The server is initialized with the checkout as its import root. Before the
 mutants, the driver opens `negative/core-fault-needs-mutable-inner` unchanged
-and requires its L0303 diagnostic at line 10. That diagnostic comes after
-`core/fault` and `hosted/heap` resolve; a run that loses imports fails here.
+and requires the diagnostic that fixture pins: the first code its `codes:`
+names, on the line of the primary span its recorded report gives, L0303 on
+line 10 today. Both are read from the fixture (`fuzz.IMPORT_FIXTURE`), so a
+change to it moves the preflight with it, and a fixture that no longer pins a
+code and a span says to choose another rooted negative. That diagnostic comes
+after `core/fault` and `hosted/heap` resolve; a run that loses imports fails
+here.
 The reproducers are separate seeds, so each is copied into its own temporary
 module for the run. The unchanged `min-100299.ldn` must report L0336, L0339 and
 L0303 before the mutants run; sibling reproducers cannot mask its checker path.

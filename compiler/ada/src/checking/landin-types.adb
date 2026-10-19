@@ -107,6 +107,40 @@ package body Landin.Types is
       return Fits (Magnitude (Value), Item, Facts, Negated => False);
    end Holds;
 
+   --------------
+   --  Lowest  --
+   --------------
+
+   function Lowest
+     (Item  : Integer_Name;
+      Facts : Landin.Targets.Target_Facts) return Folded
+   is
+      Bits : constant Natural := Natural (Width (Item, Facts));
+   begin
+      if Is_Signed (Item) then
+         return -(2 ** (Bits - 1));
+      end if;
+      return 0;
+   end Lowest;
+
+   ---------------
+   --  Highest  --
+   ---------------
+
+   function Highest
+     (Item  : Integer_Name;
+      Facts : Landin.Targets.Target_Facts) return Folded
+   is
+      Bits : constant Natural := Natural (Width (Item, Facts));
+   begin
+      if Is_Signed (Item) then
+         return 2 ** (Bits - 1) - 1;
+      elsif Bits = Natural (Widest) then
+         return Folded'Last;
+      end if;
+      return 2 ** Bits - 1;
+   end Highest;
+
    ----------------
    --  Evaluate  --
    ----------------

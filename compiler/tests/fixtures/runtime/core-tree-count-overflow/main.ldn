@@ -40,9 +40,9 @@ public main: () -> (code: i32) =
         added: tree.node_id = tree.add_branch(value, counted, label, start,
                                               two)
             else (problem)
-                overflow = problem == tree.too_many_leaves
-                last
-            end
+            overflow = problem == tree.too_many_leaves
+            last
+        end
         if predicted_overflow then
             unchanged = tree.length(value) == before
             break
@@ -67,9 +67,9 @@ public main: () -> (code: i32) =
     one: usize = 1
     small: tree.node_id = tree.add_branch(value, counted, label, first, one)
         else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     small_count: usize = tree.count_leaves(value, small) else 0
     mut invalid: bool = false
     _ = tree.count_leaves(value, wide) else (problem)
@@ -83,9 +83,9 @@ public main: () -> (code: i32) =
     --  allocation, freed once, so the four growth attempts are what
     --  attempts count beyond frees, however many the heap grew in place.
     if overflow and unchanged and invalid and wide_count and before_release == 94
-       and final == 12200160415121876738 and small_count == 1
-       and fault.attempts(counted) - fault.frees(counted) == 4
-       and fault.live(counted) == 0
+      and final == 12200160415121876738 and small_count == 1
+      and fault.attempts(counted) - fault.frees(counted) == 4
+      and fault.live(counted) == 0
     then
         code = 42
     end if

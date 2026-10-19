@@ -27,11 +27,10 @@ formatted: (host: io.memory, inout state: io.memory_space)
     a: u32 = 12
     b: u32 = 345
     try io.put(out, "x")
-    pair: [2]any text.formattable = [any(addr a), any(addr b)]
-    try io.format(out, "{}+{}", pair[0..<2])
+    --  The values written inline, as `text.format` takes them.
+    try io.format(out, "{}+{}", [any(addr a), any(addr b)])
     return when state.writes <> 0 or io.pending(out) <> 7
-    one: [1]any text.formattable = [any(addr b)]
-    try io.format(out, "={}", one[0..<1])
+    try io.format(out, "={}", [any(addr b)])
     return when state.writes <> 1 or io.pending(out) <> 4
     mut refused: bool = false
     --  Ten digits, more than the whole buffer holds.  A u32 rather than a

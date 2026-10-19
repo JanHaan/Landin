@@ -1,0 +1,30 @@
+error[L0302]: this function can reach its `end` without assigning the return `r`
+  --> ../tests/fixtures/negative/loop-exit-skips-assignment/main.ldn:4:1
+  |
+4 | early_break: (flag: bool) -> (r: i32) =
+  | ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-exit-skips-assignment/main.ldn:4:31
+  |
+4 | early_break: (flag: bool) -> (r: i32) =
+  |                               ^ declared here with no value
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check
+error[L0302]: this function can reach its `end` without assigning the return `r`
+  --> ../tests/fixtures/negative/loop-exit-skips-assignment/main.ldn:12:1
+   |
+12 | body_only: (flag: bool) -> (r: i32) =
+   | ^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-exit-skips-assignment/main.ldn:12:29
+   |
+12 | body_only: (flag: bool) -> (r: i32) =
+   |                             ^ declared here with no value
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check
+error[L0302]: `x` is read here and a path that arrives has not assigned it
+  --> ../tests/fixtures/negative/loop-exit-skips-assignment/main.ldn:24:9
+   |
+24 |     r = x
+   |         ^
+  --> ../tests/fixtures/negative/loop-exit-skips-assignment/main.ldn:20:9
+   |
+20 |     mut x: i32
+   |         ^ declared here with no value
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check

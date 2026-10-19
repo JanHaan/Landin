@@ -8,8 +8,8 @@ import core/text
 import hosted/system
 
 extern(c) r440_run_errno_threads: (first: ptr system.host,
-                                    second: ptr system.host)
-                                   -> (result: i32)
+                                   second: ptr system.host)
+                                  -> (result: i32)
 
 thread_path: []u8 = "r440-thread"
 
@@ -18,13 +18,13 @@ public extern(c) link(symbol: "r440_errno_thread_probe") thread_probe:
     result = 1
     opened: io.file = io.open_read(state.val, text.host_over(thread_path))
         else (problem)
-            if problem == io.io_failed
-              and system.last_errno(state.val) == expected
-            then
-                result = 42
-            end if
-            return
-        end
+        if problem == io.io_failed
+          and system.last_errno(state.val) == expected
+        then
+            result = 42
+        end if
+        return
+    end
     io.close(state.val, opened) else none
 end thread_probe
 

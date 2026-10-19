@@ -30,15 +30,15 @@ end nested
 control_value: (left: bool) -> (result: i32) =
     mut late: i32 = 8
     result = if left then
-        defer mark(late)
-        late = 9
-        42
-    else
-        begin
-            defer mark(1)
-            42
-        end
-    end if
+                 defer mark(late)
+                 late = 9
+                 42
+             else
+                 begin
+                     defer mark(1)
+                     42
+                 end
+             end if
 end control_value
 
 return_from_cleanup_argument: () -> (result: i32) =

@@ -66,7 +66,7 @@ public main: () -> (code: i32) =
     duplicates: bool = begin
         view := vec.used(numbers)
         lenof view == 21 and view[6] == 7 and view[7] == 7
-          and view[20] == 20
+        and view[20] == 20
     end
     mut small: [5]counted = [(value: 4), (value: 1), (value: 3), (value: 1),
                              (value: 2)]

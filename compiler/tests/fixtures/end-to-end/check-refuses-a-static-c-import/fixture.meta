@@ -1,0 +1,8 @@
+class: end-to-end
+summary: refine check gives a static Linux link's refusal of a C import nothing defines, as compile does
+program: main.ldn
+constructs: 1970, 1975
+targets: linux-x86-64
+expect: expected.txt
+args: check --target=linux-x86-64 ../tests/fixtures/end-to-end/check-refuses-a-static-c-import/main.ldn
+status: 1

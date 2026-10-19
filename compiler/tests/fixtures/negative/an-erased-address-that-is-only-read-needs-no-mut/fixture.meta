@@ -1,0 +1,8 @@
+class: negative
+summary: an address erased into any C whose entries only read is a read, so L0326 warns about the unneeded mut and offers its removal, and a receiver that writes keeps its mut
+program: program.ldn
+codes: L0326
+status: 0
+fixed: program.fixed
+constructs: 0060, 1370, 1380, 1900
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

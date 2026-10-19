@@ -1,0 +1,17 @@
+absent: atom
+node: type = struct
+    value: i32
+end node
+maybe_node: type = absent | ptr node
+
+release: (sink n: ptr node) -> (got: i32) =
+    got = n.val.value
+end release
+
+drop: (sink m: maybe_node) -> (got: i32) =
+    got = 0
+    match m
+        absent: got = 1
+        ptr (sink held): got = release(held) + release(held)
+    end match
+end drop

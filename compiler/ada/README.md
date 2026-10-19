@@ -142,6 +142,7 @@ different responsibilities.
 | `Landin.Panics` | canonical entry-hook validation, source-byte site spaces, final nonzero atom codes, and the text of D361's hosted default report for a site | a runtime reporting library, allocation in an image, or how a backend writes the report |
 | `Landin.Backend.Trap_Reports` | D361's distinct report lines in the order a backend meets them, and their assembler string spelling | decide a line's text, choose a section or write to a stream |
 | `Landin.IR.Effects` | conservative opcode effects and policy weights, including observable traps | infer alias permissions from unchecked regions |
+| `Landin.IR.Pipeline` | the optimization passes `refine compile` runs between lowering and emission, in its order, for the driver and for any test that inspects emitted code | choose what a pass does, or emit |
 | `Landin.IR.Rewriting` | shared arena compaction for verified transforms | change slot, signature, shape, image or semantic instance identities |
 | `Landin.IR.Scalar_Replacement` | splitting small scalar-part slots into one scalar slot per part, as simplification's first step and verified with its output: at speed, entry copies of the parameter parts a loop reads, rewritten part accesses, whole copies and clears, and the piece record a debugger reads | split a slot whose address is taken, a partial copy, a routine result or a part whose load checks, or move a trap |
 | `Landin.IR.Shape_Measurement` | memoized represented extents under target facts and an explicit size limit | choose machine placement or allocate work per represented array element |
@@ -406,8 +407,12 @@ the selected libgcc member names without host-specific paths.
 The outer JSON has `schema: 1`, a `build` object in
 `landin-build-report-1` format, `sources` and `items`; a linked Cortex
 executable also has a `firmware` object. A source entry contains
-`source`, `path_hex`, `sha256`; an item contains `item`, `declaration`, `source`,
-`first`, `last`. The nested build carries the target and both controls, plus
+`source`, `path_hex`, `sha256`; an item contains `item`, `declaration`, `name`,
+`source`, `first`, `last`, `name` being its symbol's spelling (D421).
+`left_indirect` lists every evidence call the emitted program still makes
+through a table, each with its `routine`, `source`, `line`, `column`, the
+`provider` a concrete table holds and `why`, a sentence. The nested build
+carries the target and both controls, plus
 `specializations`, `routines`, `layouts`. Instruction/stack counts are static
 emission sites, `estimated_growth` is an IR policy score, and neither claims
 assembled bytes. `scripts/quality.sh` obtains those from pinned Linux object
@@ -1146,11 +1151,14 @@ programming or resource exceptions. A tool capture that cannot be read raises
 `src/platform/landin_resource_usage.c` reads this process's processor time and
 peak resident set with `getrusage`, excluding children, and reports KiB on both
 hosts. The driver reads it through `Landin.Platform.Resource_Meter` only for
-`--stage-report=PATH`, which writes one row per stage (loading, which
-includes a rooted request's scanning and parsing, then each pipeline stage and
-emission) with its processor time and the peak resident set when it ended,
-plus the compilation's deterministic sizes. Named files with a library root
-are parsed in loading too, to find the library modules they import. A refused
+`--stage-report=PATH`, which writes one row per stage (loading, then each
+pipeline stage and emission) with its processor time and the peak resident
+set when it ended, plus the compilation's deterministic sizes. Loading scans
+and parses each module it reads, a rooted request's and the library modules
+named files import, to find their imports; that processor time is counted in
+the `syntax` row and not in `loading`, which is reading and import search
+alone. A module refused while it loads still writes a `syntax` row for the
+parsing that refused it. A refused
 program is measured up to the stage that refused it. No measurement reaches a
 decision, a diagnostic or an artifact; a host without a meter writes zeros.
 An incompatible `--debug` emission request is refused before loading. With
@@ -1265,3 +1273,53 @@ argument policy in `Backend.Toolchain`. `compiler.os` selects libc records
 without changing C transport facts. The FreeBSD supervisor emits on Linux;
 its VM effects belong to the external test environment. See the
 [FreeBSD lanes](../tests/freebsd/README.md).
+
+## Profiling
+
+The Linux nix shell carries `perf` and valgrind beside the pinned toolchain,
+so `refine` and the programs it emits can be profiled to the routine, and
+their calls counted, without leaving it. Both come from `flake.lock`'s
+package set rather than `environments/pins.sh`: what they measure is
+developer evidence, never a gate's. Start the program under the tool rather
+than attaching to it: a host with Yama's `ptrace_scope` at 1, as most
+distributions ship, answers an attach with "ptrace: Operation not
+permitted", and the user-space sampling below needs no privilege at the
+default `perf_event_paranoid` of 2. The `gdb` on the shell's `PATH` is the
+one the pinned GNAT bundles, built without Python, so a script that needs
+GDB's Python does not run there.
+
+Where `refine`'s time goes, by routine. Both build modes keep symbols and
+DWARF; build the release compiler with `LANDIN_BUILD_MODE=release
+./scripts/build.sh --compiler-only` to measure what a user runs.
+
+```sh
+perf record --call-graph dwarf,65528 -o refine.perf -- \
+    compiler/ada/build/nix-x86_64-linux/release/bin/refine check program.ldn
+perf report -i refine.perf --no-children --sort symbol
+```
+
+Unwind with DWARF and the largest stack copy `perf` allows. Frame-pointer
+unwinding (`-g`) drops a leaf's immediate caller, so a `memmove`'s cost shows
+one frame too high, and `dwarf,16384` truncates stacks inside the IR
+verifier, whose frame is larger than 16 KiB. `--stage-report` says which
+stage to look in first; this says which routine.
+
+Counting calls is valgrind's callgrind, which counts every call exactly and
+records who made it, so nothing has to be rewritten with counters:
+
+```sh
+valgrind --tool=callgrind --callgrind-out-file=program.callgrind ./program
+callgrind_annotate --tree=caller program.callgrind
+```
+
+Each routine's line gives its own cost, and each line above it a caller and
+how many times that caller called it, `(131,768x)`; `--tree=calling` gives
+the callees instead. A program built with `--debug=full` is attributed to
+source lines too, and `callgrind_annotate --auto=yes` prints them. That is
+the supported way to count calls per routine and per call site: an
+instrumenting mode in `refine` itself would emit different code from the
+program being measured, which callgrind's exact counts, taken from the
+unchanged binary under simulation, do not. Callgrind runs the program
+about fifty times slower, so count on a small input and time on a large
+one. A generic instance is a symbol named after its routine (D421), so both
+tools name it rather than an address.

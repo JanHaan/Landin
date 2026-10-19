@@ -9,7 +9,7 @@ end choose
 
 eighth: (a: all_atoms, b: all_atoms, c: all_atoms, d: all_atoms,
          e: all_atoms, f: all_atoms, g: all_atoms, h: all_atoms)
-         -> (result: all_atoms) =
+        -> (result: all_atoms) =
     result = h
 end eighth
 

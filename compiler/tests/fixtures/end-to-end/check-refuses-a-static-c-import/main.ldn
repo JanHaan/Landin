@@ -1,0 +1,10 @@
+--  `check` refuses what a static Linux link would refuse before any tool
+--  runs: a C import nothing in the program defines, by name.
+extern(c) puts: (text: ptr u8) -> (result: i32)
+
+greeting: [3]u8 = [104, 105, 0]
+
+public main: () -> (code: i32) =
+    _ = puts(addr greeting[0])
+    code = 0
+end main

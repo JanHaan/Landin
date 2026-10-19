@@ -21,6 +21,14 @@
 #  rename, while no tool that holds the build's readers lock is running
 #  them (scripts/build_lock.py).  Cleaning keeps bin/, so a failed or
 #  interrupted rebuild leaves the last published compiler where it was.
+#
+#  GPRbuild decides to rebuild the library and to relink from time stamps,
+#  the library's at one-second resolution, and never from contents.  After
+#  each project builds, scripts/build_link.py checks that the executable
+#  was linked from the objects as they are, and has GPRbuild remake the
+#  library or relink when it was not.  The manifest records each executable
+#  that was linked, by content, and a build that finds nothing to do still
+#  requires bin/ to hold exactly those executables.
 
 . "$(dirname -- "$0")/env.sh"
 
@@ -49,6 +57,18 @@ for Argument do
     esac
 done
 
+#  The switches that can change what GPRbuild produces, for the manifest:
+#  all of the caller's but those that only say how much to print and how
+#  many jobs to run.  The exec directory build.sh adds changes only where
+#  the executables are linked.
+Switches=''
+for Argument do
+    case "$Argument" in
+        -q | -v | -vP* | -j* | -k) ;;
+        *) Switches="${Switches:+$Switches }$Argument" ;;
+    esac
+done
+
 "$LANDIN_ROOT/scripts/toolchain.sh"
 
 Manifest="$LANDIN_BUILD_DIR/source-manifest.txt"
@@ -64,24 +84,15 @@ python3 "$LANDIN_ROOT/scripts/build_identity.py" \
     --root "$LANDIN_ROOT" --mode "$LANDIN_BUILD_MODE" \
     --output "$Identity_Source"
 
-#  Everything that invalidates an object: the sources, the project files
-#  and their configuration pragmas, the compiler and builder actually on
-#  PATH, the mode and tag, and the scripts that decide all of this.  A pin
-#  file names what should be on PATH; the tools themselves say what is.
+#  Everything that reaches an object: the project files and the files they
+#  name, the sources they find, the generated provenance unit, the switches
+#  GPRbuild is given, the mode and tag, and the compiler, builder and
+#  configuration actually on PATH.  The project files are where the inputs
+#  are found (scripts/build_identity.py), so a new kind of input counts when
+#  a project names it.  The scripts that run the build are not rows: what
+#  they decide arrives through the switches, the configuration and the
+#  provenance unit, and editing one alone rebuilds nothing from clean.
 landin_manifest() {
-    Source_Rows="$(find "$LANDIN_ADA_DIR/src" "$LANDIN_ADA_DIR/tests/src" \
-         -type f \( -name '*.ad[bs]' -o -name '*.c' -o -name '*.h' \) \
-         -exec cksum {} +)" || return
-    printf '%s\n' "$Source_Rows" | sort || return
-    Project_Rows="$(find "$LANDIN_ADA_DIR" -maxdepth 1 -type f \
-         \( -name '*.gpr' -o -name '*.adc' \) -exec cksum {} +)" || return
-    printf '%s\n' "$Project_Rows" | sort || return
-    Script_Rows="$(cksum "$LANDIN_ROOT/scripts/build.sh" \
-        "$LANDIN_ROOT/scripts/env.sh" \
-        "$LANDIN_ROOT/scripts/build_lock.py" \
-        "$LANDIN_ROOT/scripts/build_config.py" \
-        "$LANDIN_ROOT/scripts/build_identity.py")" || return
-    printf '%s\n' "$Script_Rows" | sort || return
     python3 "$LANDIN_ROOT/scripts/build_identity.py" \
         --root "$LANDIN_ROOT" --mode "$LANDIN_BUILD_MODE" \
         --output "$Identity_Source" --manifest || return
@@ -92,6 +103,7 @@ landin_manifest() {
     Configuration_Identity="$(python3 "$LANDIN_ROOT/scripts/build_config.py" \
         "$Configuration")" || return
     printf 'mode %s tag %s\n' "$LANDIN_BUILD_MODE" "$LANDIN_BUILD_TAG"
+    printf 'switches %s\n' "$Switches"
     printf 'gnat %s\n' "$Gnat_First"
     printf 'gprbuild %s\n' "$Gpr_First"
     printf '%s\n' "$Configuration_Identity"
@@ -101,7 +113,7 @@ landin_manifest() {
 #  status.  These functions also fail when used in a guarded substitution,
 #  where POSIX shells need not apply errexit to commands inside the function.
 landin_paths() {
-    Paths="$(awk '$NF ~ /[.](ad[bcs]|c|h|gpr|sh|py)$/ {print $NF}' <<EOF
+    Paths="$(awk '$1 == "source" || $1 == "project" {print $3}' <<EOF
 $1
 EOF
 )" || return
@@ -109,9 +121,15 @@ EOF
 }
 
 landin_fixed() {
-    grep -E '^(mode |gnat |gprbuild |toolchain )|[.](adc|gpr|sh|py)$' <<EOF
+    grep -E '^(mode|switches|gnat|gprbuild|toolchain|project) ' <<EOF
 $1
 EOF
+}
+
+#  A manifest as written holds the rows of what was linked as well; what
+#  the build was asked to build is the rest.
+landin_requested() {
+    sed '/^linked /d' "$1"
 }
 
 #  Everything in the build tree but bin/: whoever is running the published
@@ -178,9 +196,11 @@ if [ "$Reuse" = "yes" ]; then
         echo "landin: imported build has no successful source manifest" >&2
         exit 1
     fi
-    Imported="$(cat "$Manifest")" || exit
+    Imported="$(landin_requested "$Manifest")" || exit
     if [ "$Current" != "$Imported" ] \
-       || [ ! -x "$LANDIN_BUILD_DIR/bin/refine" ]
+       || [ ! -x "$LANDIN_BUILD_DIR/bin/refine" ] \
+       || ! python3 "$LANDIN_ROOT/scripts/build_link.py" published \
+            "$LANDIN_BUILD_DIR" "$Manifest" refine
     then
         echo "landin: imported build does not match this source and toolchain" >&2
         exit 1
@@ -192,8 +212,11 @@ if [ "$Reuse" = "yes" ]; then
             echo "landin: imported build has no verified test executable" >&2
             exit 1
         fi
-        Imported_Tests="$(cat "$Tests_Manifest")" || exit
-        if [ "$Imported_Tests" != "$Current" ]; then
+        Imported_Tests="$(landin_requested "$Tests_Manifest")" || exit
+        if [ "$Imported_Tests" != "$Current" ] \
+           || ! python3 "$LANDIN_ROOT/scripts/build_link.py" published \
+                "$LANDIN_BUILD_DIR" "$Tests_Manifest" landin_tests
+        then
             echo "landin: imported test build does not match this source and toolchain" >&2
             exit 1
         fi
@@ -205,7 +228,7 @@ fi
 
 Previous=''
 if [ -f "$Manifest" ]; then
-    Previous="$(cat "$Manifest")" || exit
+    Previous="$(landin_requested "$Manifest")" || exit
 elif [ ! -d "$LANDIN_BUILD_DIR" ]; then
     echo "landin: no earlier build of $LANDIN_BUILD_TAG/$LANDIN_BUILD_MODE; building from clean"
 else
@@ -258,25 +281,28 @@ if [ -n "$Previous" ] && [ "$Current" != "$Previous" ]; then
     fi
 fi
 
-Noop_Arguments=no
-case "$#" in
-    0) Noop_Arguments=yes ;;
-    1)
-        if [ "$1" = "-q" ]; then
-            Noop_Arguments=yes
-        fi
-        ;;
-esac
+#  Only quiet output and a job count leave nothing for GPRbuild to decide.
+Noop_Arguments=yes
+for Argument do
+    case "$Argument" in
+        -q | -j*) ;;
+        *) Noop_Arguments=no ;;
+    esac
+done
 
 if [ "$Incremental" = "yes" ] \
    && [ "$Noop_Arguments" = "yes" ] \
    && [ -f "$Manifest" ] \
    && [ "$Current" = "$Previous" ] \
    && [ -x "$LANDIN_BUILD_DIR/bin/refine" ] \
+   && python3 "$LANDIN_ROOT/scripts/build_link.py" published \
+        "$LANDIN_BUILD_DIR" "$Manifest" refine \
    && { [ "$Compiler_Only" = "yes" ] \
         || { [ -x "$LANDIN_BUILD_DIR/bin/landin_tests" ] \
              && [ -f "$Tests_Manifest" ] \
-             && [ "$(cat "$Tests_Manifest")" = "$Current" ]; }; }
+             && [ "$(landin_requested "$Tests_Manifest")" = "$Current" ] \
+             && python3 "$LANDIN_ROOT/scripts/build_link.py" published \
+                  "$LANDIN_BUILD_DIR" "$Tests_Manifest" landin_tests; }; }
 then
     echo "landin: checksum manifest unchanged; developer build is current"
     echo "built: $LANDIN_BUILD_DIR/bin/refine"
@@ -336,20 +362,53 @@ landin_failed() {
     exit "$Status"
 }
 
+#  Build one project, then hold its executable to what it links
+#  (scripts/build_link.py): when GPRbuild left the library or the
+#  executable older than the objects, they are removed and GPRbuild runs
+#  once more, which must then link.  The row naming what was linked is left
+#  in Linked_Row.
+landin_link() {
+    Link_Project="$1"
+    Link_Name="$2"
+    Link_Objects="$3"
+    shift 3
+    for Link_Round in first second; do
+        Link_Before="$(python3 "$LANDIN_ROOT/scripts/build_link.py" stamp \
+            "$LANDIN_BUILD_DIR" "$Link_Name")" || return
+        landin_gprbuild -p -P "$Link_Project" --config="$Configuration" \
+            -XLANDIN_EXEC_SUBDIR=link "$@" || return
+        Link_Status=0
+        Linked_Row="$(python3 "$LANDIN_ROOT/scripts/build_link.py" verify \
+            "$LANDIN_BUILD_DIR" "$Link_Name" "$Link_Objects" \
+            "$Link_Before")" || Link_Status=$?
+        if [ "$Link_Status" != 3 ]; then
+            return "$Link_Status"
+        fi
+    done
+    echo "landin: GPRbuild did not link $Link_Name from its objects twice" >&2
+    return 1
+}
+
 cd "$LANDIN_ADA_DIR"
 Executables=refine
-landin_gprbuild -p -P refine.gpr --config="$Configuration" \
-    -XLANDIN_EXEC_SUBDIR=link "$@" || landin_failed
+landin_link refine.gpr refine refine-obj "$@" || landin_failed
+Linked_Refine="$Linked_Row"
 if [ "$Compiler_Only" = "no" ]; then
-    landin_gprbuild -p -P landin_tests.gpr --config="$Configuration" \
-        -XLANDIN_EXEC_SUBDIR=link "$@" || landin_failed
+    landin_link landin_tests.gpr landin_tests tests-obj "$@" || landin_failed
+    Linked_Tests="$Linked_Row"
     Executables="refine landin_tests"
 fi
 
 Finished="$(landin_manifest)" || landin_failed
 if [ "$Finished" != "$Current" ]; then
     printf 'failed\n' > "$State"
-    echo "landin: sources changed during build; leaving build unverified" >&2
+    printf '%s\n' "$Finished" > "$LANDIN_BUILD_DIR/finished-manifest.txt"
+    echo "landin: sources changed while this build ran, so what it built is" \
+         "left unverified:" >&2
+    python3 "$LANDIN_ROOT/scripts/build_identity.py" --changed "$Attempt" \
+        "$LANDIN_BUILD_DIR/finished-manifest.txt" | sed 's/^/landin:   /' >&2
+    rm -f "$LANDIN_BUILD_DIR/finished-manifest.txt"
+    echo "landin: run the build again; it recompiles only what changed" >&2
     exit 1
 fi
 
@@ -357,10 +416,10 @@ fi
 python3 "$LANDIN_ROOT/scripts/build_lock.py" --publish "$LANDIN_BUILD_DIR" \
     $Executables || landin_failed
 if [ "$Compiler_Only" = "no" ]; then
-    printf '%s\n' "$Current" > "$Tests_Manifest.tmp"
+    printf '%s\n%s\n' "$Current" "$Linked_Tests" > "$Tests_Manifest.tmp"
     mv -f "$Tests_Manifest.tmp" "$Tests_Manifest"
 fi
-printf '%s\n' "$Current" > "$Manifest.tmp"
+printf '%s\n%s\n' "$Current" "$Linked_Refine" > "$Manifest.tmp"
 mv -f "$Manifest.tmp" "$Manifest"
 rm -f "$State" "$Attempt"
 

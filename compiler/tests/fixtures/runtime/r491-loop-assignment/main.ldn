@@ -1,0 +1,75 @@
+--  D430, reversing D156/D157's ceiling: the state after a loop is the join
+--  of the edges that leave it, so an assignment on every exit -- before a
+--  `break`, or in a `complete` block -- holds after the loop, as it does
+--  for a named return and a local alike.
+while_completion: (flag: bool) -> (r: i32) =
+    while flag do
+    complete
+        r = 1
+    end while
+end while_completion
+
+break_assignment: () -> (r: i32) =
+    loop do
+        r = 2
+        break
+    end loop
+end break_assignment
+
+for_completion: () -> (r: i32) =
+    for i in 0..<1 do
+    complete
+        r = 3
+    end for
+end for_completion
+
+array_completion: (flag: bool) -> (r: [2]i32) =
+    while flag do
+    complete
+        r = [4, 5]
+    end while
+end array_completion
+
+waited: (limit: i32) -> (r: i32) =
+    mut count := 0
+    loop do
+        count = count + 1
+        if count == limit then
+            r = count
+            break
+        end if
+    end loop
+end waited
+
+local_after: (n: i32) -> (r: i32) =
+    mut x: i32
+    loop do
+        x = n
+        break
+    end loop
+    r = x
+end local_after
+
+every_break: (n: i32) -> (r: i32) =
+    for i in 0..<n do
+        if i == 2 then
+            r = 20
+            break
+        end if
+    complete
+        r = 7
+    end for
+end every_break
+
+public main: () -> (code: i32) =
+    code = 1
+    return when while_completion(false) <> 1 or break_assignment() <> 2
+    code = 2
+    pair := array_completion(false)
+    return when for_completion() <> 3 or pair[1] <> 5
+    code = 3
+    return when waited(4) <> 4 or local_after(6) <> 6
+    code = 4
+    return when every_break(5) <> 20 or every_break(1) <> 7
+    code = 42
+end main

@@ -22,7 +22,7 @@ public main: () -> (code: i32) =
         end match
     end
     if qualified.counter <> 2 or qualified <> 2
-       or sibling() <> 99 or shadow(3) <> 3 or caught <> 0 then
+      or sibling() <> 99 or shadow(3) <> 3 or caught <> 0 then
         code = 1
     else
         code = match selected.kind

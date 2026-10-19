@@ -160,6 +160,43 @@ package Landin.Testing is
       Record_Timings : Boolean := False;
       Progress       : Progress_Report := null);
 
+   --  One selector of a focused run: a whole suite when Name is empty,
+   --  else the one case Suite/Name.  An empty Suite is a `--case=` that
+   --  named none, which Selection_Problem refuses.
+   type Selector is record
+      Suite : Ada.Strings.Unbounded.Unbounded_String;
+      Name  : Ada.Strings.Unbounded.Unbounded_String;
+   end record;
+
+   package Selector_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Selector);
+
+   --  What is wrong with SELECTED in IN_REGISTRY, or "": a suite no case
+   --  is registered under, or a case that is not registered, each answered
+   --  with the names nearest it, so a mistyped selection says what the
+   --  person meant rather than only that nothing matched.
+   function Selection_Problem
+     (In_Registry : Registry; Selected : Selector) return String;
+
+   --  The registered names nearest WANTED, as `--suite=` or `--case=`
+   --  takes them, at most three, most alike first, comma separated:
+   --  suites alone when SUITES, else every SUITE/NAME.
+   function Nearest
+     (In_Registry : Registry; Wanted : String; Suites : Boolean)
+      return String;
+
+   --  Every case any of SELECTED names, once each, in the order a run
+   --  sorts them, so one run answers several selectors and each suite's
+   --  progress line still says what it cost.  The transcript says
+   --  FILTERED with each selector, one to a line.
+   procedure Run
+     (In_Registry : Registry;
+      Selected    : Selector_Vectors.Vector;
+      Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
+      Result      : out Summary;
+      Record_Timings : Boolean := False;
+      Progress       : Progress_Report := null);
+
    --  A focused run is developer feedback, not the repository gate.  Empty
    --  filters mean every value at that level; a case filter therefore needs
    --  the suite that owns it.  The transcript says FILTERED so it cannot be

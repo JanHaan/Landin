@@ -21,6 +21,7 @@ SPEC = importlib.util.spec_from_file_location('freebsd_checks', ROOT / 'compiler
 SHARED = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SHARED)
 metadata, fixture_code = SHARED.metadata, SHARED.fixture_code
+fixture_meta = SHARED.fixture_meta
 PROFILES, SPECIALIZED = SHARED.PROFILES, SHARED.SPECIALIZED
 ABI_REQUIRED = SHARED.ABI_REQUIRED | {'lp64d-varargs', 'lp64d-integer-extension',
                                    'lp64d-main-return'}
@@ -48,7 +49,7 @@ def select(kind):
     directory = 'runtime' if kind == 'isa' else kind
     selected = [(p.parent, metadata(p)) for p in
                 sorted((ROOT / 'compiler/tests/fixtures' / directory).glob('*/fixture.meta'))
-                if TARGET in metadata(p)['targets'].split(', ')]
+                if metadata(p).applies_to(TARGET)]
     if kind == 'isa':
         selected = [(p, m) for p, m in selected if p.name in ISA_REQUIRED]
     require(selected, kind + ': empty fixture selection')
@@ -88,25 +89,19 @@ class Lane(SHARED.Lane):
     def build(self, base, meta, optimize, specialize, level=None):
         label = '-'.join((base.parent.name, base.name, optimize, specialize, level or 'default'))
         executable = self.bundle / label
-        source = base / meta['program']
-        sources = (['--root=' + str((base / meta['root']).resolve()), str(source.parent)]
-                   if 'root' in meta else [str(source)])
-        sources += [str(base / p.strip()) for p in meta.get('with', '').split(',') if p.strip()]
         # A program linked with C peers, or one whose fixture asks for it,
         # takes C's startup and libc; every other one links statically.
         libc = bool(meta.get('c-sources')) or meta.get('link') == 'libc'
         argv = [self.args.refine.resolve(), '--target=' + TARGET,
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 *(['--level=' + level] if level else []), *(['--link=libc'] if libc else []),
-                *shlex.split(meta.get('args', '')), *sources]
+                *meta.source_arguments(base)]
         assembly = Path(str(executable) + '.s')
         self.command([*argv, '--emit=asm', '-o', assembly], label + '-emit')
         objects, peers = [], []
         cargs = shlex.split(meta.get('c-args', ''))
         compile_args = [a for a in cargs if not a.startswith('-Wl,') and not a.startswith('-l')]
-        for index, name in enumerate(meta.get('c-sources', '').split(',')):
-            if not name.strip():
-                continue
+        for index, name in enumerate(meta.c_sources):
             obj = Path(str(executable) + f'-peer-{index}.o')
             self.command([*self.cc, '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
                           *compile_args, '-c', base / name.strip(), '-o', obj], label + f'-peer-{index}')
@@ -124,7 +119,7 @@ class Lane(SHARED.Lane):
         # the bundle carries beside it; their paths there are its first
         # arguments (compiler/tests/README.md).
         shared = []
-        for name in [n.strip() for n in meta.get('c-shared', '').split(',') if n.strip()]:
+        for name in meta.c_shared:
             library = self.bundle / (label + '-' + Path(name).stem + '.so')
             self.command([*self.cc, '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
                           '-fPIC', '-shared', base / name, '-o', library],
@@ -224,8 +219,9 @@ def load_prepared(args):
     for result in manifest['results']:
         require(actual[result['label']] == result['executable_sha256'], 'prepared executable checksum')
         if args.kind != 'debugger':
-            require(result['meta'] == metadata(ROOT / 'compiler/tests/fixtures' / result['case'] / 'fixture.meta'),
-                    'prepared fixture oracle differs from source checkout')
+            checked = metadata(ROOT / 'compiler/tests/fixtures' / result['case'] / 'fixture.meta')
+            require(result['meta'] == checked, 'prepared fixture oracle differs from source checkout')
+            result['meta'] = checked
     shutil.copytree(prepared / 'bundle', args.output / 'bundle')
     for path in prepared.glob('*.log'):
         shutil.copyfile(path, args.output / path.name)
@@ -247,10 +243,8 @@ def native_identity(output):
 
 def standard_input(result):
     """The file a fixture's `stdin:` names below it, or an empty input."""
-    named = result['meta'].get('stdin')
-    if not named:
-        return os.devnull
-    return ROOT / 'compiler/tests/fixtures' / result['case'] / named
+    return fixture_meta.as_metadata(result['meta'], result['case']).standard_input(
+        ROOT / 'compiler/tests/fixtures' / result['case'])
 
 
 def execute(args, manifest):
@@ -263,27 +257,27 @@ def execute(args, manifest):
     # Unlike the compiler hosts, this native checkout has no Ada build tree.
     (ROOT / 'compiler/ada/build').mkdir(parents=True, exist_ok=True)
     for result in manifest['results']:
-        meta, label = result['meta'], result['label']
+        meta = fixture_meta.as_metadata(result['meta'], result['case'])
+        label = result['label']
         merged = meta.get('stream', 'merged') == 'merged'
         with open(standard_input(result), 'rb') as given:
-            completed = subprocess.run([str(bundle / label),
-                                        *[str((bundle / name).resolve()) for name in result.get('shared', [])],
-                                        *shlex.split(meta.get('run_args', ''))],
+            completed = subprocess.run(meta.program_arguments(
+                                           ROOT / 'compiler/tests/fixtures' / result['case'],
+                                           [bundle / label,
+                                            *[(bundle / name).resolve() for name in result.get('shared', [])]]),
                                        cwd=ROOT / 'compiler/ada', stdin=given, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT if merged else subprocess.PIPE, timeout=90)
         (args.output / (label + '.stdout')).write_bytes(completed.stdout)
         (args.output / (label + '.stderr')).write_bytes(completed.stderr or b'')
         (args.output / (label + '.status')).write_text(str(completed.returncode))
-        status = -4 if meta.get('traps') == 'yes' else int(meta['status'])
         #  `level_status:` gives a level's own status, LEVEL=STATUS, as
         #  the test program reads it.
-        for entry in meta.get('level_status', '').split(','):
-            level, _, value = entry.strip().partition('=')
-            if level and level == result['level']:
-                status = int(value)
+        status = -4 if meta.traps else meta.status_at(result.get('level'))
         require(completed.returncode == status, f'{label}: status {completed.returncode}, expected {status}')
         base = ROOT / 'compiler/tests/fixtures' / result['case']
-        expected = (base / meta['run_expect']).read_bytes() if meta.get('run_expect') else meta.get('stdout', '').encode()
+        expected = meta.run_expected(base)
+        if expected is None:
+            expected = meta.get('stdout', '').encode()
         actual = completed.stdout
         require(actual == expected, label + ': output mismatch ' + repr(actual[:500]))
         if meta.get('trap_report'):

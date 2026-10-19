@@ -1,5 +1,6 @@
 with Ada.Strings.Fixed;
 
+with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Text;
 with Landin.Source.Sets;
 
@@ -935,8 +936,55 @@ package body Landin.Tests.Diagnostics_Suite is
          "the first fix added is the first kept");
    end Fixes_Render_As_Help;
 
+   --  A checker's report names a second place, so one whose related place
+   --  is its own span cannot be built: the check that knew no context is
+   --  a defect to fix where it reports, not a label to print twice.
+   procedure A_Checker_Report_Names_A_Second_Place
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Checker_Report_Names_A_Second_Place
+     (Item : in out Landin.Testing.Context)
+   is
+      package Bad renames Landin.Diagnostics.Checking;
+      Found : Diagnostic_List;
+      Refused : Boolean := False;
+   begin
+      Bad.Report
+        (Item    => Bad.Type_Mismatch,
+         Source  => 1,
+         Where   => (4, 9),
+         Message => "this is u8, and bool belongs here",
+         Note    => "[1890]: two types that must agree",
+         Related => (Source => 1, Where => (0, 12)),
+         Because => "the declaration it is written in",
+         Into    => Found);
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 1, "a report beside its context is built");
+      begin
+         Bad.Report
+           (Item    => Bad.Type_Mismatch,
+            Source  => 1,
+            Where   => (4, 9),
+            Message => "this is u8, and bool belongs here",
+            Note    => "[1890]: two types that must agree",
+            Related => (Source => 1, Where => (4, 9)),
+            Because => "written here",
+            Into    => Found);
+      exception
+         when Landin.Compiler_Defect =>
+            Refused := True;
+      end;
+      Landin.Testing.Check
+        (Item, Refused, "a report beside its own span is a defect");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 1, "and nothing is added for it");
+   end A_Checker_Report_Names_A_Second_Place;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "diagnostics", "a checker report names a second place",
+         A_Checker_Report_Names_A_Second_Place'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "fixes keep their edits in order",
          Fixes_Keep_Their_Edits_In_Order'Access);

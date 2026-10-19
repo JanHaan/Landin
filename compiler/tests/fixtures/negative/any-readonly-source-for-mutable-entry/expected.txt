@@ -1,10 +1,10 @@
-error[L0342]: this conformance is not usable behind `any`: every entry needs a compatible first `self`, a pointer or a record by value
-  --> ../tests/fixtures/negative/any-readonly-source-for-mutable-entry/main.ldn:38:22
+error[L0342]: this is a read-only address, and `any` needs a mutable one for an entry that takes `self: ptr mut`
+  --> ../tests/fixtures/negative/any-readonly-source-for-mutable-entry/main.ldn:38:26
    |
 38 |     a: any counter = any(addr left)
-   |                      ^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/any-readonly-source-for-mutable-entry/main.ldn:38:8
-   |
-38 |     a: any counter = any(addr left)
-   |        ^^^^^^^^^^^ the runtime-dispatch type written here
-  = note: [1370]/[1390]: dispatch inserts the erased data pointer as the first argument
+   |                          ^^^^^^^^^
+  --> ../tests/fixtures/negative/any-readonly-source-for-mutable-entry/main.ldn:3:12
+  |
+3 |     bump: (self: ptr mut t) -> (value: i32)
+  |            ^^^^^^^^^^^^^^^ the receiver that writes
+  = note: [0440]/[1380]: a read-only pointer cannot stand where `ptr mut` is wanted; declare `left` with `mut`, so its address is mutable

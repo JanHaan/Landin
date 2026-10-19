@@ -1232,6 +1232,14 @@ package Landin.Checking is
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
      with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
 
+   --  D441: the position of the first parameter whose `escaping` alone
+   --  keeps two signatures from agreeing, or zero when they agree or
+   --  differ in something else too.  It explains a refusal; agreement
+   --  still counts `escaping`.
+   function Escaping_Difference
+     (Of_Table : Table; Left, Right : Signature_Id) return Natural
+     with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
+
    --  A generic nominal key is one source template plus an ordered tuple of
    --  normalized actuals.  The tuple deliberately has no source names,
    --  aliases, formal types, target widths or layout facts.  A fixed actual

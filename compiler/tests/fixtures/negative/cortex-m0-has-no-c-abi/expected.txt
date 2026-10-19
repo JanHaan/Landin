@@ -1,0 +1,20 @@
+error[L0346]: cortex-m0 has no C ABI, so it lays out no layout(c) record
+  --> ../tests/fixtures/negative/cortex-m0-has-no-c-abi/program.ldn:4:26
+  |
+4 | header: type = layout(c) struct
+  |                          ^^^^^^
+  --> ../tests/fixtures/negative/cortex-m0-has-no-c-abi/program.ldn:4:1
+  |
+4 | header: type = layout(c) struct
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the record declared here
+  = note: [1580]: a C record is laid out as the target's C ABI lays it out, and this target has none yet; a byte-packed `layout(c, packed)` record needs no C alignment and stands here, or the record may be a Landin struct
+error[L0346]: cortex-m0 has no C ABI, so it has no C signature
+  --> ../tests/fixtures/negative/cortex-m0-has-no-c-abi/program.ldn:14:1
+   |
+14 | extern(c) send: (packet: ptr wire) -> (status: i32)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/cortex-m0-has-no-c-abi/program.ldn:14:11
+   |
+14 | extern(c) send: (packet: ptr wire) -> (status: i32)
+   |           ^^^^ this C signature
+  = note: [1580]: a C signature is called as the target's C ABI calls it, and this target has none yet; a Landin routine needs no C convention

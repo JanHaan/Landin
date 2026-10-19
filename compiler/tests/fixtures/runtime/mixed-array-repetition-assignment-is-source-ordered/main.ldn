@@ -12,10 +12,10 @@ public main: () -> (code: i32) =
     state = [next(state[1]), of next(state[0])]
 
     if calls == 5
-        and row[0] == 21 and row[1] == 23
-        and row[2] == 26 and row[3] == 26 and row[4] == 26
-        and state[0] == 24
-        and state[1] == 29 and state[2] == 29 and state[3] == 29
+      and row[0] == 21 and row[1] == 23
+      and row[2] == 26 and row[3] == 26 and row[4] == 26
+      and state[0] == 24
+      and state[1] == 29 and state[2] == 29 and state[3] == 29
     then
         code = 42
     else

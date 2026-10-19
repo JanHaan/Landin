@@ -1,0 +1,8 @@
+class: negative
+summary: D419 a literal lent to a generic routine's closed slice parameter has the caller's frame origin, so a result from that parameter cannot be returned
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/generic-literal-lent-escapes
+status: 1
+constructs: 0570, 0780, 1290
+codes: L0314
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

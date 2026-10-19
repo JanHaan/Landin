@@ -42,6 +42,6 @@ public main: () -> (code: i32) =
     --  carrier, so this is the pointer's own width and not a tagged pair.
     carrier: usize = sizeof maybe_ptr
     total: u32 = read_or(hit, 0) + read_or(miss, 1)
-        + present(hit) + present(miss) + u32(carrier)
+                 + present(hit) + present(miss) + u32(carrier)
     code = i32(total) - 2
 end main

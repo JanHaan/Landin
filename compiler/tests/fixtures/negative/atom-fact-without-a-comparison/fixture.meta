@@ -1,0 +1,9 @@
+class: negative
+summary: an atom fact has no value of its own, so compiler.os alone is L0203 in a module value, and compiler.os == linux in a routine body is one L0203 whose atom operand is not reported again as an undeclared name; each note names the module value that holds the comparison
+program: main.ldn
+codes: L0203, L0203
+constructs: 1500, 1560, 1940
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/atom-fact-without-a-comparison/main.ldn
+status: 1

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a record, an array and a generic cell holding a distinct type over a number are zeroed, in a body and in module data, because the distinct type has its base's zero image
+program: main.ldn
+status: 42
+constructs: 0540, 0550, 0650, 1290
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

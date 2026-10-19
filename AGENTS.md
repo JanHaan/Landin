@@ -40,6 +40,10 @@ python3 scripts/script_tests.py
 # when its last lane ends.
 python3 scripts/gate_watch.py
 
+# Regenerate every generated file: the matrices, catalogue, token dump and
+# editor files.  A stale one is named by the full run above.
+python3 check.py --generate
+
 # Check one specification/prototype file (the narrowest supported test scope)
 python3 check.py prototype-2-parser.md
 
@@ -56,6 +60,12 @@ python3 check.py prototype-2-parser.md
 ./scripts/dev-test.sh --suite='fixture execution'
 ./scripts/dev-test.sh --case='harness/filters select exact cases'
 ./scripts/dev-test.sh --fixture=negative/variant-match-duplicate
+
+# The options and every suite name, without a build or Python.
+./scripts/dev-test.sh --help
+
+# An experiment in a build tree of its own, which nix develop leaves alone.
+LANDIN_BUILD_VARIANT=inliner ./scripts/dev-build.sh
 
 # Remove this host's build artefacts (--all removes every host's).
 ./scripts/clean.sh
@@ -223,7 +233,16 @@ describe the retired arrangement.
 
 The repository submits no build manifests. GitHub is canonical and takes
 pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
-the same remote rather than by a job. `pages.yml` fetches the licensed code
+the same remote rather than by a job. The mirror therefore holds only what a
+push through that remote sent it: a branch or tag made on GitHub itself —
+the release tags, a branch opened from the web — is not on it, and a ref
+deleted on GitHub alone stays on it. A deletion reaches it only when
+`git push origin --delete` runs from a clone with both push URLs, and git
+refuses that whole push to sr.ht when any ref it names is missing there,
+while GitHub still accepts it. Compare `git ls-remote` of
+<https://github.com/JanHaan/Landin> and <https://git.sr.ht/~sinnfrei/landin>
+before deleting, and delete what is only on one of them from that one by its
+URL. Nothing reports a disagreement between the two. `pages.yml` fetches the licensed code
 face from object storage because it is not in this repository; it renders and
 verifies, and runs no compiler test. `scripts/site.sh` renders and packages
 and does not publish. Nix CI is deferred: the flake is built by hand, and the
@@ -267,7 +286,8 @@ success rule.
 `scripts/test.sh` builds and runs the complete Linux test program on native
 Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
 `scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
-latter accepts one exact `--suite`, `--case`, or `--fixture` selector. A
+latter accepts exact `--suite` and `--case` selectors, as many as a change
+reaches in one run, or one `--fixture`. A
 filtered run says `FILTERED` in its transcript and is not gate evidence. There
 is no separate lint or typecheck step: the pinned build treats every warning
 as an error and enforces GNAT style checks. Warnings are policy, not preference

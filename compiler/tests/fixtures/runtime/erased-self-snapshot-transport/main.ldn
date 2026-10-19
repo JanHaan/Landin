@@ -86,9 +86,9 @@ public main: () -> (code: i32) =
     large_parts := selected.parts(22)
 
     code = if narrow == 42 and wide == 42 and once == 42
-              and saved == 42 and replaced == 42
-              and parts.value == 42 and parts.tag == 1
-              and large_parts.value == 42 and large_parts.tag == 3
-              and receiver_calls == 1 and argument_calls == 1 and trace == 12
+      and saved == 42 and replaced == 42
+      and parts.value == 42 and parts.tag == 1
+      and large_parts.value == 42 and large_parts.tag == 3
+      and receiver_calls == 1 and argument_calls == 1 and trace == 12
            then 42 else 1 end if
 end main

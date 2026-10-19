@@ -37,8 +37,8 @@ public main: () -> (code: i32) =
              + lenof value.rows[1] + lenof value.bytes[1..<4]
     results := lenof made(7) + lenof sliced(value)
                + lenof refused(value) else (problem)
-        _ = problem
-        data[0..<2]
-    end
+                   _ = problem
+                   data[0..<2]
+               end
     code = i32(paths + results) + i32(calls) - 101
 end main

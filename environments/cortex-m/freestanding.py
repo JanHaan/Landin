@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import shutil
 
-from backend import image_contract
+from backend import image_contract, metadata
 from backend_corpus import inventory as corpus_inventory
 from firmware import execute, dma_execute
 from packed_native import PROFILES
@@ -79,7 +79,12 @@ def build(run, refine, program, optimize, specialize, debug='none'):
     require(not run.command('undefined', [run.bin / 'arm-none-eabi-nm', '-u', elf]).strip(),
             'unresolved freestanding symbols')
     names = {line.split()[-1] for line in symbols.splitlines() if line.split()}
-    require(not names & {'malloc', 'calloc', 'realloc', 'free', 'exit', '_exit',
+    #  A C runtime routine would be global; a Landin routine is a local
+    #  symbol under its own name (D415), an instance of `free` among them
+    #  (D421), so only the global symbols are the closure's runtime.
+    exported = {parts[-1] for line in symbols.splitlines()
+                if len(parts := line.split()) >= 2 and parts[-2].isupper()}
+    require(not exported & {'malloc', 'calloc', 'realloc', 'free', 'exit', '_exit',
                          '__libc_init_array', '__libc_start_main', '_sbrk'},
             'hosted runtime in freestanding closure')
     mapping = (run.out / 'core.elf.map').read_text()
@@ -303,7 +308,7 @@ def programs():
     for name in ('core-mem-allocators', 'core-mem-arena-boundaries',
                  'core-mem-raw-storage'):
         fixture = ROOT / 'compiler/tests/fixtures/runtime' / name
-        require('status: 42\n' in (fixture / 'fixture.meta').read_text(),
+        require(metadata(fixture / 'fixture.meta').status == 42,
                 'inherited fixture oracle changed')
         source = (ROOT / 'compiler/tests/cortex-m/cases' / name / 'main.ldn'
                   if name == 'core-mem-raw-storage' else fixture / 'main.ldn')

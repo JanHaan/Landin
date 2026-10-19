@@ -96,7 +96,7 @@ tombstone_update: () -> (ok: bool) =
     --  past it, preserve length one, and leave no duplicate to remove twice.
     map.insert(value, provider, b, 29) else none
     first: bool = map.length(value) == 1
-                 and expect_value(value, 2, 6, 29)
+                  and expect_value(value, 2, 6, 29)
     map.remove(value, b) else none
     mut second_remove_missing: bool = false
     map.remove(value, b) else (problem)
@@ -128,16 +128,16 @@ wrap_rehash_and_churn: () -> (ok: bool) =
     --  Six colliding keys wrap from bucket six through zero. The missing
     --  lookup traverses that chain and terminates at the first free bucket.
     before: bool = map.length(value) == 6
-                  and expect_value(value, 1, 6, 101)
-                  and expect_value(value, 6, 6, 106)
-                  and missing_value(value, 99, 6)
+                   and expect_value(value, 1, 6, 101)
+                   and expect_value(value, 6, 6, 106)
+                   and missing_value(value, 99, 6)
 
     --  Seven crosses the three-quarter threshold and rehashes all six values.
     map.insert(value, provider, k7, 107) else none
     grown: bool = map.length(value) == 7
-                 and expect_value(value, 1, 6, 101)
-                 and expect_value(value, 4, 6, 104)
-                 and expect_value(value, 7, 6, 107)
+                  and expect_value(value, 1, 6, 101)
+                  and expect_value(value, 4, 6, 104)
+                  and expect_value(value, 7, 6, 107)
 
     map.remove(value, k2) else none
     map.remove(value, k4) else none
@@ -153,12 +153,12 @@ wrap_rehash_and_churn: () -> (ok: bool) =
     map.insert(value, provider, k11, 111) else none
     map.insert(value, provider, k12, 112) else none
     churned: bool = map.length(value) == 9
-                   and missing_value(value, 2, 6)
-                   and missing_value(value, 4, 6)
-                   and missing_value(value, 6, 6)
-                   and expect_value(value, 3, 6, 103)
-                   and expect_value(value, 8, 6, 108)
-                   and expect_value(value, 12, 6, 112)
+                    and missing_value(value, 2, 6)
+                    and missing_value(value, 4, 6)
+                    and missing_value(value, 6, 6)
+                    and expect_value(value, 3, 6, 103)
+                    and expect_value(value, 8, 6, 108)
+                    and expect_value(value, 12, 6, 112)
     ok = before and grown and churned
     map.release(value, provider)
     ok = ok and map.length(value) == 0

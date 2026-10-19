@@ -2,5 +2,9 @@ error[L0336]: an encoded union requires distinct atoms and distinct fixed unsign
   --> ../tests/fixtures/negative/r640-duplicate-encoding/program.ldn:3:14
   |
 3 | mode: type = (a = 1 | b = 1)
-  |              ^^^^^^^^^^^^^^^ this encoded union
+  |              ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r640-duplicate-encoding/program.ldn:3:1
+  |
+3 | mode: type = (a = 1 | b = 1)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the declaration it is written in
   = note: [0730]: each member names one atom and a pattern within 64 bits; holes remain unnamed

@@ -745,6 +745,9 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
+    "runtime/core-vec-bytes": {
+      "mode": "execute"
+    },
     "runtime/core-vec-pointer-storage": {
       "mode": "execute"
     },
@@ -847,6 +850,9 @@
     "runtime/destructured-atom-set-result": {
       "mode": "execute"
     },
+    "runtime/destructured-locals-are-places": {
+      "mode": "execute"
+    },
     "runtime/destructuring-begins-its-own-line": {
       "mode": "execute"
     },
@@ -906,7 +912,13 @@
     "runtime/distinct-equality-and-flags": {
       "mode": "execute"
     },
+    "runtime/distinct-equality-over-atoms-and-pointers": {
+      "mode": "execute"
+    },
     "runtime/distinct-ordering": {
+      "mode": "execute"
+    },
+    "runtime/distinct-zero-images": {
       "mode": "execute"
     },
     "runtime/division-and-remainder-exit-with-their-results": {
@@ -967,6 +979,9 @@
     "runtime/failure-words": {
       "mode": "execute"
     },
+    "runtime/failure-words-own-atom": {
+      "mode": "execute"
+    },
     "runtime/failure-words-report": {
       "codes": [
         "L0015"
@@ -988,6 +1003,9 @@
       "mode": "execute"
     },
     "runtime/fixed-array-bound-expression": {
+      "mode": "execute"
+    },
+    "runtime/fixed-array-bound-module-constant": {
       "mode": "execute"
     },
     "runtime/fixed-array-bound-zero": {
@@ -1095,6 +1113,9 @@
     "runtime/generic-atom-widening": {
       "mode": "execute"
     },
+    "runtime/generic-closed-parameter-takes-context": {
+      "mode": "execute"
+    },
     "runtime/generic-composed-evidence": {
       "mode": "execute"
     },
@@ -1111,6 +1132,9 @@
       "mode": "execute"
     },
     "runtime/generic-erased-aggregate-try": {
+      "mode": "execute"
+    },
+    "runtime/generic-evidence-in-recovery": {
       "mode": "execute"
     },
     "runtime/generic-evidence-indirect": {
@@ -1496,6 +1520,9 @@
     "runtime/match-expressions-produce-values": {
       "mode": "execute"
     },
+    "runtime/match-sink-binding": {
+      "mode": "execute"
+    },
     "runtime/measurements-answer-for-the-target": {
       "counterpart": "measurements-answer-for-the-target",
       "mode": "execute",
@@ -1568,6 +1595,12 @@
       "mode": "execute"
     },
     "runtime/module-values-hold-and-are-updated": {
+      "mode": "execute"
+    },
+    "runtime/module-values-read-compiler-facts": {
+      "mode": "execute"
+    },
+    "runtime/module-variant-images": {
       "mode": "execute"
     },
     "runtime/multiple-named-returns": {
@@ -1715,6 +1748,9 @@
     "runtime/pointer-to-small-integer-traps": {
       "mode": "execute"
     },
+    "runtime/pointer-union-atom-comparison": {
+      "mode": "execute"
+    },
     "runtime/pointer-union-many": {
       "mode": "execute"
     },
@@ -1850,6 +1886,9 @@
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations. Firmware maps no memory and has no descriptors to transfer through."
     },
     "runtime/private-alias-of-constrained-template": {
+      "mode": "execute"
+    },
+    "runtime/qualified-module-array-copied-and-lent": {
       "mode": "execute"
     },
     "runtime/r230-composition": {
@@ -2336,6 +2375,9 @@
     "runtime/r491-generic-empty-slice-contexts": {
       "mode": "execute"
     },
+    "runtime/r491-loop-assignment": {
+      "mode": "execute"
+    },
     "runtime/r491-overlapping-result-destination": {
       "mode": "execute"
     },
@@ -2766,6 +2808,9 @@
       "mode": "execute"
     },
     "runtime/text-range-slicing": {
+      "mode": "execute"
+    },
+    "runtime/trapping-arm-leaves-a-statement": {
       "mode": "execute"
     },
     "runtime/tree-copy": {

@@ -19,11 +19,11 @@ public extern(c) landin_binding_receive_handler:
      l1: c.c_long, l2: c.c_long) -> (result: c.c_int) =
     result = 73
     if count <> 16
-       or i1 <> 1 or i2 <> 2 or i3 <> 3 or i4 <> 4
-       or d1 <> 5.0 or d2 <> 6.0 or d3 <> 7.0 or d4 <> 8.0
-       or d5 <> 9.0 or d6 <> 10.0 or d7 <> 11.0 or d8 <> 12.0
-       or d9 <> 13.0 or d10 <> 14.0
-       or l1 <> 15 or l2 <> 16
+      or i1 <> 1 or i2 <> 2 or i3 <> 3 or i4 <> 4
+      or d1 <> 5.0 or d2 <> 6.0 or d3 <> 7.0 or d4 <> 8.0
+      or d5 <> 9.0 or d6 <> 10.0 or d7 <> 11.0 or d8 <> 12.0
+      or d9 <> 13.0 or d10 <> 14.0
+      or l1 <> 15 or l2 <> 16
     then
         result = 1
     end if
@@ -39,6 +39,13 @@ end landin_binding_matrix
 public extern(c) landin_binding_highbit: (value: binding_small) -> (result: c.c_ulong) =
     result = c.c_ulong(value)
 end landin_binding_highbit
+
+--  The C peer calls this with a packed record one byte past an aligned
+--  address: a field of a byte-packed record has no alignment (D410).
+public extern(c) landin_binding_wire_mark: (record: ptr mut binding_wire) -> none =
+    record.val.flag = true
+    record.val.wide = record.val.wide + 1
+end landin_binding_wire_mark
 
 -- Output adapters deliberately require an escaping source: their shallow
 -- stores cannot express a result-from relationship on an output parameter.
@@ -61,9 +68,9 @@ public extern(c) landin_bindings_check: () -> (result: c.c_int) =
     matrix: binding_matrix = binding_matrix(values: [[1, 2, 3], [4, 5, 6]])
     changed := binding_adjust_matrix(matrix)
     if changed.values[0][0] <> 1 or changed.values[0][1] <> 2
-       or changed.values[0][2] <> 33 or changed.values[1][0] <> 44
-       or changed.values[1][1] <> 5 or changed.values[1][2] <> 66
-       or sizeof binding_matrix <> 24 or alignof binding_matrix <> 4
+      or changed.values[0][2] <> 33 or changed.values[1][0] <> 44
+      or changed.values[1][1] <> 5 or changed.values[1][2] <> 66
+      or sizeof binding_matrix <> 24 or alignof binding_matrix <> 4
     then
         result = 21
     end if
@@ -79,8 +86,8 @@ public extern(c) landin_bindings_check: () -> (result: c.c_int) =
     end if
 
     if binding_mode_negative <> -1
-       or binding_mode_zero <> binding_mode_alias
-       or binding_mode_large <> 4000000000
+      or binding_mode_zero <> binding_mode_alias
+      or binding_mode_large <> 4000000000
     then
         result = 3
     end if
@@ -122,13 +129,13 @@ public extern(c) landin_bindings_check: () -> (result: c.c_int) =
     mut callback_bytes: [64]u8 = zeroed
     mut backing_space: arena.space = zeroed
     callback_backing := arena.over_unchecked(backing_space,
-                                                 addr callback_bytes[0], 64)
+                                             addr callback_bytes[0], 64)
     mut arena_space: fault.space = zeroed
     callback_arena := fault.over(arena_space, callback_backing, usize(1))
     cell_size: usize = binding_callback_cell_size()
     cell_alignment: usize = binding_callback_cell_alignment()
     callback_cell: ptr mut u8 = mem.allocate(callback_arena, cell_size,
-                                              cell_alignment) else (problem)
+                                             cell_alignment) else (problem)
         _ = problem
         result = 10
         return
@@ -142,15 +149,114 @@ public extern(c) landin_bindings_check: () -> (result: c.c_int) =
     binding_select_callback(callback_cell, 1)
     if not binding_callback_cell_invoke(callback_cell, 8,
                                         addr callback_result)
-       or callback_result <> 11
+      or callback_result <> 11
     then
         result = 12
         return
     end if
     refused: callback_storage = mem.allocate(callback_arena, cell_size,
-                                              cell_alignment) else no_callback_storage
+                                             cell_alignment) else no_callback_storage
     match refused
         no_callback_storage: result = result
         ptr: result = 13
     end match
+
+    --  D410 and D413: the generated records' layouts are C's.
+    if sizeof binding_wire <> usize(binding_layout(0))
+      or alignof binding_wire <> usize(binding_layout(1))
+      or offsetof binding_wire.wide <> usize(binding_layout(2))
+      or offsetof binding_wire.bytes <> usize(binding_layout(3))
+      or sizeof binding_frame <> usize(binding_layout(4))
+      or offsetof binding_frame.tail <> usize(binding_layout(5))
+      or sizeof binding_entry <> usize(binding_layout(6))
+      or alignof binding_entry <> usize(binding_layout(7))
+      or offsetof binding_entry.name <> usize(binding_layout(8))
+      or sizeof binding_words <> usize(binding_layout(9))
+      or offsetof binding_words.data <> usize(binding_layout(10))
+    then
+        result = 30
+    end if
+
+    --  C fills a packed record one byte past an aligned address and Landin
+    --  reads it; Landin writes it and C reads what Landin wrote.
+    mut wire_bytes: [64]u8 = zeroed
+    wire_at: ptr mut binding_wire = ptr(usize(addr wire_bytes) + 1)
+    binding_wire_fill(wire_at)
+    if wire_at.val.kind <> 7 or wire_at.val.half <> 0x1234
+      or wire_at.val.word <> 0x89ab_cdef
+      or wire_at.val.wide <> 0x0102_0304_0506_0708
+      or wire_at.val.twice <> -2.25 or not wire_at.val.flag
+      or wire_at.val.bytes[2] <> 3
+    then
+        result = 31
+    end if
+    wire_at.val.kind = 9
+    wire_at.val.half = 0x4321
+    wire_at.val.word = 0x0a0b_0c0d
+    wire_at.val.wide = 0x1112_1314_1516_1718
+    wire_at.val.twice = 1024.5
+    wire_at.val.flag = false
+    wire_at.val.bytes[1] = 5
+    if binding_wire_check(wire_at) <> 42 then
+        result = 32
+    end if
+
+    --  A C function returning a packed record by value, and one taking a
+    --  packed record holding it by value, through the generated pointer
+    --  adapters (D414).
+    mut made: binding_wire = zeroed
+    binding_wire_make(addr made, 5)
+    if made.kind <> 5 or made.word <> 0x89ab_cdef or made.bytes[2] <> 3 then
+        result = 33
+    end if
+    mut frame: binding_frame = zeroed
+    frame.lead = 3
+    frame.body = made
+    frame.tail = 0xbeef
+    if binding_frame_check(addr frame) <> 42 then
+        result = 34
+    end if
+
+    --  A packed C global, written, read back and reached by address.
+    binding_frame_global_write(addr frame)
+    mut copied: binding_frame = zeroed
+    binding_frame_global_read(addr copied)
+    global_frame := binding_frame_global_address()
+    if copied.tail <> 0xbeef or copied.body.kind <> 5
+      or global_frame.val.lead <> 3
+    then
+        result = 35
+    end if
+    global_frame.val.tail = 0x0102
+
+    --  C fills an entry and its name; the name is the buffer's bytes at the
+    --  flexible member's offset (D413).  The entry starts 8-aligned.
+    mut entry_bytes: [80]u8 = zeroed
+    entry_base: usize = usize(addr entry_bytes)
+    entry_skip: usize = (8 - entry_base % 8) % 8
+    entry_at: ptr mut binding_entry = ptr(entry_base + entry_skip)
+    binding_entry_fill(entry_at)
+    entry_end: usize = entry_skip + usize(entry_at.val.length)
+    entry_name := entry_bytes[entry_skip + offsetof binding_entry.name..<entry_end]
+    if entry_at.val.inode <> 99 or entry_at.val.kind <> 4
+      or lenof entry_name <> 6 or entry_name[0] <> 104
+      or entry_name[4] <> 111 or entry_name[5] <> 0
+    then
+        result = 36
+    end if
+    entry_at.val.kind = 8
+    entry_bytes[entry_skip + offsetof binding_entry.name] = 76
+    if binding_entry_check(entry_at) <> 42 then
+        result = 37
+    end if
+
+    --  A packed record's flexible member: its elements start at offset one.
+    mut words_bytes: [16]u8 = zeroed
+    words_bytes[0] = 2
+    words_bytes[1] = 5
+    words_bytes[5] = 7
+    words_at: ptr binding_words = ptr(usize(addr words_bytes))
+    if binding_words_sum(words_at, 2) <> 212 then
+        result = 38
+    end if
 end landin_bindings_check

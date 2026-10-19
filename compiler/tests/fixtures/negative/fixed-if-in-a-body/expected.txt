@@ -1,0 +1,6 @@
+error[L0110]: `fixed if` selects module declarations, not statements
+  --> ../tests/fixtures/negative/fixed-if-in-a-body/main.ldn:3:5
+  |
+3 |     fixed if compiler.os == linux then
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: [1500]/D139: declare each system's routine in a module-level `fixed if`, or branch with `if` on a module value such as `on_linux: bool = compiler.os == linux` (D437)

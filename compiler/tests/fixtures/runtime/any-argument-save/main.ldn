@@ -38,7 +38,7 @@ erase_seven: (source: ptr thing) -> (result: any display from source) =
 end erase_seven
 
 mark_holder: (source: ptr holder, digit: i32)
-      -> (result: ptr holder from source) =
+             -> (result: ptr holder from source) =
     trace = trace * 10 + digit
     result = source
 end mark_holder

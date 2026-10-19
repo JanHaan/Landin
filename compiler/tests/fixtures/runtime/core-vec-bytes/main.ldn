@@ -1,0 +1,134 @@
+--  A list of bytes is the growable byte container: `append_bytes` copies a
+--  slice after the bytes already held, `spare_bytes` lends the spare
+--  capacity a read would fill and `extend_bytes` counts what was written
+--  there.  Appended pieces of every length from 0 to 32, starting at every
+--  offset of a word, land where a byte-at-a-time model says; a failed
+--  growth or an over-long extension changes nothing; and the list grows
+--  through its provider as `push` does.
+import core/arena
+import core/mem
+import core/vec
+
+--  The byte the model holds at `at`, a pattern no two nearby positions
+--  share.
+expected: (at: usize) -> (value: u8) =
+    value = u8((at * 7 + 3) & 255)
+end expected
+
+--  Append pieces of every length from 0 to 32 from a source at every
+--  offset 0 to 7, then check every byte against the model.
+pieces: (inout bytes: vec.list(u8), memory: arena.arena)
+        -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut source: [40]u8 = zeroed
+    mut total: usize = 0
+    for length in usize(0)..<33 do
+        offset: usize = length & 7
+        for at in usize(0)..<length do
+            source[offset + at] = expected(total + at)
+        end for
+        try vec.append_bytes(bytes, memory, source[offset..<offset + length])
+        total += length
+    end for
+    return when vec.length(bytes) <> total
+    held: []mut u8 = vec.used(bytes)
+    for at in usize(0)..<total do
+        return when held[at] <> expected(at)
+    end for
+    ok = true
+end pieces
+
+--  Whether asking for more spare room than the arena holds is refused
+--  with `mem.out_of_memory`.
+asks_too_much: (inout bytes: vec.list(u8), memory: arena.arena)
+               -> (refused: bool) =
+    refused = false
+    room: []mut u8 = vec.spare_bytes(bytes, memory, 4096) else (problem)
+        refused = problem == mem.out_of_memory
+        return
+    end
+    _ = room
+end asks_too_much
+
+exercise: () -> (ok: bool)
+          ! mem.out_of_memory | mem.out_of_bounds =
+    ok = false
+    mut backing: [1024]u8 = zeroed
+    mut space: arena.space = zeroed
+    memory := arena.over_unchecked(space, addr backing[0], 1024)
+    mut bytes := vec.new(item: u8)
+
+    --  Nothing to append takes no storage.
+    try vec.append_bytes(bytes, memory, "")
+    return when vec.capacity(bytes) <> 0
+
+    return when not try pieces(bytes, memory)
+    held: usize = vec.length(bytes)
+
+    --  A read's destination: at least the room asked for, after the bytes
+    --  held, and nothing counted until `extend_bytes`.
+    room: []mut u8 = try vec.spare_bytes(bytes, memory, 5)
+    return when lenof room < 5 or vec.length(bytes) <> held
+    spare: usize = lenof room
+    for at in usize(0)..<5 do
+        room[at] = expected(held + at)
+    end for
+    try vec.extend_bytes(bytes, 5)
+    return when vec.length(bytes) <> held + 5
+    seen: []mut u8 = vec.used(bytes)
+    for at in usize(0)..<held + 5 do
+        return when seen[at] <> expected(at)
+    end for
+
+    --  Counting more than the spare capacity changes nothing.
+    vec.extend_bytes(bytes, spare - 5 + 1) else (problem)
+        return when problem <> mem.out_of_bounds
+        return when vec.length(bytes) <> held + 5
+    end
+    return when vec.length(bytes) <> held + 5
+
+    --  A growth the arena cannot give changes nothing either: room for
+    --  more than the arena holds, and then whichever append of 256 bytes
+    --  first finds the arena too small.
+    before: usize = vec.capacity(bytes)
+    return when not asks_too_much(bytes, memory)
+    return when vec.length(bytes) <> held + 5
+      or vec.capacity(bytes) <> before
+    mut large: [256]u8 = zeroed
+    for at in usize(0)..<256 do
+        large[at] = 255
+    end for
+    mut refused: bool = false
+    for attempt in usize(0)..<5 do
+        _ = attempt
+        length: usize = vec.length(bytes)
+        capacity: usize = vec.capacity(bytes)
+        vec.append_bytes(bytes, memory, large[0..<256]) else (problem)
+            return when problem <> mem.out_of_memory
+            return when vec.length(bytes) <> length
+              or vec.capacity(bytes) <> capacity
+            refused = true
+        end
+        break when refused
+    end for
+    return when not refused
+    kept: []mut u8 = vec.used(bytes)
+    for at in usize(0)..<held + 5 do
+        return when kept[at] <> expected(at)
+    end for
+    for at in held + 5..<lenof kept do
+        return when kept[at] <> 255
+    end for
+
+    vec.release(bytes, memory)
+    return when vec.length(bytes) <> 0 or vec.capacity(bytes) <> 0
+    ok = true
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    ok := exercise() else false
+    if ok then
+        code = 42
+    end if
+end main

@@ -1,0 +1,11 @@
+--  A `noreturn` call never returns, so it is no value: assigned, or
+--  bound with an inferred type, it is refused naming `noreturn`, not as a
+--  call that returns none.
+stop: () -> noreturn =
+    compiler.unreachable()
+end stop
+
+public main: () -> (code: i32) =
+    halted := stop()
+    code = compiler.unreachable()
+end main

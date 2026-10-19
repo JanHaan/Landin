@@ -1,0 +1,8 @@
+class: negative
+summary: D419 a generic routine's closed parameter refuses what an ordinary one does, a literal lent writable and a known-zero ptr(integer); a literal for a formal's slice names the typed binding when an element needs a context, and an ambiguous erasure names the concepts it found
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/generic-closed-parameter-refusals
+status: 1
+constructs: 0460, 0520, 0570, 1290, 1380
+codes: L0301, L0335, L0304, L0342
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

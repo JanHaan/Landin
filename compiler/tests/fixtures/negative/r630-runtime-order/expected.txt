@@ -1,4 +1,8 @@
 error[L0344]: invalid constant memory ordering
+  --> ../tests/fixtures/negative/r630-runtime-order/program.ldn:5:38
+  |
+5 |     _ = compiler.atomic_load(addr a, order)
+  |                                      ^^^^^
   --> ../tests/fixtures/negative/r630-runtime-order/program.ldn:5:9
   |
 5 |     _ = compiler.atomic_load(addr a, order)

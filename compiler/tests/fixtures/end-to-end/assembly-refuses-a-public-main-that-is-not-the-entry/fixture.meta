@@ -1,0 +1,8 @@
+class: end-to-end
+summary: compile --emit=asm refuses a public main that is not the hosted entry with L0502 before writing anything
+program: main.ldn
+constructs: 1970
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --emit=asm --dry-run ../tests/fixtures/end-to-end/assembly-refuses-a-public-main-that-is-not-the-entry/main.ldn
+status: 1

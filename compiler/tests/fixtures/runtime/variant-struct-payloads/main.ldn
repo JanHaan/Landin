@@ -30,8 +30,8 @@ copied: () -> (result: i32) =
     match state.kind
         leaf: local.kind = leaf
         spot(at, weight): if true then
-            local.kind = spot(at: at, weight: weight)
-        end if
+                              local.kind = spot(at: at, weight: weight)
+                          end if
     end match
     match local.kind
         leaf: result = 0
@@ -54,10 +54,10 @@ written: () -> (result: i32) =
     match state.kind
         leaf: result = 0
         spot(inout at, weight): if true then
-            at.x = at.x + 8
-            at.y = at.y + 1
-            result = at.x + at.y + weight
-        end if
+                                    at.x = at.x + 8
+                                    at.y = at.y + 1
+                                    result = at.x + at.y + weight
+                                end if
     end match
 end written
 

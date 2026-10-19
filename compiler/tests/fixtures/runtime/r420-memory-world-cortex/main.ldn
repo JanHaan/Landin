@@ -10,8 +10,8 @@ public main: () -> (code: i32) =
     code = 1
     name: []u8 = "unused"
     file: io.memory_file =
-      (name: name, contents: backing[0..<1], length: 0, cursor: 0,
-       readable: true, writable: true, state: io.closed_slot)
+        (name: name, contents: backing[0..<1], length: 0, cursor: 0,
+         readable: true, writable: true, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file
     no_arguments: [][]u8 = []

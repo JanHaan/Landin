@@ -66,12 +66,12 @@ end operand_exit
 --  block does, and is how the defect was first written.
 branch_exit: (leave: bool) -> (result: i32) =
     narrow: percent = if leave then
-        result = 42
-        return
-    else
-        result = 42
-        return
-    end if
+                          result = 42
+                          return
+                      else
+                          result = 42
+                          return
+                      end if
     result = i32(narrow)
 end branch_exit
 

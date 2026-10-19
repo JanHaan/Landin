@@ -43,8 +43,8 @@ public main: () -> (code: i32) =
     code = 1
     name: []u8 = "f"
     file_value: io.memory_file =
-      (name: name, contents: backing[0..<3], length: 3, cursor: 0,
-       readable: true, writable: false, state: io.closed_slot)
+        (name: name, contents: backing[0..<3], length: 3, cursor: 0,
+         readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = file_value
     mut state: io.memory_space = zeroed

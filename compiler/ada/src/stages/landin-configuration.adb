@@ -185,15 +185,30 @@ package body Landin.Configuration is
          return "D202: " & Namespace & "." & Member
            & " is a module-only fixed directive";
       elsif Namespace = "compiler" and then Member
-        in "arch" | "os" | "word_size" | "byte_order" | "build_mode"
-         | "c_sysv_lp64" | "c_darwin_lp64" | "c_aapcs64_lp64"
+        in "arch" | "os" | "byte_order" | "build_mode"
+      then
+         --  D437: an atom fact has no value of its own outside a fixed
+         --  condition; a module value holds its comparison.
+         return "D437: compiler." & Member & " is compared in a fixed"
+           & " condition or a module value, such as `"
+           & (if Member = "arch" then "on_arm: bool = compiler.arch == arm64"
+              elsif Member = "os" then "on_linux: bool = compiler.os == linux"
+              elsif Member = "byte_order"
+              then "low_first: bool = compiler.byte_order == little"
+              else "debugging: bool = compiler.build_mode == debug")
+           & "`, which a routine body then reads";
+      elsif Namespace = "compiler" and then Member
+        in "word_size" | "c_sysv_lp64" | "c_darwin_lp64" | "c_aapcs64_lp64"
          | "c_riscv_lp64d" | "c_runtime"
       then
-         return "D202: compiler." & Member
-           & " is available only in fixed configuration expressions";
+         return "D437: compiler." & Member & " is read in fixed"
+           & " configuration expressions and module values; a routine"
+           & " body reads a module value that holds it";
       elsif Namespace = "compiler" and then Member = "feature" then
-         return "D255: compiler.feature.NAME is available only in fixed"
-           & " configuration expressions";
+         return "D437: compiler.feature.NAME is read in fixed configuration"
+           & " expressions and module values; a routine body reads a module"
+           & " value that holds it, such as `fast: bool ="
+           & " compiler.feature.NAME`";
       else
          return "[1560]: unknown builtin member " & Namespace & "." & Member;
       end if;
@@ -290,6 +305,7 @@ package body Landin.Configuration is
    procedure Prepare (Into : in out Table) is
    begin
       Into.Deferred.Clear;
+      Into.Facts.Clear;
       Into.Inactive.Clear;
       Into.Linked.Clear;
       Into.Declared.Clear;
@@ -298,6 +314,42 @@ package body Landin.Configuration is
    function "<" (Left, Right : Inactive_Node) return Boolean is
      (Left.Source < Right.Source
       or else (Left.Source = Right.Source and then Left.Node < Right.Node));
+
+   procedure Record_Fact
+     (Into : in out Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id;
+      Kind : Fact_Kind;
+      Value : Landin.Types.Folded) is
+   begin
+      Into.Facts.Include
+        (Inactive_Node'(Source => Source, Node => Node),
+         Recorded_Fact'(Kind => Kind, Value => Value));
+   end Record_Fact;
+
+   function Fact_At
+     (In_Table : Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id) return Fact_Kind
+   is
+      Where : constant Fact_Maps.Cursor := In_Table.Facts.Find
+        (Inactive_Node'(Source => Source, Node => Node));
+   begin
+      return (if Fact_Maps.Has_Element (Where)
+              then Fact_Maps.Element (Where).Kind else No_Fact);
+   end Fact_At;
+
+   function Fact_Value
+     (In_Table : Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id) return Landin.Types.Folded
+   is
+      Where : constant Fact_Maps.Cursor := In_Table.Facts.Find
+        (Inactive_Node'(Source => Source, Node => Node));
+   begin
+      return (if Fact_Maps.Has_Element (Where)
+              then Fact_Maps.Element (Where).Value else 0);
+   end Fact_Value;
 
    procedure Mark_Inactive
      (Into : in out Table;

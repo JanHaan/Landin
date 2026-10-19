@@ -8,6 +8,12 @@
 --  is malformed, truncated or of another kind finds nothing rather than
 --  trapping, and the caller makes the system call instead.  A submodule of
 --  platform/linux, since only a caller that reads a clock needs it.
+--
+--  It costs what it does: on Linux x86-64 these routines are 9.5 KB of a
+--  static program at --optimize size and 12.1 KB at speed, measured from
+--  the linked symbols of a program that reads the monotonic clock through
+--  platform/posix.  A program bound by its size can make the
+--  clock_gettime system call through platform/linux instead.
 
 import platform/linux
 

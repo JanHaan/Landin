@@ -1,0 +1,40 @@
+--  D428: a distinct type has a zero image exactly when its base has one,
+--  so a record or an array holding one may be zeroed, in a body and in
+--  module data, and the type is `zeroable`.  The word `zeroed` itself
+--  still constructs no identity: the identity is written from its base.
+user_id: type = distinct u32
+status: type = struct
+    owner: user_id
+    size: u64
+end status
+
+cell: type (item: type is zeroable) = struct
+    value: item
+end cell
+id_cell: type = cell(user_id)
+
+blank: (item: type is zeroable, like: item) -> (empty: item) =
+    empty = zeroed
+end blank
+
+kept: status = zeroed
+owners: [3]user_id = zeroed
+
+public main: () -> (code: i32) =
+    code = 1
+    mut s: status = zeroed
+    return when s.owner <> user_id(0) or s.size <> 0
+    code = 2
+    s.size = 5
+    s.owner = user_id(7)
+    s = zeroed
+    return when s.owner <> user_id(0)
+    code = 3
+    return when kept.owner <> user_id(0) or owners[2] <> user_id(0)
+    code = 4
+    held: id_cell = zeroed
+    return when held.value <> user_id(0)
+    code = 5
+    return when blank(user_id(9)) <> user_id(0)
+    code = 42
+end main

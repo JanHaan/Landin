@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a routine's final match or if whose only answers are traps or noreturn calls is a statement whose other arms assign the named return, nested and after statements, while a final control with a real answer stays a value
+program: main.ldn
+status: 42
+constructs: 0890, 1080, 1210, 1560, 1800
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

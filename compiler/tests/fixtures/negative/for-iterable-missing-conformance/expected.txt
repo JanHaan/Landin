@@ -2,5 +2,9 @@ error[L0348]: this type has no [1320] iterable conformance
   --> ../tests/fixtures/negative/for-iterable-missing-conformance/main.ldn:14:17
    |
 14 |     for item in items do
-   |                 ^^^^^ this traversal source
+   |                 ^^^^^
+  --> ../tests/fixtures/negative/for-iterable-missing-conformance/main.ldn:14:5
+   |
+14 |     for item in items do
+   |     ^^^^^^^^^^^^^^^^^^^^ the loop that traverses it
   = note: [1150]: a struct or `any C` traversal selects one exact Cur and Item pair

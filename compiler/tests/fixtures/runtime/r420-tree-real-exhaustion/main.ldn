@@ -32,7 +32,7 @@ exhaust: (provider: type is mem.allocator, inner: provider)
     eight: usize = 8
     branch: tree.node_id = tree.add_branch(value, counted, name, tree.id(0),
                                            eight)
-      else (problem)
+        else (problem)
         branch_failed = problem == mem.out_of_memory
         tree.id(0)
     end
@@ -61,7 +61,7 @@ exhaust: (provider: type is mem.allocator, inner: provider)
     end while
     tree.release(value, counted)
     okay = tree.length(value) == 0 and fault.frees(counted) == 1
-      and fault.live(counted) == 0
+           and fault.live(counted) == 0
 end exhaust
 
 reuse: (slab: pool.provider) -> (okay: bool) =
@@ -79,7 +79,7 @@ reuse: (slab: pool.provider) -> (okay: bool) =
     end while
     three: usize = 3
     root: tree.node_id = tree.add_branch(value, slab, name, tree.id(0), three)
-      else (problem)
+        else (problem)
         _ = problem
         return
     end
@@ -109,7 +109,7 @@ public main: () -> (code: i32) =
     mut space: pool.space = zeroed
     slab := pool.over(space, pool_base, 16384,
                       slot_size, 1, alignof tree.node, records[0..<1])
-      else (problem)
+        else (problem)
         _ = problem
         return
     end

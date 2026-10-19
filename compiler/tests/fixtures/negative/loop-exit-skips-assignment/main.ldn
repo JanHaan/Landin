@@ -1,0 +1,25 @@
+--  D430: after a loop, an assignment holds only when every edge that
+--  leaves it made one: a `break` before it, a `while` whose test fails
+--  first, or a `for` that runs out with no `complete` assigning, does not.
+early_break: (flag: bool) -> (r: i32) =
+    loop do
+        break when flag
+        r = 1
+        break
+    end loop
+end early_break
+
+body_only: (flag: bool) -> (r: i32) =
+    while flag do
+        r = 2
+        break
+    end while
+end body_only
+
+local_read: (n: i32) -> (r: i32) =
+    mut x: i32
+    for i in 0..<n do
+        x = i
+    end for
+    r = x
+end local_read

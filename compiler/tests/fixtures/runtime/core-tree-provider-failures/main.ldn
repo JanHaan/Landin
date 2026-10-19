@@ -29,9 +29,9 @@ exercise: (provider: type is mem.allocator, memory: provider)
     while at < 8 do
         added: tree.node_id = tree.add_leaf(value, counted, leaf_name)
             else (problem)
-                _ = problem
-                return
-            end
+            _ = problem
+            return
+        end
         return when tree.ordinal(added) <> at
         inc at
     end while
@@ -44,10 +44,10 @@ exercise: (provider: type is mem.allocator, memory: provider)
     mut branch_refused: bool = false
     _ = tree.add_branch(value, counted, branch_name, tree.id(0), eight)
         else (problem)
-            _ = problem
-            branch_refused = true
-            tree.id(0)
-        end
+        _ = problem
+        branch_refused = true
+        tree.id(0)
+    end
     return when not leaf_refused or not branch_refused
     return when tree.length(value) <> 8 or fault.live(counted) <> 1
     at = 0
@@ -80,12 +80,12 @@ exercise: (provider: type is mem.allocator, memory: provider)
     --  the heap does not, which spends an eighth attempt and gives a second
     --  block; every block given is freed once.
     okay = tree.ordinal(root) == 8 and leaves == 8
-        and tree.length(value) == 0
-        and fault.injected_failures(counted) == 5
-        and fault.successes(counted) + fault.growths(counted) == 2
-        and fault.frees(counted) == fault.successes(counted)
-        and fault.frees(counted) == fault.attempts(counted) - 6
-        and fault.live(counted) == 0
+           and tree.length(value) == 0
+           and fault.injected_failures(counted) == 5
+           and fault.successes(counted) + fault.growths(counted) == 2
+           and fault.frees(counted) == fault.successes(counted)
+           and fault.frees(counted) == fault.attempts(counted) - 6
+           and fault.live(counted) == 0
 end exercise
 
 public main: () -> (code: i32) =
@@ -106,8 +106,8 @@ public main: () -> (code: i32) =
     end
     pool_ok: bool = exercise(slab)
     if heap_ok and arena_ok and pool_ok and pool.live(slab) == 0
-       and pool.allocations(slab) == 1 and pool.frees(slab) == 1
-       and pool.rejected_frees(slab) == 0
+      and pool.allocations(slab) == 1 and pool.frees(slab) == 1
+      and pool.rejected_frees(slab) == 0
     then
         code = 42
     end if

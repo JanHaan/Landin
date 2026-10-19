@@ -23,21 +23,21 @@ public main: () -> (code: i32) =
     falsehood: bool = not true
 
     if complement_8 == 255
-        and complement_32 == -1
-        and negation_8 == -42
-        and negation_zero == 0
-        and negation_64 == -4000000000
-        and and_32 == 240
-        and xor_32 == 3855
-        and or_32 == 4095
-        and and_8 == 48
-        and xor_8 == 207
-        and or_8 == 255
-        and and_64 == 254
-        and xor_64 == 18446744073709551361
-        and or_64 == 18446744073709551615
-        and truth
-        and not falsehood
+      and complement_32 == -1
+      and negation_8 == -42
+      and negation_zero == 0
+      and negation_64 == -4000000000
+      and and_32 == 240
+      and xor_32 == 3855
+      and or_32 == 4095
+      and and_8 == 48
+      and xor_8 == 207
+      and or_8 == 255
+      and and_64 == 254
+      and xor_64 == 18446744073709551361
+      and or_64 == 18446744073709551615
+      and truth
+      and not falsehood
     then
         code = 42
     else

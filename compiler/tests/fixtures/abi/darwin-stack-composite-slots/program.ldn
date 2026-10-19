@@ -19,23 +19,23 @@ packed_handler: type = extern(c) (a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a
 extern(c) c_packed: (a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, s: p3, c: u8, t: p5, d: i16) -> (result: i32)
 public extern(c) l_packed: (a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, s: p3, c: u8, t: p5, d: i16) -> (result: i32) =
     if a0 == 10
-       and a1 == 11
-       and a2 == 12
-       and a3 == 13
-       and a4 == 14
-       and a5 == 15
-       and a6 == 16
-       and a7 == 17
-       and s.v[0] == 1
-       and s.v[1] == 2
-       and s.v[2] == 3
-       and c == 9
-       and t.v[0] == 4
-       and t.v[1] == 5
-       and t.v[2] == 6
-       and t.v[3] == 7
-       and t.v[4] == 8
-       and d == 77
+      and a1 == 11
+      and a2 == 12
+      and a3 == 13
+      and a4 == 14
+      and a5 == 15
+      and a6 == 16
+      and a7 == 17
+      and s.v[0] == 1
+      and s.v[1] == 2
+      and s.v[2] == 3
+      and c == 9
+      and t.v[0] == 4
+      and t.v[1] == 5
+      and t.v[2] == 6
+      and t.v[3] == 7
+      and t.v[4] == 8
+      and d == 77
     then
         result = 42
     else
@@ -47,21 +47,21 @@ mixed_handler: type = extern(c) (a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5
 extern(c) c_mixed: (a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, f0: f64, f1: f64, f2: f64, f3: f64, f4: f64, f5: f64, f6: f64, f7: f64, h: h3, c: u8, k: h3, s: p3, x: f32, d: i16) -> (result: i32)
 public extern(c) l_mixed: (a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, f0: f64, f1: f64, f2: f64, f3: f64, f4: f64, f5: f64, f6: f64, f7: f64, h: h3, c: u8, k: h3, s: p3, x: f32, d: i16) -> (result: i32) =
     if a0 == 20
-       and a7 == 27
-       and f0 == 0.5
-       and f7 == 7.5
-       and h.a == 1.5
-       and h.b == 2.5
-       and h.c == 3.5
-       and c == 10
-       and k.a == 4.5
-       and k.b == 5.5
-       and k.c == 6.5
-       and s.v[0] == 7
-       and s.v[1] == 8
-       and s.v[2] == 9
-       and x == 11.5
-       and d == 12
+      and a7 == 27
+      and f0 == 0.5
+      and f7 == 7.5
+      and h.a == 1.5
+      and h.b == 2.5
+      and h.c == 3.5
+      and c == 10
+      and k.a == 4.5
+      and k.b == 5.5
+      and k.c == 6.5
+      and s.v[0] == 7
+      and s.v[1] == 8
+      and s.v[2] == 9
+      and x == 11.5
+      and d == 12
     then
         result = 42
     else

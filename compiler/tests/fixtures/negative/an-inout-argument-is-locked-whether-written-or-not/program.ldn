@@ -1,0 +1,18 @@
+--  An `inout` parameter locks its argument whether the routine writes it or
+--  not, so a view of that argument may not be used after the call; the
+--  refusal names the convention, the view and the way out.
+counter: type = struct
+    items: [4]u32
+    count: usize
+end counter
+
+count_of: (inout self: counter) -> (count: usize) =
+    count = self.count
+end count_of
+
+public main: () -> (code: i32) =
+    mut c: counter = (items: [1, 2, 3, 4], count: 4)
+    first := addr c.items[0]
+    n := count_of(c)
+    code = i32(first.val) + i32(n)
+end main

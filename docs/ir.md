@@ -243,7 +243,14 @@ for representation validation separately: null pointer construction, malformed
 text and reserved-bit patterns report `bad_conversion`; subtype bounds report
 `out_of_range`. Rewriting and specialization preserve this flag, and proved
 constant replacements remove it with the check. The verifier refuses it on
-other opcodes. A signed right shift describes
+other opcodes. A range check keeps both bounds, but every backend tests
+only an edge inside its type: `ptr(n)`'s check is `1` up to the largest
+`usize`, and only the nonnull edge is emitted. A load of an atom-typed value
+tests that its bits are one of its set's codes, except a load of a sealed
+slot: a compiler temporary that only loads and stores name, which the
+verifier holds it to, so it reads back only a value of its set. An atom
+`match` keeps its subject in one, so the subject is tested once where it is
+read and each arm only compares. A signed right shift describes
 the language's shift semantics; the x86 emitter is responsible for handling
 counts that the hardware would otherwise mask.
 
@@ -622,7 +629,12 @@ of a program as its backend would receive it, after every pass the request's
 lives where it does without reading the lowering or diffing two assemblies.
 `refine compile --help` names it. `--link` still decides whether
 `platform/linux` joins the program; `--debug` and `--panic-map`, which
-describe machine code, are refused with it.
+describe machine code, are refused with it. Each evidence entry line in this
+dump ends `kept` or `dropped`: whether the emitted table names that entry's
+routine or holds a zero word in its place (D374), as every backend decides
+it for this unit, so a pruning claim can be read here rather than in the
+assembly or `nm`. The recorded corpus dump leaves the word out, because the
+backend, not the lowering, decides it.
 
 The dump has no reader and is not a stable serialization format. Comparing a
 fresh dump with the recorded one detects a change in lowering; it does not

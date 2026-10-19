@@ -113,7 +113,8 @@ promotion were required. See the retired
 [validation workflow](process.md) for that historical process.
 
 No build manifest is submitted. GitHub is canonical and git.sr.ht is a mirror,
-kept in step by a second push URL on the same remote; the Pages and
+kept in step by a second push URL on the same remote (`AGENTS.md` says what
+the mirror holds and how a deletion reaches it); the Pages and
 GitHub-mirror manifests are retired with the SourceHut gate, and
 `scripts/site.sh` renders and packages without publishing.
 `.github/workflows/pages.yml` is the only publisher. The former automatic Nix manifest was
@@ -189,10 +190,16 @@ checking while avoiding a clean rebuild for every Ada edit:
 ```
 
 The selectors are exact, accept one selection at a time, and print `FILTERED`
-in the transcript. They are fast feedback, not validation evidence. The
+in the transcript. They are fast feedback, not validation evidence.
+`./scripts/dev-test.sh --help` prints the options and the suite names
+without building anything. The
 developer build asks the pinned GPRbuild for checksum-based Ada recompilation;
 a changed source inventory, project file or selected GPRbuild executable still
-makes it clean. The ordinary `build.sh` and `test.sh` remain complete native
+makes it clean. The build finds its inputs from the project files, so a file
+a project names counts the moment it is named; the scripts that run the
+build are not inputs of it, and editing one recompiles only the provenance
+unit. A build with nothing to do, a job count aside, says so without running
+GPRbuild. The ordinary `build.sh` and `test.sh` remain complete native
 Linux commands; `--host`
 selects Mac compiler checks. Nothing approves a revision now. The container
 command is retained troubleshooting, not a routine gate.
@@ -218,7 +225,19 @@ of each process that holds it.
 
 Every build says why it builds what it does: no earlier build, sources
 changed, the inventory or a project changed, or the last build did not
-finish. A clean rebuild removes everything but `bin/`. The developer build
+finish. A source edited while a build runs leaves that build unverified,
+and the refusal names each file that changed and says to run the build
+again.
+
+GPRbuild decides to rebuild the library and to relink by time stamps, the
+library's at one-second resolution, and never by content, so a build tree
+whose objects were copied, restored or rewritten within one second can keep
+an executable linked from older objects. After each project builds,
+`scripts/build_link.py` compares the archive with the compiled objects and
+the executable with a record of the objects it was linked from, and has
+GPRbuild rebuild the library or relink when they disagree. The manifest
+records each executable that was linked, by content, and a build that finds
+nothing to do still requires `bin/` to hold exactly those executables. A clean rebuild removes everything but `bin/`. The developer build
 keeps what a failed build compiled, because the checksum mode recompiles
 whatever no longer matches its source, and after an interrupted build it
 discards only the files that build wrote, any of which may be half-written;
@@ -345,7 +364,11 @@ option. A published archive from 0.2.7 or earlier holds `refine` alone, so
 The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
 `nix-aarch64-linux` or `nix-aarch64-darwin`. Shells sharing a checkout
 therefore use separate object trees and locks, apart from the other
-environments' trees. The `nix build` derivation still uses `nix` in its
+environments' trees. An experiment that should not disturb the shell's tree
+names a variant, which the shell does not set:
+`LANDIN_BUILD_VARIANT=inliner ./scripts/dev-build.sh` builds in
+`build/nix-x86_64-linux.inliner/`, with its own locks, and every command run
+with the same variant tests that build. The `nix build` derivation still uses `nix` in its
 isolated build directory. `python3` comes with
 it, so `check.py` and `scripts/site.sh` work in that shell too. On Linux it
 also selects `llvmPackages."19".clang` and `glibc.dev` from the package set

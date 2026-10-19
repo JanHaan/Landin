@@ -1,0 +1,20 @@
+error[L0328]: a distinct type does not accept `zeroed`
+  --> ../tests/fixtures/negative/distinct-bare-zeroed/main.ldn:11:10
+   |
+11 |     id = zeroed
+   |          ^^^^^^
+  --> ../tests/fixtures/negative/distinct-bare-zeroed/main.ldn:11:5
+   |
+11 |     id = zeroed
+   |     ^^ the place written here
+  = note: [0540]/[0650]: construct it from its base, `name(0)`; a record or array holding it may be zeroed when its base has a zero image
+error[L0328]: this type does not permit a zeroed initializer
+  --> ../tests/fixtures/negative/distinct-bare-zeroed/main.ldn:15:9
+   |
+15 |     h = zeroed
+   |         ^^^^^^
+  --> ../tests/fixtures/negative/distinct-bare-zeroed/main.ldn:15:5
+   |
+15 |     h = zeroed
+   |     ^ the place written here
+  = note: [0540]/[0630]: zeroed needs a zero image for every field, and a pointer, slice, pointer union, function or atom set has none, nor does a distinct type over one; write the value with its fields, or, for a service's state, keep its references in the handle and only scalars in the zeroed state (D288)

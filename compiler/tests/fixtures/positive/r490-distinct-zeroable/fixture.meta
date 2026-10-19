@@ -1,0 +1,5 @@
+class: positive
+summary: a distinct type over a number is in the compiler zeroable family, as its base is (D428, which reversed D213's exclusion)
+program: main.ldn
+constructs: 0540, 0550, 0650, 1280, 1290
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

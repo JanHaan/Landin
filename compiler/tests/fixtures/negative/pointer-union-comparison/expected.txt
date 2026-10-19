@@ -7,4 +7,4 @@ error[L0335]: a comparison wants a pointer and this is a union of an atom and on
   |
 1 | none_found: atom
   | ^^^^^^^^^^^^^^^^ the empty case this union reserves zero for
-  = note: [0480]: a pointer union is matched before it is read
+  = note: [0480]: a pointer union is matched before it is read; compare it with one of its atoms, `== none_found`, or match it, as `ptr (p):`

@@ -110,3 +110,64 @@ public release: (item: type, provider: type is mem.allocator,
                  inout value: list(item), memory: provider) -> none =
     mem.release_storage(value.values, memory)
 end release
+
+--  A list of bytes is the library's growable byte container (D425): the
+--  operations below append a slice and let a read fill the spare capacity,
+--  and the list grows as `push` grows it, its bytes copied a word at a time
+--  where `mem.copy` moves words.
+
+--  Make room for `extra` more bytes after the initialized ones, doubling
+--  the capacity as `push` does, or to exactly what is wanted when doubling
+--  is not enough or cannot be represented.
+make_room: (provider: type is mem.allocator, inout value: list(u8),
+            memory: provider, extra: usize) -> none ! mem.out_of_memory =
+    count: usize = length(value)
+    have: usize = capacity(value)
+    return when extra <= have - count
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when extra > maximum - count
+    wanted: usize = count + extra
+    next: usize = grown(have) else (problem)
+        _ = problem
+        wanted
+    end
+    try reserve(value, memory, if next > wanted then next else wanted end if)
+end make_room
+
+--- Append every byte of `bytes`, growing capacity as `push` does, and
+--- copying them a word at a time where `mem.copy` moves words.  Reports
+--- `mem.out_of_memory` without appending anything when growth fails.
+--- Successful growth may invalidate views into the previous allocation.
+public append_bytes: (provider: type is mem.allocator,
+                      inout value: list(u8), memory: provider, bytes: []u8)
+                     -> none ! mem.out_of_memory =
+    try make_room(value, memory, lenof bytes)
+    mem.admit_copy(value.values, bytes) else (problem)
+        --  After the room was made, mem.full would be an internal defect.
+        _ = problem
+        fail mem.out_of_memory
+    end
+end append_bytes
+
+--- Lend the spare capacity past the list's bytes, at least `extra` bytes
+--- of it, growing as `push` does when there are fewer: the buffer a read
+--- fills, `io.read(host, file, room)`, before `extend_bytes` counts what it
+--- wrote.  Its bytes are whatever the storage held.  End uses of the view
+--- before the next append, reserve or release.
+public spare_bytes: (provider: type is mem.allocator, inout value: list(u8),
+                     memory: provider, extra: usize)
+                    -> (room: []mut u8 from value) ! mem.out_of_memory =
+    try make_room(value, memory, extra)
+    room = mem.spare_bytes(value.values)
+end spare_bytes
+
+--- Count the first `count` bytes of the spare capacity, which the caller
+--- has written through `spare_bytes`, as appended.  Reports
+--- `mem.out_of_bounds`, changing nothing, when fewer than `count` are spare.
+public extend_bytes: (inout value: list(u8), count: usize)
+                     -> none ! mem.out_of_bounds =
+    mem.admit_bytes(value.values, count) else (problem)
+        _ = problem
+        fail mem.out_of_bounds
+    end
+end extend_bytes

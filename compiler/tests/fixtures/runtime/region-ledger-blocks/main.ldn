@@ -72,7 +72,7 @@ run: (count: usize, budget: usize) -> (made: usize, clean: bool) =
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     mut arena_space: arena.space = zeroed
     memory := arena.over_unchecked(arena_space, base,
-                                      lenof backing * sizeof usize)
+                                   lenof backing * sizeof usize)
     mut state: tally_state = (inner: memory, live: 0, addresses: 0,
                               extents: 0)
     counter: tally = (state: addr state)

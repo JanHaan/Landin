@@ -15,6 +15,8 @@ compiler/tests/
                                          server, and what it found; see fuzz/README.md
   server/<name>/session.lsp              a scripted language-server session, and its
                                          workspace; see "Language-server sessions"
+  fixture_meta.py                        the fixture format's reader for every Python consumer
+  fixture-meta.cases                     source: what a metadata text means, which both readers are held to
   registers.md                           source: the four evidence registers the matrices are generated from
   constructs.matrix                      generated: every [NNNN], its evidence and inventory
   diagnostics.catalogue                  generated: every code and its rule
@@ -96,12 +98,32 @@ recompilation:
 ./scripts/dev-test.sh --fixture=abi/r440-smoke
 ```
 
+`--suite` and `--case` repeat, so one run, with one build check, answers a
+change that reaches several suites; each case any of them names runs once,
+in the order a complete run sorts them, and the transcript begins with a
+`FILTERED` line for each selector:
+
+```sh
+./scripts/dev-test.sh --suite=fixtures --suite=harness \
+    --case='parser/reports carry the pinned codes'
+```
+
+A case is named `SUITE/NAME`, its suite's name and its own as the
+transcript lists them.  A suite or case nothing is registered under is
+refused before anything runs, with the rule and the three registered names
+nearest it, so a `--case` naming only `core and the examples are formatted`
+is answered with `formatting/core and the examples are formatted`.
+
 A fixture selector accepts `positive`, `negative`, `runtime`, `abi`, or any
 other discovered class whose fixture has a recorded `expect`. It invokes the
 real scanner-through-backend path appropriate to that class, including
 assembling, linking and executing a runtime or ABI fixture. Every selected
 transcript begins with `FILTERED`, and an unknown selection fails: focused
-feedback cannot look like the complete suite by accident. On macOS use
+feedback cannot look like the complete suite by accident.  A fixture this
+run's lane does not run, one whose `targets:` do not name the lane and
+whose `args` select no target of their own, is not a failure: the run
+says `NOT APPLICABLE`, names each of its targets with the command of the
+lane that runs it, and exits 0 having run nothing. On macOS use
 `--host`, optionally with one `--suite` or `--case`; native workload cases
 remain excluded and cannot be selected through that combination. `--fixture`
 and recording cannot combine with `--host`. Run Linux workloads on a native
@@ -169,7 +191,11 @@ none of those tools has to be found by hand. On Ubuntu, QEMU needs
 above the default runs only once the runner's own `/proc/cpuinfo`, read
 by a program the lane's driver links, confirms it: `Features` on arm64,
 and on RV64 the `isa` line, whose ISA string names each extension. QEMU's
-`max` RV64 CPU lacks T-Head's `xtheadba`, which `QEMU_CPU` adds.
+`max` RV64 CPU lacks T-Head's `xtheadba`, which `QEMU_CPU` adds. QEMU's
+user emulation also performs a misaligned RV64 load or store silently, so
+the lane cannot show that D410's packed fields move a byte at a time;
+`--case='backend/RV64 packed fields move by byte'` holds the emitted
+sequence to it instead, at none and at size.
 
 Before a cross lane runs any program, the harness asks its runner to run a
 probe the lane's driver links, which asks Linux for a signal's action with
@@ -440,6 +466,24 @@ the real hosted I/O fixtures separately assert native process behavior.
 `python3 compiler/tests/debugging/test_check.py` exercises transcript refusals
 without GDB; `scripts/debug.sh` runs those regressions before the real sessions.
 
+GDB ends a backtrace at the frame named `main` unless told otherwise, so a
+hosted Linux program's stack shows nothing below its `main` even though
+`platform/linux`'s `_landin_start` and `_landin_start_main` called it. To see
+those frames in your own session, give GDB `set backtrace past-main on`
+before `bt`; the panic sessions in `debugging/panic.py` do, and assert
+`_landin_start_main` and `_landin_start` below `main`. The workload sessions
+leave the default, because the frames they hold are the program's own.
+LLDB shows every frame without a setting.
+
+Debug information and source maps record a library file as
+`/landin-library/` and its module path (D422). The GDB sessions map that
+prefix to this checkout with `set substitute-path`, the Cortex-M sessions to
+the library copy they build from, and the source-map checks expect a
+library file under the prefix however its path was spelled when it was
+read. The parser workload's token kind is an atom set, which D423 describes
+as an enumeration, so the GDB and LLDB sessions read it by name, `number`
+and `newline`, not by its code.
+
 The current Linux transport is native GDB on the native runner. The historical
 translated troubleshooting path uses `--runner=qemu`; `--qemu=PATH` selects
 the emulator explicitly. It stayed outside the development and acceptance loop
@@ -591,7 +635,9 @@ its expected name cannot silently omit a source package.
 The metadata-only `fixtures/repository fixtures are clean` case compares
 Ada discovery with every fixture identity and target list in `targets.matrix`,
 which `check.py` generates independently. Missing, additional and duplicate
-rows fail. Corpus runners separately compare their attempted programs,
+rows fail, and the failure names the fixture and the row: a fixture with no
+row, a row with no fixture, a repeated row, or a row whose targets the
+fixture's `targets:` no longer says, beside what it says. Corpus runners separately compare their attempted programs,
 recorded outputs and runtime/ABI profiles with metadata-derived obligations,
 and require the positive, negative, runtime, ABI and recorded-output coverage
 categories they own to remain present. Malformed metadata stops those runners
@@ -630,7 +676,8 @@ emits assembly text.
 | `link` | no, and runtime only | `static` or `libc`: how a hosted lane links the executable, passed as `--link=`; absent means the target's default, static on Linux. A program that calls the C library names `libc`. An ABI fixture is always emitted with `--link=libc`, because the C driver links its assembly with the C runtime |
 | `expect` | no | the file holding the expected bytes, which `fixture execution/recorded expectations hold` compares and `./scripts/test.sh --record=CLASS/NAME` rewrites |
 | `args` | no | the arguments `refine` is run with; for a rooted fixture, only the options before the module its `root` gives, such as `--target=darwin-arm64` |
-| `run_args` | no | the arguments handed to a compiled runtime or ABI program |
+| `run_args` | no | words handed to a compiled runtime or ABI program as written, before its `run_files`; it names no file of the fixture's |
+| `run_files` | no, and runtime or ABI only | comma-separated files below the fixture directory, each handed to the program after `run_args` as a path to it wherever the lane put the fixture |
 | `stdin` | no | a file below the fixture directory whose bytes a compiled runtime or ABI program reads as its standard input; without it the program's standard input is empty |
 | `run_expect` | no | the file holding a runtime or ABI program's expected bytes on the selected `stream` |
 | `status` | no | the exit status `refine` or a compiled program must produce (default 1 for a negative, 0 otherwise) |
@@ -735,7 +782,11 @@ executable fixtures alike import repository-owned modules such as `core/*`
 without keeping fixture-only copies. The parser's exact-code case retains its
 fake filesystem for ordinary negative fixtures, but reads the real module
 closure for a rooted negative because its pinned report depends on those
-imports resolving.
+imports resolving. A negative whose recorded `args` name a `--root=` rather
+than a `root` key is rooted too: that case runs it with exactly those `args`,
+from `compiler/ada` as the recorded invocation runs, whether or not it also
+names a `program`, so nothing has to be left out of its metadata to keep it
+off the fake filesystem.
 
 A rooted fixture's `args` never name its module: the harness passes them
 first and then `--root` and the fixture's directory, and refuses an `args`
@@ -873,6 +924,41 @@ arguments through the real tool adapter, and compares the captured bytes and
 the exit status with what the fixture claims. Standard output and standard
 error are captured together, in the order the process wrote them.
 
+Two programs read this format, and they are held to one meaning. The test
+program reads it with `Landin.Testing.Fixtures`; every Python consumer (the
+Darwin, FreeBSD, RV64 and Cortex-M lanes, the quality and outside-user lanes,
+the driver and emission manifests, the site and `check.py`) reads it with
+[`fixture_meta.py`](fixture_meta.py), which says what refine is run with for a
+fixture (`source_arguments`), what its program is run with
+(`program_arguments`) and which of its `levels:` a lane builds
+(`levels_for`). [`fixture-meta.cases`](fixture-meta.cases) is a table of
+metadata texts with the faults and values each must give, which
+`fixtures/the metadata readers agree` reads through the Ada reader and
+`scripts/tests/test_fixture_meta.py` through the Python one. A change to the
+format is a change to both readers and the table, and a reader that was
+missed fails by name.
+
+### Adding a fixture
+
+Write the fixture directory and its `fixture.meta`, then run
+
+```sh
+python3 scripts/add_fixture.py CLASS/NAME
+```
+
+It reads the metadata as the test program does and stops on any fault; gives
+a runtime or ABI fixture its row in `cortex-m/corpus.json`, `execute` for a
+runtime fixture unless `--refuse=CODES --reason=TEXT` says the Cortex-M0
+source check refuses it, and for an ABI fixture, whose C peer is hosted, a
+`restriction` with the `--reason` it is given; regenerates `targets.matrix`,
+`constructs.matrix` and `lexical.tokens` (`check.py --coverage`, `--matrix`
+and `--tokens`); and says what only a person can decide, a Linux x86-64
+runtime or ABI fixture that does not run on arm64 needing its record in
+`linux-arm64/parity.json`. Then run the fixture on its own lane,
+`./scripts/dev-test.sh --fixture=CLASS/NAME`, and `python3 check.py`. A
+Cortex-M row it guessed wrong is found by the Cortex-M corpus, whose
+refusal says which row to write.
+
 Discovery is strict. An unknown key, a repeated key, a missing required key,
 a class that disagrees with its directory, a line that is not a pair, a
 fixture directory without metadata, and a plain file where a fixture belongs
@@ -930,10 +1016,15 @@ optional.
 `stdin` names a file the way `run_expect` does, relative to the fixture
 directory, and it must stay below it: a slash-separated path with no empty,
 `.` or `..` component, no backslash and no colon, so every lane opens the
-same file whatever its working directory. `run_args` is different, and older:
-its words are handed over as written, so a path among them is relative to the
-directory the program runs in, `compiler/ada`. Every lane that runs a compiled
-program honours `stdin`: the Ada harness on the Linux and Darwin hosts and
+same file whatever its working directory. `run_files` names the files a
+program is given as arguments the same way, so every path to a fixture's own
+file has one base, the fixture directory. `run_args` holds the rest of the
+command line, words handed over as written; a word that is a path is one a
+program writes, relative to the directory it runs in, which is `compiler/ada`
+on every lane and whose `build/` is there to write into, as the output file
+`runtime/r480-hosted-text` names with its `--out` does. The
+program's arguments are its `c-shared` objects, then `run_args`, then
+`run_files`. Every lane that runs a compiled program honours `stdin`: the Ada harness on the Linux and Darwin hosts and
 under an emulator runner, the FreeBSD guests, the RV64 machines, the quality
 measurements and the outside-user lane. A fixture without the key gives its
 program an empty standard input, `/dev/null`, on every lane, and never the
@@ -1025,8 +1116,8 @@ produce the same tokens. The distinction belongs to the line map, and
 `compiler/tests/lexical.tokens` is generated: `python3 check.py --tokens`
 writes it from `check.py`'s tokeniser, one line per token as `first last
 spelling`. The Ada harness reads it and compares every token with what
-`Landin.Tokens.Lexer` produced, and `check.py` regenerates it on every full
-run and fails if the committed copy is stale.
+`Landin.Tokens.Lexer` produced, and every full `check.py` run compares the
+committed copy with a fresh dump and fails if it is stale.
 
 Kinds are deliberately not in it. The two implementations have different
 kind vocabularies, and what a disagreement actually looks like is a boundary
@@ -1038,6 +1129,11 @@ Ada scanner appended each file's tokens to the previous file's, because a
 limited `out` parameter is passed by reference and `Lex` had not cleared it.
 
 ## Diagnostic and semantic coverage registers
+
+`python3 check.py --generate` regenerates every generated file at once: the
+token dump, the catalogue and its matrix and explanations, the coverage and
+construct matrices and the editor files. Each flag below writes its own share,
+and several flags in one run each run.
 
 `python3 check.py --catalogue` writes both `diagnostics.catalogue` and
 `diagnostics.matrix`. The compact catalogue comes from

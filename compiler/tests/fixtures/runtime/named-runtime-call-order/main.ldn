@@ -54,11 +54,11 @@ public main: () -> (code: i32) =
 
     code = 1
     if direct == 123 and direct_order == 123
-       and prefix == 123 and prefix_order == 456
-       and through_value == 123 and indirect_order == 789
-       and through_field == 123 and field_order == 123
-       and through_selection == 123 and selection_order == 456
-       and through_generic == 8 and generic_order == 78
+      and prefix == 123 and prefix_order == 456
+      and through_value == 123 and indirect_order == 789
+      and through_field == 123 and field_order == 123
+      and through_selection == 123 and selection_order == 456
+      and through_generic == 8 and generic_order == 78
     then
         code = 42
     end if

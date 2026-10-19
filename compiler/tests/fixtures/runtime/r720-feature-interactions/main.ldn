@@ -13,8 +13,8 @@ end pair
 classify: (m: maybe) -> (code: i32) =
     match m
         none_found: code = 1
-        denied:     code = 2
-        ptr (p):    code = i32(p.val)
+        denied: code = 2
+        ptr (p): code = i32(p.val)
     end match
 end classify
 
@@ -38,7 +38,7 @@ public main: () -> (code: i32) =
     end search
     code = total + 1
     if classify(first) <> 1 or classify(held.left) <> 40
-        or classify(held.right) <> 2 or sizeof maybe <> 2 * sizeof usize then
+      or classify(held.right) <> 2 or sizeof maybe <> 2 * sizeof usize then
         code = 3
     end if
 end main

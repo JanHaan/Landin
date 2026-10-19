@@ -1,0 +1,35 @@
+--  An address erased into `any C` is read through when every entry takes
+--  `self: ptr`, so the `mut` on what it addresses is not needed and is
+--  warned about; one entry taking `self: ptr mut` writes through it, and
+--  that `mut` is needed.
+reader: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end reader
+
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (value: i32)
+end counter
+
+cell: type = struct
+    value: i32
+end cell
+
+read_cell: (self: ptr cell) -> (value: i32) =
+    value = self.val.value
+end read_cell
+
+bump_cell: (self: ptr mut cell) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump_cell
+
+cell is reader (read: read_cell)
+cell is counter (bump: bump_cell)
+
+public main: () -> (code: i32) =
+    read_only: cell = (value: 18)
+    mut written: cell = (value: 22)
+    r: any reader = any(addr read_only)
+    c: any counter = any(addr written)
+    code = r.read() + c.bump()
+end main

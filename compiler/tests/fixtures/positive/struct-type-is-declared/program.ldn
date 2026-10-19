@@ -13,6 +13,6 @@ offset: type = i32
 
 span: type = struct
     start: offset
-    to:   offset
-    tag:  u8
+    to: offset
+    tag: u8
 end span

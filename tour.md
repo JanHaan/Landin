@@ -696,7 +696,9 @@ end read
 ```
 
 A pointer goes into the union without being written down as anything; coming
-back out is a match, and both cases have to be named. `ptr` is the arm for
+back out is a match, and both cases have to be named. Which case it holds can
+be asked without one, `m == none_found` or `m <> none_found`, because that
+reads no address; two unions do not compare. `ptr` is the arm for
 the present case, and the name in brackets after it is the pointer itself.
 On a return edge, an exact `from` clause applies only when this optional value
 actually carries the pointer. An edge provably returning `none_found` has no
@@ -803,10 +805,14 @@ still subject to manual lifetime discipline; consumption is not ownership.
 ### [0520] Array: a value
 
 Array: a value. Assignment copies. Size is part of the type. Its bound is a
-closed fixed expression: integer literals and fixed parameters combined with
-parentheses, unary `-`, and non-wrapping `+`, `-`, `*`, `/` and `%`. It is
-substitution and arithmetic, never a call or compile-time user execution;
-width-dependent wrapping, bitwise and shift operations are not bound forms. A
+closed fixed expression: integer literals, fixed parameters and immutable
+module integers combined with parentheses, unary `-`, and non-wrapping `+`,
+`-`, `*`, `/` and `%`. It is substitution and arithmetic, never a call or
+compile-time user execution; width-dependent wrapping, bitwise and shift
+operations are not bound forms. A module integer counts when its own image is
+such an expression, and may read a compiler fact [1500], so `path_max: usize
+= 4096` sizes `[path_max]u8`, the same type as `[4096]u8`; a `mut` one does
+not, since the program may write it (D438). A
 negative result is refused. A zero result is accepted: `[0]t` and an admitted
 fixed expression that folds to zero denote a zero-length array. This does not
 add an empty array literal or make zero-length repetition valid.
@@ -858,7 +864,9 @@ explicitly rather than using whole or trailing `zeroed`. A type ACCEPTS
 the word zeroed only when that image has one obvious
 reading. Numbers, bool, ranges containing zero and
 aggregates of those accept it. Named value sets do not:
-write the name. Pointers and 'any' have no zero image at
+write the name. Nor does a distinct type [0650]: it has its base's image,
+but an identity has no obvious zero, so write `user_id(0)`, and zero a
+record holding one. Pointers and 'any' have no zero image at
 all, because there is no null. Where the destination supplies
 that context, assignment writes the complete zero image as one
 value rather than spelling its parts. D228's packed structs are raw images:
@@ -890,8 +898,9 @@ end zeroable
 
 A program cannot declare a `zeroable` conformance. The supplied family contains
 the enabled scalars, a fixed array exactly when its element is zeroable (also at
-length zero), and an aggregate exactly when its recursively active all-zero
-shape has a zero image. Atoms, functions, pointers and slices are not in it.
+length zero), an aggregate exactly when its recursively active all-zero
+shape has a zero image, and a distinct type exactly when its base is in it.
+Atoms, functions, pointers and slices are not in it.
 This is a closed named family, not reflection over arbitrary representations.
 
 Which is what lets a shape that needs a value for storage it
@@ -1180,15 +1189,19 @@ second: type = distinct f32
 ```
 
 Neither `meter + second` nor adding two `meter` values inherits `f32`'s
-arithmetic. Two values of one distinct type whose base is a scalar do
-compare with `==` and `<>`: equality is identity, and asks nothing of what
-the base means, so a descriptor is compared without taking its number out.
-They are ordered too, with `<`, `<=`, `>` and `>=` as the base orders them,
+arithmetic. Two values of one distinct type whose base has equality, a
+scalar, an atom set, a pointer or a function value, do compare with `==` and
+`<>`: equality is identity, and asks nothing of what the base means, so a
+descriptor is compared without taking its number out. A scalar base's are
+ordered too, with `<`, `<=`, `>` and `>=` as the base orders them,
 so two `meter` values or two instants of a clock compare directly. Where
 the base is an unsigned integer, `&`, `^`, `|` and `~` combine values into
-that same type, which is how a set of flags stays one. Arithmetic and
+that same type, and `&=`, `^=` and `|=` update one in place, which is how a
+set of flags stays one. Arithmetic and
 shifts stay the base's, and a distinct value meets its base or another
-type only through a conversion, its ordering included. Construct and extract
+type only through a conversion, its ordering included. A distinct type has
+its base's zero image, so a record holding one may be zeroed [0540], though
+`zeroed` does not construct the identity itself. Construct and extract
 explicitly:
 
 ```landin
@@ -1802,6 +1815,21 @@ its arithmetic. [0500] records the omitted `offset` and `base_of` conveniences
 and the rejected `slice_from`; none supplies another derivation rule. The
 initialized-prefix state machine remains responsible for exposing only values
 that have actually been stored [0510].
+
+An allocator's `resize` that returns the block it was given, unmoved, writes
+`moved = ptr(usize(block))`: the entry's result has no `from`, because an
+allocation borrows nothing, and returning `block` itself would derive from a
+parameter the clause does not name.
+
+What re-enters tracking after such a step is a signature. A routine that
+indexes a table C gave it, or passes storage to an assembly block [1630],
+writes the contract its callers keep: `from table` on the result, `ptr mut u8`
+on the storage. Callers are checked against it like any other; the routine's
+own body is not, since an integer-made pointer satisfies any `from`, so the
+contract is its author's claim and the routine is kept small (D440). A table
+whose length C also gives keeps its origin another way: typed `ptr [1]t`, its
+`p.val[0..<1]` is widened to that length inside `unchecked`, which is the
+program's claim about the extent over elements C already initialised.
 
 ### [0820] Arenas are ordinary allocators with explicit backing
 
@@ -2795,7 +2823,9 @@ Several labels share one arm, `north, south:`, and each counts
 toward exhaustiveness; an arm that binds a payload names one
 case, and `_` is an arm of its own (D405).
 The constants a pattern names are atoms [0630]: a subject is an atom set, a
-variant part or a pointer union [0480], and an arm names an identity. A number
+variant part or a pointer union [0480], and an arm names an identity. On an
+atom set, the last arm `_ (rest):` binds the atoms no other arm named, as a
+set of their own, so they can be passed on where only those are wanted. A number
 has no identity to name, so it is compared with `if` and `elsif` rather than
 matched (D241).
 
@@ -2814,7 +2844,9 @@ end area
 ### [1220] A pattern binding carries a parameter convention
 
 A pattern binding carries a parameter convention: in by
-default, inout to write into the payload that was matched.
+default, inout to write into the payload that was matched, and sink on a
+pointer union's `ptr` arm, `ptr (sink p):`, to pass the pointer on to a
+`sink` parameter [0910], which consumes the place that was matched.
 Nothing new is needed, because the conventions of [0900] are
 already the mechanism — and without them a `[capacity]t` payload
 would be copied in order to be read and could not be
@@ -3752,7 +3784,26 @@ end if
 ```
 
 A level changes the instructions a build may use and never a layout or a
-calling convention, so code built at two levels links together. Build mode is an
+calling convention, so code built at two levels links together.
+
+A module value may read a fact too, as the value this build has [1940], and a
+routine body branches on that value with an ordinary `if`. An integer fact
+takes its type from context, and `compiler.arch`, `compiler.os`,
+`compiler.byte_order` and `compiler.build_mode` are read compared with one
+of their atoms (D437):
+
+```landin
+fast_count: bool = compiler.feature.popcnt
+on_linux: bool = compiler.os == linux
+word_bytes: usize = compiler.word_size / 8
+```
+
+A body itself reads no fact, and `fixed if` does not begin a statement: what
+differs only by a value branches on a module value like these, and what needs
+a call one system lacks is a routine declared in each arm of a module-level
+`fixed if`.
+
+Build mode is an
 explicit request value, defaulting
 to debug; it does not change runtime checks or optimization policy.
 Conditions also see the program's declared options [1530]. They use a closed
@@ -4074,7 +4125,10 @@ one underscore, so `foreign_add` becomes `_foreign_add` and `_entry` becomes
 excluded. The backend quotes the identity where target assembly syntax requires
 it after applying that prefix. Compatible bodyless C declarations may share
 one spelling and one definition, but incompatible signatures and multiple
-definitions are refused.
+definitions are refused. `escaping` is part of that compatibility although C
+has no such word: a Landin caller of an import is checked against what the
+import says, so an import of a definition that keeps its pointer repeats the
+definition's `escaping` (D441).
 C imports and public C definitions default to their declared name. A private C
 definition without an override is, like every other unexported routine and
 datum, a local symbol, renamed only where the program holds its name twice
@@ -4142,7 +4196,10 @@ its: one is a scalar, several are an anonymous result you destructure.
 An operand is an integer scalar that fits one register. A pointer crosses as
 `usize(p)` and comes back through `ptr(u)`, whose zero check is then written
 where it happens; a flag comes back as `x <> 0`. Inputs are evaluated once,
-left to right, before the block runs.
+left to right, before the block runs. The integer keeps no permission, so a
+routine around a block that writes storage takes it as `ptr mut u8` or
+`[]mut u8`: its callers are checked against that parameter, and an immutable
+buffer is refused there rather than handed to the system (D440).
 
 Every block may overwrite the registers a call may, and the flags. A register
 a call must preserve is declared, as an operand or as a discarded output

@@ -56,6 +56,15 @@ python3 compiler/tests/freebsd/check.py --arch=amd64 --kind=runtime \
     --output=/tmp/freebsd-runtime
 ```
 
+On Linux, `nix develop` provides what emission needs, so `--prepare-only` runs
+there with the lane's defaults: `clang-19`, `ld.lld-19` and `llvm-objdump-19`
+from the flake's LLVM 19 under Ubuntu's names, GNU as and bsdtar. Its
+`clang-19` takes the bare compiler, with the wrapper's resource directory, for
+a command that names a target or a sysroot, as every FreeBSD compilation does,
+because nixpkgs' wrapper adds the host's glibc to a FreeBSD build; a host
+program gets the wrapper, as `bindings/test.py` needs. The shell does not
+provide the system emulators and firmware that run the guests.
+
 Select `arm64`, `abi` or `debugger` for the other lanes. `--case=NAME` is exact
 and visibly filtered. `--ssh-port=PORT` uses an existing development VM;
 `--prepare-only` emits and inspects a payload without executing it.

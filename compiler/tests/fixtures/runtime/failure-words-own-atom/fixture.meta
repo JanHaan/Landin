@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a match's `_ (rest)` arm binds the atoms no other arm named, so a failure set mixing the program's own atom with library atoms passes the rest to failure.words, which takes only the library's
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0630, 0640, 0940, 1210, 1410, 1420
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

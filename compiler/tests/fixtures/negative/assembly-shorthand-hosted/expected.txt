@@ -2,5 +2,9 @@ error[L0330]: the positional u32 shorthand names Cortex-M0's r0; write a named o
   --> ../tests/fixtures/negative/assembly-shorthand-hosted/program.ldn:2:9
   |
 2 |     r = assembler.block("addl $7, %eax", value)
+  |         ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-shorthand-hosted/program.ldn:2:9
+  |
+2 |     r = assembler.block("addl $7, %eax", value)
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

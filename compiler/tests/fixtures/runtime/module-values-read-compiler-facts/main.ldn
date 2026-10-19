@@ -1,0 +1,57 @@
+--  D437: a module value reads a compiler fact; a routine body reads the
+--  module value.  Each fact is checked against the arm a fixed if selects
+--  for the same fact, so the answer does not depend on the target.
+import facts
+import linux
+
+has_popcnt: bool = compiler.feature.popcnt
+--  `linux` is the imported module in a body, and the system here.
+on_linux_here: bool = compiler.os == linux
+not_arm: bool = compiler.arch <> arm64
+sysv: bool = compiler.c_sysv_lp64
+sizes: [2]usize = [compiler.word_size, 8]
+
+fixed if compiler.os == linux then
+    expect_linux: bool = true
+else
+    expect_linux: bool = false
+end if
+
+fixed if compiler.feature.popcnt then
+    expect_popcnt: bool = true
+else
+    expect_popcnt: bool = false
+end if
+
+fixed if compiler.arch == arm64 then
+    expect_not_arm: bool = false
+else
+    expect_not_arm: bool = true
+end if
+
+fixed if compiler.c_sysv_lp64 then
+    expect_sysv: bool = true
+else
+    expect_sysv: bool = false
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    return when facts.word_bits <> u32(8 * sizeof usize)
+    code = 2
+    return when facts.word_bytes <> sizeof usize
+    code = 3
+    return when facts.on_linux <> expect_linux
+      or on_linux_here <> expect_linux
+    code = 4
+    return when has_popcnt <> expect_popcnt
+    code = 5
+    return when not_arm <> expect_not_arm
+    code = 6
+    return when sysv <> expect_sysv
+    code = 7
+    return when sizes[0] <> 8 * sizeof usize or sizes[1] <> 8
+    code = 8
+    return when not facts.low_first
+    code = linux.answer
+end main

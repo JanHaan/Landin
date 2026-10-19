@@ -3,7 +3,7 @@ profiles: specialization
 summary: bounded and streaming diagnostic loggers receive one ordered sequence through any dispatch while overflow and I/O failure keep distinct channels
 program: main.ldn
 root: ../../../../..
-run_args: ../tests/fixtures/runtime/diagnostic-loggers-dispatch/input.txt
+run_files: input.txt
 run_expect: output.txt
 status: 42
 stream: merged

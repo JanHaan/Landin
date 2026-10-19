@@ -1,0 +1,29 @@
+--  What a closed generic parameter still refuses, as any routine's does:
+--  a literal lent to a writable slice and a known-zero `ptr(integer)`.  A
+--  literal for a parameter whose element type is a formal has no shape,
+--  and the route named is a binding typed when an element needs a context;
+--  the erasures an inferred binding is then given name their concepts.
+import core/text
+
+fill: (t: type, values: []mut u8, x: t) -> none =
+    _ = x
+    values[0] = 1
+end fill
+
+store: (p: ptr mut u8) -> none =
+    p.val = 1
+end store
+
+pick: (item: type, values: []item) -> (count: usize) =
+    count = lenof values
+end pick
+
+refused: () -> (count: usize) =
+    a: u32 = 1
+    b: u8 = 2
+    fill([1, 2], true)
+    store(ptr(0))
+    count = pick([any(addr a), any(addr b)])
+    values := [any(addr a), any(addr b)]
+    _ = values
+end refused

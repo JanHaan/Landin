@@ -53,9 +53,9 @@ public main: () -> (code: i32) =
     mut outer_arena_space: arena.space = zeroed
     mut inner_arena_space: arena.space = zeroed
     outer_arena := arena.over_unchecked(outer_arena_space,
-                                            addr outer_bytes[0], 4)
+                                        addr outer_bytes[0], 4)
     inner_arena := arena.over_unchecked(inner_arena_space,
-                                            addr inner_bytes[0], 2)
+                                        addr inner_bytes[0], 2)
     mut outer_space: fault.space = zeroed
     mut inner_space: fault.space = zeroed
     outer := fault.over(outer_space, outer_arena, usize(4))

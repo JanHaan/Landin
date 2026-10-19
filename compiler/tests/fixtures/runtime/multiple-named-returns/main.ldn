@@ -84,10 +84,10 @@ public main: () -> (code: i32) =
     indirect_wide := wide_function(8, 7, 6, 5, 4, 3, 2, 1)
 
     chosen := if direct.rem == 2 then
-        choose(false, 22, 5)
-    else
-        divide(1, 1)
-    end if
+                  choose(false, 22, 5)
+              else
+                  divide(1, 1)
+              end if
 
     through := apply(divide, 17, 5)
     anonymous_function: division =
@@ -102,23 +102,23 @@ public main: () -> (code: i32) =
      selected: selection, callback: call, code: mixed_code) := mixed(40)
 
     if direct.quot == 3 and direct.rem == 2
-       and replaced.quot == 3 and replaced.rem == 4
-       and quot == 3 and residue == 1
-       and renamed.first == 3 and renamed.second == 2
-       and direct_wide.sum == 36 and direct_wide.edges == 9
-       and indirect_wide.sum == 36 and indirect_wide.edges == 9
-       and chosen.quot == 4 and chosen.rem == 2
-       and through.quot == 3 and through.rem == 2
-       and anonymous.quot == 3 and anonymous.rem == 3
-       and all.code == 30 and all.values[0] == 30 and all.values[1] == 31
-       and all.record.left == 32 and all.record.right == 33
-       and all.records[0].left == 34 and all.records[1].right == 35
-       and inspect_choice(all.selected) == 61
-       and numbers[0] == 40 and numbers[1] == 41
-       and held.left == 42 and held.right == 43
-       and pair_array[0].left == 44 and pair_array[1].right == 45
-       and inspect_choice(selection) == 81
-       and call(4) == 8 and mixed_code == 40
+      and replaced.quot == 3 and replaced.rem == 4
+      and quot == 3 and residue == 1
+      and renamed.first == 3 and renamed.second == 2
+      and direct_wide.sum == 36 and direct_wide.edges == 9
+      and indirect_wide.sum == 36 and indirect_wide.edges == 9
+      and chosen.quot == 4 and chosen.rem == 2
+      and through.quot == 3 and through.rem == 2
+      and anonymous.quot == 3 and anonymous.rem == 3
+      and all.code == 30 and all.values[0] == 30 and all.values[1] == 31
+      and all.record.left == 32 and all.record.right == 33
+      and all.records[0].left == 34 and all.records[1].right == 35
+      and inspect_choice(all.selected) == 61
+      and numbers[0] == 40 and numbers[1] == 41
+      and held.left == 42 and held.right == 43
+      and pair_array[0].left == 44 and pair_array[1].right == 45
+      and inspect_choice(selection) == 81
+      and call(4) == 8 and mixed_code == 40
     then
         code = 0
     else

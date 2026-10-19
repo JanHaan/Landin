@@ -1,0 +1,12 @@
+--  [0990]: a routine's results are bound by name, never by position, so a
+--  reordering of two results of one type cannot swap what they bind.  The
+--  refusal names the result's fields and the `field: local` rename.
+divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
+    quot = a / b
+    rem = a % b
+end divide
+
+public main: () -> (code: i32) =
+    (q, r) := divide(10, 3)
+    code = q + r
+end main

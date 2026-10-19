@@ -19,5 +19,5 @@ write: () -> (result: usize) =
     state =
         (other: copied.row, ready: zeroed, row: zeroed, tag: zeroed)
     result = local.row[0] + copied.other[1]
-      + assigned.row[2] + assigned.other[2] + state.row[0]
+             + assigned.row[2] + assigned.other[2] + state.row[0]
 end write

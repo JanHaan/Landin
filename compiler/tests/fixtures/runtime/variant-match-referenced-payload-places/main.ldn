@@ -70,5 +70,5 @@ public main: () -> (code: i32) =
     code = if untouched and changed and subjects == 1 and elements == 2
       and rows[0].before == 77 and rows[0].after == 79
       and rows[1].before == 91 and rows[1].after == 93
-    then 42 else 1 end if
+           then 42 else 1 end if
 end main

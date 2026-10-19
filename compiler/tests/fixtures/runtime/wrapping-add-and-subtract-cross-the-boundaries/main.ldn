@@ -5,9 +5,9 @@ public main: () -> (code: i32) =
     signed_subtract: i8 = -128 -% 1
 
     if unsigned_add == 0
-        and unsigned_subtract == 255
-        and signed_add == -128
-        and signed_subtract == 127
+      and unsigned_subtract == 255
+      and signed_add == -128
+      and signed_subtract == 127
     then
         code = 42
     else

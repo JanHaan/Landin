@@ -1285,6 +1285,23 @@ package body Landin.Backend is
       return (if Path = "" then "main" else Path) & "." & Spelling;
    end Qualified_Symbol;
 
+   function Symbol_Declaration
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id) return Landin.IR.Declaration_Id
+   is
+      Declared : constant Landin.IR.Declaration_Id :=
+        Landin.IR.Declares (Of_Unit, Item);
+   begin
+      if Declared /= Landin.IR.No_Declaration then
+         return Declared;
+      elsif Landin.IR.Generic_Template_Of (Of_Unit, Item)
+        /= Landin.IR.No_Declaration
+      then
+         return Landin.IR.Generic_Template_Of (Of_Unit, Item);
+      end if;
+      return Landin.IR.Named_After (Of_Unit, Item);
+   end Symbol_Declaration;
+
    procedure Remove (Into : in out Spelling_Counts; Spelling : String) is
       Found : Spelling_Maps.Cursor := Into.Held.Find (Spelling);
    begin

@@ -26,5 +26,5 @@ public main: () -> (code: i32) =
     missing_cell: maybe_cell = absent
     missing_pointer: maybe_pointer = absent
     code = read_cell(present_cell) + read_pointer(present_pointer)
-        + read_cell(missing_cell) + read_pointer(missing_pointer)
+           + read_cell(missing_cell) + read_pointer(missing_pointer)
 end main

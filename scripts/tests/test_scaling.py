@@ -258,6 +258,41 @@ class ScalingObjectives(unittest.TestCase):
         self.assertIn("--optimize=size", commands[1])
 
 
+class CleanPrograms(unittest.TestCase):
+    """A warning leaves the exit status at zero, so a measured
+    program is held to the compiler writing nothing at all."""
+
+    def compile_reporting(self, stdout: bytes, stderr: bytes) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            report = Path(work) / "stages.json"
+
+            def compile_once(command, *_args):
+                report.write_text(json.dumps({
+                    "stages": [{"stage": name, "processor_us": 100,
+                                "peak_kib": 32}
+                               for name in scaling.FRONTEND + scaling.EMISSION],
+                    "sizes": {}}))
+                return subprocess.CompletedProcess(command, 0, stdout, stderr)
+
+            with mock.patch.object(scaling, "run_compiler",
+                                   side_effect=compile_once):
+                scaling.measure("refine", work, work, str(report), 1)
+
+    def test_a_warning_with_a_zero_exit_is_refused(self):
+        warning = (b"warning[L0326]: `t` is declared `mut` and nothing"
+                   b" writes it\n")
+        with self.assertRaisesRegex(RuntimeError,
+                                    r"reported a diagnostic(.|\n)*L0326"):
+            self.compile_reporting(b"", warning)
+
+    def test_anything_written_to_stdout_is_refused(self):
+        with self.assertRaisesRegex(RuntimeError, "reported a diagnostic"):
+            self.compile_reporting(b"note: something\n", b"")
+
+    def test_a_silent_compilation_is_measured(self):
+        self.compile_reporting(b"", b"")
+
+
 class ScalingSamples(unittest.TestCase):
     def sample(self, peak):
         return {"frontend": 1, "emission": 1, "peak_kib": peak,

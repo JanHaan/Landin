@@ -42,6 +42,14 @@ import time
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE.parent / "fixtures"
 ROOT = HERE.parents[2]
+sys.path.insert(0, str(HERE.parent))
+import fixture_meta  # noqa: E402
+
+#  The rooted negative the import preflight opens.  What the server must
+#  report for it is read from the fixture, its first code from `codes:` and
+#  the line from its recorded report, so editing the fixture moves the
+#  preflight with it rather than breaking it.
+IMPORT_FIXTURE = "negative/core-fault-needs-mutable-inner"
 MASK = (1 << 64) - 1
 
 KEYWORDS = ("end begin match if then else elsif while do loop for in break "
@@ -320,9 +328,25 @@ def serve_one(server, seed, path, original, mutant):
     server.notify("textDocument/didClose", {"textDocument": document})
 
 
+def import_expectation():
+    """The import preflight's file, and the code and zero-based line and
+    column the server must report there: IMPORT_FIXTURE's first code, at
+    the primary span its recorded report gives."""
+    meta = fixture_meta.read(FIXTURES / IMPORT_FIXTURE)
+    report = (meta.directory / meta["expect"]).read_text(encoding="utf-8")
+    found = re.search(r"^\s*--> \S*/%s/([^/\s]+\.ldn):(\d+):(\d+)$"
+                      % re.escape(IMPORT_FIXTURE), report, re.M)
+    if not meta.codes or found is None:
+        raise Broken("%s no longer names a code and a primary span in its"
+                     " report; give check_imports another rooted negative"
+                     % IMPORT_FIXTURE)
+    return (meta.directory / found.group(1), meta.codes[0],
+            int(found.group(2)) - 1, int(found.group(3)) - 1)
+
+
 def check_imports(server):
     """Prove that rooted analysis reaches checking through fixture imports."""
-    path = (FIXTURES / "negative/core-fault-needs-mutable-inner/main.ldn")
+    path, code, line, column = import_expectation()
     uri = path.as_uri()
     server.diagnostics.clear()
     server.notify("textDocument/didOpen", {"textDocument": {
@@ -332,13 +356,15 @@ def check_imports(server):
         # A response follows the diagnostics published for the open.
         server.request("textDocument/hover", {
             "textDocument": {"uri": uri},
-            "position": {"line": 9, "character": 48}})
+            "position": {"line": line, "character": column}})
         if not any(report.get("uri") == uri and any(
-                diagnostic.get("code") == "L0303" and
-                diagnostic.get("range", {}).get("start", {}).get("line") == 9
+                diagnostic.get("code") == code and
+                diagnostic.get("range", {}).get("start", {}).get("line")
+                == line
                 for diagnostic in report.get("diagnostics", []))
                 for report in server.diagnostics):
-            raise Broken("import check did not reach L0303 at line 10")
+            raise Broken("import check did not reach %s at line %d of %s"
+                         % (code, line + 1, IMPORT_FIXTURE))
     finally:
         server.notify("textDocument/didClose", {"textDocument": {"uri": uri}})
 

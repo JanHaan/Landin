@@ -152,6 +152,9 @@ def run(debugger, config_path):
                                  for i in range(union_type.GetNumberOfFields())], [0, 8])
         record('union bytes', union_type.GetByteSize(), 16)
         record('union atom case code', value(f, 'union_atom.atom') > 0, True)
+        # D423: the atom cell is an enumeration, read by the atom's name.
+        record('union atom case name', f.FindVariable('union_atom')
+               .GetChildMemberWithName('atom').GetValue(), 'debug_denied')
         values(f, 'unions', {'union_atom.ptr': 0, 'union_pointer.atom': 0,
                              'union_pointer.ptr.*': 41})
         # [1630]: the block's own line, its output a local on the next, and

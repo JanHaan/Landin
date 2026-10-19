@@ -134,6 +134,77 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Selected := Unbounded.To_Unbounded_String (Path);
    end Select_Fixture;
 
+   function Lane_Command (Label, Target : String) return String is
+     (if Target = "linux-x86-64" then
+         "./scripts/dev-test.sh --fixture=" & Label
+         & " on a Linux x86-64 host"
+      elsif Target = "linux-arm64" then
+         "./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64"
+         & " --fixture=" & Label & ", or natively on a Linux arm64 host"
+      elsif Target = "linux-rv64" then
+         "QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh"
+         & " --target=linux-rv64 --runner=qemu-riscv64 --fixture=" & Label
+      elsif Target = "darwin-arm64" then
+         "./scripts/dev-test.sh --fixture=" & Label & " on a Mac, or"
+         & " compiler/tests/darwin/check.py --parity --case=" & Label
+         & " --refine=REFINE --output=DIR"
+         & " there; the gate's darwin jobs run both"
+      elsif Target in "freebsd-x86-64" | "freebsd-arm64" then
+         "compiler/tests/freebsd/check.py --arch="
+         & (if Target = "freebsd-x86-64" then "amd64" else "arm64")
+         & " --kind=runtime --case="
+         & Label (Ada.Strings.Fixed.Index (Label, "/") + 1 .. Label'Last)
+         & " --refine=REFINE --output=DIR, or the gate's freebsd-"
+         & (if Target = "freebsd-x86-64" then "amd64" else "arm64")
+         & " jobs (compiler/tests/freebsd/README.md)"
+      elsif Target = "cortex-m0" then
+         "environments/cortex-m/backend_corpus.py --case=" & Label
+         & " --refine=REFINE --output=DIR, or the gate's cortex-m job"
+      else
+         "no lane runs it: " & Target & " is a layout model the targets"
+         & " suite measures");
+
+   function Lane_Note (Path : String) return String is
+      Host  : Landin.Platform.Native.Native_Filesystem;
+      Found : Catalogue;
+   begin
+      Discover (Found, Fixture_Root, Host, Only => Path);
+      if Problem_Count (Found) /= 0 or else Count (Found) /= 1 then
+         return "";
+      end if;
+      declare
+         Case_Item : constant Fixture := Nth (Found, 1);
+         Named : constant String :=
+           Landin.Testing.Fixtures.Targets (Case_Item);
+         Note  : Unbounded.Unbounded_String;
+         First : Integer := Named'First;
+      begin
+         if Recorded_In_Lane (Case_Item) then
+            return "";
+         end if;
+         Unbounded.Append
+           (Note, "NOT APPLICABLE " & Path & ": it does not apply to this"
+            & " run's target, " & Lanes.Target_Name & ", for its targets"
+            & " are " & Named & "; run it on its own lane:" & ASCII.LF);
+         for Index in Named'First .. Named'Last + 1 loop
+            if Index > Named'Last or else Named (Index) = ',' then
+               declare
+                  One : constant String := Ada.Strings.Fixed.Trim
+                    (Named (First .. Index - 1), Ada.Strings.Both);
+               begin
+                  if One /= "" then
+                     Unbounded.Append
+                       (Note, "  " & One & ": " & Lane_Command (Path, One)
+                        & ASCII.LF);
+                  end if;
+               end;
+               First := Index + 1;
+            end if;
+         end loop;
+         return Unbounded.To_String (Note);
+      end;
+   end Lane_Note;
+
    --  How many fixtures may be in flight at once.  One unless a run asks
    --  for more, so the harness behaves exactly as it always has by default
    --  and a parallel run is something a caller opted into.  An unreadable
@@ -333,14 +404,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
    function Invocation (Case_Item : Fixture) return Landin.Platform.Path_List;
 
    function Invocation (Case_Item : Fixture) return Landin.Platform.Path_List
-   is
-      Result : Landin.Platform.Path_List := Split (Args (Case_Item));
-   begin
-      if Module_Root (Case_Item) /= "" then
-         Append_Module_Arguments (Case_Item, Fixture_Root, Result);
-      end if;
-      return Result;
-   end Invocation;
+     is (Source_Arguments (Case_Item, Fixture_Root));
 
    function Label_Of (Item : Fixture) return String is
      (Class_Directory (Class (Item)) & "/" & Name (Item));
@@ -2247,9 +2311,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
                return;
             end if;
             Runtime_Arguments := Objects;
-            for Argument of Split (Run_Args (Case_Item)) loop
-               Runtime_Arguments.Append (Argument);
-            end loop;
+            Append_Program_Arguments
+              (Case_Item, Fixture_Root & "/runtime/" & Name (Case_Item),
+               Runtime_Arguments);
          end;
          Feed_Standard_Input
            (Runner, Case_Item, Fixture_Root & "/runtime/" & Name (Case_Item));
@@ -2449,9 +2513,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
                return;
             end if;
             Runtime_Arguments := Objects;
-            for Argument of Split (Run_Args (Case_Item)) loop
-               Runtime_Arguments.Append (Argument);
-            end loop;
+            Append_Program_Arguments
+              (Case_Item, Directory, Runtime_Arguments);
          end;
          Feed_Standard_Input (Runner, Case_Item, Directory);
          Run_With_Stream
@@ -3165,7 +3228,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Case_Item : constant Fixture := Nth (Found, Index);
          begin
             if Label_Of (Case_Item) = Wanted
-              and then not In_Lane (Case_Item)
+              and then not Recorded_In_Lane (Case_Item)
             then
                Landin.Testing.Fail
                  (Item, Wanted & ": names no " & Lanes.Fixture_Label

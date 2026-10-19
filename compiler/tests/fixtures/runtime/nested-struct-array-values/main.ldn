@@ -22,8 +22,8 @@ answer: () -> (result: i32) =
     local.nested.row = [5, of 6]
     local.nested.row = zeroed
     result = right.nested.row[0] + right.nested.row[1]
-           + right.nested.row[2] + left.nested.row[0]
-           + left.nested.row[1] + left.nested.row[2]
+             + right.nested.row[2] + left.nested.row[0]
+             + left.nested.row[1] + left.nested.row[2]
 end answer
 
 public main: () -> (code: i32) =

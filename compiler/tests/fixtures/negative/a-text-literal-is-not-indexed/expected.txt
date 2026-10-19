@@ -1,0 +1,10 @@
+error[L0103]: a text literal is a value, and only a name is indexed
+  --> ../tests/fixtures/negative/a-text-literal-is-not-indexed/program.ldn:6:22
+  |
+6 |     code = i32("beta"[i])
+  |                      ^
+  --> ../tests/fixtures/negative/a-text-literal-is-not-indexed/program.ldn:6:16
+  |
+6 |     code = i32("beta"[i])
+  |                ^^^^^^ the literal
+  = note: [0570]: give the text a name first, as `word := "beta"`, and index the name, `word[i]`

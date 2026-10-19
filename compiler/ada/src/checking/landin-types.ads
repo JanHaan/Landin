@@ -266,6 +266,23 @@ package Landin.Types is
      with Pre => Width (Item, Facts)
                  <= Landin.Targets.Bit_Width (Widest);
 
+   --  The least and the greatest value of a type, as folds.  A range
+   --  check whose edge is one of these compares against nothing a value
+   --  of the type can pass, so a backend emits no test for that edge:
+   --  `ptr(n)` keeps its nonnull edge and loses the one at the largest
+   --  `usize`.
+   function Lowest
+     (Item  : Integer_Name;
+      Facts : Landin.Targets.Target_Facts) return Folded
+     with Pre => Width (Item, Facts)
+                 <= Landin.Targets.Bit_Width (Widest);
+
+   function Highest
+     (Item  : Integer_Name;
+      Facts : Landin.Targets.Target_Facts) return Folded
+     with Pre => Width (Item, Facts)
+                 <= Landin.Targets.Bit_Width (Widest);
+
    --  The value of an integer literal's digits [1770], separators and all
    --  [0220].  Overflowed is an answer and not an exception because it is
    --  foreseeable: 18446744073709551616 is something a program can be

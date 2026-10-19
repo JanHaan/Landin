@@ -4,7 +4,7 @@ f: (p: ptr mut u32) -> (old: u32) =
     _ = compiler.atomic_exchange(p, 9, compiler.acq_rel)
     _ = compiler.atomic_add(p, 1, compiler.relaxed)
     _ = compiler.atomic_compare_exchange(p, 10, 11,
-        compiler.seq_cst, compiler.acquire)
+                                         compiler.seq_cst, compiler.acquire)
     _ = compiler.volatile_load(p)
     compiler.volatile_store(p, 42)
     compiler.compiler_barrier()

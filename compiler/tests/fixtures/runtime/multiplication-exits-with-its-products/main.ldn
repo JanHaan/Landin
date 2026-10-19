@@ -9,13 +9,13 @@ public main: () -> (code: i32) =
     signed_64: i64 = -4000000000 * 2
 
     if unsigned_8 == 42
-        and unsigned_16 == 60000
-        and unsigned_32 == 4200000000
-        and unsigned_64 == 8000000000
-        and signed_8 == -42
-        and signed_16 == -30000
-        and signed_32 == -2100000000
-        and signed_64 == -8000000000
+      and unsigned_16 == 60000
+      and unsigned_32 == 4200000000
+      and unsigned_64 == 8000000000
+      and signed_8 == -42
+      and signed_16 == -30000
+      and signed_32 == -2100000000
+      and signed_64 == -8000000000
     then
         code = 42
     else

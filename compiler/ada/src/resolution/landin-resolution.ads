@@ -353,6 +353,17 @@ package Landin.Resolution is
         (Id : Declaration_Id; Depth : Natural))
      with Pre => Is_Prepared (Of_Table) and then Holds (Of_Table, Scope);
 
+   --  Every module this scope or an enclosing one imports whole, with the
+   --  name it is imported as, in the order the imports were bound: where a
+   --  name that names nothing here might be found qualified.
+   procedure Each_Imported_Module
+     (Of_Table : Table;
+      Scope    : Scope_Id;
+      Visit    : not null access procedure
+        (Name : Landin.Source.Names.Name_Id;
+         Module : Landin.Modules.Module_Id))
+     with Pre => Is_Prepared (Of_Table) and then Holds (Of_Table, Scope);
+
    --  Every public declaration of a module, in the order recorded: what a
    --  qualified selection or a selected import could have named.  Never a
    --  module-internal one, which is inaccessible [1410] and so no answer.

@@ -22,7 +22,8 @@ def selection_controls(run, elf):
     """
     table, assembly = Path(str(elf)+'.sources.json'), Path(str(elf)+'.s')
     def check(executable=elf, symbols=elf, source_table=table, asm=assembly):
-        return verify(executable,symbols,source_table,asm,elf.parent)
+        return verify(executable,symbols,source_table,asm,elf.parent,
+                      elf.parent/'source')
     passed = []
     def refuses(name, **kwargs):
         try:
@@ -72,7 +73,7 @@ def selection_controls(run, elf):
     check()
     # Execute a stripped image with the separately verified symbol ELF.
     firmware.execute(run,stripped,[
-        'symbol-file '+str(elf), 'directory '+str(elf.parent), *source_debug.PRELUDE,
+        'symbol-file '+str(elf), *source_debug.search(elf), *source_debug.PRELUDE,
         'break source/app/main.ldn:61','continue','python',
         'frame("start","source/app/main.ldn",61)',
         'print("R6100_SEPARATE_SYMBOLS_PASS")','end'],'R6100_SEPARATE_SYMBOLS_PASS')

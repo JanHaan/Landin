@@ -1,0 +1,8 @@
+class: negative
+summary: a `_ (rest)` arm binds one read-only name for the atoms left over, and none when every atom has its arm; the rest widens only into a set holding all of it, and a named atom arm binds nothing
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/wildcard-rest-binding
+constructs: 0630, 0640, 1210
+codes: L0333, L0333, L0301, L0333
+status: 1
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

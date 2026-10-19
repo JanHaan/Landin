@@ -29,13 +29,13 @@ public main: () -> (code: i32) =
     selection_sort_from(0)
 
     if values[0] == -20
-        and values[1] == -5
-        and values[2] == 0
-        and values[3] == 3
-        and values[4] == 3
-        and values[5] == 8
-        and values[6] == 11
-        and values[7] == 18
+      and values[1] == -5
+      and values[2] == 0
+      and values[3] == 3
+      and values[4] == 3
+      and values[5] == 8
+      and values[6] == 11
+      and values[7] == 18
     then
         code = 42
     else

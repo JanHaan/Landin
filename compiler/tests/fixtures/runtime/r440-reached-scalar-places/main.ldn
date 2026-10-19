@@ -25,10 +25,10 @@ public main: () -> (code: i32) =
     pointer.val.values[1][0] += 8
     mut count: usize = 0
     pointer.val.values[next(count)][1] += if count == 1 then
-        9
-    else
-        100
-    end if
+                                              9
+                                          else
+                                              100
+                                          end if
     array_pointer: ptr mut [2]i32 = addr flat
     array_pointer.val[0] += 10
     index: usize = 1

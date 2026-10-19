@@ -7,7 +7,7 @@ public main: () -> (code: i32) =
     h: handle = handle(42)
     plain: ordinary = 3
     if f32(m) == 2.5 and sizeof handle == sizeof u32
-       and alignof handle == alignof u32 and plain == 3 then
+      and alignof handle == alignof u32 and plain == 3 then
         code = i32(u32(h))
     else
         code = 1

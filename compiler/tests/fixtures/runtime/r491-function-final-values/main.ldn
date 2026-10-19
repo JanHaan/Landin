@@ -9,7 +9,7 @@ pair: () -> (first: i32, second: i32) = first = 40 second = 2 end pair
 box: type = struct value: i32 end box
 choice: type = struct kind: variant yes | no end kind end choice
 prefix: () -> (r: i32) = local: i32 = 40 local + 2 end prefix
-parenthesis: () -> (r: i32) = r = zeroed(42) end parenthesis
+parenthesis: () -> (r: i32) = r = zeroed (42) end parenthesis
 called: () -> (r: i32) = local: i32 = 0 value() end called
 none_call: () -> (r: i32) = r = 42 noop() end none_call
 control: () -> (r: i32) =

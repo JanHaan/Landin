@@ -1,0 +1,8 @@
+public main: () -> (code: i32) =
+    code = 0
+    fixed if compiler.os == linux then
+        code = 1
+    else
+        code = 2
+    end if
+end main

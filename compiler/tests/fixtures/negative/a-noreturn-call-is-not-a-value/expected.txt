@@ -1,0 +1,20 @@
+error[L0331]: this call never returns, so there is no type to infer
+  --> ../tests/fixtures/negative/a-noreturn-call-is-not-a-value/program.ldn:9:15
+  |
+9 |     halted := stop()
+  |               ^^^^^^
+  --> ../tests/fixtures/negative/a-noreturn-call-is-not-a-value/program.ldn:9:5
+  |
+9 |     halted := stop()
+  |     ^^^^^^^^^^^^^^^^ this binding
+  = note: [0890]: this call is `noreturn`: it never returns, so it has no type; write it as a statement of its own
+error[L0331]: this call never returns, and a value belongs here
+  --> ../tests/fixtures/negative/a-noreturn-call-is-not-a-value/program.ldn:10:12
+   |
+10 |     code = compiler.unreachable()
+   |            ^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/a-noreturn-call-is-not-a-value/program.ldn:10:5
+   |
+10 |     code = compiler.unreachable()
+   |     ^^^^ the place written here
+  = note: [0890]: this call is `noreturn`: it never returns, so it is not a value; write it as a statement of its own

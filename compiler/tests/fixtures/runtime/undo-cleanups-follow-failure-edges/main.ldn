@@ -46,12 +46,12 @@ end propagated_failure
 
 if_value_failure: () -> none ! ... =
     _ = if true then
-        undo mark(5)
-        fail bad when true
-        1
-    else
-        2
-    end if
+            undo mark(5)
+            fail bad when true
+            1
+        else
+            2
+        end if
 end if_value_failure
 
 match_value_failure: () -> none ! ... =

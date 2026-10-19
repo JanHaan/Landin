@@ -25,7 +25,7 @@ public main: () -> (code: i32) =
     changed := values[1]
     last := values[2]
     code = if index_calls == 1 and rhs_calls == 1 and order == 12
-              and first.val.value == 17 and changed.val.value == 25
-              and last.val.value == 17
+      and first.val.value == 17 and changed.val.value == 25
+      and last.val.value == 17
            then 42 else 1 end if
 end main

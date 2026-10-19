@@ -5082,8 +5082,17 @@
           "type": "CHOICE",
           "members": [
             {
-              "type": "STRING",
-              "value": "inout"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "inout"
+                },
+                {
+                  "type": "STRING",
+                  "value": "sink"
+                }
+              ]
             },
             {
               "type": "BLANK"

@@ -132,12 +132,12 @@ exercise: (provider: type is mem.allocator, inner: provider,
     vec.release(pointers, allocator)
     vec.release(erased, allocator)
     okay = pointer_ok and dispatch_ok and tail_ok and left.value == 21
-      and right.value == 41 and right.sentinel == 123 and other.value == 37
-      and vec.capacity(pointers) == 0 and vec.capacity(erased) == 0
-      and fault.successes(allocator) + fault.growths(allocator) == 8
-      and fault.injected_failures(allocator) == 6
-      and fault.frees(allocator) == fault.successes(allocator)
-      and fault.live(allocator) == 0
+           and right.value == 41 and right.sentinel == 123 and other.value == 37
+           and vec.capacity(pointers) == 0 and vec.capacity(erased) == 0
+           and fault.successes(allocator) + fault.growths(allocator) == 8
+           and fault.injected_failures(allocator) == 6
+           and fault.frees(allocator) == fault.successes(allocator)
+           and fault.live(allocator) == 0
 end exercise
 
 public main: () -> (code: i32) =

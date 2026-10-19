@@ -1,0 +1,3 @@
+--  Arrays another module reads through this one's name.
+public values: [3]i32 = [1, 2, 3]
+public mut cells: [2]u8 = [4, 5]

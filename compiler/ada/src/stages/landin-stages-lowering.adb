@@ -1828,6 +1828,41 @@ package body Landin.Stages.Lowering is
          end;
       end Distinct_Scalar_Base;
 
+      --  D427: the carrier `==` and `<>` read from a value of a distinct
+      --  type whose base has equality: a scalar base's own type, an atom's
+      --  code, or a pointer's or function's address.  No_Value otherwise.
+      function Distinct_Carrier
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+
+      function Distinct_Carrier
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+         Scalar : constant Ty.Type_Kind :=
+           Distinct_Scalar_Base (Of_Tree, Node);
+
+      begin
+         if Scalar in Ty.Scalar_Name
+           or else Type_At (Of_Tree, Node) /= Ty.Aggregate
+         then
+            return Scalar;
+         end if;
+         declare
+            Nominal : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node);
+         begin
+            if Nominal = Landin.Checking.No_Nominal_Type
+              or else not Landin.Checking.Is_Distinct (Types.all, Nominal)
+            then
+               return Ty.No_Value;
+            end if;
+            case Landin.Checking.Distinct_Base (Types.all, Nominal).Kind is
+               when Ty.Atom_Value => return Ty.U32;
+               when Ty.Pointer_Value | Ty.Function_Value => return Ty.Usize;
+               when others => return Ty.No_Value;
+            end case;
+         end;
+      end Distinct_Carrier;
+
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name
       is
@@ -1837,8 +1872,8 @@ package body Landin.Stages.Lowering is
             return Ty.Usize;
          elsif Held = Ty.Atom_Value then
             return Ty.U32;
-         elsif Distinct_Scalar_Base (Of_Tree, Node) in Ty.Scalar_Name then
-            return Distinct_Scalar_Base (Of_Tree, Node);
+         elsif Distinct_Carrier (Of_Tree, Node) in Ty.Scalar_Name then
+            return Distinct_Carrier (Of_Tree, Node);
          end if;
          if Held not in Ty.Scalar_Name then
             raise Landin.Compiler_Defect with
@@ -8424,6 +8459,147 @@ package body Landin.Stages.Lowering is
          end;
       end Checked_Update;
 
+      --  D429: which operand of `==` or `<>` is a pointer union compared
+      --  with one of its atoms, 1 or 2, or 0.
+      function Union_Operand
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural;
+
+      function Union_Operand
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural
+      is
+         function Is_Union (Operand : Syn.Node_Id) return Boolean is
+           (case Type_At (Of_Tree, Operand) is
+               when Ty.Aggregate =>
+                  Is_Union_Nominal
+                    (Landin.Checking.Nominal_Of (Types.all, Of_Tree, Operand)),
+               when Ty.Pointer_Value =>
+                  Landin.Provenance."/="
+                    (Landin.Checking.Descriptor_Of
+                       (Types.all,
+                        Landin.Checking.Reference_Of
+                          (Types.all, Of_Tree, Operand)).Empty_Atom,
+                     Res.No_Declaration),
+               when others => False);
+         Left : constant Syn.Node_Id := Syn.Left_Of (Of_Tree, Node);
+         Right : constant Syn.Node_Id := Syn.Right_Of (Of_Tree, Node);
+      begin
+         if Type_At (Of_Tree, Right) = Ty.Atom_Value and then Is_Union (Left)
+         then
+            return 1;
+         elsif Type_At (Of_Tree, Left) = Ty.Atom_Value
+           and then Is_Union (Right)
+         then
+            return 2;
+         end if;
+         return 0;
+      end Union_Operand;
+
+      --  D429: the union's own cell answers.  A one-atom union holds its
+      --  atom exactly when its carrier is zero; a union of several atoms
+      --  holds an atom's code in its first cell, and zero there when it
+      --  holds the pointer.  Both operands are evaluated, left first.
+      function Lower_Union_Atom_Test
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Value_Id;
+
+      function Lower_Union_Atom_Test
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Value_Id
+      is
+         Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
+         Which : constant Natural := Union_Operand (Of_Tree, Node);
+         Union : constant Syn.Node_Id :=
+           (if Which = 1 then Syn.Left_Of (Of_Tree, Node)
+            else Syn.Right_Of (Of_Tree, Node));
+         Atom : constant Syn.Node_Id :=
+           (if Which = 1 then Syn.Right_Of (Of_Tree, Node)
+            else Syn.Left_Of (Of_Tree, Node));
+         Opcode : constant IR.Opcode :=
+           Opcode_For (Syn.Kind (Of_Tree, Node));
+         Several : constant Boolean :=
+           Type_At (Of_Tree, Union) = Ty.Aggregate;
+         Carrier : IR.Slot_Id := IR.No_Slot;
+         Code : IR.Slot_Id := IR.No_Slot;
+
+         --  The union's carrier, or its code cell, into a slot.
+         procedure Hold_Union;
+
+         procedure Hold_Union is
+         begin
+            if Several then
+               Carrier := Shaped_Temporary
+                 (Neutral_Value_Shape (Of_Tree, Union), Site);
+               Lower_Stored_Expression (Of_Tree, Union, Scope, Carrier);
+            else
+               declare
+                  Value : constant IR.Value_Id :=
+                    Lower_Expression (Of_Tree, Union, Scope);
+               begin
+                  if Current /= IR.No_Block then
+                     Carrier := IR.Add_Slot
+                       (Unit.all, Filling, Ty.Usize, Res.No_Declaration,
+                        Site,
+                        Pointee => IR.Pointee_Of (Unit.all, Filling, Value));
+                     IR.Emit_Store (Unit.all, Filling, Carrier, Value, Site);
+                  end if;
+               end;
+            end if;
+         end Hold_Union;
+
+         procedure Hold_Atom;
+
+         procedure Hold_Atom is
+            Value : constant IR.Value_Id :=
+              Lower_Expression (Of_Tree, Atom, Scope);
+         begin
+            if Current /= IR.No_Block then
+               Code := IR.Add_Slot
+                 (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
+                  Atoms => IR.Atom_Set_Of (Unit.all, Filling, Value));
+               IR.Emit_Store (Unit.all, Filling, Code, Value, Site);
+            end if;
+         end Hold_Atom;
+      begin
+         if Which = 1 then
+            Hold_Union;
+            if Current /= IR.No_Block then
+               Hold_Atom;
+            end if;
+         else
+            Hold_Atom;
+            if Current /= IR.No_Block then
+               Hold_Union;
+            end if;
+         end if;
+         if Current = IR.No_Block then
+            return IR.No_Value;
+         end if;
+
+         if Several then
+            declare
+               Cell : constant IR.Value_Id :=
+                 IR.Emit_Load_Slot_Field
+                   (Unit.all, Filling, Carrier, 1, Ty.U32, Site);
+               Wanted : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Code, Site);
+            begin
+               return IR.Emit_Binary
+                 (Unit.all, Filling, Opcode, Cell, Wanted, Ty.Bool, Site);
+            end;
+         end if;
+         declare
+            Held : constant IR.Value_Id :=
+              IR.Emit_Load (Unit.all, Filling, Carrier, Site);
+            Zero : constant IR.Value_Id :=
+              IR.Emit_Number (Unit.all, Filling, Ty.Usize, 0, False, Site);
+         begin
+            return IR.Emit_Binary
+              (Unit.all, Filling, Opcode, Held, Zero, Ty.Bool, Site);
+         end;
+      end Lower_Union_Atom_Test;
+
       function Lower_Unconstrained
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -8538,11 +8714,40 @@ package body Landin.Stages.Lowering is
          end Fixed_Actual_Of;
 
       begin
+         --  D437: a compiler fact in a module value is the constant
+         --  configuration read, emitted as its literal would be.
+         case Landin.Configuration.Fact_At
+           (Configurations (Context).all, Syn.Source_Of (Of_Tree), Node)
+         is
+            when Landin.Configuration.Bool_Fact =>
+               return IR.Emit_Truth
+                 (Unit.all, Filling,
+                  Landin.Configuration.Fact_Value
+                    (Configurations (Context).all, Syn.Source_Of (Of_Tree),
+                     Node) /= 0,
+                  Site);
+            when Landin.Configuration.Integer_Fact =>
+               declare
+                  Value : constant Ty.Folded := Landin.Configuration.Fact_Value
+                    (Configurations (Context).all, Syn.Source_Of (Of_Tree),
+                     Node);
+               begin
+                  return IR.Emit_Number
+                    (Unit.all, Filling, Scalar_At (Of_Tree, Node),
+                     Ty.Magnitude (abs Value), Value < 0, Site);
+               end;
+            when Landin.Configuration.Refused_Fact =>
+               raise Landin.Compiler_Defect with
+                 "a refused compiler fact reached lowering";
+            when Landin.Configuration.No_Fact =>
+               null;
+         end case;
+
          --  [0650]: a value of a distinct scalar type, read for `==` or a
          --  bit operator, is its base: the value is built in a temporary
          --  and its one representation child loaded.  A bit operator over
          --  such values is lowered below as the base's operator.
-         if Distinct_Scalar_Base (Of_Tree, Node) in Ty.Scalar_Name
+         if Distinct_Carrier (Of_Tree, Node) in Ty.Scalar_Name
            and then Syn.Kind (Of_Tree, Node)
              not in Syn.Bitwise_And | Syn.Bitwise_Xor | Syn.Bitwise_Or
                   | Syn.Complement
@@ -8555,9 +8760,22 @@ package body Landin.Stages.Lowering is
                if Current = IR.No_Block then
                   return IR.No_Value;
                end if;
+               --  D427: a function value keeps its signature.
                return IR.Emit_Load_Slot_Field
                  (Unit.all, Filling, Temporary, 1,
-                  Scalar_At (Of_Tree, Node), Site);
+                  Scalar_At (Of_Tree, Node), Site,
+                  Signature =>
+                    (if Landin.Checking.Distinct_Base
+                          (Types.all,
+                           Landin.Checking.Nominal_Of
+                             (Types.all, Of_Tree, Node)).Kind
+                        = Ty.Function_Value
+                     then Signature_For
+                       (Landin.Checking.Distinct_Base
+                          (Types.all,
+                           Landin.Checking.Nominal_Of
+                             (Types.all, Of_Tree, Node)).Signature)
+                     else IR.No_Signature));
             end;
          end if;
          if Is_Utf8_Index (Of_Tree, Node) then
@@ -9658,6 +9876,12 @@ package body Landin.Stages.Lowering is
                return Lower_Call (Of_Tree, Node, Scope);
 
             when others =>
+               if Syn.Kind (Of_Tree, Node)
+                    in Syn.Equal_To | Syn.Not_Equal_To
+                 and then Union_Operand (Of_Tree, Node) /= 0
+               then
+                  return Lower_Union_Atom_Test (Of_Tree, Node, Scope);
+               end if;
                --  [0410] fixes the order: the left, then the right.  The
                --  right can change blocks, so the earlier value crosses
                --  through a slot and is loaded in the block where the
@@ -9690,6 +9914,12 @@ package body Landin.Stages.Lowering is
                              then Atom_Set_For
                                (Landin.Checking.Atom_Set_Of
                                   (Types.all, Of_Tree, Left_Node))
+                             --  D427: a distinct atom's code keeps the
+                             --  set its representation child carries.
+                             elsif Type_At (Of_Tree, Left_Node) = Ty.Aggregate
+                               and then Distinct_Carrier (Of_Tree, Left_Node)
+                                 = Ty.U32
+                             then IR.Atom_Set_Of (Unit.all, Filling, Left)
                              else IR.No_Atom_Set));
                   begin
                      IR.Emit_Store
@@ -10106,10 +10336,12 @@ package body Landin.Stages.Lowering is
            Atom_Set_For
              (Landin.Checking.Atom_Set_Of
                 (Types.all, Of_Tree, Subject));
+         --  Sealed: the subject was tested against its set where it was
+         --  read, and each arm only compares this copy of it.
          Saved : constant IR.Slot_Id :=
            IR.Add_Slot
              (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
-              Atoms => Set_Id);
+              Atoms => Set_Id, Sealed => True);
          Merge : IR.Block_Id := IR.No_Block;
          --  D405: an arm's block is made at its first label, and every
          --  label the arm names branches to it.
@@ -10125,6 +10357,75 @@ package body Landin.Stages.Lowering is
             end if;
             Close_With_Jump (Merge, Site);
          end Close_To_Merge;
+
+         --  D434: the binding holds the subject's code under the narrower
+         --  set of the atoms no arm named.  The code is the same; each
+         --  candidate but the last is tested so that the stored value is
+         --  an atom of that set, which is what the verifier can see.
+         procedure Bind_Rest (Arm : Syn.Node_Id; Inside : Res.Scope_Id);
+
+         procedure Bind_Rest (Arm : Syn.Node_Id; Inside : Res.Scope_Id) is
+            Binding : constant Syn.Node_Id :=
+              Syn.Nth_Match_Binding (Of_Tree, Arm, 1);
+            Id : constant Res.Declaration_Id :=
+              Declaration_At (Syn.Source_Of (Of_Tree), Binding);
+            Rest : constant Landin.Checking.Atom_Set_Id :=
+              Landin.Checking.Atom_Set_Of (Types.all, Id);
+            Narrowed : constant IR.Atom_Set_Id := Atom_Set_For (Rest);
+            Count : constant Natural :=
+              Landin.Checking.Atom_Count (Types.all, Rest);
+            Slot : constant IR.Slot_Id := Slot_For (Of_Tree, Binding, Id);
+            Join : constant IR.Block_Id := Fresh (Of_Tree, Arm, Inside);
+         begin
+            for Index in 1 .. Count loop
+               declare
+                  Atom : constant Res.Declaration_Id :=
+                    Landin.Checking.Nth_Atom (Types.all, Rest, Index);
+               begin
+                  if Index = Count then
+                     IR.Emit_Store
+                       (Unit.all, Filling, Slot,
+                        IR.Emit_Atom (Unit.all, Filling, Atom, Narrowed, Site),
+                        Site);
+                     Close_With_Jump (Join, Site);
+                  else
+                     declare
+                        Matched : constant IR.Block_Id :=
+                          Fresh (Of_Tree, Arm, Inside);
+                        Other : constant IR.Block_Id :=
+                          Fresh (Of_Tree, Arm, Inside);
+                        --  Emitted one declaration at a time: as two
+                        --  actuals of one call their order is the Ada
+                        --  compiler's, and the debug and release builds
+                        --  emitted them in different orders.
+                        Got : constant IR.Value_Id :=
+                          IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                        Wanted : constant IR.Value_Id :=
+                          IR.Emit_Atom
+                            (Unit.all, Filling, Atom, Set_Id, Site);
+                        Test : constant IR.Value_Id :=
+                          IR.Emit_Binary
+                            (Unit.all, Filling, IR.Equal_To,
+                             Got, Wanted, Ty.Bool, Site);
+                     begin
+                        IR.Emit_Branch
+                          (Unit.all, Filling, Test, Matched, Other, Site);
+                        IR.Leave_Block (Unit.all, Filling);
+                        Current := IR.No_Block;
+                        Open (Matched);
+                        IR.Emit_Store
+                          (Unit.all, Filling, Slot,
+                           IR.Emit_Atom
+                             (Unit.all, Filling, Atom, Narrowed, Site),
+                           Site);
+                        Close_With_Jump (Join, Site);
+                        Open (Other);
+                     end;
+                  end if;
+               end;
+            end loop;
+            Open (Join);
+         end Bind_Rest;
       begin
          declare
             Value : constant IR.Value_Id :=
@@ -10158,6 +10459,11 @@ package body Landin.Stages.Lowering is
                if Wildcard or else Last then
                   Close_With_Jump (Taken, Site);
                   Open (Taken);
+                  if Wildcard
+                    and then Syn.Match_Binding_Count (Of_Tree, Arm) = 1
+                  then
+                     Bind_Rest (Arm, Inside);
+                  end if;
                   Lower_Statements
                     (Of_Tree, Runs, Inside, Result, Destination,
                      Destination_Field, Destination_Path);
@@ -14165,6 +14471,65 @@ package body Landin.Stages.Lowering is
                         end;
                      elsif Syn.Assignment_Operation (Of_Tree, Stmt)
                           /= Landin.Tokens.Plain_Assignment
+                       and then Distinct_Scalar_Base
+                         (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
+                           in Ty.Scalar_Name
+                     then
+                        --  D427: `x op= y` over a distinct type of an
+                        --  unsigned base is `x = x op y` with the place
+                        --  reached once: its one representation child is
+                        --  read, combined with the base's operator and
+                        --  written back.
+                        declare
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Stmt);
+                           Held : constant Ty.Scalar_Name :=
+                             Distinct_Scalar_Base (Of_Tree, Place);
+                           Shape : constant IR.Field_Shape :=
+                             Neutral_Value_Shape (Of_Tree, Place);
+                           Reached : constant Stored_Place :=
+                             Lower_Stored_Place (Of_Tree, Place, Scope);
+                        begin
+                           if Current /= IR.No_Block then
+                              declare
+                                 Saved : constant IR.Slot_Id :=
+                                   Shaped_Temporary (Shape, Site);
+                              begin
+                                 Copy_Shaped_Storage
+                                   (Reached,
+                                    Stored_At
+                                      ((Kind => IR.Frame_Slot,
+                                        Slot => Saved)),
+                                    Shape, Site);
+                                 declare
+                                    Right : constant IR.Value_Id :=
+                                      Lower_Expression
+                                        (Of_Tree,
+                                         Syn.Value_Of (Of_Tree, Stmt),
+                                         Scope);
+                                 begin
+                                    if Current /= IR.No_Block then
+                                       Store_Shaped_Scalar
+                                         (Child_Place (Reached, 1),
+                                          IR.Nth_Aggregate_Field
+                                            (Unit.all, Shape, 1),
+                                          IR.Emit_Binary
+                                            (Unit.all, Filling,
+                                             Update_Opcode
+                                               (Syn.Assignment_Operation
+                                                  (Of_Tree, Stmt)),
+                                             IR.Emit_Load_Slot_Field
+                                               (Unit.all, Filling, Saved,
+                                                1, Held, Site),
+                                             Right, Held, Site),
+                                          Site);
+                                    end if;
+                                 end;
+                              end;
+                           end if;
+                        end;
+                     elsif Syn.Assignment_Operation (Of_Tree, Stmt)
+                          /= Landin.Tokens.Plain_Assignment
                      then
                         declare
                            Place : constant Syn.Node_Id :=
@@ -15739,7 +16104,18 @@ package body Landin.Stages.Lowering is
             --  says it opens no scope, so its block is the signature's.
             Open (Fresh (Of_Tree, Runs, Signature));
 
-            if Gives_Type
+            if Type_At (Of_Tree, Runs) = Ty.No_Value
+              and then Syn.Kind (Of_Tree, Runs)
+                in Syn.If_Statement | Syn.Match_Statement
+            then
+               --  D431: a control whose answers all diverge is a
+               --  statement; its arms assign the named returns.
+               if Syn.Kind (Of_Tree, Runs) = Syn.If_Statement then
+                  Lower_If (Of_Tree, Runs, Signature, Result);
+               else
+                  Lower_Match (Of_Tree, Runs, Signature, Result);
+               end if;
+            elsif Gives_Type
               in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
                  | Ty.Any_Value
             then
@@ -16745,6 +17121,13 @@ package body Landin.Stages.Lowering is
                            end if;
                         end;
                      end loop;
+                     --  A call's recovery clause sits beside its slots, and
+                     --  a selection made only there needs its evidence too
+                     --  (runtime/generic-evidence-in-recovery).
+                     if Syn.Beside_Slots (Of_Tree.all, Node) /= Syn.No_Node
+                     then
+                        Visit (Syn.Beside_Slots (Of_Tree.all, Node));
+                     end if;
                   end Visit;
                begin
                   Landin.Checking.Activate_Routine_View
@@ -17073,6 +17456,14 @@ package body Landin.Stages.Lowering is
                            IR.Origin_Of (Unit.all, Target),
                            IR.Nominal_Of (Unit.all, Target));
                      begin
+                        --  Named after the routine it binds, so a profile
+                        --  shows whose evidence it supplies.
+                        IR.Set_Named_After
+                          (Unit.all, Made,
+                           (if IR.Generic_Template_Of (Unit.all, Target)
+                                 /= Res.No_Declaration
+                            then IR.Generic_Template_Of (Unit.all, Target)
+                            else IR.Declares (Unit.all, Target)));
                         if IR.Atom_Set_Of (Unit.all, Target) /= IR.No_Atom_Set
                         then
                            IR.Set_Atom_Set
@@ -17575,6 +17966,7 @@ package body Landin.Stages.Lowering is
            (Types              => Types,
             Meanings           => Meanings,
             Facts              => Facts,
+            Settings           => Configurations (Context),
             Snapshot_Of        => Snapshot_For,
             Tree_For           => Tree_For,
             Conversion_Target  => Conversion_Scalar,

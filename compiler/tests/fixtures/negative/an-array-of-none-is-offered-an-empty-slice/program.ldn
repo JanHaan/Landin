@@ -1,0 +1,6 @@
+--  A pointer has no zero image, and an array of none has no element to fill
+--  it from, so the refusal offers the slice that holds none, `[]`.
+public main: () -> (code: i32) =
+    empty: [0]ptr i32 = zeroed
+    code = 0
+end main

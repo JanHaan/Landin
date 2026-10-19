@@ -3,4 +3,4 @@ error[L0203]: unavailable tool reference: compiler.feature
   |
 3 |     if compiler.feature.lse then
   |                 ^^^^^^^
-  = note: D255: compiler.feature.NAME is available only in fixed configuration expressions
+  = note: D437: compiler.feature.NAME is read in fixed configuration expressions and module values; a routine body reads a module value that holds it, such as `fast: bool = compiler.feature.NAME`

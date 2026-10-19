@@ -9,6 +9,26 @@ _Static_assert(_Alignof(BindingMode) == 8, "BindingMode alignment disagrees with
 _Static_assert(__builtin_types_compatible_p(BindingSmall, unsigned int), "BindingSmall compatible type disagrees with its generated integer alias");
 _Static_assert(sizeof(BindingSmall) == 4, "BindingSmall size disagrees with its generated integer alias");
 _Static_assert(_Alignof(BindingSmall) == 4, "BindingSmall alignment disagrees with its generated integer alias");
+_Static_assert(sizeof(BindingEntry) == 16, "BindingEntry size disagrees with Landin layout(c)");
+_Static_assert(_Alignof(BindingEntry) == 8, "BindingEntry alignment disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(BindingEntry, inode) == 0, "BindingEntry.inode offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(BindingEntry, length) == 8, "BindingEntry.length offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(BindingEntry, kind) == 10, "BindingEntry.kind offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(BindingEntry, name) == 11, "BindingEntry.name offset disagrees with Landin layout(c)");
+_Static_assert(sizeof(BindingWire) == 27, "BindingWire size disagrees with Landin layout(c, packed)");
+_Static_assert(_Alignof(BindingWire) == 1, "BindingWire alignment disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWire, kind) == 0, "BindingWire.kind offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWire, half) == 1, "BindingWire.half offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWire, word) == 3, "BindingWire.word offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWire, wide) == 7, "BindingWire.wide offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWire, twice) == 15, "BindingWire.twice offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWire, flag) == 23, "BindingWire.flag offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWire, bytes) == 24, "BindingWire.bytes offset disagrees with Landin layout(c, packed)");
+_Static_assert(sizeof(BindingFrame) == 30, "BindingFrame size disagrees with Landin layout(c, packed)");
+_Static_assert(_Alignof(BindingFrame) == 1, "BindingFrame alignment disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingFrame, lead) == 0, "BindingFrame.lead offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingFrame, body) == 1, "BindingFrame.body offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingFrame, tail) == 28, "BindingFrame.tail offset disagrees with Landin layout(c, packed)");
 _Static_assert(sizeof(BindingMatrix) == 24, "BindingMatrix size disagrees with Landin layout(c)");
 _Static_assert(_Alignof(BindingMatrix) == 4, "BindingMatrix alignment disagrees with Landin layout(c)");
 _Static_assert(__builtin_offsetof(BindingMatrix, values) == 0, "BindingMatrix.values offset disagrees with Landin layout(c)");
@@ -19,6 +39,10 @@ _Static_assert(sizeof(BindingPair) == 16, "BindingPair size disagrees with Landi
 _Static_assert(_Alignof(BindingPair) == 8, "BindingPair alignment disagrees with Landin layout(c)");
 _Static_assert(__builtin_offsetof(BindingPair, real) == 0, "BindingPair.real offset disagrees with Landin layout(c)");
 _Static_assert(__builtin_offsetof(BindingPair, count) == 8, "BindingPair.count offset disagrees with Landin layout(c)");
+_Static_assert(sizeof(BindingWords) == 1, "BindingWords size disagrees with Landin layout(c, packed)");
+_Static_assert(_Alignof(BindingWords) == 1, "BindingWords alignment disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWords, kind) == 0, "BindingWords.kind offset disagrees with Landin layout(c, packed)");
+_Static_assert(__builtin_offsetof(BindingWords, data) == 1, "BindingWords.data offset disagrees with Landin layout(c, packed)");
 
 struct landin_r440_bindings_binding_borrow_callback_cell_type { binding_borrow_callback value; };
 struct landin_r440_bindings_binding_callback_cell_type { binding_callback value; };
@@ -287,6 +311,11 @@ int landin_r440_bindings_binding_call_optional_call(const void *argument_1, int 
     return binding_call_optional(((const struct landin_r440_bindings_binding_callback_cell_type *)argument_1)->value, argument_2);
 }
 
+int landin_r440_bindings_binding_frame_check_call(const void *argument_1)
+{
+    return binding_frame_check(*(const BindingFrame *)argument_1);
+}
+
 void landin_r440_bindings_binding_rotate_value_call(void *result, const void *argument_1)
 {
     *(BindingValue *)result = binding_rotate_value(*(const BindingValue *)argument_1);
@@ -295,6 +324,26 @@ void landin_r440_bindings_binding_rotate_value_call(void *result, const void *ar
 void landin_r440_bindings_binding_select_callback_call(void *result, int argument_1)
 {
     ((struct landin_r440_bindings_binding_callback_cell_type *)result)->value = binding_select_callback(argument_1);
+}
+
+void landin_r440_bindings_binding_wire_make_call(void *result, unsigned char argument_1)
+{
+    *(BindingWire *)result = binding_wire_make(argument_1);
+}
+
+void * landin_r440_bindings_binding_frame_global_address(void)
+{
+    return (void *)&binding_frame_global;
+}
+
+void landin_r440_bindings_binding_frame_global_read(void *value_)
+{
+    *(BindingFrame *)value_ = binding_frame_global;
+}
+
+void landin_r440_bindings_binding_frame_global_write(const void *value_)
+{
+    binding_frame_global = *(const BindingFrame *)value_;
 }
 
 int * landin_r440_bindings_binding_global_counter_address(void)

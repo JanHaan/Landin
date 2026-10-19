@@ -200,8 +200,8 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_0 := handler_0(input_0)
     callback_0 := callback_one_i(l_one_i, input_0)
     if direct_0.value <> input_0.value + 1
-       or indirect_0.value <> input_0.value + 1
-       or callback_0.value <> input_0.value + 2
+      or indirect_0.value <> input_0.value + 1
+      or callback_0.value <> input_0.value + 2
     then
         result = 1
     end if
@@ -211,8 +211,8 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_1 := handler_1(input_1)
     callback_1 := callback_one_s(l_one_s, input_1)
     if direct_1.value <> input_1.value + 1.0
-       or indirect_1.value <> input_1.value + 1.0
-       or callback_1.value <> input_1.value + 2.0
+      or indirect_1.value <> input_1.value + 1.0
+      or callback_1.value <> input_1.value + 2.0
     then
         result = 2
     end if
@@ -222,11 +222,11 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_2 := handler_2(input_2)
     callback_2 := callback_two_ii(l_two_ii, input_2)
     if direct_2.first <> input_2.first + 1
-       or indirect_2.first <> input_2.first + 1
-       or callback_2.first <> input_2.first + 2
-       or direct_2.second <> input_2.second + 1
-       or indirect_2.second <> input_2.second + 1
-       or callback_2.second <> input_2.second + 2
+      or indirect_2.first <> input_2.first + 1
+      or callback_2.first <> input_2.first + 2
+      or direct_2.second <> input_2.second + 1
+      or indirect_2.second <> input_2.second + 1
+      or callback_2.second <> input_2.second + 2
     then
         result = 3
     end if
@@ -236,11 +236,11 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_3 := handler_3(input_3)
     callback_3 := callback_two_is(l_two_is, input_3)
     if direct_3.first <> input_3.first + 1
-       or indirect_3.first <> input_3.first + 1
-       or callback_3.first <> input_3.first + 2
-       or direct_3.second <> input_3.second + 1.0
-       or indirect_3.second <> input_3.second + 1.0
-       or callback_3.second <> input_3.second + 2.0
+      or indirect_3.first <> input_3.first + 1
+      or callback_3.first <> input_3.first + 2
+      or direct_3.second <> input_3.second + 1.0
+      or indirect_3.second <> input_3.second + 1.0
+      or callback_3.second <> input_3.second + 2.0
     then
         result = 4
     end if
@@ -250,11 +250,11 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_4 := handler_4(input_4)
     callback_4 := callback_two_si(l_two_si, input_4)
     if direct_4.first <> input_4.first + 1.0
-       or indirect_4.first <> input_4.first + 1.0
-       or callback_4.first <> input_4.first + 2.0
-       or direct_4.second <> input_4.second + 1
-       or indirect_4.second <> input_4.second + 1
-       or callback_4.second <> input_4.second + 2
+      or indirect_4.first <> input_4.first + 1.0
+      or callback_4.first <> input_4.first + 2.0
+      or direct_4.second <> input_4.second + 1
+      or indirect_4.second <> input_4.second + 1
+      or callback_4.second <> input_4.second + 2
     then
         result = 5
     end if
@@ -264,11 +264,11 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_5 := handler_5(input_5)
     callback_5 := callback_two_ss(l_two_ss, input_5)
     if direct_5.first <> input_5.first + 1.0
-       or indirect_5.first <> input_5.first + 1.0
-       or callback_5.first <> input_5.first + 2.0
-       or direct_5.second <> input_5.second + 1.0
-       or indirect_5.second <> input_5.second + 1.0
-       or callback_5.second <> input_5.second + 2.0
+      or indirect_5.first <> input_5.first + 1.0
+      or callback_5.first <> input_5.first + 2.0
+      or direct_5.second <> input_5.second + 1.0
+      or indirect_5.second <> input_5.second + 1.0
+      or callback_5.second <> input_5.second + 2.0
     then
         result = 6
     end if
@@ -278,11 +278,11 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_6 := handler_6(input_6)
     callback_6 := callback_floats2(l_floats2, input_6)
     if direct_6.values[0] <> input_6.values[0] + 1.0
-       or indirect_6.values[0] <> input_6.values[0] + 1.0
-       or callback_6.values[0] <> input_6.values[0] + 2.0
-       or direct_6.values[1] <> input_6.values[1] + 1.0
-       or indirect_6.values[1] <> input_6.values[1] + 1.0
-       or callback_6.values[1] <> input_6.values[1] + 2.0
+      or indirect_6.values[0] <> input_6.values[0] + 1.0
+      or callback_6.values[0] <> input_6.values[0] + 2.0
+      or direct_6.values[1] <> input_6.values[1] + 1.0
+      or indirect_6.values[1] <> input_6.values[1] + 1.0
+      or callback_6.values[1] <> input_6.values[1] + 2.0
     then
         result = 7
     end if
@@ -292,14 +292,14 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_7 := handler_7(input_7)
     callback_7 := callback_floats3(l_floats3, input_7)
     if direct_7.values[0] <> input_7.values[0] + 1.0
-       or indirect_7.values[0] <> input_7.values[0] + 1.0
-       or callback_7.values[0] <> input_7.values[0] + 2.0
-       or direct_7.values[1] <> input_7.values[1] + 1.0
-       or indirect_7.values[1] <> input_7.values[1] + 1.0
-       or callback_7.values[1] <> input_7.values[1] + 2.0
-       or direct_7.values[2] <> input_7.values[2] + 1.0
-       or indirect_7.values[2] <> input_7.values[2] + 1.0
-       or callback_7.values[2] <> input_7.values[2] + 2.0
+      or indirect_7.values[0] <> input_7.values[0] + 1.0
+      or callback_7.values[0] <> input_7.values[0] + 2.0
+      or direct_7.values[1] <> input_7.values[1] + 1.0
+      or indirect_7.values[1] <> input_7.values[1] + 1.0
+      or callback_7.values[1] <> input_7.values[1] + 2.0
+      or direct_7.values[2] <> input_7.values[2] + 1.0
+      or indirect_7.values[2] <> input_7.values[2] + 1.0
+      or callback_7.values[2] <> input_7.values[2] + 2.0
     then
         result = 8
     end if
@@ -309,14 +309,14 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_8 := handler_8(input_8)
     callback_8 := callback_partial3(l_partial3, input_8)
     if direct_8.values[0] <> input_8.values[0] + 1
-       or indirect_8.values[0] <> input_8.values[0] + 1
-       or callback_8.values[0] <> input_8.values[0] + 2
-       or direct_8.values[1] <> input_8.values[1] + 1
-       or indirect_8.values[1] <> input_8.values[1] + 1
-       or callback_8.values[1] <> input_8.values[1] + 2
-       or direct_8.values[2] <> input_8.values[2] + 1
-       or indirect_8.values[2] <> input_8.values[2] + 1
-       or callback_8.values[2] <> input_8.values[2] + 2
+      or indirect_8.values[0] <> input_8.values[0] + 1
+      or callback_8.values[0] <> input_8.values[0] + 2
+      or direct_8.values[1] <> input_8.values[1] + 1
+      or indirect_8.values[1] <> input_8.values[1] + 1
+      or callback_8.values[1] <> input_8.values[1] + 2
+      or direct_8.values[2] <> input_8.values[2] + 1
+      or indirect_8.values[2] <> input_8.values[2] + 1
+      or callback_8.values[2] <> input_8.values[2] + 2
     then
         result = 9
     end if
@@ -326,20 +326,20 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_9 := handler_9(input_9)
     callback_9 := callback_partial5(l_partial5, input_9)
     if direct_9.values[0] <> input_9.values[0] + 1
-       or indirect_9.values[0] <> input_9.values[0] + 1
-       or callback_9.values[0] <> input_9.values[0] + 2
-       or direct_9.values[1] <> input_9.values[1] + 1
-       or indirect_9.values[1] <> input_9.values[1] + 1
-       or callback_9.values[1] <> input_9.values[1] + 2
-       or direct_9.values[2] <> input_9.values[2] + 1
-       or indirect_9.values[2] <> input_9.values[2] + 1
-       or callback_9.values[2] <> input_9.values[2] + 2
-       or direct_9.values[3] <> input_9.values[3] + 1
-       or indirect_9.values[3] <> input_9.values[3] + 1
-       or callback_9.values[3] <> input_9.values[3] + 2
-       or direct_9.values[4] <> input_9.values[4] + 1
-       or indirect_9.values[4] <> input_9.values[4] + 1
-       or callback_9.values[4] <> input_9.values[4] + 2
+      or indirect_9.values[0] <> input_9.values[0] + 1
+      or callback_9.values[0] <> input_9.values[0] + 2
+      or direct_9.values[1] <> input_9.values[1] + 1
+      or indirect_9.values[1] <> input_9.values[1] + 1
+      or callback_9.values[1] <> input_9.values[1] + 2
+      or direct_9.values[2] <> input_9.values[2] + 1
+      or indirect_9.values[2] <> input_9.values[2] + 1
+      or callback_9.values[2] <> input_9.values[2] + 2
+      or direct_9.values[3] <> input_9.values[3] + 1
+      or indirect_9.values[3] <> input_9.values[3] + 1
+      or callback_9.values[3] <> input_9.values[3] + 2
+      or direct_9.values[4] <> input_9.values[4] + 1
+      or indirect_9.values[4] <> input_9.values[4] + 1
+      or callback_9.values[4] <> input_9.values[4] + 2
     then
         result = 10
     end if
@@ -349,26 +349,26 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_10 := handler_10(input_10)
     callback_10 := callback_partial7(l_partial7, input_10)
     if direct_10.values[0] <> input_10.values[0] + 1
-       or indirect_10.values[0] <> input_10.values[0] + 1
-       or callback_10.values[0] <> input_10.values[0] + 2
-       or direct_10.values[1] <> input_10.values[1] + 1
-       or indirect_10.values[1] <> input_10.values[1] + 1
-       or callback_10.values[1] <> input_10.values[1] + 2
-       or direct_10.values[2] <> input_10.values[2] + 1
-       or indirect_10.values[2] <> input_10.values[2] + 1
-       or callback_10.values[2] <> input_10.values[2] + 2
-       or direct_10.values[3] <> input_10.values[3] + 1
-       or indirect_10.values[3] <> input_10.values[3] + 1
-       or callback_10.values[3] <> input_10.values[3] + 2
-       or direct_10.values[4] <> input_10.values[4] + 1
-       or indirect_10.values[4] <> input_10.values[4] + 1
-       or callback_10.values[4] <> input_10.values[4] + 2
-       or direct_10.values[5] <> input_10.values[5] + 1
-       or indirect_10.values[5] <> input_10.values[5] + 1
-       or callback_10.values[5] <> input_10.values[5] + 2
-       or direct_10.values[6] <> input_10.values[6] + 1
-       or indirect_10.values[6] <> input_10.values[6] + 1
-       or callback_10.values[6] <> input_10.values[6] + 2
+      or indirect_10.values[0] <> input_10.values[0] + 1
+      or callback_10.values[0] <> input_10.values[0] + 2
+      or direct_10.values[1] <> input_10.values[1] + 1
+      or indirect_10.values[1] <> input_10.values[1] + 1
+      or callback_10.values[1] <> input_10.values[1] + 2
+      or direct_10.values[2] <> input_10.values[2] + 1
+      or indirect_10.values[2] <> input_10.values[2] + 1
+      or callback_10.values[2] <> input_10.values[2] + 2
+      or direct_10.values[3] <> input_10.values[3] + 1
+      or indirect_10.values[3] <> input_10.values[3] + 1
+      or callback_10.values[3] <> input_10.values[3] + 2
+      or direct_10.values[4] <> input_10.values[4] + 1
+      or indirect_10.values[4] <> input_10.values[4] + 1
+      or callback_10.values[4] <> input_10.values[4] + 2
+      or direct_10.values[5] <> input_10.values[5] + 1
+      or indirect_10.values[5] <> input_10.values[5] + 1
+      or callback_10.values[5] <> input_10.values[5] + 2
+      or direct_10.values[6] <> input_10.values[6] + 1
+      or indirect_10.values[6] <> input_10.values[6] + 1
+      or callback_10.values[6] <> input_10.values[6] + 2
     then
         result = 11
     end if
@@ -378,14 +378,14 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_11 := handler_11(input_11)
     callback_11 := callback_partial12(l_partial12, input_11)
     if direct_11.values[0] <> input_11.values[0] + 1
-       or indirect_11.values[0] <> input_11.values[0] + 1
-       or callback_11.values[0] <> input_11.values[0] + 2
-       or direct_11.values[1] <> input_11.values[1] + 1
-       or indirect_11.values[1] <> input_11.values[1] + 1
-       or callback_11.values[1] <> input_11.values[1] + 2
-       or direct_11.values[2] <> input_11.values[2] + 1
-       or indirect_11.values[2] <> input_11.values[2] + 1
-       or callback_11.values[2] <> input_11.values[2] + 2
+      or indirect_11.values[0] <> input_11.values[0] + 1
+      or callback_11.values[0] <> input_11.values[0] + 2
+      or direct_11.values[1] <> input_11.values[1] + 1
+      or indirect_11.values[1] <> input_11.values[1] + 1
+      or callback_11.values[1] <> input_11.values[1] + 2
+      or direct_11.values[2] <> input_11.values[2] + 1
+      or indirect_11.values[2] <> input_11.values[2] + 1
+      or callback_11.values[2] <> input_11.values[2] + 2
     then
         result = 12
     end if
@@ -395,14 +395,14 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_12 := handler_12(input_12)
     callback_12 := callback_large(l_large, input_12)
     if direct_12.values[0] <> input_12.values[0] + 1.0
-       or indirect_12.values[0] <> input_12.values[0] + 1.0
-       or callback_12.values[0] <> input_12.values[0] + 2.0
-       or direct_12.values[1] <> input_12.values[1] + 1.0
-       or indirect_12.values[1] <> input_12.values[1] + 1.0
-       or callback_12.values[1] <> input_12.values[1] + 2.0
-       or direct_12.values[2] <> input_12.values[2] + 1.0
-       or indirect_12.values[2] <> input_12.values[2] + 1.0
-       or callback_12.values[2] <> input_12.values[2] + 2.0
+      or indirect_12.values[0] <> input_12.values[0] + 1.0
+      or callback_12.values[0] <> input_12.values[0] + 2.0
+      or direct_12.values[1] <> input_12.values[1] + 1.0
+      or indirect_12.values[1] <> input_12.values[1] + 1.0
+      or callback_12.values[1] <> input_12.values[1] + 2.0
+      or direct_12.values[2] <> input_12.values[2] + 1.0
+      or indirect_12.values[2] <> input_12.values[2] + 1.0
+      or callback_12.values[2] <> input_12.values[2] + 2.0
     then
         result = 13
     end if
@@ -412,11 +412,11 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_13 := handler_13(input_13)
     callback_13 := callback_nested(l_nested, input_13)
     if direct_13.values[0].value <> input_13.values[0].value + 1.0
-       or indirect_13.values[0].value <> input_13.values[0].value + 1.0
-       or callback_13.values[0].value <> input_13.values[0].value + 2.0
-       or direct_13.values[1].value <> input_13.values[1].value + 1.0
-       or indirect_13.values[1].value <> input_13.values[1].value + 1.0
-       or callback_13.values[1].value <> input_13.values[1].value + 2.0
+      or indirect_13.values[0].value <> input_13.values[0].value + 1.0
+      or callback_13.values[0].value <> input_13.values[0].value + 2.0
+      or direct_13.values[1].value <> input_13.values[1].value + 1.0
+      or indirect_13.values[1].value <> input_13.values[1].value + 1.0
+      or callback_13.values[1].value <> input_13.values[1].value + 2.0
     then
         result = 14
     end if
@@ -426,17 +426,17 @@ public extern(c) landin_check: () -> (result: i32) =
     indirect_14 := handler_14(input_14)
     callback_14 := callback_nested_large(l_nested_large, input_14)
     if direct_14.values[0].first <> input_14.values[0].first + 1
-       or indirect_14.values[0].first <> input_14.values[0].first + 1
-       or callback_14.values[0].first <> input_14.values[0].first + 2
-       or direct_14.values[0].second <> input_14.values[0].second + 1.0
-       or indirect_14.values[0].second <> input_14.values[0].second + 1.0
-       or callback_14.values[0].second <> input_14.values[0].second + 2.0
-       or direct_14.values[1].first <> input_14.values[1].first + 1
-       or indirect_14.values[1].first <> input_14.values[1].first + 1
-       or callback_14.values[1].first <> input_14.values[1].first + 2
-       or direct_14.values[1].second <> input_14.values[1].second + 1.0
-       or indirect_14.values[1].second <> input_14.values[1].second + 1.0
-       or callback_14.values[1].second <> input_14.values[1].second + 2.0
+      or indirect_14.values[0].first <> input_14.values[0].first + 1
+      or callback_14.values[0].first <> input_14.values[0].first + 2
+      or direct_14.values[0].second <> input_14.values[0].second + 1.0
+      or indirect_14.values[0].second <> input_14.values[0].second + 1.0
+      or callback_14.values[0].second <> input_14.values[0].second + 2.0
+      or direct_14.values[1].first <> input_14.values[1].first + 1
+      or indirect_14.values[1].first <> input_14.values[1].first + 1
+      or callback_14.values[1].first <> input_14.values[1].first + 2
+      or direct_14.values[1].second <> input_14.values[1].second + 1.0
+      or indirect_14.values[1].second <> input_14.values[1].second + 1.0
+      or callback_14.values[1].second <> input_14.values[1].second + 2.0
     then
         result = 15
     end if
@@ -490,8 +490,8 @@ public extern(c) landin_check: () -> (result: i32) =
     direct_merged0 := c_merged0(input_merged0)
     indirect_merged0 := call_merged0(input_merged0)
     if direct_merged0.real <> 5.5 or direct_merged0.integer <> 26
-       or indirect_merged0.real <> 5.5 or indirect_merged0.integer <> 26
-       or sizeof merged0 <> 8 or alignof merged0 <> 4
+      or indirect_merged0.real <> 5.5 or indirect_merged0.integer <> 26
+      or sizeof merged0 <> 8 or alignof merged0 <> 4
     then
         result = 20
     end if
@@ -500,8 +500,8 @@ public extern(c) landin_check: () -> (result: i32) =
     direct_merged1 := c_merged1(input_merged1)
     indirect_merged1 := call_merged1(input_merged1)
     if direct_merged1.real <> 5.5 or direct_merged1.integer <> 26
-       or indirect_merged1.real <> 5.5 or indirect_merged1.integer <> 26
-       or sizeof merged1 <> 8 or alignof merged1 <> 4
+      or indirect_merged1.real <> 5.5 or indirect_merged1.integer <> 26
+      or sizeof merged1 <> 8 or alignof merged1 <> 4
     then
         result = 21
     end if

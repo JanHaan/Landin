@@ -1,4 +1,8 @@
 error[L0344]: register contract forbids this read
+  --> ../tests/fixtures/negative/r640-register-unknown-read/program.ldn:8:35
+  |
+8 |     _ = compiler.register_read(p, compiler.read_twice)
+  |                                   ^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/r640-register-unknown-read/program.ldn:8:9
   |
 8 |     _ = compiler.register_read(p, compiler.read_twice)

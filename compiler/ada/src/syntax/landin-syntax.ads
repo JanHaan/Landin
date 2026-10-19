@@ -528,6 +528,17 @@ package Landin.Syntax is
           Post => Landin.Source.Contains
                     (Where (Of_Tree, Id), Anchor'Result);
 
+   --  The innermost node whose extent holds this one's and is wider than
+   --  it: the construct a node is written in, for a report that has no
+   --  other place to name beside the node itself.  No_Node for the root.
+   function Enclosing (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id),
+          Post => Enclosing'Result = No_Node
+                  or else (Contains (Of_Tree, Enclosing'Result)
+                           and then Landin.Source.Contains
+                             (Where (Of_Tree, Enclosing'Result),
+                              Where (Of_Tree, Id)));
+
    --  The pair the source foundations built for this: source identity and span
    --  together, in the form the IR and the debug stages already carry.
    --  Nothing here writes to a Landin.Provenance.Table; see the header.
@@ -644,10 +655,11 @@ package Landin.Syntax is
    type Parameter_Convention is
      (Implicit_In, Explicit_In, Inout_Convention, Sink_Convention);
 
+   --  A match binding's is D433's: `inout`, `sink` or the implicit `in`.
    function Convention_Of (Of_Tree : Tree; Id : Node_Id)
      return Parameter_Convention
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Parameter;
+                 and then Kind (Of_Tree, Id) in Parameter | Match_Binding;
 
    --  [1630]'s three operand directions.  `inout` carries its input into the
    --  register and its output back out of the same register.
@@ -714,8 +726,18 @@ package Landin.Syntax is
    ------------------------------------------------------------------
 
    --  A node's children, in the order they were written, without saying
-   --  what they are.  This is the whole representation-free walk, and it is
-   --  what a dumper, an origin sweep or a well-formedness audit uses.
+   --  what they are.  This and Beside_Slots below are the whole
+   --  representation-free walk, and it is what a dumper, an origin sweep or
+   --  a well-formedness audit uses.
+   --
+   --  Slots are not every child.  A call's [1030] recovery clause, the
+   --  `else (problem) ... end` after a Call or Labeled_Application, is
+   --  carried beside its slots rather than in them, so a walk over slots
+   --  alone never reaches the clause or anything inside it: a first
+   --  reachability walk dropped a routine called only in a clause that way,
+   --  and lowering's hidden-evidence inventory missed a constrained
+   --  selection made only there (runtime/generic-evidence-in-recovery).  A
+   --  walk that means to see every node visits Beside_Slots too.
    --
    --  A slot may be No_Node, and that is information rather than an
    --  absence to be skipped silently: the grammar allows a child there and
@@ -737,6 +759,13 @@ package Landin.Syntax is
                             or else Landin.Source.Contains
                                       (Where (Of_Tree, Id),
                                        Where (Of_Tree, Slot'Result)));
+
+   --  The one child a node carries beside its slots: a Call's or a
+   --  Labeled_Application's Recovery_Clause, and No_Node for every other
+   --  node and for a call without one.  Recovery_Of says the same for the
+   --  two kinds that have it; this asks any node.
+   function Beside_Slots (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id);
 
    ------------------------------------------------------------------
    --  The named positions

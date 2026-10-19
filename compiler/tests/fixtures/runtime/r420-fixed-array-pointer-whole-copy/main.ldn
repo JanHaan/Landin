@@ -52,18 +52,18 @@ public main: () -> (code: i32) =
     --  evaluation before the pointer-backed source is copied.
     targets[destination_index()] = source_pointer.val
     direct_ok: bool = destination_calls == 1
-      and targets[0][0] == 11 and targets[0][1] == 13
-      and targets[0][2] == 17
-      and targets[1][0] == 11 and targets[1][1] == 13
-      and targets[1][2] == 17
+                      and targets[0][0] == 11 and targets[0][1] == 13
+                      and targets[0][2] == 17
+                      and targets[1][0] == 11 and targets[1][1] == 13
+                      and targets[1][2] == 17
 
     --  Lowering the destination call takes its recovery return before an
     --  address, right-hand side, or store is emitted.
     attempt_refused_store()
     control_ok: bool = refusing_calls == 1 and source_calls == 0
-      and completed_stores == 0
-      and guarded[0][0] == 0 and guarded[0][1] == 0
-      and guarded[0][2] == 0
+                       and completed_stores == 0
+                       and guarded[0][0] == 0 and guarded[0][1] == 0
+                       and guarded[0][2] == 0
 
     state = packet(prefix: 3, kind: empty, tail: 5)
     state.kind = arrays(values: source_pointer.val)
@@ -71,7 +71,7 @@ public main: () -> (code: i32) =
     match state.kind
         empty: payload_ok = false
         arrays(values): payload_ok = values[0] == 11
-          and values[1] == 13 and values[2] == 17
+                                     and values[1] == 13 and values[2] == 17
     end match
 
     if direct_ok and control_ok and payload_ok

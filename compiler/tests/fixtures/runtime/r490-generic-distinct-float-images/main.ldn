@@ -18,9 +18,9 @@ public main: () -> (code: i32) =
     local_nan := f32(copy(wrapped_nan))
     selected_nan: f32 = f32(stored.narrow)
     if ordinary_copy > 1.0e300 and extracted_infinity > 1.0e300
-       and local_infinity > 1.0e300 and local_negative < -1.0e300
-       and extracted_nan <> extracted_nan and selected_nan <> selected_nan
-       and local_nan <> local_nan then
+      and local_infinity > 1.0e300 and local_negative < -1.0e300
+      and extracted_nan <> extracted_nan and selected_nan <> selected_nan
+      and local_nan <> local_nan then
         code = 42
     else
         code = 1

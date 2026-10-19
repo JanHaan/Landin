@@ -15,11 +15,7 @@ with Landin.Checking;
 with Landin.Configuration;
 with Landin.Debugging;
 with Landin.IR.Dump;
-with Landin.IR.If_Conversion;
-with Landin.IR.In_Place;
-with Landin.IR.Inlining;
-with Landin.IR.Simplification;
-with Landin.IR.Specialization;
+with Landin.IR.Pipeline;
 with Landin.Optimization;
 with Landin.Panics;
 with Landin.Diagnostics.Catalogue;
@@ -184,9 +180,11 @@ package body Landin.Driver is
       & "  --level=NAME        assume a CPU feature level of that target"
       & LF
       & "  --option=NAME=VALUE set a declared fixed build option" & LF
-      & "  --build-mode=NAME   debug (default) or release" & LF
+      & "  --build-mode=NAME   debug (default) or release:"
+      & " compiler.build_mode only" & LF
       & "  --optimize=NAME     none, size (default), or speed" & LF
-      & "  --specialize=NAME   off, auto (default), or all" & LF
+      & "  --specialize=NAME   off, auto (default), or all: direct"
+      & " evidence calls" & LF
       & "  --panic-map         emit off-target check-site mapping" & LF
       & "  --debug=NAME        none (default), full (hosted),"
       & " lines (Cortex-M0)" & LF
@@ -1435,8 +1433,13 @@ package body Landin.Driver is
          --  `--stage-report`: one row per stage, each the processor time
          --  spent in it and the process's peak resident set when it ended.
          --  The peak is a high-water mark, so the stage that raised it is
-         --  the one whose row first shows the new value.
+         --  the one whose row first shows the new value.  Loading scans and
+         --  parses each batch of modules it reads, to find their imports;
+         --  that time is the syntax stage's, so it is taken out of the
+         --  loading row and counted in the syntax row instead.
          Stage_Rows : Unbounded.Unbounded_String;
+         Parse_Start : Landin.Platform.Resource_Sample;
+         Parse_Microseconds : Long_Long_Integer := 0;
          --  The stage running now, for a defect to say where it arose.
          Current_Stage : Unbounded.Unbounded_String :=
            Unbounded.To_Unbounded_String ("the driver");
@@ -1444,6 +1447,7 @@ package body Landin.Driver is
 
          procedure Stage_Began;
          procedure Stage_Ended (Name : String);
+         procedure Watch_Parsing (Finished : Boolean);
          procedure Watch_Stage (Name : String; Finished : Boolean);
          procedure Write_Stage_Report;
 
@@ -1459,21 +1463,45 @@ package body Landin.Driver is
               (Ada.Strings.Fixed.Trim
                  (Long_Long_Integer'Image (Value), Ada.Strings.Both));
             Now : Landin.Platform.Resource_Sample;
+            Spent : Long_Long_Integer;
          begin
             if not Stage_Report_Seen or else Dry_Run then
                return;
             end if;
             Now := Meter.Sample;
+            Spent := Now.Processor_Microseconds
+              - Stage_Start.Processor_Microseconds;
+            if Name = "loading" then
+               Spent := Long_Long_Integer'Max (0, Spent - Parse_Microseconds);
+            elsif Name = "syntax" then
+               Spent := Spent + Parse_Microseconds;
+               Parse_Microseconds := 0;
+            end if;
             if Unbounded.Length (Stage_Rows) > 0 then
                Unbounded.Append (Stage_Rows, "," & LF);
             end if;
             Unbounded.Append
               (Stage_Rows,
                "    {""stage"":""" & Name & """,""processor_us"":"
-               & Image (Now.Processor_Microseconds
-                        - Stage_Start.Processor_Microseconds)
+               & Image (Spent)
                & ",""peak_kib"":" & Image (Now.Peak_Resident_KiB) & "}");
          end Stage_Ended;
+
+         procedure Watch_Parsing (Finished : Boolean) is
+            Now : Landin.Platform.Resource_Sample;
+         begin
+            if not Stage_Report_Seen or else Dry_Run then
+               return;
+            end if;
+            Now := Meter.Sample;
+            if Finished then
+               Parse_Microseconds := Parse_Microseconds
+                 + (Now.Processor_Microseconds
+                    - Parse_Start.Processor_Microseconds);
+            else
+               Parse_Start := Now;
+            end if;
+         end Watch_Parsing;
 
          procedure Watch_Stage (Name : String; Finished : Boolean) is
          begin
@@ -1563,6 +1591,61 @@ package body Landin.Driver is
             end if;
          end Write_Stage_Report;
 
+         --  A `public main` in the entry module of a hosted program that
+         --  is not [1970]'s entry: refused when the program is checked or
+         --  emitted as assembly, as it is before a link, rather than left
+         --  for the linker to miss `main` (D443).  A C-convention `main` is
+         --  [1650]'s own form and is not asked about.
+         function Public_Main_Not_Entry return Boolean;
+
+         function Public_Main_Not_Entry return Boolean is
+            package Res renames Landin.Resolution;
+            Grouped : Landin.Modules.Table renames
+              Landin.Stages.Modules (Context).all;
+            Meanings : Res.Table renames
+              Landin.Stages.Meanings (Context).all;
+         begin
+            if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                 = Landin.Targets.Capabilities.No_Hosted_System
+              or else Landin.Backend.Entry_Point.Hosted_Main
+                (Landin.Stages.Code (Context).all, Meanings, Grouped,
+                 Landin.Stages.Identities (Context).all)
+                  /= Landin.IR.No_Item
+            then
+               return False;
+            end if;
+            for Index in 1 .. Res.Declaration_Count (Meanings) loop
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Declaration_Id (Index);
+                  From : constant Landin.Source.Source_Id :=
+                    Res.Source_Of (Meanings, Id);
+                  Node : constant Landin.Syntax.Node_Id :=
+                    Res.Node_Of (Meanings, Id);
+               begin
+                  if Res."=" (Res.Sort_Of (Meanings, Id), Res.Module_Function)
+                    and then Res.Is_Public (Meanings, Id)
+                    and then Natural (From)
+                      <= Landin.Modules.Source_Count (Grouped)
+                    and then Landin.Modules.Module_Of (Grouped, From)
+                      = Landin.Modules.Entry_Module
+                    and then Landin.Source.Names.Spelling
+                      (Landin.Stages.Identities (Context).all,
+                       Res.Name_Of (Meanings, Id)) = "main"
+                    and then Landin.Configuration.Is_Active
+                      (Landin.Stages.Configurations (Context).all, From, Node)
+                    and then not Landin.Syntax.Uses_C_ABI
+                      (Landin.Syntax.Forest.Tree_Of
+                         (Landin.Stages.Trees (Context).all, From).all,
+                       Node)
+                  then
+                     return True;
+                  end if;
+               end;
+            end loop;
+            return False;
+         end Public_Main_Not_Entry;
+
          procedure Note_No_Entry (For_Firmware : Boolean := False);
 
          procedure Note_No_Entry (For_Firmware : Boolean := False) is
@@ -1648,6 +1731,91 @@ package body Landin.Driver is
             Landin.Diagnostics.Add_Note (Item, Advice);
             Landin.Stages.Report (Context, Item);
          end Note_No_Toolchain;
+
+         --  D280's refusals of a static Linux link, before any tool runs:
+         --  no platform/linux to start at, a C library asked for, or a C
+         --  symbol nothing defines.  An executable, and a check that asks
+         --  what one would refuse, are held to the last two; assembly and
+         --  IR need platform/linux.  A check loads no platform/linux, which
+         --  defines no C symbol a program could import, so it asks only
+         --  the last two.  True when one was reported.
+         function Refused_Static_Link
+           (Executable : Boolean; Checking : Boolean := False)
+            return Boolean;
+
+         function Refused_Static_Link
+           (Executable : Boolean; Checking : Boolean := False)
+            return Boolean
+         is
+            Needed : Landin.Platform.Path_List;
+            Referrers : Landin.Platform.Path_List;
+            Requests : constant Natural :=
+              Landin.Configuration.Library_Count
+                (Landin.Stages.Configurations (Context).all);
+         begin
+            if not Checking
+              and then Landin.Modules.Find_Logical
+                (Landin.Stages.Modules (Context).all, "platform/linux")
+                  = Landin.Modules.No_Module
+            then
+               Note_No_Toolchain
+                 ("a static link of " & Landin.Targets.Name (Facts)
+                  & " starts at platform/linux's `_landin_start`, and"
+                  & " no library holding platform/linux was found",
+                  "name the library with --library=PATH, or link"
+                  & " with --link=libc, which keeps C's runtime");
+               return True;
+            elsif not Executable then
+               return False;
+            elsif Requests > 0 then
+               Note_No_Toolchain
+                 ("a static link of " & Landin.Targets.Name (Facts)
+                  & " cannot link the C library `"
+                  & Landin.Configuration.Library_Name
+                      (Landin.Stages.Configurations (Context).all, 1)
+                  & "` the program asks for with linker.library",
+                  "link with --link=libc, which keeps C's runtime"
+                  & " and library");
+               return True;
+            end if;
+            Landin.Backend.Entry_Point.Unsatisfied_Imports
+              (Landin.Stages.Code (Context).all,
+               Landin.Stages.Meanings (Context).all,
+               Landin.Stages.Modules (Context).all,
+               Landin.Stages.Identities (Context).all,
+               Needed, Referrers);
+            if Needed.Is_Empty then
+               return False;
+            end if;
+            --  Each name with what in the program refers to it, so a
+            --  library routine that needs the C library, as platform/posix's
+            --  loader does, is named by its own name and not only by the C
+            --  symbol it calls.
+            declare
+               Listed : Unbounded.Unbounded_String;
+            begin
+               for Index in 1 .. Natural (Needed.Length) loop
+                  Unbounded.Append
+                    (Listed,
+                     (if Index = 1 then ""
+                      elsif Index = Natural (Needed.Length)
+                      then ", or "
+                      else ", ")
+                     & "`" & Needed (Index) & "`, which "
+                     & (if Referrers (Index) = "" then "the program"
+                        else Referrers (Index))
+                     & " refers to");
+               end loop;
+               Note_No_Toolchain
+                 ("a static link of " & Landin.Targets.Name (Facts)
+                  & " has no C library to define "
+                  & Unbounded.To_String (Listed),
+                  "link with --link=libc, which keeps C's runtime"
+                  & " and library");
+            end;
+            return True;
+         end Refused_Static_Link;
+
 
          procedure Note_Unavailable_Toolchain (Driver : String);
 
@@ -2270,26 +2438,19 @@ package body Landin.Driver is
             then
                Note_No_Entry;
                return;
+            elsif Emit = Emit_Assembly and then not Cortex
+              and then Public_Main_Not_Entry
+            then
+               Note_No_Entry;
+               return;
             end if;
 
             Landin.Build_Reports.Clear (Evidence);
             --  Lowering already verified this unit with Facts. The checks
             --  above only read it; each enabled pass verifies its output.
-            Landin.IR.Specialization.Run_On_Verified
+            Landin.IR.Pipeline.Run_On_Verified
               (Landin.Stages.Code (Context).all, Facts,
                Optimization, Evidence);
-            Landin.IR.Inlining.Run_On_Verified
-              (Landin.Stages.Code (Context).all, Facts,
-               Optimization.Optimize);
-            Landin.IR.Simplification.Run_On_Verified
-              (Landin.Stages.Code (Context).all, Facts,
-               Optimization.Optimize);
-            Landin.IR.If_Conversion.Run_On_Verified
-              (Landin.Stages.Code (Context).all, Facts,
-               Optimization.Optimize);
-            Landin.IR.In_Place.Run_On_Verified
-              (Landin.Stages.Code (Context).all, Facts,
-               Optimization.Optimize);
 
             --  Specialization can expose an additional atom domain. The
             --  selected source identity and source-byte spaces stay fixed;
@@ -2381,73 +2542,11 @@ package body Landin.Driver is
             --  linker's undefined references.  Its process entry is
             --  platform/linux's, so assembly or IR for one without it is
             --  refused too, rather than written without it (D363).
-            if Emit /= Emit_Nothing and then Static_Link then
-               declare
-                  Needed : Landin.Platform.Path_List;
-                  Referrers : Landin.Platform.Path_List;
-                  Requests : constant Natural :=
-                    Landin.Configuration.Library_Count
-                      (Landin.Stages.Configurations (Context).all);
-               begin
-                  Landin.Backend.Entry_Point.Unsatisfied_Imports
-                    (Landin.Stages.Code (Context).all,
-                     Landin.Stages.Meanings (Context).all,
-                     Landin.Stages.Modules (Context).all,
-                     Landin.Stages.Identities (Context).all,
-                     Needed, Referrers);
-                  if Landin.Modules.Find_Logical
-                       (Landin.Stages.Modules (Context).all, "platform/linux")
-                     = Landin.Modules.No_Module
-                  then
-                     Note_No_Toolchain
-                       ("a static link of " & Landin.Targets.Name (Facts)
-                        & " starts at platform/linux's `_landin_start`, and"
-                        & " no library holding platform/linux was found",
-                        "name the library with --library=PATH, or link"
-                        & " with --link=libc, which keeps C's runtime");
-                     return;
-                  elsif Emit /= Emit_Executable then
-                     null;
-                  elsif Requests > 0 then
-                     Note_No_Toolchain
-                       ("a static link of " & Landin.Targets.Name (Facts)
-                        & " cannot link the C library `"
-                        & Landin.Configuration.Library_Name
-                            (Landin.Stages.Configurations (Context).all, 1)
-                        & "` the program asks for with linker.library",
-                        "link with --link=libc, which keeps C's runtime"
-                        & " and library");
-                     return;
-                  elsif not Needed.Is_Empty then
-                     --  Each name with what in the program refers to it, so
-                     --  a library routine that needs the C library, as
-                     --  platform/posix's loader does, is named by its own
-                     --  name and not only by the C symbol it calls.
-                     declare
-                        Listed : Unbounded.Unbounded_String;
-                     begin
-                        for Index in 1 .. Natural (Needed.Length) loop
-                           Unbounded.Append
-                             (Listed,
-                              (if Index = 1 then ""
-                               elsif Index = Natural (Needed.Length)
-                               then ", or "
-                               else ", ")
-                              & "`" & Needed (Index) & "`, which "
-                              & (if Referrers (Index) = "" then "the program"
-                                 else Referrers (Index))
-                              & " refers to");
-                        end loop;
-                        Note_No_Toolchain
-                          ("a static link of " & Landin.Targets.Name (Facts)
-                           & " has no C library to define "
-                           & Unbounded.To_String (Listed),
-                           "link with --link=libc, which keeps C's runtime"
-                           & " and library");
-                     end;
-                     return;
-                  end if;
-               end;
+            if Emit /= Emit_Nothing and then Static_Link
+              and then Refused_Static_Link
+                (Executable => Emit = Emit_Executable)
+            then
+               return;
             end if;
 
             --  D365: the IR the backend would be given, in Landin.IR.Dump's
@@ -2458,13 +2557,30 @@ package body Landin.Driver is
                     "write " & Landin.Json.Quoted (Assembly_Path) & LF);
                   return;
                end if;
-               Host.Write_File
-                 (Assembly_Path,
-                  Landin.IR.Dump.Text
-                    (Landin.Stages.Code (Context).all,
-                     Landin.Stages.Meanings (Context).all,
-                     Landin.Stages.Identities (Context).all),
-                  Written);
+               declare
+                  --  D374's answer, as every backend gives it, so the dump
+                  --  says which entries an emitted table names.
+                  Entries : constant Landin.Backend.Kept_Entries :=
+                    Landin.Backend.Kept_Evidence_Entries
+                      (Landin.Stages.Code (Context).all,
+                       Landin.Panics.Handler (Panic),
+                       Landin.Stages.Meanings (Context).all,
+                       Landin.Stages.Identities (Context).all);
+
+                  function Is_Kept
+                    (Id : Landin.IR.Evidence_Id; Which : Positive)
+                     return Boolean
+                  is (Landin.Backend.Is_Kept (Entries, Id, Which));
+               begin
+                  Host.Write_File
+                    (Assembly_Path,
+                     Landin.IR.Dump.Text
+                       (Landin.Stages.Code (Context).all,
+                        Landin.Stages.Meanings (Context).all,
+                        Landin.Stages.Identities (Context).all,
+                        Kept => Is_Kept'Access),
+                     Written);
+               end;
                if Written /= Landin.Platform.Write_Ok then
                   Note_Failure
                     (Code_Unwritable, "cannot write: " & Assembly_Path);
@@ -2500,7 +2616,10 @@ package body Landin.Driver is
                      Landin.Debugging.Append
                        (Debug, Landin.Stages.Source
                           (Context, Landin.Stages.Nth_Source
-                            (Context, Index)));
+                            (Context, Index)),
+                        Recorded => Landin.Source_Maps.Recorded_Name
+                          (Context, Landin.Stages.Nth_Source
+                             (Context, Index)));
                   end loop;
                   for Index in 1 .. Landin.Checking.Declaration_Limit
                     (Landin.Stages.Types (Context).all)
@@ -2690,6 +2809,22 @@ package body Landin.Driver is
                  Unbounded.To_String (Firmware_Name)) = Landin.IR.No_Item
             then
                Note_No_Entry (For_Firmware => True);
+               return;
+            end if;
+            --  What compiling it would refuse before the link, a check
+            --  refuses too: a `public main` that is not the entry, and a
+            --  static link's C symbol.
+            if Landin.Targets.Architecture_Of (Facts)
+                 /= Landin.Targets.Cortex_M0
+              and then Public_Main_Not_Entry
+            then
+               Note_No_Entry;
+               return;
+            end if;
+            if Static_Link
+              and then Refused_Static_Link
+                (Executable => True, Checking => True)
+            then
                return;
             end if;
             if not Report_Seen or else Dry_Run then
@@ -3205,7 +3340,8 @@ package body Landin.Driver is
                         Dependency_Directories =>
                           (if Depfile /= ""
                            then Dependency_Directories'Access else null),
-                        Implicit => Implicit_Module);
+                        Implicit => Implicit_Module,
+                        Parsing => Watch_Parsing'Access);
                   end if;
                elsif Natural (Roots.Length) > 0 then
                   if Natural (Inputs.Length) = 1 then
@@ -3215,7 +3351,8 @@ package body Landin.Driver is
                           (if Depfile /= ""
                            then Dependency_Directories'Access else null),
                         Library => Library_Root,
-                        Implicit => Implicit_Module);
+                        Implicit => Implicit_Module,
+                        Parsing => Watch_Parsing'Access);
                   end if;
                else
                   Loading.Load_Files (Context, Host, Inputs);
@@ -3232,7 +3369,8 @@ package body Landin.Driver is
                         Dependency_Directories =>
                           (if Depfile /= ""
                            then Dependency_Directories'Access else null),
-                        Implicit => Implicit_Module);
+                        Implicit => Implicit_Module,
+                        Parsing => Watch_Parsing'Access);
                   end if;
                end if;
             end;
@@ -3247,8 +3385,16 @@ package body Landin.Driver is
             end loop;
 
             --  A rooted request scans and parses each module as it is found,
-            --  to read its imports, so its syntax is inside this row.
+            --  to read its imports; Stage_Ended moves that time from this row
+            --  to the syntax row.  A module refused while loading parsed it
+            --  still ends the pipeline before its syntax stage, so the
+            --  parsing it did is that stage's row.
             Stage_Ended ("loading");
+            if Landin.Stages.Failed (Context) and then Parse_Microseconds > 0
+            then
+               Stage_Began;
+               Stage_Ended ("syntax");
+            end if;
 
             --  An empty module is legal, but it supplies nothing to emit.
             --  Keep the check-only request legal and refuse emission before

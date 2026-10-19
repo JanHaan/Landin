@@ -14,11 +14,11 @@ public main: () -> (code: i32) =
     name_in: []u8 = "in"
     name_out: []u8 = "out"
     first: io.memory_file =
-      (name: name_in, contents: input[0..<lenof input], length: 5, cursor: 0,
-       readable: true, writable: false, state: io.closed_slot)
+        (name: name_in, contents: input[0..<lenof input], length: 5, cursor: 0,
+         readable: true, writable: false, state: io.closed_slot)
     second: io.memory_file =
-      (name: name_out, contents: destination[0..<lenof destination], length: 0, cursor: 0,
-       readable: true, writable: true, state: io.closed_slot)
+        (name: name_out, contents: destination[0..<lenof destination], length: 0, cursor: 0,
+         readable: true, writable: true, state: io.closed_slot)
     mut files: [2]io.memory_file
     files[0] = first
     files[1] = second

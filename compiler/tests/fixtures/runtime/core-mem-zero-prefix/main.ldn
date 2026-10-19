@@ -53,8 +53,8 @@ public main: () -> (code: i32) =
         beyond_capacity = true
     end
     refused_unchanged: bool = mem.length(source) == 2
-                             and mem.length(target) == 0
-                             and mem.length(limited) == 0
+                              and mem.length(target) == 0
+                              and mem.length(limited) == 0
     mem.transfer_prefix(source, target, two) else (problem)
         _ = problem
         return
@@ -109,7 +109,7 @@ public main: () -> (code: i32) =
         return
     end
     exact: bool = usize(released) == usize(base)
-                 and usize(released_other) == usize(other)
+                  and usize(released_other) == usize(other)
     mem.free(allocator, released, zero)
     mem.free(allocator, released_other, zero)
     if a == 0 and b == 1 and refused == 2 and c == 0 and d == 1

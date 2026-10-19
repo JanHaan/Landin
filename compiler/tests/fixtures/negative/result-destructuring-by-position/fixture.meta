@@ -1,0 +1,8 @@
+class: negative
+summary: result destructuring by position is refused, and each refusal lists the result's fields and the field: local rename
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/result-destructuring-by-position
+constructs: 0990
+codes: L0308, L0308
+status: 1
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

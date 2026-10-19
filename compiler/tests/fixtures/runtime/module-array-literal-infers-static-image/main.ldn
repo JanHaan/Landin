@@ -9,11 +9,11 @@ public main: () -> (code: i32) =
     copied[1] = 77
 
     if literal[0] == 10 and literal[1] == 21
-        and literal[2] == 100 and literal[3] == 200
-        and typed[0] == 99 and typed[1] == 21
-        and typed[2] == 100 and typed[3] == 200
-        and copied[0] == 10 and copied[1] == 77
-        and copied[2] == 100 and copied[3] == 200
+      and literal[2] == 100 and literal[3] == 200
+      and typed[0] == 99 and typed[1] == 21
+      and typed[2] == 100 and typed[3] == 200
+      and copied[0] == 10 and copied[1] == 77
+      and copied[2] == 100 and copied[3] == 200
     then
         code = 42
     else

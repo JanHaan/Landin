@@ -11,8 +11,8 @@ project directory of its own, compiled there with `refine compile` and no
 option, and run.  The environment is PATH alone, so nothing the checkout or
 a developer's shell provides can stand in for what the installation lacks.
 Each program is held to its fixture's status and output oracle, is given its
-fixture's `run_args:` as its arguments, and reads the file its fixture's
-`stdin:` names as its standard input, or an empty one.
+fixture's `run_args:` and `run_files:` as its arguments, and reads the file
+its fixture's `stdin:` names as its standard input, or an empty one.
 
 With `--stock`, the system is a stock distribution with only its own GCC
 (D364): the first compile's plan must name a driver the distribution
@@ -33,6 +33,9 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "compiler/tests"))
+import fixture_meta  # noqa: E402
+
 FIRST_PROGRAM = ROOT / "compiler/tests/fixtures/runtime/first-program"
 
 
@@ -59,17 +62,10 @@ def examples():
                              re.M):
         fixture = ROOT / named.group(1)
         source, _ = landin_block(text, named.end())
-        meta = dict(line.split(": ", 1) for line in
-                    (fixture / "fixture.meta").read_text().splitlines()
-                    if ": " in line)
-        expected = None
-        if "run_expect" in meta:
-            expected = (fixture / meta["run_expect"]).read_bytes()
-        given = b""
-        if "stdin" in meta:
-            given = (fixture / meta["stdin"]).read_bytes()
-        yield (fixture.name, source, expected, int(meta.get("status", "0")),
-               given, meta.get("run_args", "").split())
+        meta = fixture_meta.read(fixture)
+        given = pathlib.Path(meta.standard_input(fixture)).read_bytes()
+        yield (fixture.name, source, meta.run_expected(fixture), meta.status,
+               given, meta.program_arguments(fixture))
 
 
 def run(argv, cwd, env, what, given=b""):

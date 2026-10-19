@@ -15,5 +15,5 @@ public main: () -> (code: i32) =
     code = if lenof view == 0 and lenof mutable == 0
       and lenof stored_view == 0 and lenof returned == 0
       and lenof module_empty == 0 and length([]) == 0 and generic_length(1, []) == 0
-      then 42 else 1 end if
+           then 42 else 1 end if
 end main

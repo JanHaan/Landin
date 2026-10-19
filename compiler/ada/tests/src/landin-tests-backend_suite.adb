@@ -1356,6 +1356,124 @@ package body Landin.Tests.Backend_Suite is
       One (Landin.Targets.Cortex_M, Cortex_M);
    end By_Value_Parameters_Move_By_Words;
 
+   --  `ptr(n)` from a `usize` is checked against [0470]'s nonnull edge
+   --  and against the largest `usize`, which no value exceeds; every
+   --  backend tests the first and emits nothing for the second, at no
+   --  optimization and at speed alike.
+   procedure A_Pointer_From_A_Usize_Tests_Only_Nonnull
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Pointer_From_A_Usize_Tests_Only_Nonnull
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "at: (n: usize) -> (r: u64) =" & LF
+        & "    q: ptr u64 = ptr(n)" & LF
+        & "    r = q.val" & LF
+        & "end at" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    mut x: u64 = 7" & LF
+        & "    code = i32(at(usize(addr x)))" & LF
+        & "end main" & LF;
+
+      type Backend_Kind is (X86_64, Arm64, RV64, Cortex_M);
+
+      procedure One
+        (Facts     : Landin.Targets.Target_Facts;
+         Kind      : Backend_Kind;
+         Objective : Landin.Optimization.Objective);
+
+      procedure One
+        (Facts     : Landin.Targets.Target_Facts;
+         Kind      : Backend_Kind;
+         Objective : Landin.Optimization.Objective)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+         Options : constant Landin.Optimization.Options :=
+           (Objective, Landin.Optimization.Off);
+         Name : constant String := Backend_Kind'Image (Kind) & " "
+           & Landin.Optimization.Spelling (Objective);
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, Name & ": five stages ran");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         case Kind is
+            when X86_64 =>
+               Landin.Backend.X86_64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+            when Arm64 =>
+               Landin.Backend.Arm64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+            when RV64 =>
+               Landin.Backend.RiscV.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+            when Cortex_M =>
+               Landin.Backend.Cortex_M.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work), Options, Assembly, Report);
+         end case;
+         declare
+            Whole : constant String :=
+              Ada.Strings.Unbounded.To_String (Assembly);
+            At_Start : constant Natural := Index (Whole, "at:" & LF);
+            Main_Start : constant Natural := Index (Whole, "main:" & LF);
+            Text : constant String :=
+              (if At_Start = 0 or else Main_Start <= At_Start then ""
+               else Whole (At_Start .. Main_Start - 1));
+            Nonnull, Largest : Boolean;
+         begin
+            case Kind is
+               when X86_64 =>
+                  Nonnull := Contains (Text, "$1, %r")
+                    and then Contains (Text, HT & "jb ");
+                  Largest := Contains (Text, "18446744073709551615");
+               when Arm64 =>
+                  Nonnull := Contains (Text, "#1" & LF)
+                    and then Contains (Text, HT & "b.lo ");
+                  Largest := Contains (Text, "movn x")
+                    or else Contains (Text, HT & "b.hi ");
+               when RV64 =>
+                  Nonnull := Contains (Text, HT & "li x6, 1" & LF);
+                  Largest := Contains (Text, HT & "li x6, -1" & LF);
+               when Cortex_M =>
+                  --  A 32-bit `usize` already lost the edge here.
+                  Nonnull := Contains (Text, HT & "movs r2, #1" & LF);
+                  Largest := Occurrences (Text, HT & "cmp r0, r2" & LF) /= 1;
+            end case;
+            Landin.Testing.Check
+              (Item, Text /= "", Name & ": the routine was found");
+            Landin.Testing.Check
+              (Item, Nonnull, Name & ": the nonnull edge is tested");
+            Landin.Testing.Check
+              (Item, not Largest,
+               Name & ": the largest usize is not compared against");
+         end;
+      end One;
+   begin
+      for Objective in Landin.Optimization.Objective loop
+         One (Landin.Targets.Linux_X86_64, X86_64, Objective);
+         One (Landin.Targets.Linux_Arm64, Arm64, Objective);
+         One (Landin.Targets.Linux_RV64, RV64, Objective);
+         One (Landin.Targets.Cortex_M, Cortex_M, Objective);
+      end loop;
+   end A_Pointer_From_A_Usize_Tests_Only_Nonnull;
+
    --  A copy into one field of a struct datum is word-aligned when the
    --  datum's own placement says so.  A whole struct datum has no array
    --  shape, so its alignment is read from its placed fields; asking for
@@ -6548,12 +6666,18 @@ package body Landin.Tests.Backend_Suite is
             "the first semantic function offset feeds one indirect call");
          --  A folded instance is an alias that keeps its symbol's type, so
          --  the body count is the count of sizes, which only a body has.
+         --  Each instance is a symbol named after its routine (D421), the
+         --  second qualified as D417 says.
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, ".size .Llandin_anonymous_"), 1,
+           (Item, Occurrences (Text, ".size main.is_less"), 1,
             "representation-compatible instances emit one machine body");
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, ".set .Llandin_anonymous_"), 1,
+           (Item, Occurrences (Text, ".set main.is_less.1, main.is_less"
+                                     & LF), 1,
             "the second concrete symbol aliases the shared body");
+         Landin.Testing.Check
+           (Item, not Contains (Text, "landin_anonymous"),
+            "no instance is left an unnamed label");
       end;
    end Generic_Evidence_Is_Ordered_Indirect_And_Shared;
 
@@ -8723,6 +8847,212 @@ package body Landin.Tests.Backend_Suite is
          "the ordinary language return keeps its native bit carrier");
    end RV64_Hosted_Main_Returns_A_Signed_C_Int;
 
+   --  D410: a scalar in a `layout(c, packed)` record may sit at any
+   --  address, and RV64 moves it one byte at a time, because a misaligned
+   --  RISC-V access may trap or be emulated by the kernel.  QEMU's user
+   --  emulation performs a misaligned access silently, so the RV64 cross
+   --  lane cannot show it; the emitted sequence can.  Each field below is
+   --  at an odd offset; its access is exactly as many byte loads or stores
+   --  as it has bytes, at displacements 0 .. size - 1 from one register,
+   --  with no wider access through that register among them.
+   procedure RV64_Packed_Fields_Move_By_Byte
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV64_Packed_Fields_Move_By_Byte
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_RV64);
+      Ran : Natural;
+
+      type Access_Case is record
+         Routine : Ada.Strings.Unbounded.Unbounded_String;
+         Size    : Positive;
+         Stores  : Boolean;
+      end record;
+
+      function Case_Of (Name : String; Size : Positive; Stores : Boolean)
+        return Access_Case
+      is ((Ada.Strings.Unbounded.To_Unbounded_String (Name), Size, Stores));
+
+      Profiles : constant array (1 .. 2) of Landin.Optimization.Options :=
+        [Landin.Optimization.Reference_Options,
+         Landin.Optimization.Default_Options];
+
+      Cases : constant array (Positive range <>) of Access_Case :=
+        [Case_Of ("read_half", 2, False), Case_Of ("read_word", 4, False),
+         Case_Of ("read_long", 8, False), Case_Of ("read_double", 8, False),
+         Case_Of ("write_half", 2, True), Case_Of ("write_word", 4, True),
+         Case_Of ("write_long", 8, True), Case_Of ("write_double", 8, True)];
+
+      function Body_Of (Text, Routine : String) return String;
+      function Byte_By_Byte (Text : String; Size : Positive; Stores : Boolean)
+        return Boolean;
+
+      --  The text of ROUTINE in TEXT: from its label to the next `.size`.
+      function Body_Of (Text, Routine : String) return String is
+         First : constant Natural := Index (Text, LF & Routine & ":" & LF);
+         Last  : Natural;
+      begin
+         if First = 0 then
+            return "";
+         end if;
+         Last := Ada.Strings.Fixed.Index
+           (Text (First .. Text'Last), HT & ".size ");
+         return Text (First .. (if Last = 0 then Text'Last else Last));
+      end Body_Of;
+
+      --  Whether ROUTINE's text moves its field byte by byte, as above.
+      function Byte_By_Byte (Text : String; Size : Positive; Stores : Boolean)
+        return Boolean
+      is
+         Byte : constant String := (if Stores then "sb" else "lbu");
+         Wide : constant array (1 .. 7) of String (1 .. 3) :=
+           (if Stores then ["sh ", "sw ", "sd ", "fsw", "fsd", "sh ", "sw "]
+            else ["lh ", "lw ", "ld ", "flw", "fld", "lhu", "lwu"]);
+         Base : Ada.Strings.Unbounded.Unbounded_String;
+         Seen : array (0 .. Size - 1) of Boolean := [others => False];
+         Count : Natural := 0;
+         First_Line, Last_Line : Natural := 0;
+         Line_Number : Natural := 0;
+         Start : Positive := Text'First;
+         Ok : Boolean := True;
+      begin
+         --  First pass: the byte accesses, their base and displacements.
+         for Index_At in Text'Range loop
+            if Text (Index_At) = LF then
+               Line_Number := Line_Number + 1;
+               declare
+                  Line : constant String := Text (Start .. Index_At - 1);
+                  Open : constant Natural :=
+                    Ada.Strings.Fixed.Index (Line, "(");
+                  Comma : constant Natural :=
+                    Ada.Strings.Fixed.Index (Line, ", ", Ada.Strings.Backward);
+               begin
+                  if Line'Length > Byte'Length + 1
+                    and then Line (Line'First .. Line'First + Byte'Length)
+                             = HT & Byte
+                    and then Line (Line'First + Byte'Length + 1) = ' '
+                    and then Open > Comma and then Comma > 0
+                  then
+                     declare
+                        Shown : constant String :=
+                          Line (Comma + 2 .. Open - 1);
+                        Register : constant String :=
+                          Line (Open + 1 .. Line'Last - 1);
+                        Offset : Integer := -1;
+                     begin
+                        begin
+                           Offset := Integer'Value (Shown);
+                        exception
+                           when Constraint_Error => Ok := False;
+                        end;
+                        if Ada.Strings.Unbounded.Length (Base) = 0 then
+                           Base := Ada.Strings.Unbounded.To_Unbounded_String
+                             (Register);
+                           First_Line := Line_Number;
+                        end if;
+                        if Ada.Strings.Unbounded.To_String (Base) = Register
+                          and then Offset in Seen'Range
+                        then
+                           Seen (Offset) := True;
+                           Count := Count + 1;
+                           Last_Line := Line_Number;
+                        end if;
+                     end;
+                  end if;
+               end;
+               Start := Index_At + 1;
+            end if;
+         end loop;
+         if Count /= Size or else (for some Each of Seen => not Each) then
+            return False;
+         end if;
+         --  Second pass: no wider access through that register among them.
+         Line_Number := 0;
+         Start := Text'First;
+         for Index_At in Text'Range loop
+            if Text (Index_At) = LF then
+               Line_Number := Line_Number + 1;
+               if Line_Number in First_Line .. Last_Line then
+                  declare
+                     Line : constant String := Text (Start .. Index_At - 1);
+                  begin
+                     for Mnemonic of Wide loop
+                        if Line'Length > 4
+                          and then Line (Line'First + 1 .. Line'First + 3)
+                                   = Mnemonic
+                          and then Contains
+                            (Line, "(" & Ada.Strings.Unbounded.To_String (Base)
+                                   & ")")
+                        then
+                           Ok := False;
+                        end if;
+                     end loop;
+                  end;
+               end if;
+               Start := Index_At + 1;
+            end if;
+         end loop;
+         return Ok;
+      end Byte_By_Byte;
+   begin
+      Lower
+        (Work,
+         "wire: type = layout(c, packed) struct" & LF
+         & "    kind: u8" & LF & "    half: u16" & LF & "    word: u32" & LF
+         & "    long: u64" & LF & "    double: f64" & LF
+         & "end wire" & LF
+         & "public read_half: (p: ptr wire) -> (v: u16) ="
+         & " v = p.val.half end read_half" & LF
+         & "public read_word: (p: ptr wire) -> (v: u32) ="
+         & " v = p.val.word end read_word" & LF
+         & "public read_long: (p: ptr wire) -> (v: u64) ="
+         & " v = p.val.long end read_long" & LF
+         & "public read_double: (p: ptr wire) -> (v: f64) ="
+         & " v = p.val.double end read_double" & LF
+         & "public write_half: (p: ptr mut wire, v: u16) -> none ="
+         & " p.val.half = v end write_half" & LF
+         & "public write_word: (p: ptr mut wire, v: u32) -> none ="
+         & " p.val.word = v end write_word" & LF
+         & "public write_long: (p: ptr mut wire, v: u64) -> none ="
+         & " p.val.long = v end write_long" & LF
+         & "public write_double: (p: ptr mut wire, v: f64) -> none ="
+         & " p.val.double = v end write_double" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      for Options of Profiles loop
+         declare
+            Assembly : Ada.Strings.Unbounded.Unbounded_String;
+            Report : Landin.Build_Reports.Report;
+         begin
+            Landin.Backend.RiscV.Emit
+              (Landin.Stages.Code (Work).all,
+               Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all,
+               Landin.Stages.Target (Work), Options, Assembly, Report);
+            for One of Cases loop
+               declare
+                  Name : constant String :=
+                    Ada.Strings.Unbounded.To_String (One.Routine);
+                  Text : constant String := Body_Of
+                    (LF & Ada.Strings.Unbounded.To_String (Assembly), Name);
+               begin
+                  Landin.Testing.Check
+                    (Item, Text /= ""
+                     and then Byte_By_Byte (Text, One.Size, One.Stores),
+                     Name & " at " & Landin.Optimization.Objective'Image
+                       (Options.Optimize)
+                     & " moves its unaligned field one byte at a time" & LF
+                     & Text);
+               end;
+            end loop;
+         end;
+      end loop;
+   end RV64_Packed_Fields_Move_By_Byte;
+
    --  [1630] on arm64: a declared x19 saved in its frame home and restored
    --  with CFI, the text filled at each operand's width, and the verifier's
    --  refusal, under Darwin's description and Linux's alike, of x18, the
@@ -9222,7 +9552,8 @@ package body Landin.Tests.Backend_Suite is
       Check_Range ("i16", "-100", "100", 2, 0);
       Check_Range ("u32", "10", "4294967295", 1, 0);
       Check_Range ("i32", "-2147483648", "5", 1, 0);
-      Check_Range ("u64", "0", "100", 2, 2);
+      --  A u64 is two words, each edge two comparisons; zero is no edge.
+      Check_Range ("u64", "0", "100", 1, 1);
    end Narrow_Ranges_Use_Scalar_Comparisons;
 
    procedure Size_Float_Conversions_Share_Decode
@@ -9549,6 +9880,9 @@ package body Landin.Tests.Backend_Suite is
         (Into, "backend", "RV64 hosted main returns a signed C int",
          RV64_Hosted_Main_Returns_A_Signed_C_Int'Access);
       Landin.Testing.Register
+        (Into, "backend", "RV64 packed fields move by byte",
+         RV64_Packed_Fields_Move_By_Byte'Access);
+      Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);
       Landin.Testing.Register
@@ -9829,6 +10163,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "by-value parameters move by words",
          By_Value_Parameters_Move_By_Words'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a pointer from a usize tests only nonnull",
+         A_Pointer_From_A_Usize_Tests_Only_Nonnull'Access);
       Landin.Testing.Register
         (Into, "backend", "cortex field copies into a datum move by words",
          Cortex_Field_Copies_Into_A_Datum_Move_By_Words'Access);

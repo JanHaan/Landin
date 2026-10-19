@@ -4,20 +4,13 @@
 
 import core/text
 
---  The token tag stays a byte rather than an atom set: a debugger shows an
---  atom only as its carrier number, which differs between programs, and the
---  debugger sessions read this tag.
-public kind: type = u8
-public identifier: kind = 0
-public number: kind = 1
-public string: kind = 2
-public left_brace: kind = 3
-public right_brace: kind = 4
-public equals: kind = 5
-public newline: kind = 6
-public end_of_input: kind = 7
-public bad_character: kind = 8
-public unterminated_string: kind = 9
+--  The token tag is an atom set, and a debugger shows it by its atom's
+--  name (D423), as the debugger sessions read it.
+public identifier, number, string, left_brace, right_brace, equals: atom
+public newline, end_of_input, bad_character, unterminated_string: atom
+public kind: type = identifier | number | string | left_brace | right_brace
+    | equals | newline | end_of_input | bad_character
+    | unterminated_string
 
 public token: type = struct
     what: kind
@@ -133,14 +126,14 @@ public next: (source: []u8, inout lexer: state) -> (result: token) =
 
     inc lexer.cursor
     result = if byte == 123 then
-        single(source, left_brace, begins)
-    elsif byte == 125 then
-        single(source, right_brace, begins)
-    elsif byte == 61 then
-        single(source, equals, begins)
-    elsif byte == 10 then
-        single(source, newline, begins)
-    else
-        single(source, bad_character, begins)
-    end if
+                 single(source, left_brace, begins)
+             elsif byte == 125 then
+                 single(source, right_brace, begins)
+             elsif byte == 61 then
+                 single(source, equals, begins)
+             elsif byte == 10 then
+                 single(source, newline, begins)
+             else
+                 single(source, bad_character, begins)
+             end if
 end next

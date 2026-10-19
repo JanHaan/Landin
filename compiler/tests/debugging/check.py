@@ -196,10 +196,18 @@ def emit_section(lines: list[str], name: str, commands: list[str]) -> None:
     lines.append(f'printf "LANDIN-END {name}\\n"')
 
 
+#  Values the sessions read by name rather than number: an atom set is an
+#  enumeration (D423), so GDB prints the atom's name.
+NAMED_VALUES = ("parser->look.what",)
+
+
 def emit_value(lines: list[str], name: str, expression: str,
                unsigned: bool = False) -> None:
     lines.append(f'printf "LANDIN-VALUE {name}="')
-    lines.append(f"output/{'u' if unsigned else 'd'} {expression}")
+    if expression in NAMED_VALUES:
+        lines.append(f"output {expression}")
+    else:
+        lines.append(f"output/{'u' if unsigned else 'd'} {expression}")
     lines.append('printf "\\n"')
 
 
@@ -209,8 +217,34 @@ def emit_values(lines: list[str], scope: str,
         emit_value(lines, f"{scope}.{name}", expression)
 
 
+#  D422: debug information and source maps name a library file by this
+#  prefix and its module path, not by where the library is; a session maps
+#  the prefix to the library these builds read, which is this checkout.
+LIBRARY_PREFIX = "/landin-library"
+LIBRARY_NAMESPACES = ("core", "hosted", "platform")
+
+
+def recorded_path(source_arg: str) -> str:
+    """The path debug information and the source map give a source the
+    compiler read as `source_arg`: a library module's file under
+    LIBRARY_PREFIX, every other file as it was read."""
+    path = Path(source_arg)
+    resolved = (path if path.is_absolute() else ROOT / path).resolve()
+    try:
+        relative = resolved.relative_to(ROOT.resolve())
+    except ValueError:
+        return source_arg
+    #  A rooted build whose root is this checkout reads the library through
+    #  that root's spelling, `./core/...`, and records it as D422 says all
+    #  the same: what decides is the module, not how its path was spelled.
+    if len(relative.parts) > 1 and relative.parts[0] in LIBRARY_NAMESPACES:
+        return LIBRARY_PREFIX + "/" + relative.as_posix()
+    return source_arg
+
+
 def gdb_setup() -> list[str]:
     return [
+        f"set substitute-path {LIBRARY_PREFIX} {ROOT}",
         "set pagination off",
         "set confirm off",
         "set width 0",
@@ -837,9 +871,10 @@ def check_parser_transcript(transcript: str,
     for name, value in (
             ("digits.accumulated", 4), ("digits.cursor", 27), ("digits.ends", 28),
             ("digits-caller.accumulated", 0), ("digits-caller.cursor", 26),
-            ("recovery.depth", 0), ("recovery.look", 1),
+            ("recovery.depth", 0), ("recovery.look", "number"),
             ("recovery.begins", 36), ("recovery.ends", 38),
-            ("nested.depth", 1), ("nested.look", 6), ("nested.begins", 48),
+            ("nested.depth", 1), ("nested.look", "newline"),
+            ("nested.begins", 48),
             ("nested.source_length", 92), ("done.valid", 1),
             ("done.source_length", 92), ("done.saw_out_of_memory", 1),
             ("done.saw_io_failure", 1)):
@@ -853,7 +888,7 @@ def check_parser_transcript(transcript: str,
             f"debugged parser program did not return 42: {inferior_exit!r}")
 
 
-def expect_value(transcript: str, name: str, value: int) -> None:
+def expect_value(transcript: str, name: str, value: int | str) -> None:
     require(re.search(r"^LANDIN-VALUE " + re.escape(name) + "=" +
                       re.escape(str(value)) + r"$", transcript, re.M) is not None,
             f"GDB did not report {name}={value}")
@@ -1090,14 +1125,16 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
     require(re.search(r"\btag = 1\b", variant_values) is not None,
             "variant debug view omits the active payload tag")
     #  [0480]/[1870]: the union is a structure named by its canonical
-    #  spelling; an atom case has a nonzero code, the pointer case code 0.
+    #  spelling; an atom case has a nonzero code, which D423's enumeration
+    #  shows as the atom's name, and the pointer case code 0.
     union_type = marker_section(transcript, "unions-type")
     require("debug_denied | debug_none | ptr mut i32" in union_type
             and re.search(r"\batom;", union_type) is not None
             and re.search(r"\*\s*ptr;", union_type) is not None,
             f"pointer union type is not presented: {union_type!r}")
     union_values = marker_section(transcript, "unions-values")
-    require(re.search(r"atom = [1-9]\d*, ptr = 0x0\b", union_values)
+    require(re.search(r"atom = debug_(?:denied|none), ptr = 0x0\b",
+                      union_values)
             is not None and re.search(r"atom = 0, ptr = 0x[0-9a-f]*[1-9a-f]",
                                       union_values) is not None,
             f"pointer union cases are not presented: {union_values!r}")
@@ -1138,11 +1175,12 @@ def check_line_table(raw_lines: str,
             f"line-table file IDs differ from Source_Id order: {files!r}")
     for expected_id, source_arg in enumerate(source_args, 1):
         directory_id, basename = files[expected_id]
-        require(basename == Path(source_arg).name,
+        recorded = recorded_path(source_arg)
+        require(basename == Path(recorded).name,
                 f"line-table file {expected_id} has wrong basename {basename!r}")
         # Path.parent normalizes away the leading ./ of rooted imports,
         # but the assembler's directory table retains that source spelling.
-        require(directories.get(directory_id) == (os.path.dirname(source_arg) or "."),
+        require(directories.get(directory_id) == (os.path.dirname(recorded) or "."),
                 f"line-table file {expected_id} has wrong directory entry")
     return versions
 
@@ -1223,9 +1261,10 @@ def check_source_map(table_path: Path, executable_id: str,
             zip(entries, sources, source_args), 1):
         require(entry["file_id"] == expected_id,
                 "source map is not in Source_Id order")
-        source_arg_bytes = os.fsencode(source_arg)
+        source_arg_bytes = os.fsencode(recorded_path(source_arg))
         require(bytes.fromhex(entry["path_hex"]) == source_arg_bytes,
-                f"source {expected_id} path bytes differ from compiler input")
+                f"source {expected_id} path bytes differ from compiler input"
+                " as D422 records it")
         file_directive = f'\t.file {expected_id} "{gas_string(source_arg_bytes)}"'
         require(file_directive in assembly_lines,
                 f"assembly omits exact Source_Id .file directive {file_directive!r}")
@@ -1459,6 +1498,31 @@ def check_workload_sources(workload, source_args):
               "workload_sources.py --refine REFINE --write")
 
 
+def check_build_sources(reported, expected) -> None:
+    """Hold a build report's sources to the ones the build was given.
+
+    The comparison is of the files, not of their spellings: a compiler
+    copied out of its build tree finds its library through whatever prefix
+    it was copied to, and a symlink in that prefix names this checkout's
+    platform/linux by another path.  Each path, relative ones taken from
+    the repository root, is resolved before it is compared, and a refusal
+    names both lists as spelled and as resolved.
+    """
+    def resolved(paths) -> list[tuple[str, str]]:
+        return [(str(path), str((ROOT / path).resolve())) for path in paths]
+
+    reported, expected = resolved(reported), resolved(expected)
+    if [real for _, real in reported] == [real for _, real in expected]:
+        return
+    lines = ["the build's sources are not the named ones and platform/linux,"
+             " compared as resolved paths"]
+    for name, paths in (("reported", reported), ("expected", expected)):
+        lines.append(f"  {name}:")
+        lines.extend(f"    {spelled}" + ("" if spelled == real else f" -> {real}")
+                     for spelled, real in paths)
+    require(False, "\n".join(lines))
+
+
 def measure(refine: Path, tools: dict[str, str], gdb: str,
             runner: str, qemu: str | None, retained: Path, scratch: Path,
             profile: tuple[str, str, str], containers: bool = False,
@@ -1512,9 +1576,7 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         #  the generated wrapped.ldn.
         implicit = tuple(str(path) for path in
                          sorted((ROOT / "platform/linux").glob("*.ldn")))
-        require(reported == source_args + implicit,
-                f"the build's sources are not the named ones and platform/linux:"
-                f" {reported!r}")
+        check_build_sources(reported, source_args + implicit)
         source_args = reported
         sources = tuple((ROOT / path).resolve() for path in source_args)
     if workload:
@@ -1640,7 +1702,7 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
                        str(caller_column)]
     resolved = run([sys.executable, resolver, *coordinate_args,
                     "--build-id", stripped_id], cwd=debugger_cwd).strip()
-    expected_location = (f"{source_args[caller_id - 1]}:"
+    expected_location = (f"{recorded_path(source_args[caller_id - 1])}:"
                          f"{caller_line}:{caller_column}")
     require(resolved == expected_location,
             "D192 source-map decoding failed for the stripped build")

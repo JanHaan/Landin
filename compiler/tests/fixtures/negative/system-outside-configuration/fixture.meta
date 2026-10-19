@@ -1,5 +1,5 @@
 class: negative
-summary: The operating system fact is available only in fixed configuration
+summary: The operating system fact has no value of its own in a routine body, which reads a module value holding its comparison (D437)
 program: main.ldn
 codes: L0203
 constructs: 1500, 1560

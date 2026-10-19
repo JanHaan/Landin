@@ -2,5 +2,9 @@ error[L0348]: this iterable evidence does not implement [1320]'s exact call cont
   --> ../tests/fixtures/negative/r491-iterable-contract/main.ldn:16:20
    |
 16 |     for element in source do
-   |                    ^^^^^^ this traversal source
+   |                    ^^^^^^
+  --> ../tests/fixtures/negative/r491-iterable-contract/main.ldn:16:5
+   |
+16 |     for element in source do
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^ the loop that traverses it
   = note: D180: providers are infallible calls taking a read-only source pointer, with one Cur and Item identity

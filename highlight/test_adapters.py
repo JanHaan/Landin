@@ -12,6 +12,7 @@ import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from grammar_pin import PATHS, last_grammar_commit, uncommitted_grammar
 from landin_highlight import (BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES,
                               Scanner, collect_symbols, source_lines)
 
@@ -93,24 +94,38 @@ def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> None:
             print("pinned grammar commit unavailable in shallow checkout; "
                   "grammar/query comparison skipped", file=sys.stderr)
             return
-        raise AssertionError(f"pinned grammar commit {revision} is unavailable; "
-                             "fetch it to compare the shipped grammar and queries")
-    paths = [
-        "highlight/tree-sitter/grammar.js",
-        "highlight/tree-sitter/src/parser.c",
-        "highlight/tree-sitter/src/scanner.c",
-        "highlight/tree-sitter/src/node-types.json",
-        "highlight/tree-sitter/queries",
-        "highlight/helix/runtime/queries/landin",
-        "highlight/zed/languages/landin",
-    ]
-    diff = subprocess.run(["git", "diff", "--quiet", revision, "--", *paths],
+        raise AssertionError(
+            f"pinned grammar commit {revision} is unavailable; fetch it to "
+            "compare the shipped grammar and queries, or, if a rebase "
+            "rewrote it, " + _repair(checkout))
+    diff = subprocess.run(["git", "diff", "--quiet", revision, "--", *PATHS],
                           cwd=checkout, capture_output=True, text=True,
                           check=False)
     assert diff.returncode == 0, (
         "shipped grammar or queries differ from the pinned revision; "
-        "commit them and update all three editor revisions"
+        "commit them, then " + _repair(checkout)
         if diff.returncode == 1 else diff.stderr.strip())
+    #  The same content at a commit that is not on this branch is a pin a
+    #  rebase left behind: the editors fetch the commit, and once the branch
+    #  is pushed its old commits are not there to fetch.
+    ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", revision,
+                               "HEAD"], cwd=checkout, capture_output=True,
+                              text=True, check=False)
+    assert ancestor.returncode == 0, (
+        f"pinned grammar commit {revision} is not on this branch, as a "
+        "rebase leaves it; " + _repair(checkout)
+        if ancestor.returncode == 1 else ancestor.stderr.strip())
+
+
+def _repair(checkout: Path) -> str:
+    """Say how to move the pins, and where to, when HEAD already says."""
+    if uncommitted_grammar(checkout):
+        return ("`python3 highlight/grammar_pin.py` moves all three editor "
+                "revisions to the commit that holds them")
+    target = last_grammar_commit(checkout)
+    where = f" to {target}" if target else ""
+    return ("`python3 highlight/grammar_pin.py` moves all three editor "
+            f"revisions{where}, the last commit on HEAD that changed them")
 
 
 def textmate_pattern(grammar: dict[str, object], scope: str) -> str:
@@ -293,7 +308,12 @@ def kate_raw_smoke(kate: ET.ElementTree) -> None:
         assert source.find(closing, match.end()) == len(delimiter + body)
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
+    #  test.sh defers the pin check to its end, so that the structural and
+    #  corpus passes still run, and report, on an uncommitted grammar.
+    if argv not in ([], ["--without-grammar-pin"]):
+        print(f"usage: {sys.argv[0]} [--without-grammar-pin]", file=sys.stderr)
+        return 2
     grammar = load_json("textmate/syntaxes/landin.tmLanguage.json")
     package = load_json("textmate/package.json")
     load_json("textmate/language-configuration.json")
@@ -347,7 +367,8 @@ def main() -> int:
 
     emacs = (ROOT / "emacs/landin-mode.el").read_text(encoding="utf-8")
     assert balanced_lisp(emacs), "unbalanced Emacs Lisp"
-    check_grammar_revision(helix, zed, emacs)
+    if not argv:
+        check_grammar_revision(helix, zed, emacs)
     withdrawn_word_smoke(grammar, emacs)
     for word in KEYWORDS | TYPES | CONSTANTS:
         assert f'"{word}"' in emacs, f"Emacs vocabulary omits {word}"
@@ -440,4 +461,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

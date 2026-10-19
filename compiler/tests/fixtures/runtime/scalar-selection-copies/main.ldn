@@ -23,9 +23,9 @@ public main: () -> (code: i32) =
 
     code = if correct and chosen == 31 and lenof source == 1
       and source[0] == 37
-    then
-        42
-    else
-        1
-    end if
+           then
+               42
+           else
+               1
+           end if
 end main

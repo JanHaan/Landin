@@ -27,6 +27,7 @@ package body Landin.Stages.Resolution is
 
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Modules.Module_Id;
+   use type Landin.Configuration.Fact_Kind;
    use type Landin.Resolution.Application_Class;
    use type Landin.Resolution.Declaration_Sort;
    use type Landin.Resolution.Verdict;
@@ -134,6 +135,157 @@ package body Landin.Stages.Resolution is
          return Landin.Diagnostics.Fixes.Respellings
            (Syn.Source_Of (Of_Tree), Syn.Anchor (Of_Tree, Node), Offered);
       end Near_In_Scope;
+
+      --  A scalar type written as a positional argument of a call to a
+      --  generic routine: the call with every argument named, the type
+      --  given to the routine's type formal, `make_buffer(capacity: 4,
+      --  t: u8)`; "" when the call is not of that form.
+      function Named_Call_Form
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
+
+      function Named_Call_Form
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String
+      is
+         Call : constant Syn.Node_Id := Syn.Enclosing (Of_Tree, Node);
+      begin
+         if Call = Syn.No_Node
+           or else Syn.Kind (Of_Tree, Call) /= Syn.Call
+           or else Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Call))
+             not in Syn.Name_Reference | Syn.Member_Selection
+           or else Res.Verdict_Of
+             (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Call))
+               /= Res.Bound
+         then
+            return "";
+         end if;
+         declare
+            Routine : constant Res.Declaration_Id :=
+              Res.Bound_To
+                (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Call));
+            Its_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Trees.all, Res.Source_Of (Meanings.all, Routine));
+            Its_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Routine);
+            Text : Landin.Source.Snapshot renames
+              Source (Context, Syn.Source_Of (Of_Tree)).Element.all;
+            Form : Ada.Strings.Unbounded.Unbounded_String;
+            Next_Formal, Next_Parameter : Natural := 0;
+
+            --  The next type formal's or runtime parameter's name, or
+            --  No_Name when the routine has no more of them.
+            function Next_Type_Formal return Landin.Source.Names.Name_Id;
+            function Next_Type_Formal return Landin.Source.Names.Name_Id is
+            begin
+               while Next_Formal
+                 < Syn.Generic_Formal_Count (Its_Tree.all, Its_Node)
+               loop
+                  Next_Formal := Next_Formal + 1;
+                  if Syn.Kind
+                    (Its_Tree.all,
+                     Syn.Nth_Generic_Formal
+                       (Its_Tree.all, Its_Node, Next_Formal))
+                      = Syn.Type_Formal
+                  then
+                     return Syn.Name
+                       (Its_Tree.all,
+                        Syn.Nth_Generic_Formal
+                          (Its_Tree.all, Its_Node, Next_Formal));
+                  end if;
+               end loop;
+               return Landin.Source.Names.No_Name;
+            end Next_Type_Formal;
+         begin
+            if Res.Sort_Of (Meanings.all, Routine) /= Res.Module_Function
+              or else Syn.Kind (Its_Tree.all, Its_Node)
+                /= Syn.Function_Declaration
+              or else Syn.Generic_Formal_Count (Its_Tree.all, Its_Node) = 0
+            then
+               return "";
+            end if;
+            for Index in 1 .. Syn.Argument_Count (Of_Tree, Call) loop
+               declare
+                  Argument : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Of_Tree, Call, Index);
+                  Is_Type : constant Boolean :=
+                    Syn.Kind (Of_Tree, Argument) = Syn.Name_Reference
+                    and then
+                      (for some Scalar in Landin.Types.Scalar_Name =>
+                         Spelled (Syn.Name (Of_Tree, Argument))
+                           = Landin.Types.Spelling (Scalar));
+                  Label : Landin.Source.Names.Name_Id :=
+                    Landin.Source.Names.No_Name;
+               begin
+                  if Is_Type then
+                     Label := Next_Type_Formal;
+                  elsif Next_Parameter
+                    < Syn.Parameter_Count (Its_Tree.all, Its_Node)
+                  then
+                     Next_Parameter := Next_Parameter + 1;
+                     Label := Syn.Name
+                       (Its_Tree.all,
+                        Syn.Nth_Parameter
+                          (Its_Tree.all, Its_Node, Next_Parameter));
+                  end if;
+                  if Label = Landin.Source.Names.No_Name then
+                     return "";
+                  end if;
+                  Ada.Strings.Unbounded.Append
+                    (Form,
+                     (if Index = 1 then "" else ", ") & Spelled (Label)
+                     & ": " & Landin.Source.Slice
+                       (Text, Syn.Where (Of_Tree, Argument)));
+               end;
+            end loop;
+            return Landin.Source.Slice
+                (Text, Syn.Where (Of_Tree, Syn.Callee_Of (Of_Tree, Call)))
+              & "(" & Ada.Strings.Unbounded.To_String (Form) & ")";
+         end;
+      end Named_Call_Form;
+
+      --  `module.case` when a module this scope imports whole declares a
+      --  public variant case called Named, or "" when none does.
+      function Imported_Case
+        (Named  : Landin.Source.Names.Name_Id;
+         Inside : Landin.Resolution.Scope_Id) return String;
+
+      function Imported_Case
+        (Named  : Landin.Source.Names.Name_Id;
+         Inside : Landin.Resolution.Scope_Id) return String
+      is
+         Found_As : Ada.Strings.Unbounded.Unbounded_String;
+
+         procedure Visit_Module
+           (Name : Landin.Source.Names.Name_Id;
+            Module : Landin.Modules.Module_Id);
+
+         procedure Visit_Module
+           (Name : Landin.Source.Names.Name_Id;
+            Module : Landin.Modules.Module_Id)
+         is
+            procedure Visit_Member (Id : Res.Declaration_Id);
+
+            procedure Visit_Member (Id : Res.Declaration_Id) is
+            begin
+               if Ada.Strings.Unbounded.Length (Found_As) = 0
+                 and then Res.Sort_Of (Meanings.all, Id) = Res.Case_Name
+                 and then Res.Name_Of (Meanings.all, Id) = Named
+               then
+                  Found_As := Ada.Strings.Unbounded.To_Unbounded_String
+                    (Spelled (Name) & "." & Spelled (Named));
+               end if;
+            end Visit_Member;
+         begin
+            Res.Each_Public_In_Module
+              (Meanings.all, Module, Visit_Member'Access);
+         end Visit_Module;
+      begin
+         if Res."=" (Inside, Res.No_Scope) then
+            return "";
+         end if;
+         Res.Each_Imported_Module (Meanings.all, Inside, Visit_Module'Access);
+         return Ada.Strings.Unbounded.To_String (Found_As);
+      end Imported_Case;
 
       --  A member a qualified selection or a selected import could have
       --  named: public ones only, since a module-internal one would be
@@ -873,6 +1025,52 @@ package body Landin.Stages.Resolution is
             return;
          end if;
 
+         --  D437: configuration already read this compiler fact in a
+         --  module value; its atom operand is no name to look up.
+         if Landin.Configuration.Fact_At
+           (Activity.all, Syn.Source_Of (Of_Tree), Node)
+           /= Landin.Configuration.No_Fact
+         then
+            return;
+         end if;
+
+         --  An atom fact compared outside configuration and module values
+         --  is one mistake: the fact is refused below, and its atom
+         --  operand, `linux` in `compiler.os == linux`, is the fact's
+         --  domain rather than a second unknown name.
+         if Syn.Kind (Of_Tree, Node) in Syn.Equal_To | Syn.Not_Equal_To then
+            declare
+               function Atom_Fact (Operand : Syn.Node_Id) return Boolean
+                 is (Syn.Kind (Of_Tree, Operand) = Syn.Member_Selection
+                     and then Syn.Kind
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Operand))
+                         = Syn.Name_Reference
+                     and then Spelled (Syn.Name
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Operand)))
+                         = "compiler"
+                     and then Spelled (Syn.Name (Of_Tree, Operand))
+                       in "arch" | "os" | "byte_order" | "build_mode");
+               function Atom_Word (Operand : Syn.Node_Id) return Boolean
+                 is (Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
+                     and then Spelled (Syn.Name (Of_Tree, Operand))
+                       in "x86_64" | "arm64" | "rv64" | "cortex_m0"
+                        | "synthetic_32" | "little" | "big" | "debug"
+                        | "release" | "linux" | "darwin" | "freebsd"
+                        | "freestanding");
+               Left : constant Syn.Node_Id := Syn.Left_Of (Of_Tree, Node);
+               Right : constant Syn.Node_Id := Syn.Right_Of (Of_Tree, Node);
+            begin
+               if (Atom_Fact (Left) and then Atom_Word (Right))
+                 or else (Atom_Fact (Right) and then Atom_Word (Left))
+               then
+                  Resolve
+                    (Of_Tree, (if Atom_Fact (Left) then Left else Right),
+                     Inside);
+                  return;
+               end if;
+            end;
+         end if;
+
          if Landin.Configuration.Assembly_Call
            (Spellings.all, Of_Tree, Node)
          then
@@ -1413,9 +1611,15 @@ package body Landin.Stages.Resolution is
                         Message => "`" & Spelled (Named)
                                    & "` is a type, and a type is not a"
                                    & " value",
-                        Note    => "[0700]: a value is converted to `"
-                                   & Spelled (Named) & "` by calling it, as"
-                                   & " in `" & Spelled (Named) & "(value)`",
+                        Note    =>
+                          (if Named_Call_Form (Of_Tree, Node) /= ""
+                           then "[1300]: a generic routine is given a type"
+                                & " by its formal's name, and then every"
+                                & " argument by name, as in `"
+                                & Named_Call_Form (Of_Tree, Node) & "`"
+                           else "[0700]: a value is converted to `"
+                                & Spelled (Named) & "` by calling it, as"
+                                & " in `" & Spelled (Named) & "(value)`"),
                         Into    => Found);
                   --  [1750]: the name is an argument of a call that the
                   --  line above ran on into, through a `(` that begins
@@ -1436,6 +1640,30 @@ package body Landin.Stages.Resolution is
                                    & " assign a value that begins with a"
                                    & " parenthesis to its place, or begin"
                                    & " a struct value with its type's name",
+                        Into    => Found);
+                  elsif Named /= Landin.Source.Names.No_Name
+                    and then Imported_Case (Named, Inside) /= ""
+                  then
+                     --  [1440]: an imported module's case is reached
+                     --  through its module's name, as everything else
+                     --  public in it is, unless the import selects it.
+                     Names.Report
+                       (Item    => Names.Unresolved_Name,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor (Of_Tree, Node),
+                        Message => "`" & Spelled (Named)
+                                   & "` is not declared in any scope this"
+                                   & " reaches",
+                        Note    => "[1440]: `" & Spelled (Named) & "` is a"
+                                   & " case of a type in an imported module,"
+                                   & " and is written with the module's"
+                                   & " name, `"
+                                   & Imported_Case (Named, Inside) & "`",
+                        Fixes   =>
+                          [Landin.Diagnostics.Fixes.Respell
+                             (Syn.Source_Of (Of_Tree),
+                              Syn.Anchor (Of_Tree, Node),
+                              Imported_Case (Named, Inside))],
                         Into    => Found);
                   elsif Named /= Landin.Source.Names.No_Name then
                      Names.Report

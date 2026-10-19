@@ -126,9 +126,9 @@ failure_case: (provider: type is mem.allocator, memory: provider,
         preserved = false
     end
     retried: bool = map.length(value) == 7 and has(value, k2, 22)
-                   and has(value, k4, 44) and has(value, k7, 77)
-                   and fault.frees(budget) == rollback_frees + 3
-                   and fault.live(budget) == 3
+                    and has(value, k4, 44) and has(value, k7, 77)
+                    and fault.frees(budget) == rollback_frees + 3
+                    and fault.live(budget) == 3
 
     expected_allocations: usize = 6 + allowed
     expected_attempts: usize = 7 + allowed

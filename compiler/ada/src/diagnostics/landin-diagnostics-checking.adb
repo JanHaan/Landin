@@ -50,6 +50,16 @@ package body Landin.Diagnostics.Checking is
             raise Compiler_Defect
               with Text & " was given a related label and no origin";
          end if;
+         --  A second place is a second place: a check that knows nothing of
+         --  its context names the construct it was written in, never the
+         --  refused span again.
+         if Landin.Source."=" (Related.Source, Source)
+           and then Landin.Source."=" (Related.Where, Where)
+         then
+            raise Compiler_Defect
+              with Text & " was given a secondary on its own span: "
+                   & Because;
+         end if;
 
          Add_Label
            (Built,

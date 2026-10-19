@@ -22,5 +22,9 @@ error[L0330]: assembly cannot alter frame, stack or reserved registers outside a
   --> ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn:4:5
   |
 4 |     assembler.block("mov r11, {v}", in v: u32 at general = value)
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn:4:5
+  |
+4 |     assembler.block("mov r11, {v}", in v: u32 at general = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

@@ -2,11 +2,19 @@ error[L0346]: this signature takes by value a C record that C reaches only throu
   --> ../tests/fixtures/negative/c-packed-by-value/program.ldn:11:1
    |
 11 | extern(c) send: (packet: wire) -> (status: i32)
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this C signature
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-by-value/program.ldn:11:18
+   |
+11 | extern(c) send: (packet: wire) -> (status: i32)
+   |                  ^^^^^^^^^^^^ this record crosses to C by pointer
   = note: D410/D413: a layout(c, packed) record, and one that ends in a flexible array member or holds such a record, crosses to C by pointer; pass `ptr` to the record instead
 error[L0346]: this signature takes by value a C record that C reaches only through a pointer
   --> ../tests/fixtures/negative/c-packed-by-value/program.ldn:12:1
    |
 12 | extern(c) receive: () -> (whole: holder)
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this C signature
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-by-value/program.ldn:12:27
+   |
+12 | extern(c) receive: () -> (whole: holder)
+   |                           ^^^^^^^^^^^^^ this record crosses to C by pointer
   = note: D410/D413: a layout(c, packed) record, and one that ends in a flexible array member or holds such a record, crosses to C by pointer; pass `ptr` to the record instead

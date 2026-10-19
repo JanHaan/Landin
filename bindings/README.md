@@ -22,7 +22,8 @@ generator guards.
 
 The generator writes exactly four files:
 
-- `bindings.ldn` contains `layout(c)` records, exact enum integer aliases and
+- `bindings.ldn` contains `layout(c)` and `layout(c, packed)` records, exact
+  enum integer aliases and
   constants, direct `extern(c)` declarations, and declarations for generated
   adapters;
 - `adapters.c` contains C-owned union/bitfield storage, object/TLS accessors,
@@ -219,7 +220,33 @@ a Landin `layout(c)` type and otherwise chooses C-owned opaque storage.
 `opaque` always keeps a complete record on the C side.
 
 Native records receive generated `_Static_assert`s for `sizeof`, `_Alignof`,
-and every `offsetof`. Unions and records containing bitfields never become
+and every `offsetof`.
+
+A struct carrying its own `__attribute__((packed))` becomes a
+`layout(c, packed)` record (D410): every field at alignment one, no padding.
+Its native form needs what D410 asks of it, so an array or record it holds
+by value must itself have alignment one (an array of one-byte scalars or of
+packed records, or a nested packed record); otherwise `auto` keeps it
+C-owned and opaque, whose accessors copy fields and never take a member's
+address. `#pragma pack`, a member's own `packed` attribute and an `aligned`
+attribute beside `packed` remain refused. A struct whose last field, after at
+least one other, is C's flexible array member (`T name[]`, or GNU's
+`T name[0]`) becomes a `layout(c)` or `layout(c, packed)` record whose last
+field is `[0]T` (D413); the member takes its element's alignment, or one in
+a packed record, so size and offsets are C's. Its elements are not part of
+the value: such a record has no opaque form, is no array element and no
+field of another record, and is refused wherever C would copy it by value.
+
+C reaches both kinds, and a record holding either by value, only through a
+pointer (D414). A pointer to such a record that the policy selects is typed
+`ptr` or `ptr mut` to its Landin record rather than an opaque byte pointer.
+An imported function taking or returning a packed record by value gets a
+generated wrapper that takes `ptr record` for the argument and writes the
+result through a `ptr mut record` first parameter, as opaque records do; a
+global of such a record gets typed `address`, `read` and `write` adapters
+that copy through pointers. Exports, callbacks and incoming-varargs handlers
+cannot carry one by value, because Landin's `extern(c)` signature cannot,
+and are refused. Unions and records containing bitfields never become
 byte-array Landin surrogates. They receive explicit nullable allocation,
 release, copy, size/alignment, and member accessor APIs. Named signed and
 unsigned bitfields are read and written through the compiler's member access;
@@ -386,8 +413,9 @@ type.
 The generator reports the selected declaration and position for missing,
 unsafe, or stale policies. It explicitly refuses selected extended/x87,
 complex, vector, 128-bit, atomic/volatile, old-style, non-C-calling-convention,
-attributed, flexible/zero-size, anonymous-aggregate, anonymous-unaliased, and
-unsupported array forms. It also refuses any wrapper that would require
+attributed (other than a record's own `packed`), misplaced flexible or
+zero-size, anonymous-aggregate, anonymous-unaliased, and unsupported array
+forms, and a flexible member's record by value. It also refuses any wrapper that would require
 forwarding an unknown C variadic tail. A Clang parse or generated-C validation
 failure is a hard error and publishes nothing.
 
@@ -430,7 +458,7 @@ checks relocated byte-for-byte generation, path-free metadata, ABI guards,
 precise refusal paths, and no replacement on failure. It compiles generated C
 for `x86_64-pc-linux-gnu`, then compiles and executes the same adapters locally
 to exercise union and signed/unsigned/zero-width bitfield access, by-value
-wrappers, nullable callback cells, globals, real two-thread TLS isolation, and
+wrappers (packed records' through typed pointers at an odd address), nullable callback cells, globals, real two-thread TLS isolation, and
 a mixed register/stack-sized incoming-varargs schema. Regression inputs also pin
 recursive retention and callback policy, unequal nested array extents, true enum
 compatible types, declaration identity, reserved names, ambient-environment
@@ -448,7 +476,8 @@ of frame-origin arguments.
 
 From the repository root, with `CLANG` naming the desired frontend (the
 gate's `bindings` job uses Ubuntu 24.04's `clang-19` at the version
-`environments/pins.sh` names):
+`environments/pins.sh` names; `nix develop` provides a `clang-19` that
+`CLANG=clang-19 python3 bindings/test.py` runs with, as the gate does):
 
 ```sh
 CLANG=${CLANG:-clang}
@@ -473,7 +502,13 @@ into a temporary directory and requires byte equality. The real
 Landin and exported Landin definitions from C, including unequal matrix extents,
 unnamed high-bit enum values, direct native reference results, opaque borrowed
 output results, pointer-returning callback invocation (present and absent), and
-a retaining global setter. Its reference-output calls use a static C source and
+a retaining global setter. Its packed and flexible-member records are
+compared with the C peer's `sizeof`, `_Alignof` and `offsetof`; C fills a
+packed record one byte past an aligned address and Landin reads it, Landin
+writes it and C checks it, the by-value wrappers and a packed global carry
+one, C calls an exported Landin handler with a packed record at an odd
+address, and Landin reads and writes a flexible member through the buffer's
+bytes at the member's offset. Its reference-output calls use a static C source and
 assert retained pointer identity, not just successful return. Linux execution
 remains a separate, mandatory compiler gate; the Python suite does not run
 `refine` or establish frame-origin negative diagnostics.

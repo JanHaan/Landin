@@ -8,7 +8,8 @@ package body Landin.Debugging is
      is (Info.Sources.Contains (Id));
 
    procedure Append
-     (Into : in out Information; Snapshot : Landin.Source.Snapshot)
+     (Into : in out Information; Snapshot : Landin.Source.Snapshot;
+      Recorded : String := "")
    is
    begin
       if Landin.Source.Id (Snapshot)
@@ -19,9 +20,24 @@ package body Landin.Debugging is
          raise Compiler_Defect with "debug source is not the compilation's";
       end if;
       Into.Described := Into.Described + 1;
+      Into.Recorded.Append
+        (Ada.Strings.Unbounded.To_Unbounded_String
+           (if Recorded = "" then Landin.Source.Name (Snapshot)
+            else Recorded));
    end Append;
 
    function Count (Info : Information) return Natural is (Info.Described);
+
+   function Recorded_Name
+     (Info : Information; Id : Landin.Source.Source_Id) return String
+   is
+   begin
+      if Id = Landin.Source.No_Source or else Natural (Id) > Count (Info) then
+         raise Compiler_Defect with "unknown debug source identity";
+      end if;
+      return Ada.Strings.Unbounded.To_String
+        (Info.Recorded (Positive (Id)));
+   end Recorded_Name;
 
    function Source
      (Info : aliased Information; Id : Landin.Source.Source_Id)

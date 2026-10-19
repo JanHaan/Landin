@@ -1,4 +1,8 @@
 error[L0344]: invalid constant memory ordering
+  --> ../tests/fixtures/negative/r630-store-acquire/program.ldn:5:38
+  |
+5 |     compiler.atomic_store(addr a, 1, compiler.acquire)
+  |                                      ^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/r630-store-acquire/program.ldn:5:5
   |
 5 |     compiler.atomic_store(addr a, 1, compiler.acquire)

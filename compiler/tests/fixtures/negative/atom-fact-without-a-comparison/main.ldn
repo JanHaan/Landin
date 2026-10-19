@@ -1,0 +1,8 @@
+system: bool = compiler.os
+
+public main: () -> (code: i32) =
+    code = 0
+    if compiler.os == linux then
+        code = 1
+    end if
+end main

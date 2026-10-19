@@ -20,7 +20,7 @@ public main: () -> (code: i32) =
     failed_deduced := deduced_forward(0, true) else 1
     failed_explicit := explicit_forward(halt: true, value: 0) else 1
     if first + second == 42 and failed_deduced == 1
-       and failed_explicit == 1
+      and failed_explicit == 1
     then
         code = 42
     else

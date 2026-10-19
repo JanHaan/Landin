@@ -1,12 +1,16 @@
-error[L0344]: register mask must fit its carrier
-  --> ../tests/fixtures/negative/r640-register-mask-width/program.ldn:8:5
-  |
-8 |     compiler.register_write(p, 0, compiler.normal_write, compiler.write_zero, 0x1_0000_0000)
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
-  = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes
 error[L0300]: `0x1_0000_0000` does not fit `u32`
   --> ../tests/fixtures/negative/r640-register-mask-width/program.ldn:8:79
   |
 8 |     compiler.register_write(p, 0, compiler.normal_write, compiler.write_zero, 0x1_0000_0000)
   |                                                                               ^^^^^^^^^^^^^
   = note: [1880]: a literal takes the type of its context and is checked there
+error[L0344]: register mask must fit its carrier
+  --> ../tests/fixtures/negative/r640-register-mask-width/program.ldn:8:79
+  |
+8 |     compiler.register_write(p, 0, compiler.normal_write, compiler.write_zero, 0x1_0000_0000)
+  |                                                                               ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r640-register-mask-width/program.ldn:8:5
+  |
+8 |     compiler.register_write(p, 0, compiler.normal_write, compiler.write_zero, 0x1_0000_0000)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes

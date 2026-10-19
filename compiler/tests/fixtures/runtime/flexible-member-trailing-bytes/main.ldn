@@ -25,7 +25,7 @@ end write_record
 --- The name of the record at `at`: the bytes from its offset to the NUL.
 name_at: (buffer: []u8, at: usize) -> (name: []u8 from buffer) =
     length := usize(buffer[at + offsetof directory_record.length])
-      | usize(buffer[at + offsetof directory_record.length + 1]) << 8
+              | usize(buffer[at + offsetof directory_record.length + 1]) << 8
     rest := buffer[at + offsetof directory_record.name..<at + length]
     mut end_at: usize = 0
     while rest[end_at] <> 0 do

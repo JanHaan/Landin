@@ -36,10 +36,10 @@ public main: () -> (code: i32) =
     closed: posix.descriptor =
         posix.open_at(posix.working_directory,
                       text.host_over("/dev/null"), posix.reading, 0)
-          else (problem)
-        said("open", problem)
-        return
-    end
+        else (problem)
+            said("open", problem)
+            return
+        end
     posix.close(closed) else (problem)
         said("close", problem)
         return

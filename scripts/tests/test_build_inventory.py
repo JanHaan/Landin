@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise build.sh's real invalidation decision, without invoking a builder."""
+import hashlib
 import os
 import re
 import tarfile
@@ -20,13 +21,25 @@ HELPERS = SCRIPT[SCRIPT.index("landin_paths() {"):
 MANIFEST = SCRIPT[SCRIPT.index("landin_manifest() {"):
                   SCRIPT.index('Incremental=')]
 DECISION = HELPERS + SCRIPT[SCRIPT.index(START):
-                            SCRIPT.index("\nNoop_Arguments=no")]
-BASE = ["1 10 /src/main.adb", "2 20 /src/host.c", "3 30 /src/host.h",
-        "4 40 /src/lib.gpr", "5 50 /scripts/build.sh",
-        "6 60 /scripts/build_lock.py", "mode debug tag test",
+                            SCRIPT.index("\n#  Only quiet output and a job count")]
+BASE = ["source 1 compiler/ada/src/main.adb", "source 2 compiler/ada/src/host.c",
+        "source 3 compiler/ada/src/host.h", "project 4 compiler/ada/lib.gpr",
+        "project 5 compiler/ada/landin.adc", "identity 6 0123abc clean",
+        "mode debug tag test", "switches ",
         "gnat pinned", "gprbuild pinned", "toolchain configuration selected",
         'toolchain c-driver {"path": "/tools/selected-cc", "sha256": "123"}',
         'toolchain gprbuild {"path": "/tools/builder", "sha256": "456"}']
+FIXED = [row for row in BASE if row.split(" ", 1)[0]
+         in ("project", "mode", "switches", "gnat", "gprbuild", "toolchain")]
+
+
+def changed(row):
+    """ROW with its content, not its path, changed."""
+    words = row.split(" ")
+    if words[0] in ("source", "project", "identity"):
+        words[1] = "9" + words[1]
+        return " ".join(words)
+    return row + " changed"
 
 
 class BuildInventory(unittest.TestCase):
@@ -72,12 +85,12 @@ class BuildInventory(unittest.TestCase):
 
     def test_inventory_add_remove_rename(self):
         for extension in ("c", "h", "adb", "ads"):
-            row = f"7 70 /src/member.{extension}"
+            row = f"source 7 compiler/ada/src/member.{extension}"
             for operation, old, new in (
                 ("add", BASE, BASE + [row]),
                 ("remove", BASE + [row], BASE),
                 ("rename", BASE + [row],
-                 BASE + [f"7 70 /src/renamed.{extension}"]),
+                 BASE + [f"source 7 compiler/ada/src/renamed.{extension}"]),
             ):
                 with self.subTest(extension=extension, operation=operation):
                     exists, text = self.decision(old, new)
@@ -86,20 +99,30 @@ class BuildInventory(unittest.TestCase):
 
     def test_source_content_is_incremental(self):
         for extension in ("adb", "c", "h"):
-            old = BASE + [f"0 70 /src/member.{extension}"]
-            new = BASE + [f"999 71 /src/member.{extension}"]
+            old = BASE + [f"source 0 compiler/ada/src/member.{extension}"]
+            new = BASE + [f"source 999 compiler/ada/src/member.{extension}"]
             with self.subTest(extension=extension):
                 exists, text = self.decision(old, new)
                 self.assertTrue(exists)
                 self.assertIn("using checksum recompilation", text)
 
     def test_fixed_identity_changes_are_clean(self):
-        for row in BASE[3:]:
+        for row in FIXED:
             with self.subTest(row=row):
-                new = ["9" + entry if entry == row else entry for entry in BASE]
+                new = [changed(entry) if entry == row else entry
+                       for entry in BASE]
                 exists, text = self.decision(BASE, new)
                 self.assertFalse(exists)
                 self.assertIn("inventory or project changed", text)
+
+    def test_provenance_change_is_incremental(self):
+        # An edit to a build script reaches the objects only through the
+        # provenance unit, so it recompiles that rather than everything.
+        new = [changed(row) if row.startswith("identity ") else row
+               for row in BASE]
+        exists, text = self.decision(BASE, new)
+        self.assertTrue(exists)
+        self.assertIn("using checksum recompilation", text)
 
     def test_unchanged_does_nothing(self):
         self.assertEqual(self.decision(BASE, BASE), (True, ""))
@@ -109,11 +132,11 @@ class BuildInventory(unittest.TestCase):
         self.assertTrue(exists)
         self.assertIn("did not finish (it failed); keeping what it compiled",
                       text)
-        changed = ["9 10 /src/main.adb"] + BASE[1:]
-        exists, text = self.decision(BASE, changed, unfinished="failed")
+        edited = [changed(BASE[0])] + BASE[1:]
+        exists, text = self.decision(BASE, edited, unfinished="failed")
         self.assertTrue(exists)
         self.assertIn("using checksum recompilation", text)
-        added = BASE + ["7 70 /src/member.adb"]
+        added = BASE + ["source 7 compiler/ada/src/member.adb"]
         exists, text = self.decision(BASE, added, unfinished="failed")
         self.assertFalse(exists)
         self.assertIn("inventory or project changed", text)
@@ -132,17 +155,23 @@ class BuildInventory(unittest.TestCase):
                 self.assertIn("rebuilding from clean, keeping bin/", text)
 
     def test_ordinary_gate_still_cleans_content_changes(self):
-        new = ["9 10 /src/main.adb"] + BASE[1:]
+        new = [changed(BASE[0])] + BASE[1:]
         exists, text = self.decision(BASE, new, incremental="no")
         self.assertFalse(exists)
         self.assertIn("sources changed since the last build", text)
 
     def test_failed_inventory_producers_abort(self):
-        changed = ["9 10 /src/main.adb"] + BASE[1:]
-        for tool in ("awk", "sort", "grep", "cat"):
+        edited = [changed(BASE[0])] + BASE[1:]
+        for tool in ("awk", "sort", "grep", "sed"):
             with self.subTest(tool=tool):
                 with self.assertRaises(subprocess.CalledProcessError):
-                    self.decision(BASE, changed, fail_tool=tool)
+                    self.decision(BASE, edited, fail_tool=tool)
+
+    def test_linked_rows_are_not_what_was_requested(self):
+        # The manifest as written also names what was linked; the decision
+        # compares only what the build was asked to build.
+        exists, text = self.decision(BASE + ["linked refine 0123"], BASE)
+        self.assertEqual((exists, text), (True, ""))
 
 
 class ManifestFailures(unittest.TestCase):
@@ -150,17 +179,36 @@ class ManifestFailures(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="landin-manifest-") as tmp:
             root = Path(tmp)
             ada = root / "compiler/ada"
-            files = ("compiler/ada/src/main.adb",
-                     "compiler/ada/tests/src/test.adb",
-                     "compiler/ada/library.gpr", "scripts/build.sh",
-                     "scripts/env.sh", "scripts/build_lock.py",
-                     "scripts/build_config.py", "scripts/build_identity.py")
-            for name in files:
+            files = {
+                "compiler/ada/src/main.adb": "main\n",
+                "compiler/ada/src/host.c": "host\n",
+                "compiler/ada/tests/src/test.adb": "test\n",
+                "compiler/ada/refine.gpr":
+                    'with "common.gpr";\nproject Refine is\n'
+                    '   for Languages use ("Ada", "C");\n'
+                    '   for Source_Dirs use ("src");\nend Refine;\n',
+                "compiler/ada/landin_tests.gpr":
+                    'project Landin_Tests is\n'
+                    '   for Source_Dirs use ("tests/src");\n'
+                    'end Landin_Tests;\n',
+                "compiler/ada/common.gpr":
+                    'abstract project Common is\n   package Compiler is\n'
+                    '      for Local_Configuration_Pragmas use "local.adc";\n'
+                    '   end Compiler;\nend Common;\n',
+                "compiler/ada/local.adc": "pragma Ada_2022;\n",
+                "scripts/build.sh": "build\n", "scripts/env.sh": "env\n",
+                "scripts/build_lock.py": "lock\n",
+            }
+            for name, text in files.items():
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(name + "\n")
+                path.write_text(text)
             shutil.copyfile(ROOT / "scripts/build_identity.py",
                             root / "scripts/build_identity.py")
+            if failure == "inputs":
+                (root / "compiler/ada/refine.gpr").write_text(
+                    'project Refine is\n   for Languages use ("Rust");\n'
+                    'end Refine;\n')
             identity_source = root / "generated/landin-build_identity.ads"
             (root / "scripts/build_config.py").write_text(
                 "raise SystemExit(23)\n" if failure == "configuration" else
@@ -172,15 +220,7 @@ class ManifestFailures(unittest.TestCase):
                 path.write_text("#!/bin/sh\nprintf '%s\\n' 'pinned banner' "
                                 "'additional version line'\n")
                 path.chmod(0o755)
-            if failure in ("source", "project", "script"):
-                pattern = {"source": "*.adb", "project": "*.gpr",
-                           "script": "*/scripts/build.sh"}[failure]
-                body = ("#!/bin/sh\ncase \"$1\" in " + pattern
-                        + ") exit 23 ;; esac\nexec "
-                        + shlex.quote(shutil.which("cksum")) + ' "$@"\n')
-                (fake / "cksum").write_text(body)
-                (fake / "cksum").chmod(0o755)
-            elif failure and failure != "configuration":
+            if failure and failure not in ("configuration", "inputs"):
                 (fake / failure).write_text("#!/bin/sh\nexit 23\n")
                 (fake / failure).chmod(0o755)
             written = root / "saved-manifest"
@@ -188,35 +228,47 @@ class ManifestFailures(unittest.TestCase):
             result = subprocess.run(
                 ["sh", "-eu", "-c", MANIFEST
                  + 'printf \'%s\\n\' "$Current" > "$WRITTEN"\n'],
-                text=True, capture_output=True, timeout=5,
+                text=True, capture_output=True, timeout=10,
                 env={**os.environ, "PATH": str(fake) + os.pathsep
                      + os.environ["PATH"], "LANDIN_ROOT": str(root),
                      "LANDIN_ADA_DIR": str(ada), "LANDIN_BUILD_MODE": "debug",
                      "LANDIN_BUILD_TAG": "test", "WRITTEN": str(written),
+                     "Switches": "-R",
                      "Configuration": str(root / "native.cgpr"),
                      "Identity_Source": str(identity_source)})
             text = written.read_text()
             if not failure:
                 rows = subprocess.check_output(
-                    ["cksum", *[str(root / name) for name in files]],
-                    text=True, timeout=5).splitlines()
-                identity_row = subprocess.check_output(
                     ["python3", str(root / "scripts/build_identity.py"),
                      "--root", str(root), "--mode", "debug", "--output",
-                     str(identity_source), "--manifest"], text=True).strip()
-                expected = (sorted(rows[:2]) + rows[2:3] + sorted(rows[3:])
-                            + [identity_row, "mode debug tag test", "gnat pinned banner",
-                               "gprbuild pinned banner",
-                               "toolchain configuration selected"])
+                     str(identity_source), "--manifest"],
+                    text=True).splitlines()
+                self.assertEqual(
+                    [row.split()[0] + " " + row.split()[-1]
+                     for row in rows[:-1]],
+                    ["project compiler/ada/common.gpr",
+                     "project compiler/ada/landin_tests.gpr",
+                     "project compiler/ada/local.adc",
+                     "project compiler/ada/refine.gpr",
+                     "source compiler/ada/src/host.c",
+                     "source compiler/ada/src/main.adb",
+                     "source compiler/ada/tests/src/test.adb"])
+                self.assertTrue(rows[-1].startswith("identity "))
+                expected = rows + ["mode debug tag test", "switches -R",
+                                   "gnat pinned banner",
+                                   "gprbuild pinned banner",
+                                   "toolchain configuration selected"]
                 self.assertEqual(text.splitlines(), expected)
+                # The scripts that run the build are not inputs of it.
+                self.assertNotIn("scripts/", text)
             return result.returncode, text
 
     def test_manifest_format_is_preserved(self):
         self.assertEqual(self.manifest()[0], 0)
 
     def test_failed_manifest_producer_preserves_previous_manifest(self):
-        for failure in ("find", "source", "project", "script", "sort",
-                        "gnat", "gprbuild", "sed", "configuration"):
+        for failure in ("python3", "inputs", "gnat", "gprbuild", "sed",
+                        "configuration"):
             with self.subTest(failure=failure):
                 code, text = self.manifest(failure)
                 self.assertNotEqual(code, 0)
@@ -233,7 +285,7 @@ class ConfiguredBuild(unittest.TestCase):
         scripts = self.root / "scripts"
         scripts.mkdir()
         for name in ("build.sh", "build_config.py", "build_identity.py",
-                     "build_lock.py"):
+                     "build_lock.py", "build_link.py"):
             shutil.copyfile(ROOT / "scripts" / name, scripts / name)
         (scripts / "env.sh").write_text('''set -eu
 LANDIN_ROOT="$FAKE_ROOT"
@@ -247,11 +299,16 @@ landin_require() { command -v "$1" >/dev/null; }
 ''')
         self.executable(scripts / "toolchain.sh", "#!/bin/sh\nexit 0\n")
         ada = self.root / "compiler/ada"
-        for name in ("src/main.adb", "src/host.c", "tests/src/test.adb",
-                     "refine.gpr", "landin_tests.gpr"):
+        for name in ("src/main.adb", "src/host.c", "tests/src/test.adb"):
             path = ada / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(name + "\n")
+        (ada / "refine.gpr").write_text(
+            'project Refine is\n   for Languages use ("Ada", "C");\n'
+            '   for Source_Dirs use ("src");\nend Refine;\n')
+        (ada / "landin_tests.gpr").write_text(
+            'project Landin_Tests is\n   for Source_Dirs use ("tests/src");\n'
+            'end Landin_Tests;\n')
         fake = self.root / "fake"
         fake.mkdir()
         self.driver = fake / "selected cc"
@@ -293,12 +350,15 @@ exec_dir = build / next(arg.split("=", 1)[1] for arg in sys.argv[1:]
                         if arg.startswith("-XLANDIN_EXEC_SUBDIR="))
 exec_dir.mkdir(parents=True, exist_ok=True)
 (build / "refine-obj").mkdir(exist_ok=True)
-(build / "refine-obj" / "built.o").write_text("object")
+(build / "refine-obj" / "built.o").write_text(
+    "object " + os.environ.get("FAKE_OBJECT", ""))
 project = sys.argv[sys.argv.index("-P") + 1]
 name = {"refine.gpr": "refine", "landin_tests.gpr": "landin_tests"}[project]
 path = exec_dir / name
-path.write_text("#!/bin/sh\\necho " + artifact + "\\n")
-path.chmod(0o755)
+# As GPRbuild can: an executable judged current by time stamps is kept.
+if not (os.environ.get("FAKE_KEEP_EXECUTABLE") and path.exists()):
+    path.write_text("#!/bin/sh\\necho " + artifact + "\\n")
+    path.chmod(0o755)
 ''')
         self.executable(fake / "gprconfig", '''#!/usr/bin/env python3
 import os, pathlib, sys
@@ -333,6 +393,16 @@ path.write_text("-- generated at " + str(path) + "\\n"
     def executable(path, text):
         path.write_text(text)
         path.chmod(0o755)
+
+    @staticmethod
+    def requested(manifest):
+        """What a manifest says was asked for, without what was linked."""
+        return [row for row in manifest.read_text().splitlines()
+                if not row.startswith("linked ")]
+
+    def linked(self, manifest):
+        return [row for row in manifest.read_text().splitlines()
+                if row.startswith("linked ")]
 
     def run_build(self, *arguments, extra=None):
         return subprocess.run(
@@ -413,8 +483,8 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual([call[call.index("-P") + 1]
                           for call in self.calls()],
                          ["refine.gpr", "refine.gpr", "landin_tests.gpr"])
-        self.assertEqual(self.tests_manifest.read_text(),
-                         self.manifest.read_text())
+        self.assertEqual(self.requested(self.tests_manifest),
+                         self.requested(self.manifest))
         current = self.run_build()
         self.assertIn("developer build is current", current.stdout)
         self.assertEqual(len(self.calls()), 3)
@@ -433,8 +503,8 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(full.returncode, 0, full.stderr)
         self.assertEqual(self.calls()[-1][self.calls()[-1].index("-P") + 1],
                          "landin_tests.gpr")
-        self.assertEqual(self.tests_manifest.read_text(),
-                         self.manifest.read_text())
+        self.assertEqual(self.requested(self.tests_manifest),
+                         self.requested(self.manifest))
 
     def test_imported_build_requires_matching_source_and_executables(self):
         first = self.run_build()
@@ -465,8 +535,10 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(self.run_build().returncode, 0)
         calls = self.calls()
         manifest = self.manifest.read_text()
+        tests = self.tests_manifest.read_text()
         reuse = {"LANDIN_BUILD_REUSE": "yes", "LANDIN_BUILD_INCREMENTAL": "no"}
-        for stamp in (None, "", "different source and toolchain\n"):
+        for stamp in (None, "", "different source and toolchain\n",
+                      manifest):
             with self.subTest(stamp=stamp):
                 if stamp is None:
                     self.tests_manifest.unlink()
@@ -477,7 +549,7 @@ path.write_text("-- generated at " + str(path) + "\\n"
                 self.assertIn("imported", result.stderr)
                 self.assertEqual(self.calls(), calls)
                 self.assertEqual(self.manifest.read_text(), manifest)
-        self.tests_manifest.write_text(manifest)
+        self.tests_manifest.write_text(tests)
         self.assertEqual(self.run_build("-q", extra=reuse).returncode, 0)
         self.assertEqual(self.calls(), calls)
 
@@ -557,9 +629,13 @@ path.write_text("-- generated at " + str(path) + "\\n"
                     first = self.run_build(extra=extra)
                     self.assertEqual(first.returncode, 0, first.stderr)
                     changed = self.run_build(
-                        "-j1", extra={**extra, "FAKE_EDIT_ON_PROJECT": project})
+                        "-k", extra={**extra, "FAKE_EDIT_ON_PROJECT": project})
                     self.assertEqual(changed.returncode, 1, changed.stderr)
-                    self.assertIn("sources changed during build", changed.stderr)
+                    self.assertIn("sources changed while this build ran",
+                                  changed.stderr)
+                    self.assertIn("compiler/ada/src/main.adb changed",
+                                  changed.stderr)
+                    self.assertIn("run the build again", changed.stderr)
                     self.assertFalse(self.manifest.exists())
                     marker = self.build / "stale-object"
                     marker.write_text("old object")
@@ -579,13 +655,14 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(published.read_bytes(),
                          (self.build / "link/refine").read_bytes())
         identity = published.stat().st_ino
-        failed = self.run_build("-j1", extra={"FAKE_BUILD_FAILURE": "compile"})
+        # -k, unlike a job count, is an argument a current build still runs.
+        failed = self.run_build("-k", extra={"FAKE_BUILD_FAILURE": "compile"})
         self.assertEqual(failed.returncode, 4, failed.stderr)
         self.assertEqual(published.stat().st_ino, identity)
         self.assertEqual((self.build / "build-state").read_text(), "failed\n")
         for incremental in ("yes", "no"):
             with self.subTest(incremental=incremental):
-                failed = self.run_build("-j1", extra={
+                failed = self.run_build("-k", extra={
                     "FAKE_BUILD_FAILURE": "compile",
                     "LANDIN_BUILD_INCREMENTAL": incremental})
                 self.assertEqual(failed.returncode, 4, failed.stderr)
@@ -640,6 +717,61 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(sorted(p.name for p in published.parent.iterdir()),
                          ["landin_tests", "refine"])
 
+    def test_executable_not_relinked_from_changed_objects_is_relinked(self):
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        linked = self.linked(self.manifest)
+        # GPRbuild judged the executable current by its time stamps although
+        # an object it links changed: the build relinks it.
+        again = self.run_build("-k", extra={"FAKE_KEEP_EXECUTABLE": "yes",
+                                            "FAKE_OBJECT": "changed"})
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertIn("link/refine was not relinked and refine-obj/built.o"
+                      " changed since it was linked; relinking it",
+                      again.stderr)
+        projects = [call[call.index("-P") + 1] for call in self.calls()]
+        self.assertEqual(projects[2:], ["refine.gpr", "refine.gpr",
+                                        "landin_tests.gpr"])
+        self.assertEqual(self.linked(self.manifest), linked)
+        record = json.loads((self.build / "link/.refine.linked").read_text())
+        self.assertEqual(record["inputs"]["refine-obj/built.o"],
+                         hashlib.sha256(b"object changed").hexdigest())
+
+    def test_executable_with_no_link_record_is_relinked(self):
+        self.assertEqual(self.run_build().returncode, 0)
+        (self.build / "link/.landin_tests.linked").unlink()
+        again = self.run_build("-k", extra={"FAKE_KEEP_EXECUTABLE": "yes"})
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertIn("link/landin_tests was not relinked and nothing records"
+                      " what it was linked from", again.stderr)
+
+    def test_published_executable_must_be_the_one_linked(self):
+        self.assertEqual(self.run_build().returncode, 0)
+        published = self.build / "bin/refine"
+        linked = published.read_text()
+        published.write_text("#!/bin/sh\necho replaced\n")
+        reuse = {"LANDIN_BUILD_REUSE": "yes", "LANDIN_BUILD_INCREMENTAL": "no"}
+        imported = self.run_build("-q", extra=reuse)
+        self.assertEqual(imported.returncode, 1)
+        self.assertIn("bin/refine is not the executable the last build linked",
+                      imported.stderr)
+        calls = len(self.calls())
+        current = self.run_build()
+        self.assertEqual(current.returncode, 0, current.stderr)
+        self.assertNotIn("developer build is current", current.stdout)
+        self.assertIn("bin/refine is not the executable the last build linked",
+                      current.stderr)
+        self.assertEqual(len(self.calls()), calls + 2)
+        self.assertEqual(published.read_text(), linked)
+        self.assertIn("developer build is current", self.run_build().stdout)
+
+    def test_job_count_alone_leaves_a_current_build_alone(self):
+        self.assertEqual(self.run_build().returncode, 0)
+        calls = self.calls()
+        result = self.run_build("-j6", "-q")
+        self.assertIn("developer build is current", result.stdout)
+        self.assertEqual(self.calls(), calls)
+
     def test_disk_full_reports_what_was_free(self):
         for failure in ("disk", "compile"):
             with self.subTest(failure=failure):
@@ -692,6 +824,86 @@ path.write_text("-- generated at " + str(path) + "\\n"
                 self.assertIn("owns the native GPR configuration", result.stderr)
                 self.assertEqual(self.manifest.read_text(), old)
                 self.assertEqual(self.calls(), calls)
+
+
+class DeveloperScripts(unittest.TestCase):
+    """What the developer wrappers do before any build or interpreter."""
+
+    def bare_path(self, directory):
+        # The tools env.sh and the usage need, without python3.
+        for tool in ("sh", "dirname", "uname", "tr", "sed", "awk", "cat"):
+            os.symlink(shutil.which(tool), directory / tool)
+        return str(directory)
+
+    def test_help_needs_no_build_and_no_python(self):
+        with tempfile.TemporaryDirectory(prefix="landin-help-") as tmp:
+            path = self.bare_path(Path(tmp))
+            for script, name in (("test.sh", "scripts/test.sh"),
+                                 ("dev-test.sh", "scripts/dev-test.sh")):
+                with self.subTest(script=script):
+                    result = subprocess.run(
+                        ["sh", str(ROOT / "scripts" / script), "--help"],
+                        env={"PATH": path}, capture_output=True, text=True,
+                        timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(
+                        "usage: " + name + " [--record | --fixture=CLASS/NAME"
+                        " | --suite=NAME ... --case=SUITE/NAME ...]",
+                        result.stdout)
+                    self.assertIn("--shard=I/N", result.stdout)
+        source = (ROOT / "compiler/ada/tests/src/landin_tests.adb").read_text()
+        declared = source[source.index("Expected_Suites : constant"):]
+        declared = declared[:declared.index("];")]
+        suites = [name.strip() for name in re.findall(r'"([^"]*)"', declared)]
+        self.assertGreater(len(suites), 10)
+        listed = result.stdout.split("Suites, for --suite=NAME and"
+                                     " --case=SUITE/NAME:\n")[1]
+        self.assertEqual([line.strip() for line in listed.splitlines()], suites)
+
+    def test_missing_python_names_the_development_shell(self):
+        with tempfile.TemporaryDirectory(prefix="landin-python-") as tmp:
+            path = self.bare_path(Path(tmp))
+            for script in ("dev-build.sh", "dev-test.sh", "build.sh"):
+                with self.subTest(script=script):
+                    result = subprocess.run(
+                        ["sh", str(ROOT / "scripts" / script)],
+                        env={"PATH": path}, capture_output=True, text=True,
+                        timeout=10)
+                    self.assertEqual(result.returncode, 127)
+                    self.assertIn("landin: python3 is not on PATH",
+                                  result.stderr)
+                    self.assertIn("nix develop", result.stderr)
+
+    def test_variant_has_a_tree_of_its_own(self):
+        with tempfile.TemporaryDirectory(prefix="landin-variant-") as tmp:
+            scripts = Path(tmp) / "scripts"
+            scripts.mkdir()
+            shutil.copyfile(ROOT / "scripts/env.sh", scripts / "env.sh")
+            (scripts / "probe.sh").write_text(
+                '. "$(dirname -- "$0")/env.sh"\n'
+                'echo "$LANDIN_BUILD_TAG $LANDIN_BUILD_DIR"\n'
+                'sh -c \'echo "inherited ${LANDIN_BUILD_VARIANT:-none}'
+                ' $LANDIN_BUILD_TAG"\'\n')
+            def probe(**extra):
+                return subprocess.run(
+                    ["sh", str(scripts / "probe.sh")], capture_output=True,
+                    text=True, timeout=10,
+                    env={"PATH": os.environ["PATH"],
+                         "LANDIN_BUILD_TAG": "nix-x86_64-linux", **extra})
+            plain = probe().stdout.split()
+            self.assertEqual(plain[0], "nix-x86_64-linux")
+            variant = probe(LANDIN_BUILD_VARIANT="inliner")
+            self.assertEqual(variant.returncode, 0, variant.stderr)
+            words = variant.stdout.split()
+            self.assertEqual(words[0], "nix-x86_64-linux.inliner")
+            self.assertTrue(words[1].endswith(
+                "compiler/ada/build/nix-x86_64-linux.inliner/debug"))
+            # Applied once: a nested command keeps the tree and adds nothing.
+            self.assertEqual(words[2:], ["inherited", "none",
+                                         "nix-x86_64-linux.inliner"])
+            refused = probe(LANDIN_BUILD_VARIANT="../escape")
+            self.assertEqual(refused.returncode, 2)
+            self.assertIn("LANDIN_BUILD_VARIANT must match", refused.stderr)
 
 
 class BuildArchives(unittest.TestCase):

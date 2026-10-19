@@ -1,0 +1,14 @@
+--  An applied name that names nothing is a misspelling, as a bare one is,
+--  and is offered the near names, in a signature and in a body.
+shelf: type (item: type) = struct
+    count: usize
+end shelf
+
+take: (source: shlf(u8)) -> (code: i32) =
+    code = i32(source.count)
+end take
+
+public main: () -> (code: i32) =
+    s: shlf(u8) = (count: 3)
+    code = i32(s.count)
+end main

@@ -44,9 +44,88 @@ class LexicalCache(unittest.TestCase):
         for text in examples:
             with self.subTest(text=text):
                 cached = CHECK.landin_tokens(text, signs, trees)
-                with patch.object(CHECK, "lru_cache", side_effect=lambda **kw: lambda f: f):
+                #  The lexical answers live with the grammar's analysis, so
+                #  forgetting it is what makes the second reading uncached.
+                with patch.object(CHECK, "lru_cache", side_effect=lambda **kw: lambda f: f), \
+                        patch.object(CHECK.grammar_analysis, "last", None):
                     uncached = CHECK.landin_tokens(text, signs, trees)
                 self.assertEqual(cached, uncached)
+
+
+class PrunedRecogniser(unittest.TestCase):
+    """The compiled, pruned recogniser answers what the unpruned one does."""
+
+    def unpruned(self, rules, trees, tokens):
+        with patch.object(CHECK, "compiled_recogniser", return_value=None), \
+                patch.object(CHECK.grammar_analysis, "last", None):
+            return CHECK.grammar_recognises(rules, trees, tokens)
+
+    def test_the_corpus_gets_the_same_verdict_both_ways(self):
+        rules, trees, problems = CHECK.read_grammar(str(ROOT / "spec.md"))
+        self.assertEqual(problems, [])
+        signs = CHECK.grammar_signs(trees)
+        fixtures = ROOT / "compiler/tests/fixtures"
+        #  A slice of each, small sources only, since the unpruned side
+        #  is the slow one: refusals are where a wrongly pruned arm would
+        #  show, and acceptances where a missing one would.
+        def small(kind, step):
+            return [path for path in sorted((fixtures / kind).glob("*/*.ldn"))
+                    if path.stat().st_size < 2000][::step]
+        sources = small("negative", 12) + small("positive", 40)
+        verdicts = set()
+        for path in sources:
+            text = path.read_bytes().decode("latin-1")
+            tokens, _ = CHECK.landin_tokens(text, signs, trees)
+            if tokens is None:
+                continue
+            with self.subTest(source=str(path.relative_to(ROOT))):
+                pruned = CHECK.grammar_recognises(rules, trees, tokens)
+                self.assertEqual(pruned,
+                                 self.unpruned(rules, trees, tokens))
+                verdicts.add(pruned)
+        self.assertEqual(verdicts, {True, False})
+
+    def test_choices_and_repetition_agree_on_a_small_grammar(self):
+        rules = {"keyword": '"if"'}
+        trees = {"program": ("seq", [("*", ("rule", "statement"))]),
+                 "statement": ("alt", [
+                     ("seq", [("lit", "if"), ("rule", "identifier"),
+                              ("?", ("seq", [("lit", "else")])),
+                              ("lit", ";")]),
+                     ("seq", [("rule", "identifier"), ("lit", "="),
+                              ("+", ("rule", "literal")), ("lit", ";")]),
+                     ("seq", [("?", ("lit", "@")), ("lit", ";")])])}
+        cases = [[], [("sign", ";")],
+                 [("word", "if"), ("word", "x"), ("sign", ";")],
+                 [("word", "if"), ("word", "if"), ("sign", ";")],
+                 [("word", "if"), ("word", "x"), ("word", "else"),
+                  ("sign", ";"), ("sign", "@"), ("sign", ";")],
+                 [("word", "x"), ("sign", "="), ("integer", "1"),
+                  ("word", "true"), ("sign", ";")],
+                 [("word", "x"), ("sign", "="), ("sign", ";")],
+                 [("word", "x"), ("sign", "=")]]
+        for tokens in cases:
+            with self.subTest(tokens=tokens):
+                self.assertEqual(
+                    CHECK.grammar_recognises(rules, trees, tokens),
+                    self.unpruned(rules, trees, tokens))
+
+    def test_left_recursion_is_still_reached_and_refused(self):
+        rules = {"keyword": ""}
+        trees = {"program": ("alt", [
+                     ("seq", [("rule", "program"), ("lit", "+")]),
+                     ("seq", [("lit", "x")])])}
+        self.assertIsNone(CHECK.grammar_analysis(trees)["derive"])
+        with self.assertRaises(CHECK.LeftRecursion):
+            CHECK.grammar_recognises(rules, trees, [("sign", "+")])
+
+    def test_a_grammar_edited_in_place_is_analysed_again(self):
+        rules = {"keyword": ""}
+        trees = {"program": ("seq", [("lit", "x")])}
+        self.assertTrue(CHECK.grammar_recognises(rules, trees, [("word", "x")]))
+        trees["program"][1][0] = ("lit", "y")
+        self.assertFalse(CHECK.grammar_recognises(rules, trees, [("word", "x")]))
+        self.assertTrue(CHECK.grammar_recognises(rules, trees, [("word", "y")]))
 
 
 class GrammarCorpusCache(unittest.TestCase):

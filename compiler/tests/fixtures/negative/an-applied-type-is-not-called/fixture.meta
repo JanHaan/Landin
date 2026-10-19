@@ -1,0 +1,9 @@
+class: negative
+summary: an applied type called with labelled fields is refused naming the struct value written against the declared type
+program: program.ldn
+codes: L0103
+constructs: 0710, 1350, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/an-applied-type-is-not-called/program.ldn
+status: 1

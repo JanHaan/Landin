@@ -17,6 +17,7 @@ With Node.js available:
 ```sh
 npm install
 npm run generate
+export TREE_SITTER_LIBDIR="$(mktemp -d)"   # a fresh parser library; see below
 npm test
 tree-sitter highlight ../tests/structural.ldn
 ```
@@ -35,3 +36,25 @@ Their [MIT notice](src/tree_sitter/LICENSE) preserves the
 Keep that notice beside the headers when distributing this parser or
 regenerating its support files. Landin-authored grammar, queries and scanner
 retain the repository's dual license.
+
+## The CLI runs a cached parser
+
+`tree-sitter parse`, `test`, `highlight` and `query` do not run the parser in
+`src/`. They compile `src/parser.c` and `src/scanner.c` into a shared library,
+`$XDG_CACHE_HOME/tree-sitter/lib/landin.so` (`~/.cache/tree-sitter/lib/`
+by default), and load that, compiling again only when a source file is newer
+than the library. A grammar checked out, unpacked or copied with older
+timestamps therefore runs whatever grammar was compiled there last, without a
+word. `--rebuild` does not settle it: with the pinned 0.26.9 CLI and no working
+C compiler, `parse --rebuild` keeps the cached library and still exits 0. Give
+each run a library directory of its own, which the CLI must compile into and
+which fails when it cannot:
+
+```sh
+TREE_SITTER_LIBDIR="$(mktemp -d)" tree-sitter parse ../tests/structural.ldn
+```
+
+`../test.sh` does the same with a fresh `XDG_CACHE_HOME`, so its verdicts are
+always about the parser in this checkout. Run the CLI from this directory: it
+finds the grammar in the current directory, since no parser directories are
+configured.

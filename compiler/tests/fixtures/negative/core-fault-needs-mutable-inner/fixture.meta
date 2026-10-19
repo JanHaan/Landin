@@ -1,3 +1,5 @@
+# compiler/tests/fuzz/fuzz.py opens this fixture before its mutants and
+# requires the first of its codes on the line its expected.txt gives.
 class: negative
 summary: a counted wrapper requires writable caller-owned state for its injector
 expect: expected.txt

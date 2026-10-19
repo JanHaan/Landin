@@ -50,7 +50,7 @@ public main: () -> (code: i32) =
         diagnostic: [3]u8 = [79, 75, 10]
         error_stream := io.err(host)
         io.write(host, error_stream, diagnostic[0..<3])
-          else (write_problem)
+            else (write_problem)
             _ = write_problem
             code = fail_code
             return

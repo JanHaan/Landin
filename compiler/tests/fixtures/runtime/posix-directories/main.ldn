@@ -62,9 +62,9 @@ listed: () -> (seen: u32) ! posix.errno =
     loop do
         entry: posix.directory_entry =
             posix.read_directory(stream, buffer[0..<1024]) else (problem)
-            posix.close_directory(stream) else none
-            fail problem
-        end
+                posix.close_directory(stream) else none
+                fail problem
+            end
         name: text.host_string = entry.name
         spelled: []u8 = text.host_bytes(name)
         break when lenof spelled == 0
@@ -109,9 +109,9 @@ public main: () -> (code: i32) =
     made: posix.descriptor =
         posix.open_at(posix.working_directory, text.host_over(inside),
                       posix.writing, 0o644) else (problem)
-        said("create", problem)
-        return
-    end
+            said("create", problem)
+            return
+        end
     posix.close(made) else (problem)
         said("close", problem)
         return
@@ -141,30 +141,30 @@ public main: () -> (code: i32) =
     absent: posix.directory_stream =
         posix.open_directory(posix.working_directory,
                              text.host_over("posix-directories-absent"))
-          else (problem)
-        said("absent", problem)
-        return when problem <> posix.enoent
-        posix.directory_stream(descriptor: posix.standard_input, stream: 0,
-                               filled: 0, cursor: 0, finished: true)
-    end
+        else (problem)
+            said("absent", problem)
+            return when problem <> posix.enoent
+            posix.directory_stream(descriptor: posix.standard_input, stream: 0,
+                                   filled: 0, cursor: 0, finished: true)
+        end
     _ = absent.finished
     code = 6
     as_file: posix.directory_stream =
         posix.open_directory(posix.working_directory,
                              text.host_over(inside)) else (problem)
-        said("file", problem)
-        return when problem <> posix.enotdir
-        posix.directory_stream(descriptor: posix.standard_input, stream: 0,
-                               filled: 0, cursor: 0, finished: true)
-    end
+            said("file", problem)
+            return when problem <> posix.enotdir
+            posix.directory_stream(descriptor: posix.standard_input, stream: 0,
+                                   filled: 0, cursor: 0, finished: true)
+        end
     _ = as_file.finished
     code = 7
     mut stream: posix.directory_stream =
         posix.open_directory(posix.working_directory,
                              text.host_over(top)) else (problem)
-        said("open", problem)
-        return
-    end
+            said("open", problem)
+            return
+        end
     mut small: [16]u8 = zeroed
     _ = posix.read_directory(stream, small[0..<16]) else (problem)
         said("small", problem)

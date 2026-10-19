@@ -1,0 +1,9 @@
+class: negative
+summary: D438 admits an immutable module integer as an array bound, so a mut module value is refused as storage the program may write, a bool module value as no count, and a module value whose image calls a routine only once, where the module value is refused
+program: main.ldn
+codes: L0305, L0305, L0305
+constructs: 0520, 1940
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/fixed-array-bound-module-value/main.ldn
+status: 1

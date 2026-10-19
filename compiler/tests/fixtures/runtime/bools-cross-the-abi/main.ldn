@@ -10,10 +10,10 @@ end both
 
 public main: () -> (code: i32) =
     if agrees(true, 7)
-        and not agrees(false, 7)
-        and not agrees(true, 8)
-        and both(false, true)
-        and not both(false, false)
+      and not agrees(false, 7)
+      and not agrees(true, 8)
+      and both(false, true)
+      and not both(false, false)
     then
         code = 42
     else

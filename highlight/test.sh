@@ -27,7 +27,10 @@ fi
 
 if test "$lsp_emacs" = false; then
 python3 "$root/highlight/generate.py" --check
-python3 "$root/highlight/test_adapters.py"
+#  The editor pin is checked last, after every pass below, so that an
+#  uncommitted grammar change still gets its structural and corpus verdicts;
+#  the run still fails on it, so the gate is not weakened.
+python3 "$root/highlight/test_adapters.py" --without-grammar-pin
 python3 "$root/highlight/tests/test_adapters_revision.py"
 
 if test -d "$root/highlight/textmate/node_modules" && command -v node >/dev/null 2>&1; then
@@ -263,5 +266,6 @@ if test -n "${LANDIN_REFINE-}"; then
 fi
 
 if test "$lsp_emacs" = false; then
+    python3 "$root/highlight/grammar_pin.py" --check
     echo "highlight packages clean"
 fi

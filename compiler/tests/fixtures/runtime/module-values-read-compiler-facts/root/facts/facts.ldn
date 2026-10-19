@@ -1,0 +1,6 @@
+--- D437: what the build is for, read as module values another module
+--- reads through this one's name.
+public word_bits: u32 = compiler.word_size
+public word_bytes: usize = compiler.word_size / 8
+public on_linux: bool = compiler.os == linux
+public low_first: bool = little == compiler.byte_order

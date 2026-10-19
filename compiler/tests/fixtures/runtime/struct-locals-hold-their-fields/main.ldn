@@ -29,11 +29,11 @@ public main: () -> (code: i32) =
     q.second = 1
 
     if p.hits == 8
-        and p.misses == 3
-        and p.ready
-        and q.first == 18446744073709551615
-        and q.tag == 255
-        and q.second == 1
+      and p.misses == 3
+      and p.ready
+      and q.first == 18446744073709551615
+      and q.tag == 255
+      and q.second == 1
     then
         code = 42
     else

@@ -9,12 +9,15 @@ import re
 from pathlib import Path
 import struct
 import subprocess
+import sys
 import time
 
 from run import FLAGS, CommandFailed, Run, gdb_listener, oracle, require, stop
 from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
 
 ROOT = HERE.parent.parent
+sys.path.insert(0, str(ROOT / 'compiler/tests'))
+import fixture_meta  # noqa: E402
 COUNTERPARTS = ROOT / 'compiler/tests/cortex-m'
 
 #  The CPU feature levels (D255) the corpus executes beyond Armv6-M, each
@@ -43,14 +46,9 @@ def level_flags(level):
 
 
 def metadata(path):
-    result = {}
-    for line in path.read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith('#'):
-            continue
-        key, value = line.split(':', 1)
-        require(key not in result, 'duplicate fixture key ' + key)
-        result[key] = value.strip()
-    return result
+    """The metadata of the fixture whose `fixture.meta` is PATH, read as
+    the test program reads it (compiler/tests/fixture_meta.py)."""
+    return fixture_meta.read(path.parent)
 
 
 def execute(run, elf, expected, traps, before=(), level='armv6-m'):
@@ -62,19 +60,41 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m'):
         'break backend_done', 'break backend_fault_done', 'continue',
         'python', 'import gdb',
         'def value(expr): return int(gdb.parse_and_eval(expr))',
-        'assert value("*(unsigned int*)&backend_fault") == ' + ('3' if traps else '0'),
-        ('assert value("$pc") == value("&backend_fault_done")' if traps else
-         'assert value("$pc") == value("&backend_done")'),
-        *(['assert value("*(unsigned short*)*(unsigned int*)($sp+24)") == 0xde01'] if traps else [
-            f'assert value("*(unsigned int*)&backend_result") & 255 == {expected}',
-            'assert value("*((unsigned int*)&backend_result+1)") == 0',
-            'assert value("$sp") == 0x20004000', 'assert value("$r11") == 0',
-            'assert [value("$r%d" % i) for i in range(4, 11)] == [44,55,66,77,88,99,100]']),
+        #  Where the program stopped, said before anything is held to it:
+        #  the exception the harness recorded (3, HardFault, for a trap or
+        #  a fault), the stop, and after an exception the frame the core
+        #  stacked, whose pc is the faulting instruction.
+        'def where(address):',
+        '    said = gdb.execute("info symbol %#x" % address, to_string=True).strip()',
+        '    line = gdb.execute("info line *%#x" % address, to_string=True).strip()',
+        '    return "%#x (%s; %s)" % (address, said, line.split(" and ends")[0])',
+        'fault = value("*(unsigned int*)&backend_fault")',
+        'state = "fault=%d%s pc=%s" % (fault, " (HardFault)" if fault == 3 else "", where(value("$pc")))',
+        'if fault:',
+        '    frame = [value("*(unsigned int*)($sp+%d)" % (4 * i)) for i in range(8)]',
+        '    state += " stacked pc=%s lr=%s xpsr=%#x" % (where(frame[6]), where(frame[5] & ~1), frame[7])',
+        'print("LANDIN-STATE " + state)',
+        'def check(holds, what):',
+        '    if not holds: raise gdb.GdbError("LANDIN-CHECK " + what + "; " + state)',
+        'check(fault == ' + ('3' if traps else '0') + ', "backend_fault is %d, expected '
+        + ('3' if traps else '0') + '" % fault)',
+        ('check(value("$pc") == value("&backend_fault_done"), "the program did not stop at backend_fault_done")'
+         if traps else
+         'check(value("$pc") == value("&backend_done"), "the program did not stop at backend_done")'),
+        *(['check(value("*(unsigned short*)*(unsigned int*)($sp+24)") == 0xde01, '
+           '"the stacked pc is no udf #1, the trap instruction")'] if traps else [
+            f'check(value("*(unsigned int*)&backend_result") & 255 == {expected}, '
+            f'"the result is %d, expected {expected}" % (value("*(unsigned int*)&backend_result") & 255))',
+            'check(value("*((unsigned int*)&backend_result+1)") == 0, "r12 was not zero at return")',
+            'check(value("$sp") == 0x20004000, "sp is %#x at return, expected 0x20004000" % value("$sp"))',
+            'check(value("$r11") == 0, "r11 is not zero at return")',
+            'check([value("$r%d" % i) for i in range(4, 11)] == [44,55,66,77,88,99,100], '
+            '"a callee-saved register r4-r10 was not preserved")']),
          'import json, struct',
         #  One 4 KiB read rather than 1,024 one-word round trips to the stub.
         'words=list(struct.unpack("<1024I", bytes(gdb.selected_inferior().read_memory(0x20003000, 4096))))',
-        'assert words[:4] == [0xa55ac33c]*4',
-        'assert value("$sp") >= 0x20003000',
+        'check(words[:4] == [0xa55ac33c]*4, "the stack overran its 4 KiB reservation")',
+        'check(value("$sp") >= 0x20003000, "sp is below the stack reservation")',
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
         f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":0x20003000+4*first,"reserved_bytes":4096,"is_stack_bound":False}},f)',
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', '']))
@@ -98,7 +118,7 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m'):
             except CommandFailed as error:
                 if error.ended.startswith('timed out'):
                     raise timed_out(error, process, time.monotonic() - tick) from None
-                raise
+                raise RuntimeError(session_failure(error)) from None
             oracle(text, 'R650_GENERATED_QEMU_PASS')
         finally:
             stop(process)
@@ -110,6 +130,24 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m'):
 #  How long one program may take, from GDB connecting to its result
 #  breakpoint, under single-threaded QEMU.
 SESSION_LIMIT = 20
+
+
+def session_failure(error):
+    """A failed session's line: which check failed, the exception and the
+    stop, read from the session's own log, rather than its name alone."""
+    said = []
+    try:
+        text = Path(error.log).read_text(errors='replace')
+    except OSError:
+        text = ''
+    for marker in ('LANDIN-CHECK ', 'LANDIN-STATE '):
+        found = next((line[line.index(marker) + len(marker):].strip()
+                      for line in text.splitlines() if marker in line), None)
+        if found:
+            said.append(found)
+            break
+    return '%s %s%s; inspect %s' % (error.name, error.ended,
+                                   ': ' + said[0] if said else '', error.log)
 
 
 def timed_out(error, process, elapsed):
@@ -357,21 +395,17 @@ def fixture(run, refine, name, optimize, specialize, level='armv6-m',
     source = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(source / 'fixture.meta')
     require(meta['class'] == 'runtime', 'development selector requires runtime fixture')
-    if meta.get('root'):
-        inputs = ['--root=' + str((source / meta['root']).resolve()), str(source)]
-    else:
-        inputs = [str(source / meta['program'])]
-        inputs += [str(source / p.strip()) for p in meta.get('with', '').split(',') if p.strip()]
+    inputs = meta.module_arguments(source)
     counterparts = json.loads((COUNTERPARTS / 'counterparts.json').read_text())['replacements']
     if source.name in counterparts:
         inputs = ['--root=' + str(ROOT), str(COUNTERPARTS / 'cases' / source.name)]
     require(not meta.get('args'), 'fixture has explicit compiler arguments')
-    require(not meta.get('run_args') and not meta.get('run_expect')
-            and not meta.get('stdin'),
+    require(not meta.get('run_args') and not meta.get('run_files')
+            and not meta.get('run_expect') and not meta.get('stdin'),
             'fixture requires hosted input/output')
     elf = build(run, refine, inputs, optimize, specialize, level=level)
     execute(run, elf, 1 if name == 'runtime/fixed-conditional-runtime' else
-            int(meta.get('status', '0')), meta.get('traps') == 'yes', level=level)
+            meta.status_at(level), meta.traps, level=level)
     result = {'fixture': name, 'optimize': optimize, 'specialize': specialize,
               'status': 'passed'}
     if include_compiler_sha256:
@@ -381,8 +415,9 @@ def fixture(run, refine, name, optimize, specialize, level='armv6-m',
 
 def levels_of(meta):
     """The M-profile levels a fixture's `levels:` names beyond the default."""
-    named = [one.strip() for one in meta.get('levels', '').split(',') if one.strip()]
-    return [one for one in named if one in LEVELS]
+    if not isinstance(meta, fixture_meta.Metadata):
+        meta = fixture_meta.Metadata.of(meta, 'runtime/')
+    return [one for one in meta.levels_for('cortex-m0') if one in LEVELS]
 
 
 def main():

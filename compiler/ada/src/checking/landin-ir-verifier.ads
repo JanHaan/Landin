@@ -95,6 +95,7 @@ package Landin.IR.Verifier is
       Field_Shape_Malformed,
       Condition_Is_Not_A_Bool,
       Unchecked_Not_Removable,
+      Sealed_Slot_Exposed,
       --  Places [1900] and module values [1940].
       Slot_Out_Of_Range,
       Pieces_Disagree,
@@ -106,6 +107,9 @@ package Landin.IR.Verifier is
       Storage_Address_Is_Not_An_Aggregate,
       Runtime_Address_Is_Not_Valid,
       Address_Value_Disagrees,
+      --  A read of an address slot that a path from the routine's entry
+      --  reaches with no store to that slot on it.
+      Address_Read_Before_Store,
       Field_Out_Of_Range,
       Field_Is_Not_A_Scalar,
       Element_Datum_Is_Not_An_Array,
@@ -190,6 +194,11 @@ package Landin.IR.Verifier is
 
    --  For a message and for a test that wants to say which rule it meant.
    function Describe (Of_Kind : Fault_Kind) return String;
+
+   --  The message a fault raises: Describe and where, and for a read
+   --  before any store, the slot it reads and one path from the entry to
+   --  the read that stores nothing in that slot.
+   function Explain (Of_Unit : Unit; Found : Fault) return String;
 
 private
    --  Instance-owned test seam, reachable through the test-only child.

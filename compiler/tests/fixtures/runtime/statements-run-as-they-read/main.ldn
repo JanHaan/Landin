@@ -57,15 +57,15 @@ end arm_scoped
 
 public main: () -> (code: i32) =
     if early(0) == 7
-        and early(5) == 9
-        and plain(1) == 2
-        and plain(0) == 3
-        and which_arm(4) == 1
-        and which_arm(0 - 4) == 2
-        and which_arm(0) == 3
-        and counted() == 41
-        and arm_scoped(true) == 11
-        and arm_scoped(false) == 22
+      and early(5) == 9
+      and plain(1) == 2
+      and plain(0) == 3
+      and which_arm(4) == 1
+      and which_arm(0 - 4) == 2
+      and which_arm(0) == 3
+      and counted() == 41
+      and arm_scoped(true) == 11
+      and arm_scoped(false) == 22
     then
         code = 42
     else

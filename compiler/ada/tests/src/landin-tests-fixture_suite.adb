@@ -2,6 +2,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Platform.Native;
+with Landin.Targets;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
 
@@ -372,6 +373,18 @@ package body Landin.Tests.Fixture_Suite is
            (Item, not Matches_Inventory (Found, Rest),
             "a missing inventory fixture is refused");
          Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Inventory_Difference (Found, Rest),
+               "the fixture unit/alpha | linux-x86-64 has no row") > 0,
+            "the difference names the fixture with no row");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Inventory_Difference
+                 (Found, "unit/alpha | cortex-m0" & LF & Rest),
+               "has the row unit/alpha | cortex-m0, and the fixture's"
+               & " targets: say unit/alpha | linux-x86-64") > 0,
+            "the difference names the row and what the fixture says");
+         Landin.Testing.Check
            (Item, not Matches_Inventory (Found, First & Rest & LF & First),
             "a duplicate inventory fixture is refused");
          Landin.Testing.Check
@@ -421,7 +434,8 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check_Equal
         (Item, Summary (Nth (Found, 1)), "earlier by name", "summary is kept");
       Landin.Testing.Check_Equal
-        (Item, Targets (Nth (Found, 1)), "linux-x86-64", "targets are kept");
+        (Item, Landin.Testing.Fixtures.Targets (Nth (Found, 1)),
+         "linux-x86-64", "targets are kept");
       Landin.Testing.Check_Equal
         (Item, Program (Nth (Found, 4)), "broken.ldn", "program is kept");
       Landin.Testing.Check_Equal
@@ -1140,13 +1154,11 @@ package body Landin.Tests.Fixture_Suite is
            (Item, Status = Landin.Platform.Read_Ok,
             "the independent fixture inventory is readable");
          if Status = Landin.Platform.Read_Ok then
-            Landin.Testing.Check
-              (Item, Matches_Inventory
-                 (Found, Ada.Strings.Unbounded.To_String (Text)),
+            Landin.Testing.Check_Equal
+              (Item, Inventory_Difference
+                 (Found, Ada.Strings.Unbounded.To_String (Text)), "",
                "discovery matches every inventoried identity and target"
-               & " in compiler/tests/targets.matrix, which a fixture's"
-               & " `targets:` or a new fixture changes; regenerate it with"
-               & " python3 check.py --coverage");
+               & " in compiler/tests/targets.matrix");
          end if;
       end;
 
@@ -1290,8 +1302,281 @@ package body Landin.Tests.Fixture_Suite is
          "a root of . is the fixture's directory as it is spelled");
    end A_Rooted_Negative_Names_Its_Target;
 
+
+   --  compiler/tests/fixture-meta.cases says what a metadata text means,
+   --  and compiler/tests/fixture_meta.py, every Python lane's reader, is
+   --  held to it by scripts/tests/test_fixture_meta.py.  This holds the
+   --  test program's own reader to the same table, so the format has two
+   --  readers and one meaning.  Deliberate real-host exception: the table
+   --  is a repository file, read where the harness runs, compiler/ada.
+   procedure The_Metadata_Readers_Agree
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Metadata_Readers_Agree
+     (Item : in out Landin.Testing.Context)
+   is
+      package Unbounded renames Ada.Strings.Unbounded;
+
+      Host   : Landin.Platform.Native.Native_Filesystem;
+      Path   : constant String := "../tests/fixture-meta.cases";
+      Text   : Unbounded.Unbounded_String;
+      Read   : Landin.Platform.Read_Status;
+      Cases  : Natural := 0;
+
+      --  The case being gathered.
+      Title    : Unbounded.Unbounded_String;
+      Label    : Unbounded.Unbounded_String;
+      Content  : Unbounded.Unbounded_String;
+      Problems : Landin.Platform.Path_List;
+      Keys     : Landin.Platform.Path_List;
+      Values   : Landin.Platform.Path_List;
+
+      function Joined (List : Landin.Platform.Path_List) return String;
+
+      function Joined (List : Landin.Platform.Path_List) return String is
+         Result : Unbounded.Unbounded_String;
+      begin
+         for One of List loop
+            if Unbounded.Length (Result) > 0 then
+               Unbounded.Append (Result, " ");
+            end if;
+            Unbounded.Append (Result, One);
+         end loop;
+         return Unbounded.To_String (Result);
+      end Joined;
+
+      function Image (Value : Integer) return String is
+        (Ada.Strings.Fixed.Trim (Integer'Image (Value), Ada.Strings.Both));
+
+      function Facts_Named (Name : String) return Landin.Targets.Target_Facts
+      is
+        (if Name = "linux-x86-64" then Landin.Targets.Linux_X86_64
+         elsif Name = "freebsd-x86-64" then Landin.Targets.FreeBSD_X86_64
+         elsif Name = "linux-arm64" then Landin.Targets.Linux_Arm64
+         elsif Name = "darwin-arm64" then Landin.Targets.Darwin_Arm64
+         elsif Name = "freebsd-arm64" then Landin.Targets.FreeBSD_Arm64
+         elsif Name = "linux-rv64" then Landin.Targets.Linux_RV64
+         elsif Name = "cortex-m0" then Landin.Targets.Cortex_M
+         else Landin.Targets.Synthetic_32);
+
+      --  A field as fixture-meta.cases renders it.
+      function Field
+        (Fixture : Landin.Testing.Fixtures.Fixture;
+         Root, Key : String) return String;
+
+      function Field
+        (Fixture : Landin.Testing.Fixtures.Fixture;
+         Root, Key : String) return String
+      is
+         At_Sign : constant Natural := Ada.Strings.Fixed.Index (Key, "@");
+         Directory : constant String :=
+           Root & "/" & Class_Directory (Class (Fixture)) & "/"
+           & Name (Fixture);
+      begin
+         if At_Sign > 0 then
+            declare
+               Head : constant String := Key (Key'First .. At_Sign - 1);
+               Tail : constant String := Key (At_Sign + 1 .. Key'Last);
+            begin
+               if Head = "levels" then
+                  return Joined
+                    (Levels_Of_Family (Fixture, Facts_Named (Tail)));
+               elsif Head = "status" then
+                  return Image (Status_At (Fixture, Tail));
+               end if;
+            end;
+         elsif Key = "status" then
+            return Image (Status (Fixture));
+         elsif Key = "traps" then
+            return (if Traps (Fixture) then "yes" else "no");
+         elsif Key = "stream" then
+            return (if Stream (Fixture) = Output then "output" else "merged");
+         elsif Key = "profile-count" then
+            return Image (Profile_Count (Fixture));
+         elsif Key = "codes-normalized" then
+            return Normalized_Codes (Codes (Fixture));
+         elsif Key = "module-arguments" then
+            declare
+               Made : Landin.Platform.Path_List;
+            begin
+               Append_Module_Arguments (Fixture, Root, Made);
+               return Joined (Made);
+            end;
+         elsif Key = "source-arguments" then
+            return Joined (Source_Arguments (Fixture, Root));
+         elsif Key = "program-arguments" then
+            declare
+               Made : Landin.Platform.Path_List;
+            begin
+               Append_Program_Arguments (Fixture, Directory, Made);
+               return Joined (Made);
+            end;
+         elsif Key = "program" then
+            return Program (Fixture);
+         elsif Key = "expect" then
+            return Expect (Fixture);
+         elsif Key = "targets" then
+            return Landin.Testing.Fixtures.Targets (Fixture);
+         elsif Key = "codes" then
+            return Codes (Fixture);
+         elsif Key = "args" then
+            return Args (Fixture);
+         elsif Key = "run_args" then
+            return Run_Args (Fixture);
+         elsif Key = "run_files" then
+            return Run_Files (Fixture);
+         elsif Key = "stdin" then
+            return Standard_Input (Fixture);
+         elsif Key = "run_expect" then
+            return Run_Expect (Fixture);
+         elsif Key = "trap_report" then
+            return Trap_Report (Fixture);
+         elsif Key = "constructs" then
+            return Constructs (Fixture);
+         elsif Key = "with" then
+            return With_Sources (Fixture);
+         elsif Key = "root" then
+            return Module_Root (Fixture);
+         elsif Key = "fixed" then
+            return Fixed (Fixture);
+         elsif Key = "c-sources" then
+            return C_Sources (Fixture);
+         elsif Key = "c-args" then
+            return C_Args (Fixture);
+         elsif Key = "c-shared" then
+            return C_Shared (Fixture);
+         elsif Key = "link" then
+            return Link_Mode (Fixture);
+         elsif Key = "levels" then
+            return Levels (Fixture);
+         elsif Key = "summary" then
+            return Summary (Fixture);
+         end if;
+         return "<no field " & Key & ">";
+      end Field;
+
+      procedure Finish;
+
+      procedure Finish is
+         Slash : constant Natural :=
+           Ada.Strings.Fixed.Index (Unbounded.To_String (Label), "/");
+         Whole : constant String := Unbounded.To_String (Label);
+         Found : Boolean := False;
+         Kind  : Fixture_Class := Unit;
+         Read_Item : Landin.Testing.Fixtures.Fixture;
+         Said  : Landin.Platform.Path_List;
+         Named : constant String := Unbounded.To_String (Title);
+      begin
+         if Slash > 0 then
+            Kind := Class_Of (Whole (Whole'First .. Slash - 1), Found);
+         end if;
+         if not Found then
+            Landin.Testing.Fail
+              (Item, Named & ": `fixture CLASS/NAME` names no class");
+            return;
+         end if;
+         Cases := Cases + 1;
+         Read_Text
+           (Unbounded.To_String (Content), Kind,
+            Whole (Slash + 1 .. Whole'Last), Read_Item, Said);
+         Landin.Testing.Check_Equal
+           (Item, Natural (Said.Length), Natural (Problems.Length),
+            Named & ": the reader reports as many faults as the table");
+         for Index in 1 .. Natural'Min
+           (Natural (Said.Length), Natural (Problems.Length))
+         loop
+            Landin.Testing.Check_Equal
+              (Item, Said (Index), Problems (Index),
+               Named & ": fault" & Natural'Image (Index));
+         end loop;
+         if Said.Is_Empty then
+            for Index in 1 .. Natural (Keys.Length) loop
+               Landin.Testing.Check_Equal
+                 (Item, Field (Read_Item, "F", Keys (Index)), Values (Index),
+                  Named & ": field " & Keys (Index));
+            end loop;
+         end if;
+      end Finish;
+
+      procedure Take (Line : String);
+
+      procedure Take (Line : String) is
+         function Starts (Prefix : String) return Boolean is
+           (Line'Length >= Prefix'Length
+            and then Line (Line'First .. Line'First + Prefix'Length - 1)
+                     = Prefix);
+         function After (Prefix : String) return String is
+           (Line (Line'First + Prefix'Length .. Line'Last));
+      begin
+         if Line = "" or else Line (Line'First) = '#' then
+            return;
+         elsif Starts ("case ") then
+            Title := Unbounded.To_Unbounded_String (After ("case "));
+            Label := Unbounded.Null_Unbounded_String;
+            Content := Unbounded.Null_Unbounded_String;
+            Problems.Clear;
+            Keys.Clear;
+            Values.Clear;
+         elsif Starts ("fixture ") then
+            Label := Unbounded.To_Unbounded_String (After ("fixture "));
+         elsif Line = "|" then
+            Unbounded.Append (Content, LF);
+         elsif Starts ("| ") then
+            Unbounded.Append (Content, After ("| ") & LF);
+         elsif Starts ("problem ") then
+            Problems.Append (After ("problem "));
+         elsif Starts ("field ") then
+            declare
+               Rest   : constant String := After ("field ");
+               Equals : constant Natural :=
+                 Ada.Strings.Fixed.Index (Rest, " =");
+            begin
+               if Equals = 0 then
+                  Landin.Testing.Fail
+                    (Item, "fixture-meta.cases: no ` = ` in " & Line);
+               else
+                  Keys.Append (Rest (Rest'First .. Equals - 1));
+                  Values.Append
+                    (Ada.Strings.Fixed.Trim
+                       (Rest (Equals + 2 .. Rest'Last), Ada.Strings.Left));
+               end if;
+            end;
+         elsif Line = "end" then
+            Finish;
+         else
+            Landin.Testing.Fail
+              (Item, "fixture-meta.cases: a line no case reads: " & Line);
+         end if;
+      end Take;
+   begin
+      Host.Read_File (Path, Text, Read);
+      if Read /= Landin.Platform.Read_Ok then
+         Landin.Testing.Fail (Item, Path & " is unreadable");
+         return;
+      end if;
+
+      declare
+         Whole : constant String := Unbounded.To_String (Text);
+         First : Positive := Whole'First;
+      begin
+         for Index in Whole'Range loop
+            if Whole (Index) = LF then
+               Take (Whole (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check
+        (Item, Cases >= 20, "the table holds the format's cases:"
+         & Natural'Image (Cases));
+   end The_Metadata_Readers_Agree;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "fixtures", "the metadata readers agree",
+         The_Metadata_Readers_Agree'Access);
       Landin.Testing.Register
         (Into, "fixtures", "a rooted negative names its target",
          A_Rooted_Negative_Names_Its_Target'Access);

@@ -10,6 +10,24 @@ and attached `---` comments. Build it with `scripts/site.sh` and open
 `docs/site/site/library.html`; [the site guide](../docs/site/README.md) describes
 the documentation convention.
 
+## Adding a module
+
+A new `core/NAME` directory is known in four other places, and a full
+`python3 check.py` names every one it is still missing from:
+
+1. `'NAME'` in `MODULES` in `environments/cortex-m/freestanding.py`, the
+   freestanding probe's inventory, which `environments/cortex-m/test.py`
+   holds to the directories here;
+2. the probe fixture `compiler/tests/fixtures/runtime/library-shared-NAME`,
+   a `main.ldn` and `fixture.meta` as the others are;
+3. that fixture's row in `compiler/tests/cortex-m/corpus.json`, which
+   `python3 scripts/add_fixture.py runtime/library-shared-NAME` adds while it
+   regenerates the corpus's generated files;
+4. a `## core/NAME` section in `docs/library.md`, the module's overview in the
+   library reference.
+
+The availability inventory below then says which targets it serves.
+
 ## Availability inventory
 
 The shared freestanding modules are `core/arena`, `core/cmp`, `core/diag`,

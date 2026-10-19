@@ -835,14 +835,48 @@ int main(void)
             selected, "unsupported complex type",
             header="extern _Complex double complex_api(_Complex double value);\n")
 
+        # D410 admits the record's own packed attribute; `#pragma pack` and a
+        # member's own packed attribute lay out what that form does not say.
         selected = json.loads(json.dumps(base))
         selected["declarations"] = [{
-            "kind": "record", "name": "Packed", "landin_name": "packed_record",
+            "kind": "record", "name": "Pragma", "landin_name": "pragma_record",
             "representation": "auto", "fields": {},
         }]
         self.assert_generation_error(
-            selected, "unsupported record attribute PackedAttr",
-            header="typedef struct __attribute__((packed)) Packed { int value; } Packed;\n")
+            selected, "unsupported record attribute MaxFieldAlignmentAttr",
+            header=("#pragma pack(push, 2)\n"
+                    "typedef struct Pragma { char lead; int value; } Pragma;\n"
+                    "#pragma pack(pop)\n"))
+
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [{
+            "kind": "record", "name": "Member", "landin_name": "member_record",
+            "representation": "auto", "fields": {},
+        }]
+        self.assert_generation_error(
+            selected, "record 'Member' field value: unsupported field attribute PackedAttr",
+            header=("typedef struct Member { char lead; "
+                    "int value __attribute__((packed)); } Member;\n"))
+
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [{
+            "kind": "record", "name": "PackedAligned", "landin_name": "packed_aligned",
+            "representation": "auto", "fields": {},
+        }]
+        self.assert_generation_error(
+            selected, "unsupported record attribute AlignedAttr",
+            header=("typedef struct __attribute__((packed, aligned(4))) PackedAligned "
+                    "{ char lead; int value; } PackedAligned;\n"))
+
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [{
+            "kind": "record", "name": "Unaligned", "landin_name": "unaligned",
+            "representation": "native", "fields": {},
+        }]
+        self.assert_generation_error(
+            selected, "or with a packed record's field of alignment above one (D410)",
+            header=("typedef struct __attribute__((packed)) Unaligned "
+                    "{ char lead; short values[2]; } Unaligned;\n"))
 
         selected = json.loads(json.dumps(base))
         selected["declarations"] = [{
@@ -862,14 +896,72 @@ int main(void)
         self.assert_generation_error(selected, "old-style function declaration is unsupported",
                                      header="extern int old_api();\n")
 
+        # D413 admits a struct's last flexible member; D414 refuses its record
+        # by value, and nothing else stands in for one.
+        flexible_header = "typedef struct Flexible { int count; int values[]; } Flexible;\n"
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [{
+            "kind": "function", "name": "flexible_api", "landin_name": "flexible_api",
+            "direction": "import", "parameters": {},
+        }]
+        self.assert_generation_error(
+            selected, "policy declaration 1 (function 'flexible_api') parameter value: "
+            "record 'Flexible' ends in a flexible array member",
+            header=flexible_header + "extern int flexible_api(Flexible value);\n")
+
         selected = json.loads(json.dumps(base))
         selected["declarations"] = [{
             "kind": "record", "name": "Flexible", "landin_name": "flexible",
+            "representation": "opaque", "fields": {},
+        }]
+        self.assert_generation_error(
+            selected, "record 'Flexible': a record with a flexible array member has only "
+            "a native layout(c) form (D413)", header=flexible_header)
+
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [{
+            "kind": "record", "name": "Outer", "landin_name": "outer",
             "representation": "auto", "fields": {},
         }]
         self.assert_generation_error(
-            selected, "flexible or zero-size array is unsupported",
-            header="typedef struct Flexible { int count; int values[]; } Flexible;\n")
+            selected, "record 'Outer' field inner: record 'Flexible' ends in a flexible array member",
+            header=flexible_header + "typedef struct Outer { Flexible inner; int after; } Outer;\n")
+
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [{
+            "kind": "record", "name": "Middle", "landin_name": "middle",
+            "representation": "auto", "fields": {},
+        }]
+        self.assert_generation_error(
+            selected, "record 'Middle' field values: flexible or zero-size array is "
+            "unsupported except as a struct's last field after another field (D413)",
+            header="typedef struct Middle { int count; int values[0]; int after; } Middle;\n")
+
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [
+            {"kind": "record", "name": "Wire", "landin_name": "wire",
+             "representation": "auto", "fields": {}},
+            {"kind": "callback", "name": "wire_callback", "landin_name": "wire_callback",
+             "nullable": False, "parameters": {}},
+        ]
+        self.assert_generation_error(
+            selected, "callback 'wire_callback' parameter 1: a packed record by value has no "
+            "extern(c) transport; C passes it only through a pointer (D414)",
+            header=("typedef struct __attribute__((packed)) Wire { char lead; int value; } Wire;\n"
+                    "typedef int (*wire_callback)(Wire value);\n"))
+
+        selected = json.loads(json.dumps(base))
+        selected["declarations"] = [
+            {"kind": "record", "name": "Wire", "landin_name": "wire",
+             "representation": "auto", "fields": {}},
+            {"kind": "function", "name": "landin_wire", "landin_name": "landin_wire",
+             "direction": "export", "parameters": {}},
+        ]
+        self.assert_generation_error(
+            selected, "export requires a native C signature; adapter-required form "
+            "pointer-only-parameter:value is unsupported",
+            header=("typedef struct __attribute__((packed)) Wire { char lead; int value; } Wire;\n"
+                    "extern int landin_wire(Wire value);\n"))
 
         selected = json.loads(json.dumps(base))
         selected["declarations"] = [{
@@ -991,7 +1083,8 @@ int main(void)
                  "landin_name": "zero_sized", "representation": "auto",
                  "fields": {}},
                 "typedef struct ZeroSized { int values[0]; } ZeroSized;\n",
-                "record 'ZeroSized' field values: flexible or zero-size array is unsupported",
+                "record 'ZeroSized' field values: flexible or zero-size array is unsupported "
+                "except as a struct's last field after another field (D413)",
                 False,
             ),
             (
@@ -1179,6 +1272,112 @@ int main(void) {
         _, output = self.generate(self.root / "recursive-node", selected_policy=recursive,
                                   header="typedef struct Node { struct Node *next; } Node; void keep(Node value);\n")
         self.assertIn("keep: (escaping value: node) -> none", (output / "bindings.ldn").read_text())
+
+    def test_packed_records_are_layout_c_packed_reached_by_pointer(self) -> None:
+        source = self.root / "packed"
+        reference = annotation()
+        selected = self.selection(
+            self.record("Wire"), self.record("Frame", representation="native"),
+            self.record("Holder"), self.record("Spread"),
+            self.function("wire_fill", parameters={"record": reference}),
+            self.function("wire_make"), self.function("frame_check"),
+            {"kind": "variable", "name": "frame_global", "storage": "define",
+             "writable": True})
+        _, output = self.generate(source, selected_policy=selected, header=(
+            "typedef struct __attribute__((packed)) Wire { char lead; int value; "
+            "double real; unsigned char bytes[3]; } Wire;\n"
+            "typedef struct __attribute__((packed)) Frame { char lead; Wire body; "
+            "short tail; } Frame;\n"
+            "typedef struct Holder { char tag; Wire wire; Wire many[2]; } Holder;\n"
+            "typedef struct __attribute__((packed)) Spread { char lead; short values[2]; } Spread;\n"
+            "extern void wire_fill(Wire *record);\n"
+            "extern Wire wire_make(int value);\n"
+            "extern int frame_check(Frame value);\n"
+            "extern Frame frame_global;\n"))
+        text = (output / "bindings.ldn").read_text()
+        for expected in (
+                "public wire: type = layout(c, packed) struct",
+                "public frame: type = layout(c, packed) struct\n    lead: c.c_char\n"
+                "    body: wire\n    tail: c.c_short\nend frame",
+                "public holder: type = layout(c) struct",
+                "wire_fill: (record: ptr mut wire) -> none",
+                'link(symbol: "landin_probe_wire_make_call") wire_make: '
+                "(result: ptr mut wire, value: c.c_int) -> none",
+                'link(symbol: "landin_probe_frame_check_call") frame_check: '
+                "(value: ptr frame) -> (result: c.c_int)",
+                "frame_global_address: () -> (address: ptr mut frame)",
+                "frame_global_read: (value: ptr mut frame) -> none",
+                "frame_global_write: (value: ptr frame) -> none",
+                # D410: an array of shorts is not of alignment one, so this
+                # packed record stays on the C side.
+                "spread_allocate"):
+            self.assertIn(expected, text)
+        metadata = json.loads((output / "bindings.json").read_text())
+        records = {item["c_name"]: item for item in metadata["declarations"]
+                   if item["kind"] == "record"}
+        self.assertEqual((records["Wire"]["size"], records["Wire"]["alignment"],
+                          records["Wire"]["offsets"], records["Wire"]["packed"],
+                          records["Wire"]["pointer_only"]),
+                         (16, 1, {"lead": 0, "value": 1, "real": 5, "bytes": 13}, True, True))
+        self.assertEqual((records["Holder"]["size"], records["Holder"]["alignment"],
+                          records["Holder"]["packed"], records["Holder"]["pointer_only"]),
+                         (49, 1, False, True))
+        self.assertEqual(records["Spread"]["representation"], "c-owned-opaque")
+        self.execute_adapters(source, r'''
+void wire_fill(Wire *record) { record->lead = 1; record->value = 0x01020304; }
+Wire wire_make(int value) { Wire made = { 2, value, 1.5, { 7, 8, 9 } }; return made; }
+int frame_check(Frame value) { return value.tail == 5 && value.body.value == -3; }
+int main(void) {
+    union { double align; unsigned char bytes[64]; } space = { 0 };
+    Wire *odd = (Wire *)(void *)(space.bytes + 1);
+    landin_probe_wire_make_call(odd, -3);
+    if (odd->value != -3 || odd->bytes[2] != 9 || space.bytes[0] != 0) return 1;
+    Frame frame = { 4, { 0 }, 5 };
+    frame.body = *odd;
+    if (!landin_probe_frame_check_call(&frame)) return 2;
+    landin_probe_frame_global_write(&frame);
+    Frame back;
+    landin_probe_frame_global_read(&back);
+    if (back.tail != 5 || ((Frame *)landin_probe_frame_global_address())->lead != 4) return 3;
+    return 0;
+}
+''')
+
+    def test_flexible_member_is_last_zero_length_array(self) -> None:
+        source = self.root / "flexible"
+        reference = annotation()
+        selected = self.selection(
+            self.record("Entry"), self.record("Words"), self.record("Gnu"),
+            self.function("entry_fill", parameters={"record": reference}))
+        _, output = self.generate(source, selected_policy=selected, header=(
+            "typedef struct Entry { unsigned long inode; unsigned short length; "
+            "unsigned char kind; char name[]; } Entry;\n"
+            "typedef struct __attribute__((packed)) Words { unsigned char kind; "
+            "unsigned int data[]; } Words;\n"
+            "typedef struct Gnu { char kind; double values[0]; } Gnu;\n"
+            "extern void entry_fill(Entry *record);\n"))
+        text = (output / "bindings.ldn").read_text()
+        for expected in (
+                "public entry: type = layout(c) struct\n    inode: c.c_ulong\n"
+                "    length: c.c_ushort\n    kind: c.c_uchar\n    name: [0]c.c_char\nend entry",
+                "public words: type = layout(c, packed) struct\n    kind: c.c_uchar\n"
+                "    data: [0]c.c_uint\nend words",
+                "    values: [0]c.c_double\nend gnu",
+                "entry_fill: (record: ptr mut entry) -> none"):
+            self.assertIn(expected, text)
+        metadata = json.loads((output / "bindings.json").read_text())
+        records = {item["c_name"]: item for item in metadata["declarations"]
+                   if item["kind"] == "record"}
+        # D413: the member takes its element's alignment, so the size and
+        # its offset are C's; in a packed record that alignment is one.
+        self.assertEqual((records["Entry"]["size"], records["Entry"]["alignment"],
+                          records["Entry"]["offsets"]["name"], records["Entry"]["flexible_member"]),
+                         (16, 8, 11, "name"))
+        self.assertEqual((records["Words"]["size"], records["Words"]["offsets"]["data"]),
+                         (1, 1))
+        self.assertEqual((records["Gnu"]["size"], records["Gnu"]["alignment"],
+                          records["Gnu"]["offsets"]["values"]), (8, 8, 8))
+        self.assertEqual(records["Entry"]["fields"][-1]["c_type"], "char []")
 
     def test_nonsquare_array_shape_and_row_offsets(self) -> None:
         source = self.root / "matrix"

@@ -65,11 +65,11 @@ carried: () -> (result: i32) =
     match boxed.which
         empty: result = 0
         wrapped(value, weight): if true then
-            match value.kind
-                leaf: result = weight
-                pair(first, second): result = weight + first + second
-            end match
-        end if
+                                    match value.kind
+                                        leaf: result = weight
+                                        pair(first, second): result = weight + first + second
+                                    end match
+                                end if
     end match
 end carried
 

@@ -21,13 +21,13 @@ public main: () -> (code: i32) =
     typed_mutable[0] = 77
 
     if mut_from_module[0] == 17 and mut_from_module[1] == 88
-        and immutable_from_module[0] == 17
-        and immutable_from_module[1] == 25
-        and mut_from_local[0] == 17 and mut_from_local[1] == 25
-        and immutable_from_local[0] == 17
-        and immutable_from_local[1] == 25
-        and typed_mutable[0] == 77 and typed_mutable[1] == 25
-        and typed_immutable[0] == 17 and typed_immutable[1] == 25
+      and immutable_from_module[0] == 17
+      and immutable_from_module[1] == 25
+      and mut_from_local[0] == 17 and mut_from_local[1] == 25
+      and immutable_from_local[0] == 17
+      and immutable_from_local[1] == 25
+      and typed_mutable[0] == 77 and typed_mutable[1] == 25
+      and typed_immutable[0] == 17 and typed_immutable[1] == 25
     then
         code = 42
     else

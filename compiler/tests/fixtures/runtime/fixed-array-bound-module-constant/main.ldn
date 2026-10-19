@@ -1,0 +1,37 @@
+--  D438: an immutable module integer sizes an array as its folded image
+--  does, and `[half + 1]u8` is the same type as `[33]u8`.
+import limits
+
+page: usize = 64
+half: usize = page / 2
+room: type = [half + 1]u8
+word_room: type = [limits.word * 2]u8
+
+pair: type = struct
+    bytes: [limits.small]u8
+    tag: u8
+end pair
+
+copy_of: (source: [33]u8) -> (into: room) =
+    into = source
+end copy_of
+
+public main: () -> (code: i32) =
+    mut r: room = zeroed
+    w: word_room = zeroed
+    p: pair = zeroed
+    local: [page - half]u8 = zeroed
+    code = 1
+    return when lenof r <> 33
+    code = 2
+    return when lenof w <> 2 * sizeof usize
+    code = 3
+    return when lenof p.bytes <> 3
+    code = 4
+    return when lenof local <> 32
+    r[32] = 9
+    same: [33]u8 = copy_of(r)
+    code = 5
+    return when same[32] <> 9
+    code = 42
+end main

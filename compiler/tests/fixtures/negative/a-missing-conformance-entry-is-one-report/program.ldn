@@ -1,0 +1,32 @@
+--  One entry left out of a conformance is one report: the uses that need
+--  the conformance, erased or as a constraint, are not refused again.
+worker: type = concept (t: type)
+    start: (self: ptr mut t) -> (value: i32)
+    process: (self: ptr mut t, item: i32) -> (value: i32)
+end worker
+
+job: type = struct
+    total: i32
+end job
+
+pair: type = struct
+    a: i32
+    b: i32
+end pair
+
+start_job: (self: ptr mut job) -> (value: i32) =
+    value = self.val.total
+end start_job
+
+job is worker (start: start_job)
+
+make: (t: type is worker, w: ptr mut t) -> (p: pair) =
+    p = (a: w.start(), b: w.process(2))
+end make
+
+public main: () -> (code: i32) =
+    mut j: job = (total: 1)
+    w: any worker = any(addr j)
+    p := make(addr j)
+    code = w.process(3) + p.a
+end main

@@ -7,4 +7,4 @@ error[L0301]: a text literal spells bytes, and this context wants a pointer to u
   |
 2 |     p: ptr u8 = "abc"
   |        ^^^^^^ the reference type written here
-  = note: [0260]: a text literal takes `[]u8` from its context
+  = note: [0260]/D442: a text literal takes `[]u8` or `cstring` from its context, never a pointer; bind it, `name: []u8 = "..."`, and pass `addr name[0]`: the literal ends in NUL

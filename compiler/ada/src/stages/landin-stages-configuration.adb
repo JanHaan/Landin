@@ -1302,6 +1302,77 @@ package body Landin.Stages.Configuration is
          Mark_Subtree_Inactive (Of_Tree, Node);
       end Configure_Directive;
 
+      --  D437: a module value may read a compiler fact, [1940]'s "known
+      --  when the compiler reads it".  A bool or integer fact stands for
+      --  its value; an atom fact, which has no value outside this stage,
+      --  is read only compared with `==` or `<>`, and the comparison's
+      --  other operand is a configuration atom as it is in a condition,
+      --  so `compiler.os == linux` means the system even where `linux`
+      --  also names an imported module.  Options stay configuration-only,
+      --  and a routine body, an anonymous one included, reads no fact.
+      procedure Record_Module_Facts
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Record_Module_Facts
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         function Atom_Fact (Operand : Syn.Node_Id) return Boolean
+           is (Is_Compiler_Member (Of_Tree, Operand)
+               and then Spelled (Syn.Name (Of_Tree, Operand))
+                 in "arch" | "os" | "byte_order" | "build_mode");
+         function Atom_Operand (Operand : Syn.Node_Id) return Boolean
+           is (Atom_Fact (Operand)
+               or else (Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
+                        and then Spelled (Syn.Name (Of_Tree, Operand))
+                          in "x86_64" | "arm64" | "rv64" | "cortex_m0"
+                           | "synthetic_32" | "little" | "big" | "debug"
+                           | "release" | "linux" | "darwin" | "freebsd"
+                           | "freestanding"));
+
+         procedure Keep;
+         procedure Keep is
+            Value : Fixed_Value := (Kind => Bad_Value);
+         begin
+            if Validate (Of_Tree, Node) then
+               Value := Evaluate (Of_Tree, Node);
+            end if;
+            Landin.Configuration.Record_Fact
+              (Activity.all, Syn.Source_Of (Of_Tree), Node,
+               (case Value.Kind is
+                  when Truth => Landin.Configuration.Bool_Fact,
+                  when Number => Landin.Configuration.Integer_Fact,
+                  when others => Landin.Configuration.Refused_Fact),
+               (case Value.Kind is
+                  when Truth => Boolean'Pos (Value.Boolean_Value),
+                  when Number => Value.Integer_Value,
+                  when others => 0));
+         end Keep;
+      begin
+         if Node = Syn.No_Node
+           or else Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function
+         then
+            return;
+         elsif Is_Feature_Fact (Of_Tree, Node)
+           or else (Is_Compiler_Member (Of_Tree, Node)
+                    and then Spelled (Syn.Name (Of_Tree, Node))
+                      in "word_size" | "c_sysv_lp64" | "c_darwin_lp64"
+                       | "c_aapcs64_lp64" | "c_riscv_lp64d" | "c_runtime")
+         then
+            Keep;
+            return;
+         elsif Syn.Kind (Of_Tree, Node) in Syn.Equal_To | Syn.Not_Equal_To
+           and then (Atom_Fact (Syn.Left_Of (Of_Tree, Node))
+                     or else Atom_Fact (Syn.Right_Of (Of_Tree, Node)))
+           and then Atom_Operand (Syn.Left_Of (Of_Tree, Node))
+           and then Atom_Operand (Syn.Right_Of (Of_Tree, Node))
+         then
+            Keep;
+            return;
+         end if;
+         for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            Record_Module_Facts (Of_Tree, Syn.Slot (Of_Tree, Node, Index));
+         end loop;
+      end Record_Module_Facts;
+
       procedure Configure_Declaration
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
@@ -1309,6 +1380,9 @@ package body Landin.Stages.Configuration is
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.Tool_Directive then
             Configure_Directive (Of_Tree, Node);
+            return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Binding then
+            Record_Module_Facts (Of_Tree, Syn.Value_Of (Of_Tree, Node));
             return;
          elsif Syn.Kind (Of_Tree, Node) = Syn.Option_Declaration then
             Mark_Subtree_Inactive (Of_Tree, Node);

@@ -1,0 +1,365 @@
+# What a fixture.meta means, as both of its readers must read it.
+#
+# The test program reads fixture metadata with Landin.Testing.Fixtures and
+# every Python lane, manifest and check with compiler/tests/fixture_meta.py.
+# Each case below is a metadata text, the class directory it sits in, and
+# what the readers must make of it: every fault, in order, with the path a
+# harness puts before it left out, or for an accepted text the value of each
+# named field.  `fixtures/the metadata readers agree` holds the Ada reader to
+# this file and scripts/tests/test_fixture_meta.py the Python one, so a
+# change to the format that reaches one reader and not the other fails.
+#
+#   case NAME            begins a case
+#   fixture CLASS/NAME   the class directory and the fixture's name
+#   | TEXT               one line of the metadata, `|` alone a blank one
+#   problem TEXT         a fault the readers report, in order
+#   field KEY = VALUE    an accepted fixture's field, as both render it
+#   end                  ends the case
+#
+# A key's field is its value as written.  The others: `status`, the status
+# a program must return, and `status@LEVEL` at that level; `traps`, `yes`
+# or `no`; `stream`; `profile-count`; `codes-normalized`; `levels@TARGET`,
+# the levels TARGET's lane builds at; `source-arguments`, what refine is
+# run with, `module-arguments`, its source operands, and
+# `program-arguments`, what the compiled program is run with -- each a
+# space-separated list, the fixture directory written F/CLASS/NAME.
+
+case a hosted program with every argument key
+fixture runtime/reads-input
+| class: runtime
+| summary: reads a file it is given
+| profiles: specialization
+| program: main.ldn
+| run_args: --level INFO --out build/out.txt
+| run_files: input.txt, data/more.txt
+| stdin: given.txt
+| run_expect: expected.txt
+| stream: output
+| status: 42
+| constructs: 0300, 1810
+| targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, cortex-m0
+field status = 42
+field traps = no
+field stream = output
+field profile-count = 6
+field run_args = --level INFO --out build/out.txt
+field run_files = input.txt, data/more.txt
+field stdin = given.txt
+field module-arguments = F/runtime/reads-input/main.ldn
+field source-arguments = F/runtime/reads-input/main.ldn
+field program-arguments = --level INFO --out build/out.txt F/runtime/reads-input/input.txt F/runtime/reads-input/data/more.txt
+end
+
+case each lane builds only its own family's levels
+fixture runtime/every-level
+| class: runtime
+| summary: a program built at a level of every family
+| profiles: standard
+| program: main.ldn
+| status: 7
+| levels: x86-64-v3, armv8.1-a, rv64gc_xtheadba, armv7-m
+| level_status: rv64gc_xtheadba=8, armv7-m=9
+| constructs: 1500
+| targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+field levels@linux-x86-64 = x86-64-v3
+field levels@freebsd-x86-64 = x86-64-v3
+field levels@linux-arm64 = armv8.1-a
+field levels@darwin-arm64 = armv8.1-a
+field levels@freebsd-arm64 = armv8.1-a
+field levels@linux-rv64 = rv64gc_xtheadba
+field levels@cortex-m0 = armv7-m
+field levels@synthetic-32 =
+field status = 7
+field status@x86-64-v3 = 7
+field status@rv64gc_xtheadba = 8
+field status@armv7-m = 9
+field profile-count = 4
+end
+
+case a rooted negative names its target in args
+fixture negative/rooted-target
+| class: negative
+| summary: refused at one target through its imports
+| program: main.ldn
+| root: ../../../../..
+| args: --target=darwin-arm64
+| codes: L0201 ,L0201
+| constructs: 0770
+| targets: darwin-arm64
+field status = 1
+field codes-normalized = L0201, L0201
+field module-arguments = --root=F/negative/rooted-target/../../../../.. F/negative/rooted-target
+field source-arguments = --target=darwin-arm64 --root=F/negative/rooted-target/../../../../.. F/negative/rooted-target
+end
+
+case a root of the fixture directory itself
+fixture positive/own-root
+| class: positive
+| summary: the fixture directory is its own root
+| program: main.ldn
+| root: .
+| constructs: 0770
+| targets: linux-x86-64
+field status = 0
+field module-arguments = --root=F/positive/own-root F/positive/own-root
+end
+
+case a recorded fixture is run with its args as written
+fixture negative/recorded
+| class: negative
+| summary: a recorded report
+| program: program.ldn
+| expect: expected.txt
+| args: ../tests/fixtures/negative/recorded/program.ldn
+| codes: L0302
+| status: 1
+| constructs: 0910
+| targets: linux-x86-64
+field source-arguments = ../tests/fixtures/negative/recorded/program.ldn
+field module-arguments = F/negative/recorded/program.ldn
+end
+
+case a module of several files
+fixture positive/two-files
+| # a comment, and a blank line, are nothing
+|
+| class: positive
+| summary: one module in two files
+| program: main.ldn
+| with: other.ldn, more/third.ldn
+| constructs: 1840
+| targets: linux-x86-64, synthetic-32
+field module-arguments = F/positive/two-files/main.ldn F/positive/two-files/other.ldn F/positive/two-files/more/third.ldn
+field source-arguments = F/positive/two-files/main.ldn F/positive/two-files/other.ldn F/positive/two-files/more/third.ldn
+field with = other.ldn, more/third.ldn
+end
+
+case a trapping program has no status
+fixture runtime/traps
+| class: runtime
+| summary: traps
+| profiles: standard
+| program: main.ldn
+| traps: yes
+| trap_report: main.ldn:4:9: trap: out_of_range
+| constructs: 1960
+| targets: linux-x86-64
+field traps = yes
+field trap_report = main.ldn:4:9: trap: out_of_range
+field stream = merged
+end
+
+case faults in lines
+fixture runtime/faulty-lines
+| class: runtime
+| summary: faulty
+| class: runtime
+| this line has no colon
+| colour: blue
+| targets: linux-x86-64, macos-arm64
+| profiles: everything
+| stream: both
+| status: forty
+| traps: maybe
+| link: dynamic
+| constructs: 300
+| codes: E0001
+problem duplicate key: class
+problem line 4 is not `key: value`
+problem unknown key: colour
+problem unknown target: macos-arm64
+problem profiles is not standard or specialization: everything
+problem stream is not output or merged: both
+problem status is not a number: forty
+problem traps is not yes or no: maybe
+problem link is not static or libc: dynamic
+problem a construct is four digits, and this is not: 300
+problem a code is L and four digits: E0001
+problem a runtime fixture needs a program to run
+end
+
+case files a program is given stay below the fixture
+fixture runtime/escaping-files
+| class: runtime
+| summary: names files outside itself
+| profiles: standard
+| program: main.ldn
+| run_files: ../other/input.txt, input.txt, input.txt, /etc/passwd
+| stdin: ../../input.txt
+| constructs: 0300
+| targets: linux-x86-64
+problem run_files path is not a file below the fixture directory: ../other/input.txt
+problem duplicate run_files path: input.txt
+problem run_files path is not a file below the fixture directory: /etc/passwd
+problem stdin is not a file below the fixture directory: ../../input.txt
+end
+
+case argument keys belong to a program that runs
+fixture negative/runs-nothing
+| class: negative
+| summary: a negative runs no program
+| program: main.ldn
+| run_args: alpha
+| run_files: input.txt
+| stdin: input.txt
+| run_expect: expected.txt
+| profiles: standard
+| codes: L0302
+| constructs: 0910
+| targets: linux-x86-64
+problem profiles belong only to a runtime or ABI fixture
+problem run_args belong only to a runtime or ABI fixture
+problem run_files belong only to a runtime or ABI fixture
+problem stdin belongs only to a runtime or ABI fixture
+problem run_expect belongs only to a runtime or ABI fixture
+end
+
+case a report needs a command and a command a report
+fixture end-to-end/half-recorded
+| class: end-to-end
+| summary: expect alone
+| expect: expected.txt
+| targets: linux-x86-64
+problem expect without args: nothing would produce it
+end
+
+case args alone compare nothing
+fixture end-to-end/unrecorded
+| class: end-to-end
+| summary: args alone
+| args: --identify
+| targets: linux-x86-64
+problem args without expect: nothing would be compared
+end
+
+case a rooted fixture's args name no module
+fixture negative/rooted-module-in-args
+| class: negative
+| summary: names its module twice
+| program: main.ldn
+| root: ../../../../..
+| args: --target=linux-x86-64 main.ldn --root=elsewhere
+| codes: L0201
+| constructs: 0770
+| targets: linux-x86-64
+problem a rooted fixture's args are the options refine takes before the module its root gives, so they name no module: main.ldn
+problem a rooted fixture's args are the options refine takes before the module its root gives, so they name no module: --root=elsewhere
+end
+
+case levels are some product target's and level_status names them
+fixture runtime/bad-levels
+| class: runtime
+| summary: levels nobody has
+| profiles: standard
+| program: main.ldn
+| levels: x86-64-v9, armv8.1-a
+| level_status: armv8.1-a=3, rv64gc=4, nonsense
+| constructs: 1500
+| targets: linux-x86-64
+problem level_status entry is not LEVEL=STATUS: nonsense
+problem level is no product target's: x86-64-v9
+problem level_status names a level levels does not: rv64gc
+problem level_status names a level levels does not: nonsense
+end
+
+case levels belong to a runtime fixture
+fixture positive/levelled
+| class: positive
+| summary: levels on a positive
+| program: main.ldn
+| levels: x86-64-v3
+| constructs: 1500
+| targets: linux-x86-64
+problem levels belong to a runtime fixture
+end
+
+case C sources belong to their classes
+fixture runtime/c-everywhere
+| class: runtime
+| summary: C where it does not belong
+| profiles: standard
+| program: main.ldn
+| with: helper.c
+| c-sources: peer.c
+| c-args: -lm
+| c-shared: plugin.c, other/plugin.c, ../escape.c
+| constructs: 0300
+| targets: linux-x86-64
+problem c-sources belong only to an ABI fixture
+problem c-args belong only to an ABI fixture
+problem two c-shared sources would build one object: other/plugin.c
+problem c-shared path is not a relative .c file: ../escape.c
+problem a runtime fixture with c-shared needs link: libc
+problem C source belongs in c-sources, never with: helper.c
+end
+
+case an ABI fixture needs its C peers
+fixture abi/no-peers
+| class: abi
+| summary: no C
+| profiles: standard
+| program: main.ldn
+| constructs: 0300
+| targets: linux-x86-64
+problem an ABI fixture needs c-sources
+end
+
+case a trap has no status, and its report needs a trap
+fixture runtime/two-answers
+| class: runtime
+| summary: traps and returns
+| profiles: standard
+| program: main.ldn
+| traps: yes
+| status: 3
+| constructs: 1960
+| targets: linux-x86-64
+problem a trapping fixture has no exit status to compare
+end
+
+case a trap report without a trap
+fixture runtime/report-alone
+| class: runtime
+| summary: reports a trap it never takes
+| profiles: standard
+| program: main.ldn
+| trap_report: main.ldn:1:1: trap: out_of_range
+| constructs: 1960
+| targets: linux-x86-64
+problem trap_report is the line a trapping program writes, and needs traps: yes
+end
+
+case roots, modules and fixes in the wrong places
+fixture positive/rooted-with
+| class: positive
+| summary: rooted and with
+| root: ../../../../..
+| with: other.ldn
+| fixed: main.fixed
+| traps: yes
+problem missing required key: targets
+problem with names the rest of a module and there is no program to be the rest of
+problem a rooted positive or negative fixture needs a nonempty program
+problem a rooted fixture discovers its module files instead of naming them with `with`
+problem fixed belongs only to a negative fixture with a program and codes
+problem only a runtime or ABI fixture runs a program that could trap
+end
+
+case required keys and a class that disagrees
+fixture unit/misfiled
+| class: negative
+| summary:
+| program: main.ldn
+problem class negative does not match directory unit
+problem summary is empty
+problem missing required key: targets
+problem a fixture with a program says which constructs it is about
+end
+
+case a class no directory has
+fixture unit/unknown-class
+| class: widget
+| summary: an unknown class
+| targets: linux-x86-64
+problem unknown class: widget
+end

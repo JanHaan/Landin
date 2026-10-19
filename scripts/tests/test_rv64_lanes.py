@@ -151,10 +151,15 @@ class RV64Controls(unittest.TestCase):
             fixture = Path(tmp) / 'compiler/tests/fixtures/abi/one'
             fixture.mkdir(parents=True)
             meta = fixture / 'fixture.meta'
-            meta.write_text('targets: linux-rv64\n')
-            with self.assertRaisesRegex(ValueError, 'independently compiled C peer'):
+            head = ('class: abi\nsummary: one\nprofiles: standard\nprogram: main.ldn\n'
+                    'constructs: 0300\ntargets: linux-rv64\n')
+            meta.write_text(head)
+            #  The fixture format refuses it before the lane can: an ABI
+            #  fixture needs c-sources (compiler/tests/fixture_meta.py).
+            with self.assertRaisesRegex(ValueError, 'an ABI fixture needs c-sources'):
                 LANE.select('abi')
-            meta.write_text('targets: linux-rv64\nc-sources: peer.c\n')
+            meta.write_text(head + 'c-sources: peer.c\n')
+            (fixture / 'peer.c').write_text('int peer(void) { return 0; }\n')
             with self.assertRaisesRegex(ValueError, 'ABI coverage missing'):
                 LANE.select('abi')
 

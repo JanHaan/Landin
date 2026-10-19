@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a destructured result binding is a local place: its address is taken, a slice element it holds is addressed, and it is passed to a sink parameter
+program: main.ldn
+status: 42
+constructs: 0430, 0910, 0990, 1920
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

@@ -24,12 +24,12 @@ public main: () -> (code: i32) =
         stored.value
     end
     second: i32 = if true then
-        stored.value += 5
-        stored.value
-    else
-        stored.value += 100
-        stored.value
-    end if
+                      stored.value += 5
+                      stored.value
+                  else
+                      stored.value += 100
+                      stored.value
+                  end if
     item: choice = (kind: one)
     match item.kind
         zero: stored.value -= 1

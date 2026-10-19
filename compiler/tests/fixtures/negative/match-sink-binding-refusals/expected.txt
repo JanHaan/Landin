@@ -1,0 +1,50 @@
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:35:22
+   |
+35 |     got = got + peek(m)
+   |                      ^
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:29:17
+   |
+29 | subject_after: (sink m: maybe_node) -> (got: i32) =
+   |                 ^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:42:50
+   |
+42 |         ptr (sink l): got = release(l) + release(l)
+   |                                                  ^
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:42:19
+   |
+42 |         ptr (sink l): got = release(l) + release(l)
+   |                   ^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0337]: a `sink` binding consumes the matched place, and this subject is not one
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:50:19
+   |
+50 |         ptr (sink l): got = release(l)
+   |                   ^
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:48:11
+   |
+48 |     match made()
+   |           ^^^^^^ this matched value
+  = note: [0910]/D433: match a binding or a field of one, without a dereference or a computed index
+error[L0333]: only a `ptr` arm's binding may be `sink`
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:58:18
+   |
+58 |         box(sink side): got = side
+   |                  ^^^^
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:56:11
+   |
+56 |     match s.kind
+   |           ^^^^^^ this matched value
+  = note: [0910]/D433: a payload or an atom is part of the matched value; sink the subject itself
+error[L0337]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:66:32
+   |
+66 |         ptr (l): got = release(l)
+   |                                ^
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:17:11
+   |
+17 | release: (sink n: ptr node) -> (got: i32) =
+   |           ^^^^^^^^^^^^^^^^ this `sink` parameter
+  = note: [0910]: this is the boundary at which one consumed place remains provable; a `ptr` arm that consumes the matched place binds it as `ptr (sink l)` (D433)

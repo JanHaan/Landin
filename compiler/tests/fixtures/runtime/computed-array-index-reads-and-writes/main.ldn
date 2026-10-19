@@ -14,9 +14,9 @@ end at_flag
 
 public main: () -> (code: i32) =
     if at(0, 11) == 12 and at(3, 44) == 45
-        and words[0] == 12 and words[3] == 45
-        and at_flag(0, true, true) == true
-        and at_flag(0, true, false) == false
+      and words[0] == 12 and words[3] == 45
+      and at_flag(0, true, true) == true
+      and at_flag(0, true, false) == false
     then
         code = 42
     else

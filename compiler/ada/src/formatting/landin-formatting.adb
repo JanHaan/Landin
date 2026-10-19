@@ -529,30 +529,17 @@ package body Landin.Formatting is
       --  Indentation
       ------------------------------------------------------------------
 
-      --  An `if` written mid-line with its first arm's value on the same
-      --  line is a table: its `elsif`, `else` and `end if` stand under it.
-      function Is_Table (C : Syn.Node_Id) return Boolean;
-
-      function Is_Table (C : Syn.Node_Id) return Boolean is
-         Opening : constant Positive := First (C);
-         Arm     : constant Syn.Node_Id := Syn.Nth_Arm (Tree, C, 1);
-         Body_Of : constant Syn.Node_Id := Syn.Body_Of (Tree, Arm);
-      begin
-         if Is_Head (Opening) then
-            return False;
-         end if;
-         for Position in 1 .. Syn.Slot_Count (Tree, Body_Of) loop
-            if Syn.Slot (Tree, Body_Of, Position) /= Syn.No_Node then
-               return Line_Of (First (Body_Of)) = Line_Of (Opening)
-                 and then First (Body_Of) > Opening;
-            end if;
-         end loop;
-         return False;
-      end Is_Table;
+      --  An `if` written mid-line is an expression continued below its
+      --  line (D424): its `then`, `elsif`, `else` and `end if` stand under
+      --  its `if`, and its arms' bodies four columns in from it.  A table,
+      --  whose first arm's value shares the `if`'s line, is the case of it
+      --  whose arms each fit their line.
+      function Is_Inline (C : Syn.Node_Id) return Boolean
+        is (not Is_Head (First (C)));
 
       --  Where a construct's body is indented from, and where its `end`
       --  stands: the line it begins on.  A recovery clause begins where
-      --  its call does, and a table where its `if` is.
+      --  its call does, and an `if` written mid-line where its `if` is.
       function Base (C : Syn.Node_Id) return Integer;
 
       function Base (C : Syn.Node_Id) return Integer is
@@ -569,7 +556,7 @@ package body Landin.Formatting is
                return (if Parent (Positive (C)) = Syn.No_Node then 0
                        else Line_Indent (First (Parent (Positive (C)))));
             when Syn.If_Statement =>
-               return (if Is_Table (C) then Column (First (C))
+               return (if Is_Inline (C) then Column (First (C))
                        else Line_Indent (First (C)));
             when others =>
                return Line_Indent (First (C));

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: an assignment made on every edge that leaves a loop, before each break or in complete, holds after the loop for named returns, arrays and locals (D430, which reversed D156/D157's ceiling)
+program: main.ldn
+status: 42
+constructs: 0930, 1130, 1140, 1150, 1170, 1810, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

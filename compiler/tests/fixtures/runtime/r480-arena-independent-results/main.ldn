@@ -102,10 +102,10 @@ run: () -> (ok: bool) ! mem.out_of_memory =
     mut last := try erased_arena.alloc(1, 1)
     last.val = 31
     ok = first.val == 7 and second.val == 9
-      and held.first.val == 11 and held.second.val == 13
-      and bytes[0] == 17 and bytes[1] == 19
-      and dynamic.read() == 23 and state.call(state.state) == 29
-      and last.val == 31
+         and held.first.val == 11 and held.second.val == 13
+         and bytes[0] == 17 and bytes[1] == 19
+         and dynamic.read() == 23 and state.call(state.state) == 29
+         and last.val == 31
 end run
 
 public main: () -> (code: i32) =
@@ -123,11 +123,11 @@ public main: () -> (code: i32) =
     counted := fault.over(space, counted_arena, usize(1))
     counted_block: ptr mut u8 =
         mem.allocate(counted, usize(1), usize(1)) else (problem)
-        _ = problem
-        return
-    end
+            _ = problem
+            return
+        end
     counted_block.val = 41
     code = if ok and matched and counted_block.val == 41
-          and fault.successes(counted) == 1
-        then 42 else 1 end if
+      and fault.successes(counted) == 1
+           then 42 else 1 end if
 end main

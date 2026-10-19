@@ -9,7 +9,7 @@ image: callbacks = callbacks(values: [[add, add], [2 of add]])
 copy: callbacks = image
 select: (input: callbacks) -> (result: callbacks) =
     result = callbacks(values: [input.values[1],
-        [input.values[0][1], input.values[0][0]]])
+                                [input.values[0][1], input.values[0][0]]])
 end select
 use: (row: usize, column: usize) -> (result: i32) =
     mut local: callbacks = select(copy)

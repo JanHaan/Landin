@@ -1051,8 +1051,8 @@ package Landin.IR is
 
    --  Generic routine items are keyed by the checker interning position,
    --  not by the source declaration.  Declares therefore remains
-   --  No_Declaration (giving the backend a deterministic local symbol), while
-   --  Generic_Template_Of retains source provenance.
+   --  No_Declaration, while Generic_Template_Of retains source provenance,
+   --  and the backend spells the instance's local symbol from it (D421).
    function Item_For_Instance
      (Of_Unit : Unit; Instance_Position : Positive) return Item_Id
      with Pre => Is_Prepared (Of_Unit);
@@ -1082,6 +1082,21 @@ package Landin.IR is
    function Generic_Template_Of (Of_Unit : Unit; Id : Item_Id)
      return Declaration_Id
      with Pre => Holds (Of_Unit, Id);
+
+   --  The routine a declarationless item stands in for, which only its
+   --  symbol is spelled from: an evidence provider that binds a generic
+   --  instance's evidence is named after that instance's routine.  It has
+   --  no meaning beyond the name; No_Declaration when none was given.
+   procedure Set_Named_After
+     (Into : in out Unit; Item : Item_Id; Routine : Declaration_Id)
+     with Pre => Holds (Into, Item)
+                 and then Declares (Into, Item) = No_Declaration
+                 and then Generic_Template_Of (Into, Item) = No_Declaration
+                 and then Natural (Routine) <= Declaration_Limit (Into);
+
+   function Named_After (Of_Unit : Unit; Item : Item_Id)
+     return Declaration_Id
+     with Pre => Holds (Of_Unit, Item);
 
    --  Concrete semantic instance position, never a specialization clone
    --  number.  Zero for an ordinary routine or datum.
@@ -1974,8 +1989,10 @@ package Landin.IR is
       Site     : Landin.Provenance.Origin;
       Signature : Signature_Id := No_Signature;
       Atoms     : Atom_Set_Id := No_Atom_Set;
-      Pointee   : Pointee_Id := No_Pointee) return Slot_Id
+      Pointee   : Pointee_Id := No_Pointee;
+      Sealed    : Boolean := False) return Slot_Id
      with Pre  => Holds (Into, Item)
+                  and then (not Sealed or else Atoms /= No_Atom_Set)
                   and then (Signature = No_Signature
                             or else Holds (Into, Signature))
                   and then (Signature = No_Signature
@@ -2389,6 +2406,17 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item)
                  and then Holds (Of_Unit, Item, Slot);
 
+   --  A sealed slot is a compiler temporary of an atom set that only a
+   --  Store and a Load ever name: nothing takes its address, no storage
+   --  operand or assembly output reaches it, so what a load of it reads
+   --  is what a store of a value of the set wrote.  Lowering seals the
+   --  copy an atom `match` keeps of its subject, and the verifier holds a
+   --  sealed slot to that rule.
+   function Is_Sealed
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item)
+                 and then Holds (Of_Unit, Item, Slot);
+
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Declaration_Id
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
@@ -2655,6 +2683,14 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Is_Failure_Status_Load (Of_Unit, Item, Value)
          or else Is_Union_Code_Load (Of_Unit, Item, Value))
+     with Pre => Holds (Of_Unit, Item, Value);
+
+   --  Whether an atom-typed load tests that its bits are one of its set's
+   --  codes, D232's representation validation.  Every load from memory
+   --  does but one from a sealed slot, which can hold nothing else: an
+   --  atom `match` tests its subject once and its arms compare only.
+   function Validates_Atoms
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      with Pre => Holds (Of_Unit, Item, Value);
 
    --  Where the construct this instruction came from is written.  Taken
@@ -4225,6 +4261,8 @@ private
       Length      : Element_Total             := 0;
       Signature   : Signature_Id              := No_Signature;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
+      --  Is_Sealed's answer.
+      Sealed      : Boolean                   := False;
       --  True only for Add_Address_Slot.  Element then describes the
       --  complete target-neutral shape reached by its stored address.
       Addressed   : Boolean                   := False;
@@ -4262,6 +4300,7 @@ private
       Declaration : Declaration_Id            := No_Declaration;
       Generic_Template : Declaration_Id       := No_Declaration;
       Instance_Position : Natural              := 0;
+      Named_After : Declaration_Id            := No_Declaration;
       Address_Exposed : Boolean                := False;
       Source_Loop_Depth : Natural              := 0;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;

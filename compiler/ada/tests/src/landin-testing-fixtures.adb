@@ -168,6 +168,9 @@ package body Landin.Testing.Fixtures is
    function Run_Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.Run_Args));
 
+   function Run_Files (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Run_Files));
+
    function Standard_Input (Item : Fixture) return String
      is (Unbounded.To_String (Item.Stdin));
 
@@ -271,6 +274,103 @@ package body Landin.Testing.Fixtures is
       end;
    end Append_Module_Arguments;
 
+   --  Each comma-separated entry of TEXT, trimmed, that is not empty.
+   function Entries (Text : String) return Landin.Platform.Path_List;
+
+   function Entries (Text : String) return Landin.Platform.Path_List is
+      Result : Landin.Platform.Path_List;
+      First  : Integer := Text'First;
+   begin
+      for Index in Text'First .. Text'Last + 1 loop
+         if Index > Text'Last or else Text (Index) = ',' then
+            declare
+               One : constant String := Trimmed (Text (First .. Index - 1));
+            begin
+               if One /= "" then
+                  Result.Append (One);
+               end if;
+            end;
+            First := Index + 1;
+         end if;
+      end loop;
+      return Result;
+   end Entries;
+
+   --  The words of TEXT, separated by spaces.
+   function Words (Text : String) return Landin.Platform.Path_List;
+
+   function Words (Text : String) return Landin.Platform.Path_List is
+      Result : Landin.Platform.Path_List;
+      First  : Integer := Text'First;
+   begin
+      for Index in Text'First .. Text'Last + 1 loop
+         if Index > Text'Last or else Text (Index) in ' ' | ASCII.HT then
+            if Index > First then
+               Result.Append (Text (First .. Index - 1));
+            end if;
+            First := Index + 1;
+         end if;
+      end loop;
+      return Result;
+   end Words;
+
+   function Is_Rooted (Item : Fixture) return Boolean is
+   begin
+      if Module_Root (Item) /= "" then
+         return True;
+      end if;
+      for Word of Words (Args (Item)) loop
+         if Word'Length > 7
+           and then Word (Word'First .. Word'First + 6) = "--root="
+         then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Is_Rooted;
+
+   function Rooted_By_Args_Count (In_Catalogue : Catalogue) return Natural is
+      Total : Natural := 0;
+   begin
+      for Item of In_Catalogue.Items loop
+         if Item.Class = Negative_Program and then Codes (Item) /= ""
+           and then Module_Root (Item) = "" and then Is_Rooted (Item)
+         then
+            Total := Total + 1;
+         end if;
+      end loop;
+      return Total;
+   end Rooted_By_Args_Count;
+
+   function Source_Arguments
+     (Item : Fixture; Fixture_Root : String) return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List;
+   begin
+      if Module_Root (Item) /= "" then
+         Result := Words (Args (Item));
+         Append_Module_Arguments (Item, Fixture_Root, Result);
+      elsif Args (Item) /= "" then
+         Result := Words (Args (Item));
+      else
+         Append_Module_Arguments (Item, Fixture_Root, Result);
+      end if;
+      return Result;
+   end Source_Arguments;
+
+   procedure Append_Program_Arguments
+     (Item      : Fixture;
+      Directory : String;
+      To        : in out Landin.Platform.Path_List) is
+   begin
+      for Word of Words (Run_Args (Item)) loop
+         To.Append (Word);
+      end loop;
+      for File of Entries (Run_Files (Item)) loop
+         To.Append (Directory & "/" & File);
+      end loop;
+   end Append_Program_Arguments;
+
    function C_Sources (Item : Fixture) return String
      is (Unbounded.To_String (Item.C_Files));
 
@@ -364,52 +464,96 @@ package body Landin.Testing.Fixtures is
 
    function Matches_Inventory
      (In_Catalogue : Catalogue; Text : String) return Boolean
+     is (Inventory_Difference (In_Catalogue, Text) = "");
+
+   function Inventory_Difference
+     (In_Catalogue : Catalogue; Text : String) return String
    is
       package Rows is new Ada.Containers.Indefinite_Ordered_Sets (String);
       Remaining : Rows.Set;
+      Listed    : Rows.Set;
       First : Integer := Text'First;
+      Matrix : constant String := "compiler/tests/targets.matrix";
+      Regenerate : constant String :=
+        "; regenerate it with python3 check.py --coverage, or for a new"
+        & " fixture python3 scripts/add_fixture.py CLASS/NAME";
 
-      function Consume (Line : String) return Boolean;
+      --  The discovered row for IDENTITY, or "".
+      function Discovered (Identity : String) return String;
 
-      function Consume (Line : String) return Boolean is
+      function Discovered (Identity : String) return String is
+      begin
+         for Item of In_Catalogue.Items loop
+            if Class_Directory (Class (Item)) & "/" & Name (Item) = Identity
+            then
+               return Identity & " | " & Targets (Item);
+            end if;
+         end loop;
+         return "";
+      end Discovered;
+
+      function Consume (Line : String) return String;
+
+      function Consume (Line : String) return String is
          Row : constant String :=
            Ada.Strings.Fixed.Trim (Line, Ada.Strings.Both);
          Divider : constant Natural := Ada.Strings.Fixed.Index (Row, " | ");
       begin
          if Row = "" or else Row (Row'First) = '#' then
-            return True;
+            return "";
          elsif Divider = 0 or else Divider + 3 > Row'Last then
-            return False;
+            return Matrix & " has a row that is not `CLASS/NAME | TARGETS`: "
+              & Row;
          elsif Row (Row'First .. Divider - 1) in
            "prototype-1" | "prototype-2" | "prototype-3" | "prototype-4"
          then
-            return True;
+            return "";
+         elsif Listed.Contains (Row) then
+            return Matrix & " repeats the row " & Row;
          elsif not Remaining.Contains (Row) then
-            return False;
+            declare
+               Found : constant String :=
+                 Discovered (Row (Row'First .. Divider - 1));
+            begin
+               if Found = "" then
+                  return Matrix & " has the row " & Row
+                    & ", and there is no such fixture" & Regenerate;
+               end if;
+               return Matrix & " has the row " & Row & ", and the fixture's"
+                 & " targets: say " & Found & Regenerate;
+            end;
          end if;
          Remaining.Delete (Row);
-         return True;
+         Listed.Insert (Row);
+         return "";
       end Consume;
    begin
       if Problem_Count (In_Catalogue) /= 0 then
-         return False;
+         return "the fixture metadata has problems, which come first";
       end if;
       for Item of In_Catalogue.Items loop
          Remaining.Insert
            (Class_Directory (Class (Item)) & "/" & Name (Item)
             & " | " & Targets (Item));
       end loop;
-      for Index in Text'Range loop
-         if Text (Index) = ASCII.LF then
-            if not Consume (Text (First .. Index - 1)) then
-               return False;
-            end if;
+      for Index in Text'First .. Text'Last + 1 loop
+         if Index > Text'Last or else Text (Index) = ASCII.LF then
+            declare
+               Said : constant String := Consume (Text (First .. Index - 1));
+            begin
+               if Said /= "" then
+                  return Said;
+               end if;
+            end;
             First := Index + 1;
          end if;
       end loop;
-      return Consume (Text (First .. Text'Last))
-        and then Remaining.Is_Empty;
-   end Matches_Inventory;
+      if not Remaining.Is_Empty then
+         return "the fixture " & Remaining.First_Element & " has no row in "
+           & Matrix & Regenerate;
+      end if;
+      return "";
+   end Inventory_Difference;
 
    function Problem_Count (In_Catalogue : Catalogue) return Natural
      is (Natural (In_Catalogue.Problems.Length));
@@ -508,6 +652,7 @@ package body Landin.Testing.Fixtures is
       Seen_Targets : Boolean := False;
       Seen_Args    : Boolean := False;
       Seen_Run_Args : Boolean := False;
+      Seen_Run_Files : Boolean := False;
       Seen_Stdin   : Boolean := False;
       Seen_Run_Expect : Boolean := False;
       Seen_Status  : Boolean := False;
@@ -534,7 +679,7 @@ package body Landin.Testing.Fixtures is
 
       procedure Complain (Text : String) is
       begin
-         Problems.Append (Where & ": " & Text);
+         Problems.Append (if Where = "" then Text else Where & ": " & Text);
       end Complain;
 
       procedure Handle (Line : String);
@@ -720,6 +865,46 @@ package body Landin.Testing.Fixtures is
                Seen_Run_Args := True;
                Item.Run_Args := Unbounded.To_Unbounded_String (Value);
 
+            elsif Key = "run_files" then
+               if Seen_Run_Files then
+                  Complain ("duplicate key: run_files");
+                  return;
+               end if;
+               Seen_Run_Files := True;
+
+               declare
+                  First : Integer := Value'First;
+                  Ok    : Boolean := True;
+                  Seen  : Landin.Platform.Path_List;
+               begin
+                  for Index in Value'First .. Value'Last + 1 loop
+                     if Index > Value'Last or else Value (Index) = ',' then
+                        declare
+                           One : constant String :=
+                             Trimmed (Value (First .. Index - 1));
+                        begin
+                           if not Is_Below_Directory (One) then
+                              Ok := False;
+                              Complain
+                                ("run_files path is not a file below the"
+                                 & " fixture directory: "
+                                 & (if One = "" then "<empty>" else One));
+                           elsif Seen.Contains (One) then
+                              Ok := False;
+                              Complain ("duplicate run_files path: " & One);
+                           else
+                              Seen.Append (One);
+                           end if;
+                        end;
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if Ok then
+                     Item.Run_Files := Unbounded.To_Unbounded_String (Value);
+                  end if;
+               end;
+
             elsif Key = "stdin" then
                if Seen_Stdin then
                   Complain ("duplicate key: stdin");
@@ -773,6 +958,9 @@ package body Landin.Testing.Fixtures is
                   return;
                end if;
                Seen_Level_Status := True;
+               --  Kept as written whatever its entries are, so a faulty
+               --  entry does not also hide a level `levels:` does not name.
+               Item.Level_Status := Unbounded.To_Unbounded_String (Value);
                --  Each entry is LEVEL=STATUS with an integer status; that
                --  each level is one `levels:` names is checked below.
                declare
@@ -811,7 +999,6 @@ package body Landin.Testing.Fixtures is
                      end;
                   end loop;
                end;
-               Item.Level_Status := Unbounded.To_Unbounded_String (Value);
 
             elsif Key = "stream" then
                if Seen_Stream then
@@ -1125,6 +1312,7 @@ package body Landin.Testing.Fixtures is
                Targets => Unbounded.Null_Unbounded_String,
                Args    => Unbounded.Null_Unbounded_String,
                Run_Args => Unbounded.Null_Unbounded_String,
+               Run_Files => Unbounded.Null_Unbounded_String,
                Stdin    => Unbounded.Null_Unbounded_String,
                Run_Expect => Unbounded.Null_Unbounded_String,
                Codes   => Unbounded.Null_Unbounded_String,
@@ -1295,6 +1483,13 @@ package body Landin.Testing.Fixtures is
          Complain ("run_args belong only to a runtime or ABI fixture");
       end if;
 
+      if Seen_Run_Files
+        and then (not Seen_Class
+                  or else Item.Class not in Runtime | Abi)
+      then
+         Complain ("run_files belong only to a runtime or ABI fixture");
+      end if;
+
       if Seen_Stdin
         and then (not Seen_Class
                   or else Item.Class not in Runtime | Abi)
@@ -1450,6 +1645,30 @@ package body Landin.Testing.Fixtures is
       Accepted := Natural (Problems.Length) = Before;
    end Read_Metadata;
 
+   procedure Read_Text
+     (Content      : String;
+      Kind         : Fixture_Class;
+      Fixture_Name : String;
+      Item         : out Fixture;
+      Problems     : out Landin.Platform.Path_List)
+   is
+      Found    : Problem_Vectors.Vector;
+      Accepted : Boolean;
+   begin
+      Read_Metadata
+        (Content      => Content,
+         Where        => "",
+         Expected     => Kind,
+         Fixture_Name => Fixture_Name,
+         Item         => Item,
+         Problems     => Found,
+         Accepted     => Accepted);
+      Problems.Clear;
+      for One of Found loop
+         Problems.Append (One);
+      end loop;
+   end Read_Text;
+
    procedure Discover
      (Into : in out Catalogue;
       Root : String;
@@ -1493,6 +1712,21 @@ package body Landin.Testing.Fixtures is
                Item         => Item,
                Problems     => Into.Problems,
                Accepted     => Accepted);
+
+            --  A program is handed its `run_files` by path, so each
+            --  must be there, as a C companion must.
+            if Accepted then
+               for File of Entries (Run_Files (Item)) loop
+                  if not Host.Exists (Path & "/" & File)
+                    or else Host.Is_Directory (Path & "/" & File)
+                  then
+                     Into.Problems.Append
+                       (Meta & ": run_files names " & File
+                        & ", which is missing or not a file");
+                     Accepted := False;
+                  end if;
+               end loop;
+            end if;
 
             if Accepted then
                declare

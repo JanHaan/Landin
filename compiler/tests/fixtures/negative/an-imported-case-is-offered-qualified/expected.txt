@@ -1,0 +1,14 @@
+error[L0201]: `leaf` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/an-imported-case-is-offered-qualified/main.ldn:7:14
+  |
+7 |     t.kind = leaf
+  |              ^^^^
+  = note: [1440]: `leaf` is a case of a type in an imported module, and is written with the module's name, `shapes.leaf`
+  = help: did you mean `shapes.leaf`?
+error[L0201]: `leaf` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/an-imported-case-is-offered-qualified/main.ldn:9:9
+  |
+9 |         leaf: code = 1
+  |         ^^^^
+  = note: [1440]: `leaf` is a case of a type in an imported module, and is written with the module's name, `shapes.leaf`
+  = help: did you mean `shapes.leaf`?

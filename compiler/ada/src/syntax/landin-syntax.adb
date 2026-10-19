@@ -140,6 +140,41 @@ package body Landin.Syntax is
    function Anchor (Of_Tree : Tree; Id : Node_Id) return Landin.Source.Span
      is (Element (Of_Tree, Id).Anchor);
 
+   function Enclosing (Of_Tree : Tree; Id : Node_Id) return Node_Id is
+      Target : constant Landin.Source.Span := Where (Of_Tree, Id);
+      Here   : Node_Id := Root (Of_Tree);
+      Found  : Node_Id := No_Node;
+   begin
+      --  A tree is in post-order, so the child holding Id is the first of
+      --  a node's slots at or after it whose extent holds Id's.
+      while Here /= Id loop
+         if Landin.Source."/=" (Where (Of_Tree, Here), Target) then
+            Found := Here;
+         end if;
+         declare
+            Next : Node_Id := No_Node;
+         begin
+            for Index in 1 .. Slot_Count (Of_Tree, Here) loop
+               declare
+                  Child : constant Node_Id := Slot (Of_Tree, Here, Index);
+               begin
+                  if Child /= No_Node
+                    and then Child >= Id
+                    and then Landin.Source.Contains
+                      (Where (Of_Tree, Child), Target)
+                    and then (Next = No_Node or else Child < Next)
+                  then
+                     Next := Child;
+                  end if;
+               end;
+            end loop;
+            exit when Next = No_Node;
+            Here := Next;
+         end;
+      end loop;
+      return Found;
+   end Enclosing;
+
    function Origin (Of_Tree : Tree; Id : Node_Id)
      return Landin.Provenance.Origin
      is (Source => Of_Tree.Source,
@@ -569,6 +604,10 @@ package body Landin.Syntax is
 
    function Error_Set_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 2));
+
+   function Beside_Slots (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (if Kind (Of_Tree, Id) in Call | Labeled_Application
+         then Recovery_Of (Of_Tree, Id) else No_Node);
 
    function Recovery_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Element (Of_Tree, Id).Recovery);

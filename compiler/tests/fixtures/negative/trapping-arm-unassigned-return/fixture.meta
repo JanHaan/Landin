@@ -1,0 +1,8 @@
+class: negative
+summary: a final match or if that answers only by trapping is a statement, so an arm that falls through without assigning the named return is refused as any statement would be
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/trapping-arm-unassigned-return
+constructs: 0930, 1560, 1800, 1910
+codes: L0302, L0302
+status: 1
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1432,6 +1432,19 @@ package body Landin.IR is
      return Declaration_Id
      is (Element (Of_Unit, Id).Generic_Template);
 
+   procedure Set_Named_After
+     (Into : in out Unit; Item : Item_Id; Routine : Declaration_Id)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Named_After := Routine;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Named_After;
+
+   function Named_After (Of_Unit : Unit; Item : Item_Id)
+     return Declaration_Id
+     is (Element (Of_Unit, Item).Named_After);
+
    function Instance_Position_Of (Of_Unit : Unit; Id : Item_Id)
      return Natural is
    begin
@@ -2093,7 +2106,8 @@ package body Landin.IR is
       Site     : Landin.Provenance.Origin;
       Signature : Signature_Id := No_Signature;
       Atoms     : Atom_Set_Id := No_Atom_Set;
-      Pointee   : Pointee_Id := No_Pointee) return Slot_Id
+      Pointee   : Pointee_Id := No_Pointee;
+      Sealed    : Boolean := False) return Slot_Id
    is
       Held : Item_Record := Element (Into, Item);
    begin
@@ -2109,6 +2123,7 @@ package body Landin.IR is
         (Slot_Record'(Of_Type     => Of_Type,
                       Signature   => Signature,
                       Atom_Set    => Atoms,
+                      Sealed      => Sealed,
                       Pointee     => Pointee,
                       Declaration => Declares,
                       Site        => Site,
@@ -3034,6 +3049,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Atom_Set_Id
      is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Atom_Set);
 
+   function Is_Sealed
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Sealed);
+
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Declaration_Id
@@ -3222,6 +3241,16 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
       return Declaration_Id
      is (Held (Of_Unit, Item, Value).Atom_Identity);
+
+   function Validates_Atoms
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     is (Atom_Set_Of (Of_Unit, Item, Value) /= No_Atom_Set
+         and then Op_Of (Of_Unit, Item, Value) in
+           Load | Load_Indirect | Load_Datum | Load_Field | Load_Element
+           | Load_Variant_Field
+         and then not (Op_Of (Of_Unit, Item, Value) = Load
+                       and then Is_Sealed
+                         (Of_Unit, Item, Slot_Of (Of_Unit, Item, Value))));
 
    function Call_Variadic_Types_Are_Valid
      (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Boolean

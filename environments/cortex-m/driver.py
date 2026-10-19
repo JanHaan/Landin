@@ -64,7 +64,11 @@ def build(run, refine, name, optimize, specialize, debug='none'):
     report=json.loads((run.out/'build.json').read_text())['build']
     require(all(r['frame_bytes'] <= 4096 for r in report['routines']),
             'individual driver frame exceeds stack reservation')
-    require(not symbols.keys() & {'malloc','calloc','realloc','free','exit','_exit','__libc_init_array','__libc_start_main','_sbrk'},'hosted driver closure')
+    #  Only a global symbol is a C runtime's; a Landin routine, an
+    #  instance of `free` among them (D421), is local (D415).
+    exported={s[2] for line in names.splitlines()
+              if len(s:=line.split())==3 and s[1].isupper()}
+    require(not exported & {'malloc','calloc','realloc','free','exit','_exit','__libc_init_array','__libc_start_main','_sbrk'},'hosted driver closure')
     imported = {'app'}
     for path in source.rglob('*.ldn'):
         imported.update(line[7:] for line in path.read_text().splitlines()

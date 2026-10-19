@@ -80,27 +80,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "compiler/tests"))
+import fixture_meta  # noqa: E402
+
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
            "freebsd-x86-64", "freebsd-arm64")
 CLASSES = ("positive", "negative", "runtime", "abi", "end-to-end")
 
 
 def meta_of(fixture):
-    meta = {}
-    for line in (fixture / "fixture.meta").read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and ":" in line:
-            key, value = line.split(":", 1)
-            meta[key.strip()] = value.strip()
-    return meta
+    """The fixture's metadata, read as the test program reads it."""
+    return fixture_meta.read(fixture, strict=False)
 
 
 def operands(meta):
-    if meta.get("root"):
-        return ["--root=" + meta["root"], "."]
-    rest = [one.strip() for one in meta.get("with", "").split(",")
-            if one.strip()]
-    return [meta["program"]] + rest
+    """Its module, named from the fixture directory a manifest compilation
+    runs in."""
+    return meta.module_arguments(".")
 
 
 def text_digest(data):
@@ -324,7 +320,7 @@ def run_one(refine, fixture, sources, target, variant, work):
 
 def run_recorded(refine, root, args):
     """The fixture harness's invocation, without manifest-only options."""
-    result = subprocess.run([str(refine)] + args.split(), capture_output=True,
+    result = subprocess.run([str(refine)] + args, capture_output=True,
                             cwd=root / "compiler/ada")
     return {
         "status": result.returncode,
@@ -351,15 +347,9 @@ def emit(refine, root, work, out, targets=TARGETS):
             meta = meta_of(fixture)
             #  A rooted fixture's `args` are options before the module its
             #  root gives, as the test program runs it.
-            if meta.get("root") and ("args" in meta or "expect" in meta):
-                place = "../tests/fixtures/%s/%s" % (klass, fixture.name)
-                module = (place if meta["root"] == "."
-                          else "%s/%s" % (place, meta["root"]))
-                recorded.append((fixture, " ".join(
-                    [meta.get("args", ""), "--root=" + module,
-                     place]).strip()))
-            elif "args" in meta:
-                recorded.append((fixture, meta["args"]))
+            if "args" in meta or (meta.get("root") and "expect" in meta):
+                recorded.append((fixture, meta.source_arguments(
+                    "../tests/fixtures/%s/%s" % (klass, fixture.name))))
             if not meta.get("program"):
                 continue
             sources = operands(meta)
@@ -393,9 +383,8 @@ def emit(refine, root, work, out, targets=TARGETS):
 
 
 #  Default levels for manifest compilations without an explicit level.
-DEFAULT_LEVEL = {"linux-x86-64": "x86-64-v1", "linux-arm64": "armv8-a",
-                 "darwin-arm64": "armv8-a", "cortex-m0": "armv6-m",
-                 "freebsd-x86-64": "x86-64-v1", "freebsd-arm64": "armv8-a"}
+DEFAULT_LEVEL = {target: fixture_meta.FAMILIES[fixture_meta.FAMILY_OF[target]][0]
+                 for target in TARGETS}
 
 #  What a change of space may move, per field; `layout` stands for them.
 MOVED_BY_LAYOUT = {"asm", "report"}

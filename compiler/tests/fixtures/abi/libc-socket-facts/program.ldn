@@ -162,5 +162,5 @@ public extern(c) l_decoded: (source: ptr u8, length: u32) -> (summary: i64) =
     last: u8 = if at.family == net.ipv4 then at.octets[3] else at.octets[15]
                end if
     summary = (if at.family == net.ipv6 then i64(1) << 32 else i64(0) end if)
-               | (i64(at.port) << 8) | i64(last)
+              | (i64(at.port) << 8) | i64(last)
 end l_decoded

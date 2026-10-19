@@ -1,5 +1,16 @@
 --  Host-independent allocation and selected-machine evidence.  These cases
 --  inspect assembly; the separately recorded ABI/runtime fixtures execute it.
+--
+--  The assembly a case reads is what `refine compile` emits for its source
+--  at the options the case names: Emitted lowers the source again and puts
+--  it through Landin.IR.Pipeline, the driver's own passes, before the
+--  backend sees it, so the slots, their use counts and the checks that
+--  remain are the command line's, and an expectation learned from
+--  `refine compile --emit=asm` holds here.  Lower puts its unit through the
+--  same pipeline at the default options, or at the options a case names,
+--  so a case that asks the allocator or the backend about that unit
+--  directly (Alloc.Make, X86.Emit on Landin.Stages.Code) asks about the
+--  unit the command line would emit too.
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Unchecked_Conversion;
@@ -12,8 +23,7 @@ with Landin.Backend.X86_64.Machine;
 with Landin.Build_Reports;
 with Landin.Debugging;
 with Landin.IR;
-with Landin.IR.If_Conversion;
-with Landin.IR.Simplification;
+with Landin.IR.Pipeline;
 with Landin.Optimization;
 with Landin.Source;
 with Landin.Stages.Checking;
@@ -58,11 +68,16 @@ package body Landin.Tests.X86_Optimization_Suite is
    function Contains (Text, Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
+   --  Text lowered into Work and put through Landin.IR.Pipeline at
+   --  Options, as `refine compile` would at those options, so a case that
+   --  asks the allocator or the backend about Work's unit directly asks
+   --  about the unit the command line emits.
    procedure Lower
      (Item : in out Landin.Testing.Context;
-      Work : in out Landin.Stages.Compilation; Text : String);
+      Work : in out Landin.Stages.Compilation; Text : String;
+      Options : Opt.Options := Opt.Default_Options);
    function Emitted
-     (Work : in out Landin.Stages.Compilation;
+     (Work : Landin.Stages.Compilation;
       Options : Opt.Options := Opt.Default_Options) return String;
    procedure Selected_Instructions (Item : in out Landin.Testing.Context);
    procedure Canonical_Bodies (Item : in out Landin.Testing.Context);
@@ -109,7 +124,8 @@ package body Landin.Tests.X86_Optimization_Suite is
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
-      Work : in out Landin.Stages.Compilation; Text : String)
+      Work : in out Landin.Stages.Compilation; Text : String;
+      Options : Opt.Options := Opt.Default_Options)
    is
       Order : Landin.Stages.Pipeline;
       Written : constant Landin.Source.Source_Id :=
@@ -127,16 +143,58 @@ package body Landin.Tests.X86_Optimization_Suite is
          Landin.Testing.Check_Equal
            (Item, Ran, 5, "in-memory source reaches verified IR: "
             & Landin.Stages.Rendered_Report (Work));
+         if Ran = 5 then
+            declare
+               Evidence : Reports.Report;
+            begin
+               Landin.IR.Pipeline.Run_On_Verified
+                 (Landin.Stages.Code (Work).all, Landin.Stages.Target (Work),
+                  Options, Evidence);
+            end;
+         end if;
       end;
    end Lower;
 
    function Emitted
-     (Work : in out Landin.Stages.Compilation;
+     (Work : Landin.Stages.Compilation;
       Options : Opt.Options := Opt.Default_Options) return String
-   is (X86.Text
-         (Landin.Stages.Code (Work).all, Landin.Stages.Meanings (Work).all,
-          Landin.Stages.Identities (Work).all, Landin.Stages.Target (Work),
-          Options));
+   is
+      Fresh : Landin.Stages.Compilation :=
+        Landin.Stages.Create
+          (Landin.Stages.Target (Work), Landin.Stages.Level (Work));
+      Order : Landin.Stages.Pipeline;
+      Evidence : Reports.Report;
+   begin
+      for Index in 1 .. Landin.Stages.Source_Count (Work) loop
+         declare
+            Written : constant Landin.Source.Snapshot_Reference :=
+              Landin.Stages.Source
+                (Work, Landin.Stages.Nth_Source (Work, Index));
+            Added : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source
+                (Fresh, Landin.Source.Name (Written.Element.all),
+                 Landin.Source.Text (Written.Element.all));
+         begin
+            pragma Assert (Added /= Landin.Source.No_Source);
+         end;
+      end loop;
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Resolver'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Landin.Stages.Append (Order, Lowerer'Access);
+      if Landin.Stages.Run (Order, Fresh) /= 5 then
+         raise Program_Error with "the source no longer lowers: "
+           & Landin.Stages.Rendered_Report (Fresh);
+      end if;
+      Landin.IR.Pipeline.Run_On_Verified
+        (Landin.Stages.Code (Fresh).all, Landin.Stages.Target (Fresh),
+         Options, Evidence);
+      return X86.Text
+        (Landin.Stages.Code (Fresh).all, Landin.Stages.Meanings (Fresh).all,
+         Landin.Stages.Identities (Fresh).all, Landin.Stages.Target (Fresh),
+         Options);
+   end Emitted;
 
    --  Lines that move a float between two XMM registers with a scalar
    --  movss or movsd, which merges into the destination.
@@ -248,12 +306,17 @@ package body Landin.Tests.X86_Optimization_Suite is
       Reference, Optimized : Reports.Report;
       Before, After : US.Unbounded_String;
    begin
+      --  The call keeps `i` and `total` live across it, so they need the
+      --  callee-saved registers a leaf would not; without it the routine
+      --  `refine compile` emits is a leaf whose values all fit
+      --  caller-saved registers, which Small_Routines covers.
       Lower
         (Item, Work,
          "public sum: (limit: i32) -> (result: i32) =" & LF
          & "mut i: i32 = 0 mut total: i32 = 0" & LF
-         & "while i < limit do total = total + i inc i end while" & LF
-         & "result = total end sum");
+         & "while i < limit do total = total + step(i) inc i end while" & LF
+         & "result = total end sum" & LF
+         & "step: (x: i32) -> (r: i32) = r = x end step");
       declare
          Code : IR.Unit renames Landin.Stages.Code (Work).all;
          Facts : constant Landin.Targets.Target_Facts :=
@@ -273,7 +336,9 @@ package body Landin.Tests.X86_Optimization_Suite is
            (Item, Promoted >= 2 and then Alloc.Save_Count (Plan) > 0
             and then Plan.Slot = Again.Slot and then Plan.Value = Again.Value
             and then Plan.Used = Again.Used,
-            "loop scalars promote with a repeatable physical register plan");
+            "loop scalars promote with a repeatable physical register plan:"
+            & Natural'Image (Promoted) & " promoted," & Natural'Image
+              (Alloc.Save_Count (Plan)) & " saved");
          Landin.Testing.Check
            (Item, X86.Frame_Is_Addressable (Code, 1, Facts,
                                            Opt.Default_Options),
@@ -332,10 +397,13 @@ package body Landin.Tests.X86_Optimization_Suite is
       Speed : constant Opt.Options := (Opt.Speed, Opt.Auto);
       Updates : US.Unbounded_String;
    begin
+      --  Each arm also stores to a module variable, so if-conversion,
+      --  which at size and speed turns an arm that touches only private
+      --  slots into a choice, leaves the twelve branches and their blocks.
       for Bound in 1 .. 12 loop
          US.Append
            (Updates, "if limit >" & Natural'Image (Bound)
-            & " then setup = setup + 1 end if" & LF);
+            & " then setup = setup + 1 seen = 1 end if" & LF);
       end loop;
       Lower
         (Item, Work,
@@ -347,7 +415,8 @@ package body Landin.Tests.X86_Optimization_Suite is
          & " end while" & LF
          & "inc i end while" & LF
          & "result = total + usize(setup) end walk" & LF
-         & "step: (x: usize) -> (r: usize) = r = x end step");
+         & "step: (x: usize) -> (r: usize) = r = x end step" & LF
+         & "mut seen: u32 = 0");
       declare
          Code : IR.Unit renames Landin.Stages.Code (Work).all;
          Facts : constant Landin.Targets.Target_Facts :=
@@ -928,12 +997,14 @@ package body Landin.Tests.X86_Optimization_Suite is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
    begin
+      --  Two indices, so the load's check is not the address's again,
+      --  which simplification would leave out at size.
       Lower
         (Item, Work,
-         "public probe: (i: usize) -> (r: u32) = "
+         "public probe: (i: usize, j: usize) -> (r: u32) = "
          & "mut words: [4]u32 = zeroed "
          & "p: ptr mut u32 = addr words[i] "
-         & "p.val = 7 r = words[i] end probe");
+         & "p.val = 7 r = words[j] end probe");
       for Reference in Boolean loop
          declare
             Text : constant String := Emitted
@@ -1321,15 +1392,18 @@ package body Landin.Tests.X86_Optimization_Suite is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
    begin
+      --  Each arm returns, so if-conversion, which turns an arm that only
+      --  assigns into a choice at size and speed, leaves every comparison
+      --  a branch to read.
       Lower
         (Item, Work,
          "public probe: (a: f64, b: f32, c: f32) -> (r: u32) = r = 0 "
-         & "if a < 1.0 then r = 1 end if "
-         & "if a >= 2.0 then r = 2 end if "
-         & "if b <= c then r = 3 end if "
-         & "if b > c then r = 4 end if "
-         & "if a == 3.0 then r = 5 end if "
-         & "if b <> c then r = 6 end if end probe");
+         & "if a < 1.0 then r = 1 return end if "
+         & "if a >= 2.0 then r = 2 return end if "
+         & "if b <= c then r = 3 return end if "
+         & "if b > c then r = 4 return end if "
+         & "if a == 3.0 then r = 5 return end if "
+         & "if b <> c then r = 6 return end if end probe");
       for Objective in Opt.Objective loop
          declare
             Text : constant String := Emitted (Work, (Objective, Opt.Off));
@@ -1486,16 +1560,18 @@ package body Landin.Tests.X86_Optimization_Suite is
          return Count;
       end Indexed;
    begin
+      --  Every access has an index of its own, so no check dominates
+      --  another and simplification, which removes a dominated one at
+      --  size and speed, leaves each access its trap to keep.
       Lower
         (Item, Work,
-         "public words_at: (words: []u64, i: usize) -> (r: u64) = "
-         & "mut local: [4]u64 = zeroed local[i] = words[i] "
-         & "r = local[i] + words[i] end words_at "
+         "public words_at: (words: []u64, i: usize, j: usize) -> (r: u64) = "
+         & "mut local: [4]u64 = zeroed local[i] = words[j] "
+         & "r = local[j] + words[i] end words_at "
          & "public pick: (inout values: [16]u8, i: usize) -> (r: u8) = "
          & "r = values[i] end pick "
-         & "public flip: (inout values: [16]u8, i: usize) -> none = "
-         & "saved: u8 = values[i] values[i] = values[0] "
-         & "values[0] = saved end flip");
+         & "public flip: (inout values: [16]u8, i: usize, j: usize)"
+         & " -> none = values[j] = values[i] end flip");
       for Objective in Opt.Objective loop
          declare
             Text : constant String := Emitted (Work, (Objective, Opt.Off));
@@ -1786,12 +1862,6 @@ package body Landin.Tests.X86_Optimization_Suite is
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
    begin
       Lower (Item, Work, Source);
-      IR.Simplification.Run
-        (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
-         Objective);
-      IR.If_Conversion.Run
-        (Landin.Stages.Code (Work).all, Landin.Targets.Linux_X86_64,
-         Objective);
       return Emitted (Work, (Objective, Opt.Off));
    end Converted;
 

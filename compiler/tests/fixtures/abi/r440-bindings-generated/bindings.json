@@ -356,6 +356,90 @@
       "adapter": null,
       "adapter_output_escaping_sources": [],
       "adapter_reasons": [],
+      "c_name": "binding_entry_check",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_entry_check",
+      "parameters": [
+        {
+          "c_name": "record",
+          "c_type": "const BindingEntry *",
+          "landin_name": "record",
+          "landin_type": "ptr binding_entry",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "int",
+        "landin_type": "c.c_int",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_entry_fill",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_entry_fill",
+      "parameters": [
+        {
+          "c_name": "record",
+          "c_type": "BindingEntry *",
+          "landin_name": "record",
+          "landin_type": "ptr mut binding_entry",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_r440_bindings_binding_frame_check_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "pointer-only-parameter:value"
+      ],
+      "c_name": "binding_frame_check",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_frame_check",
+      "parameters": [
+        {
+          "c_name": "value",
+          "c_type": "BindingFrame",
+          "landin_name": "value",
+          "landin_type": "binding_frame",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "int",
+        "landin_type": "c.c_int",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
       "c_name": "binding_highbit",
       "direction": "import",
       "kind": "function",
@@ -364,6 +448,30 @@
       "result": {
         "c_type": "BindingSmall",
         "landin_type": "binding_small",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_layout",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_layout",
+      "parameters": [
+        {
+          "c_name": "which",
+          "c_type": "int",
+          "landin_name": "which",
+          "landin_type": "c.c_int",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "unsigned long",
+        "landin_type": "c.c_ulong",
         "policy": null
       },
       "variadic": false
@@ -423,6 +531,126 @@
           "ownership": "static",
           "retention": "static"
         }
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_wire_check",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_wire_check",
+      "parameters": [
+        {
+          "c_name": "record",
+          "c_type": "const BindingWire *",
+          "landin_name": "record",
+          "landin_type": "ptr binding_wire",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "int",
+        "landin_type": "c.c_int",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_wire_fill",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_wire_fill",
+      "parameters": [
+        {
+          "c_name": "record",
+          "c_type": "BindingWire *",
+          "landin_name": "record",
+          "landin_type": "ptr mut binding_wire",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_r440_bindings_binding_wire_make_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "pointer-only-result"
+      ],
+      "c_name": "binding_wire_make",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_wire_make",
+      "parameters": [
+        {
+          "c_name": "kind",
+          "c_type": "unsigned char",
+          "landin_name": "kind",
+          "landin_type": "c.c_uchar",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "BindingWire",
+        "landin_type": "binding_wire",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "binding_words_sum",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_words_sum",
+      "parameters": [
+        {
+          "c_name": "record",
+          "c_type": "const BindingWords *",
+          "landin_name": "record",
+          "landin_type": "ptr binding_words",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        },
+        {
+          "c_name": "count",
+          "c_type": "int",
+          "landin_name": "count",
+          "landin_type": "c.c_int",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "int",
+        "landin_type": "c.c_int",
+        "policy": null
       },
       "variadic": false
     },
@@ -529,6 +757,33 @@
       "result": {
         "c_type": "_Bool",
         "landin_type": "c.c_bool",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "c_name": "landin_binding_wire_mark",
+      "direction": "export",
+      "kind": "function",
+      "landin_name": "landin_binding_wire_mark",
+      "parameters": [
+        {
+          "c_name": "record",
+          "c_type": "BindingWire *",
+          "landin_name": "record",
+          "landin_type": "ptr mut binding_wire",
+          "policy": {
+            "from": [],
+            "nullability": "nonnullable",
+            "ownership": "borrowed",
+            "retention": "call"
+          }
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
         "policy": null
       },
       "variadic": false
@@ -741,6 +996,87 @@
       "selected": true
     },
     {
+      "alignment": 8,
+      "c_name": "BindingEntry",
+      "fields": [
+        {
+          "c_name": "inode",
+          "c_type": "unsigned long",
+          "landin_name": "inode",
+          "policy": null
+        },
+        {
+          "c_name": "length",
+          "c_type": "unsigned short",
+          "landin_name": "length",
+          "policy": null
+        },
+        {
+          "c_name": "kind",
+          "c_type": "unsigned char",
+          "landin_name": "kind",
+          "policy": null
+        },
+        {
+          "c_name": "name",
+          "c_type": "char []",
+          "landin_name": "name",
+          "policy": null
+        }
+      ],
+      "flexible_member": "name",
+      "kind": "record",
+      "landin_name": "binding_entry",
+      "offsets": {
+        "inode": 0,
+        "kind": 10,
+        "length": 8,
+        "name": 11
+      },
+      "packed": false,
+      "pointer_only": true,
+      "representation": "native-layout-c",
+      "selected": true,
+      "size": 16
+    },
+    {
+      "alignment": 1,
+      "c_name": "BindingFrame",
+      "fields": [
+        {
+          "c_name": "lead",
+          "c_type": "unsigned char",
+          "landin_name": "lead",
+          "policy": null
+        },
+        {
+          "c_name": "body",
+          "c_type": "BindingWire",
+          "landin_name": "body",
+          "policy": null
+        },
+        {
+          "c_name": "tail",
+          "c_type": "unsigned short",
+          "landin_name": "tail",
+          "policy": null
+        }
+      ],
+      "flexible_member": null,
+      "kind": "record",
+      "landin_name": "binding_frame",
+      "offsets": {
+        "body": 1,
+        "lead": 0,
+        "tail": 28
+      },
+      "packed": true,
+      "pointer_only": true,
+      "representation": "native-layout-c",
+      "selected": true,
+      "size": 30
+    },
+    {
       "alignment": 4,
       "c_name": "BindingMatrix",
       "fields": [
@@ -751,11 +1087,14 @@
           "policy": null
         }
       ],
+      "flexible_member": null,
       "kind": "record",
       "landin_name": "binding_matrix",
       "offsets": {
         "values": 0
       },
+      "packed": false,
+      "pointer_only": false,
       "representation": "native-layout-c",
       "selected": true,
       "size": 24
@@ -776,11 +1115,14 @@
           }
         }
       ],
+      "flexible_member": null,
       "kind": "record",
       "landin_name": "binding_native_view",
       "offsets": {
         "data": 0
       },
+      "packed": false,
+      "pointer_only": false,
       "representation": "native-layout-c",
       "selected": true,
       "size": 8
@@ -802,12 +1144,15 @@
           "policy": null
         }
       ],
+      "flexible_member": null,
       "kind": "record",
       "landin_name": "binding_pair",
       "offsets": {
         "count": 8,
         "real": 0
       },
+      "packed": false,
+      "pointer_only": false,
       "representation": "native-layout-c",
       "selected": true,
       "size": 16
@@ -896,6 +1241,117 @@
       "selected": true
     },
     {
+      "alignment": 1,
+      "c_name": "BindingWire",
+      "fields": [
+        {
+          "c_name": "kind",
+          "c_type": "unsigned char",
+          "landin_name": "kind",
+          "policy": null
+        },
+        {
+          "c_name": "half",
+          "c_type": "unsigned short",
+          "landin_name": "half",
+          "policy": null
+        },
+        {
+          "c_name": "word",
+          "c_type": "unsigned int",
+          "landin_name": "word",
+          "policy": null
+        },
+        {
+          "c_name": "wide",
+          "c_type": "unsigned long",
+          "landin_name": "wide",
+          "policy": null
+        },
+        {
+          "c_name": "twice",
+          "c_type": "double",
+          "landin_name": "twice",
+          "policy": null
+        },
+        {
+          "c_name": "flag",
+          "c_type": "_Bool",
+          "landin_name": "flag",
+          "policy": null
+        },
+        {
+          "c_name": "bytes",
+          "c_type": "unsigned char [3]",
+          "landin_name": "bytes",
+          "policy": null
+        }
+      ],
+      "flexible_member": null,
+      "kind": "record",
+      "landin_name": "binding_wire",
+      "offsets": {
+        "bytes": 24,
+        "flag": 23,
+        "half": 1,
+        "kind": 0,
+        "twice": 15,
+        "wide": 7,
+        "word": 3
+      },
+      "packed": true,
+      "pointer_only": true,
+      "representation": "native-layout-c",
+      "selected": true,
+      "size": 27
+    },
+    {
+      "alignment": 1,
+      "c_name": "BindingWords",
+      "fields": [
+        {
+          "c_name": "kind",
+          "c_type": "unsigned char",
+          "landin_name": "kind",
+          "policy": null
+        },
+        {
+          "c_name": "data",
+          "c_type": "unsigned int []",
+          "landin_name": "data",
+          "policy": null
+        }
+      ],
+      "flexible_member": "data",
+      "kind": "record",
+      "landin_name": "binding_words",
+      "offsets": {
+        "data": 1,
+        "kind": 0
+      },
+      "packed": true,
+      "pointer_only": true,
+      "representation": "native-layout-c",
+      "selected": true,
+      "size": 1
+    },
+    {
+      "accessors": {
+        "address": "landin_r440_bindings_binding_frame_global_address",
+        "read": "landin_r440_bindings_binding_frame_global_read",
+        "write": "landin_r440_bindings_binding_frame_global_write"
+      },
+      "c_name": "binding_frame_global",
+      "c_type": "BindingFrame",
+      "kind": "variable",
+      "landin_name": "binding_frame_global",
+      "landin_type": "binding_frame",
+      "policy": null,
+      "storage": "import",
+      "thread_local": false,
+      "writable": true
+    },
+    {
       "accessors": {
         "address": "landin_r440_bindings_binding_global_counter_address",
         "read": "landin_r440_bindings_binding_global_counter_read",
@@ -955,15 +1411,15 @@
     "headers": [
       {
         "name": "r440-bindings.h",
-        "sha256": "18c57fc8154b676ba7c3d44a8f5a4135fc4781cf62210f842535870c2daed29d"
+        "sha256": "b2cea09a23a21bc853dc90cb91d3daad25c2a59e70066159b9a2fdec49cc2aa7"
       }
     ],
-    "policy_sha256": "f33043ce1149710e41a130289881f479df75e497ec471c5144ae11e4ee6198c5"
+    "policy_sha256": "f23db01474fdde605ee822eee9d15027712abd1e5e9667fd9986418cf822fb3d"
   },
   "outputs": {
-    "adapters.c": "d7d9c9076211c4987d928f62297370e84394aac392bbccb9f71761c68f06ea41",
-    "bindings.ldn": "303a4d86630928cc768511ed38f9bf257055d374d0f7ce821c948c4cfcca755d",
-    "exports.h": "4db13113ad85b233ae8ff0f08af1e88aed4e3f4ba29010f48909eb4462c416d0"
+    "adapters.c": "e46fc03981f173fcdd390b903b5038e4daf1d2225197f1df1319d714f9aa9682",
+    "bindings.ldn": "866e94d95359ef0dd48b37a9da6c997fe24a3b909d1e7b3500b11c1342e2892e",
+    "exports.h": "b9b3ce73b399dd4633b8545f112bfd07f39058bac15a179aedcd08132819b33e"
   },
   "schema_version": 1
 }

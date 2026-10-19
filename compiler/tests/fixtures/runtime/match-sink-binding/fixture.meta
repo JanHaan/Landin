@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a ptr arm's `sink` binding is passed to a sink parameter, consuming the matched place, for a union of one atom and of several, and the subject is used again once assigned
+program: main.ldn
+status: 42
+constructs: 0480, 0910, 1210, 1220
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

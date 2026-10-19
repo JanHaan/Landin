@@ -7,7 +7,7 @@ error[L0328]: this type does not permit a zeroed initializer
    |
 20 |     mut state: counter_space = zeroed
    |                ^^^^^^^^^^^^^ the type written here
-  = note: [0540]/[0630]/D213: zeroed needs a zero image for every field, and a pointer, slice, pointer union, function or atom set has none; write the value with its fields, or, for a service's state, keep its references in the handle and only scalars in the zeroed state (D288)
+  = note: [0540]/[0630]: zeroed needs a zero image for every field, and a pointer, slice, pointer union, function or atom set has none, nor does a distinct type over one; write the value with its fields, or, for a service's state, keep its references in the handle and only scalars in the zeroed state (D288)
 error[L0328]: this array has no all-bits-zero value
   --> ../tests/fixtures/negative/zeroed-names-its-routes/main.ldn:21:32
    |

@@ -1,0 +1,6 @@
+error[L0201]: `u8` is a type, and a type is not a value
+  --> ../tests/fixtures/negative/a-type-argument-is-offered-by-name/program.ldn:9:25
+  |
+9 |     n := make_buffer(4, u8)
+  |                         ^^
+  = note: [1300]: a generic routine is given a type by its formal's name, and then every argument by name, as in `make_buffer(capacity: 4, t: u8)`

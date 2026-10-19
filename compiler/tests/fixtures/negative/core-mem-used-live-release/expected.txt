@@ -1,4 +1,4 @@
-error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+error[L0315]: this argument is passed `inout`, so the call may change its storage while `view` still views it
   --> ../tests/fixtures/negative/core-mem-used-live-release/main.ldn:4:22
   |
 4 |     _ = mem.withdraw(storage) else 0
@@ -7,4 +7,4 @@ error[L0315]: this `inout` or `sink` use may move storage while a derived view i
   |
 3 |     view := mem.used(storage)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
-  = note: [0800]/[0830]: take the view again after mutating its source
+  = note: [0800]/[0830]: the `inout` parameter `store` locks its argument whether or not the routine writes it; finish with `view` before the call and take it again after, or, if the routine only reads it, declare `store` without `inout`

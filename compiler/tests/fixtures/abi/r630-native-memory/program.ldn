@@ -41,9 +41,9 @@ public extern(c) alias_bytes: (p: ptr mut u32) -> (value: u32) =
 end alias_bytes
 
 public extern(c) swap_value: (p: ptr mut u64, expected: u64, desired: u64)
-    -> (old: u64) =
+                             -> (old: u64) =
     old = compiler.atomic_compare_exchange(p, expected, desired,
-        compiler.acq_rel, compiler.acquire)
+                                           compiler.acq_rel, compiler.acquire)
 end swap_value
 
 public extern(c) fenced: (own: ptr mut u32, other: ptr u32) -> (r: u32) =

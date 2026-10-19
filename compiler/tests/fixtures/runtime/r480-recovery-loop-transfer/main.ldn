@@ -45,6 +45,6 @@ public main: () -> (code: i32) =
         assigned
     end) + 1
     code = if state == 5 and total == 84 and cleanups == 6
-              and recovered == 42
+      and recovered == 42
            then 42 else 1 end if
 end main

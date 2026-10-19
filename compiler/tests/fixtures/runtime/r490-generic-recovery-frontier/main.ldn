@@ -47,7 +47,7 @@ end self
 public main: () -> (code: i32) =
     recovered := leaf(true) else (error)
         observe(copy(error))
-        for index in 0 ..< limit(error) do
+        for index in 0..<limit(error) do
             observe(index)
         end for
         40

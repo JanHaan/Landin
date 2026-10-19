@@ -169,10 +169,10 @@ port_taken: (self: network, at: net.address, role: socket_role)
     for index in usize(0)..<lenof self.sockets do
         held: ptr network_socket = addr self.sockets[index]
         same_kind: bool = if role == datagram_slot
-        then held.val.role == datagram_slot
-        elsif role == listening_slot then held.val.role == listening_slot
-        else held.val.role == listening_slot
-             or held.val.role == connection_slot end if
+                          then held.val.role == datagram_slot
+                          elsif role == listening_slot then held.val.role == listening_slot
+                          else held.val.role == listening_slot
+                               or held.val.role == connection_slot end if
         if same_kind and overlaps(held.val.local, at) then taken = true end if
     end for
 end port_taken

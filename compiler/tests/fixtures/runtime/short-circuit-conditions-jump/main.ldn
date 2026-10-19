@@ -36,7 +36,7 @@ either_then_both: (first: bool, second: bool, third: bool)
     mut log: u32 = 0
     mut way: u32 = 2
     if (note(log, 1, first) or note(log, 2, second))
-        and note(log, 3, third)
+      and note(log, 3, third)
     then
         way = 1
     end if
@@ -47,7 +47,7 @@ both_or_else: (first: bool, second: bool, third: bool) -> (outcome: u32) =
     mut log: u32 = 0
     mut way: u32 = 2
     if (note(log, 1, first) and note(log, 2, second))
-        or note(log, 3, third)
+      or note(log, 3, third)
     then
         way = 1
     end if

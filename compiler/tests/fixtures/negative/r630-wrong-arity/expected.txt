@@ -2,5 +2,9 @@ error[L0344]: wrong memory intrinsic arity
   --> ../tests/fixtures/negative/r630-wrong-arity/program.ldn:5:9
   |
 5 |     _ = compiler.atomic_load(addr a)
+  |         ^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r630-wrong-arity/program.ldn:5:9
+  |
+5 |     _ = compiler.atomic_load(addr a)
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
   = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes

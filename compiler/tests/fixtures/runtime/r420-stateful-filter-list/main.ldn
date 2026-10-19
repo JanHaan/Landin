@@ -61,8 +61,8 @@ public main: () -> (code: i32) =
         if selected.keep(20) then inc second_pass end if
     end for
     shape_ok: bool = vec.length(filters) == 20
-      and fault.attempts(allocator) == 5 and fault.growths(allocator) == 0
-      and fault.live(allocator) == 1
+                     and fault.attempts(allocator) == 5 and fault.growths(allocator) == 0
+                     and fault.live(allocator) == 1
     vec.release(filters, allocator)
     if shape_ok and accepted == 10 and second_pass == 15
       and low.calls == 20 and low.minimum == 10

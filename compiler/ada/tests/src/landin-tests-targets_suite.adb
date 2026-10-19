@@ -1742,6 +1742,305 @@ package body Landin.Tests.Targets_Suite is
          "the system call has one standing on every hosted architecture");
    end Assembly_Registers;
 
+   --  D255's table is stated three times: in spec.md, in the compiler's
+   --  level model and in `platform/linux`, whose entry check restates each
+   --  level's name and, in D255's order, the features it holds a processor
+   --  to.  Nothing else ties the three, so this reads the first and the
+   --  third from this checkout, on the real host, and holds the compiler
+   --  and the library to the specification's table.
+   procedure Levels_Agree_With_D255 (Item : in out Landin.Testing.Context);
+
+   procedure Levels_Agree_With_D255 (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+      package Unbounded renames Ada.Strings.Unbounded;
+      use type Unbounded.Unbounded_String;
+
+      Host : Landin.Platform.Native.Native_Filesystem;
+      Spec_Text, Library_Text : Unbounded.Unbounded_String;
+      Spec_Status, Library_Status : Landin.Platform.Read_Status;
+
+      type Row is record
+         Family, Level : Unbounded.Unbounded_String;
+         --  Space-separated, with a space before and after each name.
+         Holds : Unbounded.Unbounded_String;
+         --  The names this row's cell writes, in its order.
+         Adds : Unbounded.Unbounded_String;
+      end record;
+      Rows : array (1 .. 32) of Row;
+      Count : Natural := 0;
+
+      --  The backticked words of Cell, each followed by a space.
+      function Quoted_Words (Cell : String) return String;
+      function Quoted_Words (Cell : String) return String is
+         Result : Unbounded.Unbounded_String;
+         Open : Natural := 0;
+      begin
+         for Index in Cell'Range loop
+            if Cell (Index) = '`' then
+               if Open = 0 then
+                  Open := Index;
+               else
+                  Unbounded.Append
+                    (Result, Cell (Open + 1 .. Index - 1) & " ");
+                  Open := 0;
+               end if;
+            end if;
+         end loop;
+         return Unbounded.To_String (Result);
+      end Quoted_Words;
+
+      --  The double-quoted single words of Text, space-separated.
+      function Named_Features (Text : String) return String;
+      function Named_Features (Text : String) return String is
+         Result : Unbounded.Unbounded_String;
+         Open : Natural := 0;
+      begin
+         for Index in Text'Range loop
+            if Text (Index) = '"' then
+               if Open = 0 then
+                  Open := Index;
+               else
+                  declare
+                     Word : constant String := Text (Open + 1 .. Index - 1);
+                  begin
+                     if Word'Length > 0
+                       and then Ada.Strings.Fixed.Index (Word, " ") = 0
+                     then
+                        if Unbounded.Length (Result) > 0 then
+                           Unbounded.Append (Result, " ");
+                        end if;
+                        Unbounded.Append (Result, Word);
+                     end if;
+                  end;
+                  Open := 0;
+               end if;
+            end if;
+         end loop;
+         return Unbounded.To_String (Result);
+      end Named_Features;
+
+      --  The text from the first First after From to the next Last.
+      function Between
+        (Text : String; First, Last : String; From : Natural := 0)
+         return String;
+      function Between
+        (Text : String; First, Last : String; From : Natural := 0)
+         return String
+      is
+         Start : constant Natural := Ada.Strings.Fixed.Index
+           (Text, First, (if From = 0 then Text'First else From));
+         Stop : Natural;
+      begin
+         if Start = 0 then
+            return "";
+         end if;
+         Stop := Ada.Strings.Fixed.Index (Text, Last, Start + First'Length);
+         return (if Stop = 0 then "" else Text (Start .. Stop - 1));
+      end Between;
+
+      function Find (Level : String) return Natural;
+      function Find (Level : String) return Natural is
+      begin
+         for Index in 1 .. Count loop
+            if Rows (Index).Level = Level then
+               return Index;
+            end if;
+         end loop;
+         return 0;
+      end Find;
+
+      function Facts_Of (Family : String) return Target_Facts is
+        (if Family = "x86-64" then Linux_X86_64
+         elsif Family = "arm64" then Linux_Arm64
+         elsif Family = "M profile" then Cortex_M
+         else Linux_RV64);
+
+      function Added (Level : String) return String is
+        (if Find (Level) = 0 then "<no row>"
+         else Unbounded.To_String (Rows (Find (Level)).Adds));
+   begin
+      Host.Read_File ("../../spec.md", Spec_Text, Spec_Status);
+      Host.Read_File
+        ("../../platform/linux/linux.ldn", Library_Text, Library_Status);
+      if Spec_Status /= Landin.Platform.Read_Ok
+        or else Library_Status /= Landin.Platform.Read_Ok
+      then
+         Landin.Testing.Fail
+           (Item, "spec.md and platform/linux/linux.ldn are read from the"
+            & " checkout this program runs in, compiler/ada");
+         return;
+      end if;
+
+      --  The table under D255's heading, one row per level.
+      declare
+         Spec : constant String := Unbounded.To_String (Spec_Text);
+         Table : constant String := Between
+           (Spec, "| family | level | features |", LF & LF,
+            Ada.Strings.Fixed.Index (Spec, "### D255 "));
+         Line_First : Positive := Table'First;
+         Family : Unbounded.Unbounded_String;
+         Family_First : Natural := 0;
+      begin
+         while Line_First <= Table'Last loop
+            declare
+               Line_Last : Natural :=
+                 Ada.Strings.Fixed.Index (Table, [1 => LF], Line_First);
+            begin
+               if Line_Last = 0 then
+                  Line_Last := Table'Last + 1;
+               end if;
+               declare
+                  Line : constant String :=
+                    Table (Line_First .. Line_Last - 1);
+                  Bar_2 : constant Natural := Ada.Strings.Fixed.Index
+                    (Line, "|", Line'First + 1);
+                  Bar_3 : constant Natural :=
+                    (if Bar_2 = 0 then 0
+                     else Ada.Strings.Fixed.Index (Line, "|", Bar_2 + 1));
+                  Bar_4 : constant Natural :=
+                    (if Bar_3 = 0 then 0
+                     else Ada.Strings.Fixed.Index (Line, "|", Bar_3 + 1));
+               begin
+                  if Bar_4 /= 0 and then Count < Rows'Last
+                    and then Ada.Strings.Fixed.Index (Line, "---") = 0
+                    and then Ada.Strings.Fixed.Index (Line, "| family") = 0
+                  then
+                     declare
+                        Named : constant String :=
+                          Trimmed (Line (Line'First + 1 .. Bar_2 - 1));
+                        Level_Words : constant String :=
+                          Quoted_Words (Line (Bar_2 + 1 .. Bar_3 - 1));
+                        Cell : constant String :=
+                          Trimmed (Line (Bar_3 + 1 .. Bar_4 - 1));
+                        Words : constant String := Quoted_Words (Cell);
+                        Inherited : Unbounded.Unbounded_String;
+                     begin
+                        if Named /= "" then
+                           Family := Unbounded.To_Unbounded_String (Named);
+                           Family_First := Count + 1;
+                        end if;
+                        if Cell'Length >= 5
+                          and then Cell (Cell'First .. Cell'First + 4)
+                            = "those"
+                        then
+                           Inherited := Rows (Count).Holds;
+                        elsif Cell'Length >= 8
+                          and then Cell (Cell'First .. Cell'First + 7)
+                            = "baseline"
+                        then
+                           Inherited := Rows (Family_First).Holds;
+                        end if;
+                        Count := Count + 1;
+                        Rows (Count) :=
+                          (Family => Family,
+                           Level => Unbounded.To_Unbounded_String
+                             (Trimmed (Level_Words)),
+                           Holds => Inherited & " " & Words,
+                           Adds => Unbounded.To_Unbounded_String
+                             (Trimmed (Words)));
+                     end;
+                  end if;
+               end;
+               Line_First := Line_Last + 1;
+            end;
+         end loop;
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Count, 13, "D255's table states thirteen levels");
+
+      --  The compiler holds exactly the features the table gives a level.
+      for Index in 1 .. Count loop
+         declare
+            Level_Name : constant String :=
+              Unbounded.To_String (Rows (Index).Level);
+            Level : constant L.Feature_Level := L.Level_Named
+              (Facts_Of (Unbounded.To_String (Rows (Index).Family)),
+               Level_Name);
+            Holds : constant String :=
+              Unbounded.To_String (Rows (Index).Holds) & " ";
+         begin
+            for Each in L.Feature loop
+               Landin.Testing.Check
+                 (Item, L.Has (Level, Each)
+                    = (Ada.Strings.Fixed.Index
+                         (Holds, " " & L.Spelling (Each) & " ") /= 0),
+                  Level_Name & " holds " & L.Spelling (Each)
+                  & " exactly when D255's table says it does");
+            end loop;
+         end;
+      end loop;
+
+      --  The library names every hosted Linux family's levels, and checks
+      --  the features each one adds in D255's order.
+      declare
+         Library : constant String := Unbounded.To_String (Library_Text);
+         Section : constant Natural :=
+           Ada.Strings.Fixed.Index (Library, "The CPU feature level (D255)");
+         Arm64 : constant String :=
+           (if Section = 0 then ""
+            else Between (Library, "elsif compiler.arch == arm64 then",
+                          LF & "    else", Section));
+         Riscv : constant String :=
+           (if Section = 0 then ""
+            else Between (Library, LF & "    else" & LF
+                                   & "        --- What the kernel says",
+                          "end missing_feature", Section));
+         Named_Levels : Natural := 0;
+         From : Natural := Library'First;
+      begin
+         loop
+            From := Ada.Strings.Fixed.Index (Library, "public level:", From);
+            exit when From = 0;
+            declare
+               Spelled : constant String := Named_Features
+                 (Between (Library, "name = """, [1 => LF], From));
+               Row : constant Natural := Find (Spelled);
+            begin
+               Named_Levels := Named_Levels + 1;
+               Landin.Testing.Check
+                 (Item, Row /= 0
+                    and then Rows (Row).Family /= "M profile",
+                  "platform/linux's level " & Spelled
+                  & " is a hosted level of D255's table");
+            end;
+            From := From + 1;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Named_Levels, 10,
+            "platform/linux names every x86-64, arm64 and RV64 level");
+         for Version in 2 .. 4 loop
+            declare
+               Image : constant String := Trimmed (Natural'Image (Version));
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Named_Features
+                    (Between (Library, "missing_v" & Image & ": (",
+                              "end missing_v" & Image)),
+                  Added ("x86-64-v" & Image),
+                  "platform/linux checks x86-64-v" & Image
+                  & "'s features in D255's order");
+            end;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Named_Features
+              (Between (Arm64, "public missing_feature:",
+                        "end missing_feature")),
+            Added ("armv8.1-a"),
+            "platform/linux checks armv8.1-a's features in D255's order");
+         Landin.Testing.Check
+           (Item, Riscv /= ""
+              and then Named_Features
+                (Riscv (Ada.Strings.Fixed.Index
+                          (Riscv & "public missing_feature:",
+                           "public missing_feature:") .. Riscv'Last)) = "zba"
+              and then Ada.Strings.Fixed.Index
+                (Added ("rv64gc_zba") & " ", "zba ") /= 0,
+            "platform/linux checks RV64's zba, a D255 feature, and no"
+            & " vendor extension the kernel cannot report");
+      end;
+   end Levels_Agree_With_D255;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1771,6 +2070,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "levels are stated per family",
          Levels_Are_Stated_Per_Family'Access);
+      Landin.Testing.Register
+        (Into, "targets", "the library and the compiler state D255's levels",
+         Levels_Agree_With_D255'Access);
       Landin.Testing.Register
         (Into, "targets", "alignments are stated per target",
          Alignments_Are_Stated_Per_Target'Access);

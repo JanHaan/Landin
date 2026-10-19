@@ -5,6 +5,7 @@ with Landin.Machine;
 --  inactive declarations and ordered library requests for one compilation.
 
 private with Ada.Containers.Ordered_Sets;
+private with Ada.Containers.Ordered_Maps;
 private with Ada.Containers.Vectors;
 private with Ada.Containers.Indefinite_Vectors;
 private with Ada.Strings.Unbounded;
@@ -13,6 +14,7 @@ with Landin.Source;
 with Landin.Source.Names;
 with Landin.Provenance;
 with Landin.Syntax;
+with Landin.Types;
 
 package Landin.Configuration is
 
@@ -105,6 +107,31 @@ package Landin.Configuration is
    function Deferred_Node
      (In_Table : Table; Index : Positive) return Landin.Syntax.Node_Id;
 
+   --  D437: a compiler fact read in a module value.  Configuration
+   --  evaluates it once arms are selected and records the node it stands
+   --  at: a bool or integer fact, or an atom fact compared with `==` or
+   --  `<>`, which is then that comparison's bool.  Resolution does not
+   --  look inside a recorded node, the checker types it as the bool or
+   --  untyped integer it is, and the one folder reads its value, so it is
+   --  image data exactly as the literal it stands for would be.  A fact
+   --  configuration refused is recorded as Refused_Fact, so that no later
+   --  stage reports it again.
+   type Fact_Kind is (No_Fact, Bool_Fact, Integer_Fact, Refused_Fact);
+   procedure Record_Fact
+     (Into : in out Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id;
+      Kind : Fact_Kind;
+      Value : Landin.Types.Folded);
+   function Fact_At
+     (In_Table : Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id) return Fact_Kind;
+   function Fact_Value
+     (In_Table : Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id) return Landin.Types.Folded;
+
    procedure Prepare (Into : in out Table);
 
    procedure Mark_Inactive
@@ -160,8 +187,16 @@ private
    package Deferrals is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Inactive_Node);
 
+   type Recorded_Fact is record
+      Kind : Fact_Kind := No_Fact;
+      Value : Landin.Types.Folded := 0;
+   end record;
+   package Fact_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Inactive_Node, Element_Type => Recorded_Fact);
+
    type Table is record
       Deferred : Deferrals.Vector;
+      Facts : Fact_Maps.Map;
       Inactive : Entries.Set;
       Settings : Overrides.Vector;
       Linked   : Libraries.Vector;

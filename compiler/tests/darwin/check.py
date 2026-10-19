@@ -20,7 +20,9 @@ ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 PROFILES = json.loads((HERE / "cases.json").read_text())
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "compiler/tests"))
 from macos_environment import stop_session
+import fixture_meta
 
 
 def require(condition, message):
@@ -52,14 +54,21 @@ def merged(meta):
     return meta.get("stream", "merged") == "merged"
 
 
+def as_meta(meta):
+    """META as fixture metadata: a fixture's own, or a lane's case or
+    overlay written as a plain dict."""
+    return fixture_meta.as_metadata(meta)
+
+
 def outcome(meta, status, stdout, stderr, expected=None):
+    meta = as_meta(meta)
     if meta.get("traps") == "yes":
         require(status == -signal.SIGTRAP, f"expected synchronous BRK, got {status}")
         if meta.get("trap_report"):
             require(reports_trap(stdout + stderr, meta["trap_report"]),
                     f"trap report missing: {meta['trap_report']!r} in {(stdout + stderr)[:400]!r}")
     else:
-        require(status == int(meta["status"]), f"expected status {meta['status']}, got {status}")
+        require(status == meta.status, f"expected status {meta.status}, got {status}")
     if expected is not None:
         actual = stdout + stderr if merged(meta) else stdout
         require(actual == expected, f"output mismatch: {actual[:400]!r}")
@@ -114,8 +123,7 @@ LEVELS = {"armv8.1-a": {"sysctl": "hw.optional.arm.FEAT_LSE",
 
 def levels_of(meta):
     """The arm64 levels a fixture's `levels:` names beyond the default."""
-    named = [one.strip() for one in meta.get("levels", "").split(",") if one.strip()]
-    return [one for one in named if one in LEVELS]
+    return [one for one in as_meta(meta).levels_for("darwin-arm64") if one in LEVELS]
 
 
 def host_has(level):
@@ -155,7 +163,7 @@ def workers():
 
 def standard_input(base, meta):
     """The file a fixture's `stdin:` names below BASE, or an empty input."""
-    return base / meta["stdin"] if meta.get("stdin") else os.devnull
+    return as_meta(meta).standard_input(base)
 
 
 class Run:
@@ -232,14 +240,12 @@ def main(argv=None):
                                    for p in (ROOT / "compiler/tests/fixtures" / cls).glob("*/fixture.meta"))
         for name in fixture_names:
             base = ROOT / "compiler/tests/fixtures" / name
-            meta = dict(line.split(": ", 1) for line in (base / "fixture.meta").read_text().splitlines()
-                        if ": " in line and not line.startswith("#"))
+            meta = fixture_meta.read(base)
             #  A fixture that does not name macOS arm64 is another lane's,
             #  as compiler/tests/README.md says of every target; one with a
             #  replacement or overlay below still names it or is replaced.
             if (args.parity and name not in differences
-                    and "darwin-arm64" not in [t.strip() for t in
-                                              meta.get("targets", "").split(",")]):
+                    and not meta.applies_to("darwin-arm64")):
                 continue
             if args.parity and name in differences:
                 if "replacement" in differences[name]:
@@ -247,9 +253,9 @@ def main(argv=None):
                 meta.update({k: v for k, v in differences[name].items() if k != "reason"})
             candidates.append((name, base, meta))
         for case in PROFILES["darwin"]:
-            candidates.append((case["name"], HERE,
-                               {**case, "class": case.get("class", "abi"),
-                                "c-sources": case.get("c", "")}))
+            candidates.append((case["name"], HERE, fixture_meta.Metadata.of(
+                {**case, "class": case.get("class", "abi"), "c-sources": case.get("c", "")},
+                case.get("class", "abi") + "/" + case["name"])))
         names = {name for name, _, _ in candidates}
         require(not args.case or set(args.case) <= names, "unknown exact case")
         def fixture(item):
@@ -284,12 +290,9 @@ def main(argv=None):
                 assembly = directory / (label + ".s")
                 object_file = directory / (label + ".o")
                 executable = directory / label
-                source = base / meta["program"]
-                sources = (["--root=" + str((base / meta["root"]).resolve()), str(source.parent)]
-                           if "root" in meta else [str(source)])
-                sources += [str(base / part.strip()) for part in meta.get("with", "").split(",") if part.strip()]
                 argv = [refine, "--target=darwin-arm64", "--optimize=" + optimize,
-                        "--specialize=" + specialize, *(["--level=" + level] if level else []), *sources]
+                        "--specialize=" + specialize, *(["--level=" + level] if level else []),
+                        *meta.module_arguments(base)]
                 cwd = ROOT / "compiler/ada"
                 # Runtime cases exercise refine's native driver selection;
                 # ABI cases retain a separate Apple-assembled Mach-O object.
@@ -336,12 +339,11 @@ def main(argv=None):
                                  "-Wl,-undefined,dynamic_lookup", base / part, "-o", dylib],
                                 label + "-shared-" + Path(part).stem, cwd)
                     shared.append(dylib)
-                status, stdout, stderr = run.command([executable, *shared,
-                                                      *shlex.split(meta.get("run_args", ""))],
+                status, stdout, stderr = run.command(meta.program_arguments(base, [executable, *shared]),
                                                      label + "-execute", cwd, expected=None, timeout=30,
                                                      merged=merged(meta),
                                                      stdin=standard_input(base, meta))
-                expected = ((base / meta["run_expect"]).read_bytes() if "run_expect" in meta
+                expected = (meta.run_expected(base) if "run_expect" in meta
                             else meta["stdout"].encode() if "stdout" in meta else None)
                 verdict = "passed"
                 if args.parity and meta.get("limit") == "darwin-shared-region":

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a pointer union of one atom or of several compares with == and <> against one of its atoms on either side, without matching and without reading the address
+program: main.ldn
+status: 42
+constructs: 0350, 0480, 1890
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

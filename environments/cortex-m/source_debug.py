@@ -11,13 +11,21 @@ sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from cortex_debug import Image, verify
 
 
+def search(elf):
+    """Where GDB finds the sources: the build's directory, and the library
+    copy under it for D422's `/landin-library/` prefix."""
+    return ['directory '+str(elf.parent),
+            'set substitute-path /landin-library '+str(elf.parent/'source')]
+
+
 PRELUDE = [
     'python', 'import gdb',
     'def frame(name, suffix=None, line=None):',
     '    f=gdb.newest_frame()',
     '    assert f.name() == name, (f.name(), name)',
     '    sal=f.find_sal()',
-    '    if suffix: assert sal.symtab.filename.endswith(suffix), sal.symtab.filename',
+    '    if suffix: assert sal.symtab.filename.endswith(suffix) or'
+    ' sal.symtab.fullname().endswith(suffix), sal.symtab.filename',
     '    if line: assert sal.line == line, (sal.line,line)',
     'def chain(names):',
     '    f=gdb.newest_frame()',
@@ -29,14 +37,15 @@ PRELUDE = [
 
 
 def checked(run, elf):
-    record = verify(elf, elf, str(elf)+'.sources.json', str(elf)+'.s', elf.parent)
+    record = verify(elf, elf, str(elf)+'.sources.json', str(elf)+'.s', elf.parent,
+                    elf.parent/'source')
     (run.out/'debug-selection.json').write_text(json.dumps(record, indent=2)+'\n')
     return record
 
 
 def cpu(run, elf):
     checked(run, elf)
-    execute(run, elf, ['directory '+str(elf.parent), *PRELUDE,
+    execute(run, elf, [*search(elf), *PRELUDE,
         'break source/app/main.ldn:61', 'continue', 'python',
         'frame("start","source/app/main.ldn",61)',
         'chain(["start","_landin_firmware_reset"])', 'end',
@@ -65,7 +74,7 @@ def relayed(run, elf, commands):
         script = run.out/'source-debug.gdb'
         script.write_text('\n'.join([
             'set pagination off', 'set confirm off', 'set remotetimeout 30',
-            'directory '+str(elf.parent), f'target remote 127.0.0.1:{port}', *PRELUDE,
+            *search(elf), f'target remote 127.0.0.1:{port}', *PRELUDE,
             *commands, 'python', 'print("R6100_RELAYED_SOURCE_PASS")', 'end', 'detach', 'quit', '']))
         text = run.debug('gdb-relayed-source', elf, script, timeout=60)
         oracle(text, 'R6100_RELAYED_SOURCE_PASS')
@@ -174,13 +183,13 @@ def library(run, elf, kind):
             'assert v("*(unsigned*)&entries") == 1', 'end']
     else:
         raise ValueError(kind)
-    execute(run, elf, ['directory '+str(elf.parent), *PRELUDE, *commands,
+    execute(run, elf, [*search(elf), *PRELUDE, *commands,
         'python', 'print("R6100_LIBRARY_SOURCE_PASS")', 'end'], 'R6100_LIBRARY_SOURCE_PASS')
 
 
 def veneer(run, elf):
     checked(run, elf)
-    execute(run, elf, ['directory '+str(elf.parent), *PRELUDE,
+    execute(run, elf, [*search(elf), *PRELUDE,
         'break boot.ldn:10', 'continue', 'python',
         'frame("flash_helper","boot.ldn",10)',
         'chain(["flash_helper","ram_worker","start"])', 'end', 'bt',
@@ -227,7 +236,7 @@ def interrupt(run, elf, naked=False):
             'assert v("$lr") == 0xfffffff1 and v("$xpsr") & 511 == 16',
             'end','bt','delete breakpoints','break _landin_firmware_returned',
             'continue','python','assert v("*(unsigned*)&completed") == 4','end']
-    execute(run,elf,['directory '+str(elf.parent),*PRELUDE,*commands,
+    execute(run,elf,[*search(elf),*PRELUDE,*commands,
         'python','assert v("$sp") == '+str(0x20003800 if naked else 0x20004000),
         'print("R6100_INTERRUPT_SOURCE_PASS")','end'],'R6100_INTERRUPT_SOURCE_PASS')
 
@@ -241,7 +250,7 @@ def leaf(run, elf):
     """
     checked(run, elf)
     line = source_line(run, 'boot.ldn', 'result += 1')
-    execute(run, elf, ['directory '+str(elf.parent), *PRELUDE,
+    execute(run, elf, [*search(elf), *PRELUDE,
         f'break boot.ldn:{line}', 'continue', 'python',
         'chain(["leaf","caller","start","_landin_firmware_reset"])',
         'end', 'bt', 'delete breakpoints',

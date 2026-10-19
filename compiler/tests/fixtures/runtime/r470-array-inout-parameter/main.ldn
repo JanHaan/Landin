@@ -39,7 +39,7 @@ end recover_first_argument
 
 public main: () -> (code: i32) =
     mut rows: [2][7]u8 = [[0, 1, 2, 3, 4, 5, 6],
-                           [10, 11, 12, 13, 14, 15, 16]]
+                          [10, 11, 12, 13, 14, 15, 16]]
     swap_copy_forward(rows[(select(0, false) else (problem)
         _ = problem
         code = 1

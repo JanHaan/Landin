@@ -16,5 +16,5 @@ extern(c) link(symbol: ".L_1_1") retry_foreign: () -> (value: i32)
 
 public extern(c) r440_link_identity: () -> (value: i32) =
     value = foo() + foreign() + mangled_foreign() + occupied
-        + payload + foreign_payload() + block_foreign() + retry_foreign()
+            + payload + foreign_payload() + block_foreign() + retry_foreign()
 end r440_link_identity

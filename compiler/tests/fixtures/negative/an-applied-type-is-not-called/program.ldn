@@ -1,0 +1,11 @@
+--  A value of an applied type is its fields in parentheses where the type is
+--  declared; calling the applied type is refused naming that form.
+list: type (t: type) = struct
+    items: [4]t
+    len: usize
+end list
+
+public main: () -> (code: i32) =
+    l := list(i32)(items: [1, 2, 3, 4], len: 3)
+    code = i32(l.len)
+end main

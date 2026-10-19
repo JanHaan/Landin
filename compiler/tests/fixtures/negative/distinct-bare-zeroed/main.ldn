@@ -1,0 +1,16 @@
+--  D428: `zeroed` constructs no identity of its own, though a distinct
+--  type over a number has a zero image; and a distinct type over a
+--  pointer has none, so a record holding one is not zeroed either.
+user_id: type = distinct u32
+cell: type = distinct ptr u32
+holder: type = struct
+    at: cell
+end holder
+
+fresh: () -> (id: user_id) =
+    id = zeroed
+end fresh
+
+held: () -> (h: holder) =
+    h = zeroed
+end held

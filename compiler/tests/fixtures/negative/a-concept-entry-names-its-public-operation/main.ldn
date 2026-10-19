@@ -1,0 +1,11 @@
+--  A hosted heap's representation is module-internal, so its allocator
+--  entry is not selected from it; the refusal names the public routine of
+--  core/mem that calls the entry, as this file calls it.
+import core/mem
+import hosted/heap
+
+public main: () -> (code: i32) =
+    memory := heap.new()
+    block := memory.alloc(64, 1) else (problem) return end
+    code = 0
+end main

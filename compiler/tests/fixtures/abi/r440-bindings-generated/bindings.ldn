@@ -40,6 +40,29 @@ public binding_callback: type = extern(c) (argument_1: c.c_int) -> (result: c.c_
 
 public binding_int_pointer: type = ptr c.c_int
 
+public binding_entry: type = layout(c) struct
+    inode: c.c_ulong
+    length: c.c_ushort
+    kind: c.c_uchar
+    name: [0]c.c_char
+end binding_entry
+
+public binding_wire: type = layout(c, packed) struct
+    kind: c.c_uchar
+    half: c.c_ushort
+    word: c.c_uint
+    wide: c.c_ulong
+    twice: c.c_double
+    flag: c.c_bool
+    bytes: [3]c.c_uchar
+end binding_wire
+
+public binding_frame: type = layout(c, packed) struct
+    lead: c.c_uchar
+    body: binding_wire
+    tail: c.c_ushort
+end binding_frame
+
 public binding_matrix: type = layout(c) struct
     values: [2][3]c.c_int
 end binding_matrix
@@ -52,6 +75,11 @@ public binding_pair: type = layout(c) struct
     real: c.c_double
     count: c.c_int
 end binding_pair
+
+public binding_words: type = layout(c, packed) struct
+    kind: c.c_uchar
+    data: [0]c.c_uint
+end binding_words
 
 public binding_receive_many_handler: type = extern(c) (count: c.c_int, i1: c.c_int, i2: c.c_int, i3: c.c_int, i4: c.c_int, d1: c.c_double, d2: c.c_double, d3: c.c_double, d4: c.c_double, d5: c.c_double, d6: c.c_double, d7: c.c_double, d8: c.c_double, d9: c.c_double, d10: c.c_double, l1: c.c_long, l2: c.c_long) -> (result: c.c_int)
 
@@ -165,11 +193,33 @@ public extern(c) link(symbol: "binding_borrowed_pointer") binding_borrowed_point
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_call_optional_call") binding_call_optional: (action: ptr u8, value: c.c_int) -> (result: c.c_int)
 
+public extern(c) link(symbol: "binding_entry_check") binding_entry_check: (record: ptr binding_entry) -> (result: c.c_int)
+
+public extern(c) link(symbol: "binding_entry_fill") binding_entry_fill: (record: ptr mut binding_entry) -> none
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_frame_check_call") binding_frame_check: (value: ptr binding_frame) -> (result: c.c_int)
+
 public extern(c) link(symbol: "binding_highbit") binding_highbit: () -> (result: binding_small)
+
+public extern(c) link(symbol: "binding_layout") binding_layout: (which: c.c_int) -> (result: c.c_ulong)
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_rotate_value_call") binding_rotate_value: (result: ptr mut u8, value: ptr u8) -> none
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_select_callback_call") binding_select_callback: (result: ptr mut u8, which: c.c_int) -> none
+
+public extern(c) link(symbol: "binding_wire_check") binding_wire_check: (record: ptr binding_wire) -> (result: c.c_int)
+
+public extern(c) link(symbol: "binding_wire_fill") binding_wire_fill: (record: ptr mut binding_wire) -> none
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_wire_make_call") binding_wire_make: (result: ptr mut binding_wire, kind: c.c_uchar) -> none
+
+public extern(c) link(symbol: "binding_words_sum") binding_words_sum: (record: ptr binding_words, count: c.c_int) -> (result: c.c_int)
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_frame_global_address") binding_frame_global_address: () -> (address: ptr mut binding_frame)
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_frame_global_read") binding_frame_global_read: (value: ptr mut binding_frame) -> none
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_frame_global_write") binding_frame_global_write: (value: ptr binding_frame) -> none
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_global_counter_address") binding_global_counter_address: () -> (address: ptr mut c.c_int)
 

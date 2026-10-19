@@ -1,0 +1,9 @@
+class: negative
+summary: an unknown name applied to type arguments is L0201 with the near names, in a signature and in a body
+program: program.ldn
+codes: L0201, L0201
+constructs: 1350, 1860
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/an-unknown-applied-name-offers-near-names/program.ldn
+status: 1

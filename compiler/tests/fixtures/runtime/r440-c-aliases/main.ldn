@@ -1,6 +1,6 @@
 import platform/c
 import platform/c (c_bool, c_double, c_float, c_long, c_longlong, c_ptrdiff,
-               c_size, c_ulong, c_ulonglong)
+                   c_size, c_ulong, c_ulonglong)
 
 public main: () -> (code: i32) =
     --  c_char is deliberately a signed numeric byte, not Unicode u32.

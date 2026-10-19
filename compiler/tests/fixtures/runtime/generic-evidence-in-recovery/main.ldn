@@ -1,0 +1,44 @@
+--  A constrained selection that a generic body makes only inside a call's
+--  recovery clause.  Lowering inventories the evidence each instance's body
+--  selects before it gives the instance its signature, and the clause sits
+--  beside the call's slots rather than in them, so a walk over slots alone
+--  would not see `t.count` here.  `other` is projected nowhere.
+missing: atom
+
+counter: type = concept (t: type)
+    count: (self: ptr t) -> (value: i32)
+    other: (self: ptr t) -> (value: i32)
+end counter
+
+box: type = struct
+    value: i32
+end box
+
+count_box: (self: ptr box) -> (value: i32) =
+    value = self.val.value
+end count_box
+
+other_box: (self: ptr box) -> (value: i32) =
+    value = 1000
+end other_box
+
+box is counter (count: count_box, other: other_box)
+
+refuse: (code: i32) -> (value: i32) ! missing =
+    fail missing when code > 0
+    value = code
+end refuse
+
+recovered: (t: type is counter, item: ptr t) -> (value: i32) =
+    first: i32 = refuse(1) else (problem)
+        value = t.count(item)
+        if problem <> missing then value = 1 end if
+        return
+    end
+    value = first
+end recovered
+
+public main: () -> (code: i32) =
+    item: box = (value: 42)
+    code = recovered(addr item)
+end main

@@ -83,8 +83,8 @@ public main: () -> (code: i32) =
     text_ok: bool = begin
         saved := filter_object.val.needle
         lenof saved == 6 and saved[0] == 'n' and saved[1] == 'e'
-          and saved[2] == 'e' and saved[3] == 'd' and saved[4] == 'l'
-          and saved[5] == 'e'
+        and saved[2] == 'e' and saved[3] == 'd' and saved[4] == 'l'
+        and saved[5] == 'e'
     end
     scalar_ok: bool = scalar.val == 29
     object_ok: bool = begin

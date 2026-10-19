@@ -1,0 +1,10 @@
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/generic-literal-lent-escapes/main.ldn:9:1
+  |
+9 | escape: () -> (kept: []u8) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/generic-literal-lent-escapes/main.ldn:9:16
+  |
+9 | escape: () -> (kept: []u8) =
+  |                ^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

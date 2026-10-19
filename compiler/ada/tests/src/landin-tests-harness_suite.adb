@@ -73,7 +73,8 @@ package body Landin.Tests.Harness_Suite is
             Result     : Landin.Testing.Summary;
          begin
             Landin.Testing.Run
-              (Scratch, (Index => Index, Count => 3), Transcript, Result);
+              (Scratch, Landin.Testing.Shard'(Index => Index, Count => 3),
+               Transcript, Result);
 
             declare
                Text : constant String := Unbounded.To_String (Transcript);
@@ -265,6 +266,77 @@ package body Landin.Tests.Harness_Suite is
       Landin.Testing.Check_Equal
         (Item, Result.Cases, 0, "an unknown filter runs nothing");
    end Filters_Select_Exact_Cases;
+
+
+   --  One run answers several selectors, and a selector
+   --  that names nothing is answered with the rule and the nearest names.
+   procedure Several_Selectors_Run_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Several_Selectors_Run_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      Scratch    : Landin.Testing.Registry;
+      Transcript : Unbounded.Unbounded_String;
+      Result     : Landin.Testing.Summary;
+      Selected   : Landin.Testing.Selector_Vectors.Vector;
+
+      function Pick (Suite, Name : String) return Landin.Testing.Selector is
+        ((Suite => Unbounded.To_Unbounded_String (Suite),
+          Name  => Unbounded.To_Unbounded_String (Name)));
+   begin
+      Landin.Testing.Register
+        (Scratch, "alpha", "one", Always_Passes'Access);
+      Landin.Testing.Register
+        (Scratch, "alpha", "two", Always_Passes'Access);
+      Landin.Testing.Register
+        (Scratch, "beta", "one", Always_Passes'Access);
+      Landin.Testing.Register
+        (Scratch, "gamma", "core and the examples are formatted",
+         Always_Passes'Access);
+
+      Selected.Append (Pick ("beta", ""));
+      Selected.Append (Pick ("alpha", "two"));
+      Selected.Append (Pick ("beta", "one"));
+      Landin.Testing.Run (Scratch, Selected, Transcript, Result);
+      Landin.Testing.Check_Equal
+        (Item, Result.Cases, 2, "each selected case runs once");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Transcript),
+                         "FILTERED suite=beta" & ASCII.LF
+                         & "FILTERED suite=alpha case=two" & ASCII.LF),
+         "the transcript names every selector");
+      Landin.Testing.Check
+        (Item, not Contains (Unbounded.To_String (Transcript), "gamma"),
+         "an unselected suite is absent");
+
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Selection_Problem
+           (Scratch, Pick ("alpha", "two")), "", "a known case is no problem");
+      Landin.Testing.Check
+        (Item, Contains
+           (Landin.Testing.Selection_Problem (Scratch, Pick ("alpah", "")),
+            "no suite is named 'alpah'; the nearest are 'alpha'"),
+         "an unknown suite is answered with the nearest suite");
+      Landin.Testing.Check
+        (Item, Contains
+           (Landin.Testing.Selection_Problem (Scratch, Pick ("alpha", "tow")),
+            "a case is named SUITE/NAME")
+         and then Contains
+           (Landin.Testing.Selection_Problem (Scratch, Pick ("alpha", "tow")),
+            "the nearest are 'alpha/two'"),
+         "an unknown case is answered with the rule and the nearest case");
+      Landin.Testing.Check
+        (Item, Contains
+           (Landin.Testing.Selection_Problem
+              (Scratch, Pick ("", "core and the examples are formatted")),
+            "names no suite: a case is named SUITE/NAME")
+         and then Contains
+           (Landin.Testing.Selection_Problem
+              (Scratch, Pick ("", "core and the examples are formatted")),
+            "the nearest are 'gamma/core and the examples are formatted'"),
+         "a case named without its suite is offered the one that has it");
+   end Several_Selectors_Run_Once;
 
    procedure Failures_Are_Counted (Item : in out Landin.Testing.Context) is
       Scratch    : Landin.Testing.Registry;
@@ -497,6 +569,9 @@ package body Landin.Tests.Harness_Suite is
       Landin.Testing.Register
         (Into, "harness", "failures are counted",
          Failures_Are_Counted'Access);
+      Landin.Testing.Register
+        (Into, "harness", "several selectors run once",
+         Several_Selectors_Run_Once'Access);
       Landin.Testing.Register
         (Into, "harness", "filters select exact cases",
          Filters_Select_Exact_Cases'Access);

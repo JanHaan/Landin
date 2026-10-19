@@ -13,9 +13,9 @@ public main: () -> (code: i32) =
     match state.kind
         leaf: answer = 1
         pair(first, inout second): if true then
-            second = second + 1
-            answer = first + second
-        end if
+                                       second = second + 1
+                                       answer = first + second
+                                   end if
     end match
     code = answer
 end main

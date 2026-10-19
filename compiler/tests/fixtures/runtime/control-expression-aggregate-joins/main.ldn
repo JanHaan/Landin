@@ -54,23 +54,23 @@ public main: () -> (code: i32) =
 
     mut stored: pair = zeroed
     stored = if false then
-        pair(left: 1, right: 1)
-    else
-        choose_pair(false, false)
-    end if
+                 pair(left: 1, right: 1)
+             else
+                 choose_pair(false, false)
+             end if
     _ = if true then choose_row(true) else choose_row(false) end if
     code = score_pair(stored)
     if code == 42
       and score_pair(if true then
-          choose_pair(true, false)
-      else
-          pair(left: 1, right: 1)
-      end if) == 42
+                         choose_pair(true, false)
+                     else
+                         pair(left: 1, right: 1)
+                     end if) == 42
       and score_row(if false then
-          [1, 1, 1]
-      else
-          choose_row(false)
-      end if) == 42
+                        [1, 1, 1]
+                    else
+                        choose_row(false)
+                    end if) == 42
       and score_pair(choose_pair(false, true)) == 42
       and cells[0].value + cells[1].value == 42
     then

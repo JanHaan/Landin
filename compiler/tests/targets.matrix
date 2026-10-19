@@ -67,6 +67,9 @@ abi/r670-noreturn | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, fre
 abi/r670-panic | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/sigpipe-handler-kept | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/socket-write-raises-no-sigpipe | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+end-to-end/assembly-refuses-a-public-main-that-is-not-the-entry | linux-x86-64
+end-to-end/check-refuses-a-public-main-that-is-not-the-entry | linux-x86-64
+end-to-end/check-refuses-a-static-c-import | linux-x86-64
 end-to-end/feature-level-armv6-m-lacks-idiv | cortex-m0
 end-to-end/feature-level-armv7-m-has-idiv | cortex-m0
 end-to-end/feature-level-armv8-1-a-has-lse | darwin-arm64
@@ -91,14 +94,25 @@ end-to-end/link-static-unsatisfied-c-import | linux-x86-64
 end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, darwin-arm64, linux-rv64
+negative/a-concept-entry-names-its-public-operation | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-control-value-missing-twice-reports-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-fold-deeper-than-any-limit | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-missing-conformance-entry-is-one-report | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-nested-mistake-after-a-refused-statement-is-reported | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-noreturn-call-is-not-a-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-refused-write-still-assigns | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-text-literal-is-not-indexed | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/a-type-argument-is-offered-by-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/addr-of-a-call-result-is-refused-there | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/addr-of-a-literal-is-refused-there | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/aggregate-call-result-missing-at-early-exit | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/aggregate-call-result-not-assigned-on-every-path | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/an-applied-type-is-not-called | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/an-array-of-none-is-offered-an-empty-slice | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/an-erased-address-that-is-only-read-needs-no-mut | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/an-imported-case-is-offered-qualified | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/an-inout-argument-is-locked-whether-written-or-not | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/an-unknown-applied-name-offers-near-names | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/anonymous-function-captures-local | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/any-comparison-refused | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/any-concept-identity-mismatch | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -184,6 +198,7 @@ negative/assignment-as-expression | linux-x86-64, linux-arm64, darwin-arm64, fre
 negative/assignment-to-a-parameter | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assignment-to-an-immutable-binding | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/atom-assignment-not-subset | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+negative/atom-fact-without-a-comparison | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/atom-match-not-exhaustive | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/atom-union-as-a-conformance-target-needs-a-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/atom-union-as-a-distinct-base-needs-a-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -206,6 +221,7 @@ negative/c-layout-second-word | linux-x86-64, linux-arm64, darwin-arm64, freebsd
 negative/c-packed-aligned-part | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/c-packed-by-value | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/c-packed-field-address | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/c-symbol-differs-only-in-escaping | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-array-result-dropped-by-omission | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-of-a-non-function | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/call-result-dropped-by-omission | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -310,6 +326,7 @@ negative/core-vec-used-live-growth | linux-x86-64, linux-arm64, darwin-arm64, sy
 negative/core-vec-used-live-release | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/core-vec-used-read-only | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/core-vec-used-wrong-from | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/cortex-m0-has-no-c-abi | cortex-m0
 negative/cortex-refused-type-named | cortex-m0
 negative/cstring-literal-write | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/cstring-range-slicing-has-no-length | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -330,9 +347,12 @@ negative/derived-array-slice-by-value | linux-x86-64, linux-arm64, darwin-arm64,
 negative/derived-array-slice-local | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-local-field | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-wrong-from | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/destructured-local-escape | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/directory-name-outlives-read | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/discard-of-nothing | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/distinct-bare-zeroed | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/distinct-compare-across-types | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/distinct-equality-only | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/distinct-ordering-and-signed-flags | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/divisor-is-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/divisor-is-zero-in-a-body | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -367,17 +387,18 @@ negative/fail-carries-no-value | linux-x86-64, linux-arm64, darwin-arm64, freebs
 negative/fail-needs-one-atom | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/fail-outside-declared-set | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/failing-function-signature-mismatch | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
-negative/failure-words-own-atom | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/feature-compared-with-architecture | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/feature-outside-configuration | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/feature-unknown-name | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/fixed-array-bound-call | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/fixed-array-bound-invalid | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/fixed-array-bound-module-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/fixed-conditional-active-duplicate | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/fixed-conditional-active-generic-error | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/fixed-conditional-active-reference-inactive | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
 negative/fixed-conditional-evaluator | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/fixed-conditional-inactive-parser-error | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/fixed-if-in-a-body | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/flexible-member-by-value | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/flexible-member-placement | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/float-literal-not-enabled | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -436,6 +457,7 @@ negative/function-variant-payload-signature-mismatch | linux-x86-64, linux-arm64
 negative/generic-any-carrier-frame-escape | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-any-nominal-deduction-conflict | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-atom-outside-set | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/generic-closed-parameter-refusals | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-computed-pattern-undeduced | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-explicit-computed-pattern-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-explicit-reference-frame | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -443,6 +465,7 @@ negative/generic-formals-in-brackets-are-reported-once | linux-x86-64, linux-arm
 negative/generic-inferred-error-unhandled | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-inferred-template-not-function-value | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-literal-is-checked-against-its-parameter | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/generic-literal-lent-escapes | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-pointer-result-live-view | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-reference-array-extent | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/generic-reference-carrier-live-view | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -589,6 +612,7 @@ negative/local-struct-initializer-source-unassigned | linux-x86-64, linux-arm64,
 negative/local-used-above-its-declaration | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/logical-words-on-numbers | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/loop-condition-not-bool | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/loop-exit-skips-assignment | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/loop-value-in-every-value-context | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/loop-value-missing-break-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/loop-value-missing-completion | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -601,6 +625,7 @@ negative/match-arm-binding-names-several-cases | linux-x86-64, linux-arm64, darw
 negative/match-label-named-twice | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/match-over-an-integer-names-if-and-elsif | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/match-scalar-not-enabled | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/match-sink-binding-refusals | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/match-subject-left-unfinished-is-reported-there | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/match-wildcard-among-labels | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/measure-in-parentheses-is-written-bare | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -978,7 +1003,6 @@ negative/r490-distinct-reference-identity | linux-x86-64, linux-arm64, darwin-ar
 negative/r490-distinct-slice-cycle | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r490-distinct-static-address | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r490-distinct-type-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
-negative/r490-distinct-zeroable | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r490-fill-array-shapes | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/r490-fill-atom-sets | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/r490-fill-case-mixed-types | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
@@ -1037,7 +1061,6 @@ negative/r491-local-self-initializer | linux-x86-64, linux-arm64, darwin-arm64, 
 negative/r491-local-self-reference | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r491-local-shadowed-type | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r491-lookahead-recovery | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
-negative/r491-loop-assignment | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/r491-malformed-public-start | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r491-match-extra-colon | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/r491-match-extra-paren | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1187,6 +1210,7 @@ negative/result-destructure-duplicate-field | linux-x86-64, linux-arm64, darwin-
 negative/result-destructure-local-name-duplicate | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/result-destructure-needs-multiple | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/result-destructure-unknown-field | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/result-destructuring-by-position | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/return-shares-a-parameter-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/return-with-value | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/returned-reference-missing-from | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1318,6 +1342,7 @@ negative/text-traversal-ordinary-pointer-is-not-cstring | linux-x86-64, linux-ar
 negative/text-view-byte-escape | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-view-identities-are-distinct | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/tool-namespace-bindings | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/trapping-arm-unassigned-return | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/try-infallible-call | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/try-infallible-inferred-in-generic-argument | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/type-alias-cycle | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1396,6 +1421,7 @@ negative/variant-whole-copy-source-unassigned | linux-x86-64, linux-arm64, darwi
 negative/view-taken-again-after-break | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/warning-advisory | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/wide-integer-not-enabled | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/wildcard-rest-binding | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/writes-to-an-immutable-binding-report-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/written-binding-is-offered-mut | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/written-function-signature-mismatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1621,6 +1647,7 @@ positive/r440-parameterized-struct-unused-numeric-array-shape | linux-x86-64, li
 positive/r450-array-arithmetic-source | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/r450-optimal-layout-source | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/r490-conformance-input-keys | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/r490-distinct-zeroable | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/r490-union-alias-optional-widening | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/r490-union-alias-tagged-pointer | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/r490-union-concrete-optional-widening | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1836,6 +1863,7 @@ runtime/core-tree-count-overflow | linux-x86-64, linux-arm64, darwin-arm64, free
 runtime/core-tree-indices | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-tree-node-queries | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/core-tree-provider-failures | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/core-vec-bytes | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/core-vec-pointer-storage | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-vec-used-references | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/core-vec-used-sort | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1858,6 +1886,7 @@ runtime/derived-hosted-memory | linux-x86-64, linux-arm64, darwin-arm64, freebsd
 runtime/derived-parser | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/derived-storage-address-origin | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/destructured-atom-set-result | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+runtime/destructured-locals-are-places | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/destructuring-begins-its-own-line | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/diagnostic-loggers-dispatch | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/directory-larger-than-buffer | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1869,7 +1898,9 @@ runtime/directory-name-not-utf8 | linux-x86-64, linux-arm64, darwin-arm64, freeb
 runtime/directory-through-file | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/discard-else-none-ignores-a-value-call-failure | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/distinct-equality-and-flags | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+runtime/distinct-equality-over-atoms-and-pointers | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/distinct-ordering | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+runtime/distinct-zero-images | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/division-by-arguments-at-every-width | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/division-by-constants-agrees-with-division | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1886,11 +1917,13 @@ runtime/erased-static-view-under-writable-from | linux-x86-64, linux-arm64, darw
 runtime/evaluation-order-is-left-then-right | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/evidence-projected-entries-kept | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/failure-words | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+runtime/failure-words-own-atom | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/failure-words-report | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/file-system-firmware | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/first-program | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/fixed-array-any-shapes | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/fixed-array-bound-expression | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/fixed-array-bound-module-constant | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/fixed-array-bound-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/fixed-array-reference-shapes | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/fixed-conditional-generic-runtime | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1922,12 +1955,14 @@ runtime/generic-any-construction-evidence | linux-x86-64, linux-arm64, darwin-ar
 runtime/generic-any-nominal-transport | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-arguments-are-typed-and-lent-from-the-parameter | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-atom-widening | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+runtime/generic-closed-parameter-takes-context | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/generic-composed-evidence | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-contextual-text-literals | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-declared-errors | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-direct-descriptor-deduction | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-entry-recovery-refails | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/generic-erased-aggregate-try | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/generic-evidence-in-recovery | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/generic-evidence-indirect | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-explicit-parameterized-actuals | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-explicit-static | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2035,6 +2070,7 @@ runtime/loop-control-flow | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86
 runtime/loop-values | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/match-arm-names-several-cases | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/match-expressions-produce-values | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/match-sink-binding | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/measurements-answer-for-the-target | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/merge-sort | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/minimum-remainder-minus-one-is-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2059,6 +2095,8 @@ runtime/module-struct-literal-selected-field-image-is-independent | linux-x86-64
 runtime/module-struct-zeroed-image-is-static | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/module-values-across-modules | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/module-values-hold-and-are-updated | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/module-values-read-compiler-facts | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+runtime/module-variant-images | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/multiple-named-returns | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/multiplication-exits-with-its-products | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/named-call-statements | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2096,6 +2134,7 @@ runtime/parameterized-struct-lazy-value-layout | linux-x86-64, linux-arm64, darw
 runtime/parameterized-struct-values | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/parameterized-type-alias-fixed-array | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-to-small-integer-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/pointer-union-atom-comparison | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/pointer-union-many | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/pointer-unions | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-accounts | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2117,6 +2156,7 @@ runtime/posix-spawn-standard-streams | linux-x86-64, linux-arm64, darwin-arm64, 
 runtime/posix-terminals | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-transfer-above-int-max | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/private-alias-of-constrained-template | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+runtime/qualified-module-array-copied-and-lent | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/r230-composition | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r230-composition-trap | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r250-references | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2243,6 +2283,7 @@ runtime/r491-consumed-place-restoration | linux-x86-64, linux-arm64, darwin-arm6
 runtime/r491-function-final-values | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r491-generic-array-fields | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r491-generic-empty-slice-contexts | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/r491-loop-assignment | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/r491-overlapping-result-destination | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r491-payload-alias-last-use | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/r491-reference-store-origins | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2373,6 +2414,7 @@ runtime/text-conversion-truncated-traps | linux-x86-64, linux-arm64, darwin-arm6
 runtime/text-literal-bytes | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/text-ordinary-conversions | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/text-range-slicing | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+runtime/trapping-arm-leaves-a-statement | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/tree-copy | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/try-inferred-in-generic-argument | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/try-nominal-inference | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

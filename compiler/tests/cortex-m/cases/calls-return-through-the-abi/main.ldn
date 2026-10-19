@@ -9,7 +9,7 @@ widths: (a: i8, b: i16, c: i32, d: i64, e: u8, f: usize) -> (r: i64) =
     r = 0
 
     if a == -1 and b == -300 and c == 70000
-        and d == 5000000000 and e == 255 and f == 4294967295
+      and d == 5000000000 and e == 255 and f == 4294967295
     then
         r = 1
     end if
@@ -32,15 +32,15 @@ public main: () -> (code: i32) =
 
     carried: i64 = sum_of_six(1, 2, 3, 44, 5, 6)
     ordered: i64 = widths(-1, -300, 70000, 5000000000, 255,
-        4294967295)
+                          4294967295)
     nested: u32 = triangle(10)
     discarded: i64 = 0
     _ = sum_of_six(1, 2, 3, 4, 5, 6)
 
     if carried == 1000044
-        and ordered == 1
-        and nested == 55
-        and discarded == 0
+      and ordered == 1
+      and nested == 55
+      and discarded == 0
     then
         code = 42
     else

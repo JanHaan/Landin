@@ -16,7 +16,7 @@ double: (value: i32) -> (result: i32) =
 end double
 
 f: (bytes: []u8, spare: []mut u8, text: utf8, row: [2]u8, p: point)
-    -> (result: point) =
+   -> (result: point) =
     mut local: [2]u8 = [1, 2]
     views := [bytes, spare]
     texts := [text, "literal"]

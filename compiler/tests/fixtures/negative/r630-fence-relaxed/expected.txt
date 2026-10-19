@@ -1,4 +1,8 @@
 error[L0344]: invalid constant memory ordering
+  --> ../tests/fixtures/negative/r630-fence-relaxed/program.ldn:5:27
+  |
+5 |     compiler.thread_fence(compiler.relaxed)
+  |                           ^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/r630-fence-relaxed/program.ldn:5:5
   |
 5 |     compiler.thread_fence(compiler.relaxed)

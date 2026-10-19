@@ -1,0 +1,31 @@
+--  D432, [1920]: a name a result binding writes binds a local, so it is a
+--  place as any local is: its address is taken, an element of a slice it
+--  holds is addressed, and it is passed as a `sink` argument.
+pair: () -> (count: i32, other: i32) =
+    count = 40
+    other = 2
+end pair
+
+found: (data: []u8) -> (present: bool, bytes: []u8 from data) =
+    present = lenof data > 0
+    bytes = data
+end found
+
+consume: (sink n: i32) -> (got: i32) =
+    got = n
+end consume
+
+public main: () -> (code: i32) =
+    code = 1
+    (count, other) := pair()
+    at := addr count
+    return when at.val <> 40
+    code = 2
+    data: [3]u8 = [7, 8, 9]
+    (present, bytes) := found(data)
+    first := addr bytes[0]
+    return when not present or first.val <> 7
+    code = 3
+    return when consume(other) <> 2
+    code = at.val + 2
+end main

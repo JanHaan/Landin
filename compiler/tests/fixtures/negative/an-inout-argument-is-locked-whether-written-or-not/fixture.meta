@@ -1,0 +1,9 @@
+class: negative
+summary: an inout argument that the routine only reads still locks a live view, and L0315 names the convention, the parameter and the view
+program: program.ldn
+codes: L0315
+constructs: 0800, 0830, 1900
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/an-inout-argument-is-locked-whether-written-or-not/program.ldn
+status: 1

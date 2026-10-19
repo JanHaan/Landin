@@ -27,4 +27,3 @@ public main: () -> (code: i32) =
         code = 1
     end if
 end main
-

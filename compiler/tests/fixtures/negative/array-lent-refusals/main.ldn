@@ -1,7 +1,7 @@
 --  What an array cannot lend: a literal a writable slice, an immutable
 --  array a writable slice, and either a text view, which is validated
---  where it is made.  A generic routine's argument is typed on its own,
---  so a literal there takes no shape from the parameter.
+--  where it is made.  A slice of a generic routine's formal gives a
+--  literal no shape: the formal is deduced, and a literal has no type.
 fill: (values: []mut u8) -> none =
     values[0] = 1
 end fill

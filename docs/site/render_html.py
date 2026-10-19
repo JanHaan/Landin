@@ -108,6 +108,13 @@ import landin_icon  # noqa: E402
 import icons  # noqa: E402
 import fonts  # noqa: E402
 
+#  Nor is the fixture format: a fixture's metadata is read the way every
+#  lane reads it, by compiler/tests/fixture_meta.py.
+
+sys.path.insert(0, str(HERE.parents[1] / "compiler" / "tests"))
+
+import fixture_meta as fixture_format  # noqa: E402
+
 #  Nor are the two files an agent asks for.  They are a reading of the
 #  grammar, the compiler's refusal tables and the catalogue rather than
 #  anything about a page, so they live beside this and not inside it.
@@ -1846,9 +1853,7 @@ def landing_program(source, titles, construct_page):
 
 
 def fixture_meta(where):
-    return dict(line.split(": ", 1) for line in
-                (where / "fixture.meta").read_text().splitlines()
-                if ": " in line)
+    return fixture_format.read(where)
 
 
 def fixture_uses(meta, titles, construct_page):
@@ -2557,6 +2562,7 @@ def main(argv):
         library_pages = library.write(source, SITE, SimpleNamespace(
             DOCS=DOCS, GUIDES=GUIDES, WORD=WORD, page=page,
             render_guide=render_guide, guide_targets=guide_targets,
+            inline=inline,
             Highlighter=Highlighter, listing_of=listing_of,
             render_landin=render_landin))
         print(f"{SITE.name}/library.html  {len(library_pages)} reference and source pages")

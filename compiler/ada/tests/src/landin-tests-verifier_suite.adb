@@ -3716,6 +3716,73 @@ package body Landin.Tests.Verifier_Suite is
             "an atom constant outside its structural set is refused");
       end;
 
+      --  A sealed slot's loads are not validated, so only a Load and a
+      --  Store may name it: one whose address is taken is refused, and
+      --  the same routine reading it back without the address is not.
+      for Exposed in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Site : Landin.Provenance.Origin;
+            Unit : IR.Unit;
+            Atoms : IR.Atom_Set_Id;
+            Signature : IR.Signature_Id;
+            Routine : IR.Item_Id;
+            Result, Saved : IR.Slot_Id;
+            Block : IR.Block_Id;
+            Value : IR.Value_Id;
+         begin
+            Ready (Work, Site);
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Atoms := IR.Add_Atom_Set (Unit, [1 => 5]);
+            Signature := IR.Add_Signature
+              (Unit, IR.No_Signature_Parts,
+               (Kind => Landin.Types.U32, Atoms => Atoms, others => <>));
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+            IR.Set_Atom_Set (Unit, Routine, Atoms);
+            IR.Set_Signature (Unit, Routine, Signature);
+            Result := IR.Add_Slot
+              (Unit, Routine, Landin.Types.U32, 2, Site, Atoms => Atoms);
+            IR.Set_Result_Slot (Unit, Routine, Result);
+            Saved := IR.Add_Slot
+              (Unit, Routine, Landin.Types.U32,
+               Landin.Resolution.No_Declaration, Site,
+               Atoms => Atoms, Sealed => True);
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            Value := IR.Emit_Atom (Unit, Routine, 5, Atoms, Site);
+            IR.Emit_Store (Unit, Routine, Saved, Value, Site);
+            if Exposed then
+               --  Refused at the address itself, before anything asks
+               --  where the address goes.
+               Value := IR.Emit_Place_Address
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Saved), Site);
+               IR.Emit_Store
+                 (Unit, Routine,
+                  IR.Add_Slot
+                    (Unit, Routine, Landin.Types.Usize,
+                     Landin.Resolution.No_Declaration, Site),
+                  Value, Site);
+            end if;
+            Value := IR.Emit_Load (Unit, Routine, Saved, Site);
+            IR.Emit_Store (Unit, Routine, Result, Value, Site);
+            IR.Emit_Leave (Unit, Routine, Value, Site);
+            IR.Leave_Block (Unit, Routine);
+            Landin.Testing.Check
+              (Item, IR.Is_Sealed (Unit, Routine, Saved),
+               "the slot is sealed");
+            Expect
+              (Item, V.Check (Unit),
+               (if Exposed then V.Sealed_Slot_Exposed else V.Nothing_Wrong),
+               (if Exposed then "a sealed slot whose address is taken"
+                  & " is refused"
+                else "a sealed slot only loaded and stored is accepted"));
+         end;
+      end loop;
+
       declare
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -5500,7 +5567,11 @@ package body Landin.Tests.Verifier_Suite is
                Callback, Raw, Pointer, Origin, Loaded : IR.Value_Id;
                Expected : constant V.Fault_Kind :=
                  (if Scenario in Direct_Place .. Integer_Cast
-                  then V.Nothing_Wrong else V.Address_Value_Disagrees);
+                  then V.Nothing_Wrong
+                  elsif Scenario in Uninitialised_Pointer
+                    | Uninitialised_Address
+                  then V.Address_Read_Before_Store
+                  else V.Address_Value_Disagrees);
             begin
                IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
                Inner := IR.Add_Signature
@@ -5762,7 +5833,8 @@ package body Landin.Tests.Verifier_Suite is
                      when Wrong_Parameter | Plain_Parameter =>
                         V.Routine_Signature_Disagrees,
                      when Erased_Parameter => V.Signature_Part_Malformed,
-                     when Uninitialised_Argument => V.Address_Value_Disagrees,
+                     when Uninitialised_Argument =>
+                        V.Address_Read_Before_Store,
                      when others => V.Operands_Disagree);
             begin
                IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
@@ -6188,8 +6260,28 @@ package body Landin.Tests.Verifier_Suite is
             Expect
               (Item, V.Check (Unit),
                (if Scenario in Both_Arms | Initialised_Loop
-                then V.Nothing_Wrong else V.Address_Value_Disagrees),
+                then V.Nothing_Wrong else V.Address_Read_Before_Store),
                "address must-initialisation: " & Scenario'Image);
+            --  The refusal names the slot and a path from the entry that
+            --  stores nothing in it: the arm that skips the store, or
+            --  the loop's first trip.
+            if Scenario in One_Arm | Uninitialised_Loop then
+               declare
+                  Said : constant String :=
+                    V.Explain (Unit, V.Check (Unit));
+                  Wanted : constant String :=
+                    "slot" & Address'Image & " is read with nothing stored"
+                    & " in it on the path through blocks"
+                    & (if Scenario = One_Arm then " 1 -> 3 -> 4"
+                       else " 1 -> 2")
+                    & ", so a store to slot" & Address'Image
+                    & " is missing before the read on that path";
+               begin
+                  Landin.Testing.Check
+                    (Item, Ada.Strings.Fixed.Index (Said, Wanted) > 0,
+                     "the refusal names the path and the store: " & Said);
+               end;
+            end if;
             declare
                package Probe renames V.Testing_Support;
                use type V.Fault;

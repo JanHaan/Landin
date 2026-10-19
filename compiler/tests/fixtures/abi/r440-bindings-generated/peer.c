@@ -91,6 +91,95 @@ BindingSmall binding_highbit(void)
     return (BindingSmall)0x80000000U;
 }
 
+/* D410 and D413: C's own sizes and offsets, which Landin's must equal. */
+BindingFrame binding_frame_global;
+
+unsigned long binding_layout(int which)
+{
+    switch (which) {
+    case 0: return sizeof(BindingWire);
+    case 1: return _Alignof(BindingWire);
+    case 2: return __builtin_offsetof(BindingWire, wide);
+    case 3: return __builtin_offsetof(BindingWire, bytes);
+    case 4: return sizeof(BindingFrame);
+    case 5: return __builtin_offsetof(BindingFrame, tail);
+    case 6: return sizeof(BindingEntry);
+    case 7: return _Alignof(BindingEntry);
+    case 8: return __builtin_offsetof(BindingEntry, name);
+    case 9: return sizeof(BindingWords);
+    case 10: return __builtin_offsetof(BindingWords, data);
+    default: return 0;
+    }
+}
+
+/* Fill a packed record wherever the caller put it, an odd address included.
+   No packed member's address is taken. */
+void binding_wire_fill(BindingWire *record)
+{
+    record->kind = 7;
+    record->half = 0x1234;
+    record->word = 0x89abcdefU;
+    record->wide = 0x0102030405060708UL;
+    record->twice = -2.25;
+    record->flag = 1;
+    record->bytes[0] = 1;
+    record->bytes[1] = 2;
+    record->bytes[2] = 3;
+}
+
+int binding_wire_check(const BindingWire *record)
+{
+    return record->kind == 9 && record->half == 0x4321 &&
+        record->word == 0x0a0b0c0dU && record->wide == 0x1112131415161718UL &&
+        record->twice == 1024.5 && !record->flag && record->bytes[0] == 1 &&
+        record->bytes[1] == 5 && record->bytes[2] == 3 ? 42 : 1;
+}
+
+BindingWire binding_wire_make(unsigned char kind)
+{
+    BindingWire made;
+    binding_wire_fill(&made);
+    made.kind = kind;
+    return made;
+}
+
+int binding_frame_check(BindingFrame value)
+{
+    return value.lead == 3 && value.body.kind == 5 &&
+        value.body.word == 0x89abcdefU && value.body.bytes[2] == 3 &&
+        value.tail == 0xbeef ? 42 : 1;
+}
+
+/* An entry and its name, as getdents64 would leave one. */
+void binding_entry_fill(BindingEntry *record)
+{
+    record->inode = 99;
+    record->length = (unsigned short)(__builtin_offsetof(BindingEntry, name) + 6);
+    record->kind = 4;
+    record->name[0] = 'h';
+    record->name[1] = 'e';
+    record->name[2] = 'l';
+    record->name[3] = 'l';
+    record->name[4] = 'o';
+    record->name[5] = 0;
+}
+
+int binding_entry_check(const BindingEntry *record)
+{
+    return record->inode == 99 && record->kind == 8 &&
+        record->name[0] == 'L' && record->name[1] == 'e' &&
+        record->name[4] == 'o' && record->name[5] == 0 ? 42 : 1;
+}
+
+int binding_words_sum(const BindingWords *record, int count)
+{
+    int sum = record->kind * 100;
+    for (int index = 0; index < count; index++) {
+        sum += (int)record->data[index];
+    }
+    return sum;
+}
+
 int main(void)
 {
     BindingMatrix matrix = { .values = {{1, 2, 3}, {4, 5, 6}} };
@@ -143,6 +232,21 @@ int main(void)
     landin_r440_bindings_binding_global_counter_write(32);
     if (landin_r440_bindings_binding_global_counter_read() != 32) {
         return 8;
+    }
+
+    /* What Landin left in the packed global, and Landin's exported handler
+       writing a packed record C placed at an odd address. */
+    if (binding_frame_global.lead != 3 || binding_frame_global.tail != 0x0102 ||
+        binding_frame_global.body.kind != 5) {
+        return 43;
+    }
+    union { unsigned long align; unsigned char bytes[40]; } wire_space = { 0 };
+    BindingWire *odd_wire = (BindingWire *)(void *)(wire_space.bytes + 1);
+    binding_wire_fill(odd_wire);
+    landin_binding_wire_mark(odd_wire);
+    if (!odd_wire->flag || odd_wire->wide != 0x0102030405060709UL ||
+        odd_wire->half != 0x1234 || wire_space.bytes[0] != 0) {
+        return 44;
     }
 
     void *value = landin_r440_bindings_binding_value_allocate();

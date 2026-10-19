@@ -1,0 +1,60 @@
+--  D431, [1560]: a path that ends in a call that does not return needs no
+--  value, so a routine's final `match` or `if` whose only answers trap or
+--  call a `noreturn` routine is a statement, and its other arms assign the
+--  named return; a final control with a real answer is still a value.
+dot: atom
+box: atom
+shape: type = dot | box
+
+stop: () -> noreturn =
+    compiler.unreachable()
+end stop
+
+matched: (s: shape) -> (r: i32) =
+    match s
+        dot: r = 10
+        box: compiler.unreachable()
+    end match
+end matched
+
+tested: (c: bool) -> (r: i32) =
+    if c then
+        r = 11
+    else
+        stop()
+    end if
+end tested
+
+after_prefix: (s: shape) -> (r: i32) =
+    base := 6
+    match s
+        dot: begin
+            r = base
+            r = r * 2
+        end
+        box: stop()
+    end match
+end after_prefix
+
+nested: (s: shape, c: bool) -> (r: i32) =
+    match s
+        dot: if c then
+                 r = 9
+             else
+                 compiler.unreachable()
+             end if
+        box: stop()
+    end match
+end nested
+
+answered: (s: shape) -> (r: i32) =
+    match s
+        dot: 13
+        box: compiler.unreachable()
+    end match
+end answered
+
+public main: () -> (code: i32) =
+    code = matched(dot) + tested(true) + after_prefix(dot) + nested(dot, true)
+    code = code - answered(dot) + 13
+end main

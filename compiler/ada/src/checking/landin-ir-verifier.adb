@@ -111,6 +111,8 @@ package body Landin.IR.Verifier is
             when Unchecked_Not_Removable =>
                "an instruction is marked unchecked and carries no check"
                & " D187 removes, or sits in a module value",
+            when Sealed_Slot_Exposed =>
+               "a sealed slot is named other than by a load or a store",
             when Slot_Out_Of_Range    =>
                "a load or a store names a slot the item does not have",
             when Pieces_Disagree =>
@@ -134,6 +136,9 @@ package body Landin.IR.Verifier is
                "a runtime storage endpoint names no checked address slot",
             when Address_Value_Disagrees =>
                "a checked address slot is filled by another shape or value",
+            when Address_Read_Before_Store =>
+               "an address slot is read where a path from the routine's"
+               & " entry has stored nothing in it",
             when Field_Out_Of_Range =>
                "a field load names a field the aggregate does not have",
             when Field_Is_Not_A_Scalar =>
@@ -3291,10 +3296,12 @@ package body Landin.IR.Verifier is
                         return (Bad, Item, Block_Id (B), V);
                      elsif Missing (Code.Source) or else Missing
                        (Code.Destination)
-                       or else (B = Failure_Block
-                         and then P = Failure_Position)
                      then
                         return (Address_Value_Disagrees,
+                                Item, Block_Id (B), V);
+                     elsif B = Failure_Block and then P = Failure_Position
+                     then
+                        return (Address_Read_Before_Store,
                                 Item, Block_Id (B), V);
                      end if;
                   end;
@@ -6221,6 +6228,37 @@ package body Landin.IR.Verifier is
                                    Item => Id, Block => Block, Value => V);
                         end if;
 
+                        --  A sealed slot reads back only what a store of
+                        --  its set wrote, which is why a backend does not
+                        --  validate its loads: nothing but a Load or a
+                        --  Store may name it.
+                        declare
+                           function Sealed (Slot : Slot_Id) return Boolean
+                             is (Slot /= No_Slot
+                                 and then Natural (Slot)
+                                   <= Slot_Count (Of_Unit, Id)
+                                 and then Is_Sealed (Of_Unit, Id, Slot));
+                           Exposed : Boolean :=
+                             (Op not in Load | Store
+                              and then Sealed (Code.Slot))
+                             or else (Code.Source.Kind = Frame_Slot
+                                      and then Sealed (Code.Source.Slot))
+                             or else (Code.Destination.Kind = Frame_Slot
+                                      and then Sealed
+                                        (Code.Destination.Slot));
+                        begin
+                           for A in 1 .. Code.Assembly_Run.Count loop
+                              Exposed := Exposed or else Sealed
+                                (Of_Unit.Assembly_Operands.Element
+                                   (Code.Assembly_Run.First + A).Output);
+                           end loop;
+                           if Exposed then
+                              return (Kind => Sealed_Slot_Exposed,
+                                      Item => Id, Block => Block,
+                                      Value => V);
+                           end if;
+                        end;
+
                         --  Step one: what a later step indexes.  A
                         --  callee, a slot, a datum or a target that does
                         --  not exist has to be caught before anything
@@ -8897,29 +8935,147 @@ package body Landin.IR.Verifier is
       return Sound;
    end Check;
 
-   procedure Raise_On (Found : Fault);
+   --  The slot an Address_Read_Before_Store read reads, and one path of
+   --  blocks from the entry to it with no store to that slot: the trace
+   --  the check made, made again for the one read it refused.
+   function Read_Path (Of_Unit : Unit; Found : Fault) return String;
 
-   procedure Raise_On (Found : Fault) is
+   function Read_Path (Of_Unit : Unit; Found : Fault) return String is
+      Item : constant Item_Id := Found.Item;
+      First_Value : constant Natural :=
+        Of_Unit.Items.Element (Positive (Item)).Values.First;
+      Blocks : constant Natural := Block_Count (Of_Unit, Item);
+      Read : constant Instruction :=
+        Of_Unit.Code.Element (First_Value + Positive (Found.Value));
+      Read_Position : Natural := 0;
+
+      function Code_At (Block, Position : Positive) return Instruction
+        is (Of_Unit.Code.Element
+              (First_Value + Positive
+                 (Nth_Value (Of_Unit, Item, Block_Id (Block), Position))));
+
+      function Stores (Block : Positive; Slot : Slot_Id; Before : Natural)
+        return Boolean
+      is (for some Position in 1 .. Before =>
+            Code_At (Block, Position).Op = Landin.IR.Store
+            and then Code_At (Block, Position).Slot = Slot);
+
+      function Path_For (Slot : Slot_Id) return String;
+
+      function Path_For (Slot : Slot_Id) return String is
+         Parent : array (1 .. Blocks) of Natural := [others => 0];
+         Seen : array (1 .. Blocks) of Boolean := [others => False];
+         Queue : array (1 .. Blocks) of Positive := [others => 1];
+         Used, Read_At : Natural := 0;
+         Target : constant Positive := Positive (Found.Block);
+
+         function Shown (Block : Positive) return String is
+           (if Block = 1 then " 1"
+            else Shown (Parent (Block)) & " ->" & Block'Image);
+      begin
+         if Slot = No_Slot
+           or else not Holds (Of_Unit, Item, Slot)
+           or else (for some P in 1 .. Parameter_Count (Of_Unit, Item) =>
+                      Nth_Parameter (Of_Unit, Item, P) = Slot)
+           or else Stores (Target, Slot, Read_Position - 1)
+         then
+            return "";
+         end if;
+         Seen (1) := True;
+         Used := 1;
+         while Read_At < Used loop
+            Read_At := Read_At + 1;
+            declare
+               B : constant Positive := Queue (Read_At);
+               Last : constant Instruction :=
+                 Code_At (B, Length (Of_Unit, Item, Block_Id (B)));
+            begin
+               if B = Target then
+                  return Shown (B);
+               end if;
+               if not Stores (B, Slot, Length (Of_Unit, Item, Block_Id (B)))
+                 and then Last.Op in Jump | Branch
+               then
+                  declare
+                     Ending : constant Value_Id :=
+                       Nth_Value
+                         (Of_Unit, Item, Block_Id (B),
+                          Length (Of_Unit, Item, Block_Id (B)));
+                     Next_Blocks : constant array (1 .. 2) of Natural :=
+                       [Natural (Target_Of (Of_Unit, Item, Ending)),
+                        (if Last.Op = Branch
+                         then Natural (Alternative_Of (Of_Unit, Item, Ending))
+                         else 0)];
+                  begin
+                     for Next of Next_Blocks loop
+                        if Next in 1 .. Blocks and then not Seen (Next) then
+                           Seen (Next) := True;
+                           Parent (Next) := B;
+                           Used := Used + 1;
+                           Queue (Used) := Next;
+                        end if;
+                     end loop;
+                  end;
+               end if;
+            end;
+         end loop;
+         return "";
+      end Path_For;
+
+      function Told (Slot : Slot_Id; Path : String) return String
+        is (": slot" & Slot'Image & " is read with nothing stored in it on"
+            & " the path through blocks" & Path & ", so a store to slot"
+            & Slot'Image & " is missing before the read on that path");
+   begin
+      for Position in 1 .. Length (Of_Unit, Item, Found.Block) loop
+         if Nth_Value (Of_Unit, Item, Found.Block, Position) = Found.Value
+         then
+            Read_Position := Position;
+         end if;
+      end loop;
+      if Read.Source.Kind = Runtime_Address
+        and then Path_For (Read.Source.Address) /= ""
+      then
+         return Told (Read.Source.Address, Path_For (Read.Source.Address));
+      elsif Read.Destination.Kind = Runtime_Address
+        and then Path_For (Read.Destination.Address) /= ""
+      then
+         return Told
+           (Read.Destination.Address, Path_For (Read.Destination.Address));
+      elsif Path_For (Read.Slot) /= "" then
+         return Told (Read.Slot, Path_For (Read.Slot));
+      end if;
+      return "";
+   end Read_Path;
+
+   function Explain (Of_Unit : Unit; Found : Fault) return String
+     is ("malformed IR: " & Describe (Found.Kind)
+         & " (item" & Found.Item'Image
+         & ", block" & Found.Block'Image
+         & ", value" & Found.Value'Image & ")"
+         & (if Found.Kind = Address_Read_Before_Store
+            then Read_Path (Of_Unit, Found)
+            else ""));
+
+   procedure Raise_On (Of_Unit : Unit; Found : Fault);
+
+   procedure Raise_On (Of_Unit : Unit; Found : Fault) is
    begin
       if Found.Kind /= Nothing_Wrong then
-         raise Landin.Compiler_Defect with
-           "malformed IR: " & Describe (Found.Kind)
-           & " (item" & Found.Item'Image
-           & ", block" & Found.Block'Image
-           & ", value" & Found.Value'Image & ")";
+         raise Landin.Compiler_Defect with Explain (Of_Unit, Found);
       end if;
    end Raise_On;
 
    procedure Verify (Of_Unit : Unit) is
    begin
-      Raise_On (Check (Of_Unit));
+      Raise_On (Of_Unit, Check (Of_Unit));
    end Verify;
 
    procedure Verify
      (Of_Unit : Unit;
       Facts   : Landin.Targets.Target_Facts) is
    begin
-      Raise_On (Check (Of_Unit, Facts));
+      Raise_On (Of_Unit, Check (Of_Unit, Facts));
    end Verify;
 
 end Landin.IR.Verifier;

@@ -6,7 +6,6 @@ import core/io
 import core/io/fake
 import core/text
 
-
 same_bytes: (actual: []u8, expected: []u8) -> (same: bool) =
     same = false
     return when lenof actual <> lenof expected

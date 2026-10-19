@@ -1,0 +1,8 @@
+class: negative
+summary: an assignment counts after a loop only when every edge leaving it assigned, so a break before it, a while's failed test or a for's exhaustion leaves the name unassigned
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/loop-exit-skips-assignment
+constructs: 0930, 1130, 1140, 1150, 1810, 1910
+codes: L0302, L0302, L0302
+status: 1
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

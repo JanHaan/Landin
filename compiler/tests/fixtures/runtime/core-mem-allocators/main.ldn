@@ -39,7 +39,7 @@ public main: () -> (code: i32) =
     allowance: usize = 1
     mut limited_space: arena.space = zeroed
     limited_arena := arena.over_unchecked(limited_space, limited_base,
-                                              limited_extent)
+                                          limited_extent)
     mut counted_space: fault.space = zeroed
     limited := fault.over(counted_space, limited_arena, allowance)
     accepted: ptr mut u8 = mem.allocate(limited, eight, eight) else (problem)

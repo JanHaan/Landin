@@ -19,11 +19,17 @@ class BuildIdentity(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / 'checkout with spaces'
         self.root.mkdir()
-        for name in ('compiler/ada/src/base/main.ads', 'compiler/ada/test.gpr',
-                     'scripts/build.sh', 'README.md'):
+        for name in ('compiler/ada/src/base/main.ads', 'scripts/build.sh',
+                     'README.md'):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(name + '\n')
+        (self.root / 'compiler/ada/refine.gpr').write_text(
+            'project Refine is\n   for Source_Dirs use ("src/base");\n'
+            'end Refine;\n')
+        (self.root / 'compiler/ada/landin_tests.gpr').write_text(
+            'project Landin_Tests is\n   for Source_Dirs use ();\n'
+            'end Landin_Tests;\n')
         self.git('init', '-q')
         self.git('add', '.')
         self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
@@ -166,8 +172,105 @@ class BuildIdentity(unittest.TestCase):
         manifest = subprocess.run(command + ['--manifest'], check=True,
                                   capture_output=True, text=True).stdout
         import hashlib
-        self.assertEqual(manifest, hashlib.sha256(output.read_bytes()).hexdigest()
-                         + ' identity ' + str(output) + '\n')
+        rows = manifest.splitlines()
+        self.assertEqual(rows[-1], 'identity '
+                         + hashlib.sha256(output.read_bytes()).hexdigest()
+                         + ' ' + self.git('rev-parse', 'HEAD') + ' clean')
+        self.assertEqual([row.split()[0] + ' ' + row.split()[2]
+                          for row in rows[:-1]],
+                         ['project compiler/ada/landin_tests.gpr',
+                          'project compiler/ada/refine.gpr',
+                          'source compiler/ada/src/base/main.ads'])
+        for row in rows[:-1]:
+            self.assertEqual(row.split()[1], hashlib.sha256(
+                (self.root / row.split()[2]).read_bytes()).hexdigest())
+
+    def test_inputs_are_found_from_the_projects(self):
+        ada = self.root / 'compiler/ada'
+        (ada / 'common.gpr').write_text(
+            'abstract project Common is\n   package Compiler is\n'
+            '      for Local_Configuration_Pragmas use "local.adc";\n'
+            '   end Compiler;\nend Common;\n')
+        (ada / 'local.adc').write_text('pragma Ada_2022;\n')
+        (ada / 'other/deep').mkdir(parents=True)
+        (ada / 'other/deep/unit.adb').write_text('unit\n')
+        (ada / 'other/deep/notes.txt').write_text('prose\n')
+        (ada / 'other/host.c').write_text('host\n')
+        (ada / 'refine.gpr').write_text(
+            'with "common.gpr";\nproject Refine is\n'
+            '   for Languages use ("Ada", "C");  --  "ignored.adc"\n'
+            '   for Source_Dirs use ("src/base", "other/**",\n'
+            '                        Landin_Common.Build_Dir & "/generated");\n'
+            '   for Object_Dir use Landin_Common.Build_Dir & "/obj";\n'
+            'end Refine;\n')
+        projects, sources, files = IDENTITY.project_inputs(self.root)
+        self.assertEqual(projects, ['compiler/ada/common.gpr',
+                                    'compiler/ada/landin_tests.gpr',
+                                    'compiler/ada/refine.gpr'])
+        self.assertEqual(files, ['compiler/ada/local.adc'])
+        self.assertEqual(sources, ['compiler/ada/other/deep/unit.adb',
+                                   'compiler/ada/other/host.c',
+                                   'compiler/ada/src/base/main.ads'])
+        # A new kind of input counts from the moment a project names it.
+        before = IDENTITY.identity(self.root, 'debug')[1]
+        (ada / 'local.adc').write_text('pragma Ada_2012;\n')
+        self.assertNotEqual(before, IDENTITY.identity(self.root, 'debug')[1])
+
+    def test_unreadable_project_inputs_are_refused(self):
+        ada = self.root / 'compiler/ada'
+        for text, said in (
+                ('project Refine is\n   for Languages use ("Rust");\n'
+                 'end Refine;\n', 'uses rust'),
+                ('project Refine is\n   for Source_Dirs use (Dirs);\n'
+                 'end Refine;\n', 'names a source directory Dirs'),
+                ('with "missing.gpr";\nproject Refine is\nend Refine;\n',
+                 'missing.gpr does not exist')):
+            with self.subTest(said=said):
+                (ada / 'refine.gpr').write_text(text)
+                with self.assertRaisesRegex(IDENTITY.ProjectError, said):
+                    IDENTITY.project_inputs(self.root)
+
+    def test_changed_names_what_moved(self):
+        base = ['project 1 compiler/ada/refine.gpr',
+                'source 2 compiler/ada/src/a.adb',
+                'identity 3 abc clean', 'mode debug tag t']
+        def said(after):
+            return IDENTITY.changed('\n'.join(base), '\n'.join(after))
+        self.assertEqual(said(base), [])
+        self.assertEqual(said([base[0], 'source 9 compiler/ada/src/a.adb',
+                               'identity 4 abc clean', base[3]]),
+                         ['compiler/ada/src/a.adb changed'])
+        self.assertEqual(said(base[:2] + ['identity 4 abc dirty', base[3]]),
+                         ['the checkout went from clean to dirty: a tracked'
+                          ' file the compiler does not build from was edited'
+                          ' or restored, which changes only the provenance'
+                          ' `refine --version` reports'])
+        self.assertEqual(said(base[:2] + ['identity 4 def clean', base[3]]),
+                         ['HEAD moved from abc to def'])
+        self.assertEqual(said(base[:2] + ['identity 4 abc clean', base[3]]),
+                         ['a build script changed, which the provenance'
+                          ' `refine --version` reports covers'])
+        self.assertEqual(said(base + ['source 5 compiler/ada/src/b.adb']),
+                         ['compiler/ada/src/b.adb appeared'])
+
+
+class CheckoutInputs(unittest.TestCase):
+    """Every file of compiler/ada is an input of the build or named here."""
+
+    NOT_INPUTS = {'compiler/ada/README.md', 'compiler/ada/TOOLCHAIN.md'}
+
+    def test_every_compiler_file_is_an_input_or_prose(self):
+        listed = subprocess.run(['git', '-C', str(ROOT), 'ls-files', '-z',
+                                 'compiler/ada'], capture_output=True,
+                                check=True).stdout
+        tracked = {name.decode() for name in listed.split(b'\0') if name}
+        inputs = set(IDENTITY.inputs(ROOT))
+        unclassified = sorted(tracked - inputs - self.NOT_INPUTS)
+        self.assertEqual(unclassified, [], 'a file under compiler/ada that no'
+                         ' project names reaches no object; name it in'
+                         ' CheckoutInputs.NOT_INPUTS if that is so, or in a'
+                         ' project file if it is an input')
+        self.assertEqual(sorted(self.NOT_INPUTS & inputs), [])
 
 
 if __name__ == '__main__':

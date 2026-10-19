@@ -7,6 +7,17 @@ package Landin.Tests.Fixture_Execution_Suite is
    --  developer run.  The ordinary complete suite never calls this.
    procedure Select_Fixture (Path : String);
 
+   --  What a focused run of fixture PATH says instead of running it when
+   --  none of its `targets:` is this run's lane, and its `args` select no
+   --  target of their own: that it does not apply here, and the command
+   --  of each lane that does run it.  "" when the fixture applies, or when
+   --  PATH selects no single well-formed fixture, which the run reports.
+   function Lane_Note (Path : String) return String;
+
+   --  The command that runs fixture LABEL on the lane of TARGET, a name
+   --  `targets:` may hold.
+   function Lane_Command (Label, Target : String) return String;
+
    --  Rewrite one recorded fixture's `expect` file, CLASS/NAME as
    --  --fixture names it, with what refine reports for it now.  Nothing
    --  is written unless the fixture is one with an `expect`, refine ran

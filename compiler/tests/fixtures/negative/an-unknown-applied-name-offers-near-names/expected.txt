@@ -1,0 +1,14 @@
+error[L0201]: `shlf` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/an-unknown-applied-name-offers-near-names/program.ldn:7:16
+  |
+7 | take: (source: shlf(u8)) -> (code: i32) =
+  |                ^^^^
+  = note: [1860]: a name that names nothing is refused, applied to arguments or not
+  = help: did you mean `shelf`?
+error[L0201]: `shlf` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/an-unknown-applied-name-offers-near-names/program.ldn:12:8
+   |
+12 |     s: shlf(u8) = (count: 3)
+   |        ^^^^
+  = note: [1860]: a name that names nothing is refused, applied to arguments or not
+  = help: did you mean `shelf`?

@@ -15,7 +15,7 @@ visible: point = point(hidden)
 direct: point = point(opaque_point((x: 31)))
 span: type = []i32
 opaque_span: type = distinct span
-slice_image: opaque_span = opaque_span(plain[0 ..< 2])
+slice_image: opaque_span = opaque_span(plain[0..<2])
 view: span = span(slice_image)
 text_id: type = distinct utf8
 message: text_id = text_id("hello")
@@ -41,9 +41,9 @@ failure: opaque_problems = opaque_problems(problem)
 error: problems = problems(failure)
 public main: () -> (code: i32) =
     if plain[1] == 20 and visible.x == 30 and direct.x == 31
-       and view[1] == 20 and lenof text == 5 and callable() == 42
-       and raw_height == 2.5 and u32(boxed.value) == 4
-       and boxed.values[1] == 20 and error == problem then
+      and view[1] == 20 and lenof text == 5 and callable() == 42
+      and raw_height == 2.5 and u32(boxed.value) == 4
+      and boxed.values[1] == 20 and error == problem then
         code = i32(raw)
     else
         code = 1

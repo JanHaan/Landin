@@ -25,7 +25,7 @@ public main: () -> (code: i32) =
         empty: correct = false
         full(planes):
             correct = total == 12 and planes[0][2][3] == 10
-              and planes[1][2][3] == 11
+                      and planes[1][2][3] == 11
     end match
     code = if correct then 42 else 1 end if
 end main

@@ -1,6 +1,10 @@
-error[L0336]: packed fields overlap or the target does not support this image layout
-  --> ../tests/fixtures/negative/shared-packed-fields-overlap/program.ldn:1:30
+error[L0336]: this packed field overlaps an earlier one
+  --> ../tests/fixtures/negative/shared-packed-fields-overlap/program.ldn:2:10
   |
-1 | image: type = layout(packed) struct
-  |                              ^^^^^^ this layout declaration
+2 |     low, high: u4 at 0..3
+  |          ^^^^
+  --> ../tests/fixtures/negative/shared-packed-fields-overlap/program.ldn:2:5
+  |
+2 |     low, high: u4 at 0..3
+  |     ^^^ the field it overlaps
   = note: [0730]: packed fields have explicit, disjoint bit positions within one unsigned image

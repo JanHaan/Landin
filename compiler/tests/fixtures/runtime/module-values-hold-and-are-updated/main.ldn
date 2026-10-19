@@ -35,22 +35,22 @@ public main: () -> (code: i32) =
     run_remainder: i32 = run_dividend % 6
 
     if answer == 42
-        and derived == 43
-        and beyond == 0
-        and masked == 240
-        and below == -100
-        and widest == 18446744073709551615
-        and verdict
-        and counter == 42
-        and latch
-        and kept == run_kept
-        and wide == run_shift
-        and quotient == run_quotient
-        and remainder == run_remainder
-        and kept == -13
-        and wide == -16
-        and quotient == -7
-        and remainder == -1
+      and derived == 43
+      and beyond == 0
+      and masked == 240
+      and below == -100
+      and widest == 18446744073709551615
+      and verdict
+      and counter == 42
+      and latch
+      and kept == run_kept
+      and wide == run_shift
+      and quotient == run_quotient
+      and remainder == run_remainder
+      and kept == -13
+      and wide == -16
+      and quotient == -7
+      and remainder == -1
     then
         code = 42
     else

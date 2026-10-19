@@ -26,8 +26,8 @@ public main: () -> (code: i32) =
     mut final_copy: [2]u32
     final_copy = mixed_paths
     if final_copy[0] == 17 and final_copy[1] == 25
-        and module_destination[0] == 17
-        and module_destination[1] == 25
+      and module_destination[0] == 17
+      and module_destination[1] == 25
     then
         code = 42
     else

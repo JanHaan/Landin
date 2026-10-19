@@ -16,7 +16,7 @@ package body Landin.Tests.Optimization_Driver_Suite is
      & "i32 is ordered (less: less) "
      & "choose: (t: type is ordered, a: t, b: t) -> (r: t) = "
      & "if t.less(a,b) then r = a else r = b end if end choose "
-     & "public main: () -> (r: i32) = r = choose(42,43) end main";
+     & "public main: () -> (code: i32) = code = choose(42,43) end main";
 
    type Report_Refusing_Host is new
      Landin.Testing.Fakes.Fake_Filesystem with null record;
@@ -60,6 +60,47 @@ package body Landin.Tests.Optimization_Driver_Suite is
    procedure Tool_Completion (Item : in out Landin.Testing.Context);
    procedure Path_Bytes (Item : in out Landin.Testing.Context);
    procedure Stage_Reports (Item : in out Landin.Testing.Context);
+   procedure Indirect_Calls_Named (Item : in out Landin.Testing.Context);
+
+   --  The build report names each evidence call the program still
+   --  makes through a table, by routine, place and provider, and says why
+   --  in words.
+   procedure Indirect_Calls_Named (Item : in out Landin.Testing.Context) is
+      function Report (Mode : String) return String;
+
+      function Report (Mode : String) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Request;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Generic_Source);
+         Args.Append ("--specialize=" & Mode);
+         Args.Append ("--build-report=report.json");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "--specialize=" & Mode & " emits");
+         return Host.Written ("report.json");
+      end Report;
+
+      Off : constant String := Report ("off");
+      Auto : constant String := Report ("auto");
+   begin
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Off, """left_indirect"":[" & ASCII.LF
+              & "{""routine"":""main.choose"",""source"": 1,""line"":1,"
+              & """column"":216,""provider"":""main.less"",""why"":"
+              & """--specialize=off makes no evidence call direct""}]")
+           > 0,
+         "an unspecialized call is named, placed and explained: " & Off);
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index (Off, """name"":""main.choose""") > 0,
+         "an instance's item carries its routine's name");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index (Auto, """left_indirect"":[]") > 0,
+         "a specialized call is not listed: " & Auto);
+   end Indirect_Calls_Named;
 
    procedure Invalid_Requests (Item : in out Landin.Testing.Context) is
       procedure Refuses (First : String; Second : String := "");
@@ -609,10 +650,16 @@ package body Landin.Tests.Optimization_Driver_Suite is
          Written := US.To_Unbounded_String (Host.Written ("stages.json"));
          Landin.Testing.Check_Equal
            (Item, Result.Status, 0, "an emitting request may be measured");
+         --  Loading samples four times: as it begins, around the parse of
+         --  the file it reads, and as it ends.  Its 30 microseconds hold
+         --  10 of parsing, which the syntax row carries beside its own 10.
          Landin.Testing.Check
            (Item, Has (US.To_String (Written),
-                       "{""stage"":""loading"",""processor_us"":10,"
-                       & """peak_kib"":102}")
+                       "{""stage"":""loading"",""processor_us"":20,"
+                       & """peak_kib"":104}")
+              and then Has (US.To_String (Written),
+                            "{""stage"":""syntax"",""processor_us"":20,"
+                            & """peak_kib"":106}")
               and then Has (US.To_String (Written),
                             "{""stage"":""lowering"",""processor_us"":10,")
               and then Has (US.To_String (Written),
@@ -650,6 +697,31 @@ package body Landin.Tests.Optimization_Driver_Suite is
                                 """checking"""),
             "a refused program is measured up to the stage that refused");
       end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Clock : aliased Count;
+         Meter : Counting_Meter (Clock'Access);
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", "main: () -> (code: i32) = code = 0");
+         Args.Append ("main.ldn");
+         Args.Append ("--stage-report=stages.json");
+         Result := Landin.Driver.Execute (Args, Host, Tools, Meter);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a program its parse refuses is refused");
+         Landin.Testing.Check
+           (Item, Has (Host.Written ("stages.json"),
+                       "{""stage"":""loading"",""processor_us"":20,")
+              and then Has (Host.Written ("stages.json"),
+                            "{""stage"":""syntax"",""processor_us"":20,")
+              and then not Has (Host.Written ("stages.json"),
+                                """configuration"""),
+            "a parse refused while loading is the syntax stage's row");
+      end;
    end Stage_Reports;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
@@ -675,5 +747,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Landin.Testing.Register
         (Into, "opt driver", "stage reports measure each stage",
          Stage_Reports'Access);
+      Landin.Testing.Register
+        (Into, "opt driver", "build reports name calls left indirect",
+         Indirect_Calls_Named'Access);
    end Register;
 end Landin.Tests.Optimization_Driver_Suite;

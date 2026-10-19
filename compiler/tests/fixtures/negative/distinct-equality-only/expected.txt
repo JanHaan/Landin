@@ -1,0 +1,40 @@
+error[L0301]: a distinct type over an atom, a pointer or a function value has `==` and `<>`, and no other operator
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:17:16
+   |
+17 |     before = a < b
+   |                ^
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:17:14
+   |
+17 |     before = a < b
+   |              ^^^^^ here
+  = note: [0650]: extract the base, `base(value)`, for anything else
+error[L0301]: a distinct type over an atom, a pointer or a function value has `==` and `<>`, and no other operator
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:21:14
+   |
+21 |     both = a | b
+   |              ^
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:21:12
+   |
+21 |     both = a | b
+   |            ^^^^^ here
+  = note: [0650]: extract the base, `base(value)`, for anything else
+error[L0301]: a distinct type has `==`, `<>` and its base's order, and `&`, `^`, `|` and `~` when its base is an unsigned integer; extract the base for anything else
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:25:7
+   |
+25 |     d |= more
+   |       ^^
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:25:5
+   |
+25 |     d |= more
+   |     ^^^^^^^^^ here
+  = note: [0650]: arithmetic and shifts are the base's, written `base(value)`, and `&=`, `^=` and `|=` combine flags in place
+error[L0301]: a comparison takes scalars, atoms, pointers and function values, not a distinct type whose base has no equality
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:29:13
+   |
+29 |     equal = a == b
+   |             ^
+  --> ../tests/fixtures/negative/distinct-equality-only/main.ldn:29:13
+   |
+29 |     equal = a == b
+   |             ^^^^^^ the comparison here
+  = note: [1890]: `==` and its kin compare one register-sized value; a view or an aggregate has no equality of its own

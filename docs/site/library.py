@@ -23,6 +23,12 @@ PUBLIC = re.compile(r'^(\s*)public ((?:extern\((?:c|naked)\)\s+)?'
                     r'(?:link\(symbol:[^)]*\)\s+)?)'
                     r'(\w+):\s*(.*)')
 DOC = re.compile(r'^\s*---(?: ?)(.*)$')
+#  `public` and a declaration's attributes alone on a line, which the layout
+#  writes when they would make the declaration's first line long: the name
+#  begins the next line, at the same indentation.
+ATTRIBUTES = re.compile(r'^(\s*)public(?:\s+extern\((?:c|naked)\))?'
+                        r'(?:\s+link\(symbol:[^)]*\))?\s*$')
+NAMED = re.compile(r'\w+:')
 
 
 @dataclass
@@ -35,6 +41,9 @@ class Item:
     source: str
     line: int
     condition: str = ''
+    # Each enclosing `fixed if` branch's own test, outermost first, where
+    # `condition` also says which earlier branches did not hold.
+    chain: tuple = ()
 
     @property
     def anchor(self):
@@ -90,6 +99,15 @@ def read_items(text, source):
                 conditions[-1][1] = 'otherwise'
             elif stripped == 'end if':
                 conditions.pop()
+        # The line the declaration's name is on: this one, or the next when
+        # its attributes stand alone above it.
+        last = i
+        attributes = ATTRIBUTES.match(code)
+        if (attributes and i + 1 < len(codes)
+                and codes[i + 1].startswith(attributes[1])
+                and NAMED.match(codes[i + 1][len(attributes[1]):])):
+            last = i + 1
+            code = code.rstrip() + ' ' + codes[last].lstrip()
         match = PUBLIC.match(code)
         if not match:
             if re.search(r'\bpublic\b', code):
@@ -109,7 +127,12 @@ def read_items(text, source):
             # indented lines, and a definition ends it with '=' at
             # delimiter depth zero where an import simply stops.
             depth = 0
-            j = i
+            for char in ''.join(codes[i:last]):
+                if char in '([':
+                    depth += 1
+                elif char in ')]':
+                    depth -= 1
+            j = last
             while True:
                 for char in codes[j]:
                     if char in '([':
@@ -132,8 +155,8 @@ def read_items(text, source):
                     raise ValueError(f'{source}:{i+1}: unterminated C routine')
             kind = 'function'
         elif after.startswith('(') or (
-                not after and i + 1 < len(codes)
-                and codes[i + 1].strip().startswith('(')):
+                not after and last + 1 < len(codes)
+                and codes[last + 1].strip().startswith('(')):
             # A native routine, whose signature the layout may start on the
             # next line.  The implementation separator is the first standalone '=' at
             # delimiter depth zero. '=' inside defaults is not a separator.
@@ -167,12 +190,13 @@ def read_items(text, source):
                 signature = '\n'.join(lines[i:j+1])
                 kind = 'concept' if block[1] == 'concept' else 'type'
             else:
-                continued = (code.rstrip().endswith('=') and i + 1 < len(codes)
-                             and codes[i+1].startswith(prefix + '    ')
-                             and codes[i+1].strip())
+                continued = (code.rstrip().endswith('=')
+                             and last + 1 < len(codes)
+                             and codes[last+1].startswith(prefix + '    ')
+                             and codes[last+1].strip())
                 if continued:
                     # An alias whose right side the layout put on the next line.
-                    code = code.rstrip() + ' ' + codes[i+1].strip()
+                    code = code.rstrip() + ' ' + codes[last+1].strip()
                 if '=' not in code or not code.split('=', 1)[1].strip():
                     raise ValueError(f'{source}:{i+1}: unsupported type alias')
                 rhs = code.split('=', 1)[1].strip()
@@ -181,17 +205,38 @@ def read_items(text, source):
                         or rhs.count('(') != rhs.count(')')
                         or rhs.count('[') != rhs.count(']')):
                     raise ValueError(f'{source}:{i+1}: unsupported multiline type')
-                signature = '\n'.join(lines[i:i+2]) if continued else lines[i]
+                signature = '\n'.join(lines[i:last + (2 if continued else 1)])
                 kind = 'type'
         elif after == 'atom':
-            signature, kind = lines[i], 'atom'
+            signature, kind = '\n'.join(lines[i:last+1]), 'atom'
         else:
-            if '=' not in code or not lines[i].split('=', 1)[1].strip():
+            # A value, whose expression the layout may begin on the next
+            # line or continue on more deeply indented ones; open brackets
+            # carry it on whatever the indentation.  Its name may itself be
+            # on the line after its attributes.
+            depth, j = 0, last
+            while True:
+                for char in codes[j]:
+                    if char in '([':
+                        depth += 1
+                    elif char in ')]':
+                        depth -= 1
+                following = codes[j + 1] if j + 1 < len(codes) else ''
+                if depth <= 0 and (not following.strip()
+                                   or len(following) - len(following.lstrip())
+                                   <= len(prefix)):
+                    break
+                j += 1
+                if j == len(codes):
+                    raise ValueError(f'{source}:{i+1}: unterminated public value')
+            written = '\n'.join(lines[i:j + 1])
+            if '=' not in code or not written.split('=', 1)[1].strip():
                 raise ValueError(f'{source}:{i+1}: unsupported public value')
-            signature, kind = lines[i], 'value'
+            signature, kind = written.rstrip(), 'value'
         signature = textwrap.dedent(signature).strip()
         items.append(Item(module, name, kind, signature, documentation,
-                          source, i+1, condition))
+                          source, i+1, condition,
+                          tuple(c[1] for c in conditions)))
     return items
 
 
@@ -237,6 +282,103 @@ def overviews(root, modules):
     return parts[0], result
 
 
+VALUE = re.compile(r'public (\w+):\s*([^=\n]*?)\s*=\s*(\S[^\n]*)')
+
+
+@dataclass
+class Table:
+    """Values declared once per target, as one row per name.
+
+    A module generated for several targets, platform/linux/numbers the
+    first, declares each name once in every branch of a `fixed if`; as a
+    section per declaration its page repeated 387 names three times.
+    """
+    columns: list        # each column's full condition, in source order
+    labels: list         # what its header says
+    rows: dict           # name -> (type, {condition: Item}, value by condition)
+
+    def documentation(self, name):
+        return merged_documentation([i.documentation
+                                     for i in self.rows[name][1].values()])
+
+
+def value_table(grouped):
+    """The names `grouped` can show as one table, or None.
+
+    A name qualifies when every declaration of it is a one-line value of
+    one type under its own target condition and its documentation is one
+    paragraph. The columns are the conditions more than half of the
+    names declared more than once use, and a name joins the table when all
+    its conditions are columns; the rest keep their sections, so one odd
+    declaration does not widen every row.
+    """
+    candidates = {}
+    for name, variants in grouped.items():
+        found = [VALUE.fullmatch(v.signature) for v in variants]
+        if (all(found) and len({m[2] for m in found}) == 1
+                and all(v.kind == 'value' and v.condition
+                        and '\n\n' not in v.documentation for v in variants)):
+            candidates[name] = (found[0][2], {v.condition: v for v in variants},
+                                {v.condition: m[3] for v, m in zip(variants, found)})
+    repeated = [row[1] for row in candidates.values() if len(row[1]) > 1]
+    uses = {}
+    for items in repeated:
+        for condition in items:
+            uses[condition] = uses.get(condition, 0) + 1
+    wanted = {c for c, n in uses.items() if 2 * n > len(repeated)}
+    rows = {name: row for name, row in candidates.items() if set(row[1]) <= wanted}
+    if (len(rows) < 2 or len(wanted) < 2
+            or all(len(row[1]) == 1 for row in rows.values())):
+        return None
+    first = {}
+    for _, items, _ in rows.values():
+        for condition, item in items.items():
+            first[condition] = min(first.get(condition, (item.source, item.line)),
+                                   (item.source, item.line))
+    columns = sorted(first, key=first.get)
+    chains = [next(i.chain for _, items, _ in rows.values()
+                   for c, i in items.items() if c == column) for column in columns]
+    # A column is headed by its own branch's test when the columns are
+    # branches under the same enclosing tests; the full condition is said
+    # once above the table.
+    labels = [chain[-1] for chain in chains]
+    if len(set(labels)) != len(labels) or len({chain[:-1] for chain in chains}) != 1:
+        labels = list(columns)
+    return Table(columns, labels, rows)
+
+
+TOKENS = re.compile(r'\s+|[^\s.,;:]+|[.,;:]')
+
+
+def merged_documentation(texts):
+    """One documentation for a row: shared, or its differing words joined.
+
+    `read`'s number "on x86-64.", "on arm64." and "on RV64." become "on
+    x86-64 / arm64 / RV64.", every variant's every word still present.
+    """
+    texts = [' '.join(t.split()) for t in texts]
+    distinct = list(dict.fromkeys(texts))
+    if len(distinct) == 1:
+        return distinct[0]
+    tokens = [TOKENS.findall(t) for t in distinct]
+    start = 0
+    while all(start < len(t) for t in tokens) and len({t[start] for t in tokens}) == 1:
+        start += 1
+    end = 0
+    while (all(end < len(t) - start for t in tokens)
+           and len({t[len(t) - 1 - end] for t in tokens}) == 1):
+        end += 1
+    prefix = ''.join(tokens[0][:start])
+    suffix = ''.join(tokens[0][len(tokens[0]) - end:])
+    middles = [''.join(t[start:len(t) - end]).strip() for t in tokens]
+    balanced = all(part.count('`') % 2 == 0 and part.count('[') == part.count(']')
+                   and part.count('(') == part.count(')')
+                   for part in [prefix] + middles)
+    if balanced and all(middles) and all(len(m.split()) <= 3 for m in middles):
+        return (prefix.rstrip() + ' ' + ' / '.join(middles) + suffix).strip()
+    return ' / '.join(distinct)
+
+
 CSS = '''
 .api-tools {margin:1.5rem 0} .api-tools input {width:100%; padding:.7rem;
 font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--rule)}
@@ -251,6 +393,12 @@ background:var(--panel); border:1px solid var(--rule); white-space:pre}
 .api-index {columns:2; padding-left:1.2rem} .api-source-line {display:block;scroll-margin-top:5rem}
 .api-source-line:target {background:var(--panel)} .api-line-number {display:inline-block;
 min-width:4ch;margin-right:1.2em;color:var(--ink-faint);user-select:none}
+.api-table {border-collapse:collapse; font-size:.9rem}
+.api-table th, .api-table td {text-align:left; padding:.25rem .8rem .25rem 0;
+border-bottom:1px solid var(--rule); vertical-align:top}
+.api-table th[scope=row] {font-weight:normal; font-family:var(--mono)}
+.api-table tr:target {background:var(--panel)} .api-table tr {scroll-margin-top:5rem}
+.api-table td code, .api-table th code {white-space:nowrap}
 .api-condition {font-size:.9rem} @media(max-width:600px){.api-index{columns:1}}
 '''
 
@@ -323,6 +471,41 @@ ANCHORS = """
  addEventListener('hashchange',settle);
 })();
 """
+
+
+def value_section(table, module, source_name, reference, render, links):
+    """The table: a row per name, a column per target condition."""
+    out = ['<section class="api-values" id="values"><h2>Values by target</h2>'
+           '<p>Each name is declared once for each target condition below; '
+           'a dash means the name is not declared there.</p><ul class="api-columns">']
+    for label, column in zip(table.labels, table.columns):
+        out.append(f'<li><code>{html.escape(label)}</code>: when '
+                   f'<code>{html.escape(column)}</code></li>')
+    out.append('</ul><div class="scroller"><table class="api-table"><thead><tr>'
+               '<th scope="col">Name</th><th scope="col">Type</th>')
+    out += [f'<th scope="col"><code>{html.escape(label)}</code></th>'
+            for label in table.labels]
+    out.append('<th scope="col">Documentation</th></tr></thead><tbody>')
+    for name, (kind, items, values) in table.rows.items():
+        anchor = 'item-' + name
+        target = reference(kind)
+        written = f'<code>{html.escape(kind)}</code>'
+        out.append(f'<tr class="api-item" id="{anchor}"><th scope="row">{name}</th><td>'
+                   + (f'<a href="{target}">{written}</a>' if target else written) + '</td>')
+        for column in table.columns:
+            item = items.get(column)
+            if item is None:
+                out.append('<td class="api-absent">\u2014</td>')
+            else:
+                out.append(f'<td><a href="{source_name(item.source)}#L{item.line}">'
+                           f'<code>{html.escape(values[column])}</code></a></td>')
+        first = next(iter(items.values()))
+        out.append('<td>' + render.inline(
+            table.documentation(name), links,
+            render.guide_targets(render.DOCS + render.GUIDES, first.source))
+            + '</td></tr>')
+    out.append('</tbody></table></div></section>')
+    return ''.join(out)
 
 
 def search_box():
@@ -459,16 +642,26 @@ def write(root, destination, render):
         kinds = ('concept', 'type', 'atom', 'value', 'function')
         grouped = dict(sorted(grouped.items(), key=lambda entry:
                               (kinds.index(entry[1][0].kind), entry[0])))
+        table = value_table(grouped)
+        tabled = table.rows if table else {}
         for kind in kinds:
             for name, variants in grouped.items():
-                if variants[0].kind == kind:
+                if variants[0].kind == kind and name not in tabled:
                     body += f'<li><a href="#item-{name}">{name}</a> <span class="api-kind">{kind}</span></li>'
+        if table:
+            body += (f'<li><a href="#values">{len(tabled)} values by target</a> '
+                     '<span class="api-kind">table</span></li>')
         body += '</ul><details id="example"><summary>Executable example</summary><p>This complete program is maintained in the repository runtime tests. '
         body += f'<a href="{source_name(example_path)}#L1">View source</a>.</p>'
         example = (root / example_path).read_text()
         sources[example_path] = example
         body += render.listing_of(render.render_landin(example.splitlines(), render.Highlighter())) + '</details>'
+        if table:
+            body += value_section(table, module, source_name, reference, render,
+                                  lambda ref: anchors.get(ref))
         for name, variants in grouped.items():
+            if name in tabled:
+                continue
             item = variants[0]
             body += f'<section class="api-item" id="{item.anchor}"><h2>{name} <span class="api-kind">{item.kind}</span></h2>'
             for variant in variants:
@@ -491,6 +684,39 @@ def write(root, destination, render):
     return pages
 
 
+def verify_table(module, page, table, render):
+    """Every declaration a table holds is in its row, under its column."""
+    from collections import Counter
+    want = ['Name', 'Type'] + table.labels + ['Documentation']
+    if [h.strip() for h in (page.headers[0] if page.headers else [])] != want:
+        raise ValueError(f'{module}: value table columns changed')
+    legend = [f'{label}: when {column}'
+              for label, column in zip(table.labels, table.columns)]
+    if [' '.join(entry.split()) for entry in page.legend] != legend:
+        raise ValueError(f'{module}: value table legend changed')
+    for name, (kind, items, values) in table.rows.items():
+        anchor = 'item-' + name
+        if anchor not in page.cells:
+            raise ValueError(f'{module}: missing rendered declaration {anchor}')
+        cells = [cell.strip() for cell in page.cells[anchor]]
+        expected = [name, kind] + [values.get(c, '\u2014') for c in table.columns]
+        if cells[:-1] != expected:
+            raise ValueError(f'{module}.{anchor}: value table row changed: '
+                             f'{cells[:-1]} for {expected}')
+        # A merged documentation moves a sentence's full stop off the
+        # word that differed, "x86-64." becoming "x86-64 / arm64.", so a
+        # word is compared without the stop that ends it.
+        def words(text):
+            return Counter(render.WORD.findall(re.sub(r'\.(?=\s|$)', ' ', text)))
+        got = words(''.join(page.items[anchor]))
+        for item in items.values():
+            missing = words(re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1',
+                                   item.documentation)) - got
+            if missing:
+                raise ValueError(f'{module}.{anchor}: documentation lost words: '
+                                 f'{sorted(missing)}')
+
+
 def verify(destination, pages, modules, render, sources=None):
     """Check every local destination and each item's own visible content."""
     from collections import Counter
@@ -502,6 +728,11 @@ def verify(destination, pages, modules, render, sources=None):
             super().__init__(convert_charrefs=True)
             self.ids, self.links, self.items = set(), [], {}
             self.current, self.depth, self.hidden, self.pre = None, 0, 0, 0
+            # A table row is an item too, whose cells are kept one by one;
+            # the table's header and its column legend likewise.
+            self.item_tag, self.cells, self.heading = 'section', {}, None
+            self.headers, self.legend, self.in_legend = [], [], 0
+            self.in_table = False
             self.source_lines, self.source_line, self.span_depth = {}, None, 0
             self.feed(text)
 
@@ -517,8 +748,21 @@ def verify(destination, pages, modules, render, sources=None):
                 self.pre += 1
             if self.current and tag == 'code' and not self.pre:
                 self.items[self.current].append(' ')
-            if self.current and tag in ('p', 'pre', 'h2', 'h3', 'li', 'section'):
+            if self.current and tag in ('p', 'pre', 'h2', 'h3', 'li', 'section',
+                                        'th', 'td'):
                 self.items[self.current].append('\n')
+            if self.current and tag in ('th', 'td'):
+                self.cells[self.current].append('')
+            if tag == 'table' and attrs.get('class') == 'api-table':
+                self.in_table = True
+            if tag == 'thead' and self.in_table:
+                self.heading = []
+            elif tag == 'th' and self.heading is not None:
+                self.heading.append('')
+            if tag == 'ul' and attrs.get('class') == 'api-columns':
+                self.in_legend = 1
+            elif tag == 'li' and self.in_legend:
+                self.legend.append('')
             if 'id' in attrs:
                 if attrs['id'] in self.ids:
                     raise ValueError('duplicate HTML anchor: ' + attrs['id'])
@@ -528,12 +772,12 @@ def verify(destination, pages, modules, render, sources=None):
             if tag == 'input' and 'data-index' in attrs:
                 # The search index the page loads is a local link too.
                 self.links.append(attrs['data-index'])
-            if tag == 'section':
-                if self.current:
-                    self.depth += 1
-                elif attrs.get('class') == 'api-item':
-                    self.current, self.depth = attrs['id'], 1
-                    self.items[self.current] = []
+            if self.current and tag == self.item_tag:
+                self.depth += 1
+            elif (not self.current and tag in ('section', 'tr')
+                  and attrs.get('class') == 'api-item'):
+                self.current, self.depth, self.item_tag = attrs['id'], 1, tag
+                self.items[self.current], self.cells[self.current] = [], []
             if tag in ('script', 'style'):
                 self.hidden += 1
 
@@ -546,9 +790,17 @@ def verify(destination, pages, modules, render, sources=None):
                 self.items[self.current].append(' ')
             if tag == 'pre':
                 self.pre -= 1
-            if self.current and tag in ('p', 'pre', 'h2', 'h3', 'li', 'section'):
+            if self.current and tag in ('p', 'pre', 'h2', 'h3', 'li', 'section',
+                                        'th', 'td'):
                 self.items[self.current].append('\n')
-            if tag == 'section' and self.current:
+            if tag == 'thead' and self.heading is not None:
+                self.headers.append(self.heading)
+                self.heading = None
+            if tag == 'table':
+                self.in_table = False
+            if tag == 'ul' and self.in_legend:
+                self.in_legend = 0
+            if tag == self.item_tag and self.current:
                 self.depth -= 1
                 if not self.depth:
                     self.current = None
@@ -560,6 +812,12 @@ def verify(destination, pages, modules, render, sources=None):
                 self.source_lines[self.source_line].append(data)
             if self.current and not self.hidden:
                 self.items[self.current].append(data)
+                if self.cells[self.current]:
+                    self.cells[self.current][-1] += data
+            if self.heading:
+                self.heading[-1] += data
+            if self.in_legend and self.legend:
+                self.legend[-1] += data
 
     parsed = {name: Page((destination / name).read_text()) for name in pages}
     for name, page in list(parsed.items()):
@@ -583,9 +841,17 @@ def verify(destination, pages, modules, render, sources=None):
         grouped = {}
         for item in items:
             grouped.setdefault(item.anchor, []).append(item)
+        by_name = {}
+        for item in items:
+            by_name.setdefault(item.name, []).append(item)
+        table = value_table(by_name)
+        if table:
+            verify_table(module, page, table, render)
         for anchor, variants in grouped.items():
             if anchor not in page.items:
                 raise ValueError(f'{module}: missing rendered declaration {anchor}')
+            if table and variants[0].name in table.rows:
+                continue
             want = Counter(render.WORD.findall('\n'.join(
                 item.signature + '\n' + re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1',
                                                item.documentation) for item in variants)))

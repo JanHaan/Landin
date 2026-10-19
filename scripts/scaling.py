@@ -166,22 +166,24 @@ def modules(size: int) -> dict[str, str]:
         last = min(count, first + per) - 1
         for index in range(first, last + 1):
             visible = "public " if index == last else ""
+            #  `t` is mutable only where the call before writes it: the
+            #  program's very first function calls nothing.
             if index == first and module:
-                local = f"m{module - 1}.pair{module - 1}"
+                local = f"mut t: m{module - 1}.pair{module - 1}"
                 inner = f"m{module - 1}.g{index - 1}(t, x)"
             elif index == first:
-                local = f"pair{module}"
+                local = f"t: pair{module}"
                 inner = "x"
             else:
-                local = f"pair{module}"
+                local = f"mut t: pair{module}"
                 inner = f"g{index - 1}(t, x)"
             parts.append(
                 f"{visible}g{index}: (inout p: pair{module}, x: i32)"
                 " -> (r: i32) =\n"
-                f"    mut t: {local} = (left: 0, right: 0)\n"
+                f"    {local} = (left: 0, right: 0)\n"
                 f"    mut acc: i32 = {inner}\n"
                 f"    q: ptr mut pair{module} = addr p\n"
-                f"    mut s: shape{module} = (kind: a(v: acc))\n"
+                f"    s: shape{module} = (kind: a(v: acc))\n"
                 "    for i in 0..<3 do\n"
                 "        if acc > 1000 then\n"
                 "            acc = acc - 1\n"
@@ -244,11 +246,13 @@ def locals_(size: int) -> dict[str, str]:
 def branches(size: int) -> dict[str, str]:
     """One function holding every declaration as a local, each set by a
     call and every other one followed by a branch that may reassign it:
-    the facts a local carries are saved and joined at every branch."""
+    the facts a local carries are saved and joined at every branch.  Only
+    a local a branch reassigns is `mut`, so the program checks clean."""
     body = ["side: (x: i32) -> (r: i32) =\n    r = x\nend side\n\n"
-            "public main: () -> (code: i32) =\n    mut v0: i32 = 0\n"]
+            "public main: () -> (code: i32) =\n    v0: i32 = 0\n"]
     for index in range(1, size):
-        body.append(f"    mut v{index}: i32 = side(v{index - 1})\n")
+        written = "mut " if index % 2 == 0 else ""
+        body.append(f"    {written}v{index}: i32 = side(v{index - 1})\n")
         if index % 2 == 0:
             body.append(f"    if v{index} == 7 then\n"
                         f"        v{index} = 8\n    end if\n")
@@ -377,6 +381,15 @@ def measure(refine: str, root: str, entry: str, report: str,
                 " ".join(command), completed.returncode,
                 time.monotonic() - started,
                 completed.stderr.decode("utf-8", "replace")[-2000:]))
+    #  A warning does not change the exit status, so a program that checks
+    #  with any diagnostic is refused by what the compiler wrote, not by
+    #  how it exited: its time would include reporting the diagnostics.
+    if completed.stdout or completed.stderr:
+        reported = (completed.stderr or completed.stdout).decode(
+            "utf-8", "replace")
+        raise RuntimeError(
+            "%s reported a diagnostic, and a measured program must check"
+            " clean:\n%s" % (" ".join(command), reported[:2000]))
     try:
         with open(report, encoding="utf-8") as handle:
             data = json.load(handle)

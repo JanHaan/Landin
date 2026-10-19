@@ -173,7 +173,7 @@ debug_denied: atom
 debug_union: type = debug_none | debug_denied | ptr mut i32
 
 --  [0480]/[1870]: one union local holds an atom case and one the pointer
---  case; a debugger presents each as its atom code and pointer cells.
+--  case; a debugger presents each as its atom's name and pointer cells.
 debug_unions: (union_param: ptr mut i32) -> (result: i32) =
     union_atom: debug_union = debug_denied
     union_pointer: debug_union = union_param

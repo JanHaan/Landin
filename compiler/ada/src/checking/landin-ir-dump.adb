@@ -52,7 +52,10 @@ package body Landin.IR.Dump is
      (Of_Unit  : Unit;
       Meanings : Landin.Resolution.Table;
       Names    : Landin.Source.Names.Table;
-      With_Metadata : Boolean := False) return String
+      With_Metadata : Boolean := False;
+      Kept     : access function
+        (Id : Evidence_Id; Which : Positive) return Boolean := null)
+      return String
    is
       Out_Text : Unbounded.Unbounded_String;
 
@@ -1118,7 +1121,10 @@ package body Landin.IR.Dump is
                       (Evidence_Entry_Signature (Of_Unit, Id, Entry_Index)))
                     & " dispatch " & Trimmed (Signature_Id'Image
                       (Evidence_Entry_Dispatch_Signature
-                         (Of_Unit, Id, Entry_Index))));
+                         (Of_Unit, Id, Entry_Index)))
+                    & (if Kept = null then ""
+                       elsif Kept (Id, Entry_Index) then " kept"
+                       else " dropped"));
             end loop;
          end;
       end loop;
@@ -1409,6 +1415,10 @@ package body Landin.IR.Dump is
 
                   if Result_Slot (Of_Unit, Id) = Slot then
                      Unbounded.Append (Marks, " return");
+                  end if;
+
+                  if Is_Sealed (Of_Unit, Id, Slot) then
+                     Unbounded.Append (Marks, " sealed");
                   end if;
 
                   if Inlined_At (Of_Unit, Id, Slot) /= 0 then

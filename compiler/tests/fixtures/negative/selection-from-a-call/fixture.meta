@@ -1,5 +1,8 @@
 class: negative
-summary: [1820] selects from a name and a call is its own production, so a selection from a call derives in no rule and is reported once at its `.`
+summary: [1820] selects from a name and a call is its own production, so a selection from a call derives in no rule and is reported once at its `.`, naming the binding to select from instead
+expect: expected.txt
+args: ../tests/fixtures/negative/selection-from-a-call/program.ldn
+status: 1
 constructs: 1820
 program: program.ldn
 codes: L0103

@@ -40,7 +40,7 @@ end first_even
 -- Origin facts join the break edge and the fallthrough: each carries a
 -- parameter the result is declared to come from.
 keep: (cell: ptr u32, other: ptr u32, early: bool)
-        -> (result: ptr u32 from cell, other) =
+      -> (result: ptr u32 from cell, other) =
     mut held: ptr u32 = cell
     pick: begin
         if early then

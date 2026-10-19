@@ -49,9 +49,9 @@ public main: () -> (code: i32) =
     state.fail_write_at = 4
     empty_count: usize = io.write_some(memory, io.out(memory), source[0..<0])
         else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     return when empty_count <> 0 or state.writes <> 0
     world: any io.world = any(addr memory)
     heap := heap.new()
@@ -257,8 +257,8 @@ skipped_long_lines_in: (data: []mut u8) -> (ok: bool) =
     end
     region.release(ledger, bump)
     ok = kept == 1 and files[1].length == lenof selected
-      and app.equal(destination[0..<lenof selected], selected)
-      and files[0].state == io.closed_slot and files[1].state == io.closed_slot
+         and app.equal(destination[0..<lenof selected], selected)
+         and files[0].state == io.closed_slot and files[1].state == io.closed_slot
 end skipped_long_lines_in
 
 --  Walk every allocation boundary until one complete run succeeds. The

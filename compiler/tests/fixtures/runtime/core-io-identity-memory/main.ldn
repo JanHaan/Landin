@@ -7,10 +7,10 @@ public main: () -> (code: i32) =
     mut first: [1]u8 = [65]
     mut second: [1]u8 = [66]
     mut files: [2]io.memory_file = [
-      (name: "a", contents: first[0..<1], length: 1, cursor: 0,
-       readable: false, writable: false, state: io.closed_slot),
-      (name: "b", contents: second[0..<1], length: 1, cursor: 0,
-       readable: true, writable: true, state: io.closed_slot)]
+        (name: "a", contents: first[0..<1], length: 1, cursor: 0,
+         readable: false, writable: false, state: io.closed_slot),
+        (name: "b", contents: second[0..<1], length: 1, cursor: 0,
+         readable: true, writable: true, state: io.closed_slot)]
     args: [1][]u8 = [first[0..<0]]
     mut out: [0]u8 = zeroed
     mut err: [0]u8 = zeroed

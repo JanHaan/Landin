@@ -1,0 +1,68 @@
+--  D433, [1220]: a `ptr` arm's binding may carry `sink`, and is then a sink
+--  place: passing it on consumes the matched place, so the subject is
+--  dead on that arm's path until it is assigned again, as it would be had
+--  the subject itself been sunk.  The union of one atom and of several
+--  both bind it.
+absent: atom
+refused: atom
+node: type = struct
+    value: i32
+end node
+maybe_node: type = absent | ptr node
+many_node: type = absent | refused | ptr node
+
+mut released: i32 = 0
+
+release: (sink n: ptr node) -> (got: i32) =
+    released = released + 1
+    got = n.val.value
+end release
+
+drop_one: (sink m: maybe_node) -> (got: i32) =
+    got = 0
+    match m
+        absent: got = 1
+        ptr (sink held): got = release(held)
+    end match
+end drop_one
+
+drop_many: (sink m: many_node) -> (got: i32) =
+    got = 0
+    match m
+        absent: got = 1
+        refused: got = 2
+        ptr (sink held): got = release(held)
+    end match
+end drop_many
+
+reassigned: (sink m: maybe_node, other: ptr node) -> (got: i32) =
+    mut current := m
+    got = 0
+    match current
+        absent: got = 1
+        ptr (sink held): got = release(held)
+    end match
+    current = other
+    match current
+        absent: got = got + 100
+        ptr (p): got = got + p.val.value
+    end match
+end reassigned
+
+public main: () -> (code: i32) =
+    first := node(value: 20)
+    second := node(value: 10)
+    one: maybe_node = addr first
+    many: many_node = addr second
+    nothing: maybe_node = absent
+    code = 1
+    return when drop_one(one) <> 20 or drop_one(nothing) <> 1
+    code = 2
+    return when drop_many(many) <> 10
+    code = 3
+    again: maybe_node = addr second
+    return when reassigned(again, addr first) <> 30
+    code = 4
+    return when released <> 3
+    code = 42
+end main

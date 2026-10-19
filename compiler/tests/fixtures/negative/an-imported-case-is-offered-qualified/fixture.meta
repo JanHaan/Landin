@@ -1,0 +1,9 @@
+class: negative
+summary: an imported module's payload-free case written bare is L0201 offering the qualified case, in a value and in a match arm
+program: main.ldn
+root: root
+codes: L0201, L0201
+constructs: 0680, 0690, 1440, 1860
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+status: 1

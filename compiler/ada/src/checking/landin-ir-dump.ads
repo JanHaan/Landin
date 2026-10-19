@@ -67,10 +67,19 @@ package Landin.IR.Dump is
    --  the existing recorded format. Pointee identities are printed as edges,
    --  never recursively expanded, including on malformed metadata graphs.
    --  These are reached-type facts, not source positions or lifetime claims.
+   --
+   --  Kept, when given, says whether an emitted table names an evidence
+   --  entry, and each entry line ends `kept` or `dropped` by its answer.
+   --  The backend decides that (D374, `Landin.Backend`), so a caller that
+   --  knows the backend's answer supplies it; `refine compile --emit=ir`
+   --  does, and the recorded dumps do not.
    function Text
      (Of_Unit  : Unit;
       Meanings : Landin.Resolution.Table;
       Names    : Landin.Source.Names.Table;
-      With_Metadata : Boolean := False) return String;
+      With_Metadata : Boolean := False;
+      Kept     : access function
+        (Id : Evidence_Id; Which : Positive) return Boolean := null)
+      return String;
 
 end Landin.IR.Dump;

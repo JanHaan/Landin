@@ -31,9 +31,9 @@ public main: () -> (code: i32) =
 
     zero_unaligned: ptr mut u8 =
         mem.allocate(memory, zero, zero) else (problem)
-        _ = problem
-        return
-    end
+            _ = problem
+            return
+        end
     aligned: ptr mut u8 = mem.allocate(memory, three, eight) else (problem)
         _ = problem
         return
@@ -57,7 +57,7 @@ public main: () -> (code: i32) =
 
     mut limited_space: arena.space = zeroed
     limited_arena := arena.over_unchecked(limited_space, misaligned_base,
-                                              sixty_three)
+                                          sixty_three)
     --  The backing refuses the size boundary; that refusal reached the arena
     --  and so spends one of the three permits.
     mut counted_space: fault.space = zeroed
@@ -77,23 +77,23 @@ public main: () -> (code: i32) =
     top := arena.over_unchecked(top_space, raw_base, maximum)
     at_top: ptr mut u8 =
         mem.allocate(top, zero, maximum) else (problem)
-        _ = problem
-        return
-    end
+            _ = problem
+            return
+        end
     rounding_past_top: allocation =
         mem.allocate(top, zero, two) else no_allocation
     past_top: allocation = mem.allocate(top, one, maximum) else no_allocation
 
     mut limited_top_space: arena.space = zeroed
     limited_top_arena := arena.over_unchecked(limited_top_space, raw_base,
-                                                  maximum)
+                                              maximum)
     mut counted_top_space: fault.space = zeroed
     limited_top := fault.over(counted_top_space, limited_top_arena, two)
     limited_at_top: ptr mut u8 =
         mem.allocate(limited_top, zero, maximum) else (problem)
-        _ = problem
-        return
-    end
+            _ = problem
+            return
+        end
     limited_rounding_past_top: allocation =
         mem.allocate(limited_top, zero, two) else no_allocation
 

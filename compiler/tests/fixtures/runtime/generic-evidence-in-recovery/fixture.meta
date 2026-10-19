@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: a generic body's constrained selection made only inside a call's recovery clause has its evidence, which lowering's inventory finds beside the call's slots
+program: main.ldn
+status: 42
+constructs: 1030, 1230, 1290, 1310
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

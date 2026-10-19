@@ -7,14 +7,58 @@
 #  no case; --record=lowering, --record=layout, --record=server/NAME and
 #  --record=CLASS/NAME each write one of them, the last a fixture's report.
 #  --record-and-run does
-#  both invocations after one build.  --suite, --case and --fixture select a
-#  visibly FILTERED developer run; none replaces the no-argument gate.
+#  both invocations after one build.  --suite and --case, each as often as
+#  wanted, or one --fixture select a visibly FILTERED developer run; none
+#  replaces the no-argument gate.
 #  --host explicitly excludes native target workload emission/execution and reports
-#  HOST-ONLY scope; it can combine with one --suite or --case selection.
+#  HOST-ONLY scope; it can combine with --suite and --case selections.
 #  --shard=I/N runs shard I of N of the complete (or --host) run; only all N
 #  together are the complete run, as the gate's shard jobs are.
 #  Linux routine acceptance uses host scope for its debug compiler; Darwin
 #  runs both compiler hosts and selects native workloads separately.
+#
+#  --help prints the test program's usage and its suite names, read from its
+#  source, without a build, a lock or Python.
+
+case "${1:-}" in
+    --help | -h)
+        Tests_Source="$(dirname -- "$0")/../compiler/ada/tests/src/landin_tests.adb"
+        Name=scripts/test.sh
+        if [ "${LANDIN_BUILD_INCREMENTAL:-no}" = yes ]; then
+            Name=scripts/dev-test.sh
+        fi
+        echo "Builds the compiler and its test program, then runs the test program"
+        echo "with the options given, which are the test program's own:"
+        echo
+        #  Each Put_Line of Print_Usage is one line: its literals, joined.
+        awk '/procedure Print_Usage is/ { on = 1; next }
+             /end Print_Usage;/ { on = 0 }
+             on {
+                 text = $0
+                 while (match(text, /"[^"]*"/)) {
+                     line = line substr(text, RSTART + 1, RLENGTH - 2)
+                     text = substr(text, RSTART + RLENGTH)
+                 }
+                 if ($0 ~ /\);/) { print line; line = "" }
+             }' "$Tests_Source" | sed "s|landin_tests|$Name|g"
+        echo "       $Name --record-and-run   records, then runs every case"
+        echo
+        echo "No option runs the complete suite; a selection is a FILTERED run."
+        echo "Suites, for --suite=NAME and --case=SUITE/NAME:"
+        awk '/Expected_Suites : constant/ { on = 1 }
+             on {
+                 text = $0
+                 while (match(text, /"[^"]*"/)) {
+                     name = substr(text, RSTART + 1, RLENGTH - 2)
+                     sub(/ +$/, "", name)
+                     print "  " name
+                     text = substr(text, RSTART + RLENGTH)
+                 }
+             }
+             on && /];/ { exit }' "$Tests_Source"
+        exit 0
+        ;;
+esac
 
 . "$(dirname -- "$0")/env.sh"
 

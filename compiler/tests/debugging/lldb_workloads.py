@@ -29,6 +29,9 @@ def run(debugger, config_path):
                       result.GetChildAtIndex(int(part)) if part.isdigit() else
                       result.GetChildMemberWithName(part))
         assert result.IsValid(), ('missing variable', path)
+        # D423: an atom set is an enumeration, read by its atom's name.
+        if result.GetType().GetCanonicalType().GetTypeClass() == lldb.eTypeClassEnumeration:
+            return result.GetValue()
         error = lldb.SBError()
         actual = (result.GetValueAsSigned(error)
                   if result.GetType().GetTypeFlags() & lldb.eTypeIsSigned

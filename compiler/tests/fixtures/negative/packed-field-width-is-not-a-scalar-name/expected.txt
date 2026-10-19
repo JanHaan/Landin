@@ -2,5 +2,9 @@ error[L0336]: this unsigned width is a packed field representation
   --> ../tests/fixtures/negative/packed-field-width-is-not-a-scalar-name/main.ldn:1:9
   |
 1 | narrow: u12 = 1
-  |         ^^^ this representation width
+  |         ^^^
+  --> ../tests/fixtures/negative/packed-field-width-is-not-a-scalar-name/main.ldn:1:1
+  |
+1 | narrow: u12 = 1
+  | ^^^^^^^^^^^^^^^ the declaration it is written in
   = note: [0730]: ordinary values use u8, u16, u32 or u64

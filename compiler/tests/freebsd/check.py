@@ -16,7 +16,9 @@ from contextlib import contextmanager
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / 'environments/freebsd'))
+sys.path.insert(0, str(ROOT / 'compiler/tests'))
 from vm import Guest, LOCK, boot, prepare, require, sha
+import fixture_meta
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
 SPECIALIZED = [('none', 'all'), ('speed', 'all')]
@@ -25,15 +27,20 @@ ABI_REQUIRED = {'r440-native-scalars', 'r440-native-aggregates', 'r440-native-ca
 
 
 def metadata(path):
-    return dict(line.split(': ', 1) for line in path.read_text().splitlines()
-                if ': ' in line and not line.startswith('#'))
+    """A fixture's metadata, read as the harness reads it
+    (compiler/tests/fixture_meta.py)."""
+    return fixture_meta.read(path.parent)
+
+
+def lane_target(arch):
+    return 'freebsd-x86-64' if arch == 'amd64' else 'freebsd-arm64'
 
 
 def select(arch, kind):
-    target = 'freebsd-x86-64' if arch == 'amd64' else 'freebsd-arm64'
+    target = lane_target(arch)
     fixtures = [(p.parent, metadata(p)) for p in
                 sorted((ROOT / 'compiler/tests/fixtures' / kind).glob('*/fixture.meta'))]
-    selected = [(p, m) for p, m in fixtures if target in m['targets'].split(', ')]
+    selected = [(p, m) for p, m in fixtures if m.applies_to(target)]
     # BSD guests lack the two Linux fault paths used by these I/O fixtures.
     # The shared C endpoint adapter preserves all source/status/output oracles.
     if kind == 'runtime':
@@ -59,8 +66,10 @@ def expected_output(meta, base):
     compiler/tests/README.md compares `run_expect` only when it is present,
     as the Linux and Darwin lanes do, so undeclared output is not compared.
     """
-    if meta.get('run_expect'):
-        return (base / meta['run_expect']).read_bytes()
+    meta = fixture_meta.as_metadata(meta)
+    found = meta.run_expected(base)
+    if found is not None:
+        return found
     return meta['stdout'].encode() if 'stdout' in meta else None
 
 
@@ -94,7 +103,7 @@ class Lane:
         self.remote_prefix = '/tmp/landin-' + sha(args.refine)[:12] + '-' + args.arch + '-' + args.kind + '-' + self.output.name
         self.remote_bundle = Path(self.remote_prefix) / 'bundle'
         self.source_root = ROOT
-        self.target = 'freebsd-x86-64' if args.arch == 'amd64' else 'freebsd-arm64'
+        self.target = lane_target(args.arch)
         self.triplet = ('x86_64' if args.arch == 'amd64' else 'aarch64') + '-unknown-freebsd14.4'
         self.clang = str(Path(shutil.which(args.clang) or args.clang).resolve())
         # LLD dispatches by argv[0]. Ubuntu's ld.lld-19 symlink points to the
@@ -129,22 +138,15 @@ class Lane:
         for kind in ('positive', 'negative'):
             for meta_path in sorted((ROOT / 'compiler/tests/fixtures' / kind).glob('*/fixture.meta')):
                 meta = metadata(meta_path)
-                if self.target not in meta['targets'].split(', '):
+                if not meta.applies_to(self.target):
                     continue
                 base = meta_path.parent
-                options = [a for a in shlex.split(meta.get('args', ''))
-                           if not a.startswith('--target=')]
-                #  A rooted fixture's `args` are options before the module
-                #  its root gives (compiler/tests/README.md).
-                if 'root' in meta:
-                    argv = options + ['--root=' + str((base / meta['root']).resolve()), str(base)]
-                elif 'args' in meta:
-                    argv = options
-                else:
-                    argv = [str(base / meta['program'])]
-                argv += [str(base / p.strip()) for p in meta.get('with', '').split(',') if p.strip()]
+                #  What the harness runs refine with for this verdict, the
+                #  lane naming its own target (compiler/tests/README.md).
+                argv = [a for a in meta.source_arguments(base)
+                        if not a.startswith('--target=')]
                 label = 'source-' + kind + '-' + base.name
-                status = int(meta.get('status', '1' if kind == 'negative' else '0'))
+                status = meta.status
                 # Source verdicts run on the compiler host, selecting the guest
                 # target; execution and debugger verdicts are always guest-side.
                 completed = subprocess.run([str(self.args.refine.resolve()), '--target=' + self.target,
@@ -153,7 +155,7 @@ class Lane:
                 (self.output / (label + '.log')).write_bytes(actual)
                 require(completed.returncode == status, label + ': wrong source verdict')
                 codes = re.findall(rb'(?m)^(?:error|warning)\[(L[0-9]{4})\]', actual)
-                expected = [c.strip().encode() for c in meta.get('codes', '').split(',') if c.strip()]
+                expected = [c.encode() for c in meta.codes]
                 require(codes == expected, label + ': ordered diagnostic codes differ: ' + str(codes))
                 results.append({'case': kind + '/' + base.name, 'status': 'passed'})
         require(results, 'empty source verdict selection')
@@ -163,14 +165,10 @@ class Lane:
     def build(self, base, meta, optimize, specialize, level=None):
         label = '-'.join((base.parent.name, base.name, optimize, specialize, level or 'default'))
         executable = self.bundle / label
-        source = base / meta['program']
-        sources = (["--root=" + str((base / meta['root']).resolve()), str(source.parent)]
-                   if 'root' in meta else [str(source)])
-        sources += [str(base / p.strip()) for p in meta.get('with', '').split(',') if p.strip()]
         argv = [self.args.refine.resolve(), '--target=' + self.target,
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 *(['--level=' + level] if level else []),
-                *shlex.split(meta.get('args', '')), *sources]
+                *meta.source_arguments(base)]
         peers = []
         if not meta.get('c-sources'):
             self.command([*argv, '--toolchain=' + str(self.driver), '--emit=exe', '-o', executable],
@@ -181,7 +179,7 @@ class Lane:
             objects = []
             cargs = shlex.split(meta.get('c-args', ''))
             compile_args = [a for a in cargs if not a.startswith('-Wl,') and not a.startswith('-l')]
-            for index, name in enumerate(meta['c-sources'].split(',')):
+            for index, name in enumerate(meta.c_sources):
                 obj = Path(str(executable) + f'-peer-{index}.o')
                 self.command([*[a for a in self.cc if not a.startswith('-fuse-ld=')],
                               '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
@@ -196,7 +194,7 @@ class Lane:
         # the bundle carries beside it; their guest paths are its first
         # arguments (compiler/tests/README.md).
         shared = []
-        for name in [n.strip() for n in meta.get('c-shared', '').split(',') if n.strip()]:
+        for name in meta.c_shared:
             library = self.bundle / (label + '-' + Path(name).stem + '.so')
             # This links, so it keeps LLD, but as `--ld-path`: Clang refuses
             # `-fuse-ld=` with a path under -Werror as deprecated.
@@ -294,19 +292,21 @@ class Lane:
     def standard_input(self, result):
         """The guest's copy of the file a fixture's `stdin:` names below it,
         which the payload carries with compiler/tests, or an empty input."""
-        named = result['meta'].get('stdin')
-        if not named:
-            return Path('/dev/null')
-        return self.source_root / 'compiler/tests/fixtures' / result['case'] / named
+        return Path(fixture_meta.as_metadata(result['meta'], result['case']).standard_input(
+            self.source_root / 'compiler/tests/fixtures' / result['case']))
 
     def execute(self, guest, results):
         script = ['#!/bin/sh', 'ulimit -c 0', 'ulimit -d unlimited',
                   'cd ' + shlex.quote(str(self.source_root / 'compiler/ada'))]
         for result in results:
-            label, meta = result['label'], result['meta']
+            label = result['label']
+            meta = fixture_meta.as_metadata(result['meta'], result['case'])
             path = self.remote_bundle / label
-            command = shlex.join([str(path), *[str(self.remote_bundle / name) for name in result.get('shared', [])],
-                                  *shlex.split(meta.get('run_args', ''))])
+            #  The guest's copy of the fixture, which the payload carries
+            #  with compiler/tests, holds its `run_files`.
+            guest_base = self.source_root / 'compiler/tests/fixtures' / result['case']
+            command = shlex.join(meta.program_arguments(
+                guest_base, [path, *[self.remote_bundle / name for name in result.get('shared', [])]]))
             out, err, status = (str(path) + suffix for suffix in ('.stdout', '.stderr', '.status'))
             redirection = '2>&1' if meta.get('stream', 'merged') == 'merged' else '2>' + shlex.quote(err)
             given = shlex.quote(str(self.standard_input(result)))
@@ -326,10 +326,12 @@ class Lane:
         with tarfile.open(archive) as tar:
             tar.extractall(self.bundle, filter='data')
         for result in results:
-            label, meta = result['label'], result['meta']
+            label = result['label']
+            meta = fixture_meta.as_metadata(result['meta'], result['case'])
             path = self.bundle / label
             status = int(Path(str(path) + '.status').read_text())
-            expected_status = (132 if self.args.arch == 'amd64' else 133) if meta.get('traps') == 'yes' else int(meta['status'])
+            expected_status = ((132 if self.args.arch == 'amd64' else 133) if meta.traps
+                               else meta.status_at(result['level']))
             require(status == expected_status, f'{label}: guest status {status}, expected {expected_status}')
             stdout = Path(str(path) + '.stdout').read_bytes()
             expected = expected_output(meta, Path(result['base']))
@@ -418,7 +420,7 @@ def work_items(args):
         if args.kind == 'runtime':
             default = 'x86-64-v1' if args.arch == 'amd64' else 'armv8-a'
             higher = 'x86-64-v3' if args.arch == 'amd64' else 'armv8.1-a'
-            if higher in meta.get('levels', '').split(', '):
+            if higher in meta.levels_for(lane_target(args.arch)):
                 levels += [default, higher]
         for level in levels:
             for optimize, specialize in PROFILES + (SPECIALIZED if meta.get('profiles') == 'specialization' else []):
@@ -486,7 +488,7 @@ def load_prepared(args):
             'invalid emission source root')
     lane.remote_prefix = '/tmp/landin-' + manifest['refine_sha256'][:12] + '-' + args.arch + '-' + args.kind + '-' + lane.output.name
     lane.remote_bundle = Path(lane.remote_prefix) / 'bundle'
-    lane.target = 'freebsd-x86-64' if args.arch == 'amd64' else 'freebsd-arm64'
+    lane.target = lane_target(args.arch)
     for result in manifest['results']:
         require(sha(lane.bundle / result['label']) == result['executable_sha256'], 'prepared executable checksum')
         if args.kind != 'debugger':

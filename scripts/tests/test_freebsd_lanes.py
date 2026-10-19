@@ -139,7 +139,10 @@ class FreeBSDControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch.object(LANE, 'ROOT', Path(tmp)):
             fixture = Path(tmp) / 'compiler/tests/fixtures/abi/only-one'
             fixture.mkdir(parents=True)
-            (fixture / 'fixture.meta').write_text('targets: freebsd-x86-64, freebsd-arm64\nc-sources: peer.c\n')
+            (fixture / 'fixture.meta').write_text(
+                'class: abi\nsummary: one peer\nprofiles: standard\nprogram: main.ldn\n'
+                'constructs: 0300\ntargets: freebsd-x86-64, freebsd-arm64\nc-sources: peer.c\n')
+            (fixture / 'peer.c').write_text('int peer(void) { return 0; }\n')
             with self.assertRaisesRegex(ValueError, 'ABI coverage missing'):
                 LANE.select('amd64', 'abi')
             with self.assertRaisesRegex(ValueError, 'ABI coverage missing'):
@@ -149,8 +152,12 @@ class FreeBSDControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch.object(LANE, 'ROOT', Path(tmp)):
             fixture = Path(tmp) / 'compiler/tests/fixtures/abi/only-one'
             fixture.mkdir(parents=True)
-            (fixture / 'fixture.meta').write_text('targets: freebsd-x86-64, freebsd-arm64\n')
-            with self.assertRaisesRegex(ValueError, 'independently compiled C peer'):
+            (fixture / 'fixture.meta').write_text(
+                'class: abi\nsummary: no peer\nprofiles: standard\nprogram: main.ldn\n'
+                'constructs: 0300\ntargets: freebsd-x86-64, freebsd-arm64\n')
+            #  The fixture format refuses it before the lane can: an ABI
+            #  fixture needs c-sources (compiler/tests/fixture_meta.py).
+            with self.assertRaisesRegex(ValueError, 'an ABI fixture needs c-sources'):
                 LANE.select('amd64', 'abi')
 
     def test_linked_checks_use_function_extents_past_local_labels(self):

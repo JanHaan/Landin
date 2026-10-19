@@ -26,6 +26,6 @@ end value
 
 public main: () -> (code: i32) =
     code = true_arm() + false_then_true_elsif()
-        + unknown_then_true_elsif(false) + unknown_then_true_elsif(true)
-        + value()
+           + unknown_then_true_elsif(false) + unknown_then_true_elsif(true)
+           + value()
 end main

@@ -140,12 +140,21 @@ class Mutator(unittest.TestCase):
                     self.assertEqual(list(entry.parent.glob("*.ldn")), [entry])
                     self.assertEqual(entry.read_text(), text)
 
+    def test_import_preflight_reads_its_fixture(self):
+        path, code, line, column = fuzz.import_expectation()
+        meta = fuzz.fixture_meta.read(fuzz.FIXTURES / fuzz.IMPORT_FIXTURE)
+        self.assertEqual(path.parent, meta.directory)
+        self.assertTrue(path.is_file())
+        self.assertEqual(code, meta.codes[0])
+        self.assertIn(":%d:%d\n" % (line + 1, column + 1),
+                      (meta.directory / meta["expect"]).read_text())
+
     def test_import_preflight_requires_current_code_line_and_uri(self):
-        uri = (fuzz.FIXTURES /
-               "negative/core-fault-needs-mutable-inner/main.ldn").as_uri()
+        path, code, line, _ = fuzz.import_expectation()
+        uri = path.as_uri()
         for code, line, report_uri, accepted in (
-                ("L0303", 9, uri, True), ("L0301", 9, uri, False),
-                ("L0303", 8, uri, False), ("L0303", 9, uri + "other", False)):
+                (code, line, uri, True), ("L0001", line, uri, False),
+                (code, line - 1, uri, False), (code, line, uri + "other", False)):
             with self.subTest(code=code, line=line, uri=report_uri):
                 server = Mock()
                 server.diagnostics = []

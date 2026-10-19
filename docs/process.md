@@ -48,6 +48,13 @@ last lane ends, so follow it with `python3 scripts/gate_watch.py`, which
 returns at the first failed job with its step and log command; a pushed fix
 cancels the superseded run. Before promotion, verify the complete job
 listing and the tested tree; a changed merge tree needs its own full pass.
+Close the item on its branch before that gate: the `Done:` paragraph and the
+register rows it settles go into `ROADMAP.md` in the candidate itself, so the
+tree promoted is the tree the full gate passed and main reuses that pass. A
+closing commit made after the branch's gate is a new tree, and the
+explanatory exception cannot help it: that exception takes its base only from
+a full run of a push to main, so a documents-only close on the branch costs
+one more full gate before main can reuse it.
 The identical-candidate reuse policy in `AGENTS.md` compares all tracked
 bytes, paths and modes, including workflow definitions and tool pins, with
 a recent complete successful push run from this repository. It never uses

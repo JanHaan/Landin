@@ -1,4 +1,4 @@
-runtime_count: u32 = 4
+mut runtime_count: u32 = 4
 from_storage: type = [runtime_count]u8
 
 count: () -> (n: u32) =

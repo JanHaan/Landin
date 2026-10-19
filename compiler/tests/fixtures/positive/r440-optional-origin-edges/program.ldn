@@ -20,13 +20,13 @@ end fallthrough
 empty_control: (cell: ptr u32, choose: bool)
                -> (result: maybe_pointer from cell) =
     result = if choose then
-        absent
-    else
-        begin
-            local: maybe_pointer = absent
-            local
-        end
-    end if
+                 absent
+             else
+                 begin
+                     local: maybe_pointer = absent
+                     local
+                 end
+             end if
 end empty_control
 
 mixed_control: (cell: ptr u32, choose: bool)

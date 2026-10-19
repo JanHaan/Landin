@@ -1,0 +1,11 @@
+--  A literal lent to a generic routine's closed slice parameter is formed
+--  in the caller's frame, as D309 lends one to any routine: a result
+--  `from` that parameter cannot leave the caller.
+keep: (t: type, values: []u8, x: t) -> (kept: []u8 from values) =
+    _ = x
+    kept = values
+end keep
+
+escape: () -> (kept: []u8) =
+    kept = keep([1, 2], true)
+end escape

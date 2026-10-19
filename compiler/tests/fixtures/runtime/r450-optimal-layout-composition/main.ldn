@@ -4,7 +4,7 @@ compact: type = layout(optimal) struct a: u8 b: u64 c: u8 d: u64 end compact
 outer: type = struct tag: u8 value: compact tail: u8 end outer
 image: outer = outer(tag: 9, value: compact(a: 1, b: 2, c: 3, d: 4), tail: 8)
 images: [2]compact = [compact(a: 5, b: 6, c: 7, d: 8),
-                       compact(a: 9, b: 10, c: 11, d: 12)]
+                      compact(a: 9, b: 10, c: 11, d: 12)]
 measures: [4]usize = [sizeof natural, sizeof foreign, sizeof compact, sizeof outer]
 mut order: u64 = 0
 byte: (n: u8) -> (r: u8) = order = order * 10 + u64(n) r = n end byte

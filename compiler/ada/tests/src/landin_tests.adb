@@ -70,8 +70,8 @@ procedure Landin_Tests is
 
    Mode         : Requested_Mode := Run_All;
    Host_Only    : Boolean := False;
-   Suite_Filter : Unbounded.Unbounded_String;
-   Case_Filter  : Unbounded.Unbounded_String;
+   --  Every --suite and --case of a focused run, in the order given.
+   Selected     : Landin.Testing.Selector_Vectors.Vector;
    Fixture      : Unbounded.Unbounded_String;
    --  What --record=WHAT names, or empty for every recorded artefact.
    Recording    : Unbounded.Unbounded_String;
@@ -154,15 +154,20 @@ procedure Landin_Tests is
    begin
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
-         "usage: landin_tests [--record | --suite=NAME |"
-         & " --case=SUITE/NAME | --fixture=CLASS/NAME]");
+         "usage: landin_tests [--record | --fixture=CLASS/NAME |"
+         & " --suite=NAME ... --case=SUITE/NAME ...]");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       landin_tests --record=lowering | --record=layout |"
          & " --record=server/NAME | --record=CLASS/NAME");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
-         "       landin_tests --host [--suite=NAME | --case=SUITE/NAME]");
+         "       landin_tests --host"
+         & " [--suite=NAME ... --case=SUITE/NAME ...]");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       --suite and --case repeat, and one run runs every case"
+         & " any of them names");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       and any of --target=NAME --runner=PROGRAM"
@@ -179,7 +184,8 @@ procedure Landin_Tests is
       Kept : Natural := 0;
       Seen_Target, Seen_Runner, Seen_Toolchain : Boolean := False;
       Seen_Shard : Boolean := False;
-      Selected : Positive := 1;
+      Chosen : Positive := 1;
+      Selecting : Boolean := False;
 
       function Value (Argument, Prefix : String) return String
         is (Argument (Argument'First + Prefix'Length .. Argument'Last));
@@ -255,6 +261,43 @@ procedure Landin_Tests is
                   return;
                end if;
                Seen_Shard := True;
+            elsif Starts_With (Argument, "--suite=")
+              and then Argument'Length > 8
+            then
+               Selecting := True;
+               Selected.Append
+                 (Landin.Testing.Selector'
+                   (Suite => Unbounded.To_Unbounded_String
+                     (Value (Argument, "--suite=")),
+                   Name  => Unbounded.Null_Unbounded_String));
+            elsif Starts_With (Argument, "--case=")
+              and then Argument'Length > 7
+            then
+               declare
+                  Named : constant String := Value (Argument, "--case=");
+                  Slash : constant Natural :=
+                    Ada.Strings.Fixed.Index (Named, "/");
+               begin
+                  Selecting := True;
+                  if Slash = 0
+                    or else Slash = Named'First
+                    or else Slash = Named'Last
+                  then
+                     --  Refused once the cases are registered, with the
+                     --  names nearest it (Landin.Testing.Selection_Problem).
+                     Selected.Append
+                       (Landin.Testing.Selector'
+                          (Suite => Unbounded.Null_Unbounded_String,
+                           Name  => Unbounded.To_Unbounded_String (Named)));
+                     goto Next;
+                  end if;
+                  Selected.Append
+                    (Landin.Testing.Selector'
+                      (Suite => Unbounded.To_Unbounded_String
+                        (Named (Named'First .. Slash - 1)),
+                      Name  => Unbounded.To_Unbounded_String
+                        (Named (Slash + 1 .. Named'Last))));
+               end;
             elsif Kept = Rest'Last then
                Mode := Misuse;
                return;
@@ -263,6 +306,7 @@ procedure Landin_Tests is
                Rest (Kept) := Index;
             end if;
          end;
+         <<Next>>
       end loop;
 
       if not Landin.Testing.Lanes.Has_Target then
@@ -273,24 +317,41 @@ procedure Landin_Tests is
          return;
       end if;
 
+      if Selecting then
+         --  Suites and cases select alone, or with --host and nothing
+         --  else; a shard is a share of the complete run.
+         if Kept > 1 or else Seen_Shard
+           or else (Kept = 1
+                    and then Ada.Command_Line.Argument (Rest (1)) /= "--host")
+         then
+            Mode := Misuse;
+            return;
+         end if;
+         Host_Only := Kept = 1;
+         Mode := (if Unbounded.Length (Selected.Last_Element.Name) = 0
+                    and then Natural (Selected.Length) = 1
+                  then Run_Suite else Run_Case);
+         return;
+      end if;
+
       if Kept = 0 then
          return;
       elsif Kept = 2 then
          if Ada.Command_Line.Argument (Rest (1)) = "--host" then
-            Selected := Rest (2);
+            Chosen := Rest (2);
          elsif Ada.Command_Line.Argument (Rest (2)) /= "--host" then
             Mode := Misuse;
             return;
          else
-            Selected := Rest (1);
+            Chosen := Rest (1);
          end if;
          Host_Only := True;
       else
-         Selected := Rest (1);
+         Chosen := Rest (1);
       end if;
 
       declare
-         Argument : constant String := Ada.Command_Line.Argument (Selected);
+         Argument : constant String := Ada.Command_Line.Argument (Chosen);
       begin
          if Argument = "--record" then
             Mode := Record_Artefacts;
@@ -302,34 +363,6 @@ procedure Landin_Tests is
               (Argument (Argument'First + 9 .. Argument'Last));
          elsif Argument = "--host" then
             Mode := Run_Host;
-         elsif Starts_With (Argument, "--suite=")
-           and then Argument'Length > 8
-         then
-            Mode := Run_Suite;
-            Suite_Filter := Unbounded.To_Unbounded_String
-              (Argument (Argument'First + 8 .. Argument'Last));
-         elsif Starts_With (Argument, "--case=")
-           and then Argument'Length > 7
-         then
-            declare
-               Value : constant String :=
-                 Argument (Argument'First + 7 .. Argument'Last);
-               Slash : constant Natural :=
-                 Ada.Strings.Fixed.Index (Value, "/");
-            begin
-               if Slash = 0
-                 or else Slash = Value'First
-                 or else Slash = Value'Last
-               then
-                  Mode := Misuse;
-               else
-                  Mode := Run_Case;
-                  Suite_Filter := Unbounded.To_Unbounded_String
-                    (Value (Value'First .. Slash - 1));
-                  Case_Filter := Unbounded.To_Unbounded_String
-                    (Value (Slash + 1 .. Value'Last));
-               end if;
-            end;
          elsif Starts_With (Argument, "--fixture=")
            and then Argument'Length > 10
          then
@@ -453,6 +486,20 @@ begin
    end if;
 
    if Mode = Run_Fixture then
+      --  A fixture another lane runs is not a failure here: say where it
+      --  runs and run nothing, which a FILTERED run already says is not
+      --  the complete suite.
+      declare
+         Note : constant String :=
+           Landin.Tests.Fixture_Execution_Suite.Lane_Note
+             (Unbounded.To_String (Fixture));
+      begin
+         if Note /= "" then
+            Text_IO.Put ("FILTERED fixture=" & Unbounded.To_String (Fixture)
+                         & ASCII.LF & ASCII.LF & Note);
+            return;
+         end if;
+      end;
       Landin.Tests.Fixture_Execution_Suite.Select_Fixture
         (Unbounded.To_String (Fixture));
    end if;
@@ -511,6 +558,29 @@ begin
         with "a registered suite is absent from the expected inventory";
    end if;
 
+   --  A selector that names nothing is refused before anything runs, with
+   --  the names nearest it, rather than by a run that matched nothing.
+   declare
+      Refused : Boolean := False;
+   begin
+      for One of Selected loop
+         declare
+            Problem : constant String :=
+              Landin.Testing.Selection_Problem (Cases, One);
+         begin
+            if Problem /= "" then
+               Text_IO.Put_Line
+                 (Text_IO.Standard_Error, "landin_tests: " & Problem);
+               Refused := True;
+            end if;
+         end;
+      end loop;
+      if Refused then
+         Ada.Command_Line.Set_Exit_Status (2);
+         return;
+      end if;
+   end;
+
    case Mode is
       when Run_All | Run_Host =>
          Landin.Testing.Run
@@ -518,19 +588,9 @@ begin
             Record_Timings =>
               Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
             Progress       => Landin.Testing.Write_Progress'Access);
-      when Run_Suite =>
+      when Run_Suite | Run_Case =>
          Landin.Testing.Run
-           (Cases, Unbounded.To_String (Suite_Filter), "",
-            Transcript, Result,
-            Record_Timings =>
-              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
-            Progress       => Landin.Testing.Write_Progress'Access);
-      when Run_Case =>
-         Landin.Testing.Run
-           (Cases,
-            Unbounded.To_String (Suite_Filter),
-            Unbounded.To_String (Case_Filter),
-            Transcript, Result,
+           (Cases, Selected, Transcript, Result,
             Record_Timings =>
               Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
             Progress       => Landin.Testing.Write_Progress'Access);

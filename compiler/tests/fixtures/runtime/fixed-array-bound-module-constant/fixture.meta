@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D438 admits an immutable module integer as an array bound when its image is in D136's fold: a local constant derived from another, one named through its module, and one derived from a compiler fact, in a type alias, a struct field and a binding; the bound folds to the count, so the array is the same type as one written with that literal
+program: main.ldn
+root: root
+status: 42
+constructs: 0520, 1940
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

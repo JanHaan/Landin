@@ -1,0 +1,68 @@
+--  D433: a `sink` binding consumes the matched place, so neither it nor
+--  the subject is used after it is sunk; the subject has to be a place;
+--  only a `ptr` arm binds one; and a plain arm binding is no sink place,
+--  which the refusal says is written `ptr (sink l)`.
+absent: atom
+node: type = struct
+    value: i32
+end node
+maybe_node: type = absent | ptr node
+shape: type = struct
+    kind: variant
+        dot |
+        box: (side: i32)
+    end kind
+end shape
+
+release: (sink n: ptr node) -> (got: i32) =
+    got = n.val.value
+end release
+
+peek: (m: maybe_node) -> (got: i32) =
+    got = 0
+end peek
+
+made: () -> (m: maybe_node) =
+    m = absent
+end made
+
+subject_after: (sink m: maybe_node) -> (got: i32) =
+    got = 0
+    match m
+        absent: got = 1
+        ptr (sink l): got = release(l)
+    end match
+    got = got + peek(m)
+end subject_after
+
+binding_twice: (sink m: maybe_node) -> (got: i32) =
+    got = 0
+    match m
+        absent: got = 1
+        ptr (sink l): got = release(l) + release(l)
+    end match
+end binding_twice
+
+computed_subject: () -> (got: i32) =
+    got = 0
+    match made()
+        absent: got = 1
+        ptr (sink l): got = release(l)
+    end match
+end computed_subject
+
+payload_sink: (s: shape) -> (got: i32) =
+    got = 0
+    match s.kind
+        dot: got = 1
+        box(sink side): got = side
+    end match
+end payload_sink
+
+plain_binding: (m: maybe_node) -> (got: i32) =
+    got = 0
+    match m
+        absent: got = 1
+        ptr (l): got = release(l)
+    end match
+end plain_binding

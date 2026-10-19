@@ -1,0 +1,37 @@
+error[L0301]: an array literal lends only a read-only slice, and this parameter writes through it
+  --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:24:10
+   |
+24 |     fill([1, 2], true)
+   |          ^^^^^^
+  --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:8:17
+  |
+8 | fill: (t: type, values: []mut u8, x: t) -> none =
+  |                 ^^^^^^^^^^^^^^^^ this parameter
+  = note: [0570]: bind the array `mut` and pass the binding, so what is written can be read
+error[L0335]: a pointer cannot be constructed from a known zero address
+  --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:25:11
+   |
+25 |     store(ptr(0))
+   |           ^^^^^^
+  --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:13:9
+   |
+13 | store: (p: ptr mut u8) -> none =
+   |         ^^^^^^^^^^^^^ this parameter
+  = note: [0460]/[0480]: zero after conversion to target usize is reserved for the empty atom of a named pointer union, even inside unchecked
+error[L0304]: an array literal takes no shape from a slice parameter whose element type names a generic formal; bind it with the element type it means, `values: [2]E = [...]`, and pass the name
+  --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:26:18
+   |
+26 |     count = pick([any(addr a), any(addr b)])
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0520]
+  = note: this is a recorded source-form boundary
+error[L0342]: `any(pointer)` has more than one exact runtime concept: `u32` conforms to `formattable`, `equatable`, `hashable` and `ordered`
+  --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:27:16
+   |
+27 |     values := [any(addr a), any(addr b)]
+   |                ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:27:20
+   |
+27 |     values := [any(addr a), any(addr b)]
+   |                    ^^^^^^ the erased pointer
+  = note: [1380]: write the `any C` context that names one of them: a binding `name: any C = any(...)`, a list `name: [N]any C = [...]`, or a parameter of either type

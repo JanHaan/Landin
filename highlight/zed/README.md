@@ -4,8 +4,9 @@ Install this directory as a Zed dev extension. It associates `.ldn`, fetches
 the grammar from this repository's `highlight/tree-sitter` subdirectory, and
 provides highlighting, brackets, indentation, and outline items. The grammar
 revision is pinned to the commit containing this package's grammar and queries.
-After changing either, update `extension.toml` to a commit containing the
-changes before distributing the extension.
+After committing a change to either, `python3 highlight/grammar_pin.py` moves
+the revision in `extension.toml`, and in the Helix and Emacs packages, to that
+commit before the extension is distributed.
 
 The extension also starts `refine lsp`, the compiler's language server, for
 Landin buffers: diagnostics, go to definition, hover, formatting and quick

@@ -100,7 +100,7 @@ public main: () -> (code: i32) =
         lenof view == 0 and mem.capacity(target) == 0
     end
     exact: bool = usize(target_block) == usize(other)
-                 and usize(source_block) == usize(base)
+                  and usize(source_block) == usize(base)
     mem.free(allocator, target_block, extent)
     mem.free(allocator, source_block, extent)
     if empty and a == 0 and b == 1 and refused == 2 and replace_refused

@@ -18,7 +18,7 @@ finished: () -> none = trace = trace + 10 end finished
 failed: () -> none = trace = trace + 100 end failed
 
 probe: (t: type is stepper, value: t, depth: i32)
-    -> (result: t) ! problems =
+       -> (result: t) ! problems =
     defer finished()
     undo failed()
     if depth == 0 then

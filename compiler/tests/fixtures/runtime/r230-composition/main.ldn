@@ -100,10 +100,10 @@ failer: () -> none ! problem = fail bad end failer
 
 multiple_and_errors: (choose_first: bool, fails: bool) -> (result: i32) =
     chosen: operation = if choose_first then
-        first_box.run
-    else
-        second_box.run
-    end if
+                            first_box.run
+                        else
+                            second_box.run
+                        end if
     whole := chosen(1, 2, 3, 4, 5, 6, 7, 8, fails) else fallback()
     (record: split, callback: next, sum, _) :=
         first_box.run(1, 2, 3, 4, 5, 6, 7, 8, false) else fallback()
@@ -118,7 +118,7 @@ end propagate
 
 computed_recovery: (at: usize, fails: bool) -> (result: i32) =
     records[at] = builder.run(1, 2, 3, 4, 5, 6, 7, 8, fails)
-                  else pair(left: 20, right: 22)
+        else pair(left: 20, right: 22)
     result = records[at].left + records[at].right
 end computed_recovery
 
@@ -174,11 +174,11 @@ if_failure: () -> none ! problem =
     defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
     undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
     _ = if true then
-        fail bad when true
-        1
-    else
-        2
-    end if
+            fail bad when true
+            1
+        else
+            2
+        end if
 end if_failure
 
 match_failure: () -> none ! problem =

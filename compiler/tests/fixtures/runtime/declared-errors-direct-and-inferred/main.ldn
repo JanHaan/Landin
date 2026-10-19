@@ -146,16 +146,16 @@ public main: () -> (code: i32) =
         else pair(x: 0, y: 0) end if
     placed.values = row_forward(true) else [20, 22]
     if e0 == denied and e1 == missing
-       and m0.status == denied and m0.value == 42
-       and m1.status == denied and m1.value == 42
-       and s0 == 10 and s1 == 5
-       and p0.x + p0.y == 42 and p1.x + p1.y == 42
-       and r0[0] + r0[1] == 42 and r1[0] + r1[1] == 42
-       and f0(42) == 42 and f1(40) == 42
-       and recursive == 10 and atom_calls == 0
-       and cleanup_trace == 12
-       and placed.child.x + placed.child.y == 42
-       and placed.values[0] + placed.values[1] == 42
+      and m0.status == denied and m0.value == 42
+      and m1.status == denied and m1.value == 42
+      and s0 == 10 and s1 == 5
+      and p0.x + p0.y == 42 and p1.x + p1.y == 42
+      and r0[0] + r0[1] == 42 and r1[0] + r1[1] == 42
+      and f0(42) == 42 and f1(40) == 42
+      and recursive == 10 and atom_calls == 0
+      and cleanup_trace == 12
+      and placed.child.x + placed.child.y == 42
+      and placed.values[0] + placed.values[1] == 42
     then
         code = 42
     else

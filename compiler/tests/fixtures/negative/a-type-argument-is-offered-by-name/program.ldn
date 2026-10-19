@@ -1,0 +1,11 @@
+--  A scalar type written as a positional argument of a generic routine is
+--  a type where a value belongs; the note writes the call with every
+--  argument named and the type given to the type formal.
+make_buffer: (t: type, capacity: usize) -> (count: usize) =
+    count = capacity * sizeof t
+end make_buffer
+
+public main: () -> (code: i32) =
+    n := make_buffer(4, u8)
+    code = i32(n)
+end main

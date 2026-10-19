@@ -63,13 +63,13 @@ exercise: (provider: type is mem.allocator, memory: provider)
     content_ok: bool = begin
         view := mem.bytes(bytes)
         zeroed_ok: bool = lenof view == 3 and view[0] == 0
-                         and view[1] == 0 and view[2] == 0
+                          and view[1] == 0 and view[2] == 0
         view[0] = 11
         view[2] = 29
         zeroed_ok and view[0] + view[2] == 40
     end
     object_ok: bool = value.val.value == 42 and value.val.next.val == 37
-      and usize(value) % alignof node == 0
+                      and usize(value) % alignof node == 0
     mem.delete(counted, value)
     mem.delete_bytes(counted, bytes)
     mem.delete_bytes(counted, bytes)
@@ -85,10 +85,10 @@ exercise: (provider: type is mem.allocator, memory: provider)
     end
     mem.delete_bytes(counted, retry)
     okay = content_ok and object_ok and retry_ok and evaluations == before + 2
-      and fault.attempts(counted) == 4 and fault.successes(counted) == 3
-      and fault.injected_failures(counted) == 1
-      and fault.inner_failures(counted) == 0
-      and fault.frees(counted) == 3 and fault.live(counted) == 0
+           and fault.attempts(counted) == 4 and fault.successes(counted) == 3
+           and fault.injected_failures(counted) == 1
+           and fault.inner_failures(counted) == 0
+           and fault.frees(counted) == 3 and fault.live(counted) == 0
 end exercise
 
 public main: () -> (code: i32) =

@@ -12,5 +12,9 @@ error[L0330]: this block asks `general` for 10 registers, and linux-x86-64 has 9
   --> ../tests/fixtures/negative/assembly-register-twice/program.ldn:4:5
   |
 4 |     assembler.block("nop {a}{b}{c}{d}{e}{g}{h}{i}{j}{k}",
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-register-twice/program.ldn:4:5
+  |
+4 |     assembler.block("nop {a}{b}{c}{d}{e}{g}{h}{i}{j}{k}",
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1990]: `general` chooses from the registers the block does not otherwise name

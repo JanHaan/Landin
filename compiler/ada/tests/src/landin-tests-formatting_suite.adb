@@ -20,6 +20,7 @@ with Landin.Platform.Native;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
+with Landin.Testing.Fixtures;
 with Landin.Syntax.Parser;
 with Landin.Syntax;
 with Landin.Tokens.Lexer;
@@ -774,6 +775,76 @@ package body Landin.Tests.Formatting_Suite is
          & " RUNNING_EXAMPLES");
    end Core_And_Examples_Are_Formatted;
 
+   --  The fixture corpus is held to the layout `refine fmt` gives, as core
+   --  and the examples are, apart from what a fixture's layout is the
+   --  evidence of.  Exempt are every negative fixture, a deliberate mistake
+   --  whose recorded report pins its bytes and positions and which the
+   --  formatter often cannot read at all; every fixture that names [1750],
+   --  whose line ends and space are what it is about; and the two below,
+   --  whose continued indentation and comment boundaries are what they
+   --  show.  Deliberate real-host exception: the corpus is read where the
+   --  harness runs.
+   procedure The_Corpus_Is_Formatted
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Corpus_Is_Formatted
+     (Item : in out Landin.Testing.Context)
+   is
+      package Fixtures renames Landin.Testing.Fixtures;
+      use type Fixtures.Fixture_Class;
+
+      Host  : Landin.Platform.Native.Native_Filesystem;
+      Found : Fixtures.Catalogue;
+      Files : Natural := 0;
+      Exempt : Natural := 0;
+
+      function Is_Layout_Evidence (Fixture : Fixtures.Fixture) return Boolean
+      is
+        (Ada.Strings.Fixed.Index (Fixtures.Constructs (Fixture), "1750") > 0
+         or else Fixtures.Name (Fixture)
+                   in "value-continued-at-any-indentation"
+                    | "r490-lexical-module-observation");
+
+      procedure Visit (Path, Text : String);
+
+      procedure Visit (Path, Text : String) is
+         Answer : constant Landin.Formatting.Result := Format (Text);
+      begin
+         Files := Files + 1;
+         Landin.Testing.Check
+           (Item, Answer.Outcome = Landin.Formatting.Formatted
+                  and then Answer.Edits.Is_Empty,
+            Path & " is formatted; run refine fmt on it, or say in"
+            & " The_Corpus_Is_Formatted why its layout is its evidence");
+      end Visit;
+   begin
+      Fixtures.Discover (Found, Root & "/compiler/tests/fixtures", Host);
+      for Index in 1 .. Fixtures.Count (Found) loop
+         declare
+            Fixture : constant Fixtures.Fixture := Fixtures.Nth (Found, Index);
+            Class   : constant Fixtures.Fixture_Class :=
+              Fixtures.Class (Fixture);
+         begin
+            if Class in Fixtures.Positive_Program | Fixtures.Runtime
+                      | Fixtures.Abi
+            then
+               if Is_Layout_Evidence (Fixture) then
+                  Exempt := Exempt + 1;
+               else
+                  Walk_Sources
+                    (Item, Root & "/compiler/tests/fixtures/"
+                     & Fixtures.Class_Directory (Class) & "/"
+                     & Fixtures.Name (Fixture), Visit'Access);
+               end if;
+            end if;
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, Files > 1_000 and then Exempt in 1 .. 20,
+         "the corpus was read:" & Files'Image & " sources, and"
+         & Exempt'Image & " fixtures exempt for their layout");
+   end The_Corpus_Is_Formatted;
+
    procedure Written_Types_Touch_Their_Values
      (Item : in out Landin.Testing.Context);
 
@@ -1030,6 +1101,9 @@ package body Landin.Tests.Formatting_Suite is
       Landin.Testing.Register
         (Into, "formatting", "every source keeps what it says",
          Every_Source_Keeps_What_It_Says'Access);
+      Landin.Testing.Register
+        (Into, "formatting", "the corpus is formatted",
+         The_Corpus_Is_Formatted'Access);
       Landin.Testing.Register
         (Into, "formatting", "core and the examples are formatted",
          Core_And_Examples_Are_Formatted'Access);

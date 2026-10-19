@@ -1,0 +1,20 @@
+error[L0302]: this function can reach its `end` without assigning the return `r`
+  --> ../tests/fixtures/negative/trapping-arm-unassigned-return/main.ldn:7:1
+  |
+7 | matched: (s: shape, c: bool) -> (r: i32) =
+  | ^^^^^^^
+  --> ../tests/fixtures/negative/trapping-arm-unassigned-return/main.ldn:7:34
+  |
+7 | matched: (s: shape, c: bool) -> (r: i32) =
+  |                                  ^ declared here with no value
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check
+error[L0302]: this function can reach its `end` without assigning the return `r`
+  --> ../tests/fixtures/negative/trapping-arm-unassigned-return/main.ldn:16:1
+   |
+16 | tested: (c: bool) -> (r: i32) =
+   | ^^^^^^
+  --> ../tests/fixtures/negative/trapping-arm-unassigned-return/main.ldn:16:23
+   |
+16 | tested: (c: bool) -> (r: i32) =
+   |                       ^ declared here with no value
+  = note: [1910]: a name must be assigned on every path; only written Boolean literals fix an `if` condition for this check

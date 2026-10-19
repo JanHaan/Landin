@@ -8,7 +8,11 @@ error[L0336]: this unsigned width is a packed field representation
   --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:12:13
    |
 12 |     row: [1]u3
-   |             ^^ this representation width
+   |             ^^
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:12:10
+   |
+12 |     row: [1]u3
+   |          ^^^^^ the type it is written in
   = note: [0730]: ordinary values use u8, u16, u32 or u64
 error[L0201]: `mode` is not declared in any scope this reaches
   --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:16:12
@@ -20,7 +24,11 @@ error[L0336]: this unsigned width is a packed field representation
   --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:21:13
    |
 21 |     column: u3
-   |             ^^ this representation width
+   |             ^^
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:21:5
+   |
+21 |     column: u3
+   |     ^^^^^^^^^^ the field it is written in
   = note: [0730]: ordinary values use u8, u16, u32 or u64
 error[L0339]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
   --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:40:16

@@ -5887,11 +5887,21 @@ package body Landin.Tests.Checking_Suite is
          & "bad: type (t: type) = [named]t" & LF,
          "this name does not denote a fixed integer value",
          "a non-value declaration is distinguished from runtime storage");
+      --  D438: an immutable module integer is a count; a `mut` one is
+      --  storage the program may write.
       Check_Rejected_Message
-        ("n: u32 = 4" & LF
+        ("mut n: u32 = 4" & LF
          & "bad: type (t: type) = [n]t" & LF,
-         "this name is runtime storage, not a fixed formal",
-         "runtime storage is identified as the non-fixed leaf");
+         "a `mut` module value can change while the program runs, so it is"
+         & " not a fixed count",
+         "a mut module value is identified as the non-fixed leaf");
+      Check_Rejected_Message
+        ("flag: bool = true" & LF
+         & "bad: type (t: type) = [flag]t" & LF,
+         "this module value is not a fixed count: its image is not an"
+         & " integer folded from literals, compiler facts and other"
+         & " immutable module integers",
+         "a module value that is no count is identified as such");
       Check_Rejected
         ("size: () -> (n: u32) = n = 4 end size" & LF
          & "bad: type (t: type) = [size()]t" & LF,
@@ -9030,7 +9040,7 @@ package body Landin.Tests.Checking_Suite is
          & "end while end f" & LF,
          Accepted => True);
       Check_Source
-        ("destructured sink restriction is preserved",
+        ("fresh destructured result is consumed",
          "consume: (sink value: i32) -> none = end consume" & LF
          & "pair: () -> (value: i32, other: i32) =" & LF
          & "value = 42 other = 0 end pair" & LF
@@ -9039,7 +9049,7 @@ package body Landin.Tests.Checking_Suite is
          & "(value: part, other: rest) := pair()" & LF
          & "consume(part)" & LF
          & "end while end f" & LF,
-         Accepted => False, Code => "L0337");
+         Accepted => True);
       Check_Source
         ("fresh condition binding",
          "consume: (sink value: i32) -> none = end consume" & LF
@@ -14189,10 +14199,10 @@ package body Landin.Tests.Checking_Suite is
          "f: () -> none = _ = loop do break with [1, 2] end loop end f" & LF);
    end Loop_Results_Require_A_Consumer;
 
-   procedure Loops_Preserve_The_Assignment_Boundary
+   procedure Loops_Join_The_Assignments_Of_Their_Exits
      (Item : in out Landin.Testing.Context);
 
-   procedure Loops_Preserve_The_Assignment_Boundary
+   procedure Loops_Join_The_Assignments_Of_Their_Exits
      (Item : in out Landin.Testing.Context)
    is
       procedure Check (Label, Text : String; Codes : String := "");
@@ -14234,41 +14244,49 @@ package body Landin.Tests.Checking_Suite is
             & US.To_String (Got));
       end Check;
    begin
+      --  D430: an assignment on every edge that leaves a loop holds after
+      --  it, which D156/D157's ceiling once refused for each of these.
       Check
         ("while completion",
          "f: (flag: bool) -> (r: i32) = while flag do complete r = 1 "
-         & "end while end f" & LF, "L0302");
+         & "end while end f" & LF);
       Check
         ("unconditional break",
-         "f: () -> (r: i32) = loop do r = 1 break end loop end f" & LF,
-         "L0302");
+         "f: () -> (r: i32) = loop do r = 1 break end loop end f" & LF);
       Check
         ("range completion",
          "f: () -> (r: i32) = for i in 0..<1 do complete r = 1 end "
-         & "for end f" & LF, "L0302");
+         & "for end f" & LF);
       Check
         ("array completion",
          "f: (flag: bool) -> (r: [2]i32) = while flag do complete r = "
-         & "[1, 2] end while end f" & LF, "L0302");
+         & "[1, 2] end while end f" & LF);
       Check
         ("sparse element",
          "f: (flag: bool) -> none = mut a: [2]i32 while flag do "
-         & "complete a[0] = 1 end while _ = a[0] end f" & LF, "L0302");
+         & "complete a[0] = 1 end while _ = a[0] end f" & LF);
       Check
         ("whole array",
          "f: (flag: bool) -> none = mut a: [2]i32 while flag do "
-         & "complete a = [1, 2] end while _ = a[0] end f" & LF, "L0302");
+         & "complete a = [1, 2] end while _ = a[0] end f" & LF);
       Check
         ("nested field",
          "child: type = struct x: i32 end child box: type = struct c: "
          & "child end box f: (flag: bool) -> none = mut b: box while "
-         & "flag do complete b.c.x = 1 end while _ = b.c.x end f" & LF,
-         "L0302");
+         & "flag do complete b.c.x = 1 end while _ = b.c.x end f" & LF);
       Check
         ("array field",
          "box: type = struct a: [2]i32 end box f: (flag: bool) -> "
          & "none = mut b: box while flag do complete b.a = [1, 2] end "
-         & "while _ = b.a[0] end f" & LF, "L0302");
+         & "while _ = b.a[0] end f" & LF);
+      Check
+        ("break before the assignment",
+         "f: (flag: bool) -> (r: i32) = loop do break when flag r = 1 "
+         & "break end loop end f" & LF, "L0302");
+      Check
+        ("body assignment and a failed test",
+         "f: (flag: bool) -> (r: i32) = while flag do r = 1 break end "
+         & "while end f" & LF, "L0302");
       Check
         ("incoming result",
          "f: (flag: bool) -> (r: i32) = r = 0 while flag do complete "
@@ -14301,7 +14319,7 @@ package body Landin.Tests.Checking_Suite is
          "g: (sink p: ptr i32) -> none = _ = p end g f: (flag: bool) "
          & "-> none = v: i32 = 1 mut p: ptr i32 = addr v g(p) while "
          & "flag do complete p = addr v end while _ = p end f" & LF);
-   end Loops_Preserve_The_Assignment_Boundary;
+   end Loops_Join_The_Assignments_Of_Their_Exits;
 
    procedure Sinks_Commit_At_Call_Entry
      (Item : in out Landin.Testing.Context);
@@ -15431,8 +15449,8 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "loop results require a consumer",
          Loop_Results_Require_A_Consumer'Access);
       Landin.Testing.Register
-        (Into, "checking", "loops preserve the assignment boundary",
-         Loops_Preserve_The_Assignment_Boundary'Access);
+        (Into, "checking", "loops join the assignments of their exits",
+         Loops_Join_The_Assignments_Of_Their_Exits'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary iterable elements are copies",
          Ordinary_Iterable_Elements_Are_Copies'Access);

@@ -54,6 +54,12 @@ package Landin.Testing.Fixtures is
    --  Arguments handed to a compiled runtime or ABI program, separately from
    --  the `args` used to invoke refine for recorded command-line fixtures.
    function Run_Args (Item : Fixture) return String;
+   --  Files below the fixture directory, comma separated, handed to the
+   --  program after `run_args` as paths to them wherever the lane put the
+   --  fixture.  `run_args` names no fixture file: its words are handed over
+   --  as written, so every path to a fixture's own file is relative to the
+   --  fixture directory, as `stdin`, `program` and every other key's are.
+   function Run_Files (Item : Fixture) return String;
    --  The file, relative to the fixture directory and below it, whose bytes
    --  a compiled runtime or ABI program reads as its standard input, or ""
    --  when the fixture names none.  Every lane gives a program without one
@@ -141,6 +147,41 @@ package Landin.Testing.Fixtures is
       Fixture_Root : String;
       To           : in out Landin.Platform.Path_List);
 
+   --  Whether the fixture is compiled as a directory module under an
+   --  import root: by its `root`, or by a `--root=` its recorded `args`
+   --  name.  A rooted fixture is read from the repository, never from a
+   --  fake filesystem holding its program alone.
+   function Is_Rooted (Item : Fixture) return Boolean;
+
+   --  What `refine` is run with for the fixture's verdict, before a lane
+   --  adds its target: a rooted fixture's `args` and then its module; a
+   --  recorded fixture's `args` as written, which name their files from
+   --  compiler/ada, where the test program runs; otherwise its program and
+   --  `with` files.  compiler/tests/fixture_meta.py's `source_arguments`
+   --  is the same, and fixture-meta.cases holds the two to it.
+   function Source_Arguments
+     (Item : Fixture; Fixture_Root : String) return Landin.Platform.Path_List;
+
+   --  Append what a compiled runtime or ABI program is run with after its
+   --  shared objects: the words of `run_args`, then DIRECTORY/FILE for each
+   --  `run_files` entry, DIRECTORY being the fixture directory as the lane
+   --  spells it.
+   procedure Append_Program_Arguments
+     (Item      : Fixture;
+      Directory : String;
+      To        : in out Landin.Platform.Path_List);
+
+   --  Read one fixture's metadata text, as discovery does, for a fixture of
+   --  class KIND named FIXTURE_NAME, without a filesystem: each fault is its
+   --  text alone, without the path discovery puts before it.  This is the
+   --  seam fixture-meta.cases holds the Ada reader to, beside the Python one.
+   procedure Read_Text
+     (Content      : String;
+      Kind         : Fixture_Class;
+      Fixture_Name : String;
+      Item         : out Fixture;
+      Problems     : out Landin.Platform.Path_List);
+
    --  ABI fixtures pair emitted Landin assembly with these ordered C11
    --  companions.  The source names are comma-separated relative `.c` paths;
    --  compiler and linker arguments are whitespace-separated and are kept as
@@ -210,6 +251,10 @@ package Landin.Testing.Fixtures is
 
    function Recorded_Count (In_Catalogue : Catalogue) return Natural;
 
+   --  The negative fixtures with codes whose `args`, not a `root`, name a
+   --  `--root=`, whether or not they also name a program.
+   function Rooted_By_Args_Count (In_Catalogue : Catalogue) return Natural;
+
    --  FAMILY's levels are the ones each counted fixture also runs at.
    function Profile_Run_Count
      (In_Catalogue : Catalogue; Of_Class : Fixture_Class;
@@ -223,6 +268,14 @@ package Landin.Testing.Fixtures is
    --  rows and comments are outside the fixture inventory.
    function Matches_Inventory
      (In_Catalogue : Catalogue; Text : String) return Boolean;
+
+   --  How discovery and targets.matrix disagree, naming the fixture and
+   --  the row, or "" when they agree: a fixture with no row, a row with
+   --  no fixture, a row whose targets the fixture's `targets:` no longer
+   --  says, a repeated row or a malformed one.  Matches_Inventory is this
+   --  being "".
+   function Inventory_Difference
+     (In_Catalogue : Catalogue; Text : String) return String;
 
    function Problem_Count (In_Catalogue : Catalogue) return Natural;
 
@@ -245,6 +298,7 @@ private
       Targets : Unbounded.Unbounded_String;
       Args    : Unbounded.Unbounded_String;
       Run_Args : Unbounded.Unbounded_String;
+      Run_Files : Unbounded.Unbounded_String;
       Stdin    : Unbounded.Unbounded_String;
       Run_Expect : Unbounded.Unbounded_String;
       Codes   : Unbounded.Unbounded_String;

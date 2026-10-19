@@ -17,7 +17,7 @@ error[L0330]: an assembly operand is an integer scalar, not a pointer
   |
 5 |     assembler.block("movs {v}, #1", in v: ptr u32 at general = p)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
-  = note: [1630]: convert explicitly where the value crosses: `usize(p)`, `ptr(u)`, `x <> 0`
+  = note: [1630]/D440: pass `usize(p)`, and give the routine around the block a `ptr mut` or `[]mut` parameter: that parameter is the permission its callers are checked against
 error[L0330]: an assembly operand is an integer scalar, not a distinct type
   --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:6:43
   |

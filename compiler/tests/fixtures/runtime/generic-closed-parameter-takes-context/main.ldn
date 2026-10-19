@@ -1,0 +1,104 @@
+--  A parameter whose written type names no formal of its generic routine
+--  is an ordinary context, as any other routine's parameter is: an array
+--  literal takes its shape from a closed slice parameter and is lent, an
+--  erasure its concept, `ptr(integer)` its pointer type, a struct literal
+--  and `zeroed` their struct.  A construction `T(...)` carries its own
+--  type, so it also fills a parameter whose type is a formal.
+import core/text
+
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+--  A non-generic routine's pointer parameter is the context too.
+store: (p: ptr mut u8, value: u8) -> none =
+    p.val = value
+end store
+
+grow: (t: type, p: ptr mut u8, x: t) -> (r: t) =
+    p.val += 1
+    r = x
+end grow
+
+first: (t: type, p: point, x: t) -> (r: i32) =
+    _ = x
+    r = p.x
+end first
+
+ident: (t: type, v: t) -> (r: t) =
+    r = v
+end ident
+
+measured: type = concept (item: type)
+    size: (self: item) -> (n: i32)
+end measured
+
+point_size: (self: point) -> (n: i32) =
+    n = self.x + self.y
+end point_size
+
+point is measured (size: point_size)
+
+size_of: (provider: type is measured, host: provider) -> (n: i32) =
+    n = provider.size(host)
+end size_of
+
+total: (t: type, values: []u8, x: t) -> (n: usize) =
+    _ = x
+    n = 0
+    for v in values do
+        n += usize(v)
+    end for
+end total
+
+shown: (t: type, x: t, values: []any text.formattable)
+       -> (length: usize) =
+    _ = x
+    length = 0
+    mut storage: [16]u8 = zeroed
+    mut line := text.over(storage[0..<16])
+    text.format(line, "{}-{}", values) else (problem)
+        _ = problem
+        return
+    end
+    length = text.length(line)
+end shown
+
+one: (t: type, x: t, value: any text.formattable) -> (length: usize) =
+    _ = x
+    length = 0
+    mut storage: [16]u8 = zeroed
+    mut line := text.over(storage[0..<16])
+    text.format(line, "<{}>", [value]) else (problem)
+        _ = problem
+        return
+    end
+    length = text.length(line)
+end one
+
+public main: () -> (code: i32) =
+    mut cell: u8 = 0
+    code = 1
+    store(ptr(usize(addr cell)), 3)
+    return when cell <> 3
+    code = 2
+    return when grow(ptr(usize(addr cell)), u16(7)) <> 7 or cell <> 4
+    code = 3
+    return when first(point(x: 5, y: 6), true) <> 5
+    return when first((x: 8, y: 9), 1) <> 8
+    return when first(zeroed, 1) <> 0
+    code = 4
+    copied := ident(point(x: 10, y: 11))
+    return when copied.y <> 11
+    return when size_of(point(x: 10, y: 11)) <> 21
+    code = 5
+    return when total([1, 2, 3], true) <> 6
+    code = 6
+    a: u32 = 1234
+    b: u8 = 56
+    return when shown(true, [any(addr a), any(addr b)]) <> 7
+    code = 7
+    return when one(u8(1), any(addr b)) <> 4
+    code = 42
+end main

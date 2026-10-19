@@ -529,7 +529,7 @@ arena_grow_refusals: () -> (ok: bool) =
     near_end: ptr mut u8 = ptr(maximum - 7)
     mut impossible_space: arena.space = zeroed
     impossible := arena.over_unchecked(impossible_space, near_end,
-                                           usize(16))
+                                       usize(16))
     edge: ptr mut u8 = mem.allocate(impossible, usize(4), usize(1))
         else (problem) _ = problem return end
     --  The synthetic address is never dereferenced.

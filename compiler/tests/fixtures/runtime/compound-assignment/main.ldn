@@ -48,7 +48,7 @@ public main: () -> (code: i32) =
     mut aggregate_count: usize = 0
     aggregate_cells[0].value = 30
     aggregate_cells[next(aggregate_count)].value +=
-      amount_after_destination(aggregate_count)
+        amount_after_destination(aggregate_count)
 
     mut pointee: i32 = 6
     pointer := addr pointee
@@ -56,10 +56,10 @@ public main: () -> (code: i32) =
 
     mut branched: i32 = 4
     branched += if true then
-        5
-    else
-        100
-    end if
+                    5
+                else
+                    100
+                end if
 
     if number == 24 and wrapped == 254 and real == 3.0
       and count == 1 and cells[0] == 11

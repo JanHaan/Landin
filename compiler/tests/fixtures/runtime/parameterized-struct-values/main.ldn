@@ -42,10 +42,10 @@ end take
 
 choose: (flag: bool, left: box(i32), right: box(i32)) -> (result: box(i32)) =
     result = if flag then
-        left
-    else
-        right
-    end if
+                 left
+             else
+                 right
+             end if
 end choose
 
 public main: () -> (code: i32) =

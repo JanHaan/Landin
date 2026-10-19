@@ -20,7 +20,7 @@ answer: () -> (result: i32) =
     local.nested.row[1] = 7
     local.nested.row[2] = 13
     result = global.nested.row[index] + local.nested.row[0]
-           + local.nested.row[1] + local.nested.row[2]
+             + local.nested.row[1] + local.nested.row[2]
 end answer
 
 merged: (whole: bool) -> (result: i32) =

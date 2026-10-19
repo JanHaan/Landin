@@ -849,6 +849,17 @@ package body Landin.Tests.Parser_Suite is
          & "  end match" & ASCII.LF
          & "end f" & ASCII.LF,
          "", "payload bindings are parsed in source order");
+
+      --  D433: a binding carries `inout` or `sink`; which arm may carry
+      --  `sink` is the checker's to say.
+      Check_Program
+        ("f: (x: u8) -> none =" & ASCII.LF
+         & "  match x" & ASCII.LF
+         & "    ptr (sink p): _ = p" & ASCII.LF
+         & "    pair(inout a, sink b): _ = b" & ASCII.LF
+         & "  end match" & ASCII.LF
+         & "end f" & ASCII.LF,
+         "", "a binding's convention is parsed before its name");
    end Match_Statements_Are_Parsed;
 
    ------------------------------------------------------------------
@@ -1583,6 +1594,9 @@ package body Landin.Tests.Parser_Suite is
       Real      : Landin.Platform.Native.Native_Filesystem;
       Catalogue : Fixtures.Catalogue;
       Pinned    : Natural := 0;
+      --  Negatives whose recorded `args` name a `--root=`, run as refine
+      --  runs them whether or not they also name a program.
+      Rooted_By_Args : Natural := 0;
 
       function Arguments_Of (First : String; Written : String)
         return Landin.Platform.Path_List;
@@ -1674,6 +1688,32 @@ package body Landin.Tests.Parser_Suite is
               Fixtures.Class (Fixture);
          begin
             if Class = Fixtures.Negative_Program
+              and then Fixtures.Codes (Fixture) /= ""
+              and then Fixtures.Module_Root (Fixture) = ""
+              and then Fixtures.Is_Rooted (Fixture)
+            then
+               --  Deliberate real-host exception: a module its `args`
+               --  root is read from the repository, from compiler/ada,
+               --  exactly as the recorded invocation reads it.
+               declare
+                  Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+                  Ran   : constant Landin.Driver.Outcome :=
+                    Landin.Driver.Execute
+                      (Arguments_Of ("", Fixtures.Args (Fixture)),
+                       Real, Tools);
+               begin
+                  Rooted_By_Args := Rooted_By_Args + 1;
+                  Landin.Testing.Check_Equal
+                    (Item, Codes_In (Unbounded.To_String (Ran.Report)),
+                     Fixtures.Normalized_Codes (Fixtures.Codes (Fixture)),
+                     Fixtures.Name (Fixture)
+                     & ": the report carries the codes the fixture names");
+                  Landin.Testing.Check_Equal
+                    (Item, Ran.Status, Fixtures.Status (Fixture),
+                     Fixtures.Name (Fixture)
+                     & ": the program exits as its fixture says");
+               end;
+            elsif Class = Fixtures.Negative_Program
               and then Fixtures.Program (Fixture) /= ""
               and then Fixtures.Codes (Fixture) /= ""
             then
@@ -1763,10 +1803,12 @@ package body Landin.Tests.Parser_Suite is
       end loop;
 
       Landin.Testing.Check_Equal
-        (Item, Pinned,
+        (Item, Pinned + Rooted_By_Args,
          Fixtures.Program_Count
-           (Catalogue, Fixtures.Negative_Program, Require_Codes => True),
-         "every negative program that names codes was attempted");
+           (Catalogue, Fixtures.Negative_Program, Require_Codes => True)
+         + Fixtures.Rooted_By_Args_Count (Catalogue),
+         "every negative program that names codes, and every negative"
+         & " whose args root it, was attempted");
       Landin.Testing.Check
         (Item, Pinned > 0, "the diagnostic corpus obligation remains");
    end Reports_Carry_The_Pinned_Codes;
@@ -2876,6 +2918,13 @@ package body Landin.Tests.Parser_Suite is
                      Same := Landin.Syntax.Is_Mutable (Expected, Node)
                        = Landin.Syntax.Is_Mutable (Actual, Node);
                   end if;
+                  if Same and then Landin.Syntax.Kind (Expected, Node)
+                    = Landin.Syntax.Match_Binding
+                  then
+                     Same := Landin.Syntax."="
+                       (Landin.Syntax.Convention_Of (Expected, Node),
+                        Landin.Syntax.Convention_Of (Actual, Node));
+                  end if;
                   if Same then
                      Same := Landin.Syntax.Slot_Count (Expected, Node)
                                = Landin.Syntax.Slot_Count (Actual, Node);
@@ -3022,6 +3071,13 @@ package body Landin.Tests.Parser_Suite is
                   then
                      Same := Landin.Syntax.Is_Mutable (Expected, Node)
                        = Landin.Syntax.Is_Mutable (Actual, Node);
+                  end if;
+                  if Same and then Landin.Syntax.Kind (Expected, Node)
+                    = Landin.Syntax.Match_Binding
+                  then
+                     Same := Landin.Syntax."="
+                       (Landin.Syntax.Convention_Of (Expected, Node),
+                        Landin.Syntax.Convention_Of (Actual, Node));
                   end if;
                   if Same then
                      Same := Landin.Syntax.Slot_Count (Expected, Node)

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D437 lets a module value read a compiler fact as the value configuration found, here and through another module: an integer fact taking its type from context, a feature and a C ABI bool, an atom fact compared with a configuration atom even where the atom's word also names an imported module, and an integer fact in an array image; each agrees with what a fixed if selects for the same fact, so the status is the same on every target
+program: main.ldn
+root: root
+status: 42
+constructs: 1500, 1940
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

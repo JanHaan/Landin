@@ -67,10 +67,12 @@ unsupported, except that one replaced by a rename is refused.
 
 A block is indented four spaces from the line its construct begins on, and
 the `end` that closes it, and any `else`, `elsif` or `complete` that divides
-it, stands on that line's indentation.
+it, stands on that line's indentation. A construct that opens and closes on
+one line stays on it, which is how a guarded trap is written (D436).
 
 ```landin
 f: (n: i32) -> (r: i32) =
+      if n > 99 then compiler.unreachable() end if
   if n > 0 then
         r = 1
    else
@@ -81,6 +83,7 @@ end f
 
 ```landin
 f: (n: i32) -> (r: i32) =
+    if n > 99 then compiler.unreachable() end if
     if n > 0 then
         r = 1
     else
@@ -324,26 +327,48 @@ f: () -> none =
 end f
 ```
 
-### Tables
+### An `if` inside a line
 
-An `if` that begins inside a line and gives its first arm's value on that
-line is a table: each `elsif`, `else` and its `end if` stand under the `if`.
+An `if` that begins inside a line is an expression, and it is laid out from
+its `if` rather than from its line: a `then` that begins a line, each `elsif`
+and `else` and its `end if` stand under the `if`, and each arm's body four
+columns in from it, wherever the `if` stands, an argument's place among them.
+One whose first arm's value shares the `if`'s line is a table, each arm on a
+line of its own.
 
 ```landin
-f: (byte: u8) -> (digit: u32) =
+f: (byte: u8, wide: bool) -> (digit: u32) =
     digit = if byte == 48 then 0
         elsif byte == 49 then 1
       else 9
     end if
+    digit = if wide and byte > 57
+        then 10
+        else digit
+        end if
+    digit = add(digit, if wide then
+        16
+    else
+        0
+    end if)
 end f
 ```
 
 ```landin
-f: (byte: u8) -> (digit: u32) =
+f: (byte: u8, wide: bool) -> (digit: u32) =
     digit = if byte == 48 then 0
             elsif byte == 49 then 1
             else 9
             end if
+    digit = if wide and byte > 57
+            then 10
+            else digit
+            end if
+    digit = add(digit, if wide then
+                           16
+                       else
+                           0
+                       end if)
 end f
 ```
 

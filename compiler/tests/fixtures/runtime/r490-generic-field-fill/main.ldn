@@ -81,17 +81,17 @@ public main: () -> (code: i32) =
             static_ok = first == 1 and second == 8 and third == 8
     end match
     code = if trace == 7 and v.first == 1 and v.second == 2 and v.third == 2
-              and f.first and not f.second and not f.third
-              and r.first[0] == 1 and r.second[0] == 3 and r.third[1] == 4
-              and array_state.first[0] == 6
-              and array_state.second[0] == 11
-              and array_state.second[1] == 11
-              and n.second.second == 2 and n.third.third == 2
-              and constant.second == 7 and constant.third == 7
-              and cases_ok and static_ok and recovered.second == 6
-              and recovered.third == 6 and refs.first.val == 17
-              and refs.second.val == 17 and functions.first(5) == 6
-              and functions.second(8) == 9 and state.second == 11
-              and state.third == 11
+      and f.first and not f.second and not f.third
+      and r.first[0] == 1 and r.second[0] == 3 and r.third[1] == 4
+      and array_state.first[0] == 6
+      and array_state.second[0] == 11
+      and array_state.second[1] == 11
+      and n.second.second == 2 and n.third.third == 2
+      and constant.second == 7 and constant.third == 7
+      and cases_ok and static_ok and recovered.second == 6
+      and recovered.third == 6 and refs.first.val == 17
+      and refs.second.val == 17 and functions.first(5) == 6
+      and functions.second(8) == 9 and state.second == 11
+      and state.third == 11
            then 42 else 1 end if
 end main

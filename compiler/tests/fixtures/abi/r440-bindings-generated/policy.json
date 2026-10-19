@@ -361,6 +361,146 @@
       ]
     },
     {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_wire",
+      "name": "BindingWire",
+      "representation": "auto"
+    },
+    {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_frame",
+      "name": "BindingFrame",
+      "representation": "native"
+    },
+    {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_entry",
+      "name": "BindingEntry",
+      "representation": "auto"
+    },
+    {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_words",
+      "name": "BindingWords",
+      "representation": "native"
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_layout",
+      "name": "binding_layout",
+      "parameters": {}
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_wire_fill",
+      "name": "binding_wire_fill",
+      "parameters": {
+        "record": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_wire_check",
+      "name": "binding_wire_check",
+      "parameters": {
+        "record": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_wire_make",
+      "name": "binding_wire_make",
+      "parameters": {}
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_frame_check",
+      "name": "binding_frame_check",
+      "parameters": {}
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_entry_fill",
+      "name": "binding_entry_fill",
+      "parameters": {
+        "record": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_entry_check",
+      "name": "binding_entry_check",
+      "parameters": {
+        "record": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_words_sum",
+      "name": "binding_words_sum",
+      "parameters": {
+        "record": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "kind": "variable",
+      "landin_name": "binding_frame_global",
+      "name": "binding_frame_global",
+      "storage": "import",
+      "writable": true
+    },
+    {
+      "direction": "export",
+      "kind": "function",
+      "landin_name": "landin_binding_wire_mark",
+      "name": "landin_binding_wire_mark",
+      "parameters": {
+        "record": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
       "direction": "export",
       "kind": "function",
       "landin_name": "landin_bindings_check",

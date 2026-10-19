@@ -26,8 +26,8 @@ copy: () -> none =
     match target.kind
         leaf: _ = 1
         pair(first, second): if first == 2 and second == 3 then
-            _ = target.prefix
-        end if
+                                 _ = target.prefix
+                             end if
         row: _ = 3
     end match
 end copy

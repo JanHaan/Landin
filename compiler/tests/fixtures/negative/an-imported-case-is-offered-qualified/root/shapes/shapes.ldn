@@ -1,0 +1,7 @@
+--- A variant.
+public tagged: type = struct
+    kind: variant
+        leaf |
+        pair: (first: i32, second: i32)
+    end kind
+end tagged

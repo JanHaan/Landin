@@ -1,0 +1,50 @@
+--  D434: failure.words takes the library's atoms and no others, so a
+--  failure that may be the program's own atom does not widen to its set;
+--  but a `_ (rest)` arm binds the atoms no other arm named, and those are
+--  all the library's, so the rest is passed on without naming each one.
+import core/failure
+import core/io
+
+unconfigured: atom
+
+load: (configured: bool, refused: bool) -> none
+      ! unconfigured | io.not_found | io.no_access =
+    fail unconfigured when not configured
+    fail io.no_access when refused
+    fail io.not_found
+end load
+
+phrase_for: (configured: bool, refused: bool) -> (length: i32) =
+    length = 0
+    load(configured, refused) else (problem)
+        phrase: []u8 = match problem
+            unconfigured: "not configured"
+            _ (rest): failure.words(rest)
+        end match
+        length = i32(lenof phrase)
+    end
+end phrase_for
+
+refused_twice: () -> (answer: i32) =
+    answer = 0
+    load(true, true) else (problem)
+        match problem
+            unconfigured: answer = 1
+            _ (rest): if rest == io.no_access and rest <> io.not_found then
+                          answer = 2
+                      end if
+        end match
+    end
+end refused_twice
+
+public main: () -> (code: i32) =
+    code = 1
+    return when phrase_for(false, false) <> 14
+    code = 2
+    return when phrase_for(true, false) <> 9
+    code = 3
+    return when phrase_for(true, true) <> 17
+    code = 4
+    return when refused_twice() <> 2
+    code = 42
+end main

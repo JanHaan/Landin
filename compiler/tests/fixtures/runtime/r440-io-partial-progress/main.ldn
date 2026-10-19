@@ -10,8 +10,8 @@ public main: () -> (code: i32) =
     code = 1
     name: []u8 = "f"
     source: io.memory_file =
-      (name: name, contents: contents[0..<2], length: 2, cursor: 0,
-       readable: true, writable: false, state: io.closed_slot)
+        (name: name, contents: contents[0..<2], length: 2, cursor: 0,
+         readable: true, writable: false, state: io.closed_slot)
     mut files: [1]io.memory_file
     files[0] = source
     path: text.host_string = text.host_over(name)

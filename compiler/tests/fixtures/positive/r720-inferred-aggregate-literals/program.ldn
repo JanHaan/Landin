@@ -26,5 +26,5 @@ f: (p: point, h: holder, points: [2]point, i: usize) -> (total: u8) =
     grid := [[1, 2], [3, 4], [5, 6]]
     counted := [[2 of 7], [8, 9]]
     total = names[1].x + built[2].y + called[0].x + elements[1].y
-        + fields[1][0] + u8(grid[2][1]) + u8(counted[1][1])
+            + fields[1][0] + u8(grid[2][1]) + u8(counted[1][1])
 end f

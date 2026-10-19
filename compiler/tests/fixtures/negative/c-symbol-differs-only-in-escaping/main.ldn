@@ -1,0 +1,7 @@
+import keeper
+
+extern(c) link(symbol: "keep_it") keep_import: (kept: ptr u8) -> none
+
+public main: () -> (code: i32) =
+    code = 0
+end main

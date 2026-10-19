@@ -11,6 +11,29 @@ if [ -z "${Help:-}" ]; then
     landin_build_lock mode "$@"
 fi
 # Target selection is explicit; native checks never fall back to a transport.
+# A target this script has no lane for is refused with the one that debugs
+# it, before anything is built or waited for.
+for Argument do
+    case "$Argument" in
+        --target=linux-rv64)
+            echo "landin: debug.sh has no linux-rv64 lane; RV64 GDB runs on a" >&2
+            echo "landin: physical RISC-V Linux machine, through" >&2
+            echo "landin:   compiler/tests/rv64/check.py --kind=debugger --prepare-only --refine=REFINE --output=DIR" >&2
+            echo "landin: here, then --kind=debugger --prepared=DIR --output=DIR2 on that machine" >&2
+            echo "landin: (compiler/tests/rv64/README.md); its gate lanes are suspended" >&2
+            exit 2 ;;
+        --target=freebsd-x86-64 | --target=freebsd-arm64)
+            echo "landin: debug.sh has no FreeBSD lane; FreeBSD's LLDB sessions run in its VM," >&2
+            echo "landin: through compiler/tests/freebsd/check.py --kind=debugger --arch=amd64|arm64" >&2
+            echo "landin: (compiler/tests/freebsd/README.md)" >&2
+            exit 2 ;;
+        --target=cortex-m0)
+            echo "landin: debug.sh has no cortex-m0 lane; Cortex-M source stops run" >&2
+            echo "landin: under QEMU and GDB in the Cortex-M lane, environments/cortex-m/run.py" >&2
+            echo "landin: (environments/cortex-m/README.md)" >&2
+            exit 2 ;;
+    esac
+done
 if [ "${1:-}" = "--target=darwin-arm64" ]; then
     shift
     landin_require python3

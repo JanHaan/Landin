@@ -1,0 +1,30 @@
+--  D427: a distinct type over an atom, a pointer or a function value has
+--  `==` and `<>` and nothing else; a signed base still has no flags to
+--  update in place; and a distinct type over a struct has no equality,
+--  because its base has none.
+north: atom
+south: atom
+compass: type = north | south
+heading: type = distinct compass
+cell: type = distinct ptr u32
+descriptor: type = distinct i32
+point: type = struct
+    x: i32
+end point
+place: type = distinct point
+
+ordered: (a: heading, b: heading) -> (before: bool) =
+    before = a < b
+end ordered
+
+combined: (a: cell, b: cell) -> (both: cell) =
+    both = a | b
+end combined
+
+updated: (inout d: descriptor, more: descriptor) -> none =
+    d |= more
+end updated
+
+same: (a: place, b: place) -> (equal: bool) =
+    equal = a == b
+end same

@@ -49,7 +49,8 @@ package Landin.Driver.Loading is
       Cache           : access Landin.Stages.Syntax.Parse_Cache := null;
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Library         : String := "";
-      Implicit        : String := "");
+      Implicit        : String := "";
+      Parsing         : access procedure (Finished : Boolean) := null);
 
    --  After Load_Files, for named files with a library root: what they
    --  read is parsed, and every library module their imports reach is
@@ -67,7 +68,8 @@ package Landin.Driver.Loading is
       Watch_Syntax : access procedure (Name : String) := null;
       Cache        : access Landin.Stages.Syntax.Parse_Cache := null;
       Dependency_Directories : access Landin.Platform.Path_List := null;
-      Implicit     : String := "");
+      Implicit     : String := "";
+      Parsing      : access procedure (Finished : Boolean) := null);
 
    --  D383: named source files with roots.  The files are read already
    --  by Load_Files and are the entry module, as they are without a root;
@@ -79,7 +81,12 @@ package Landin.Driver.Loading is
       Roots   : Landin.Platform.Path_List;
       Library : String;
       Dependency_Directories : access Landin.Platform.Path_List := null;
-      Implicit : String := "");
+      Implicit : String := "";
+      Parsing  : access procedure (Finished : Boolean) := null);
+
+   --  Parsing, when given, is told as each batch of newly read sources
+   --  begins and finishes scanning and parsing, so a stage report can
+   --  count that time as the syntax stage's rather than as reading.
 
    --  Implicit, in either load, names one library module the program holds
    --  whether or not an import reaches it: platform/linux, whose process

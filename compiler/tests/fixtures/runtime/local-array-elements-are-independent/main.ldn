@@ -16,7 +16,7 @@ public main: () -> (code: i32) =
     end if
 
     if words[0] == 10 and words[3] == 32
-        and bytes[0] == 1 and bytes[1] == 2 and selected[0] == 7
+      and bytes[0] == 1 and bytes[1] == 2 and selected[0] == 7
     then
         code = 42
     else

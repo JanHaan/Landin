@@ -1,0 +1,8 @@
+class: negative
+summary: a distinct type over an atom set or a pointer has == and <> and no order or bit operator, a signed base has no updating flags, and a distinct struct has no equality
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/distinct-equality-only
+constructs: 0330, 0350, 0390, 0650, 1890
+codes: L0301, L0301, L0301, L0301
+status: 1
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

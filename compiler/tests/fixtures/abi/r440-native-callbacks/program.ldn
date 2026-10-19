@@ -76,9 +76,9 @@ public extern(c) landin_check: () -> (result: i32) =
     end match
     result = 1
     if returned(10) == 11 and boxed.callback(10) == 11
-       and boxed.bias == 4 and c_apply(l_box(), 10) == 15
-       and l_apply(boxed, 10) == 15 and l_recur(16) == 42
-       and missing_ok and present_ok and indirect_ok
+      and boxed.bias == 4 and c_apply(l_box(), 10) == 15
+      and l_apply(boxed, 10) == 15 and l_recur(16) == 42
+      and missing_ok and present_ok and indirect_ok
     then
         result = 42
     end if

@@ -30,22 +30,22 @@ gp_mixed_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64,
 extern(c) c_gp_mixed: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: mixed, p7: f64, p8: u64, p9: partial, p10: large, p11: f64) -> (result: i32)
 public extern(c) l_gp_mixed: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: mixed, p7: f64, p8: u64, p9: partial, p10: large, p11: f64) -> (result: i32) =
     if p0 == 3
-       and p1 == 6
-       and p2 == 9
-       and p3 == 12
-       and p4 == 15
-       and p5 == 18
-       and p6.first == 21
-       and p6.second == 22.5
-       and p7 == 24.5
-       and p8 == 27
-       and p9.first == 30
-       and p9.second == 31
-       and p9.third == 32
-       and p10.first == 33
-       and p10.second == 34.5
-       and p10.third == 35
-       and p11 == 36.5
+      and p1 == 6
+      and p2 == 9
+      and p3 == 12
+      and p4 == 15
+      and p5 == 18
+      and p6.first == 21
+      and p6.second == 22.5
+      and p7 == 24.5
+      and p8 == 27
+      and p9.first == 30
+      and p9.second == 31
+      and p9.third == 32
+      and p10.first == 33
+      and p10.second == 34.5
+      and p10.third == 35
+      and p11 == 36.5
     then
         result = 42
     else
@@ -57,14 +57,14 @@ gp_pair_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, 
 extern(c) c_gp_pair: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: pair_i, p6: u64, p7: u64) -> (result: i32)
 public extern(c) l_gp_pair: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: pair_i, p6: u64, p7: u64) -> (result: i32) =
     if p0 == 3
-       and p1 == 6
-       and p2 == 9
-       and p3 == 12
-       and p4 == 15
-       and p5.first == 18
-       and p5.second == 19
-       and p6 == 21
-       and p7 == 24
+      and p1 == 6
+      and p2 == 9
+      and p3 == 12
+      and p4 == 15
+      and p5.first == 18
+      and p5.second == 19
+      and p6 == 21
+      and p7 == 24
     then
         result = 42
     else
@@ -76,17 +76,17 @@ sse_mixed_handler: type = extern(c) (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64
 extern(c) c_sse_mixed: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: f64, p8: mixed, p9: u64, p10: f64) -> (result: i32)
 public extern(c) l_sse_mixed: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: f64, p8: mixed, p9: u64, p10: f64) -> (result: i32) =
     if p0 == 3.5
-       and p1 == 6.5
-       and p2 == 9.5
-       and p3 == 12.5
-       and p4 == 15.5
-       and p5 == 18.5
-       and p6 == 21.5
-       and p7 == 24.5
-       and p8.first == 27
-       and p8.second == 28.5
-       and p9 == 30
-       and p10 == 33.5
+      and p1 == 6.5
+      and p2 == 9.5
+      and p3 == 12.5
+      and p4 == 15.5
+      and p5 == 18.5
+      and p6 == 21.5
+      and p7 == 24.5
+      and p8.first == 27
+      and p8.second == 28.5
+      and p9 == 30
+      and p10 == 33.5
     then
         result = 42
     else
@@ -98,16 +98,16 @@ sse_pair_handler: type = extern(c) (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64,
 extern(c) c_sse_pair: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: pair_s, p8: f64, p9: u64) -> (result: i32)
 public extern(c) l_sse_pair: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: pair_s, p8: f64, p9: u64) -> (result: i32) =
     if p0 == 3.5
-       and p1 == 6.5
-       and p2 == 9.5
-       and p3 == 12.5
-       and p4 == 15.5
-       and p5 == 18.5
-       and p6 == 21.5
-       and p7.first == 24.5
-       and p7.second == 25.5
-       and p8 == 27.5
-       and p9 == 30
+      and p1 == 6.5
+      and p2 == 9.5
+      and p3 == 12.5
+      and p4 == 15.5
+      and p5 == 18.5
+      and p6 == 21.5
+      and p7.first == 24.5
+      and p7.second == 25.5
+      and p8 == 27.5
+      and p9 == 30
     then
         result = 42
     else
@@ -119,28 +119,28 @@ both_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5:
 extern(c) c_both: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: f64, p7: f64, p8: f64, p9: f64, p10: f64, p11: f64, p12: f64, p13: f64, p14: pair_i, p15: pair_s, p16: mixed, p17: partial) -> (result: i32)
 public extern(c) l_both: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: f64, p7: f64, p8: f64, p9: f64, p10: f64, p11: f64, p12: f64, p13: f64, p14: pair_i, p15: pair_s, p16: mixed, p17: partial) -> (result: i32) =
     if p0 == 3
-       and p1 == 6
-       and p2 == 9
-       and p3 == 12
-       and p4 == 15
-       and p5 == 18
-       and p6 == 21.5
-       and p7 == 24.5
-       and p8 == 27.5
-       and p9 == 30.5
-       and p10 == 33.5
-       and p11 == 36.5
-       and p12 == 39.5
-       and p13 == 42.5
-       and p14.first == 45
-       and p14.second == 46
-       and p15.first == 48.5
-       and p15.second == 49.5
-       and p16.first == 51
-       and p16.second == 52.5
-       and p17.first == 54
-       and p17.second == 55
-       and p17.third == 56
+      and p1 == 6
+      and p2 == 9
+      and p3 == 12
+      and p4 == 15
+      and p5 == 18
+      and p6 == 21.5
+      and p7 == 24.5
+      and p8 == 27.5
+      and p9 == 30.5
+      and p10 == 33.5
+      and p11 == 36.5
+      and p12 == 39.5
+      and p13 == 42.5
+      and p14.first == 45
+      and p14.second == 46
+      and p15.first == 48.5
+      and p15.second == 49.5
+      and p16.first == 51
+      and p16.second == 52.5
+      and p17.first == 54
+      and p17.second == 55
+      and p17.third == 56
     then
         result = 42
     else
@@ -152,15 +152,15 @@ memory_live_handler: type = extern(c) (p0: large, p1: u64, p2: f64, p3: large, p
 extern(c) c_memory_live: (p0: large, p1: u64, p2: f64, p3: large, p4: u64, p5: f64) -> (result: i32)
 public extern(c) l_memory_live: (p0: large, p1: u64, p2: f64, p3: large, p4: u64, p5: f64) -> (result: i32) =
     if p0.first == 3
-       and p0.second == 4.5
-       and p0.third == 5
-       and p1 == 6
-       and p2 == 9.5
-       and p3.first == 12
-       and p3.second == 13.5
-       and p3.third == 14
-       and p4 == 15
-       and p5 == 18.5
+      and p0.second == 4.5
+      and p0.third == 5
+      and p1 == 6
+      and p2 == 9.5
+      and p3.first == 12
+      and p3.second == 13.5
+      and p3.third == 14
+      and p4 == 15
+      and p5 == 18.5
     then
         result = 42
     else
@@ -172,17 +172,17 @@ sret_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5:
 extern(c) c_sret: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: mixed, p6: f64, p7: u64, p8: large) -> (result: large)
 public extern(c) l_sret: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: mixed, p6: f64, p7: u64, p8: large) -> (result: large) =
     if p0 == 3
-       and p1 == 6
-       and p2 == 9
-       and p3 == 12
-       and p4 == 15
-       and p5.first == 18
-       and p5.second == 19.5
-       and p6 == 21.5
-       and p7 == 24
-       and p8.first == 27
-       and p8.second == 28.5
-       and p8.third == 29
+      and p1 == 6
+      and p2 == 9
+      and p3 == 12
+      and p4 == 15
+      and p5.first == 18
+      and p5.second == 19.5
+      and p6 == 21.5
+      and p7 == 24
+      and p8.first == 27
+      and p8.second == 28.5
+      and p8.third == 29
     then
         result = large(first: 42, second: 43.5, third: 44)
     else
@@ -232,8 +232,8 @@ public extern(c) landin_check: () -> (result: i32) =
     direct_6 := c_sret(3, 6, 9, 12, 15, mixed(first: 18, second: 19.5), 21.5, 24, large(first: 27, second: 28.5, third: 29))
     indirect_6 := handler_6(3, 6, 9, 12, 15, mixed(first: 18, second: 19.5), 21.5, 24, large(first: 27, second: 28.5, third: 29))
     if not (direct_6.first == 42 and direct_6.second == 43.5
-       and direct_6.third == 44 and indirect_6.first == 42
-       and indirect_6.second == 43.5 and indirect_6.third == 44) then
+            and direct_6.third == 44 and indirect_6.first == 42
+            and indirect_6.second == 43.5 and indirect_6.third == 44) then
         result = 7
     end if
 end landin_check

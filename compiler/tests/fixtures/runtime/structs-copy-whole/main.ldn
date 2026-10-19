@@ -33,14 +33,14 @@ public main: () -> (code: i32) =
     back = back
 
     if q.x == 9
-        and q.y == 4
-        and not q.on
-        and p.x == 3
-        and p.on
-        and saved.x == 3
-        and saved.on
-        and back.y == 4
-        and back.x == 3
+      and q.y == 4
+      and not q.on
+      and p.x == 3
+      and p.on
+      and saved.x == 3
+      and saved.on
+      and back.y == 4
+      and back.x == 3
     then
         code = 42
     else

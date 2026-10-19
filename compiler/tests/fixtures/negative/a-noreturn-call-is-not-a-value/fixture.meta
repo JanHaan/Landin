@@ -1,0 +1,9 @@
+class: negative
+summary: a noreturn call used as a value is refused naming noreturn, since it never returns
+program: program.ldn
+codes: L0331, L0331
+constructs: 0890, 1920
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/a-noreturn-call-is-not-a-value/program.ldn
+status: 1

@@ -1058,7 +1058,7 @@ package body Landin.Backend.Cortex_M is
 
       function Source_Symbol (Item : Landin.IR.Item_Id) return String is
          Declared : constant Landin.IR.Declaration_Id :=
-           Landin.IR.Declares (Of_Unit, Item);
+           Landin.Backend.Symbol_Declaration (Of_Unit, Item);
       begin
          if Landin.IR.Link_Symbol (Of_Unit, Item)
            /= Landin.Source.Names.No_Name
@@ -1078,6 +1078,13 @@ package body Landin.Backend.Cortex_M is
       procedure Allocate_Symbols is
          Allocated : Spelling_Counts;
          Sources : Spelling_Counts;
+         --  For each base a colliding item probes, how many of its
+         --  attempts, the base itself first, an earlier item found taken.
+         --  Nothing is freed while names are given and Sources is fixed,
+         --  so those stay taken: every instance of a generic routine
+         --  shares its routine's spelling (D421), and probing each from
+         --  the start made giving them names quadratic.
+         Tried : Spelling_Counts;
 
          function Available
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean;
@@ -1138,7 +1145,7 @@ package body Landin.Backend.Cortex_M is
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Position);
                Declared : constant Landin.IR.Declaration_Id :=
-                 Landin.IR.Declares (Of_Unit, Item);
+                 Landin.Backend.Symbol_Declaration (Of_Unit, Item);
                Spelling : constant String := Source_Symbol (Item);
             begin
                if not Is_Forced (Item) then
@@ -1152,13 +1159,17 @@ package body Landin.Backend.Cortex_M is
                            then Spelling
                            else Landin.Backend.Qualified_Symbol
                              (Meanings, Declared, Spelling));
+                        Attempt : Natural := Count (Tried, Base);
                         Candidate : Unbounded.Unbounded_String :=
-                          Unbounded.To_Unbounded_String (Base);
-                        Attempt : Natural := 0;
+                          Unbounded.To_Unbounded_String
+                            (if Attempt = 0 then Base
+                             else Base & "." & Trimmed
+                               (Natural'Image (Attempt)));
                      begin
                         while not Available
                           (Unbounded.To_String (Candidate), Item)
                         loop
+                           Add (Tried, Base);
                            Attempt := Attempt + 1;
                            Candidate := Unbounded.To_Unbounded_String
                              (Base & "." & Trimmed (Natural'Image (Attempt)));
@@ -1887,12 +1898,7 @@ package body Landin.Backend.Cortex_M is
             Atoms : constant Landin.IR.Atom_Set_Id :=
               Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
          begin
-            if Atoms /= Landin.IR.No_Atom_Set
-              and then Landin.IR.Op_Of (Of_Unit, Item, Value) in
-                Landin.IR.Load | Landin.IR.Load_Indirect
-                | Landin.IR.Load_Datum | Landin.IR.Load_Field
-                | Landin.IR.Load_Element | Landin.IR.Load_Variant_Field
-            then
+            if Landin.IR.Validates_Atoms (Of_Unit, Item, Value) then
                declare
                   Done : constant String := Fresh;
                begin
@@ -3017,17 +3023,10 @@ package body Landin.Backend.Cortex_M is
                      Extend ("r0", Kind (Value));
                      if Size_Of_Value (Value) /= Landin.Targets.Byte_8 then
                         declare
-                           Bits : constant Natural := Natural
-                             (Landin.Types.Width
-                               (Landin.Types.Integer_Name (Kind (Value)),
-                                Facts));
                            Minimum : constant Landin.Types.Folded :=
-                             (if Signed then -Landin.Types.Folded
-                                (2 ** (Bits - 1)) else 0);
+                             Landin.Types.Lowest (Kind (Value), Facts);
                            Maximum : constant Landin.Types.Folded :=
-                             (if Signed then Landin.Types.Folded
-                                (2 ** (Bits - 1) - 1)
-                              else Landin.Types.Folded (2 ** Bits - 1));
+                             Landin.Types.Highest (Kind (Value), Facts);
                            Lower : constant Landin.Types.Folded :=
                              Landin.IR.Range_Lower (Of_Unit, Item, Value);
                            Upper : constant Landin.Types.Folded :=
@@ -3054,25 +3053,40 @@ package body Landin.Backend.Cortex_M is
                         end;
                      else
                         for Upper in Boolean loop
-                           declare
-                              Bound : constant Pattern := To_Pattern
-                                ((if Upper then Landin.IR.Range_Upper
-                                    (Of_Unit, Item, Value)
-                                  else Landin.IR.Range_Lower
-                                    (Of_Unit, Item, Value)), 64);
-                              Next : constant String := Fresh;
-                           begin
-                              Immediate ("r2", Bound and 16#FFFF_FFFF#);
-                              Immediate ("r3", Bound / 2 ** 32);
-                              Emit ("cmp r1, r3");
-                              Branch ((if Upper then
-                                (if Signed then "gt" else "hi")
-                                else (if Signed then "lt" else "cc")), Trap);
-                              Branch ("ne", Next);
-                              Emit ("cmp r0, r2");
-                              Branch ((if Upper then "hi" else "cc"), Trap);
-                              Put (Next & ":");
-                           end;
+                           --  An edge at the type's own extreme passes
+                           --  every value, so it is not tested.
+                           if (if Upper
+                               then Landin.IR.Range_Upper
+                                      (Of_Unit, Item, Value)
+                                    < Landin.Types.Highest
+                                        (Kind (Value), Facts)
+                               else Landin.IR.Range_Lower
+                                      (Of_Unit, Item, Value)
+                                    > Landin.Types.Lowest
+                                        (Kind (Value), Facts))
+                           then
+                              declare
+                                 Bound : constant Pattern := To_Pattern
+                                   ((if Upper then Landin.IR.Range_Upper
+                                       (Of_Unit, Item, Value)
+                                     else Landin.IR.Range_Lower
+                                       (Of_Unit, Item, Value)), 64);
+                                 Next : constant String := Fresh;
+                              begin
+                                 Immediate ("r2", Bound and 16#FFFF_FFFF#);
+                                 Immediate ("r3", Bound / 2 ** 32);
+                                 Emit ("cmp r1, r3");
+                                 Branch
+                                   ((if Upper then
+                                       (if Signed then "gt" else "hi")
+                                     else (if Signed then "lt" else "cc")),
+                                    Trap);
+                                 Branch ("ne", Next);
+                                 Emit ("cmp r0, r2");
+                                 Branch ((if Upper then "hi" else "cc"), Trap);
+                                 Put (Next & ":");
+                              end;
+                           end if;
                         end loop;
                      end if;
                      Store_Value (Value);

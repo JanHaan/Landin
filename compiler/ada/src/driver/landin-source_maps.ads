@@ -6,9 +6,24 @@
 with Ada.Strings.Unbounded;
 with Landin.Stages;
 with Landin.Panics;
+with Landin.Source;
 with Landin.Source_Digests;
 
 package Landin.Source_Maps is
+   --  D422: where a library module's files are recorded.  Debug
+   --  information and this table name a file of `core`, `hosted` or
+   --  `platform` by this prefix, its module path and its own name,
+   --  `/landin-library/core/vec/vec.ldn`, never by where the library was
+   --  installed; a debugger maps the prefix to the directory
+   --  `refine version` names.  Every other file keeps the path it was read
+   --  from, which is how a debugger finds it beside the compilation
+   --  directory.
+   Library_Prefix : constant String := "/landin-library";
+
+   function Recorded_Name
+     (Context : aliased in out Landin.Stages.Compilation;
+      Id      : Landin.Source.Source_Id) return String;
+
    type Artifact is record
       Build_Id : String (1 .. 64);
       JSON : Ada.Strings.Unbounded.Unbounded_String;

@@ -16,9 +16,9 @@ a14: atom
 a15: atom
 mode: type = u64 (
     a0 = 0xffff_ffff_ffff_ffff | a1 = 1 | a2 = 14 | a3 = 3
-  | a4 = 12 | a5 = 5 | a6 = 10 | a7 = 7
-  | a8 = 0x8000_0000_0000_0000 | a9 = 9 | a10 = 6 | a11 = 11
-  | a12 = 4 | a13 = 13 | a14 = 2 | a15 = 0
+    | a4 = 12 | a5 = 5 | a6 = 10 | a7 = 7
+    | a8 = 0x8000_0000_0000_0000 | a9 = 9 | a10 = 6 | a11 = 11
+    | a12 = 4 | a13 = 13 | a14 = 2 | a15 = 0
 )
 image: type = layout(packed, u64) struct
     field: mode at 0..63

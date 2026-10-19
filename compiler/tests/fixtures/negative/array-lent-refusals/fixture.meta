@@ -1,5 +1,5 @@
 class: negative
-summary: an array literal is not lent to a writable slice parameter, an immutable array is not lent writable, neither is lent as a utf8 view, and a generic routine's literal argument takes no shape from its slice parameter
+summary: an array literal is not lent to a writable slice parameter, an immutable array is not lent writable, neither is lent as a utf8 view, and a literal takes no shape from a generic routine's slice parameter whose element type is a formal
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/array-lent-refusals
 status: 1

@@ -43,7 +43,7 @@ public extern(c) l_connection_write: () -> (result: i32) =
         io.write(host, client, "anyone?") else (problem)
             _ = problem
             result = if system.last_errno(host) == posix.number(posix.epipe)
-            then 1 else 4 end if
+                     then 1 else 4 end if
             break
         end
         break when time.now(host) >= deadline

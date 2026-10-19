@@ -1,8 +1,9 @@
 with GNAT.SHA256;
 
 with Landin.Byte_Encoding;
+with Landin.Driver.Library;
 with Landin.IR;
-with Landin.Source;
+with Landin.Modules;
 with Landin.Backend.Toolchain;
 
 package body Landin.Source_Maps is
@@ -12,6 +13,37 @@ package body Landin.Source_Maps is
 
    function Hex (Value : String) return String
      renames Landin.Byte_Encoding.Hex;
+
+   function Recorded_Name
+     (Context : aliased in out Landin.Stages.Compilation;
+      Id      : Landin.Source.Source_Id) return String
+   is
+      use type Landin.Modules.Module_Id;
+      Name : constant String :=
+        Landin.Source.Name (Landin.Stages.Source (Context, Id));
+      Modules : Landin.Modules.Table renames
+        Landin.Stages.Modules (Context).all;
+      Module : constant Landin.Modules.Module_Id :=
+        (if Natural (Id) <= Landin.Modules.Source_Count (Modules)
+         then Landin.Modules.Module_Of (Modules, Id)
+         else Landin.Modules.No_Module);
+      Base : Natural := Name'First;
+   begin
+      if Module = Landin.Modules.No_Module
+        or else not Landin.Driver.Library.Is_Library_Import
+          (Landin.Modules.Logical_Path (Modules, Module))
+      then
+         return Name;
+      end if;
+      for Index in Name'Range loop
+         if Name (Index) = '/' then
+            Base := Index + 1;
+         end if;
+      end loop;
+      return Library_Prefix & "/"
+        & Landin.Modules.Logical_Path (Modules, Module) & "/"
+        & Name (Base .. Name'Last);
+   end Recorded_Name;
 
    procedure Update_Assembly
      (Hash : in out GNAT.SHA256.Context;
@@ -68,7 +100,7 @@ package body Landin.Source_Maps is
             --  quotes and newlines. The lookup tool decodes filesystem bytes.
             US.Append (Files, "    {""file_id"":"
               & Landin.Source.Source_Id'Image (Id)
-              & ",""path_hex"":""" & Hex (Landin.Source.Name (Snap))
+              & ",""path_hex"":""" & Hex (Recorded_Name (Context, Id))
               & """,""source_sha256"":"""
               & (if Digests = null
                  then GNAT.SHA256.Digest (Landin.Source.Text (Snap))

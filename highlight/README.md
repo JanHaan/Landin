@@ -31,14 +31,36 @@ packages also provide editor features such as indentation, folds, text
 objects or an outline where their host supports them.
 Helix, Zed, and Emacs fetch the tree-sitter grammar at the fixed commit
 recorded in their packages, matching the queries and mode rules in this
-checkout. When changing the grammar or queries, commit those changes first,
-then update all three revisions to that commit before distributing the
-packages. `highlight/test_adapters.py` checks the full commit IDs and equality
-in every distribution. In a Git checkout with the pinned commit available, it
-also compares the shipped grammar and queries against that commit. A shallow
-checkout missing the commit reports that it skipped this comparison; fetch the
-commit for the full check. The gate's editor-grammar job checks out full history
-so that it always runs the comparison.
+checkout. A commit is what each of them can fetch, so the pin is a full commit
+ID: one on the branch whose grammar and shipped queries are this checkout's.
+When changing them, commit those changes first, then run
+
+```sh
+python3 highlight/grammar_pin.py          # move all three pins to the last
+                                          # commit on HEAD that changed them
+python3 highlight/grammar_pin.py --check  # or only check them
+```
+
+and commit the three manifests it rewrote, as their own commit. It refuses
+while the grammar or queries have uncommitted changes, since no commit holds
+them yet.
+
+A rebase across the grammar commit rewrites it, and the pins then name a
+commit that is no longer on the branch, which an editor could not fetch once
+the branch is pushed. The grammar's content is unchanged, so the repair is
+mechanical: after the rebase, run `python3 highlight/grammar_pin.py` and commit
+the result, or fold it into the pin commit the rebase replayed. Tags would
+survive a rebase too, but each would have to be set and pushed at promotion;
+the recomputed commit needs nothing outside the branch.
+
+`highlight/test_adapters.py` checks the full commit IDs and equality in every
+distribution. In a Git checkout with the pinned commit available, it also
+compares the shipped grammar and queries against that commit and requires the
+commit to be on the checked-out branch; each refusal names the commit
+`grammar_pin.py` would move the pins to. A shallow checkout missing the commit
+reports that it skipped this comparison; fetch the commit for the full check.
+The gate's editor-grammar job checks out full history so that it always runs
+the comparison.
 
 | editor or tool | package | installation |
 |---|---|---|
@@ -129,6 +151,15 @@ python3 highlight/generate.py --check
 LANDIN_REFINE=/absolute/path/to/refine ./highlight/test.sh --lsp-emacs
                                     # require Emacs to launch refine lsp
 ```
+
+`test.sh` checks the editor pins last, after every other pass, so a grammar
+change that is not yet committed still gets its structural and
+`--integration` verdicts, each printed as it passes; the run then fails on the
+pin, as the gate's does, until the change is committed and the pins moved.
+Its tree-sitter pass compiles the parser into a fresh cache; the CLI run by
+hand reuses a cached one, which can be another grammar's, as
+[`tree-sitter/README.md`](tree-sitter/README.md#the-cli-runs-a-cached-parser)
+explains.
 
 The default test never builds or invokes the compiler. Its mandatory path is
 standard-library-only: it scans the lexical fixture, exercises the TextMate

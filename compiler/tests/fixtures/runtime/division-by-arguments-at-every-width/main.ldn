@@ -31,23 +31,23 @@ end quotient_64
 
 public main: () -> (code: i32) =
     if quotient_32(7, 2) == 3
-        and quotient_32(-7, 2) == -3
-        and quotient_32(7, -2) == -3
-        and quotient_32(-2147483648, 1) == -2147483648
-        and quotient_32(-2147483647, -1) == 2147483647
-        and remainder_32(7, 2) == 1
-        and remainder_32(-7, 2) == -1
-        and remainder_32(7, -2) == 1
-        and remainder_32(-2147483648, -1) == 0
-        and remainder_32(-2147483648, 3) == -2
-        and unsigned_quotient_32(4294967295, 2) == 2147483647
-        and unsigned_quotient_32(4294967295, 4294967295) == 1
-        and unsigned_remainder_32(4294967295, 10) == 5
-        and unsigned_remainder_32(3, 4294967295) == 3
-        and quotient_8(-128, 3) == -42
-        and quotient_8(127, -1) == -127
-        and remainder_16(65535, 256) == 255
-        and quotient_64(-9223372036854775807, 2) == -4611686018427387903
+      and quotient_32(-7, 2) == -3
+      and quotient_32(7, -2) == -3
+      and quotient_32(-2147483648, 1) == -2147483648
+      and quotient_32(-2147483647, -1) == 2147483647
+      and remainder_32(7, 2) == 1
+      and remainder_32(-7, 2) == -1
+      and remainder_32(7, -2) == 1
+      and remainder_32(-2147483648, -1) == 0
+      and remainder_32(-2147483648, 3) == -2
+      and unsigned_quotient_32(4294967295, 2) == 2147483647
+      and unsigned_quotient_32(4294967295, 4294967295) == 1
+      and unsigned_remainder_32(4294967295, 10) == 5
+      and unsigned_remainder_32(3, 4294967295) == 3
+      and quotient_8(-128, 3) == -42
+      and quotient_8(127, -1) == -127
+      and remainder_16(65535, 256) == 255
+      and quotient_64(-9223372036854775807, 2) == -4611686018427387903
     then
         code = 42
     else

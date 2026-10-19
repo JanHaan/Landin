@@ -59,13 +59,13 @@ add_second: (self: ptr mut second, delta: i32) -> (answer: i32) =
 end add_second
 
 take_second: (self: ptr second, source: ptr mut cell, stop: bool)
-      -> (result: ptr mut cell from source) ! problems =
+             -> (result: ptr mut cell from source) ! problems =
     fail problem when stop
     result = source
 end take_second
 
 reerase_second: (self: ptr mut second)
-      -> (result: any counter from self) =
+                -> (result: any counter from self) =
     result = any(self)
 end reerase_second
 
@@ -84,13 +84,13 @@ add_first: (self: ptr mut first, n: i32) -> (answer: i32) =
 end add_first
 
 take_first: (self: ptr first, source: ptr mut cell, stop: bool)
-      -> (result: ptr mut cell from source) ! problems =
+            -> (result: ptr mut cell from source) ! problems =
     fail problem when stop
     result = source
 end take_first
 
 reerase_first: (self: ptr mut first)
-      -> (result: any counter from self) =
+               -> (result: any counter from self) =
     result = any(self)
 end reerase_first
 

@@ -1,0 +1,6 @@
+--  A `public main` in a hosted program's entry module that is not the
+--  entry, here for its result's name, is refused when the program is
+--  checked, as compiling it is, before any link misses `main`.
+public main: () -> (status: i32) =
+    status = 0
+end main

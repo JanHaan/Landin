@@ -86,15 +86,15 @@ public main: () -> (code: i32) =
 
     code = 1
     if first == 11
-       and copy.handler(10) == 12 and copy.tail == 3
-       and alias.handler(1) == 2
-       and anonymous.handler(1) == 4
-       and nested_call() == 6
-       and array_call() == 13
-       and computed_call(1) == 6
-       and variant_call() == 11
-       and apply_box(make_box(plus_two), 5) == 12
-       and recovered == 42
+      and copy.handler(10) == 12 and copy.tail == 3
+      and alias.handler(1) == 2
+      and anonymous.handler(1) == 4
+      and nested_call() == 6
+      and array_call() == 13
+      and computed_call(1) == 6
+      and variant_call() == 11
+      and apply_box(make_box(plus_two), 5) == 12
+      and recovered == 42
     then
         code = 42
     end if

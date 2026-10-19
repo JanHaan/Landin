@@ -21,37 +21,37 @@ public main: () -> (code: i32) =
     maximum: usize = 0 -% 1
     mut value := tree.new()
     a: tree.node_id = tree.add_leaf(value, counted, "a") else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     b: tree.node_id = tree.add_leaf(value, counted, "b") else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     c: tree.node_id = tree.add_leaf(value, counted, "c") else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     root: tree.node_id = tree.add_branch(value, counted, "root", a,
                                          three_count)
         else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     three: usize = tree.count_leaves(value, root) else 0
     zero: tree.node_id = tree.add_branch(value, counted, "empty", a,
                                          zero_count)
         else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     empty: usize = tree.count_leaves(value, zero) else 1
     shared: tree.node_id = tree.add_branch(value, counted, "shared", a,
                                            four_count)
         else (problem)
-            _ = problem
-            return
-        end
+        _ = problem
+        return
+    end
     six: usize = tree.count_leaves(value, shared) else 0
     mut deep: tree.node_id = root
     mut at: usize = 0
@@ -96,10 +96,10 @@ public main: () -> (code: i32) =
     mut invalid: bool = false
     _ = tree.add_branch(value, counted, "invalid", c, maximum)
         else (problem)
-            _ = problem
-            invalid = true
-            return_id()
-        end
+        _ = problem
+        invalid = true
+        return_id()
+    end
     unchanged: bool = tree.length(value) == before
     tree.release(value, counted)
     if three == 3 and empty == 0 and six == 6 and deep_count == 3

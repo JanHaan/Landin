@@ -62,7 +62,9 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "compiler/tests"))
 import build_lock  # noqa: E402
+import fixture_meta  # noqa: E402
 
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
            "freebsd-x86-64", "freebsd-arm64", "linux-rv64")
@@ -169,18 +171,10 @@ def operands(fixture):
     of the module after it.  A fixture that names no program is a fault
     here rather than a skip.
     """
-    meta = {}
-    for line in (fixture / "fixture.meta").read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and ":" in line:
-            key, value = line.split(":", 1)
-            meta[key.strip()] = value.strip()
+    meta = fixture_meta.read(fixture, strict=False)
     if not meta.get("program"):
         raise SystemExit("%s: fixture.meta names no program" % fixture.name)
-    if meta.get("root"):
-        return ["--root=" + meta["root"], "."]
-    rest = [one.strip() for one in meta.get("with", "").split(",") if one.strip()]
-    return [meta["program"]] + rest
+    return meta.module_arguments(".")
 
 
 def compile_one(job):
@@ -320,12 +314,8 @@ def mode_entries(root, targets):
                               if p.is_dir()):
             wanted = targets
             if kind == "runtime":
-                named = set()
-                for line in (fixture / "fixture.meta").read_text().splitlines():
-                    if line.startswith("targets:"):
-                        #  `targets:` spells each as `--target` does.
-                        named = {one.strip()
-                                 for one in line.split(":", 1)[1].split(",")}
+                #  `targets:` spells each as `--target` does.
+                named = fixture_meta.read(fixture, strict=False).targets
                 wanted = tuple(t for t in targets if t in named)
             if wanted:
                 entries.append((kind + "/" + fixture.name, fixture,

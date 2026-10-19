@@ -253,6 +253,23 @@ package body Landin.Tests.Mutation_Suite is
       State     : Word := Seed;  --  reset from Seed_For for each program
       Counted   : Tally;
       Log       : Unbounded.Unbounded_String;
+
+      --  The first few mutants each rule failed on, each with the report
+      --  that broke it, so a failure names the mutant and the report and
+      --  not only how many there were.
+      type Rule is (Outside_Rule, Body_Rule, Unclosed_Rule, Token_Rule,
+                    Secondary_Rule);
+      Shown_Limit : constant := 5;
+      Shown  : array (Rule) of Unbounded.Unbounded_String;
+      Shown_Count : array (Rule) of Natural := [others => 0];
+
+      --  A rule's examples for its failure text, or "".
+      function Examples (Of_Rule : Rule) return String
+        is (if Shown_Count (Of_Rule) = 0 then ""
+            else "; the first of them, PROGRAM:LINE, each written to "
+              & Scratch & "/kept-mutant.ldn by"
+              & " LANDIN_MUTATION_KEEP=PROGRAM:LINE:" & LF
+              & Unbounded.To_String (Shown (Of_Rule)));
       Programs  : Natural := 0;
 
       --  Every token of a program's text, and whether it lies in a
@@ -297,6 +314,35 @@ package body Landin.Tests.Mutation_Suite is
          Flags : Unbounded.Unbounded_String;
          Outside, Unclosed, No_Declaration, Off_Token, Repeated :
            Boolean := False;
+         --  The report that broke each rule, for Shown.
+         Broke : array (Rule) of Unbounded.Unbounded_String;
+
+         procedure Breaks (Of_Rule : Rule; Report : Diag.Diagnostic);
+
+         procedure Breaks (Of_Rule : Rule; Report : Diag.Diagnostic) is
+         begin
+            if Unbounded.Length (Broke (Of_Rule)) = 0 then
+               Broke (Of_Rule) := Unbounded.To_Unbounded_String
+                 (Diag.Code (Report) & " "
+                  & Diag.Message (Diag.Primary (Report)) & " at line"
+                  & Image (Line_Of (Mutant, Diag.Span_Of
+                      (Diag.Primary (Report)).First)));
+            end if;
+         end Breaks;
+
+         procedure Show (Of_Rule : Rule);
+
+         procedure Show (Of_Rule : Rule) is
+         begin
+            Shown_Count (Of_Rule) := Shown_Count (Of_Rule) + 1;
+            if Shown_Count (Of_Rule) <= Shown_Limit then
+               Unbounded.Append
+                 (Shown (Of_Rule),
+                  "        " & Label & ":" & Image (Line) & " "
+                  & Kind'Image & " `" & Touched & "` reports "
+                  & Unbounded.To_String (Broke (Of_Rule)) & LF);
+            end if;
+         end Show;
 
          --  Mutant token boundaries, for the on-a-token rule.
          Starts, Ends : array (0 .. Mutant'Length) of Boolean :=
@@ -436,6 +482,7 @@ package body Landin.Tests.Mutation_Suite is
                        or else Where.Last > Within.Last
                      then
                         Outside := True;
+                        Breaks (Outside_Rule, Report);
                      end if;
 
                      if Natural (Where.Last) > Mutant'Length
@@ -444,6 +491,7 @@ package body Landin.Tests.Mutation_Suite is
                        or else not Ends (Natural (Where.Last))
                      then
                         Off_Token := True;
+                        Breaks (Token_Rule, Report);
                      end if;
 
                      for Extra in 1 .. Diag.Label_Count (Report) loop
@@ -455,6 +503,7 @@ package body Landin.Tests.Mutation_Suite is
                              and then Diag.Span_Of (Other) = Where
                            then
                               Repeated := True;
+                              Breaks (Secondary_Rule, Report);
                            end if;
                         end;
                      end loop;
@@ -462,12 +511,14 @@ package body Landin.Tests.Mutation_Suite is
 
                   if Diag.Code (Report) = "L0104" and then not Excused then
                      Unclosed := True;
+                     Breaks (Unclosed_Rule, Report);
                   end if;
                   --  The parser read the rest of the body as the
                   --  declarations of a file, wherever the report lands.
                   if Diag.Message (Primary) = "this begins no declaration"
                   then
                      No_Declaration := True;
+                     Breaks (Body_Rule, Report);
                   end if;
                end if;
             end;
@@ -494,23 +545,28 @@ package body Landin.Tests.Mutation_Suite is
          end if;
          if Outside then
             Counted.Outside := Counted.Outside + 1;
+            Show (Outside_Rule);
             Unbounded.Append (Flags, " outside");
          end if;
          if Unclosed then
             Counted.False_Unclosed := Counted.False_Unclosed + 1;
+            Show (Unclosed_Rule);
             Unbounded.Append (Flags, " false-unclosed");
          end if;
          if No_Declaration then
             Counted.Begins_No_Declaration :=
               Counted.Begins_No_Declaration + 1;
+            Show (Body_Rule);
             Unbounded.Append (Flags, " left-the-body");
          end if;
          if Off_Token then
             Counted.Off_Token := Counted.Off_Token + 1;
+            Show (Token_Rule);
             Unbounded.Append (Flags, " off-token");
          end if;
          if Repeated then
             Counted.Repeated_Secondary := Counted.Repeated_Secondary + 1;
+            Show (Secondary_Rule);
             Unbounded.Append (Flags, " repeated-secondary");
          end if;
          if Errors /= 1 or else First_Line /= Line then
@@ -799,19 +855,22 @@ package body Landin.Tests.Mutation_Suite is
             & Summary);
          Landin.Testing.Check_Equal
            (Item, Counted.Outside, 0,
-            "no mutant reports outside its function");
+            "no mutant reports outside its function"
+            & Examples (Outside_Rule));
          Landin.Testing.Check_Equal
            (Item, Counted.Begins_No_Declaration, 0,
-            "no mutant leaves the body it is in");
+            "no mutant leaves the body it is in" & Examples (Body_Rule));
          Landin.Testing.Check_Equal
            (Item, Counted.False_Unclosed, 0,
-            "no mutant claims that a closer it has is missing");
+            "no mutant claims that a closer it has is missing"
+            & Examples (Unclosed_Rule));
          Landin.Testing.Check_Equal
            (Item, Counted.Off_Token, 0,
-            "every primary span is on a token");
+            "every primary span is on a token" & Examples (Token_Rule));
          Landin.Testing.Check_Equal
            (Item, Counted.Repeated_Secondary, 0,
-            "no secondary label repeats its primary span");
+            "no secondary label repeats its primary span"
+            & Examples (Secondary_Rule));
       end;
    end One_Mistake_Gives_One_Report;
 

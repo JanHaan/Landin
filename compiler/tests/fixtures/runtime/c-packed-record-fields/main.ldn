@@ -42,12 +42,12 @@ end filled
 --- Whether a record holds what `filled` gave it.
 holds: (record: wire, seed: u8) -> (yes: bool) =
     yes = record.kind == seed and record.half == 0x1234 + u16(seed)
-      and record.word == 0x89ab_cdef
-      and record.long == 0x0102_0304_0506_0708
-      and record.signed == -123_456 and record.single == 1.5
-      and record.double == -2.25 and record.flag
-      and record.size == 0x7766_5544 and record.bytes[0] == seed
-      and record.bytes[2] == 3
+          and record.word == 0x89ab_cdef
+          and record.long == 0x0102_0304_0506_0708
+          and record.signed == -123_456 and record.single == 1.5
+          and record.double == -2.25 and record.flag
+          and record.size == 0x7766_5544 and record.bytes[0] == seed
+          and record.bytes[2] == 3
 end holds
 
 public main: () -> (code: i32) =

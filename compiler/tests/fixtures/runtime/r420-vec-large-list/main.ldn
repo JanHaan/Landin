@@ -11,7 +11,7 @@ contents_ok: (values: vec.list(u32), middle: usize, last: usize)
     middle_value: u32 = vec.get(values, middle) else 0
     last_value: u32 = vec.get(values, last) else 0
     ok = first_value == 0 and middle_value == 32767
-      and last_value == 65535
+         and last_value == 65535
 end contents_ok
 
 public main: () -> (code: i32) =
@@ -22,7 +22,7 @@ public main: () -> (code: i32) =
     allowance: usize = 14
     mut arena_space: arena.space = zeroed
     memory := arena.over_unchecked(arena_space, addr backing[0],
-                                      lenof backing)
+                                   lenof backing)
     mut space: fault.space = zeroed
     counted := fault.over(space, memory, allowance)
     mut values := vec.new(item: u32)

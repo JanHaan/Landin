@@ -409,8 +409,15 @@ This is the maintained inventory of what the compiler does today:
   field begins, `compiler.assert` measures a declared type's size, alignment
   and field offsets, and `else (problem)` recovers a call in
   an `if` arm as anywhere else; `else none` ignores the failure of a call
-  that returns none. A module binding of function type may be
-  written on one line, `chosen: () -> (v: i32) = seven`. Generics take fixed
+  that returns none. A distinct type compares wherever its base does,
+  updates flags in place with `|=`, `&=` and `^=`, and has its base's zero
+  image; a pointer union compares with one of its own atoms; a match's
+  `_ (rest):` arm binds the atoms no other arm named, and `ptr (sink p):`
+  consumes the matched place; destructured results are local places; an
+  assignment on every edge leaving a loop holds after it; and module arrays
+  hold variant-bearing struct images. A module binding of function type may be
+  written on one line, `chosen: () -> (v: i32) = seven`, and an immutable
+  module integer sizes an array, `[path_max]u8` (D438). Generics take fixed
   parameters by compile-time substitution, an untyped literal argument takes
   its parameter's type, and a fixed array is lent to a generic slice
   parameter; concepts carry a whole-program conformance register. Generic
@@ -525,7 +532,8 @@ This is the maintained inventory of what the compiler does today:
   last-field flexible array member, both passed to C by pointer, callbacks
   and variadic calls, a C function value made from an address a loader
   found, with [`bindings/`](bindings/README.md) generating
-  bindings from an external Clang's view of a header. Unsupported C forms are
+  bindings, packed and flexible-member records among them, from an
+  external Clang's view of a header. Unsupported C forms are
   refused by name. Only the entry, C imports, public C definitions, link names and
   Cortex-M placements are global symbols; every other routine and datum,
   public or not, is local to the image, so none meets the C library's names.
@@ -553,7 +561,9 @@ This is the maintained inventory of what the compiler does today:
   sets: `rv64gc` is the baseline, `rv64gc_zba` and `rv64gc_xtheadba` add
   independent address-generation extensions, and `rv64gc_zba_xtheadba`
   selects both. A program reads a level as
-  `compiler.feature.NAME` in `fixed if`. A level changes instructions and
+  `compiler.feature.NAME` in `fixed if` or in a module value, which a
+  routine body then branches on, and every compiler fact reads the same way
+  (D437). A level changes instructions and
   never layout or ABI: BMI2 shifts at `x86-64-v3`, LSE atomics at
   `armv8.1-a` on Linux, macOS and FreeBSD, and hardware division at `armv7-m`, each
   executed at both levels, the last on QEMU's Cortex-M3. The assembler holds
@@ -569,7 +579,11 @@ This is the maintained inventory of what the compiler does today:
   identity on Darwin, and line and function debugging on Cortex-M0. At speed
   a local held in a register is described past its last use until the
   register is written over, and the GDB and LLDB sessions read such locals
-  there. Debug
+  there. An atom set is described as an enumeration, so a debugger prints
+  an atom's name; a generic instance is a symbol named after its routine;
+  and a library file is recorded as `/landin-library/` and its module path,
+  never where the library was installed, which a session maps to the
+  directory `refine version` names. Debug
   provenance stays independent of DWARF for a possible future PDB emitter; PDB
   is not implemented.
 - **Derived programs.** Prototypes 2, 3 and 4 run as the recovering

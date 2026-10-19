@@ -1,0 +1,10 @@
+error[L0328]: this array has no all-bits-zero value
+  --> ../tests/fixtures/negative/an-array-of-none-is-offered-an-empty-slice/program.ldn:4:25
+  |
+4 |     empty: [0]ptr i32 = zeroed
+  |                         ^^^^^^
+  --> ../tests/fixtures/negative/an-array-of-none-is-offered-an-empty-slice/program.ldn:4:12
+  |
+4 |     empty: [0]ptr i32 = zeroed
+  |            ^^^^^^^^^^ the array type written here
+  = note: [0540]/[0570]: the element type has no zero image, and an array of none has no element to fill it from; declare a slice of the element type and give it `[]`, which holds none

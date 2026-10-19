@@ -1,0 +1,8 @@
+class: end-to-end
+summary: refine check refuses a public main that is not the hosted entry with L0502, as compile does
+program: main.ldn
+constructs: 1970
+targets: linux-x86-64
+expect: expected.txt
+args: check --target=linux-x86-64 ../tests/fixtures/end-to-end/check-refuses-a-public-main-that-is-not-the-entry/main.ldn
+status: 1

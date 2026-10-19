@@ -12,8 +12,8 @@ public main: () -> (code: i32) =
     chosen: u32 = pick(source)
     advance(source)
     code = if chosen == 17 and lenof source == 1 and source[0] == 25 then
-        42
-    else
-        1
-    end if
+               42
+           else
+               1
+           end if
 end main

@@ -1,0 +1,20 @@
+--  D431: a final control whose only answers trap is a statement, so each
+--  arm that falls through has to have assigned the named return itself.
+dot: atom
+box: atom
+shape: type = dot | box
+
+matched: (s: shape, c: bool) -> (r: i32) =
+    match s
+        dot: if c then
+            r = 1
+        end if
+        box: compiler.unreachable()
+    end match
+end matched
+
+tested: (c: bool) -> (r: i32) =
+    if c then
+        compiler.unreachable()
+    end if
+end tested

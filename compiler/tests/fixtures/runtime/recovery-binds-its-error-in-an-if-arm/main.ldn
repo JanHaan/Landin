@@ -36,12 +36,12 @@ public main: () -> (code: i32) =
         total += (checked(0) else 1)
     end if
     picked := if total == 16 then
-        checked(7) else (problem)
-            _ = problem
-            0
-        end
-    else
-        99
-    end if
+                  checked(7) else (problem)
+                      _ = problem
+                      0
+                  end
+              else
+                  99
+              end if
     code = i32(total + picked + calls) + 15
 end main

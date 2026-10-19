@@ -1287,13 +1287,19 @@ package body Landin.Syntax.Repairs is
             Consider ((Appended, Natural (Pieces.Length), Asked));
             --  A word that says what a statement or an operand does is
             --  never removed to mend it: the line would parse and mean
-            --  something else, which no repair may do quietly.
+            --  something else, which no repair may do quietly.  Nor is a
+            --  literal, which is a value the program computes with, unless
+            --  it is one copy of the same literal written twice in a row.
             for Position in 1 .. Natural (Pieces.Length) loop
                if Pieces (Position).Kind not in Tok.Kw_In | Tok.Kw_Inout
                  | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return
                  | Tok.Kw_Fail | Tok.Kw_Defer | Tok.Kw_Undo | Tok.Kw_Addr
                  and then Bytes (Pieces (Position).First
                                  .. Pieces (Position).Last) /= "lenof"
+                 and then
+                   (not Tok.Is_Literal (Pieces (Position).Kind)
+                    or else Removes_A_Copy
+                      ((Deleted, Position, Asked), Pieces))
                then
                   Consider ((Deleted, Position, Asked));
                end if;

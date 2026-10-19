@@ -21,12 +21,12 @@ public extern(c) r440_check_pointer_tails: (data: ptr mut i32, other: ptr mut i3
     -- Five promoted ints consume rsi through r9. Every pointer/code tail is
     -- now on the stack, including the empty optional pointer's zero carrier.
     direct_stack := r440_collect_pointers(1, 11, 22, 33, 44, 55,
-        data, present, absent, r440_callback)
+                                          data, present, absent, r440_callback)
     indirect_stack := indirect(1, 11, 22, 33, 44, 55,
-        data, present, absent, saved_callback)
+                               data, present, absent, saved_callback)
     result = 1
     if direct_register == 42 and indirect_register == 42
-       and direct_stack == 42 and indirect_stack == 42 then
+      and direct_stack == 42 and indirect_stack == 42 then
         result = 42
     end if
 end r440_check_pointer_tails

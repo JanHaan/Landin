@@ -230,21 +230,33 @@ class LineTableTests(unittest.TestCase):
 
     def test_rooted_directory_spelling_is_preserved(self) -> None:
         self.assertEqual(CHECK.check_line_table(
-            self.table("./core/map"), ("./core/map/map.ldn",)), [4])
+            self.table("./examples/map"), ("./examples/map/map.ldn",)), [4])
 
     def test_normalized_rooted_directory_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "wrong directory"):
             CHECK.check_line_table(
-                self.table("core/map"), ("./core/map/map.ldn",))
+                self.table("examples/map"), ("./examples/map/map.ldn",))
 
     def test_unprefixed_directory_still_matches(self) -> None:
         self.assertEqual(CHECK.check_line_table(
-            self.table("core/map"), ("core/map/map.ldn",)), [4])
+            self.table("examples/map"), ("examples/map/map.ldn",)), [4])
 
     def test_other_directory_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "wrong directory"):
             CHECK.check_line_table(
-                self.table("./core/vec"), ("./core/map/map.ldn",))
+                self.table("./examples/vec"), ("./examples/map/map.ldn",))
+
+    def test_library_file_is_recorded_under_the_prefix(self) -> None:
+        # D422: however a library file was read, it is recorded by its
+        # module path under /landin-library, never as it was spelled.
+        for spelling in ("./core/map/map.ldn", "core/map/map.ldn",
+                         str(CHECK.ROOT / "core/map/map.ldn")):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(CHECK.check_line_table(
+                    self.table("/landin-library/core/map"), (spelling,)), [4])
+                with self.assertRaisesRegex(ValueError, "wrong directory"):
+                    CHECK.check_line_table(
+                        self.table(os.path.dirname(spelling)), (spelling,))
 
 
 class ParserTranscriptTests(unittest.TestCase):
@@ -271,9 +283,10 @@ class ParserTranscriptTests(unittest.TestCase):
         for name, value in (
                 ("digits.accumulated", 4), ("digits.cursor", 27), ("digits.ends", 28),
                 ("digits-caller.accumulated", 0), ("digits-caller.cursor", 26),
-                ("recovery.depth", 0), ("recovery.look", 1),
+                ("recovery.depth", 0), ("recovery.look", "number"),
                 ("recovery.begins", 36), ("recovery.ends", 38),
-                ("nested.depth", 1), ("nested.look", 6), ("nested.begins", 48),
+                ("nested.depth", 1), ("nested.look", "newline"),
+                ("nested.begins", 48),
                 ("nested.source_length", 92), ("done.valid", 1),
                 ("done.source_length", 92), ("done.saw_out_of_memory", 1),
                 ("done.saw_io_failure", 1)):
@@ -309,7 +322,8 @@ class ParserTranscriptTests(unittest.TestCase):
                 CHECK.check_parser_transcript(self.transcript.replace(old, new), self.lines)
 
     def test_unavailable_or_wrong_state_is_rejected(self) -> None:
-        for name, value in (("digits-caller.accumulated", 0), ("recovery.look", 1),
+        for name, value in (("digits-caller.accumulated", 0),
+                            ("recovery.look", "number"),
                             ("nested.depth", 1), ("nested.source_length", 92),
                             ("done.valid", 1), ("done.saw_out_of_memory", 1),
                             ("done.saw_io_failure", 1)):
@@ -608,6 +622,43 @@ class WorkloadFrames(unittest.TestCase):
         declared, problems = self.computed(files, chosen)
         self.assertEqual(problems, [])
         self.assertEqual(declared["w"]["leaf"], "b/b.ldn")
+
+
+class BuildSourceTests(unittest.TestCase):
+    """A copied compiler reaches its library through a symlinked prefix."""
+
+    def test_a_library_behind_a_symlinked_prefix_is_this_checkout(self) -> None:
+        named = ("compiler/tests/debugging/main.ldn",)
+        library = sorted(str(path) for path in
+                         (CHECK.ROOT / "platform/linux").glob("*.ldn"))
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary) / "copied"
+            (prefix / "lib").mkdir(parents=True)
+            (prefix / "lib/landin").symlink_to(CHECK.ROOT)
+            reported = named + tuple(
+                str(prefix / "lib/landin" / Path(path).relative_to(CHECK.ROOT))
+                for path in library)
+            CHECK.check_build_sources(reported, named + tuple(library))
+
+    def test_another_library_is_refused_naming_both_paths(self) -> None:
+        named = ("compiler/tests/debugging/main.ldn",)
+        library = sorted(str(path) for path in
+                         (CHECK.ROOT / "platform/linux").glob("*.ldn"))
+        with tempfile.TemporaryDirectory() as temporary:
+            other = Path(temporary).resolve() / "base"
+            (other / "platform/linux").mkdir(parents=True)
+            link = Path(temporary) / "linked"
+            link.symlink_to(other)
+            reported = named + tuple(str(link / "platform/linux" / Path(path).name)
+                                     for path in library)
+            with self.assertRaises(ValueError) as refused:
+                CHECK.check_build_sources(reported, named + tuple(library))
+        text = str(refused.exception)
+        self.assertIn(f"{reported[1]} -> {other / 'platform/linux' / Path(library[0]).name}",
+                      text)
+        self.assertIn(library[0], text)
+        self.assertIn("reported:", text)
+        self.assertIn("expected:", text)
 
 
 if __name__ == "__main__":

@@ -16,19 +16,19 @@ public main: () -> (code: i32) =
     beyond_negative_8: i8 = -1 >> 8
 
     if within_8 == 192
-        and within_32 == 1073741824
-        and within_64 == 9223372036854775808
-        and logical_32 == 255
-        and logical_64 == 15
-        and arithmetic_32 == -16
-        and arithmetic_8 == -16
-        and beyond_left_8 == 0
-        and beyond_left_32 == 0
-        and beyond_left_64 == 0
-        and beyond_right_32 == 0
-        and beyond_right_64 == 0
-        and beyond_negative == 0
-        and beyond_negative_8 == 0
+      and within_32 == 1073741824
+      and within_64 == 9223372036854775808
+      and logical_32 == 255
+      and logical_64 == 15
+      and arithmetic_32 == -16
+      and arithmetic_8 == -16
+      and beyond_left_8 == 0
+      and beyond_left_32 == 0
+      and beyond_left_64 == 0
+      and beyond_right_32 == 0
+      and beyond_right_64 == 0
+      and beyond_negative == 0
+      and beyond_negative_8 == 0
     then
         code = 42
     else

@@ -1,0 +1,10 @@
+error[L0347]: this C link symbol's declarations differ only in `escaping` on `kept`, which this one writes and the other does not
+  --> ../tests/fixtures/negative/c-symbol-differs-only-in-escaping/root/keeper/keeper.ldn:2:18
+  |
+2 | public extern(c) keep_it: (escaping kept: ptr u8) -> none =
+  |                  ^^^^^^^
+  --> ../tests/fixtures/negative/c-symbol-differs-only-in-escaping/main.ldn:3:1
+  |
+3 | extern(c) link(symbol: "keep_it") keep_import: (kept: ptr u8) -> none
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the declaration it must agree with
+  = note: [1610]/D441: `escaping` is the retention contract a Landin caller through either declaration is checked against; repeat it on both

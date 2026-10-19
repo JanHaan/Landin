@@ -305,7 +305,12 @@ construct that required it. When a name near the required keyword stands in
 its place, such as `thne` for `then`, the diagnostic offers the keyword as a
 likely fix. An arm that names several cases binds no payload, so bindings
 after them are refused here: give the case whose payload is bound an arm of
-its own (D405).
+its own (D405). Only a name is indexed [0570], so a text literal followed by
+`[` is refused with the route, a name given to the text first; no repair
+removes the literal, which would change what the line computes. Nor is an
+applied type called to make a value: `list(i32)(items: ..., len: 3)` is
+refused naming the form that works, the fields in parentheses where the
+type is declared [1350].
 
 ```landin
 extern(c) bad: (...) -> none
@@ -376,7 +381,11 @@ end g
 ### L0110
 
 A run of tokens begins no declaration or statement [1740]. Often a keyword
-used as a name (D225), or a line left from an edit.
+used as a name (D225), or a line left from an edit. A `fixed if` inside a
+routine body is one too: it selects module declarations [1500], so declare a
+routine per system in a module-level `fixed if`, or branch with `if` on a
+module value that holds the fact, `on_linux: bool = compiler.os == linux`
+(D437).
 
 ```landin
 begin = 10
@@ -427,6 +436,15 @@ declares only in a `fixed if` arm this target does not select, a Linux call
 written for Darwin among them, is named as one this system does not have,
 since no spelling of it would be found here.
 
+A name applied to type arguments, `shlf(item)`, is the same misspelling and
+is offered the same near names. A payload-free case of a variant another
+module declares is written with that module's name, as everything public in
+it is [1440], so a bare `leaf` naming an imported module's case is offered
+`shapes.leaf`. A scalar type written as a positional argument of a generic
+routine is a type where a value belongs; the note writes the call with every
+argument named, the type given to the routine's type formal [1300], as
+`make_buffer(capacity: 4, t: u8)`.
+
 A parameter, result or local may hide an import of its own name [1450], so
 `time.duration` written where a result is called `time` names no type. The
 diagnostic says so, names the local and the import it hides, and points at
@@ -440,13 +458,21 @@ state := nowhere(value: 1)
 
 A declaration of another module is used and it is not `public` [1410]. The
 second label shows the declaration. Make it `public` in its module, or use
-something that module does export.
+something that module does export. A module-internal type's member that is an
+entry of a concept the type conforms to is reached through the public
+routine of the concept's module that calls it [1240], and the note names
+that routine as this file calls it: `memory.alloc(64, 1)` on a
+`hosted/heap` handle is `mem.allocate(memory, ...)`.
 
 ### L0203
 
 A tool namespace, `compiler`, `assembler` or `linker`, is bound or used in a
 way it does not allow [1560] (D202). Those three are in scope without an
 import and cannot be imported, rebound or given a member they do not have.
+A compiler fact is read in a fixed condition and in a module value (D437),
+never in a routine body: bind it, `fast: bool = compiler.feature.popcnt`, and
+let the body read the binding. `compiler.os` and the other atom facts are read
+compared with one of their atoms, `compiler.os == linux`.
 
 ## Types
 
@@ -471,6 +497,9 @@ has none [1820], an operator given an operand class it does not admit, a struct 
 or element type, a function of another signature [1000], or a reference of
 another permission [0440]. The second label shows where the requirement was
 stated. Change the value, or convert it explicitly where a conversion exists.
+A text literal takes `utf8`, `[]u8`, `utf16` or `cstring` from its context but
+never a pointer; for a `ptr u8` parameter, bind it, `name: []u8 = "..."`, and
+pass `addr name[0]`, since the literal ends in NUL (D442).
 
 ```landin
 flag: bool = true
@@ -534,9 +563,12 @@ without payload may be bare; write a payload case with labelled fields.
 
 An array literal [0520] takes its shape from where it is written: an array
 destination, an inferred binding, or the argument of a read-only slice
-parameter of a routine that is not generic, which it lends a slice of
-storage made in the caller's frame for the call. An argument of a generic
-routine is typed on its own (D138), so there it needs a named array first.
+parameter, which it lends a slice of storage made in the caller's frame for
+the call. A generic routine's slice parameter gives one only when its element
+type names no formal (D419); where the element type is a formal, deduced
+from the arguments, the report names the binding to pass instead,
+`values := [...]`, or `values: [N]E = [...]` when an element such as
+`any(addr x)` needs a context, which an inferred binding does not give.
 
 ```landin
 holder: type = struct
@@ -562,7 +594,10 @@ configuration expression can depend on a runtime value or call, contain an
 unknown fixed name or form, or depend on itself, within one module or through
 several. A fixed condition or option default measures scalar types only: a
 declared type's size, alignment or field offset is measured by
-`compiler.assert`, once checking has laid the type out (D412). Change such an expression to one the closed fold can evaluate. A value
+`compiler.assert`, once checking has laid the type out (D412). An array bound
+may name an immutable module integer whose own image is a count, literals,
+compiler facts and other such integers under `+ - * / %`, but not a `mut` one,
+which the program may write (D438). Change such an expression to one the closed fold can evaluate. A value
 another module exports, named through that module as `sizes.page`, is known as
 it is in its own module; a field of a record image, an element of an array
 image and a call are not, in either. A module function binding without an
@@ -715,7 +750,11 @@ end bad
 ### L0315
 
 A place is changed while a view derived from it is still in use [0800] [0830].
-Finish with the view first, or take it again after the change.
+Finish with the view first, or take it again after the change. An argument
+passed `inout` or `sink` counts as changed whether or not the routine writes
+it: the convention locks it, and the diagnostic names the parameter whose
+convention does, the view still in use, and, for `inout`, that a routine
+which only reads the parameter may take it without `inout`.
 
 ```landin
 mutate: (inout source: []mut u32) -> none =
@@ -731,7 +770,10 @@ end bad
 ### L0316
 
 A returned reference must derive from exactly the parameters its `from`
-names [0790]. Name the source, or return something derived from it.
+names [0790]. Name the source, or return something derived from it. A
+provider's entry whose result has no `from`, such as an allocator's `resize`
+returning the block it was given, returns `ptr(usize(block))`: an allocation
+borrows nothing, and [0810]'s conversion says so (D440).
 
 ```landin
 bad: (source: ptr u32) -> (pointer: ptr u32) =
@@ -826,6 +868,8 @@ Split the routine or reduce the fields in the body or case.
 
 A warning about legal source: a local binding is declared `mut` and
 nothing writes it, steps it, passes it `inout` or takes a mutable view of it.
+An address erased into `any C` whose entries only read through their receiver
+is a read, so it does not count.
 Without `mut` it means the same, so the diagnostic offers removing the word
 as an exact fix when only blanks separate it from the name. Comments or line
 breaks retain the observation without an automatic edit. The language permits
@@ -865,14 +909,19 @@ f: () -> (r: i32) = add(a: 1) end f
 `zeroed` or an implicit initializer has no complete zero image to supply
 [0540]. `zeroed`, an implicit module initializer, and a module atom binding
 without an initializer [0630] each need the destination type's all-bits-zero
-image. A pointer, function address, atom set without a zero identity, or
-aggregate containing one has no such image, and `zeroed` nested in an
-expression or used as an operand has no destination to take its type from.
+image. A pointer, function address, atom set without a zero identity, a
+distinct type over one, or aggregate containing one has no such image, and
+`zeroed` nested in an expression or used as an operand has no destination to
+take its type from. A distinct type over a number has its base's image, so a
+record holding one is zeroed, but `zeroed` does not construct the identity
+itself: write `name(0)` (D428).
 Give an explicit initializer that constructs a valid value, use a type with a
 zero image, or write `zeroed` as the whole value of a typed destination.
 
 Two routes cover most programs. An array whose element has no zero image is
-filled from one valid element, `[n of value]`, rather than zeroed. A
+filled from one valid element, `[n of value]`, rather than zeroed; an array of
+none has no element to fill it from, and `[0 of value]` is refused, so it is
+declared a slice of the element type and given `[]`, which holds none. A
 service's state is declared `zeroed` beside the caller's other storage, so it
 holds only scalars, and the references the service needs, the backing it was
 given or the provider it stacks on, live in the handle `over` returns from
@@ -920,7 +969,9 @@ operand is one integer register, named by its target-wide name or chosen with
 `general`, and never a stack, frame, link or reserved register. Every `{name}`
 in the template names one operand. A naked body is exactly one block. Change
 the operand, register or template as the note says, or move the operands
-into an assembly block.
+into an assembly block. A pointer crosses as `usize(p)`, and the routine around
+the block takes the storage as `ptr mut u8` or `[]mut u8`, the permission its
+callers are checked against (D440).
 
 ```landin
 record: (first: u32, second: u32) -> none = end record
@@ -941,6 +992,9 @@ unless the call is the whole operand of a discard, `_ = f() else none`
 An `if`, `match` or bare `begin` used as a statement takes no value from its
 branches, so a branch that ends with one would drop it; in an `if` arm that
 value is often a call's `else value` the `if` took as its own [1820].
+A `noreturn` call never returns at all [0890], so it is no value either: it
+ends the path where it stands, and the note says so rather than calling it a
+call that returns none.
 Destructuring binds the names of a multiple result, each at most once [0990].
 Discard the result explicitly, use a call that returns one, or bind the
 result names the signature declares.
@@ -980,8 +1034,11 @@ end main
 A `match` arm does not fit its subject [1210]. A subject is an atom set, a
 variant part or a pointer union. Each arm names a case or atom of that
 subject at most once (D77) [0640] [0480], and a name twice is L0311. A `ptr` arm matches only a pointer
-union and binds one read-only pointer [1220]. Atom arms bind no payload [0630]. A wildcard arm
-comes last and binds nothing. Variant payload names are positional and
+union and binds one read-only pointer, or one `sink` pointer that consumes
+the matched place [1220] (D433); no other binding is `sink`. Atom arms bind
+no payload [0630]. A wildcard arm comes last; on an atom set it may bind one
+read-only name, `_ (rest):`, to the atoms no other arm names, and only when
+some are left (D434). Variant payload names are positional and
 complete (D78). Rewrite the arm in the form its subject admits, or compare
 numbers with `if` and `elsif`.
 
@@ -1015,7 +1072,9 @@ f: () -> none = value: record = (first: true, of false) end f
 
 A union of atoms and one pointer is used as a pointer before it is matched
 [0480]. Match it first: the `ptr` arm binds the pointer, and each atom arm
-names the empty case. A pointer case is constructed only from a pointer, and
+names the empty case. Asking which case it holds, `m == none_found`, needs
+no match, but two unions do not compare (D429). A pointer case is constructed
+only from a pointer, and
 a known zero address is reserved for the union's empty atom [0460]. Match the
 union, or construct it from an atom or a pointer. A C function value is not
 made from a known zero address either, since no code is there [1975]: a
@@ -1059,8 +1118,10 @@ end f
 An operation that needs a distinct addressable place was given something
 else. `addr` takes a storage place [0430], not a computed value such as a
 utf8 index result [0610]. Two `inout` arguments cannot be one place [0900],
-and a `sink` argument is a place rooted in a binding [0910]. Store the value
-in a binding first, or pass two different places.
+and a `sink` argument is a place rooted in a binding [0910]; a match arm's
+binding is one only when written `ptr (sink p)`, and then only over a
+subject that is such a place (D433). Store the value in a binding first, or
+pass two different places.
 
 ```landin
 replace: (inout left: u32, inout right: u32) -> none =
@@ -1128,7 +1189,8 @@ Every entry fixes one concrete error set. A conformance names a
 declared concept, supplies each input and entry once by label, and provides
 each entry with a function of exactly the required signature. A parameterized
 conformance applies its complete binder. Correct the declaration against the
-concept it names. A parameter or local named after a concept hides it [0140],
+concept it names. A conformance refused for what it lacks is reported once:
+a use that needs it is not refused again for want of one. A parameter or local named after a concept hides it [0140],
 and the diagnostic then names the parameter as the cause (D381).
 
 ```landin
@@ -1147,10 +1209,14 @@ each dispatch name unique across its closure, and erases a pointer, never a
 value; every entry takes the erased `self` first, as a pointer or as a record
 the dispatch copies from that pointer; an entry is called
 directly and is not a bound value; a concrete pointer selects exactly one
-conformance; and a module `any` binding has no implicit null pair. A call
+conformance, or the report names the pointee and every concept it conforms
+to; and a module `any` binding has no implicit null pair. A call
 through a concept no conformance answers is not refused: no value can reach
-it, and it traps as `unreachable` (D377). Pass a pointer, write the
-`any C` context, or adjust the concept's entries.
+it, and it traps as `unreachable` (D377). An entry taking `self: ptr mut`
+needs a mutable address, so a read-only one is refused at the address with
+the receiver that writes beside it [0440]. Pass a pointer, write the
+`any C` context, `name: any C = any(addr x)` or `name: [N]any C = [...]`,
+or adjust the concept's entries.
 
 ### L0343
 
@@ -1185,7 +1251,11 @@ extern(interrupt) tick: (count: u32) -> none = end tick
 ### L0346
 
 A C boundary declaration or call is something the C ABI cannot carry
-[1580]. On a target with C ABI support, a C signature is infallible and
+[1580]. A target with no C ABI yet, as Cortex-M0 has none, has no C
+signature and lays out no `layout(c)` record, and the diagnostic says so by
+the target's name; a byte-packed `layout(c, packed)` record needs no C
+alignment and stands there. The refusal of a signature names the part C
+cannot carry beside it. On a target with C ABI support, a C signature is infallible and
 nongeneric, with at most one result. Each parameter and result part uses
 implicit or explicit `in`, without `caller` or a constraint. Its type is a
 scalar, pointer (including a named optional pointer union), fixed infallible
@@ -1227,7 +1297,10 @@ which takes C's `argc`, `argv` and `envp`. Only the entry module's hosted `main`
 `main` symbol. A datum's link symbol on a hosted target has a routine's
 shape and is never `main`; Cortex data symbols and sections use the
 spellings, alignments and vectors [1640] lists. Rename the symbol or correct
-the declaration.
+the declaration. Two declarations of one C symbol that differ only in
+`escaping` are refused too, and the report names the parameter: a Landin
+caller of either is checked against what it says, so repeat `escaping` on
+both (D441).
 
 ```landin
 extern(c) link(symbol: "foreign_entry+8") bad: () -> none
@@ -1320,7 +1393,8 @@ the target has no backend, its source debug mode is unsupported, firmware
 forbids `linker.library`, a static Linux link cannot be made (no library
 holding `platform/linux` was found, or the program asks for `linker.library` or
 refers to C symbols nothing in it defines, each named with the routine that
-refers to it, as `platform/posix`'s loader refers to `dlopen`), no toolchain
+refers to it, as `platform/posix`'s loader refers to `dlopen`; `refine check`
+gives the last two as a compilation would), no toolchain
 is selected, or no driver the target names can be started. On Linux the
 message lists every driver looked for, the target's own GCC and the names
 Debian, Ubuntu and Fedora give it, and the note says which package to
@@ -1343,7 +1417,10 @@ and includes tool output when available.
 ### L0502
 
 `--emit=exe` needs an entry: a hosted `main` of the one shape [1970] in the
-entry module, or the firmware routine `--firmware-entry=` names.
+entry module, or the firmware routine `--firmware-entry=` names. A `public
+main` in a hosted program's entry module that is not of that shape is refused
+when the program is checked or emitted as assembly too, where the linker would
+otherwise find no `main` (D443); a C-convention `main` is [1650]'s own form.
 
 ### L0503
 

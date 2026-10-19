@@ -716,12 +716,12 @@ elsif compiler.os == darwin or compiler.os == freebsd then
                -> (result: i32) =
         if at == working_directory then
             result = if (flags & libc.o_creat) <> 0
-            then libc.open(path, flags, i32(permissions))
-            else libc.open(path, flags) end if
+                     then libc.open(path, flags, i32(permissions))
+                     else libc.open(path, flags) end if
         else
             result = if (flags & libc.o_creat) <> 0
-            then libc.openat(i32(at), path, flags, i32(permissions))
-            else libc.openat(i32(at), path, flags) end if
+                     then libc.openat(i32(at), path, flags, i32(permissions))
+                     else libc.openat(i32(at), path, flags) end if
         end if
     end opened_at
 

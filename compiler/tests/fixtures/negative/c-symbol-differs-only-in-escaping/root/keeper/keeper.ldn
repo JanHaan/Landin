@@ -1,0 +1,4 @@
+--- Keeps the pointer it is given, so its parameter is `escaping`.
+public extern(c) keep_it: (escaping kept: ptr u8) -> none =
+    _ = kept
+end keep_it

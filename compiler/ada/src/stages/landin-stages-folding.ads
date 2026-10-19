@@ -19,6 +19,7 @@
 --  fit, or a conversion that does not, arrives with Overflowed True.
 
 with Landin.Checking;
+with Landin.Configuration;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Syntax;
@@ -29,6 +30,8 @@ private generic
    Types    : not null access Landin.Checking.Table;
    Meanings : not null access Landin.Resolution.Table;
    Facts    : Landin.Targets.Target_Facts;
+   --  D437: the compiler facts configuration read in module values.
+   Settings : not null access constant Landin.Configuration.Table;
 
    with function Snapshot_Of
      (Source : Landin.Source.Source_Id)

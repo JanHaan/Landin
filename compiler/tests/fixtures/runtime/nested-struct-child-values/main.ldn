@@ -23,10 +23,10 @@ answer: () -> (result: i32) =
     inferred_child := global.nested
     inferred_row := local.nested.row
     result = local.nested.value + local.nested.row[0]
-           + local.nested.row[1] + global.nested.value
-           + global.nested.row[0] + global.nested.row[1]
-           + child_copy.value + row_copy[0]
-           + inferred_child.value + inferred_row[1]
+             + local.nested.row[1] + global.nested.value
+             + global.nested.row[0] + global.nested.row[1]
+             + child_copy.value + row_copy[0]
+             + inferred_child.value + inferred_row[1]
 end answer
 
 public main: () -> (code: i32) =

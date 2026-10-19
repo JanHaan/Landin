@@ -37,5 +37,5 @@ public main: () -> (code: i32) =
         wrapped = wrapped + 1
     end unchecked
     code = if result == 84 and trace == 129 and wrapped == -128
-        and alias_result == 19 then 0 else 1 end if
+      and alias_result == 19 then 0 else 1 end if
 end main

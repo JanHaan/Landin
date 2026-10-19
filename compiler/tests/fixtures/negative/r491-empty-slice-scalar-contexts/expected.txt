@@ -22,7 +22,11 @@ error[L0301]: `[]` needs a slice context
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:6:17
   |
 6 |     inferred := []
-  |                 ^^ the empty slice written here
+  |                 ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:6:5
+  |
+6 |     inferred := []
+  |     ^^^^^^^^^^^^^^ the declaration it is written in
   = note: [0570]: an empty slice retains its element type and reference permission
 error[L0301]: `[]` is an empty slice, and `i32` belongs here
   --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:7:12

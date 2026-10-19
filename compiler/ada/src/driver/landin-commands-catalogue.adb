@@ -72,16 +72,18 @@ package body Landin.Commands.Catalogue is
          when Color => "Diagnostic color: auto (default), always, never",
          when Diagnostics => "Diagnostic format: human (default), short, json",
          when Target => "Select a target; default is this compiler's host",
-         when Level => "Select a CPU feature level; default is the baseline",
+         when Level =>
+           "CPU feature level whose instructions to use; default the baseline",
          when Root => "Append an ordered module import root (repeatable)",
          when Library =>
            "Where core, hosted and platform are; default beside refine",
          when Build_Option => "Override a declared NAME=VALUE build option",
-         when Build_Mode => "Source configuration: debug (default), release",
+         when Build_Mode =>
+           "compiler.build_mode: debug (default), release; not optimization",
          when Optimize =>
-           "Optimization objective: none, size (default), speed",
+           "Code objective: none, size (default), speed",
          when Specialize =>
-           "Dispatch specialization: off, auto (default), all",
+           "Direct evidence calls: off, auto (default, if worth it), all",
          when Emit => "Artifact kind: exe (default), asm, ir",
          when Output => "Output path; default a.out, a.s or a.ir",
          when Keep_Asm => "Keep an executable's assembly beside it as OUT.s",
@@ -285,7 +287,16 @@ package body Landin.Commands.Catalogue is
               & LF & "is one entry-module directory, or the entry module's"
               & LF & "source files, and its imports are found under the roots."
               & LF & "Build mode, optimization, specialization and debug"
-              & LF & "information are independent."
+              & LF & "information are independent. --build-mode changes"
+              & LF & "generated code only where source reads"
+              & LF & "compiler.build_mode."
+              & LF & "--optimize chooses selection, inlining and register"
+              & LF & "allocation for size or speed. --specialize turns"
+              & LF & "a generic instance's evidence call into a direct one"
+              & LF & "where it proves the table; all skips auto's cost test,"
+              & LF & "and an instance whose address is taken, or a call"
+              & LF & "through any, stays indirect. --build-report lists each"
+              & LF & "call left indirect, under left_indirect, and why."
               & LF & "Example: refine " & Name (Command)
               & " program.ldn"
               & (if Command = Compile then " -o program" else "") & LF);

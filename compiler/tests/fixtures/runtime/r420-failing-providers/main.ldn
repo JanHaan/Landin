@@ -34,7 +34,7 @@ heap_budgets: () -> (ok: bool) =
     first.val = 11
     first_last.val = 13
     first_observed: bool = usize(first) % alignment_1 == 0
-                          and first.val == 11 and first_last.val == 13
+                           and first.val == 11 and first_last.val == 13
     mem.free(counted, first, size_1)
 
     two: usize = 2

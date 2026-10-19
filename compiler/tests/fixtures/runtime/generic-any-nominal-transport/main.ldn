@@ -55,6 +55,6 @@ public main: () -> (code: i32) =
     third := read(addr saved.value)
     _ = third.bump()
     code = if x == 17 and y == 23 and left.value == 18
-              and right.value == 25 and right.sentinel == 123
+      and right.value == 25 and right.sentinel == 123
            then 42 else 1 end if
 end main

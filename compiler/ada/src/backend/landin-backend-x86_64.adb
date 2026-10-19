@@ -850,7 +850,7 @@ package body Landin.Backend.X86_64 is
 
       function Source_Symbol (Item : Landin.IR.Item_Id) return String is
          Declared : constant Landin.IR.Declaration_Id :=
-           Landin.IR.Declares (Of_Unit, Item);
+           Landin.Backend.Symbol_Declaration (Of_Unit, Item);
       begin
          if Landin.IR.Link_Symbol (Of_Unit, Item)
            /= Landin.Source.Names.No_Name
@@ -913,6 +913,13 @@ package body Landin.Backend.X86_64 is
       procedure Allocate_Symbols is
          Allocated : Spelling_Counts;
          Sources : Spelling_Counts;
+         --  For each base a colliding item probes, how many of its
+         --  attempts, the base itself first, an earlier item found taken.
+         --  Nothing is freed while names are given and Sources is fixed,
+         --  so those stay taken: every instance of a generic routine
+         --  shares its routine's spelling (D421), and probing each from
+         --  the start made giving them names quadratic.
+         Tried : Spelling_Counts;
 
          function Available
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean;
@@ -965,7 +972,7 @@ package body Landin.Backend.X86_64 is
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Position);
                Declared : constant Landin.IR.Declaration_Id :=
-                 Landin.IR.Declares (Of_Unit, Item);
+                 Landin.Backend.Symbol_Declaration (Of_Unit, Item);
                Spelling : constant String := Source_Symbol (Item);
             begin
                if not Is_Forced (Item) then
@@ -979,13 +986,17 @@ package body Landin.Backend.X86_64 is
                            then Spelling
                            else Landin.Backend.Qualified_Symbol
                              (Meanings, Declared, Spelling));
+                        Attempt : Natural := Count (Tried, Base);
                         Candidate : Unbounded.Unbounded_String :=
-                          Unbounded.To_Unbounded_String (Base);
-                        Attempt : Natural := 0;
+                          Unbounded.To_Unbounded_String
+                            (if Attempt = 0 then Base
+                             else Base & "." & Trimmed
+                               (Natural'Image (Attempt)));
                      begin
                         while not Available
                           (Unbounded.To_String (Candidate), Item)
                         loop
+                           Add (Tried, Base);
                            Attempt := Attempt + 1;
                            Candidate := Unbounded.To_Unbounded_String
                              (Base & "." & Trimmed (Natural'Image (Attempt)));
@@ -4478,11 +4489,18 @@ package body Landin.Backend.X86_64 is
                         Load_Unsigned (Source, Width);
                      end if;
 
-                     Compare_Accumulator (Lower);
-                     Trap_On (if Signed then "jl" else "jb");
+                     --  An edge at the type's own extreme passes every
+                     --  value, so it is not tested: `ptr(n)`'s upper edge
+                     --  is the largest `usize`.
+                     if Lower > Landin.Types.Lowest (Kind, Facts) then
+                        Compare_Accumulator (Lower);
+                        Trap_On (if Signed then "jl" else "jb");
+                     end if;
 
-                     Compare_Accumulator (Upper);
-                     Trap_On (if Signed then "jg" else "ja");
+                     if Upper < Landin.Types.Highest (Kind, Facts) then
+                        Compare_Accumulator (Upper);
+                        Trap_On (if Signed then "jg" else "ja");
+                     end if;
 
                      Emit ("mov" & Suffix (Width) & " "
                            & Accumulator (Width) & ", "
@@ -6771,13 +6789,9 @@ package body Landin.Backend.X86_64 is
                Atoms : constant Landin.IR.Atom_Set_Id :=
                  Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
             begin
-               if Atoms /= Landin.IR.No_Atom_Set
+               if Landin.IR.Validates_Atoms (Of_Unit, Item, Value)
                  and then not
                    (Optimized and then Proven (Positive (Value)) = 1)
-                 and then Landin.IR.Op_Of (Of_Unit, Item, Value) in
-                   Landin.IR.Load | Landin.IR.Load_Indirect
-                   | Landin.IR.Load_Datum | Landin.IR.Load_Field
-                   | Landin.IR.Load_Element | Landin.IR.Load_Variant_Field
                then
                   declare
                      Done : constant String := Value_Label (Value) & "_valid";

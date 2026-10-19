@@ -99,13 +99,13 @@ growth_case: () -> (ok: bool) =
     end
 
     ok = copied_first == zero and refused_second == one
-      and rolled_back == 19 and usize(short_freed) == usize(short_start)
-      and preserved_first == 19 and preserved_second == 23
-      and grown_first == zero and grown_second == one
-      and drained_second == 23 and drained_first == 19
-      and usize(old_freed) == usize(old_start)
-      and mem.capacity(old) == four and mem.length(old) == two
-      and published_second == 23
+         and rolled_back == 19 and usize(short_freed) == usize(short_start)
+         and preserved_first == 19 and preserved_second == 23
+         and grown_first == zero and grown_second == one
+         and drained_second == 23 and drained_first == 19
+         and usize(old_freed) == usize(old_start)
+         and mem.capacity(old) == four and mem.length(old) == two
+         and published_second == 23
 end growth_case
 
 public main: () -> (code: i32) =

@@ -1,0 +1,6 @@
+--  A `public main` in a hosted program's entry module that is not the
+--  entry is refused under `--emit=asm` too, rather than written to an
+--  assembly file whose link would find no `main`.
+public main: () -> (status: i32) =
+    status = 0
+end main

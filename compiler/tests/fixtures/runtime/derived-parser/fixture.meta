@@ -3,7 +3,7 @@ profiles: specialization
 summary: the prototype-2 parser builds nested arena ASTs, recovers in order through any loggers, and propagates allocation and I/O failures
 program: main.ldn
 root: ../../../../..
-run_args: ../tests/fixtures/runtime/derived-parser/input.txt
+run_files: input.txt
 run_expect: output.txt
 status: 42
 stream: merged

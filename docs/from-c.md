@@ -167,7 +167,8 @@ a slice of a field are refused, and a field is read and written by copy.
 Where a target needs aligned loads, the compiler moves such a field a byte at
 a time. C takes a packed record through a pointer and never by value
 (D414). `layout(packed)` is a different thing, a hardware register's bits at
-stated positions (D228).
+stated positions (D228). `bindings/generate.py` writes this form for a
+header's packed struct, and a typed pointer wherever the header passes one.
 
 ### `offsetof`
 
@@ -224,6 +225,8 @@ slice of the bytes the call filled, from `offsetof` to the record's length,
 which keeps their length and their origin. Because the elements would
 overlap whatever follows, such a record is no array element and no field of
 another C record, and C takes it through a pointer (D414).
+`bindings/generate.py` writes a header's flexible member as this last
+`[0]T` field.
 
 ### `union`
 

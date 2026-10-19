@@ -7,4 +7,4 @@ error[L0328]: this type does not permit a zeroed initializer
   |
 6 |     m = zeroed
   |     ^ the place written here
-  = note: [0540]/[0630]/D213: zeroed needs a zero image for every field, and a pointer, slice, pointer union, function or atom set has none; write the value with its fields, or, for a service's state, keep its references in the handle and only scalars in the zeroed state (D288)
+  = note: [0540]/[0630]: zeroed needs a zero image for every field, and a pointer, slice, pointer union, function or atom set has none, nor does a distinct type over one; write the value with its fields, or, for a service's state, keep its references in the handle and only scalars in the zeroed state (D288)

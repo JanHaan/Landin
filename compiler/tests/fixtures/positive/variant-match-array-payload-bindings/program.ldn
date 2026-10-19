@@ -13,18 +13,18 @@ read_and_write: () -> none =
     match local.kind
         leaf: _ = 0
         row(values): if true then
-            _ = lenof values
-            _ = values[0]
-            _ = values[at]
-        end if
+                         _ = lenof values
+                         _ = values[0]
+                         _ = values[at]
+                     end if
     end match
     state.kind = row(values: [19, 23, 29])
     match state.kind
         leaf: _ = 0
         row(inout values): if true then
-            values[0] = 31
-            values[at] = zeroed
-            inc values[2]
-        end if
+                               values[0] = 31
+                               values[at] = zeroed
+                               inc values[2]
+                           end if
     end match
 end read_and_write

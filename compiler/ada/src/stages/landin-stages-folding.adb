@@ -316,6 +316,23 @@ package body Landin.Stages.Folding is
          return;
       end if;
 
+      --  D437: a compiler fact in a module value is the value
+      --  configuration read, a bool as 0 or 1 like a bool literal.
+      case Landin.Configuration.Fact_At
+        (Settings.all, Syn.Source_Of (Of_Tree), Node)
+      is
+         when Landin.Configuration.Bool_Fact
+            | Landin.Configuration.Integer_Fact =>
+            Value := Landin.Configuration.Fact_Value
+              (Settings.all, Syn.Source_Of (Of_Tree), Node);
+            Known := True;
+            return;
+         when Landin.Configuration.Refused_Fact =>
+            return;
+         when Landin.Configuration.No_Fact =>
+            null;
+      end case;
+
       case Syn.Kind (Of_Tree, Node) is
          when Syn.Integer_Literal =>
             declare

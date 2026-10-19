@@ -1,0 +1,2 @@
+error[L0500]: a static link of linux-x86-64 has no C library to define `puts`, which `main` refers to
+  = note: link with --link=libc, which keeps C's runtime and library

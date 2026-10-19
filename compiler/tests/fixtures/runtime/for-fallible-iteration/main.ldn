@@ -248,5 +248,5 @@ public main: () -> (code: i32) =
       and failure_cleanups == 4 and body_failures == 0
       and success_trace == 11 and first_trace == 2
       and head_trace == 12 and item_trace == 12 and step_trace == 12
-    then 42 else 1 end if
+           then 42 else 1 end if
 end main

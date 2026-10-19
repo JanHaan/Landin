@@ -96,7 +96,7 @@ public main: () -> (code: i32) =
     recursive: i32 = countdown(42, 3) else 0
 
     if direct_ok and propagated_ok and recovered_ok and success_ok
-       and mutual == 42 and recursive == 42
+      and mutual == 42 and recursive == 42
     then
         code = 42
     else

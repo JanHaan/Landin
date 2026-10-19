@@ -5,12 +5,12 @@ public main: () -> (code: i32) =
     unsigned_high: u8 = 255
 
     if signed_low < signed_high
-        and signed_low <= signed_low
-        and signed_high > signed_low
-        and signed_high >= signed_high
-        and unsigned_high > unsigned_low
-        and unsigned_low == 1
-        and unsigned_high <> unsigned_low
+      and signed_low <= signed_low
+      and signed_high > signed_low
+      and signed_high >= signed_high
+      and unsigned_high > unsigned_low
+      and unsigned_low == 1
+      and unsigned_high <> unsigned_low
     then
         code = 42
     else

@@ -1,0 +1,10 @@
+error[L0103]: a call's result is not selected from; bind it, then select from the name
+  --> ../tests/fixtures/negative/selection-from-a-call/program.ldn:7:16
+  |
+7 |     y := size().x
+  |                ^
+  --> ../tests/fixtures/negative/selection-from-a-call/program.ldn:7:15
+  |
+7 |     y := size().x
+  |               ^ the call
+  = note: [1820]: a selection names a place, and a call is a value that is no place

@@ -1,0 +1,12 @@
+error[L0308]: this result has no field called `q`
+  --> ../tests/fixtures/negative/result-destructuring-by-position/main.ldn:10:6
+   |
+10 |     (q, r) := divide(10, 3)
+   |      ^
+  = note: [0990]: result binding is by name, never by position; this result's fields are `quot`, `rem`, and `quot: q` binds one under another name
+error[L0308]: this result has no field called `r`
+  --> ../tests/fixtures/negative/result-destructuring-by-position/main.ldn:10:9
+   |
+10 |     (q, r) := divide(10, 3)
+   |         ^
+  = note: [0990]: result binding is by name, never by position; this result's fields are `quot`, `rem`, and `rem: r` binds one under another name

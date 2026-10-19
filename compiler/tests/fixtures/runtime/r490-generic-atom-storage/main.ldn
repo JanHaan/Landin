@@ -32,8 +32,8 @@ public main: () -> (code: i32) =
         values(first, second): okay = okay and first == south and second == north
     end match
     code = if okay and local.first == south and local.second == north
-              and stored.first == north and stored.second == south
-              and filled.first == south and filled.second == south
-              and static_array[2] == north
+      and stored.first == north and stored.second == south
+      and filled.first == south and filled.second == south
+      and static_array[2] == north
            then 42 else 1 end if
 end main

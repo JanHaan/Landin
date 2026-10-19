@@ -3,7 +3,7 @@ pair_alias: type = pair
 box: type (t: type) = (value: t)
 callback: type = (value: i32) -> (result: i32)
 callback_box: type = (call: callback, bias: i32)
-compact: type = layout(optimal) (small: u8, wide: u64, last: u8)
+compact: type = layout(optimal)(small: u8, wide: u64, last: u8)
 module_pair: pair = (left: 17, right: 25)
 
 increment: (value: i32) -> (result: i32) =

@@ -30,6 +30,21 @@ sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ROOT, "docs", "site"))
 from roadmap_order import execution_order
+#  The fixture format's one Python reader, which the test program's reader
+#  is held to by compiler/tests/fixture-meta.cases.
+sys.path.insert(0, os.path.join(ROOT, "compiler", "tests"))
+import fixture_meta  # noqa: E402
+
+
+def fixture_fields(path):
+    """A `fixture.meta`'s keys as compiler/tests/fixture_meta.py reads
+    them.  Faults are the test program's to report, so a faulty file still
+    yields what it says, its first value for a repeated key."""
+    directory = os.path.dirname(os.path.abspath(path))
+    with io.open(path, encoding="utf-8") as stream:
+        return fixture_meta.parse(
+            stream.read(), os.path.basename(os.path.dirname(directory)),
+            os.path.basename(directory))[0]
 
 #  The normative document, named once.  Every check that reads it goes
 #  through this, so a rename is one edit rather than nine -- and so that a
@@ -897,12 +912,11 @@ def landin_tokens(source, signs, trees=None):
         return char in LETTERS or char in DIGITS or char in UPPER \
             or char == "_"
 
-    # Membership depends on spelling and this invocation's grammar, not on
-    # the token offset. Keep the cache local so edited grammars cannot reuse
-    # old answers, and bounded so generated identifiers do not accumulate.
-    @lru_cache(maxsize=4096)
-    def matches(rule, text):
-        return lexical_matches(trees, rule, text)
+    # Membership depends on spelling and the grammar, not on the token
+    # offset, so the answers are shared by every source read under one
+    # grammar and dropped with it: an edited grammar cannot reuse them.
+    if trees:
+        matches = grammar_analysis(trees)["matches"]
 
     #  D245: a number ends where its spelling ends, so a name byte directly
     #  after a float makes one malformed float rather than a float and a
@@ -1208,9 +1222,390 @@ class LeftRecursion(Exception):
     """A production that reaches itself before consuming a token."""
 
 
+#  The start of a production that may begin with any token at all.
+ANY_TOKEN = "any token"
+
+
+def token_features(tokens, reserved):
+    """What each token can be matched as: its spelling and its kinds.
+
+    The recogniser asks one question of a token, whether a terminal of the
+    grammar matches it, and these are every answer that can be yes: a
+    quoted terminal matches the spelling whatever the kind, and a rule the
+    tokeniser owns matches the kind.  The same tests the unpruned
+    recogniser makes below, made once per token instead of once per try.
+    """
+    out = []
+    for token_kind, text, *_ in tokens:
+        has = {("s", text)}
+        if token_kind == "word" and text not in reserved:
+            has.add(("k", "name"))
+        if token_kind in ("integer", "float", "character", "text", "raw"):
+            has.add(("k", token_kind))
+            has.add(("k", "literal"))
+        elif text in ("true", "false", "zeroed", "uninit"):
+            has.add(("k", "literal"))
+        out.append(has)
+    return out
+
+
+def grammar_analysis(trees):
+    """What can be known about a grammar before any source is read.
+
+    Shared by every source derived under one grammar.  The lexical
+    answers, so a name spelled in a thousand fixtures is held to the
+    identifier rule once.  And a recogniser compiled from the productions
+    that knows, for every node, whether it can derive nothing and which
+    tokens can begin it, so a choice tries only the arms its next token
+    can start: most of an unpruned derivation was trying every arm of
+    every choice at every token, which is what made deriving the corpus
+    from nothing take two minutes.
+
+    Pruning only skips calls that would have answered "no derivation", so
+    no verdict changes, with one exception it therefore leaves alone.  A
+    left-recursive grammar is refused by reaching the recursion, and a
+    skipped call might not reach it; a grammar in which a production can
+    reach itself without consuming a token compiles to nothing here and
+    is derived by the unpruned recogniser, exactly as before.
+
+    Kept as the last grammar seen, compared by value as well as identity,
+    so a grammar edited in place is analysed afresh rather than answered
+    from the old one.
+    """
+    last = getattr(grammar_analysis, "last", None)
+    if last is not None and last[0] is trees and last[1] == trees:
+        return last[2]
+
+    import copy
+    nodes, order, pending = set(), [], list(trees.values())
+    while pending:
+        node = pending.pop()
+        if id(node) in nodes:
+            continue
+        nodes.add(id(node))
+        order.append(node)
+        if node[0] in ("alt", "seq"):
+            pending.extend(node[1])
+        elif node[0] in ("?", "*", "+"):
+            pending.append(node[1])
+
+    def referred(node):
+        """The production a rule node expands, or None."""
+        name = node[1]
+        if name in TOKEN_KIND_RULES or name in LEXICAL_RULES:
+            return None
+        return trees.get(name)
+
+    #  Least fixed points: nullable grows from nothing, and first sets
+    #  grow from empty towards ANY_TOKEN.  Both over-approximate what the
+    #  recogniser can do, which is the direction pruning needs.
+    nullable = {id(node): False for node in order}
+    first = {id(node): frozenset() for node in order}
+
+    def nullable_of(node):
+        kind = node[0]
+        if kind == "rule":
+            target = referred(node)
+            return target is not None and nullable[id(target)]
+        if kind == "alt":
+            return any(nullable[id(child)] for child in node[1])
+        if kind == "seq":
+            return all(nullable[id(child)] for child in node[1])
+        if kind in ("?", "*"):
+            return True
+        if kind == "+":
+            return nullable[id(node[1])]
+        return False
+
+    def first_of(node):
+        kind = node[0]
+        if kind == "lit":
+            return frozenset((("s", node[1]),))
+        if kind in ("byte", "text_byte"):
+            return ANY_TOKEN
+        if kind == "rule":
+            if node[1] in TOKEN_KIND_RULES:
+                return frozenset((("k", TOKEN_KIND_RULES[node[1]]),))
+            if node[1] in LEXICAL_RULES:
+                return ANY_TOKEN
+            target = referred(node)
+            return first[id(target)] if target is not None else frozenset()
+        if kind in ("alt", "seq"):
+            out = set()
+            for child in node[1]:
+                if first[id(child)] is ANY_TOKEN:
+                    return ANY_TOKEN
+                out |= first[id(child)]
+                if kind == "seq" and not nullable[id(child)]:
+                    break
+            return frozenset(out)
+        if kind in ("?", "*", "+"):
+            return first[id(node[1])]
+        return frozenset()
+
+    changed = True
+    while changed:
+        changed = False
+        for node in order:
+            if not nullable[id(node)] and nullable_of(node):
+                nullable[id(node)] = changed = True
+    changed = True
+    while changed:
+        changed = False
+        for node in order:
+            found = first_of(node)
+            if found != first[id(node)]:
+                first[id(node)] = found
+                changed = True
+
+    #  The calls a node can make at its own position.  A cycle among
+    #  them is a production that can reach itself having consumed
+    #  nothing, which is the only way the unpruned recogniser raises.
+    def leading(node):
+        kind = node[0]
+        if kind == "alt":
+            return list(node[1])
+        if kind == "seq":
+            out = []
+            for child in node[1]:
+                out.append(child)
+                if not nullable[id(child)]:
+                    break
+            return out
+        if kind in ("?", "*", "+"):
+            return [node[1]]
+        if kind == "rule":
+            target = referred(node)
+            return [target] if target is not None else []
+        return []
+
+    state, cyclic = {}, False
+    for root in order:
+        if id(root) in state:
+            continue
+        state[id(root)] = 1
+        stack = [(root, iter(leading(root)))]
+        while stack and not cyclic:
+            node, children = stack[-1]
+            for child in children:
+                mark = state.get(id(child))
+                if mark == 1:
+                    cyclic = True
+                elif mark is None:
+                    state[id(child)] = 1
+                    stack.append((child, iter(leading(child))))
+                break
+            else:
+                state[id(node)] = 2
+                stack.pop()
+        if cyclic:
+            break
+
+    @lru_cache(maxsize=65536)
+    def matches(rule, text):
+        return lexical_matches(trees, rule, text)
+
+    analysis = {
+        "derive": None if cyclic else compiled_recogniser(
+            trees, nullable, first),
+        "matches": matches,
+        #  Holding the nodes keeps their identities from being reused by
+        #  other objects while this analysis can still be returned.
+        "nodes": order,
+    }
+    grammar_analysis.last = (trees, copy.deepcopy(trees), analysis)
+    return analysis
+
+
+def compiled_recogniser(trees, nullable, first):
+    """The token-level productions as one function per node.
+
+    Each node answers what the unpruned recogniser's `item` answers: the
+    positions at which a derivation of it starting at `at` can end.  A
+    rule's answers are kept per position for one source, which bounds the
+    work as `item`'s table did; the nodes inside a production are not,
+    because the rule around them already is.  `derive(tokens, reserved,
+    start)` is the whole recogniser.
+    """
+    #  What one derivation reads, replaced for each source.
+    current = {"features": [], "count": 0, "memo": {}}
+    built = {}
+
+    def guard(node):
+        """None, or (first set) when a call at `at` can be skipped unless
+        a token there can begin the node."""
+        if nullable[id(node)]:
+            return None
+        return first[id(node)]
+
+    def admits(begins, at):
+        if begins is None:
+            return True
+        if at >= current["count"]:
+            return False
+        return begins is ANY_TOKEN or not begins.isdisjoint(
+            current["features"][at])
+
+    def one_token(feature):
+        def match(at):
+            if at < current["count"] and feature in current["features"][at]:
+                return (at + 1,)
+            return ()
+        return match
+
+    def any_token(at):
+        return (at + 1,) if at < current["count"] else ()
+
+    def nothing(at):
+        return ()
+
+    def build(node):
+        found = built.get(id(node))
+        if found is not None:
+            return found
+        kind = node[0]
+        if kind == "lit":
+            made = one_token(("s", node[1]))
+        elif kind in ("byte", "text_byte"):
+            made = any_token
+        elif kind == "rule":
+            name = node[1]
+            if name in TOKEN_KIND_RULES:
+                made = one_token(("k", TOKEN_KIND_RULES[name]))
+            elif name in LEXICAL_RULES:
+                made = any_token
+            elif name in trees:
+                made = rule_call(name)
+            else:
+                made = nothing
+        elif kind == "alt":
+            made = choice(node)
+        elif kind == "seq":
+            made = sequence(node)
+        elif kind == "?":
+            made = optional(node)
+        elif kind in ("*", "+"):
+            made = repetition(node)
+        else:
+            made = nothing
+        built[id(node)] = made
+        return made
+
+    def rule_call(name):
+        body = []
+
+        def call(at):
+            memo = current["memo"]
+            key = (name, at)
+            ends = memo.get(key)
+            if ends is None:
+                if not body:
+                    body.append(build(trees[name]))
+                ends = memo[key] = body[0](at)
+            return ends
+        return call
+
+    def choice(node):
+        arms = [(build(arm), guard(arm)) for arm in node[1]]
+        table, always, empty = {}, [], []
+        for index, arm in enumerate(node[1]):
+            begins = guard(arm)
+            if begins is None:
+                empty.append(index)
+                always.append(index)
+            elif begins is ANY_TOKEN:
+                always.append(index)
+            else:
+                for feature in begins:
+                    table.setdefault(feature, []).append(index)
+        always = frozenset(always)
+
+        def alternative(at):
+            if at >= current["count"]:
+                picked = empty
+            else:
+                picked = set(always)
+                for feature in current["features"][at]:
+                    picked.update(table.get(feature, ()))
+            if len(picked) == 1:
+                for index in picked:
+                    return arms[index][0](at)
+            ends = set()
+            for index in picked:
+                ends.update(arms[index][0](at))
+            return tuple(ends)
+        return alternative
+
+    def sequence(node):
+        children = [(build(child), guard(child)) for child in node[1]]
+        if len(children) == 1:
+            return children[0][0]
+
+        def chain(at):
+            reached = (at,)
+            for call, begins in children:
+                following = set()
+                for position in reached:
+                    if admits(begins, position):
+                        following.update(call(position))
+                if not following:
+                    return ()
+                reached = following
+            return tuple(reached)
+        return chain
+
+    def optional(node):
+        call, begins = build(node[1]), guard(node[1])
+
+        def maybe(at):
+            if not admits(begins, at):
+                return (at,)
+            return tuple({at}.union(call(at)))
+        return maybe
+
+    def repetition(node):
+        call, begins = build(node[1]), guard(node[1])
+        at_least_one = node[0] == "+"
+
+        def repeat(at):
+            reached = set() if at_least_one else {at}
+            frontier = {at}
+            while frontier:
+                following = set()
+                for position in frontier:
+                    if not admits(begins, position):
+                        continue
+                    for end in call(position):
+                        if end not in reached and end != position:
+                            following.add(end)
+                reached |= following
+                frontier = following
+            return tuple(reached)
+        return repeat
+
+    def derive(tokens, reserved, start):
+        top = build(trees[start])
+        current["features"] = token_features(tokens, reserved)
+        current["count"] = len(tokens)
+        current["memo"] = {}
+        try:
+            return len(tokens) in top(0)
+        finally:
+            current["features"], current["memo"] = [], {}
+
+    return derive
+
+
 def grammar_recognises(rules, trees, tokens, start="program"):
     """Does the grammar derive exactly this token list?"""
     reserved = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+    derive = grammar_analysis(trees)["derive"]
+    if derive is not None:
+        return derive(tokens, reserved, start)
+
+    #  A grammar that can reach a production again without consuming a
+    #  token is derived here, unpruned, so that the recursion is reached
+    #  and refused wherever a source leads to it.
     seen = {}
 
     def item(node, at):
@@ -2779,12 +3174,8 @@ def check_grammar_corpus(full_run):
             must_derive = default_derive
             meta = os.path.join(case, "fixture.meta")
             if kind == "negative" and frontend and os.path.exists(meta):
-                named = re.search(
-                    r"^codes: (.+)$",
-                    io.open(meta, encoding="utf-8").read(), re.M)
-                if named:
-                    codes = [one.strip()
-                             for one in named.group(1).split(",")]
+                codes = fixture_fields(meta).codes
+                if codes:
                     first = codes[0]
                     if first and first not in frontend:
                         must_derive = True
@@ -2834,11 +3225,9 @@ def check_grammar_corpus(full_run):
                 #  a span that names the wrong bytes is the defect.
                 meta = os.path.join(case, "fixture.meta")
                 if os.path.exists(meta):
-                    wanted = re.search(
-                        r"^lex: (.+)$",
-                        io.open(meta, encoding="utf-8").read(), re.M)
+                    wanted = fixture_fields(meta).get("lex")
                     if wanted:
-                        expected = wanted.group(1).encode().decode(
+                        expected = wanted.encode().decode(
                             "unicode_escape")
                         if complaint != expected:
                             out.append((where, 1,
@@ -2887,12 +3276,9 @@ def check_grammar_corpus(full_run):
         for name in sorted(os.listdir(directory)):
             meta = os.path.join(directory, name, "fixture.meta")
             if os.path.exists(meta):
-                claim = re.search(
-                    r"^constructs:(.*)$",
-                    io.open(meta, encoding="utf-8").read(), re.M)
+                claim = fixture_fields(meta).get("constructs")
                 if claim:
-                    cited |= set(re.findall(r"\b(\d{4})\b",
-                                            claim.group(1)))
+                    cited |= set(re.findall(r"\b(\d{4})\b", claim))
 
     #  A production carries no citation of its own: the construct that owns
     #  it is the `### [NNNN]` heading its fence sits under.  The .txt form
@@ -2930,11 +3316,11 @@ def check_grammar_corpus(full_run):
         if not os.path.exists(recorded):
             out.append(("compiler/tests/lexical.tokens", 1,
                         "the token dump is missing; regenerate it with "
-                        "python3 check.py --tokens"))
+                        "python3 check.py --generate (or --tokens)"))
         elif io.open(recorded, encoding="utf-8").read() != fresh:
             out.append(("compiler/tests/lexical.tokens", 1,
                         "the token dump is stale; regenerate it with "
-                        "python3 check.py --tokens"))
+                        "python3 check.py --generate (or --tokens)"))
 
     save_grammar_corpus_cache(cache_path, cache_identity, cached)
     return out
@@ -3480,11 +3866,10 @@ def check_foreign_forms(full_run):
             out.append((relative, 1, "%s is pinned by negative/%s, which is"
                         " not there" % (row, fixture)))
             continue
-        expect = re.search(r"^expect:\s*(\S+)",
-                           io.open(meta, encoding="utf-8").read(), re.M)
+        expect = fixture_fields(meta).get("expect")
         report = ""
         if expect:
-            recorded = os.path.join(os.path.dirname(meta), expect.group(1))
+            recorded = os.path.join(os.path.dirname(meta), expect)
             if os.path.exists(recorded):
                 report = io.open(recorded, encoding="utf-8").read()
         if not re.search(r"`[^`\n]*%s[^`\n]*`" % re.escape(word), report) \
@@ -3738,11 +4123,10 @@ def check_refused_constructs(full_run):
             meta = os.path.join(base, name, "fixture.meta")
             if not os.path.exists(meta):
                 continue
-            text = io.open(meta, encoding="utf-8").read()
-            if not re.search(r"^program: ", text, re.M):
+            fields = fixture_fields(meta)
+            if "program" not in fields:
                 continue
-            named = re.search(r"^codes: (.*)$", text, re.M)
-            if not named or not named.group(1).strip():
+            if not fields.codes:
                 out.append((
                     "compiler/tests/fixtures/negative/%s/fixture.meta"
                     % name, 1,
@@ -3914,11 +4298,11 @@ def check_catalogue(full_run):
         if not os.path.exists(recorded):
             out.append(("compiler/tests/diagnostics.catalogue", 1,
                         "the catalogue reading copy is missing; regenerate "
-                        "it with python3 check.py --catalogue"))
+                        "it with python3 check.py --generate (or --catalogue)"))
         elif io.open(recorded, encoding="utf-8").read() != fresh:
             out.append(("compiler/tests/diagnostics.catalogue", 1,
                         "the catalogue reading copy is stale; regenerate "
-                        "it with python3 check.py --catalogue"))
+                        "it with python3 check.py --generate (or --catalogue)"))
 
     #  A fixture may name the codes its report must carry.
     known = {row["code"] for row in rows}
@@ -3931,11 +4315,7 @@ def check_catalogue(full_run):
             meta = os.path.join(directory, name, "fixture.meta")
             if not os.path.exists(meta):
                 continue
-            wanted = re.search(r"^codes: (.+)$",
-                               io.open(meta, encoding="utf-8").read(), re.M)
-            if not wanted:
-                continue
-            for code in (c.strip() for c in wanted.group(1).split(",")):
+            for code in fixture_fields(meta).codes:
                 if code not in known:
                     out.append((
                         "compiler/tests/fixtures/%s/%s/fixture.meta"
@@ -4348,22 +4728,21 @@ def fixture_constructs():
             meta = os.path.join(directory, name, "fixture.meta")
             if not os.path.exists(meta):
                 continue
-            text = io.open(meta, encoding="utf-8").read()
-            named = re.search(r"^constructs: (.+)$", text, re.M)
+            fields = fixture_fields(meta)
             where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (
                 kind, name)
 
-            if not named:
+            if not fields.get("constructs"):
                 #  A fixture with a program is written in the language and
                 #  so is evidence about some construct of it.  One without
                 #  is about the tool, and names none for that reason.
-                if re.search(r"^program: ", text, re.M):
+                if "program" in fields:
                     out.append((where, 1,
                                 "this carries a program and names no"
                                 " construct it is evidence about"))
                 continue
 
-            for one in (c.strip() for c in named.group(1).split(",")):
+            for one in (c.strip() for c in fields["constructs"].split(",")):
                 if not re.fullmatch(r"\d{4}", one):
                     out.append((where, 1,
                                 "`%s` is not a four-digit construct" % one))
@@ -4428,15 +4807,14 @@ def fixture_sources():
             meta = os.path.join(case, "fixture.meta")
             if not os.path.exists(meta):
                 continue
-            text = io.open(meta, encoding="utf-8").read()
             where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (kind,
                                                                     name)
+            fields = fixture_fields(meta)
             for key in ("program", "with", "c-sources", "c-shared", "expect",
-                        "run_expect", "stdin"):
-                named = re.search(r"^%s: (.+)$" % key, text, re.M)
-                if not named:
+                        "run_expect", "stdin", "run_files"):
+                if not fields.get(key):
                     continue
-                for one in (f.strip() for f in named.group(1).split(",")):
+                for one in (f.strip() for f in fields[key].split(",")):
                     if one and not os.path.exists(os.path.join(case, one)):
                         out.append((where, 1,
                                     "`%s` names %s, which is not here"
@@ -4446,9 +4824,8 @@ def fixture_sources():
             #  source, becomes once its fixes are applied.  Both files are
             #  the fixture's, and the result is a program the grammar has
             #  to derive, which check_grammar_corpus holds it to.
-            named_fixed = re.search(r"^fixed: (.+)$", text, re.M)
-            if named_fixed:
-                for pair in named_fixed.group(1).split(","):
+            if fields.get("fixed"):
+                for pair in fields["fixed"].split(","):
                     for one in (bit.strip() for bit in pair.split("->")):
                         if one and not os.path.exists(os.path.join(case,
                                                                    one)):
@@ -4462,9 +4839,8 @@ def fixture_sources():
                                     " ends in .fixed so no module reads it"
                                     % result))
 
-            named_root = re.search(r"^root: (.+)$", text, re.M)
-            if named_root:
-                root = named_root.group(1).strip()
+            if "root" in fields:
+                root = fields["root"]
                 if not root or not os.path.isdir(os.path.join(case, root)):
                     out.append((where, 1,
                                 "`root` names %s, which is not a directory"
@@ -4530,12 +4906,10 @@ def construct_evidence():
                 meta = os.path.join(directory, name, "fixture.meta")
                 if not os.path.exists(meta):
                     continue
-                named = re.search(r"^constructs: (.+)$",
-                                  io.open(meta, encoding="utf-8").read(),
-                                  re.M)
+                named = fixture_fields(meta).get("constructs")
                 if not named:
                     continue
-                for one in (c.strip() for c in named.group(1).split(",")):
+                for one in (c.strip() for c in named.split(",")):
                     for claim in says.get(kind, ()):
                         evidence.setdefault(one, set()).add(claim)
 
@@ -5398,11 +5772,11 @@ def check_matrix(full_run):
     if not os.path.exists(recorded):
         return out + [("compiler/tests/constructs.matrix", 1,
                        "the construct matrix is missing; regenerate it with "
-                       "python3 check.py --matrix")]
+                       "python3 check.py --generate (or --matrix)")]
     if io.open(recorded, encoding="utf-8").read() != fresh:
         return out + [("compiler/tests/constructs.matrix", 1,
                        "the construct matrix is stale; regenerate it with "
-                       "python3 check.py --matrix")]
+                       "python3 check.py --generate (or --matrix)")]
     return out
 
 
@@ -5442,15 +5816,7 @@ def _fixture_records(root):
             meta = os.path.join(directory, name, "fixture.meta")
             if not os.path.exists(meta):
                 continue
-            with io.open(meta, encoding="utf-8") as stream:
-                text = stream.read()
-            fields = {}
-            for line in text.splitlines():
-                if line.startswith("#") or ":" not in line:
-                    continue
-                key, _, value = line.partition(":")
-                fields[key.strip()] = value.strip()
-            records[kind + "/" + name] = (meta, fields)
+            records[kind + "/" + name] = (meta, fixture_fields(meta))
     return records
 
 
@@ -5511,6 +5877,7 @@ def prototype_row_evidence(name, fields):
         if fields.get("root"):
             inputs.append("rooted")
         for label, field in (("args", "args"), ("run_args", "run_args"),
+                             ("run_files", "run_files"),
                              ("stdin", "stdin"), ("peer", "c-sources"),
                              ("shared", "c-shared")):
             if fields.get(field):
@@ -6169,11 +6536,11 @@ def check_coverage_registers(full_run):
             if not os.path.exists(path):
                 out.append((relative, 1,
                             "coverage matrix is missing; regenerate it with "
-                            "python3 check.py --coverage"))
+                            "python3 check.py --generate (or --coverage)"))
             elif io.open(path, encoding="utf-8").read() != fresh:
                 out.append((relative, 1,
                             "coverage matrix is stale; regenerate it with "
-                            "python3 check.py --coverage"))
+                            "python3 check.py --generate (or --coverage)"))
     return out
 
 
@@ -6406,7 +6773,7 @@ def check_explanations(full_run):
                               != fresh):
         out.append((EXPLANATIONS_ADA, 1,
                     "the explanations are stale; regenerate them with"
-                    " python3 check.py --catalogue"))
+                    " python3 check.py --generate (or --catalogue)"))
     return out
 
 
@@ -6674,11 +7041,11 @@ def check_diagnostic_matrix(full_run):
     if not os.path.exists(path):
         out.append(("compiler/tests/diagnostics.matrix", 1,
                     "the diagnostic matrix is missing; regenerate it with "
-                    "python3 check.py --catalogue"))
+                    "python3 check.py --generate (or --catalogue)"))
     elif io.open(path, encoding="utf-8").read() != fresh:
         out.append(("compiler/tests/diagnostics.matrix", 1,
                     "the diagnostic matrix is stale; regenerate it with "
-                    "python3 check.py --catalogue"))
+                    "python3 check.py --generate (or --catalogue)"))
     return out
 
 
@@ -7351,30 +7718,25 @@ def check_running_examples(full_run):
             out.append(("examples.md", opened + 1,
                         "%s's listing differs from %s" % (title, source)))
 
-        metadata = io.open(
-            os.path.join(ROOT, os.path.dirname(source), "fixture.meta"),
-            encoding="utf-8").read().splitlines()
+        fields = fixture_fields(
+            os.path.join(ROOT, os.path.dirname(source), "fixture.meta"))
         reads = title in READING_EXAMPLES
         takes = title in ARGUMENT_EXAMPLES
-        required = ["class: runtime", "program: main.ldn",
-                    "status: 0" if reads or takes else "status: 42"]
-        for line in required:
-            if line not in metadata:
+        required = [("class", "runtime"), ("program", "main.ldn"),
+                    ("status", "0" if reads or takes else "42")]
+        for key, value in required:
+            if fields.get(key) != value:
                 out.append((source, 1,
                             "%s is showcased as running but its metadata "
-                            "does not say %r" % (title, line)))
-        if reads and not (any(line.startswith("stdin: ")
-                              for line in metadata)
-                          and any(line.startswith("run_expect: ")
-                                  for line in metadata)):
+                            "does not say %r" % (title, key + ": " + value)))
+        if reads and not (fields.get("stdin")
+                          and fields.get("run_expect")):
             out.append((source, 1,
                         "%s reads its input, so its metadata names the "
                         "input it is given and the output expected"
                         % title))
-        if takes and not (any(line.startswith("run_args: ")
-                              for line in metadata)
-                          and any(line.startswith("run_expect: ")
-                                  for line in metadata)):
+        if takes and not (fields.get("run_args")
+                          and fields.get("run_expect")):
             out.append((source, 1,
                         "%s takes its size as an argument, so its metadata "
                         "names the arguments it is given and the output "
@@ -7888,7 +8250,8 @@ def check_highlighters(full_run):
             out.append((relative, 1, "generated editor artifact is missing"))
         elif io.open(path, encoding="utf-8").read() != expected:
             out.append((relative, 1,
-                        "generated editor artifact is stale; run highlight/generate.py"))
+                        "generated editor artifact is stale; regenerate it with"
+                        " python3 check.py --generate (or highlight/generate.py)"))
 
     required = [
         "highlight/emacs/landin-mode.el",
@@ -8100,8 +8463,36 @@ def check_optimization_contract(full_run):
     identity = "compiler/ada/src/platform/landin_file_identity.c"
     if not os.path.isfile(identity):
         out.append((identity, 1, "native same-file identity adapter is missing"))
+    #  The build manifest's inputs are what scripts/build_identity.py finds
+    #  from the project files, so it is asked rather than its text read:
+    #  every host C source and header must be among them, and build.sh's
+    #  manifest must be the one that asks it.
+    from pathlib import Path
+    native = sorted(
+        os.path.relpath(os.path.join(directory, name), ROOT).replace(
+            os.sep, "/")
+        for directory, _, names in os.walk(
+            os.path.join(ROOT, "compiler/ada/src"))
+        for name in names if name.endswith((".c", ".h")))
+    try:
+        identity_script = runpy.run_path(
+            os.path.join(ROOT, "scripts/build_identity.py"),
+            run_name="build_identity_contract_check")
+        _, counted, _ = identity_script["project_inputs"](Path(ROOT))
+    except (OSError, ValueError, KeyError) as error:
+        counted = set()
+        out.append(("scripts/build_identity.py", 1,
+                    "build inputs cannot be read: %s" % error))
+    if not native or any(name not in counted
+                         for name in [identity] + native):
+        out.append(("scripts/build.sh", 1,
+                    "host C sources and headers must invalidate build checksums"))
     manifest = io.open("scripts/build.sh", encoding="utf-8").read()
-    if "-name '*.c'" not in manifest or "-name '*.h'" not in manifest:
+    function = re.search(r"^landin_manifest\(\) \{\n(.*?)^\}", manifest,
+                         re.M | re.S)
+    if not function or not re.search(
+            r"scripts/build_identity\.py\"?(?:[^\n]*\\\n)*[^\n]*--manifest",
+            function.group(1)):
         out.append(("scripts/build.sh", 1,
                     "host C sources and headers must invalidate build checksums"))
     project = io.open("compiler/ada/landin_lib.gpr", encoding="utf-8").read()
@@ -8493,6 +8884,66 @@ def check_failure_words(full_run):
     return out
 
 
+def check_core_module_places(full_run):
+    """A `core` module is known in each place a module has to be known.
+
+    Adding one took five edits that each surfaced only as its own check
+    failed: the freestanding probe's MODULES, the probe fixture
+    `runtime/library-shared-NAME`, that fixture's Cortex-M corpus row and
+    the module's section of docs/library.md (environments/cortex-m/test.py
+    holds MODULES to the directories).  This names every place a module is
+    missing from at once; core/README.md lists the same steps.
+    """
+    if not full_run:
+        return []
+    out = []
+    core = os.path.join(ROOT, "core")
+    if not os.path.isdir(core):
+        return out
+    probe = os.path.join(ROOT, "environments/cortex-m/freestanding.py")
+    listed = set()
+    if os.path.exists(probe):
+        found = re.search(r"MODULES = tuple\('core/'\+name for name in\s*"
+                          r"\(([^)]*)\)", io.open(probe, encoding="utf-8")
+                          .read())
+        if found:
+            listed = set(re.findall(r"'([a-z_]+)'", found.group(1)))
+    corpus_path = os.path.join(ROOT, "compiler/tests/cortex-m/corpus.json")
+    rows = {}
+    if os.path.exists(corpus_path):
+        rows = json.load(io.open(corpus_path, encoding="utf-8"))["fixtures"]
+    guide = os.path.join(ROOT, "docs/library.md")
+    sections = set()
+    if os.path.exists(guide):
+        sections = set(re.findall(r"^## (core/[a-z_/]+)$", io.open(
+            guide, encoding="utf-8").read(), re.M))
+    for name in sorted(os.listdir(core)):
+        directory = os.path.join(core, name)
+        if not os.path.isdir(directory) or not any(
+                one.endswith(".ldn") for one in os.listdir(directory)):
+            continue
+        fixture = "runtime/library-shared-" + name
+        missing = []
+        if name not in listed:
+            missing.append("'%s' in MODULES in "
+                           "environments/cortex-m/freestanding.py" % name)
+        if not os.path.exists(os.path.join(
+                ROOT, "compiler/tests/fixtures", fixture, "fixture.meta")):
+            missing.append("the probe fixture compiler/tests/fixtures/%s"
+                           " (main.ldn and fixture.meta, as the others)"
+                           % fixture)
+        if fixture not in rows:
+            missing.append("its row in compiler/tests/cortex-m/corpus.json"
+                           " (python3 scripts/add_fixture.py %s)" % fixture)
+        if "core/" + name not in sections:
+            missing.append("a `## core/%s` section in docs/library.md" % name)
+        if missing:
+            out.append(("core/README.md", 1,
+                        "core/%s is missing from %s" % (
+                            name, "; ".join(missing))))
+    return out
+
+
 def check_library_documentation(full_run):
     """Keep source docs and module overviews complete before rendering."""
     if not full_run:
@@ -8507,65 +8958,128 @@ def check_library_documentation(full_run):
     return []
 
 
+def generate_tokens():
+    text = token_dump()
+    if text is None:
+        print("the grammar has problems; fix those first")
+        return 2
+    io.open(os.path.join(ROOT, "compiler/tests/lexical.tokens"), "w",
+            encoding="utf-8").write(text)
+    print("wrote compiler/tests/lexical.tokens")
+    return 0
+
+
+def generate_catalogue():
+    text = catalogue_dump()
+    if text is None:
+        print("the catalogue could not be read")
+        return 2
+    io.open(os.path.join(ROOT, "compiler/tests/diagnostics.catalogue"),
+            "w", encoding="utf-8").write(text)
+    matrix = diagnostic_matrix_dump()
+    if matrix is None:
+        print("the diagnostic matrix could not be read")
+        return 2
+    io.open(os.path.join(ROOT, "compiler/tests/diagnostics.matrix"),
+            "w", encoding="utf-8").write(matrix)
+    explained = explanations_dump()
+    if explained is None:
+        print("the explanations could not be generated; run check.py")
+        return 2
+    io.open(os.path.join(ROOT, EXPLANATIONS_ADA), "w",
+            encoding="utf-8").write(explained)
+    print("wrote compiler/tests/diagnostics.catalogue")
+    print("wrote compiler/tests/diagnostics.matrix")
+    print("wrote " + EXPLANATIONS_ADA)
+    return 0
+
+
+def generate_coverage():
+    dumps = coverage_dumps()
+    if dumps is None:
+        print("the coverage registers could not be read")
+        return 2
+    for name, text in dumps.items():
+        io.open(os.path.join(ROOT, "compiler/tests", name), "w",
+                encoding="utf-8").write(text)
+        print("wrote compiler/tests/%s" % name)
+    return 0
+
+
+def generate_matrix():
+    text = construct_matrix()
+    if text is None:
+        print("the documents could not be read")
+        return 2
+    io.open(os.path.join(ROOT, "compiler/tests/constructs.matrix"),
+            "w", encoding="utf-8").write(text)
+    print("wrote compiler/tests/constructs.matrix")
+    return 0
+
+
+def generate_highlighters():
+    """The editor artifacts, written by their own generator.
+
+    highlight/generate.py owns them and check_highlighters holds them to
+    it; this runs that writer rather than a second copy of it.
+    """
+    import subprocess
+    generator = os.path.join(ROOT, "highlight/generate.py")
+    if not os.path.exists(generator):
+        print("highlight/generate.py is missing")
+        return 2
+    if subprocess.run([sys.executable, generator], cwd=ROOT).returncode:
+        print("highlight/generate.py failed")
+        return 2
+    print("wrote the editor artifacts of highlight/generate.py")
+    return 0
+
+
+#  Every generated file check.py holds to its sources, by the flag that
+#  writes it, in the order --generate writes them all.  Several flags at
+#  once write each, in this order whatever order they were named in.
+GENERATORS = (("--tokens", generate_tokens),
+              ("--catalogue", generate_catalogue),
+              ("--coverage", generate_coverage),
+              ("--matrix", generate_matrix))
+GENERATE_ALL = "--generate"
+
+
+def generate(flags):
+    """Run the named generators, or all of them; the first failure stops."""
+    every = GENERATORS + (("highlight/generate.py", generate_highlighters),)
+    chosen = [(flag, run) for flag, run in every
+              if GENERATE_ALL in flags or flag in flags]
+    for _, run in chosen:
+        status = run()
+        if status:
+            return status
+    return 0
+
+
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     if here:
         os.chdir(here)
 
-    if "--catalogue" in argv:
-        text = catalogue_dump()
-        if text is None:
-            print("the catalogue could not be read")
+    flags = [one for one in argv[1:] if one.startswith("--")]
+    valid = [GENERATE_ALL] + [flag for flag, _ in GENERATORS]
+    usage = ("python3 check.py checks everything, and python3 check.py"
+             " FILE... checks those files; %s regenerates every generated"
+             " file, and %s regenerate theirs"
+             % (GENERATE_ALL, ", ".join(flag for flag, _ in GENERATORS)))
+    unknown = [one for one in flags if one not in valid]
+    if unknown:
+        print("check.py does not know %s; %s"
+              % (", ".join(unknown), usage))
+        return 2
+    if flags:
+        if len(flags) != len(argv) - 1:
+            print("a generator flag writes files and takes no file to"
+                  " check; %s" % usage)
             return 2
-        io.open(os.path.join(ROOT, "compiler/tests/diagnostics.catalogue"),
-                "w", encoding="utf-8").write(text)
-        matrix = diagnostic_matrix_dump()
-        if matrix is None:
-            print("the diagnostic matrix could not be read")
-            return 2
-        io.open(os.path.join(ROOT, "compiler/tests/diagnostics.matrix"),
-                "w", encoding="utf-8").write(matrix)
-        explained = explanations_dump()
-        if explained is None:
-            print("the explanations could not be generated; run check.py")
-            return 2
-        io.open(os.path.join(ROOT, EXPLANATIONS_ADA), "w",
-                encoding="utf-8").write(explained)
-        print("wrote compiler/tests/diagnostics.catalogue")
-        print("wrote compiler/tests/diagnostics.matrix")
-        print("wrote " + EXPLANATIONS_ADA)
-        return 0
+        return generate(flags)
 
-    if "--coverage" in argv:
-        dumps = coverage_dumps()
-        if dumps is None:
-            print("the coverage registers could not be read")
-            return 2
-        for name, text in dumps.items():
-            io.open(os.path.join(ROOT, "compiler/tests", name), "w",
-                    encoding="utf-8").write(text)
-            print("wrote compiler/tests/%s" % name)
-        return 0
-
-    if "--matrix" in argv:
-        text = construct_matrix()
-        if text is None:
-            print("the documents could not be read")
-            return 2
-        io.open(os.path.join(ROOT, "compiler/tests/constructs.matrix"),
-                "w", encoding="utf-8").write(text)
-        print("wrote compiler/tests/constructs.matrix")
-        return 0
-
-    if "--tokens" in argv:
-        text = token_dump()
-        if text is None:
-            print("the grammar has problems; fix those first")
-            return 2
-        io.open(os.path.join(ROOT, "compiler/tests/lexical.tokens"), "w",
-                encoding="utf-8").write(text)
-        print("wrote compiler/tests/lexical.tokens")
-        return 0
     full_run = len(argv) == 1
     paths = FILES if full_run else argv[1:]
     missing = [p for p in paths if not os.path.exists(p)]
@@ -8618,6 +9132,7 @@ def main(argv):
     extra += check_first_program(full_run)
     extra += check_from_c_page(full_run)
     extra += check_library_documentation(full_run)
+    extra += check_core_module_places(full_run)
     extra += check_failure_words(full_run)
     extra += check_benchmark_game_oracles(full_run)
     extra += check_table_shape(full_run)

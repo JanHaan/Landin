@@ -1,0 +1,12 @@
+error[L0203]: unavailable tool reference: compiler.os
+  --> ../tests/fixtures/negative/atom-fact-without-a-comparison/main.ldn:1:25
+  |
+1 | system: bool = compiler.os
+  |                         ^^
+  = note: D437: compiler.os is compared in a fixed condition or a module value, such as `on_linux: bool = compiler.os == linux`, which a routine body then reads
+error[L0203]: unavailable tool reference: compiler.os
+  --> ../tests/fixtures/negative/atom-fact-without-a-comparison/main.ldn:5:17
+  |
+5 |     if compiler.os == linux then
+  |                 ^^
+  = note: D437: compiler.os is compared in a fixed condition or a module value, such as `on_linux: bool = compiler.os == linux`, which a routine body then reads

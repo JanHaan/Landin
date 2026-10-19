@@ -75,9 +75,7 @@ def inventory():
 def source_refusal(run, refine, name, row):
     base = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(base / 'fixture.meta')
-    inputs = (['--root=' + str((base / meta['root']).resolve()), str(base)]
-              if meta.get('root') else [str(base / meta['program'])])
-    inputs += [str(base / p.strip()) for p in meta.get('with', '').split(',') if p.strip()]
+    inputs = meta.module_arguments(base)
     try:
         run.command('compile-refusal', [refine, *inputs, '--target=cortex-m0', '--emit=asm',
                     '-o', run.out / 'refused.s'], timeout=900)

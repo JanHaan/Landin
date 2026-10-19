@@ -15,12 +15,12 @@ public main: () -> (code: i32) =
     words[-0] = words[-0] + 1
 
     if words[0] == 13
-        and words[1] == 0
-        and words[2] == 0
-        and words[3] == 44
-        and flags[5]
-        and not flags[4]
-        and not flags[6]
+      and words[1] == 0
+      and words[2] == 0
+      and words[3] == 44
+      and flags[5]
+      and not flags[4]
+      and not flags[6]
     then
         code = 42
     else

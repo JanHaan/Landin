@@ -74,7 +74,7 @@ looked: (cell: ptr mut u32) -> (r: result from cell) =
 end looked
 
 fallible: (cell: ptr mut u32, reject: bool) -> (r: result from cell)
-        ! unavailable =
+          ! unavailable =
     fail unavailable when reject
     r = cell
 end fallible

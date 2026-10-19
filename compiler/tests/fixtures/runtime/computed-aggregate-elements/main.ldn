@@ -74,7 +74,7 @@ end rich_variant
 public main: () -> (code: i32) =
     code = 1
     if computed(0) + nested(1, 1) + variant(1)
-       + rich_variant(0) == 90 then
+      + rich_variant(0) == 90 then
         code = 42
     end if
 end main

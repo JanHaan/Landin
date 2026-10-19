@@ -1,0 +1,2 @@
+--- A module whose name is also a configuration atom's word.
+public answer: i32 = 42

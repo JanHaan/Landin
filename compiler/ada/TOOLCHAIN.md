@@ -112,6 +112,20 @@ the name `refine` asks for: `x86_64-pc-linux-gnu-gcc` on Linux x86-64 and
 `as`, `ld` and `gdb`, so the GDB sessions on that host use the pinned debugger
 as they do on x86-64.
 
+Each Linux archive bundles its binutils too, GNU Binutils `2.46.1` in the
+x86-64 one, and the pin covers them. The Linux nix shell links and assembles
+with them: `flake.nix` wraps the archive's `as`, `ld.bfd` and the rest the
+way nixpkgs wraps its own binutils, so the store's glibc, start files and
+interpreter still reach the link, and `ld --version` in the shell names the
+archive's release. Before that, the shell's driver reached nixpkgs' binutils
+`ld`, which the pin did not cover, and which writes `DT_RUNPATH` where the
+archive's writes `DT_RPATH`. The shell also sets `NIX_NO_SELF_RPATH`, so a
+`refine` built there no longer carries the checkout's `outputs/out/lib` in
+its run path. What remains of the store in that run path is the pinned
+archive's own library directories and the store's glibc, which a compiler
+linked against the store's glibc needs. The macOS archive bundles no
+linker; every Darwin host links with Apple's.
+
 | platform | archive | sha256 |
 |---|---|---|
 | macOS arm64 | `gnat-aarch64-darwin-16.1.0-1.tar.gz` | `657cf254323eb91f79768918e8bd8887d6da7ac6056732a38f21e2848267da18` |
@@ -162,8 +176,9 @@ so a unit that starts using one is refused rather than silently paid for.
 
 Measured on 2026-10-16 when they were introduced, with the parser and syntax
 tree changes of the same round, checking hello-world fell by about a quarter.
-`scripts/build.sh` counts the file among the project files, so editing it
-rebuilds from clean.
+`landin_common.gpr` names the file, so the build counts it among the project
+files (`scripts/build_identity.py` finds every input from the project files)
+and editing it rebuilds from clean.
 
 The shared library also compiles `src/platform/landin_file_identity.c`,
 `src/platform/landin_tool_process.c`, `src/platform/landin_resource_usage.c`
@@ -171,9 +186,9 @@ and `src/platform/landin_channel.c` with the pinned toolchain's host C compiler 
 structures and wait/signal constants out of Ada; they do not inspect Landin
 target layout. Their switches are
 `-std=c11 -Wall -Wextra -Werror -pedantic -fno-common -O2 -g` in both modes:
-C warnings are errors too. `scripts/build.sh` includes C sources and headers
-in the same source-checksum manifest as Ada, so editing an adapter cannot
-reuse stale objects. The adapters use only the host C runtime, already a
+C warnings are errors too. The library project's `Languages` include C, so
+its C sources and headers are in the same source-checksum manifest as Ada,
+and editing an adapter cannot reuse stale objects. The adapters use only the host C runtime, already a
 GNAT runtime dependency; it adds no separately acquired library.
 
 Before comparing that manifest, `scripts/build_config.py` asks the pinned

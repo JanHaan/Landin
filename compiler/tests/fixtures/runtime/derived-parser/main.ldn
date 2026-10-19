@@ -297,7 +297,7 @@ public main: () -> (code: i32) =
 
     mut first_space: arena.space = zeroed
     first_arena := arena.over_unchecked(first_space,
-                                            addr first_memory[0], 4096)
+                                        addr first_memory[0], 4096)
     mut collected := diag.new(capacity: 8)
     mut bounded_log: any diag.log = any(addr collected)
     mut tree := parser.empty()
@@ -313,7 +313,7 @@ public main: () -> (code: i32) =
 
     mut second_space: arena.space = zeroed
     second_arena := arena.over_unchecked(second_space,
-                                             addr second_memory[0], 4096)
+                                         addr second_memory[0], 4096)
     diagnostic_stream := world.err()
     writer: any io.writer = any(addr host)
     mut immediate := diag.stream(writer, diagnostic_stream)
@@ -344,7 +344,7 @@ public main: () -> (code: i32) =
 
     mut third_space: arena.space = zeroed
     third_arena := arena.over_unchecked(third_space,
-                                            addr third_memory[0], 4096)
+                                        addr third_memory[0], 4096)
     mut broken := diag.stream(writer, dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     mut interrupted_tree := parser.empty()

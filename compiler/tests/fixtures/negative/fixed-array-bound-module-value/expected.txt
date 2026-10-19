@@ -1,0 +1,18 @@
+error[L0305]: a module value has to be one the compiler knows when it reads it, and a call runs a routine to find it
+  --> ../tests/fixtures/negative/fixed-array-bound-module-value/main.ldn:3:17
+  |
+3 | called: usize = width()
+  |                 ^^^^^^^
+  = note: [1940]: nothing runs before the entry point [1460], and there is no compile-time execution
+error[L0305]: a `mut` module value can change while the program runs, so it is not a fixed count
+  --> ../tests/fixtures/negative/fixed-array-bound-module-value/main.ldn:9:18
+  |
+9 | written: type = [room]u8
+  |                  ^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs
+error[L0305]: this module value is not a fixed count: its image is not an integer folded from literals, compiler facts and other immutable module integers
+  --> ../tests/fixtures/negative/fixed-array-bound-module-value/main.ldn:10:16
+   |
+10 | truth: type = [flag]u8
+   |                ^^^^
+  = note: D136/D438: an array bound folds integer literals, fixed formals, immutable module integers and target-independent integer arithmetic; no user routine runs

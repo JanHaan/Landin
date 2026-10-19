@@ -12,7 +12,7 @@ read_view: (source: ptr mut [2]u32) -> (result: []u32 from source) =
     source.val[0..<2]
 end read_view
 empty_view: (source: ptr mut [1]empty)
-    -> (result: []mut empty from source) =
+            -> (result: []mut empty from source) =
     source.val[0..<1]
 end empty_view
 public main: () -> (code: i32) =

@@ -1,0 +1,8 @@
+class: negative
+summary: a concept entry selected from a module-internal type is refused naming the concept module's public operation that calls it
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/a-concept-entry-names-its-public-operation
+status: 1
+codes: L0202
+constructs: 1240, 1360, 1410
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

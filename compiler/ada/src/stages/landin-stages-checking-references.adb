@@ -99,6 +99,12 @@ package body Landin.Stages.Checking.References is
         Landin.Stages.Meanings (Context);
       Types : constant not null access Landin.Checking.Table :=
         Landin.Stages.Types (Context);
+      Spellings : constant not null access Landin.Source.Names.Table :=
+        Identities (Context);
+
+      function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
+        is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
+
       Parameters : constant Positive := Positive'Max
         (1, Syn.Parameter_Count (Of_Tree, Function_Node));
 
@@ -1431,7 +1437,8 @@ package body Landin.Stages.Checking.References is
                   if Fact.Derives (Local)
                     and then
                       (case Res.Sort_Of (Meanings.all, Id) is
-                         when Res.Local_Binding | Res.Named_Return =>
+                         when Res.Local_Binding | Res.Named_Return
+                            | Res.Result_Binding =>
                            not Runtime_Alias_Of (Local)
                              or else Alias_Storage (Local).Frame,
                          when Res.Pattern_Binding =>
@@ -2345,6 +2352,10 @@ package body Landin.Stages.Checking.References is
                   then Res.No_Declaration
                   else Root_Declaration (Tree, Argument));
                Used : Res.Declaration_Id := Res.No_Declaration;
+
+               function Convention_Word return String
+                 is (if Part.Convention = Syn.Sink_Convention
+                     then "`sink`" else "`inout`");
             begin
                if Part.Convention
                     in Syn.Inout_Convention | Syn.Sink_Convention
@@ -2372,15 +2383,51 @@ package body Landin.Stages.Checking.References is
                              Syn.Tree := Tree_For
                                (Res.Source_Of (Meanings.all, Used));
                         begin
+                           --  The convention locks the argument, whether the
+                           --  routine writes it or not, so the report names
+                           --  the convention, the view and the ways out.
                            Bad.Report
                              (Item    => Bad.Borrowed_Place,
                               Source  => Syn.Source_Of (Tree),
                               Where   => Syn.Where (Tree, Argument),
-                              Message => "this `inout` or `sink` use may"
-                                         & " move storage while a derived"
-                                         & " view is still in use",
-                              Note    => "[0800]/[0830]: take the view again"
-                                         & " after mutating its source",
+                              Message => "this argument is passed "
+                                         & Convention_Word
+                                         & ", so the call may "
+                                         & (if Part.Convention
+                                              = Syn.Sink_Convention
+                                            then "take"
+                                            else "change")
+                                         & " its storage while `"
+                                         & Spelled
+                                             (Res.Name_Of
+                                                (Meanings.all, Used))
+                                         & "` still views it",
+                              Note    => "[0800]/[0830]: the "
+                                         & Convention_Word
+                                         & (if Part.Name
+                                              = Landin.Source.Names.No_Name
+                                            then ""
+                                            else " parameter `"
+                                                 & Spelled (Part.Name)
+                                                 & "`")
+                                         & " locks its argument whether or"
+                                         & " not the routine writes it;"
+                                         & " finish with `"
+                                         & Spelled
+                                             (Res.Name_Of
+                                                (Meanings.all, Used))
+                                         & "` before the call and take it"
+                                         & " again after"
+                                         & (if Part.Convention
+                                              = Syn.Sink_Convention
+                                            then ""
+                                            elsif Part.Name
+                                              = Landin.Source.Names.No_Name
+                                            then ""
+                                            else ", or, if the routine only"
+                                                 & " reads it, declare `"
+                                                 & Spelled (Part.Name)
+                                                 & "` without `inout`"),
                               Related => Syn.Origin
                                 (Used_Tree.all,
                                  Res.Node_Of (Meanings.all, Used)),
@@ -2408,7 +2455,10 @@ package body Landin.Stages.Checking.References is
          if Id /= Res.No_Declaration then
             Derive (Result, Local_Of (Id));
             case Res.Sort_Of (Meanings.all, Id) is
-               when Res.Local_Binding | Res.Named_Return =>
+               --  [1920]: a destructured name binds a local, so its
+               --  storage is the frame's as an ordinary local's is.
+               when Res.Local_Binding | Res.Named_Return
+                  | Res.Result_Binding =>
                   if Runtime_Alias (Id) then
                      Result := Alias_Storage (Local_Of (Id));
                      Derive (Result, Local_Of (Id));

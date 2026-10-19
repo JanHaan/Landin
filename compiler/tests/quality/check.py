@@ -9,12 +9,14 @@ import os
 from pathlib import Path
 import platform
 import re
-import shlex
 import subprocess
 import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+import fixture_meta  # noqa: E402
+
 PROFILES = (("none", "off"), ("size", "off"),
             ("size", "auto"), ("speed", "auto"))
 WORKLOAD_COMPILE_TIMEOUT = 900
@@ -34,22 +36,21 @@ def profiles_for(name: str) -> tuple[tuple[str, str], ...]:
 def fixture_configuration(name: str) -> dict:
     require(name in FIXTURE_NAMES, f"unregistered quality fixture: {name}")
     fixture = HERE.parent / "fixtures" / "runtime" / name
-    metadata = dict(line.split(":", 1) for line in
-                    (fixture / "fixture.meta").read_text().splitlines()
-                    if ":" in line and not line.startswith("#"))
+    metadata = fixture_meta.read(fixture)
     rooted = "root" in metadata
     return {
-        "source": fixture if rooted else fixture / metadata["program"].strip(),
-        "root": (fixture / metadata["root"].strip()).resolve() if rooted else None,
-        "expected_status": int(metadata["status"]),
-        "run_args": tuple(shlex.split(metadata.get("run_args", ""))),
+        "source": fixture if rooted else fixture / metadata["program"],
+        "root": (fixture / metadata["root"]).resolve() if rooted else None,
+        "expected_status": metadata.status,
+        # `run_args` as written, then each `run_files` file below the fixture.
+        "run_args": tuple(metadata.program_arguments(fixture)),
         # The file `stdin:` names below the fixture, or None for an empty
         # standard input, as every runtime lane gives one.
-        "stdin": (fixture / metadata["stdin"].strip()
+        "stdin": (fixture / metadata["stdin"]
                   if "stdin" in metadata else None),
-        "expected_output": ((fixture / metadata["run_expect"].strip()).read_bytes()
-                            if "run_expect" in metadata else b""),
-        # Runtime fixture arguments are relative to the Ada harness directory.
+        "expected_output": metadata.run_expected(fixture) or b"",
+        # A program runs where the test program runs it: compiler/ada,
+        # whose build/ is where a fixture's own output may go.
         "execution_cwd": HERE.parents[1] / "ada",
     }
 

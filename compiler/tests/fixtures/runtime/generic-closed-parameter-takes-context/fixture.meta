@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D419 a parameter whose type names no generic formal gives an argument its context, an array literal lent read-only, an erasure, ptr(integer), a struct literal and zeroed, and D420 a named construction fills a formal; [1880] ptr(integer) takes a non-generic parameter's pointer type
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0460, 0520, 0570, 0700, 1290, 1380, 1880, 1920
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

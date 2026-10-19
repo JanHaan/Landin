@@ -1,8 +1,8 @@
 class: negative
-summary: a distinct type has no bit operators over a signed base, no arithmetic of its own and no updating assignment, though it is ordered
+summary: a distinct type has no bit operators over a signed base and no arithmetic of its own, though it is ordered
 expect: expected.txt
 args: --root=../.. ../tests/fixtures/negative/distinct-ordering-and-signed-flags
 constructs: 0330, 0350, 0650, 1890
-codes: L0301, L0301, L0301
+codes: L0301, L0301
 status: 1
 targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

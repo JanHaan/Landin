@@ -23,8 +23,8 @@ public main: () -> (code: i32) =
     module_copy := copy(module_box.values)
     b.values[1] = 9
     refs: references = (atoms: [north, south],
-        callbacks: [answer, answer],
-        pointers: [addr module_value, addr module_value])
+                        callbacks: [answer, answer],
+                        pointers: [addr module_value, addr module_value])
     atoms := copy(refs.atoms)
     callbacks := copy(refs.callbacks)
     pointers := copy(refs.pointers)
@@ -36,5 +36,5 @@ public main: () -> (code: i32) =
       and module_copy[0] + module_copy[1] == 42
       and atoms[0] == north and atoms[1] == south
       and callback() == 42 and module_value == 42
-      then 42 else 1 end if
+           then 42 else 1 end if
 end main

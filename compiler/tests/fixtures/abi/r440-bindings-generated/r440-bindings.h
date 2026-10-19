@@ -67,6 +67,48 @@ extern const int *binding_saved_pointer;
 extern _Bool landin_binding_origins(void *output, const void *cell,
                                    binding_int_pointer *result_pointer, const int *src);
 
+/* D410's byte-packed records and D413's flexible array member.  C reaches
+   each only through a pointer (D414); the generator wraps the by-value
+   forms below in pointer adapters. */
+typedef struct __attribute__((packed)) BindingWire {
+    unsigned char kind;
+    unsigned short half;
+    unsigned int word;
+    unsigned long wide;
+    double twice;
+    _Bool flag;
+    unsigned char bytes[3];
+} BindingWire;
+
+typedef struct __attribute__((packed)) BindingFrame {
+    unsigned char lead;
+    BindingWire body;
+    unsigned short tail;
+} BindingFrame;
+
+typedef struct BindingEntry {
+    unsigned long inode;
+    unsigned short length;
+    unsigned char kind;
+    char name[];
+} BindingEntry;
+
+typedef struct __attribute__((packed)) BindingWords {
+    unsigned char kind;
+    unsigned int data[];
+} BindingWords;
+
+extern unsigned long binding_layout(int which);
+extern void binding_wire_fill(BindingWire *record);
+extern int binding_wire_check(const BindingWire *record);
+extern BindingWire binding_wire_make(unsigned char kind);
+extern int binding_frame_check(BindingFrame value);
+extern void binding_entry_fill(BindingEntry *record);
+extern int binding_entry_check(const BindingEntry *record);
+extern int binding_words_sum(const BindingWords *record, int count);
+extern BindingFrame binding_frame_global;
+extern void landin_binding_wire_mark(BindingWire *record);
+
 extern int landin_bindings_check(void);
 
 #endif

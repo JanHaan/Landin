@@ -95,7 +95,14 @@ class Image:
                     loads=self.loads, sections=sections)
 
 
-def verify(executable, symbols, table, assembly, source_root):
+#  D422: a library module's file is recorded as this prefix and its module
+#  path; the library these checks build against is this checkout.
+LIBRARY_PREFIX = '/landin-library/'
+LIBRARY_ROOT = Path(__file__).resolve().parents[1]
+
+
+def verify(executable, symbols, table, assembly, source_root,
+           library_root=LIBRARY_ROOT):
     running, debug = Image(executable), Image(symbols)
     require(running.loaded_identity() == debug.loaded_identity(),
             'executable and debugger load images differ')
@@ -115,8 +122,11 @@ def verify(executable, symbols, table, assembly, source_root):
     require(files and len({f['file_id'] for f in files}) == len(files),
             'missing or duplicate source identities')
     for entry in files:
-        path = Path(os.fsdecode(bytes.fromhex(entry['path_hex'])))
-        if not path.is_absolute():
+        recorded = os.fsdecode(bytes.fromhex(entry['path_hex']))
+        path = Path(recorded)
+        if recorded.startswith(LIBRARY_PREFIX):
+            path = Path(library_root)/recorded[len(LIBRARY_PREFIX):]
+        elif not path.is_absolute():
             path = Path(source_root)/path
         require(digest(path.read_bytes()) == entry['source_sha256'],
                 'stale source snapshot: '+str(path))
@@ -133,10 +143,13 @@ def main():
     p.add_argument('--sources', type=Path, required=True)
     p.add_argument('--assembly', type=Path, required=True)
     p.add_argument('--source-root', type=Path, required=True)
+    p.add_argument('--library-root', type=Path, default=LIBRARY_ROOT,
+                   help='the library /landin-library/ names; default this'
+                        ' checkout')
     a = p.parse_args()
     try:
         print(json.dumps(verify(a.executable, a.symbols, a.sources, a.assembly,
-                                a.source_root), indent=2))
+                                a.source_root, a.library_root), indent=2))
     except (ValueError, OSError, KeyError, TypeError, struct.error) as e:
         p.error(str(e))
 

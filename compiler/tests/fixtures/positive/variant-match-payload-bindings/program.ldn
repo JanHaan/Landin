@@ -14,17 +14,17 @@ bind_payloads: () -> none =
     match local.kind
         leaf: _ = 0
         pair(first, inout second): if true then
-            _ = first
-            second = second + 1
-        end if
+                                       _ = first
+                                       second = second + 1
+                                   end if
         row: _ = 0
     end match
     match state.kind
         leaf: _ = 0
         pair(first, inout second): if true then
-            _ = first
-            second = second
-        end if
+                                       _ = first
+                                       second = second
+                                   end if
         row: _ = 0
     end match
 end bind_payloads

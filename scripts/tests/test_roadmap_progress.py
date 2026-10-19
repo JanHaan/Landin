@@ -4,7 +4,6 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 import warnings
 
 
@@ -58,7 +57,7 @@ HOSTED = ("Standard input, files and directories",
           "The rest of the file system", "The recurring parser frictions",
           "Closing the gap the measurements found", "Dynamic loading",
           "The newcomer's path",
-          "What the newcomer's path met")
+          "What the newcomer's path met", "What the register holds now")
 CONCURRENCY = ("Prototype 5", "Stackful fibres", "A second Io",
                "Threads and the atomic wrapper")
 
@@ -293,35 +292,41 @@ Depends on: none
         self.assertTrue(any("roadmap status pointer" in problem[2]
                             for problem in problems))
 
-    def test_renderer_smoke_shows_the_planned_next_item(self):
-        with tempfile.TemporaryDirectory(prefix="landin-site-") as directory:
-            old_site = RENDER.SITE
-            RENDER.SITE = Path(directory) / "site"
-            try:
-                progress = RENDER.roadmap_progress(BETWEEN_ITEMS)
-                with patch.object(RENDER, "roadmap_progress", return_value=progress):
-                    self.assertEqual(
-                        RENDER.main(["--from", str(ROOT), "--verify"]), 0)
-                index = (RENDER.SITE / "index.html").read_text()
-            finally:
-                RENDER.SITE = old_site
+    def front_page(self, roadmap):
+        """The front page the renderer writes for this roadmap, alone.
+
+        Only the page that carries the status, from the real README's
+        status line and a stand-in program: rendering the whole site to
+        read two lines of it took twenty seconds a run.  The whole render
+        and its check that every roadmap item reached the front page run
+        in test_library_docs.py, which renders the site once anyway.
+        """
+        status = RENDER.readme_status((ROOT / "README.md").read_text())
+        self.assertTrue(status)
+        program = ("sensors.ldn", ["main: () -> i32 = 0"], [])
+        return RENDER.index_page(RENDER.DOCS + RENDER.GUIDES, {},
+                                 ["Landin is a language."], status,
+                                 RENDER.roadmap_progress(roadmap), program,
+                                 set(), None, "")
+
+    def test_front_page_shows_the_planned_next_item(self):
+        index = self.front_page(BETWEEN_ITEMS)
         self.assertIn("next planned item", index)
         self.assertIn(SECOND, index)
+        self.assertIn(FIRST, index)
         self.assertNotIn('<div class="roadmap-now">', index)
         self.assertNotIn("roadmap endpoint", index)
 
-    def test_renderer_smoke_shows_the_endpoint(self):
-        with tempfile.TemporaryDirectory(prefix="landin-site-") as directory:
-            old_site = RENDER.SITE
-            RENDER.SITE = Path(directory) / "site"
-            try:
-                progress = RENDER.roadmap_progress(ENDPOINT)
-                with patch.object(RENDER, "roadmap_progress", return_value=progress):
-                    self.assertEqual(
-                        RENDER.main(["--from", str(ROOT), "--verify"]), 0)
-                index = (RENDER.SITE / "index.html").read_text()
-            finally:
-                RENDER.SITE = old_site
+    def test_front_page_shows_the_active_item(self):
+        index = self.front_page(ACTIVE_ITEM)
+        self.assertIn('<div class="roadmap-now">', index)
+        self.assertIn("up next", index)
+        self.assertIn(FIRST, index)
+        self.assertIn(SECOND, index)
+        self.assertNotIn("next planned item", index)
+
+    def test_front_page_shows_the_endpoint(self):
+        index = self.front_page(ENDPOINT)
         self.assertIn("roadmap endpoint", index)
         self.assertIn(SECOND, index)
         self.assertNotIn("next planned item", index)
