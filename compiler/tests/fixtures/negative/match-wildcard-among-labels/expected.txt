@@ -1,0 +1,6 @@
+error[L0100]: `_` is an arm of its own, never one of several labels
+  --> ../tests/fixtures/negative/match-wildcard-among-labels/program.ldn:11:16
+   |
+11 |         south, _: n = 2
+   |                ^
+  = note: D405: `_` covers every case no other arm names; list the cases, or write `_:` alone

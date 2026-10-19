@@ -8,4 +8,4 @@ run_expect: output.txt
 stream: output
 status: 0
 constructs: 0570, 0790, 0800, 0900, 0940, 0960, 1100, 1130, 1290, 1650, 1660, 1680
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

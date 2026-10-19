@@ -649,12 +649,13 @@ package body Landin.Backend.X86_64 is
       --  Allocate one namespace before emitting anything.  Forced linker
       --  identities are reserved first, including imports whose source names
       --  differ.  Ordinary routines, anonymous items and data then keep their
-      --  readable names when free, or receive a deterministic unused mangle.
-      --  A candidate must avoid both forced names and other source names:
-      --  even `landin_1_foo` can be an explicit C name or an ordinary datum.
+      --  readable names when free, or else D417's module-qualified name,
+      --  `core.arena.reset`, with `.1`, `.2` and so on while another item
+      --  holds that.  A candidate must avoid both forced names and other
+      --  source names: an explicit C name can hold a qualified spelling too.
       function Symbol (Item : Landin.IR.Item_Id) return String;
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
-      function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
+      function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean;
 
       --  The library's argument initializer the hosted entry calls with
       --  C's argc, argv and envp, when the program defines one.
@@ -968,8 +969,7 @@ package body Landin.Backend.X86_64 is
                Spelling : constant String := Source_Symbol (Item);
             begin
                if not Is_Forced (Item) then
-                  if not Is_C_Item (Item) and then Available (Spelling, Item)
-                  then
+                  if Available (Spelling, Item) then
                      Allocate
                        (Position, Unbounded.To_Unbounded_String (Spelling));
                   else
@@ -977,10 +977,8 @@ package body Landin.Backend.X86_64 is
                         Base : constant String :=
                           (if Declared = Landin.IR.No_Declaration
                            then Spelling
-                           else "landin_"
-                             & Trimmed
-                               (Landin.IR.Declaration_Id'Image (Declared))
-                             & "_" & Spelling);
+                           else Landin.Backend.Qualified_Symbol
+                             (Meanings, Declared, Spelling));
                         Candidate : Unbounded.Unbounded_String :=
                           Unbounded.To_Unbounded_String (Base);
                         Attempt : Natural := 0;
@@ -990,7 +988,7 @@ package body Landin.Backend.X86_64 is
                         loop
                            Attempt := Attempt + 1;
                            Candidate := Unbounded.To_Unbounded_String
-                             (Base & "_" & Trimmed (Natural'Image (Attempt)));
+                             (Base & "." & Trimmed (Natural'Image (Attempt)));
                         end loop;
                         Allocate (Position, Candidate);
                      end;
@@ -1024,14 +1022,9 @@ package body Landin.Backend.X86_64 is
         is (Local_Prefix & "landin_evidence_"
             & Trimmed (Landin.IR.Evidence_Id'Image (Id)));
 
-      function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean
-      is
-         Declared : constant Landin.IR.Declaration_Id :=
-           Landin.IR.Declares (Of_Unit, Item);
-      begin
-         return Declared /= Landin.IR.No_Declaration
-           and then Landin.Resolution.Is_Public (Meanings, Declared);
-      end Is_Public_Item;
+      function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean
+        is (Landin.Backend.Is_Exported
+              (Of_Unit, Meanings, Item, Hosted_Entry, Landin.IR.No_Item));
 
       --  Labels carry the item, because a Block_Id restarts at 1 in the
       --  next item and two blocks named `.L1` would be one label.
@@ -3747,7 +3740,7 @@ package body Landin.Backend.X86_64 is
                      end if;
                   end;
 
-               when Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
+               when Landin.IR.Measurement_Kind =>
                   --  [0370]: the answer is a target fact, and this is the
                   --  first place in the compiler that has one.
                   declare
@@ -3759,7 +3752,7 @@ package body Landin.Backend.X86_64 is
                        (Of_Unit, Item, Value, Facts, Size, Alignment);
                      declare
                         Answer : constant String :=
-                          (if Op = Landin.IR.Measure_Size
+                          (if Op /= Landin.IR.Measure_Align
                            then Landin.Targets.Byte_Count'Image (Size)
                            else Landin.Targets.Byte_Alignment'Image
                                   (Alignment));
@@ -6869,7 +6862,7 @@ package body Landin.Backend.X86_64 is
             end loop;
          end loop;
 
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -7411,8 +7404,7 @@ package body Landin.Backend.X86_64 is
 
                      --  [0370] in a module value, folded here for the
                      --  same reason the shifts are: it needs a target.
-                     when Landin.IR.Measure_Size
-                        | Landin.IR.Measure_Align =>
+                     when Landin.IR.Measurement_Kind =>
                         declare
                            Size : Landin.Targets.Byte_Count;
                            Alignment : Landin.Targets.Byte_Alignment;
@@ -7420,7 +7412,7 @@ package body Landin.Backend.X86_64 is
                            Measurement_Extent
                              (Of_Unit, Item, Value, Facts, Size, Alignment);
                            Held (Natural (Value)) :=
-                             (if Op = Landin.IR.Measure_Size
+                             (if Op /= Landin.IR.Measure_Align
                               then Landin.Types.Folded (Size)
                               else Landin.Types.Folded (Alignment));
                         end;
@@ -8220,7 +8212,7 @@ package body Landin.Backend.X86_64 is
             Alignment := Landin.Targets.Alignment_Of (Placed);
          end if;
 
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
          Put (Character'Val (9) & ELF.Object_Type (Symbol (Item)));
@@ -8320,7 +8312,7 @@ package body Landin.Backend.X86_64 is
          Bytes : constant String :=
            Trimmed (Landin.Targets.Byte_Count'Image (Size));
       begin
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -8418,7 +8410,7 @@ package body Landin.Backend.X86_64 is
                     * Landin.Targets.Byte_Count
                         (Landin.Targets.Bytes (Held))));
          begin
-            if Is_Public_Item (Item) then
+            if Is_Exported_Item (Item) then
                Put (Character'Val (9) & ".globl " & Symbol (Item));
             end if;
 
@@ -8489,7 +8481,7 @@ package body Landin.Backend.X86_64 is
       begin
          Landin.Backend.Field_Extent
            (Of_Unit, Element, Facts, Element_Size, Alignment);
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
          Put (Character'Val (9) & ELF.Object_Type (Symbol (Item)));
@@ -8538,7 +8530,7 @@ package body Landin.Backend.X86_64 is
          Bytes : constant String :=
            Trimmed (Positive'Image (Landin.Targets.Bytes (Held)));
       begin
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -8576,7 +8568,7 @@ package body Landin.Backend.X86_64 is
                Shareable (Index) :=
                  Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
                  and then Item /= Hosted_Entry
-                 and then not Is_Public_Item (Item)
+                 and then not Is_Exported_Item (Item)
                  and then not Is_Forced (Item);
             end;
          end loop;
@@ -8803,10 +8795,10 @@ package body Landin.Backend.X86_64 is
                   Bodies (Index) := Unbounded.Null_Unbounded_String;
                   Landin.Build_Reports.Append (Report, Statistics (Index));
                else
-                  --  An alias is still this routine's symbol: a public one
+                  --  An alias is still this routine's symbol: an exported one
                   --  keeps its visibility and its function type, so a
                   --  linker and a debugger see it as before the fold.
-                  if Is_Public_Item (Item) then
+                  if Is_Exported_Item (Item) then
                      Emit (".globl " & Symbol (Item));
                   end if;
                   Emit (ELF.Function_Type (Symbol (Item)));
@@ -8862,7 +8854,8 @@ package body Landin.Backend.X86_64 is
               Kept_Evidence_Entries
                 (Of_Unit,
                  (if Panic = null then Landin.IR.No_Item
-                  else Landin.Panics.Handler (Panic.all)));
+                  else Landin.Panics.Handler (Panic.all)),
+                 Meanings, Names);
          begin
             for Position in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
                declare

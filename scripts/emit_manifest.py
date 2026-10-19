@@ -61,6 +61,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_lock  # noqa: E402
+
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
            "freebsd-x86-64", "freebsd-arm64", "linux-rv64")
 MODES = ("debug", "release")
@@ -193,6 +196,9 @@ def compile_one(job):
 
 
 def emit(refine, root, out, workers=None, targets=TARGETS):
+    #  A rebuild of this build waits until the manifest is written, rather
+    #  than replace refine between two of its requests.
+    build_lock.reading(refine)
     refine = Path(refine).resolve()
     fixtures = sorted(
         p for p in (Path(root).resolve() / "compiler/tests/fixtures/positive").iterdir()
@@ -297,11 +303,6 @@ def compare(paths):
 MODE_TARGETS = ("linux-x86-64", "linux-arm64", "cortex-m0")
 STANDARD_PROFILES = (("none", "off"), ("size", "off"), ("size", "auto"),
                      ("speed", "auto"))
-#  A runtime fixture's `targets:` uses the lane names; refine names one
-#  of them differently.
-LANE_TARGETS = {"cortex-m": "cortex-m0", "macos-arm64": "darwin-arm64"}
-
-
 def mode_entries(root, targets):
     """(name, directory, operands, targets) for each source compared.
 
@@ -319,7 +320,8 @@ def mode_entries(root, targets):
                 named = set()
                 for line in (fixture / "fixture.meta").read_text().splitlines():
                     if line.startswith("targets:"):
-                        named = {LANE_TARGETS.get(one.strip(), one.strip())
+                        #  `targets:` spells each as `--target` does.
+                        named = {one.strip()
                                  for one in line.split(":", 1)[1].split(",")}
                 wanted = tuple(t for t in targets if t in named)
             if wanted:
@@ -355,6 +357,8 @@ def emit_both(job):
 
 
 def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
+    for compiler in (debug, release):
+        build_lock.reading(compiler)
     compilers = (Path(debug).resolve(), Path(release).resolve())
     if workers is None:
         workers = min(MAX_WORKERS, os.cpu_count() or 1)

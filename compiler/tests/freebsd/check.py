@@ -132,10 +132,14 @@ class Lane:
                 if self.target not in meta['targets'].split(', '):
                     continue
                 base = meta_path.parent
-                if 'args' in meta:
-                    argv = [a for a in shlex.split(meta['args']) if not a.startswith('--target=')]
-                elif 'root' in meta:
-                    argv = ['--root=' + str((base / meta['root']).resolve()), str(base)]
+                options = [a for a in shlex.split(meta.get('args', ''))
+                           if not a.startswith('--target=')]
+                #  A rooted fixture's `args` are options before the module
+                #  its root gives (compiler/tests/README.md).
+                if 'root' in meta:
+                    argv = options + ['--root=' + str((base / meta['root']).resolve()), str(base)]
+                elif 'args' in meta:
+                    argv = options
                 else:
                     argv = [str(base / meta['program'])]
                 argv += [str(base / p.strip()) for p in meta.get('with', '').split(',') if p.strip()]
@@ -547,6 +551,12 @@ def main():
     parser.add_argument('--shard', type=shard, metavar='I/N',
                         help='fixtures I, I+N, ... of the selection; all N together are the lane')
     args = parser.parse_args()
+    #  A rebuild of this build waits for the lane, rather than replace
+    #  refine between two of its compilations.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import build_lock
+    if args.refine:
+        build_lock.reading(args.refine)
     require(sys.platform.startswith('linux'), 'FreeBSD emission/controller lane must run on Linux')
     require(not (args.prepare_only and args.prepared), 'prepare and execute are distinct stages')
     require(args.refine is not None or args.prepared is not None, 'emission requires refine')

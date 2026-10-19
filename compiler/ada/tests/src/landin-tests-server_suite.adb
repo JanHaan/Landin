@@ -11,6 +11,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
 with Landin.Driver;
+with Landin.Driver.Library;
 with Landin.Json;
 with Landin.Platform;
 with Landin.Platform.Native;
@@ -376,8 +377,13 @@ package body Landin.Tests.Server_Suite is
                   Rooted    : Boolean := False;
                begin
                   --  The analysis is linux-x86-64's, and so is refine's
-                  --  verdict it is compared with, on every host.
+                  --  verdict it is compared with, on every host.  It is
+                  --  given the library refine finds beside itself, as the
+                  --  server gives it, so a module under a fixture's own
+                  --  root may import `core/*` here as it may there.
                   Arguments.Append ("--target=linux-x86-64");
+                  Asked.Library := Unbounded.To_Unbounded_String
+                    (Landin.Driver.Library.Located (Real));
                   Fixtures.Append_Module_Arguments
                     (Fixture, Corpus, Arguments);
                   for Argument of Arguments loop
@@ -1235,7 +1241,10 @@ package body Landin.Tests.Server_Suite is
             begin
                Ran := Ran + 1;
                Landin.Testing.Check_Equal
-                 (Item, Unbounded.To_String (Result.Problem), "", Name);
+                 (Item, Unbounded.To_String (Result.Problem), "",
+                  Name & " (once the difference is read, re-record it"
+                  & " alone with ./scripts/test.sh --record=server/"
+                  & Name & ")");
             end;
          end if;
       end loop;
@@ -1281,30 +1290,42 @@ package body Landin.Tests.Server_Suite is
       end loop;
    end Navigation_Reuses_Checked_Modules;
 
+   procedure Record_Session
+     (Name : String; Found : out Boolean; Wrote : out Boolean)
+   is
+      Real : Landin.Platform.Native.Native_Filesystem;
+      Path : constant String := Sessions_Root & "/" & Name & "/session.lsp";
+   begin
+      Wrote := False;
+      Found := Name /= ""
+        and then (for all C of Name => C not in '/' | '\')
+        and then Name /= "." and then Name /= ".."
+        and then Real.Exists (Path);
+      if Found then
+         declare
+            Result : constant Landin.Testing.Sessions.Outcome :=
+              Landin.Testing.Sessions.Run (Sessions_Root & "/" & Name);
+            Status : Landin.Platform.Write_Status;
+         begin
+            Real.Write_File
+              (Path, Unbounded.To_String (Result.Recorded), Status);
+            Wrote := Status = Landin.Platform.Write_Ok;
+         end;
+      end if;
+   end Record_Session;
+
    procedure Record_Sessions (Wrote : out Boolean) is
       Real    : Landin.Platform.Native.Native_Filesystem;
       Entries : Landin.Platform.Path_List;
       Listed  : Landin.Platform.List_Status;
+      Found   : Boolean;
+      One     : Boolean;
    begin
       Wrote := True;
       Real.List_Directory (Sessions_Root, Entries, Listed);
       for Name of Entries loop
-         declare
-            Path : constant String :=
-              Sessions_Root & "/" & Name & "/session.lsp";
-         begin
-            if Real.Exists (Path) then
-               declare
-                  Result : constant Landin.Testing.Sessions.Outcome :=
-                    Landin.Testing.Sessions.Run (Sessions_Root & "/" & Name);
-                  Status : Landin.Platform.Write_Status;
-               begin
-                  Real.Write_File
-                    (Path, Unbounded.To_String (Result.Recorded), Status);
-                  Wrote := Wrote and then Status = Landin.Platform.Write_Ok;
-               end;
-            end if;
-         end;
+         Record_Session (Name, Found, One);
+         Wrote := Wrote and then (One or else not Found);
       end loop;
    end Record_Sessions;
 

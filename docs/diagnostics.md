@@ -79,6 +79,12 @@ that would overwrite a source or another output, or `refine explain` with a
 code no catalogue row holds. `refine --help` lists the options. The status is
 2, which says the request and not a program was wrong.
 
+An option that belongs to a command is written after it. One written before
+its command, or with no command at all, is refused naming the commands it
+belongs to and where it goes, as it was written: `refine --root=lib compile
+main.ldn` is told `refine compile --root=lib ...`, and `refine -o x.s
+main.ldn` that `-o x.s` is an option of `compile` (D384).
+
 Give `--target=` only once. Repeating it is a misuse even when both names
 are the same; the driver does not choose between target selections.
 
@@ -87,9 +93,11 @@ assembly emission do not run a linker. They are also incompatible with
 `--help` and `--identify`, which do not compile. Each selection must have a
 nonempty value and may be given only once.
 
-`--link=static|libc` chooses how a hosted executable is linked and requires
-`--emit=exe` or `--emit=asm`; `static` needs a Linux target, and a target
-with no hosted system takes neither.
+`--link=static|libc` chooses how a hosted executable is linked, and under
+`refine check` which C runtime the program is checked with; `static` needs a
+Linux target, and a target with no hosted system takes neither. `check`
+takes `--firmware-entry` and `--build-report` as `compile` does, and refuses
+an entry that names no firmware routine (D383).
 
 ### L0003
 
@@ -123,7 +131,9 @@ for the full contract.
 
 No import root holds the module an import names [1420]. Roots are searched in
 the order `--root=` gives them, and a path's segments are directories under a
-root, spelled exactly. When a directory near the missing segment is there, the
+root, spelled exactly; the note names every directory looked for, in that
+order, so `import lexer/lexer` under `--root .` says it looked for
+`./lexer/lexer` (D384). When a directory near the missing segment is there, the
 diagnostic offers it as a likely fix; named files with no `--root` are offered
 the library's `core`, `hosted` or `platform` when the first segment is near
 one. An import of `core`, `hosted` or `platform` when `refine` found no
@@ -132,21 +142,24 @@ name the library's directory with `--library=DIR` (D363).
 
 ### L0007
 
-With `--root=`, the entry module must be a readable directory [1410]. Pass
-the directory, not a file inside it. This code also reports an import root or
-intermediate directory that cannot be listed while searching in root order
-[1420]. Check the named path and its permissions; a genuinely absent module
-is reported by L0006.
+With `--root=`, the entry module is a readable directory [1410], or the
+entry module's own source files, which are then one module as named files
+are without a root (D383). A path that is neither is refused. This code also
+reports an import root or intermediate directory that cannot be listed while
+searching in root order [1420]. Check the named path and its permissions; a
+genuinely absent module is reported by L0006.
 
 ### L0008
 
 `refine fmt --check` found a line that is not in the layout D252 decides
 and `docs/format.md` shows. There is one diagnostic for every such line, and
 its note shows the line as the layout writes it, or says that the layout
-removes the blank line or changes its line end (D359). Nothing is wrong with
-the program: run `refine fmt` on the file to put it in the layout, which
-changes its space and nothing else, or `refine fmt --stdout` to see the whole
-file laid out.
+removes the blank line or changes its line end (D359). A line whose spacing
+changes is marked where it differs, from the first byte the layout changes
+to the last, and the note names the column it differs from (D385). Nothing is
+wrong with the program: run `refine fmt` on the file to put it in the layout,
+which changes its space and nothing else, or `refine fmt --stdout` to see the
+whole file laid out.
 
 ### L0009
 
@@ -264,7 +277,9 @@ are the same mistake (D368).
 A `match` arm that begins with a number names a value where a case belongs:
 compare values with `if` and `elsif` (D369). Statements on the lines under a
 bare `else` were meant as a recovery block, which binds the error first:
-`else (problem)`, closed by `end` (D370).
+`else (problem)`, closed by `end` (D370). `_` among several labels of one
+arm is refused too: it covers every case no other arm names, so it is an arm
+of its own (D405).
 
 ```landin
 _: u32 = 1
@@ -288,7 +303,9 @@ operand, or a separator where a value belongs.
 A token the grammar requires is absent [1810]. The second label points at the
 construct that required it. When a name near the required keyword stands in
 its place, such as `thne` for `then`, the diagnostic offers the keyword as a
-likely fix.
+likely fix. An arm that names several cases binds no payload, so bindings
+after them are refused here: give the case whose payload is bound an arm of
+its own (D405).
 
 ```landin
 extern(c) bad: (...) -> none
@@ -409,6 +426,11 @@ imported module, never a name out of scope or inaccessible. A member a module
 declares only in a `fixed if` arm this target does not select, a Linux call
 written for Darwin among them, is named as one this system does not have,
 since no spelling of it would be found here.
+
+A parameter, result or local may hide an import of its own name [1450], so
+`time.duration` written where a result is called `time` names no type. The
+diagnostic says so, names the local and the import it hides, and points at
+the local; rename it (D381).
 
 ```landin
 state := nowhere(value: 1)
@@ -538,7 +560,9 @@ A required static value or initial image cannot be established before the
 program runs [1940] (D136, D202). A module value, array bound or fixed
 configuration expression can depend on a runtime value or call, contain an
 unknown fixed name or form, or depend on itself, within one module or through
-several. Change such an expression to one the closed fold can evaluate. A value
+several. A fixed condition or option default measures scalar types only: a
+declared type's size, alignment or field offset is measured by
+`compiler.assert`, once checking has laid the type out (D412). Change such an expression to one the closed fold can evaluate. A value
 another module exports, named through that module as `sizes.page`, is known as
 it is in its own module; a field of a record image, an element of an array
 image and a call are not, in either. A module function binding without an
@@ -632,7 +656,9 @@ For a case declared as `pair: (first: u8, second: bool)`, the construction
 
 ### L0311
 
-A match names one variant case twice [1210].
+A match names one case twice [1210]: a variant case, an atom of a set or a
+pointer union's case, twice in one arm or once in each of two (D405). Keep
+one label and delete the other.
 
 ### L0312
 
@@ -865,7 +891,9 @@ end bad
 ### L0329
 
 A failure does not follow the declared error contract [0940] [0960] [1030].
-`fail` carries exactly one atom of the function's declared error set. A call
+`fail` carries exactly one atom of the function's declared error set. A body
+that can fail with an atom outside it is told which atom, and the `fail`, the
+call or the `try for` it first came through is labelled (D382). A call
 to a failing function handles the outcome with `else` or propagates it with
 `try`, and neither form applies to a call that cannot fail. A public or
 first-class signature writes a concrete error set instead of `! ...`. Add the
@@ -907,7 +935,9 @@ A call's result is used in a way its signature does not allow. A result that
 is handed back must be used or discarded with `_ =` [1020], and a call that
 returns none has no value to use, infer from, or discard [1920] [1930], nor
 one for its `else` to yield in place of a result [1030]: `else none` ignores
-its failure, and is refused on a call that does return a value (D376).
+its failure, and is refused on a call that does return a value (D376)
+unless the call is the whole operand of a discard, `_ = f() else none`
+(D406); to use the value, handle the error with `else (problem) ... end`.
 An `if`, `match` or bare `begin` used as a statement takes no value from its
 branches, so a branch that ends with one would drop it; in an `if` arm that
 value is often a call's `else value` the `if` took as its own [1820].
@@ -949,7 +979,7 @@ end main
 
 A `match` arm does not fit its subject [1210]. A subject is an atom set, a
 variant part or a pointer union. Each arm names a case or atom of that
-subject at most once (D77) [0640] [0480]. A `ptr` arm matches only a pointer
+subject at most once (D77) [0640] [0480], and a name twice is L0311. A `ptr` arm matches only a pointer
 union and binds one read-only pointer [1220]. Atom arms bind no payload [0630]. A wildcard arm
 comes last and binds nothing. Variant payload names are positional and
 complete (D78). Rewrite the arm in the form its subject admits, or compare
@@ -1009,8 +1039,10 @@ have explicit, disjoint bit positions within one unsigned image, and an
 encoded union has distinct atoms and encodings. A packed width such as `u2`
 is a field representation, not an ordinary value type. A packed field has no address
 of its own, cannot be passed `inout`, and cannot be sliced; the image is not
-a scalar operand (D228). Correct the layout, or work through the containing
-image and its fields.
+a scalar operand (D228). A field of a `layout(c, packed)` record, at any
+depth, has no address of its own either (D410): it is read and written by
+copy. Correct the layout, or work through the containing image or record
+and its fields.
 
 ```landin
 image: type = layout(packed) struct
@@ -1096,7 +1128,8 @@ Every entry fixes one concrete error set. A conformance names a
 declared concept, supplies each input and entry once by label, and provides
 each entry with a function of exactly the required signature. A parameterized
 conformance applies its complete binder. Correct the declaration against the
-concept it names.
+concept it names. A parameter or local named after a concept hides it [0140],
+and the diagnostic then names the parameter as the cause (D381).
 
 ```landin
 left: type = concept (t: type) is right
@@ -1159,7 +1192,13 @@ scalar, pointer (including a named optional pointer union), fixed infallible
 C callback, or `layout(c)` struct; slices, `any`, atoms and by-value arrays
 are excluded. A `layout(c)` struct has at least one field and holds only C
 representations: scalars, pointers, fixed C callbacks, nonempty fixed arrays
-or recursively `layout(c)` structs, with no tagged variants. A variadic C
+or recursively `layout(c)` structs, with no tagged variants; the label names
+the field that is not one. Its last field may be a `[0]T` flexible array
+member after at least one other field (D413), and a record ending in one is
+not a field of another C record. A `layout(c, packed)` record holds an array
+or nested record by value only when its alignment is one: `u8`, `i8`, `bool`
+or a packed record (D410). A packed record, a record with a flexible member,
+and a record holding either cross a C signature only by pointer (D414). A variadic C
 declaration needs at least one fixed parameter and target support; a variadic
 definition needs a generated adapter. Variadic calls take positional scalar,
 pointer or fixed C callback tail arguments, without labels or static
@@ -1168,6 +1207,7 @@ through a parameter. Remove `caller` and constraints, specialize generics,
 represent errors through an ordinary C result, and combine multiple results
 into one C-representable result. Pass a pointer to a by-value array or other
 unsupported aggregate, or change the type or layout to one C represents.
+Pass `ptr` to a packed record or one with a flexible member.
 
 ```landin
 extern(c) collect: (count: i32, ...) -> none
@@ -1184,9 +1224,10 @@ and at most one definition. Beside a hosted entry, a declaration carrying
 `_landin_host_initialize_arguments` is exactly
 `extern(c) (count: i32, values: ptr ptr u8, environment: ptr ptr u8) -> none`,
 which takes C's `argc`, `argv` and `envp`. Only the entry module's hosted `main` takes the
-`main` symbol. Cortex data symbols and sections use the spellings,
-alignments and vectors [1640] lists. Rename the symbol or correct the
-declaration.
+`main` symbol. A datum's link symbol on a hosted target has a routine's
+shape and is never `main`; Cortex data symbols and sections use the
+spellings, alignments and vectors [1640] lists. Rename the symbol or correct
+the declaration.
 
 ```landin
 extern(c) link(symbol: "foreign_entry+8") bad: () -> none
@@ -1283,7 +1324,9 @@ refers to it, as `platform/posix`'s loader refers to `dlopen`), no toolchain
 is selected, or no driver the target names can be started. On Linux the
 message lists every driver looked for, the target's own GCC and the names
 Debian, Ubuntu and Fedora give it, and the note says which package to
-install (D364); the program's own refusals come first, so a static link that
+install, through `nix-shell -p gcc` on Nix (D364), and that `refine check`,
+`fmt` and `lsp`, and `compile --emit=asm` or `--emit=ir`, need no C driver
+(D384); the program's own refusals come first, so a static link that
 meets a C symbol is refused for that before anything asks for a driver.
 Choose a target with a backend, change the debug or firmware configuration,
 link with `--link=libc`, or select or install a toolchain as the note

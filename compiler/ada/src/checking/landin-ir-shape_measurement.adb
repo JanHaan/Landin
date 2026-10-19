@@ -7,6 +7,7 @@ package body Landin.IR.Shape_Measurement is
    use type Targets.Byte_Count;
    use type Ada.Containers.Hash_Type;
    use type Ada.Containers.Count_Type;
+   use type Landin.Layouts.Policy;
 
    function Hash (Key : Shape_Key) return Ada.Containers.Hash_Type is
       Result : Ada.Containers.Hash_Type := 0;
@@ -89,6 +90,20 @@ package body Landin.IR.Shape_Measurement is
          Extents (Index) :=
            Extent (Cache, Of_Unit, Fields (Index), Facts, Maximum);
       end loop;
+      --  D413: a C record's last zero-element array is C's flexible
+      --  member and takes its element's alignment; Landin.Checking's
+      --  Lay_Out makes the same adjustment.  D410's C_Packed placement
+      --  is Make's own.
+      if Policy = Landin.Layouts.C
+        and then Fields'Length > 0
+        and then Fields (Fields'Last).Kind = Array_Field_Shape
+        and then Fields (Fields'Last).Length = 0
+      then
+         Extents (Extents'Last).Alignment := Extent
+           (Cache, Of_Unit,
+            Array_Element_Shape (Of_Unit, Fields (Fields'Last)),
+            Facts, Maximum).Alignment;
+      end if;
       return Layout.Make (Extents, Policy, Maximum);
    end Fields_Layout;
 

@@ -2196,6 +2196,45 @@ package Landin.Checking is
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
+   --  D411: what an `offsetof` the checker accepted measures, read back
+   --  from the facts it recorded: the record the type prefix names and
+   --  the source-order field position each later selection names.
+   type Field_Positions is array (Positive range <>) of Positive;
+
+   function Offset_Root
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax."="
+                   (Landin.Syntax.Kind (Of_Tree, Node),
+                    Landin.Syntax.Offset_Of);
+
+   function Offset_Fields
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Field_Positions
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax."="
+                   (Landin.Syntax.Kind (Of_Tree, Node),
+                    Landin.Syntax.Offset_Of);
+
+   --  The byte offset in the checked target layout, or False when the
+   --  measurement was refused.
+   procedure Offset_Value
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id;
+      Offset   : out Landin.Targets.Byte_Count;
+      Known    : out Boolean)
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax."="
+                   (Landin.Syntax.Kind (Of_Tree, Node),
+                    Landin.Syntax.Offset_Of);
+
    procedure Note_Field
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;

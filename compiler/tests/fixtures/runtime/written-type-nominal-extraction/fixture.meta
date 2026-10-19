@@ -3,5 +3,5 @@ profiles: standard
 summary: written generic type aliases extract exact distinct atom-set and nominal struct bases
 program: main.ldn
 constructs: 0310, 0630, 0640, 0650, 0700, 1350
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 status: 42

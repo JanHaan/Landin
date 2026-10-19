@@ -19,7 +19,7 @@ def candidates(root):
         for path in sorted((root / 'compiler/tests/fixtures' / cls).glob('*/fixture.meta')):
             meta = dict(line.split(': ', 1) for line in path.read_text().splitlines()
                         if ': ' in line and not line.startswith('#'))
-            if 'macos-arm64' in meta['targets'].split(', ') and ('program' in meta or 'args' in meta):
+            if 'darwin-arm64' in meta['targets'].split(', ') and ('program' in meta or 'args' in meta):
                 yield str(path.parent.relative_to(root / 'compiler/tests/fixtures')), meta
 
 
@@ -44,10 +44,13 @@ def main():
                 continue
             meta = {**meta, **{k: v for k, v in differences.get(name, {}).items() if k != 'reason'}}
             base = Path('../tests/fixtures') / name
-            if 'args' in meta:
+            #  A rooted fixture's `args` are options before the module its
+            #  root gives (compiler/tests/README.md).
+            if 'root' in meta:
+                argv = meta.get('args', '').split() + [
+                    '--root=' + str(base / meta['root']), str(base)]
+            elif 'args' in meta:
                 argv = meta['args'].split()
-            elif 'root' in meta:
-                argv = ['--root=' + str(base / meta['root']), str(base)]
             else:
                 argv = [str(base / meta['program'])]
                 argv += [str(base / part.strip()) for part in meta.get('with', '').split(',') if part.strip()]

@@ -7,6 +7,6 @@ public extern(c) link(symbol: "r440_landin_step") landin_step: (value: i32) -> (
     result = value + 1
 end landin_step
 
-public main: () -> (status: i32) =
-    status = c_roundtrip(40)
+public main: () -> (code: i32) =
+    code = c_roundtrip(40)
 end main

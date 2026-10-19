@@ -1,0 +1,10 @@
+import clock
+
+later: () -> (clock: u64) =
+    span: clock.duration = 1
+    clock = span
+end later
+
+sooner: (clock: u64) -> (span: u64) =
+    span = clock.seconds(clock)
+end sooner

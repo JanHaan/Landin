@@ -1,7 +1,7 @@
 -- Independent literal 64-bit boundaries; ordinary calls prevent folding.
 u: (n: u64) -> (r: u64) = n end u
 s: (n: i64) -> (r: i64) = n end s
-public main: () -> (code: u32) =
+link(symbol: "main") public main: () -> (code: u32) =
     maximum := u(18446744073709551615)
     minimum := s(-9223372036854775808)
     near := s(3037000499)

@@ -15,9 +15,11 @@ two things on one line, which blank lines survive and how line ends outside
 raw literals and block comments are normalized.
 There is no option that changes any of that. `refine fmt --check` writes
 nothing and reports every line that is not in the layout, each with the line
-as the layout writes it, a blank line it removes or a line end it changes;
-`refine fmt --stdout` writes one source to standard output in the layout and
-leaves its file as it is (D359).
+as the layout writes it and marked from the column where it differs, a blank
+line it removes or a line end it changes; `refine fmt --stdout` writes one
+source to standard output in the layout and leaves its file as it is (D359,
+D385). A directory given to any of them is the `.ldn` files under it, a
+dot-named directory left out.
 
 A file that does not scan or parse is refused with the report a compilation
 would give it, and nothing is written. Formatting reads nothing later than the

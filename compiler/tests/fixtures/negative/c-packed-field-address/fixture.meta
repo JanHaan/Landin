@@ -1,0 +1,9 @@
+class: negative
+summary: D410 gives a field of a byte-packed record no address of its own, for addr, inout or a slice, at any depth
+constructs: 0380, 0430, 0570, 0750, 0900
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0336, L0336, L0336, L0336
+expect: expected.txt
+args: ../tests/fixtures/negative/c-packed-field-address/program.ldn
+status: 1

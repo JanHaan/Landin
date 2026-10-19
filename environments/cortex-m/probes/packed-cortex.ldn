@@ -14,7 +14,7 @@ counter: type = layout(packed, u16) struct
     count: u16 at 0..15
 end counter
 
-public main: () -> (result: u32) =
+link(symbol: "main") public main: () -> (result: u32) =
     normal: ptr mut u32 = ptr(0x40030000)
     destructive: ptr mut u32 = ptr(0x40030004)
     command_port: ptr mut u32 = ptr(0x40030008)

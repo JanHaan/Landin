@@ -1,0 +1,34 @@
+error[L0308]: this struct has no field called `nope`
+  --> ../tests/fixtures/negative/offsetof-refusals/program.ldn:14:34
+   |
+14 | missing: usize = offsetof record.nope
+   |                                  ^^^^
+  = note: [0750]: a struct has the fields it was declared with, and no others
+error[L0304]: `offsetof` measures a field of a declared struct
+  --> ../tests/fixtures/negative/offsetof-refusals/program.ldn:15:26
+   |
+15 | scalar: usize = offsetof count.value
+   |                          ^^^^^
+  = note: the tour describes it at [0670]
+  = note: this is a recorded source-form boundary
+error[L0304]: a packed image's field has bit positions, not a byte offset
+  --> ../tests/fixtures/negative/offsetof-refusals/program.ldn:16:24
+   |
+16 | bits: usize = offsetof image.count
+   |                        ^^^^^^^^^^^
+  = note: the tour describes it at [0670]
+  = note: this is a recorded source-form boundary
+error[L0304]: `offsetof` selects fields only through a nested struct
+  --> ../tests/fixtures/negative/offsetof-refusals/program.ldn:17:27
+   |
+17 | element: usize = offsetof record.values.first
+   |                           ^^^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0670]
+  = note: this is a recorded source-form boundary
+error[L0304]: a variant part has no offset of its own
+  --> ../tests/fixtures/negative/offsetof-refusals/program.ldn:18:29
+   |
+18 | case_part: usize = offsetof record.shape
+   |                             ^^^^^^^^^^^^
+  = note: the tour describes it at [0670]
+  = note: this is a recorded source-form boundary

@@ -166,7 +166,6 @@ package body Landin.Tests.Backend_Suite is
       Expected : constant String :=
         HT & ".text" & LF
         & HT & ".section .text.landin_routine_1,""ax"",@progbits" & LF
-        & HT & ".globl main" & LF
         & HT & ".type main, @function" & LF
         & "main:" & LF
         & HT & "pushq %rbp" & LF
@@ -201,8 +200,8 @@ package body Landin.Tests.Backend_Suite is
          "the entry emits its frame, its value cells and its return");
    end A_Constant_Return_Emits_Its_Whole_Frame;
 
-   --  [1740]'s `public` is what puts a symbol in the object's table, and
-   --  a function without it is emitted and not exported.
+   --  A function nothing exports is emitted as a local symbol (D415);
+   --  `Only_Exports_Are_Global_Symbols` holds `public` to the same.
    procedure Only_A_Public_Routine_Is_Made_Global
      (Item : in out Landin.Testing.Context);
 
@@ -1710,8 +1709,7 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
          Expected : constant String :=
            HT & ".section .data.landin_datum_1,""aw"",@progbits" & LF
-           & HT & ".globl answer" & LF
-           & HT & ".type answer, @object" & LF
+              & HT & ".type answer, @object" & LF
            & HT & ".align 4" & LF
            & "answer:" & LF
            & HT & ".long 42" & LF
@@ -1753,8 +1751,7 @@ package body Landin.Tests.Backend_Suite is
          Text : constant String := Emitted (Work);
          Expected : constant String :=
            HT & ".section .bss.landin_datum_1,""aw"",@nobits" & LF
-           & HT & ".globl state" & LF
-           & HT & ".type state, @object" & LF
+              & HT & ".type state, @object" & LF
            & HT & ".align 4" & LF
            & "state:" & LF
            & HT & ".zero 12" & LF
@@ -2565,33 +2562,6 @@ package body Landin.Tests.Backend_Suite is
       Witnessed_Load : Boolean := False;
       Witnessed_Store : Boolean := False;
 
-      --  The private C name uses the resolved declaration identity, not
-      --  its item position or a number predating the type declarations.
-      function Bump_Symbol return String;
-
-      function Bump_Symbol return String is
-         use type IR.Declaration_Id;
-         Code : IR.Unit renames Landin.Stages.Code (Work).all;
-      begin
-         for Position in 1 .. IR.Item_Count (Code) loop
-            declare
-               Declared : constant IR.Declaration_Id :=
-                 IR.Declares (Code, IR.Item_Id (Position));
-            begin
-               if Declared /= IR.No_Declaration
-                 and then Landin.Source.Names.Spelling
-                   (Landin.Stages.Identities (Work).all,
-                    Landin.Resolution.Name_Of
-                      (Landin.Stages.Meanings (Work).all, Declared)) = "bump"
-               then
-                  return "landin_" & Ada.Strings.Fixed.Trim
-                    (IR.Declaration_Id'Image (Declared), Ada.Strings.Both)
-                    & "_bump";
-               end if;
-            end;
-         end loop;
-         raise Landin.Compiler_Defect with "missing callback test routine";
-      end Bump_Symbol;
    begin
       Lower
         (Work,
@@ -2638,7 +2608,9 @@ package body Landin.Tests.Backend_Suite is
       declare
          Code : IR.Unit renames Landin.Stages.Code (Work).all;
          Text : constant String := Emitted (Work);
-         Private_Bump : constant String := Bump_Symbol;
+         --  D417: the import holds `bump`, so the private C definition
+         --  takes its module-qualified name, whatever else precedes it.
+         Private_Bump : constant String := "main.bump";
          Row : constant String :=
            HT & ".quad " & Private_Bump & LF & HT & ".quad bump" & LF;
          Repeated_Row : constant String :=
@@ -4518,8 +4490,7 @@ package body Landin.Tests.Backend_Suite is
          Landin.Testing.Check
            (Item,
             Contains (Text,
-                      HT & ".globl state" & LF
-                      & HT & ".type state, @object" & LF
+                      HT & ".type state, @object" & LF
                       & HT & ".align 4" & LF
                       & "state:" & LF
                       & HT & ".zero 8" & LF
@@ -4638,8 +4609,7 @@ package body Landin.Tests.Backend_Suite is
             Landin.Testing.Check
               (Item,
                Contains (Text,
-                         HT & ".globl buffer" & LF
-                         & HT & ".type buffer, @object" & LF
+                         HT & ".type buffer, @object" & LF
                          & HT & ".align 4" & LF
                          & "buffer:" & LF
                          & HT & ".zero 16" & LF
@@ -7337,6 +7307,115 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Dot_Link_Name_Is_An_Assembler_Symbol;
 
+   --  D415: `public` is not an export.  On every backend the C
+   --  definition, the native routine and the datum with a link name are
+   --  global symbols, and the public routine and datum without one are
+   --  local symbols under their own names.  D417: a routine whose name a
+   --  C import holds takes its module-qualified name, and stays local.
+   procedure Only_Exports_Are_Global_Symbols
+     (Item : in out Landin.Testing.Context);
+
+   procedure Only_Exports_Are_Global_Symbols
+     (Item : in out Landin.Testing.Context)
+   is
+      Common : constant String :=
+        "public helper: (v: i32) -> (r: i32) =" & LF
+        & "    r = v + 1" & LF
+        & "end helper" & LF
+        & "link(symbol: ""exported_native"") native: (v: i32) -> (r: i32) ="
+        & LF
+        & "    r = helper(v) + 2" & LF
+        & "end native" & LF
+        & "public table: i32 = 4" & LF
+        & "link(symbol: ""exported_table"") shared: i32 = 5" & LF;
+      Hosted : constant String :=
+        Common
+        & "extern(c) link(symbol: ""read"") c_read: (v: i32) -> (r: i32)"
+        & LF
+        & "public read: (v: i32) -> (r: i32) =" & LF
+        & "    r = c_read(v) + c_read(v)" & LF
+        & "end read" & LF
+        & "public extern(c) c_api: (v: i32) -> (r: i32) =" & LF
+        & "    r = helper(v) + table + shared + read(v)" & LF
+        & "end c_api" & LF;
+
+      function Text_For
+        (Facts : Landin.Targets.Target_Facts; Source : String)
+         return String;
+
+      function Text_For
+        (Facts : Landin.Targets.Target_Facts; Source : String)
+         return String
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+            "the exporting program lowers");
+         if Ran /= 5 or else Landin.Stages.Failed (Work) then
+            return "";
+         end if;
+         Landin.Backend.Dispatch.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Facts, Landin.Targets.Levels.Default_Level (Facts),
+            Landin.Optimization.Reference_Options, Assembly, Report);
+         return Ada.Strings.Unbounded.To_String (Assembly);
+      end Text_For;
+
+      procedure Check_Target
+        (Name : String; Facts : Landin.Targets.Target_Facts;
+         Prefix : String; Source : String; C : Boolean);
+
+      procedure Check_Target
+        (Name : String; Facts : Landin.Targets.Target_Facts;
+         Prefix : String; Source : String; C : Boolean)
+      is
+         Text : constant String := Text_For (Facts, Source);
+
+         function Global (Symbol : String) return Boolean
+           is (Contains (Text, ".globl " & Prefix & Symbol & LF));
+         function Defined (Symbol : String) return Boolean
+           is (Contains (Text, LF & Prefix & Symbol & ":" & LF));
+      begin
+         Landin.Testing.Check
+           (Item, Global ("exported_native") and then Global ("exported_table")
+            and then Defined ("exported_native")
+            and then Defined ("exported_table"),
+            Name & ": a link name is a global symbol");
+         Landin.Testing.Check
+           (Item, Defined ("helper") and then Defined ("table")
+            and then not Global ("helper") and then not Global ("table"),
+            Name & ": a public routine and datum are local under their names");
+         if C then
+            Landin.Testing.Check
+              (Item, Global ("c_api") and then Defined ("c_api"),
+               Name & ": a public C definition is a global symbol");
+            Landin.Testing.Check
+              (Item, Defined ("main.read") and then not Global ("main.read")
+               and then not Defined ("read"),
+               Name & ": a routine beside a C import of its name is"
+               & " qualified and local");
+         end if;
+      end Check_Target;
+   begin
+      Check_Target
+        ("linux-x86-64", Landin.Targets.Linux_X86_64, "", Hosted, True);
+      Check_Target
+        ("linux-arm64", Landin.Targets.Linux_Arm64, "", Hosted, True);
+      Check_Target
+        ("darwin-arm64", Landin.Targets.Darwin_Arm64, "_", Hosted, True);
+      Check_Target
+        ("linux-rv64", Landin.Targets.Linux_RV64, "", Hosted, True);
+      Check_Target
+        ("cortex-m0", Landin.Targets.Cortex_M, "", Common, False);
+   end Only_Exports_Are_Global_Symbols;
+
    procedure Forced_Link_Names_Reserve_The_Whole_Namespace
      (Item : in out Landin.Testing.Context);
 
@@ -7351,9 +7430,9 @@ package body Landin.Tests.Backend_Suite is
         (Work,
          "foo: () -> (r: i32) = r = 1 end foo" & LF
          & "extern(c) link(symbol: ""foo"") foreign: () -> (r: i32)" & LF
-         & "extern(c) link(symbol: ""landin_1_foo"") reserved: ()"
+         & "extern(c) link(symbol: ""main.foo"") reserved: ()"
          & " -> (r: i32)" & LF
-         & "landin_1_foo_1: i32 = 5" & LF
+         & "link(symbol: ""main.foo.1"") occupied: i32 = 5" & LF
          & "payload: i32 = 7" & LF
          & "extern(c) link(symbol: ""payload"") foreign_data: ()"
          & " -> (r: i32)" & LF
@@ -7362,7 +7441,7 @@ package body Landin.Tests.Backend_Suite is
          & "extern(c) link(symbol: "".L_1_1"") retry_name: ()"
          & " -> (r: i32)" & LF
          & "public extern(c) run: () -> (r: i32) =" & LF
-         & "    r = foo() + foreign() + reserved() + landin_1_foo_1" & LF
+         & "    r = foo() + foreign() + reserved() + occupied" & LF
          & "        + payload + foreign_data() + block_name() + retry_name()"
          & LF & "end run" & LF,
          Ran);
@@ -7378,17 +7457,23 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item, Contains (Text, HT & "call foo" & LF)
-            and then Contains (Text, HT & "call landin_1_foo" & LF)
+            and then Contains (Text, HT & "call main.foo" & LF)
             and then Contains (Text, HT & "call payload" & LF)
             and then not Contains (Text, LF & "foo:" & LF)
-            and then not Contains (Text, LF & "landin_1_foo:" & LF)
+            and then not Contains (Text, LF & "main.foo:" & LF)
             and then not Contains (Text, LF & "payload:" & LF),
             "forced C symbols remain external, never local definitions");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & ".type landin_1_foo_1, @object")
+           (Item, Contains (Text, HT & ".type main.foo.1, @object")
+            and then Contains (Text, HT & ".globl main.foo.1" & LF)
             and then not Contains
-              (Text, HT & ".type landin_1_foo_1, @function"),
-            "mangling retries also reserve unallocated ordinary data names");
+              (Text, HT & ".type main.foo.1, @function"),
+            "an exported datum holds the qualified candidate it names");
+         Landin.Testing.Check
+           (Item, Contains (Text, LF & "main.foo.2:" & LF)
+            and then Contains (Text, HT & "call main.foo.2" & LF)
+            and then not Contains (Text, HT & ".globl main.foo.2" & LF),
+            "the routine takes the first free qualified retry, locally");
          Landin.Testing.Check
            (Item, Contains (Text, HT & "call .L1_1" & LF)
             and then Contains (Text, HT & "call .L_1_1" & LF)
@@ -9511,6 +9596,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "forced link names reserve the whole namespace",
          Forced_Link_Names_Reserve_The_Whole_Namespace'Access);
+      Landin.Testing.Register
+        (Into, "backend", "only exports are global symbols",
+         Only_Exports_Are_Global_Symbols'Access);
       Landin.Testing.Register
         (Into, "backend", "only a native main receives hosted startup",
          Only_A_Native_Main_Receives_Hosted_Startup'Access);

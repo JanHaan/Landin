@@ -1,0 +1,9 @@
+class: negative
+summary: D381 a parameter named after a concept hides it, and the refusal names the parameter as the cause, once
+constructs: 0140, 1230, 1370
+program: program.ldn
+codes: L0341
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/parameter-hides-a-concept/program.ldn
+status: 1

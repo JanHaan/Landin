@@ -72,6 +72,14 @@ private generic
    --  module binding holds what was last written rather than its image,
    --  so its value is not known.
    with function Reads_Run_Time return Boolean;
+
+   --  D411: establish the facts an `offsetof` folds from, the measured
+   --  record and its field path, and say whether it measures anything.
+   --  The checker may meet one in a module value before its expression
+   --  pass does; lowering reads the facts already recorded.
+   with function Offset_Facts
+     (Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id)
+      return Boolean;
 package Landin.Stages.Folding is
 
    --  Completed module-binding values are shared within this query.  A

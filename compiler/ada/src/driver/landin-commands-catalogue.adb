@@ -19,7 +19,8 @@ package body Landin.Commands.Catalogue is
          when Check => "Check a whole program without producing artifacts",
          when Compile =>
            "Compile a whole program to an executable or assembly",
-         when Format => "Format source files in the one Landin layout",
+         when Format =>
+           "Format source files, or a directory's, in the one Landin layout",
          when Explain => "Explain diagnostic codes and their repairs",
          when Server => "Serve the language server protocol over stdio",
          when Version => "Identify this compiler build",
@@ -130,8 +131,11 @@ package body Landin.Commands.Catalogue is
    function Accepts (Command : Action; Flag : Option) return Boolean is
      (Shared (Flag) or else
       (case Command is
+          --  D383: check takes every option that says what program is
+          --  compiled and how, and none that says what is written.
           when Check => Flag in Target | Level | Root | Library
-            | Build_Option | Build_Mode | Optimize | Specialize | Stage_Report
+            | Build_Option | Build_Mode | Optimize | Specialize | Link
+            | Firmware_Entry | Build_Report | Stage_Report
             | Warnings | Warn | Allow | Deny,
           when Compile => Flag in Target .. Depfile
             or else Flag in Warnings .. Deny,
@@ -140,6 +144,39 @@ package body Landin.Commands.Catalogue is
           when Version => Flag in JSON | Library,
           when Targets => Flag = JSON,
           when others => False));
+
+   function Owners (Flag : Option) return String is
+      Text : US.Unbounded_String;
+      Count : Natural := 0;
+      Seen : Natural := 0;
+   begin
+      for Command in Action range Check .. Help loop
+         if Accepts (Command, Flag) then
+            Count := Count + 1;
+         end if;
+      end loop;
+      for Command in Action range Check .. Help loop
+         if Accepts (Command, Flag) then
+            Seen := Seen + 1;
+            US.Append (Text,
+              (if Seen = 1 then ""
+               elsif Seen = Count then " and "
+               else ", ")
+              & Name (Command));
+         end if;
+      end loop;
+      return US.To_String (Text);
+   end Owners;
+
+   function First_Owner (Flag : Option) return Action is
+   begin
+      for Command in Action range Check .. Help loop
+         if Accepts (Command, Flag) then
+            return Command;
+         end if;
+      end loop;
+      return Overview;
+   end First_Owner;
 
    function Repeatable (Flag : Option) return Boolean is
      (Flag in Help_Flag | Verbose | Quiet | Root | Build_Option
@@ -191,7 +228,7 @@ package body Landin.Commands.Catalogue is
       Operands : constant String :=
         (case Command is
             when Check | Compile => " [options] source.ldn ...",
-            when Format => " [options] source.ldn ...",
+            when Format => " [options] source.ldn|DIR ...",
             when Explain => " [options] [CODE ...]",
             when Completion => " [options] bash|zsh|fish",
             when Help => " [COMMAND|reference]",
@@ -245,8 +282,10 @@ package body Landin.Commands.Catalogue is
          when Check | Compile =>
             US.Append (Text, LF
               & "Sources form one whole program. With --root, the operand"
-              & LF & "is one entry-module directory. Build mode, optimization,"
-              & LF & "specialization and debug information are independent."
+              & LF & "is one entry-module directory, or the entry module's"
+              & LF & "source files, and its imports are found under the roots."
+              & LF & "Build mode, optimization, specialization and debug"
+              & LF & "information are independent."
               & LF & "Example: refine " & Name (Command)
               & " program.ldn"
               & (if Command = Compile then " -o program" else "") & LF);

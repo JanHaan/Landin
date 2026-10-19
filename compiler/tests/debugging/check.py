@@ -44,6 +44,15 @@ PRIMARY_PROFILES = (("none-off", "none", "off"),
 FALLBACK_PROFILE = ("size-all", "size", "all")
 WORKLOAD_PROFILES = (*PRIMARY_PROFILES, FALLBACK_PROFILE)
 WORKLOADS = ("parser", "containers", "hosted")
+#  The routines each workload's stack holds at each stop, innermost first,
+#  shared with the LLDB sessions and held by the test program to the files
+#  that declare them; see workload_frames.py.
+FRAMES = json.loads((HERE / "workload-frames.json").read_text())
+
+
+def frames(workload: str, stop: str) -> list[str]:
+    """The stack one stop expects, innermost first."""
+    return FRAMES[workload]["stops"][stop]
 #  Speed, where a source variable's register holds it over only part of
 #  its routine.  registers.ldn alone runs there: its stops are each where
 #  a variable is in its register past its last use.
@@ -581,8 +590,9 @@ def container_lines() -> dict[str, int]:
                 and not source[index].lstrip().startswith("--"),
                 f"container marker {marker} does not precede executable source")
         result[name] = index + 1
-    for instance, provider in (("signed", "less_i32"), ("unsigned", "less_u32")):
-        result[instance + "-provider"] = provider_line(provider)
+    for instance in ("signed", "unsigned"):
+        result[instance + "-provider"] = provider_line(
+            frames("containers", instance)[0])
     result["signed-call"] = source_line(CONTAINER_SOURCE, "signed_order: bool =")
     result["unsigned-call"] = source_line(CONTAINER_SOURCE, "unsigned_order_ok: bool =")
     result["signed-ready"] = result["unsigned-call"]
@@ -651,30 +661,29 @@ def check_container_transcript(transcript: str,
                    "Cannot find bounds", "not defined"):
         require(phrase not in transcript,
                 f"container GDB transcript contains {phrase!r}\n{transcript}")
-    for name, function in (("sorted", "numbers_path"),
-                           ("done", "containers_run")):
+    for name in ("sorted", "done"):
         expect_line(transcript, f"container-{name}", source_lines[name],
-                    function, "workload.ldn")
-    for instance, provider, left, right, result_name in (
-            ("signed", "less_i32", -1, 1, "signed_order"),
-            ("unsigned", "less_u32", 4294967295, 1, "unsigned_order_ok")):
+                    frames("containers", name)[0], "workload.ldn")
+    for instance, left, right, result_name in (
+            ("signed", -1, 1, "signed_order"),
+            ("unsigned", 4294967295, 1, "unsigned_order_ok")):
         scope = f"container-{instance}"
+        stack_names = frames("containers", instance)
+        provider, evidence, caller = stack_names[:3]
         expect_line(transcript, scope, source_lines["evidence"],
-                    "evidence_less", "workload.ldn")
+                    frames("containers", "evidence")[0], "workload.ldn")
         expect_value(transcript, scope + ".left", left)
         expect_value(transcript, scope + ".right", right)
         expect_line(transcript, scope + "-dispatch",
                     source_lines[instance + "-provider"], provider, "cmp.ldn")
         stack = marker_section(transcript, scope + "-dispatch")
-        require(re.search(r"#0\s+.*\b" + provider + r"\b", stack) is not None
-                and re.search(r"#1\s+.*\bevidence_less\b", stack) is not None
-                and re.search(r"#2\s+.*\bcontainers_run\b", stack) is not None
-                and re.search(r"#3\s+.*\bmain\b", stack) is not None,
+        require(all(re.search(rf"#{index}\s+.*\b{expected}\b", stack) is not None
+                    for index, expected in enumerate(stack_names)),
                 f"container evidence step lost its source stack: {stack!r}")
         for suffix, function, line in (
-                ("-provider-return", "evidence_less", source_lines["evidence"]),
-                ("-return", "containers_run", source_lines[instance + "-call"]),
-                ("-ready", "containers_run", source_lines[instance + "-ready"])):
+                ("-provider-return", evidence, source_lines["evidence"]),
+                ("-return", caller, source_lines[instance + "-call"]),
+                ("-ready", caller, source_lines[instance + "-ready"])):
             expect_line(transcript, scope + suffix, line, function, "workload.ldn")
             returned = marker_section(transcript, scope + suffix)
             require(re.search(r"#0\s+.*\b" + function + r"\b", returned) is not None,
@@ -733,13 +742,13 @@ def check_hosted_transcript(transcript: str,
                    "Cannot find bounds", "not defined"):
         require(phrase not in transcript,
                 f"hosted GDB transcript contains {phrase!r}\n{transcript}")
-    for name, function, filename in (("sample", "sample_keep", "filter.ldn"),
-                                     ("sample-updated", "sample_keep", "filter.ldn"),
-                                     ("text", "text_emit", "dest.ldn")):
+    for name, filename in (("sample", "filter.ldn"),
+                           ("sample-updated", "filter.ldn"),
+                           ("text", "dest.ldn")):
         scope = f"hosted-{name}"
-        expect_line(transcript, scope, source_lines[name], function, filename)
+        functions = frames("hosted", name)
+        expect_line(transcript, scope, source_lines[name], functions[0], filename)
         stack = marker_section(transcript, scope)
-        functions = (function, "process", "run_logged", "run", "main")
         require(all(re.search(rf"#{index}\s+.*\b{expected}\b", stack) is not None
                     for index, expected in enumerate(functions)),
                 f"hosted runtime dispatch lost its source stack: {stack!r}")
@@ -809,14 +818,8 @@ def check_parser_transcript(transcript: str,
                    "Cannot find bounds", "not defined", "Error in testing breakpoint"):
         require(phrase not in transcript,
                 f"parser GDB transcript contains {phrase!r}\n{transcript}")
-    for name, functions in (
-            ("digits", ("parse_digits", "parse_digits", "parse_entry",
-                            "parse_and_append", "parse_sequence")),
-            ("recovery", ("recover_to_boundary", "parse_entry",
-                              "parse_and_append", "parse_sequence")),
-            ("nested", ("parse_sequence", "parse_entry",
-                            "parse_and_append", "parse_sequence")),
-            ("done", ("main",))):
+    for name in ("digits", "recovery", "nested", "done"):
+        functions = frames("parser", name)
         scope = f"parser-{name}"
         filename = "main.ldn" if name == "done" else "parser.ldn"
         expect_line(transcript, scope, source_lines[name], functions[0], filename)
@@ -825,9 +828,11 @@ def check_parser_transcript(transcript: str,
                     for index, expected in enumerate(functions)),
                 f"parser recursion lost its source stack: {stack!r}")
         if name != "done":
-            require(re.search(r"#\d+\s+.*\bparse_file\b.*parser\.ldn:", stack)
-                    is not None and re.search(r"#\d+\s+.*\bmain\b.*main\.ldn:", stack)
-                    is not None,
+            require(all(re.search(
+                rf"#\d+\s+.*\b{routine}\b.*"
+                + re.escape(Path(FRAMES["parser"]["declared"][routine]).name)
+                + ":", stack) is not None
+                for routine in FRAMES["parser"]["beneath"]),
                     f"parser stack lost its complete application callers: {stack!r}")
     for name, value in (
             ("digits.accumulated", 4), ("digits.cursor", 27), ("digits.ends", 28),

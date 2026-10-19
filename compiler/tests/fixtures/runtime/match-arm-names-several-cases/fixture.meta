@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D405 one match arm names several cases, which branch to its one block, for an atom set, a variant part's payload-less cases and a pointer union's atoms, as a statement and as a value
+program: main.ldn
+constructs: 0480, 0630, 0640, 1210, 1220
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

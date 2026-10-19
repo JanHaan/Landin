@@ -425,20 +425,29 @@ the refusal names each one and the row to write. A row's `mode` is one of:
 
 | `mode` | Meaning | Also required |
 |---|---|---|
-| `execute` | built and run at every profile, and at each M-profile level its `levels:` names | nothing; the fixture names `cortex-m` in its `targets:` |
-| `execute` with `"profile_limit": "selected-image"` | every profile is still built and attempted; a profile whose image fits runs and must pass, and one that does not is recorded with its sizes | a `reason`; the fixture does *not* name `cortex-m` in its `targets:`, since an image that overflows is no execution, and `check.py` refuses the claim |
+| `execute` | built and run at every profile, and at each M-profile level its `levels:` names | nothing; a fixture that names `cortex-m0` in its `targets:` needs this row, and one with a `trap_report:` may not name it |
+| `execute` with `"profile_limit": "selected-image"` | every profile is still built and attempted; a profile whose image fits runs and must pass, and one that does not is recorded with its sizes | a `reason`; the fixture does *not* name `cortex-m0` in its `targets:`, since an image that overflows is no execution, and `check.py` refuses the claim |
 | `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes` and a `reason` |
 | `restriction` | a target restriction, the disabled general C surface or a hosted heap, not attempted | a `reason` and a `witness` file that shows it |
 
 A fixture that reads standard input cannot be `execute`: firmware has none
-to give it. Every program's line gives its verdict and its image against
+to give it. A fixture with a `trap_report:` keeps an `execute` row and does
+not name `cortex-m0`: firmware keeps D232's bare trap and writes no report
+(D361), so the corpus runs it to its trap and checks no line, which is less
+than the fixture's oracle; `runtime/computed-array-index-traps` is one.
+`check.py` refuses such a fixture that names `cortex-m0`, naming this rule. Every program's line gives its verdict and its image against
 the map: `FLASH used of 32768`, `RAM used of 12288` (the 16 KiB less the
-4 KiB stack), each with the sections inside it, and how far over the region
+4 KiB stack), each with the sections inside it, how far over the region
 an image that overflowed is, which the corpus measures by relinking the
-same objects against an enlarged copy of the map that never runs. A
+same objects against an enlarged copy of the map that never runs, and its
+three largest routines, `largest routines every_kind 2940, ...`. Each
+program's `result.json` under the output gives every routine's size,
+`image.routines`, read with the pinned `nm` from the image that ran or from
+the measured one, so where an overflowing image's bytes go is read from
+the corpus rather than from tools run by hand. A
 profile limit no profile meets any more fails an unfiltered run, naming the
 fixture, its largest image, and the row to change: remove `profile_limit`
-and `reason`, and add `cortex-m` to the fixture's `targets:`. An overflow
+and `reason`, and add `cortex-m0` to the fixture's `targets:`. An overflow
 in a row with no limit fails naming its sizes and the same row.
 
 `--profile` takes `none-off` or `none/off`, as the corpus line prints it.

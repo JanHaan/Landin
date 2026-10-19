@@ -323,8 +323,10 @@ class NativeCLI(unittest.TestCase):
         source.write_text(loose)
         checked = self.run_cli('fmt', '--check', 'loose.ldn', status=1)
         self.assertEqual(checked.stderr.count('error[L0008]'), 3)
-        self.assertIn('loose.ldn:2:1', checked.stderr)
-        self.assertIn('the layout writes it `    g()`', checked.stderr)
+        # D385: the line is marked where the layout changes it.
+        self.assertIn('loose.ldn:2:3', checked.stderr)
+        self.assertIn('the layout writes it `    g()`, which differs from'
+                      ' column 3', checked.stderr)
         self.assertIn('loose.ldn:4:1', checked.stderr)
         self.assertIn('the layout removes it', checked.stderr)
         self.assertIn('the layout writes it `    h()`', checked.stderr)
@@ -339,6 +341,34 @@ class NativeCLI(unittest.TestCase):
         self.assertEqual(source.read_text(), laid)
         self.assertEqual(source.stat().st_ino, inode)
         self.run_cli('fmt', '--check', 'loose.ldn')
+
+    def test_fmt_takes_a_directory(self):
+        # D385: a directory is the .ldn files under it, a dot-named
+        # directory left out, and one holding no source is refused.
+        loose = 'f: () -> none =\n  g()\nend f\n'
+        laid = 'f: () -> none =\n    g()\nend f\n'
+        tree = self.root / 'tree'
+        (tree / 'inner').mkdir(parents=True)
+        (tree / '.hidden').mkdir()
+        (tree / 'empty').mkdir()
+        (tree / 'top.ldn').write_text(loose)
+        (tree / 'inner' / 'deep.ldn').write_text(loose)
+        (tree / '.hidden' / 'kept.ldn').write_text(loose)
+        (tree / 'inner' / 'notes.txt').write_text(loose)
+        checked = self.run_cli('fmt', '--check', 'tree', status=1)
+        self.assertEqual(checked.stderr.count('error[L0008]'), 2)
+        self.assertIn('tree/inner/deep.ldn:2:3', checked.stderr)
+        self.assertIn('tree/top.ldn:2:3', checked.stderr)
+        self.assertNotIn('.hidden', checked.stderr)
+        self.run_cli('fmt', 'tree')
+        self.assertEqual((tree / 'top.ldn').read_text(), laid)
+        self.assertEqual((tree / 'inner' / 'deep.ldn').read_text(), laid)
+        self.assertEqual((tree / '.hidden' / 'kept.ldn').read_text(), loose)
+        self.assertEqual((tree / 'inner' / 'notes.txt').read_text(), loose)
+        self.run_cli('fmt', '--check', 'tree')
+        empty = self.run_cli('fmt', '--check', 'tree/empty', status=2)
+        self.assertIn('fmt found no .ldn source under tree/empty',
+                      empty.stderr)
 
     def test_bash_completion_scope(self):
         if not shutil.which('bash'):

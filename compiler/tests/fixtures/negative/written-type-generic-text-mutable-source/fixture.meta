@@ -3,4 +3,4 @@ summary: a written generic UTF-8 destination preserves the existing slice-alias 
 program: main.ldn
 codes: L0304
 constructs: 0310, 0430, 0600, 1350
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

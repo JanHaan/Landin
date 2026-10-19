@@ -1,0 +1,80 @@
+--  sort.sort_by orders records by what they refer to: each name is an
+--  offset and a length into one shared pool of bytes, which the comparison
+--  is given as its context.  A second context counts the comparisons
+--  through a pointer, and a view of no items or of one asks for none.
+import core/cmp
+import core/sort
+
+name: type = struct
+    start: usize
+    length: usize
+end name
+
+names_pool: type = struct
+    bytes: []u8
+end names_pool
+
+spelled: (pool: names_pool, at: name) -> (bytes: []u8 from pool) =
+    bytes = pool.bytes[at.start..<at.start + at.length]
+end spelled
+
+before: (pool: names_pool, left: name, right: name) -> (yes: bool) =
+    yes = cmp.compare(spelled(pool, left), spelled(pool, right)) == cmp.less
+end before
+
+--  Orders by the value an index selects, and counts every comparison.
+tally: type = struct
+    keys: []u32
+    comparisons: usize
+end tally
+
+counted_before: (counter: ptr mut tally, left: usize, right: usize)
+                -> (yes: bool) =
+    inc counter.val.comparisons
+    yes = counter.val.keys[left] < counter.val.keys[right]
+end counted_before
+
+--  "fig", "apple", "pear", "fig", "banana", "apple" over one pool.
+names_sorted: () -> (ok: bool) =
+    ok = false
+    pool: names_pool = (bytes: "figapplepearbanana")
+    mut names: [6]name = [(start: 0, length: 3), (start: 3, length: 5),
+                          (start: 8, length: 4), (start: 0, length: 3),
+                          (start: 12, length: 6), (start: 3, length: 5)]
+    sort.sort_by(names[0..<6], pool, before)
+    starts: [6]usize = [3, 3, 12, 0, 0, 8]
+    for at in usize(0)..<usize(6) do
+        return when names[at].start <> starts[at]
+    end for
+    --  Sorted already, it stays sorted.
+    sort.sort_by(names[0..<6], pool, before)
+    for at in usize(0)..<usize(6) do
+        return when names[at].start <> starts[at]
+    end for
+    ok = true
+end names_sorted
+
+indices_sorted: () -> (ok: bool) =
+    ok = false
+    keys: [8]u32 = [70, 10, 50, 30, 80, 20, 60, 40]
+    mut counter: tally = (keys: keys[0..<8], comparisons: 0)
+    mut order: [8]usize = [0, 1, 2, 3, 4, 5, 6, 7]
+    sort.sort_by(order[0..<8], addr counter, counted_before)
+    wanted: [8]usize = [1, 5, 3, 7, 2, 6, 0, 4]
+    for at in usize(0)..<usize(8) do
+        return when order[at] <> wanted[at]
+    end for
+    --  Heapsort of eight items asks at most 2n log2 n, 48, comparisons.
+    return when counter.comparisons == 0 or counter.comparisons > 48
+    --  No items and one item are sorted without a comparison.
+    counter.comparisons = 0
+    sort.sort_by(order[0..<0], addr counter, counted_before)
+    sort.sort_by(order[3..<4], addr counter, counted_before)
+    ok = counter.comparisons == 0 and order[3] == 7
+end indices_sorted
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not names_sorted() or not indices_sorted()
+    code = 42
+end main

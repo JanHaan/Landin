@@ -25,6 +25,7 @@ package Landin.Targets.Layouts is
       Saved_Bytes  : Byte_Count := 0;
    end record;
 
+   --  C_Packed places each field in order at alignment one (D410).
    --  Stable descending alignment is only selected when the final padded
    --  size is strictly smaller.  Zero-size units still require alignment.
    --  Invalid alignment or byte-count overflow raises Compiler_Defect in

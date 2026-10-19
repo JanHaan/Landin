@@ -152,9 +152,9 @@ class Derivations(unittest.TestCase):
 
     def test_a_target_claimed_without_a_record_is_refused(self):
         claims = copy.deepcopy(self.claims)
-        del claims[PARSER]["macos-arm64"]
+        del claims[PARSER]["darwin-arm64"]
         self.refused(self.problems(claims=claims),
-                     "derivation runtime/derived-parser claims macos-arm64"
+                     "derivation runtime/derived-parser claims darwin-arm64"
                      " and no record places it")
 
     def test_synthetic_32_is_never_a_target_result(self):
@@ -174,7 +174,7 @@ class Derivations(unittest.TestCase):
         self.assertNotIn("synthetic-32", results)
         self.assertEqual(results,
                          "linux-x86-64=refused, linux-arm64=refused,"
-                         " macos-arm64=refused, freebsd-x86-64=refused,"
+                         " darwin-arm64=refused, freebsd-x86-64=refused,"
                          " freebsd-arm64=refused, linux-rv64=refused")
 
     def test_a_recorded_cortex_refusal_is_reported_rather_than_dropped(self):
@@ -189,7 +189,7 @@ class Derivations(unittest.TestCase):
                      "runtime/derived-hosted-memory"):
             _, _, results = CHECK.prototype_row_evidence(
                 name, self.records[name][1])
-            self.assertIn("cortex-m=refused", results, name)
+            self.assertIn("cortex-m0=refused", results, name)
 
     #  ---------------------------------------------------- scope backing
     def test_every_scope_claim_is_reached_by_one_of_its_derivations(self):
@@ -203,12 +203,12 @@ class Derivations(unittest.TestCase):
         """
         claims = copy.deepcopy(self.claims)
         for reached in claims.values():
-            reached.pop("cortex-m", None)
+            reached.pop("cortex-m0", None)
         self.refused(self.scope_problems(claims=claims),
-                     "prototype-3 claims cortex-m and no derivation of it"
+                     "prototype-3 claims cortex-m0 and no derivation of it"
                      " reaches that target")
         self.refused(self.scope_problems(claims=claims),
-                     "prototype-1 claims cortex-m and no derivation of it"
+                     "prototype-1 claims cortex-m0 and no derivation of it"
                      " reaches that target")
 
     def test_rows_may_reach_further_than_a_scope_row_claims(self):
@@ -228,8 +228,8 @@ class Derivations(unittest.TestCase):
                 name, self.records[name][1])
             reached |= {one.split("=")[0]
                         for one in results.split(", ") if "=" in one}
-        self.assertEqual(reached, {"cortex-m", "linux-x86-64", "linux-arm64",
-                                   "macos-arm64", "freebsd-x86-64",
+        self.assertEqual(reached, {"cortex-m0", "linux-x86-64", "linux-arm64",
+                                   "darwin-arm64", "freebsd-x86-64",
                                    "freebsd-arm64", "linux-rv64"})
 
     #  ------------------------------------------------------- driver oracle

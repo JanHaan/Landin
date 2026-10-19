@@ -59,6 +59,10 @@
   operator: (identifier) @keyword
   (#eq? @keyword "lenof"))
 
+(measurement_expression
+  operator: (identifier) @keyword
+  (#eq? @keyword "offsetof"))
+
 (of_keyword
   (identifier) @keyword
   (#eq? @keyword "of"))

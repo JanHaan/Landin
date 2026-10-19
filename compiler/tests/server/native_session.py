@@ -172,6 +172,8 @@ def main():
         print("%-24s %s" % (name, "FAIL" if problem else "ok"))
         if problem:
             print("  " + problem.replace("\n", "\n  "))
+            print("  once the difference is read, re-record it alone with"
+                  " ./scripts/test.sh --record=server/" + name)
             failed += 1
     print("%d sessions, %d failed" % (len(names), failed))
     return 1 if failed or not names else 0

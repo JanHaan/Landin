@@ -455,6 +455,8 @@ package body Landin.Backend.RiscV is
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String);
+      procedure Byte_Memory
+        (Store : Boolean; Size : Held_Size; Register, Base : String);
       procedure Frame_Memory
         (Store : Boolean; Size : Held_Size; Register : String;
          Offset : Landin.Targets.Byte_Count);
@@ -580,6 +582,40 @@ package body Landin.Backend.RiscV is
          Emit (RiscV_Instructions.Memory
            (Store, Size, Reg (Register), Reg (Base), 64));
       end Memory;
+
+      --  D410: a scalar of a byte-packed C record may sit at any address,
+      --  and a misaligned RISC-V access may trap or be emulated, so it is
+      --  moved one byte at a time, least significant byte first, with x7
+      --  as scratch.  A load zero-extends, as Memory's does.
+      procedure Byte_Memory
+        (Store : Boolean; Size : Held_Size; Register, Base : String)
+      is
+         Count : constant Positive := Landin.Targets.Bytes (Size);
+      begin
+         if Count = 1 then
+            Memory (Store, Size, Register, Base);
+         elsif Store then
+            for Index in 0 .. Count - 1 loop
+               if Index = 0 then
+                  Emit ("sb " & Register & ", 0(" & Base & ")");
+               else
+                  Emit ("srli x7, " & Register & ", "
+                    & Trimmed (Natural'Image (8 * Index)));
+                  Emit ("sb x7, " & Trimmed (Natural'Image (Index))
+                    & "(" & Base & ")");
+               end if;
+            end loop;
+         else
+            Emit ("lbu " & Register & ", "
+              & Trimmed (Natural'Image (Count - 1)) & "(" & Base & ")");
+            for Index in reverse 0 .. Count - 2 loop
+               Emit ("slli " & Register & ", " & Register & ", 8");
+               Emit ("lbu x7, " & Trimmed (Natural'Image (Index))
+                 & "(" & Base & ")");
+               Emit ("or " & Register & ", " & Register & ", x7");
+            end loop;
+         end if;
+      end Byte_Memory;
 
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x9") is
@@ -843,7 +879,7 @@ package body Landin.Backend.RiscV is
 
       function Symbol (Item : Landin.IR.Item_Id) return String;
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
-      function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
+      function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean;
 
       --  The library's argument initializer the hosted entry calls with
       --  C's argc, argv and envp, when the program defines one.
@@ -1056,8 +1092,7 @@ package body Landin.Backend.RiscV is
                Spelling : constant String := Source_Symbol (Item);
             begin
                if not Is_Forced (Item) then
-                  if not Is_C_Item (Item) and then Available (Spelling, Item)
-                  then
+                  if Available (Spelling, Item) then
                      Allocate
                        (Position, Unbounded.To_Unbounded_String (Spelling));
                   else
@@ -1065,10 +1100,8 @@ package body Landin.Backend.RiscV is
                         Base : constant String :=
                           (if Declared = Landin.IR.No_Declaration
                            then Spelling
-                           else "landin_"
-                             & Trimmed
-                               (Landin.IR.Declaration_Id'Image (Declared))
-                             & "_" & Spelling);
+                           else Landin.Backend.Qualified_Symbol
+                             (Meanings, Declared, Spelling));
                         Candidate : Unbounded.Unbounded_String :=
                           Unbounded.To_Unbounded_String (Base);
                         Attempt : Natural := 0;
@@ -1078,7 +1111,7 @@ package body Landin.Backend.RiscV is
                         loop
                            Attempt := Attempt + 1;
                            Candidate := Unbounded.To_Unbounded_String
-                             (Base & "_" & Trimmed (Natural'Image (Attempt)));
+                             (Base & "." & Trimmed (Natural'Image (Attempt)));
                         end loop;
                         Allocate (Position, Candidate);
                      end;
@@ -1109,14 +1142,9 @@ package body Landin.Backend.RiscV is
         is (Local_Prefix & "landin_evidence_"
             & Trimmed (Landin.IR.Evidence_Id'Image (Id)));
 
-      function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean
-      is
-         Declared : constant Landin.IR.Declaration_Id :=
-           Landin.IR.Declares (Of_Unit, Item);
-      begin
-         return Declared /= Landin.IR.No_Declaration
-           and then Landin.Resolution.Is_Public (Meanings, Declared);
-      end Is_Public_Item;
+      function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean
+        is (Landin.Backend.Is_Exported
+              (Of_Unit, Meanings, Item, Hosted_Entry, Landin.IR.No_Item));
 
       --  Labels carry the item, because a Block_Id restarts at 1 in the
       --  next item and two blocks named `.L1` would be one label.
@@ -1613,6 +1641,23 @@ package body Landin.Backend.RiscV is
          is (Landin.IR.Shape_At
                (Of_Unit, Root_Shape_Of (Place, Field), Nested));
 
+         --  D410: whether the scalar a field or element operation reaches
+         --  lies inside a byte-packed C record, and so may be unaligned.
+         function Unaligned_Part
+           (Place  : Landin.IR.Storage;
+            Field  : Landin.IR.Element_Total;
+            Nested : Landin.IR.Path_Step_Array) return Boolean
+         is (Landin.IR.Reaches_Byte_Packed
+               (Of_Unit, Item, Place, Field, Nested));
+
+         function Unaligned_Element
+           (Place         : Landin.IR.Storage;
+            Field         : Natural;
+            Which         : Natural;
+            Payload_Field : Natural;
+            Nested        : Landin.IR.Path_Step_Array;
+            Below         : Landin.IR.Path_Step_Array) return Boolean;
+
          function Element_Shape_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -1669,6 +1714,22 @@ package body Landin.Backend.RiscV is
               Landin.IR.No_Path_Steps) return Landin.Types.Scalar_Name
          is (Element_Shape_Of
                (Place, Field, Which, Payload_Field, Nested).Element);
+
+         function Unaligned_Element
+           (Place         : Landin.IR.Storage;
+            Field         : Natural;
+            Which         : Natural;
+            Payload_Field : Natural;
+            Nested        : Landin.IR.Path_Step_Array;
+            Below         : Landin.IR.Path_Step_Array) return Boolean
+         is (Payload_Field = 0
+             and then (Unaligned_Part
+                         (Place, Landin.IR.Element_Total (Field), Nested)
+                       or else Landin.IR.Enters_Byte_Packed
+                         (Of_Unit,
+                          Element_Shape_Of
+                            (Place, Field, Which, Payload_Field, Nested),
+                          Below)));
 
          --  How many target bytes one element takes.
          function Element_Bytes_Of
@@ -2292,6 +2353,16 @@ package body Landin.Backend.RiscV is
             end Packed_Atom;
 
             procedure FP_Load (Which : Positive; Register : String);
+
+            --  D410: an indirect access whose address slot reaches a
+            --  scalar inside a byte-packed C record.
+            function Unaligned_Indirect return Boolean
+              is (Landin.IR."/="
+                    (Landin.IR.Indirect_Address_Slot (Of_Unit, Item, Value),
+                     Landin.IR.No_Slot)
+                  and then Landin.IR.Is_Unaligned_Address
+                    (Of_Unit, Item,
+                     Landin.IR.Indirect_Address_Slot (Of_Unit, Item, Value)));
             procedure FP_Save;
             procedure Index_Address
               (Storage : Landin.IR.Storage; Field : Natural;
@@ -2385,14 +2456,14 @@ package body Landin.Backend.RiscV is
                   Immediate ("x5", Pattern (Atom_Code
                     (Atoms_Ranked, Landin.IR.Atom_Of (Of_Unit, Item, Value))));
                   Store_Value (Value);
-               when Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
+               when Landin.IR.Measurement_Kind =>
                   declare
                      Bytes : Landin.Targets.Byte_Count;
                      Alignment : Landin.Targets.Byte_Alignment;
                   begin
                      Measurement_Extent
                        (Of_Unit, Item, Value, Facts, Bytes, Alignment);
-                     Immediate ("x5", (if Op = Landin.IR.Measure_Size
+                     Immediate ("x5", (if Op /= Landin.IR.Measure_Align
                        then Pattern (Bytes) else Pattern (Alignment)));
                      Store_Value (Value);
                   end;
@@ -2530,12 +2601,21 @@ package body Landin.Backend.RiscV is
 
                when Landin.IR.Load_Indirect =>
                   Load_Value (Operand (1), "x6");
-                  Memory (False, Size_Of_Value (Value), "x5", "x6");
+                  if Unaligned_Indirect then
+                     Byte_Memory (False, Size_Of_Value (Value), "x5", "x6");
+                  else
+                     Memory (False, Size_Of_Value (Value), "x5", "x6");
+                  end if;
                   Store_Value (Value);
                when Landin.IR.Store_Indirect =>
                   Load_Value (Operand (1), "x6");
                   Load_Value (Operand (2));
-                  Memory (True, Size_Of_Value (Operand (2)), "x5", "x6");
+                  if Unaligned_Indirect then
+                     Byte_Memory
+                       (True, Size_Of_Value (Operand (2)), "x5", "x6");
+                  else
+                     Memory (True, Size_Of_Value (Operand (2)), "x5", "x6");
+                  end if;
                when Landin.IR.Load_Datum | Landin.IR.Store_Datum =>
                   Address ("x6", Symbol
                     (Landin.IR.Datum_Of (Of_Unit, Item, Value)));
@@ -2591,7 +2671,22 @@ package body Landin.Backend.RiscV is
                        (Landin.IR.Field_Of (Of_Unit, Item, Value)),
                      "x6", Nested => Landin.IR.Path_Of (Of_Unit, Item,
                        Value));
-                  if Op = Landin.IR.Load_Field then
+                  if Unaligned_Part
+                    (Place,
+                     Landin.IR.Element_Total
+                       (Landin.IR.Field_Of (Of_Unit, Item, Value)),
+                     Landin.IR.Path_Of (Of_Unit, Item, Value))
+                  then
+                     if Op = Landin.IR.Load_Field then
+                        Byte_Memory
+                          (False, Size_Of_Value (Value), "x5", "x6");
+                        Store_Value (Value);
+                     else
+                        Load_Value (Operand (1));
+                        Byte_Memory
+                          (True, Size_Of_Value (Operand (1)), "x5", "x6");
+                     end if;
+                  elsif Op = Landin.IR.Load_Field then
                      Memory (False, Size_Of_Value (Value), "x5", "x6");
                      Store_Value (Value);
                   else
@@ -2656,7 +2751,24 @@ package body Landin.Backend.RiscV is
                      Landin.IR.Variant_Payload_Field_Of (Of_Unit, Item, Value),
                      Landin.IR.Path_Of (Of_Unit, Item, Value),
                      Landin.IR.Element_Path_Of (Of_Unit, Item, Value));
-                  if Op = Landin.IR.Load_Element then
+                  if Unaligned_Element
+                    (Place, Landin.IR.Element_Field_Of (Of_Unit, Item, Value),
+                     Landin.IR.Variant_Case_Of (Of_Unit, Item, Value),
+                     Landin.IR.Variant_Payload_Field_Of
+                       (Of_Unit, Item, Value),
+                     Landin.IR.Path_Of (Of_Unit, Item, Value),
+                     Landin.IR.Element_Path_Of (Of_Unit, Item, Value))
+                  then
+                     if Op = Landin.IR.Load_Element then
+                        Byte_Memory
+                          (False, Size_Of_Value (Value), "x5", "x6");
+                        Store_Value (Value);
+                     else
+                        Load_Value (Operand (2));
+                        Byte_Memory
+                          (True, Size_Of_Value (Operand (2)), "x5", "x6");
+                     end if;
+                  elsif Op = Landin.IR.Load_Element then
                      Memory (False, Size_Of_Value (Value), "x5", "x6");
                      Store_Value (Value);
                   else
@@ -3319,7 +3431,7 @@ package body Landin.Backend.RiscV is
                Terminal_Count := Terminal_Count + 1;
             end if;
          end loop;
-         if Is_Public_Item (Item) or else Is_Forced (Item) then
+         if Is_Exported_Item (Item) then
             Emit (".globl " & Symbol (Item));
          end if;
          Emit (".p2align 2");
@@ -3735,8 +3847,7 @@ package body Landin.Backend.RiscV is
 
                      --  [0370] in a module value, folded here for the
                      --  same reason the shifts are: it needs a target.
-                     when Landin.IR.Measure_Size
-                        | Landin.IR.Measure_Align =>
+                     when Landin.IR.Measurement_Kind =>
                         declare
                            Size : Landin.Targets.Byte_Count;
                            Alignment : Landin.Targets.Byte_Alignment;
@@ -3744,7 +3855,7 @@ package body Landin.Backend.RiscV is
                            Measurement_Extent
                              (Of_Unit, Item, Value, Facts, Size, Alignment);
                            Held (Natural (Value)) :=
-                             (if Op = Landin.IR.Measure_Size
+                             (if Op /= Landin.IR.Measure_Align
                               then Landin.Types.Folded (Size)
                               else Landin.Types.Folded (Alignment));
                         end;
@@ -4579,7 +4690,7 @@ package body Landin.Backend.RiscV is
             Alignment := Landin.Targets.Alignment_Of (Placed);
          end if;
 
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
          Put
@@ -4675,7 +4786,7 @@ package body Landin.Backend.RiscV is
          Alignment : Landin.Targets.Byte_Alignment)
       is
       begin
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Emit (".globl " & Symbol (Item));
          end if;
          --  An empty datum retains its aligned, zero-sized symbol, without
@@ -4771,7 +4882,7 @@ package body Landin.Backend.RiscV is
               Landin.IR.Array_Element (Of_Unit, Item);
             Held : constant Held_Size := Size_Of (Element, Facts);
          begin
-            if Is_Public_Item (Item) then
+            if Is_Exported_Item (Item) then
                Put (Character'Val (9) & ".globl " & Symbol (Item));
             end if;
 
@@ -4844,7 +4955,7 @@ package body Landin.Backend.RiscV is
       begin
          Landin.Backend.Field_Extent
            (Of_Unit, Element, Facts, Element_Size, Alignment);
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
          Put (Character'Val (9) & ".balign 8");
@@ -4891,7 +5002,7 @@ package body Landin.Backend.RiscV is
             then Symbol (Landin.IR.Address_Target (Of_Unit, Item))
             else Trimmed (Landin.Types.Folded'Image (Folded (Item))));
       begin
-         if Is_Public_Item (Item) then
+         if Is_Exported_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -5038,7 +5149,8 @@ package body Landin.Backend.RiscV is
               Kept_Evidence_Entries
                 (Of_Unit,
                  (if Panic = null then Landin.IR.No_Item
-                  else Landin.Panics.Handler (Panic.all)));
+                  else Landin.Panics.Handler (Panic.all)),
+                 Meanings, Names);
          begin
             for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
                declare

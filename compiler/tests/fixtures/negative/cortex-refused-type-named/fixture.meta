@@ -3,7 +3,7 @@ summary: [1830]'s refusal of a construct the kernel has not enabled is the check
 program: program.ldn
 codes: L0304
 constructs: 0170, 1830
-targets: cortex-m
+targets: cortex-m0
 args: --target=cortex-m0 ../tests/fixtures/negative/cortex-refused-type-named/program.ldn
 expect: expected.txt
 status: 1

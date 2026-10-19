@@ -30,7 +30,7 @@ end time_value
 --- vector names a vDSO that has one, which answers without entering the
 --- kernel, under `--link=libc` too, and the system call otherwise; on
 --- Darwin and FreeBSD it is the C library's.
-public link(symbol: "_landin_posix_clock_time") clock_time:
+public clock_time:
     (clock: clock_kind) -> (time: time_value) ! errno =
     time = try system_clock_time(clock)
 end clock_time
@@ -40,7 +40,7 @@ end clock_time
 --- errno, `eintr` when a signal came first, which leaves part of the span
 --- unslept, and `einval` for nanoseconds of a second or more.  It may
 --- return late, never early, of the clock it sleeps on.
-public link(symbol: "_landin_posix_sleep") sleep:
+public sleep:
     (span: time_value) -> none ! errno =
     fail einval when span.seconds < 0 or span.nanoseconds >= 1000000000
     try system_sleep(span)

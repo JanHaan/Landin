@@ -3,7 +3,7 @@ summary: only a C function type makes a function value from an address, and only
 constructs: 0470, 0870, 1000, 1975
 program: program.ldn
 codes: L0301, L0301, L0335, L0301, L0301
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/c-function-from-address-refusals/program.ldn
 status: 1

@@ -76,9 +76,9 @@ exercise: (provider: type is mem.allocator, memory: provider)
     tree.release(value, counted)
     --  The refused leaf and branch were each refused growing in place and
     --  allocating, so five refusals in all.  The first block, and the
-    --  growth, in place where the arena grows it and moved where the heap
-    --  and the pool do not, which spends a seventh attempt and gives a
-    --  second block; every block given is freed once.
+    --  growth, in place where the arena and the pool grow it and moved where
+    --  the heap does not, which spends an eighth attempt and gives a second
+    --  block; every block given is freed once.
     okay = tree.ordinal(root) == 8 and leaves == 8
         and tree.length(value) == 0
         and fault.injected_failures(counted) == 5
@@ -106,7 +106,7 @@ public main: () -> (code: i32) =
     end
     pool_ok: bool = exercise(slab)
     if heap_ok and arena_ok and pool_ok and pool.live(slab) == 0
-       and pool.allocations(slab) == 2 and pool.frees(slab) == 2
+       and pool.allocations(slab) == 1 and pool.frees(slab) == 1
        and pool.rejected_frees(slab) == 0
     then
         code = 42

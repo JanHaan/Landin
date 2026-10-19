@@ -112,6 +112,49 @@ class NamedFiles(unittest.TestCase):
                                 written=written))
 
 
+FAILING_MODULE = """\
+public out_of_memory: atom
+public missing: atom
+public ordered: atom
+
+public grab: () -> none ! out_of_memory | missing =
+    fail out_of_memory
+end grab
+"""
+
+
+class FailureWords(unittest.TestCase):
+    """Every atom a core module fails with is in failure.reason (D388)."""
+
+    def words(self, union):
+        return "public reason: type = %s\n\n" % union
+
+    def test_a_complete_set_passes(self):
+        self.assertEqual(
+            faults(checker.check_failure_words,
+                   written={"core/mem/mem.ldn": FAILING_MODULE,
+                            checker.FAILURE_WORDS:
+                                self.words("mem.out_of_memory\n"
+                                           "    | mem.missing")}), [])
+
+    def test_a_failure_with_no_words_is_reported(self):
+        said = reasons(checker.check_failure_words,
+                       written={"core/mem/mem.ldn": FAILING_MODULE,
+                                checker.FAILURE_WORDS:
+                                    self.words("mem.out_of_memory")})
+        self.assertTrue(any("mem.missing" in why and "no words" in why
+                            for why in said), said)
+
+    def test_words_for_an_atom_nothing_fails_with_are_reported(self):
+        said = reasons(checker.check_failure_words,
+                       written={"core/mem/mem.ldn": FAILING_MODULE,
+                                checker.FAILURE_WORDS:
+                                    self.words("mem.out_of_memory"
+                                               " | mem.missing"
+                                               " | mem.ordered")})
+        self.assertTrue(any("mem.ordered" in why for why in said), said)
+
+
 PINS = ["environments/linux-amd64/Containerfile",
         "compiler/ada/TOOLCHAIN.md",
         "environments/pins.sh",
@@ -185,6 +228,25 @@ class PinnedToolchain(unittest.TestCase):
                  "does not hold its cross lane to LANDIN_CROSS_QEMU_NIX"),
                 ('pin "LANDIN_CROSS_GCC_NIX"', '"15.3.0"',
                  "names LANDIN_CROSS_GCC_NIX's 15.3.0 literally")):
+            with self.subTest(fragment=fragment), tree(copied=copied) as root:
+                path = root / "flake.nix"
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new, 1))
+                said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
+        #  The shell's tree-sitter CLI, read from the pins as the gate's is;
+        #  its banner on standard error; its bash with completion.
+        for old, new, fragment in (
+                ("PATH\" >&2\n", "PATH\"\n",
+                 "the shell hook writes to standard output"),
+                ("pkgs.bashInteractive", "pkgs.bash",
+                 "the shell has no pkgs.bashInteractive"),
+                ('pin "LANDIN_TREE_SITTER_VERSION"', '"0.26.9"',
+                 "does not take the shell's tree-sitter CLI"),
+                ('pin "LANDIN_TREE_SITTER_SHA256_${suffix}"',
+                 '"9ce82137caa65864e7ca8b869fd391cef88c9bd2a01c4371b9c4dd26c2585efb"',
+                 "names LANDIN_TREE_SITTER_SHA256_X86_64_LINUX's 9ce8")):
             with self.subTest(fragment=fragment), tree(copied=copied) as root:
                 path = root / "flake.nix"
                 text = path.read_text()
@@ -1592,6 +1654,114 @@ class DiscussionTargets(unittest.TestCase):
             said = [why for _, _, why
                     in checker.check_discussion_targets(True)]
         self.assertTrue(any("held to nothing" in why for why in said))
+
+
+class CatalogueLabels(unittest.TestCase):
+    """A report's second places are held to its code's row at the call."""
+
+    DIAGNOSTICS = "compiler/ada/src/diagnostics"
+    CALLER = "compiler/ada/src/stages/landin-stages-sample.adb"
+
+    def call(self, item, because):
+        return ("package body Sample is\n"
+                "   package Bad renames Landin.Diagnostics.Checking;\n"
+                "   procedure Go is\n   begin\n"
+                "      Bad.Report\n"
+                "        (Item    => Bad.%s,\n"
+                "         Source  => S,\n"
+                "         Where   => W,\n"
+                "         Message => \"a (parenthesised) \"\"message\"\"\",\n"
+                "%s"
+                "         Into    => Found);\n"
+                "   end Go;\nend Sample;\n"
+                % (item, "" if because is None
+                   else "         Related => R,\n"
+                        "         Because => %s,\n" % because))
+
+    def said(self, item, because):
+        return reasons(checker.check_catalogue_labels,
+                       copied=[self.DIAGNOSTICS],
+                       written={self.CALLER: self.call(item, because)})
+
+    def test_the_compiler_passes(self):
+        self.assertEqual(
+            faults(checker.check_catalogue_labels,
+                   copied=["compiler/ada/src"]), [])
+
+    def test_a_report_with_its_second_place_passes(self):
+        self.assertEqual(self.said("Type_Mismatch", '"the requirement"'), [])
+
+    def test_a_report_that_drops_its_second_place_is_named(self):
+        said = self.said("Type_Mismatch", None)
+        self.assertEqual(len(said), 1)
+        self.assertIn("L0301", said[0])
+        self.assertIn("asks for 1", said[0])
+
+    def test_a_second_place_a_row_forbids_is_named(self):
+        said = self.said("Mutable_Never_Written", '"one more place"')
+        self.assertEqual(len(said), 1)
+        self.assertIn("give it none", said[0])
+
+    def test_a_computed_second_place_is_left_to_the_run(self):
+        self.assertEqual(self.said("Type_Mismatch", "Sentence"), [])
+
+    def test_an_unreadable_package_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_catalogue_labels,
+                       written={self.CALLER: self.call("Type_Mismatch",
+                                                       None)})
+        self.assertTrue(said)
+        self.assertIn("could not be read", said[0])
+
+
+class HarnessSelectors(unittest.TestCase):
+    """A selector a document writes names a registered suite or case."""
+
+    SUITE = ("compiler/ada/tests/src/landin-tests-sample_suite.adb",
+             'procedure Register is\nbegin\n'
+             '   Landin.Testing.Register\n'
+             '     (Into, "fixture execution", "recorded expectations hold",\n'
+             "      A'Access);\n"
+             '   Landin.Testing.Register\n'
+             '     (Into, "parser", "reports carry the pinned codes",\n'
+             "      B'Access);\nend Register;\n")
+    NAMED = ("--case='fixture execution/recorded expectations hold' and "
+             "--case='parser/reports carry the pinned codes'\n")
+
+    def said(self, readme, extra=None):
+        written = {self.SUITE[0]: self.SUITE[1],
+                   "compiler/tests/README.md": readme}
+        written.update(extra or {})
+        return reasons(checker.check_harness_selectors, written=written)
+
+    def test_the_repository_passes(self):
+        self.assertEqual(
+            faults(checker.check_harness_selectors,
+                   copied=["compiler/ada/tests/src", "compiler/tests",
+                           "docs", "AGENTS.md", "README.md",
+                           "environments"]), [])
+
+    def test_named_cases_pass(self):
+        self.assertEqual(self.said(self.NAMED + "--suite=parser\n"), [])
+
+    def test_the_format_must_name_the_cases_that_check_a_report(self):
+        said = self.said("run --suite=parser\n")
+        self.assertEqual(len(said), 2)
+        self.assertIn("recorded expectations hold", said[0])
+
+    def test_a_renamed_case_is_named(self):
+        said = self.said(self.NAMED,
+                         {"docs/x.md": "--case='parser/old name'\n"})
+        self.assertEqual(len(said), 1)
+        self.assertIn("SUITE/NAME", said[0])
+
+    def test_an_unknown_suite_is_named(self):
+        said = self.said(self.NAMED, {"docs/x.md": "--suite=fixturez\n"})
+        self.assertEqual(len(said), 1)
+        self.assertIn("fixturez", said[0])
+
+    def test_the_roadmap_may_quote_a_wrong_selector(self):
+        self.assertEqual(
+            self.said(self.NAMED, {"ROADMAP.md": "--case='no suite'\n"}), [])
 
 
 if __name__ == "__main__":

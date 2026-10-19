@@ -1,0 +1,73 @@
+--  D406: `_ = f() else none` ignores the failure of a call that returns a
+--  value, because the discard already says the result is never read.  The
+--  call's effects up to its failure stay, and the statement after it runs
+--  next, whether the call is direct, labelled, erased, through a function
+--  value or generic, and whether its result is a number or a pointer.
+refused: atom
+
+counter: type = struct
+    calls: i32
+    total: i32
+end counter
+
+bump: (inout into: counter, by: i32) -> (now: i32) ! refused =
+    inc into.calls
+    fail refused when by > 2
+    into.total += by
+    now = into.total
+end bump
+
+first: (inout into: counter) -> (found: ptr i32) ! refused =
+    inc into.calls
+    fail refused
+end first
+
+steppable: type = concept (t: type)
+    step: (self: ptr mut t, by: i32) -> (now: i32) ! refused
+end steppable
+
+counter_step: (self: ptr mut counter, by: i32) -> (now: i32) ! refused =
+    now = try bump(self.val, by)
+end counter_step
+
+counter is steppable (step: counter_step)
+
+twice: (t: type, value: t, inout seen: counter) -> (kept: t) ! refused =
+    _ = bump(seen, 1) else none
+    fail refused when seen.calls > 0
+    kept = value
+end twice
+
+public main: () -> (code: i32) =
+    code = 1
+    mut direct: counter = (calls: 0, total: 0)
+    _ = bump(direct, 1) else none
+    _ = bump(direct, 5) else none
+    _ = bump(into: direct, by: 2) else none
+    _ = first(direct) else none
+    return when direct.calls <> 4 or direct.total <> 3
+
+    mut erased_state: counter = (calls: 0, total: 0)
+    erased: any steppable = any(addr erased_state)
+    _ = erased.step(9) else none
+    _ = erased.step(1) else none
+    return when erased_state.calls <> 2 or erased_state.total <> 1
+
+    mut through: counter = (calls: 0, total: 0)
+    stepper: (self: ptr mut counter, by: i32) -> (now: i32) ! refused = counter_step
+    _ = stepper(addr through, 3) else none
+    _ = stepper(addr through, 2) else none
+    return when through.calls <> 2 or through.total <> 2
+
+    mut generic: counter = (calls: 0, total: 0)
+    _ = twice(u8(7), generic) else none
+    return when generic.calls <> 1 or generic.total <> 1
+
+    mut looped: counter = (calls: 0, total: 0)
+    for by in 0..<6 do
+        _ = bump(looped, by) else none
+    end for
+    return when looped.calls <> 6 or looped.total <> 3
+
+    code = 42
+end main

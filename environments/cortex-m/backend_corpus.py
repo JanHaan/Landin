@@ -9,9 +9,10 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import re
+import sys
 
-from backend import (ROOT, COUNTERPARTS, describe_sizes, fixture, levels_of,
-                     measure_overflow, metadata)
+from backend import (ROOT, COUNTERPARTS, describe_routines, describe_sizes, fixture,
+                     levels_of, measure_overflow, metadata)
 from run import CommandFailed, Run, require, workers
 from setup import DEFAULT, installed_tools, sha, supported_host
 
@@ -132,7 +133,7 @@ def image_limit(run, row, error, level='armv6-m'):
         raise RuntimeError(
             '%s; the image does not fit the selected map%s, and its %s row records no'
             ' profile_limit: make the program fit, or add "profile_limit": "selected-image"'
-            ' with a reason and drop cortex-m from its targets: (see %s)'
+            ' with a reason and drop cortex-m0 from its targets: (see %s)'
             % (text, ': ' + describe_sizes(result['image']) if 'image' in result else '',
                INVENTORY, RULES))
     return result
@@ -153,7 +154,7 @@ def stale_limits(rows, results):
                         for r in mine):
             largest = max(mine, key=lambda r: r['image']['regions']['FLASH']['used'])
             stale.append('  %s: every profile fits, the largest at %s/%s with %s; remove'
-                         ' profile_limit and reason from its %s row, and name cortex-m in its'
+                         ' profile_limit and reason from its %s row, and name cortex-m0 in its'
                          ' targets: (see %s)'
                          % (name, largest['optimize'], largest['specialize'],
                             describe_sizes(largest['image']), INVENTORY, RULES))
@@ -167,6 +168,9 @@ def corpus_line(result):
             ' ' + result.get('verdict', 'FAILED: ' + result.get('error', '')))
     if 'image' in result:
         text += ': ' + describe_sizes(result['image'])
+        largest = describe_routines(result['image'])
+        if largest:
+            text += '; ' + largest
     elif result.get('boundary') == 'represented static image exceeds selected memory map':
         text += ': its assembly materialises more than 8 MiB, past any region of the map'
     elif 'minimum_frame_bytes' in result:
@@ -239,7 +243,7 @@ def execute(output, tools, refine, selected=(), profiles=()):
                             include_compiler_sha256=False)
                     result['verdict'] = 'executed'
                     result['image'] = {key: json.loads((out / 'image.json').read_text())[key]
-                                       for key in ('regions', 'sections')}
+                                       for key in ('regions', 'sections', 'routines')}
                     if level != 'armv6-m':
                         result['lowering'] = divide_lowering(run)
                 except RuntimeError as error:
@@ -283,6 +287,12 @@ def main():
                         help='none-off, size-off, size-auto, speed-auto, none-all or speed-all;'
                              ' none/off as the log prints it is the same profile')
     args = parser.parse_args()
+    #  A rebuild of this build waits for the lane, rather than replace
+    #  refine between two of its compilations.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import build_lock
+    if args.refine:
+        build_lock.reading(args.refine)
     supported_host()
     args.tools = installed_tools(args.tools)
     out = args.output.resolve()

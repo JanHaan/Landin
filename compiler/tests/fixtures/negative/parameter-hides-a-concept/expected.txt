@@ -1,0 +1,10 @@
+error[L0341]: `writer` here is the parameter `writer`, which hides the concept `writer`
+  --> ../tests/fixtures/negative/parameter-hides-a-concept/program.ldn:5:34
+  |
+5 | emit: (writer: u32, out: ptr any writer) -> none =
+  |                                  ^^^^^^
+  --> ../tests/fixtures/negative/parameter-hides-a-concept/program.ldn:5:8
+  |
+5 | emit: (writer: u32, out: ptr any writer) -> none =
+  |        ^^^^^^^^^^^ this hides the concept `writer`
+  = note: [0140]: an inner name hides an outer one; rename the parameter `writer` to reach the concept `writer`

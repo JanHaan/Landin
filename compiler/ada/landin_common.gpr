@@ -17,6 +17,12 @@ abstract project Landin_Common is
 
    Build_Dir := "build/" & Build_Tag & "/" & Build_Mode;
 
+   --  Where the executables are linked.  scripts/build.sh links into link/
+   --  and then publishes them into bin/, by a rename and only while nobody
+   --  is running them, so a reader never meets a missing or half-written
+   --  executable; a bare gprbuild, as the flake's, links into bin/ itself.
+   Exec_Dir := Build_Dir & "/" & external ("LANDIN_EXEC_SUBDIR", "bin");
+
    --  Ada 2022, every warning on, warnings are errors, standard style
    --  checks.  A compiler that tolerates its own warnings teaches nobody.
    Common_Switches :=

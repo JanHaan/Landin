@@ -1,0 +1,78 @@
+--  D405: one arm names several cases, which share what it runs.  Every
+--  label counts toward exhaustiveness, for an atom set, a variant part
+--  whose cases carry no payload and a pointer union of several atoms, as
+--  a statement and as a value, first, between and last.
+north: atom
+south: atom
+east: atom
+west: atom
+compass: type = north | south | east | west
+
+along: (c: compass) -> (n: i32) =
+    match c
+        north, south: n = 1
+        east: n = 2
+        west: n = 3
+    end match
+end along
+
+across: (c: compass) -> (n: i32) =
+    match c
+        south: 10
+        north, east, west: 20
+    end match
+end across
+
+shape: type = struct
+    kind: variant
+        point |
+        dot |
+        circle: (radius: i32) |
+        line |
+        square: (side: i32)
+    end kind
+end shape
+
+measure: (s: shape) -> (size: i32) =
+    match s.kind
+        point, dot, line: size = 0
+        circle(radius): size = 3 * radius
+        square(side): size = 4 * side
+    end match
+end measure
+
+none_found: atom
+denied: atom
+missing: atom
+lookup: type = none_found | denied | missing | ptr i32
+
+read: (l: lookup) -> (value: i32) =
+    match l
+        none_found, missing: value = -1
+        ptr (p): value = p.val
+        denied: value = -2
+    end match
+end read
+
+public main: () -> (code: i32) =
+    code = 1
+    return when along(north) <> 1 or along(south) <> 1
+    return when along(east) <> 2 or along(west) <> 3
+    return when across(south) <> 10 or across(north) <> 20
+    return when across(east) <> 20 or across(west) <> 20
+
+    point_shape: shape = shape(kind: point)
+    dot_shape: shape = shape(kind: dot)
+    line_shape: shape = shape(kind: line)
+    circle_shape: shape = shape(kind: circle(radius: 2))
+    square_shape: shape = shape(kind: square(side: 5))
+    return when measure(point_shape) <> 0 or measure(dot_shape) <> 0
+    return when measure(line_shape) <> 0 or measure(circle_shape) <> 6
+    return when measure(square_shape) <> 20
+
+    seven: i32 = 7
+    return when read(none_found) <> -1 or read(missing) <> -1
+    return when read(denied) <> -2 or read(addr seven) <> 7
+
+    code = 42
+end main

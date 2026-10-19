@@ -26,6 +26,34 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+#  Written into every directory a debugger stage creates, so a later run
+#  can tell its own earlier output from anything else at that path.
+STAGE_MARK = '.landin-debugging-output'
+
+
+def fresh(output):
+    """OUTPUT as an empty directory for one debugger stage, resolved.
+
+    A stage's own earlier output -- the mark says so -- is replaced, so a
+    second run in the same build needs nothing removed by hand.  An empty
+    directory is taken as it is.  Anything else is refused, naming the
+    directory and --output, rather than deleted or mixed into.
+    """
+    output = Path(output).resolve()
+    if output.exists():
+        if (output / STAGE_MARK).is_file():
+            shutil.rmtree(output)
+        elif not output.is_dir() or any(output.iterdir()):
+            raise FileExistsError(
+                f'{output} exists and is not an earlier debugger run\'s'
+                ' output; remove it, or pass --output naming a new or empty'
+                ' directory')
+    output.mkdir(parents=True, exist_ok=True)
+    (output / STAGE_MARK).write_text(
+        'written by compiler/tests/debugging; the next run replaces it\n')
+    return output
+
+
 #  Each host debugs its own target natively; the panic path is the same
 #  promise on every one.
 HOST_TARGETS = {('Darwin', 'arm64'): 'darwin-arm64',
@@ -38,8 +66,7 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
     assert host in HOST_TARGETS, host
     darwin = platform.system() == 'Darwin'
     target = HOST_TARGETS[host]
-    output = Path(output).resolve()
-    output.mkdir(parents=True, exist_ok=False)
+    output = fresh(output)
     refine = Path(refine).resolve(strict=True)
     debugger = debugger or shutil.which('lldb' if darwin else 'gdb')
     assert debugger and Path(debugger).is_file()

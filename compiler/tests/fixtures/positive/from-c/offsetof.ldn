@@ -1,13 +1,11 @@
---- The fixed part of Linux's `struct linux_dirent64`; the name follows it.
+--- Linux's `struct linux_dirent64`; its name is a flexible array member.
 directory_record: type = layout(c) struct
     inode: u64
     offset: i64
     length: u16
     kind: u8
+    name: [0]u8
 end directory_record
 
---- Where the name begins: the byte after `kind`, measured.
-name_offset: () -> (bytes: usize) =
-    record: directory_record = zeroed
-    bytes = usize(addr record.kind) + sizeof u8 - usize(addr record)
-end name_offset
+--- Where the name begins: 19, the byte after `kind`.
+name_offset: usize = offsetof directory_record.name

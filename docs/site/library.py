@@ -131,8 +131,11 @@ def read_items(text, source):
                 if j == len(codes):
                     raise ValueError(f'{source}:{i+1}: unterminated C routine')
             kind = 'function'
-        elif after.startswith('('):
-            # The implementation separator is the first standalone '=' at
+        elif after.startswith('(') or (
+                not after and i + 1 < len(codes)
+                and codes[i + 1].strip().startswith('(')):
+            # A native routine, whose signature the layout may start on the
+            # next line.  The implementation separator is the first standalone '=' at
             # delimiter depth zero. '=' inside defaults is not a separator.
             depth = 0
             end = None
@@ -251,16 +254,34 @@ min-width:4ch;margin-right:1.2em;color:var(--ink-faint);user-select:none}
 .api-condition {font-size:.9rem} @media(max-width:600px){.api-index{columns:1}}
 '''
 
+SEARCH_SCRIPT = 'library-search.js'
+
+# The index is one file beside the pages rather than a copy inside each: as
+# a copy it was 400 KB of every one of 124 pages, most of what a reader of a
+# small module downloaded. A classic script element, not fetch(), loads it,
+# so a page opened from disk still searches; and only on first use, so a
+# reader who never searches never downloads it.
 SEARCH = '''
 (() => {
  const field=document.getElementById('api-search');
  const results=document.getElementById('api-results');
- const items=JSON.parse(document.getElementById('api-search-data').textContent);
+ let items=null, loading=false;
  const normalize=s=>s.toLowerCase().replaceAll('::','.');
- field.addEventListener('input',()=>{
+ function load(){
+  if(items||loading)return;
+  loading=true;
+  const script=document.createElement('script');
+  script.src=field.dataset.index;
+  script.onload=()=>{items=window.landinLibraryIndex||[];show();};
+  script.onerror=()=>{loading=false;results.hidden=false;
+   results.textContent='The search index could not be loaded; browse the module and item indexes below.';};
+  document.head.append(script);
+ }
+ function show(){
   const terms=normalize(field.value).trim().split(/\\s+/).filter(Boolean);
   results.replaceChildren();
   if(!terms.length){results.hidden=true;return;}
+  if(!items){load();return;}
   const matches=items.filter(i=>terms.every(t=>normalize(i.name+' '+i.summary+' '+i.kind).includes(t)));
   results.hidden=false;
   const count=document.createElement('p');count.textContent=matches.length+(matches.length===1?' result':' results');results.append(count);
@@ -269,7 +290,9 @@ SEARCH = '''
    a.textContent=item.name+' — '+item.summary;results.append(a);
   }
   if(matches.length>80){const p=document.createElement('p');p.textContent='Showing the first 80; refine your search.';results.append(p);}
- });
+ }
+ field.addEventListener('focus',load,{once:true});
+ field.addEventListener('input',show);
 })();
 '''
 
@@ -302,15 +325,20 @@ ANCHORS = """
 """
 
 
-def search_box(index):
-    data = json.dumps(index, ensure_ascii=True).replace('<', '\\u003c')
+def search_box():
     return ('<div class="api-tools"><label for="api-search">Search library APIs</label>'
             '<input type="search" id="api-search" placeholder="Name, module or purpose" '
+            f'data-index="{SEARCH_SCRIPT}" '
             'aria-controls="api-results" autocomplete="off">'
             '<div id="api-results" class="api-results" aria-live="polite" hidden></div>'
             '<noscript>Browse the module and item indexes below; search needs JavaScript.</noscript>'
-            f'</div><script type="application/json" id="api-search-data">{data}</script>'
-            f'<script>{SEARCH}{ANCHORS}</script>')
+            f'</div><script>{SEARCH}{ANCHORS}</script>')
+
+
+def search_index(index):
+    """The script every page loads on first search: the index, once."""
+    data = json.dumps(index, ensure_ascii=True, separators=(',', ':'))
+    return 'window.landinLibraryIndex=' + data.replace('<', '\\u003c') + ';\n'
 
 
 def write(root, destination, render):
@@ -331,7 +359,7 @@ def write(root, destination, render):
                               summary=' '.join(item.documentation.split('\n\n')[0].split()).replace('`', ''),
                               url=page_name(module) + '#' + item.anchor))
     index.sort(key=lambda i: i['name'])
-    search = search_box(index)
+    search = search_box()
     pages = []
     def nav(current):
         out = ['<a class="doc" href="index.html">the front page</a>',
@@ -382,7 +410,7 @@ def write(root, destination, render):
             elif name in exports[module]:
                 return '#item-' + name
             return None
-        def signature(text):
+        def signature(text, own=None):
             scanner = Scanner()
             rows = []
             for line in text.splitlines():
@@ -399,6 +427,11 @@ def write(root, destination, render):
                     escaped = html.escape(part)
                     marked = f'<span class="{cls}">{escaped}</span>' if cls else escaped
                     target = reference(part) if cls not in ('c', 'cd', 'q') else None
+                    if target is not None and target == own:
+                        # The declaration's own name: the heading above
+                        # already names it, and a link to where the reader
+                        # already is was a thousand anchors on one page.
+                        target = None
                     spans.append(f'<a href="{target}">{marked}</a>' if target else marked)
                     at += 1
                 rows.append(''.join(spans))
@@ -441,7 +474,7 @@ def write(root, destination, render):
             for variant in variants:
                 if variant.condition:
                     body += '<p class="api-condition">When <code>' + html.escape(variant.condition) + '</code></p>'
-                body += signature(variant.signature)
+                body += signature(variant.signature, '#' + item.anchor)
                 body += f'<p class="api-source"><a href="{source_name(variant.source)}#L{variant.line}">{variant.source}:{variant.line}</a></p>'
                 body += prose(variant.documentation, variant.source)
             body += '</section>'
@@ -453,6 +486,7 @@ def write(root, destination, render):
             for i, line in enumerate(text.splitlines(), 1)) + '</code></pre>'
         emit(source_name(path), path, body, path, str(Path(path).parent))
     (destination / 'library-index.json').write_text(json.dumps(index, indent=2) + '\n')
+    (destination / SEARCH_SCRIPT).write_text(search_index(index))
     verify(destination, pages, modules, render, sources)
     return pages
 
@@ -491,6 +525,9 @@ def verify(destination, pages, modules, render, sources=None):
                 self.ids.add(attrs['id'])
             if tag == 'a' and 'href' in attrs:
                 self.links.append(attrs['href'])
+            if tag == 'input' and 'data-index' in attrs:
+                # The search index the page loads is a local link too.
+                self.links.append(attrs['data-index'])
             if tag == 'section':
                 if self.current:
                     self.depth += 1

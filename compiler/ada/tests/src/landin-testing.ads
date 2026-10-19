@@ -117,6 +117,28 @@ package Landin.Testing is
 
    function Last_Timings return Timing_Vectors.Vector;
 
+   --  Told as each suite of a run ends, with the cases it ran, how many
+   --  failed and what they cost, so a run of half an hour says where it
+   --  is while it is still running rather than only once it ends.  Like
+   --  the timings it is never in the transcript; the test program writes
+   --  it to standard error.  A nested run passes none.
+   type Progress_Report is access procedure
+     (Suite   : String;
+      Cases   : Natural;
+      Failed  : Natural;
+      Seconds : Duration);
+
+   --  The line the test program writes for a suite that ended, and the
+   --  procedure that writes it to standard error and flushes it, so a
+   --  stuck run is told from a slow one by which suite stopped reporting:
+   --  "progress: lexer: 42 cases, 0 failed, 3.2s".
+   function Progress_Line
+     (Suite : String; Cases, Failed : Natural; Seconds : Duration)
+      return String;
+
+   procedure Write_Progress
+     (Suite : String; Cases, Failed : Natural; Seconds : Duration);
+
    --  Record_Timings is False by default and the test program is the only
    --  caller that passes True.  The harness suite exercises Run itself, so
    --  a nested run would otherwise clear the timings of the run containing
@@ -126,7 +148,8 @@ package Landin.Testing is
      (In_Registry : Registry;
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
       Result      : out Summary;
-      Record_Timings : Boolean := False);
+      Record_Timings : Boolean := False;
+      Progress       : Progress_Report := null);
 
    --  One shard of the complete run; Whole is the complete run itself.
    procedure Run
@@ -134,7 +157,8 @@ package Landin.Testing is
       Of_Shard    : Shard;
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
       Result      : out Summary;
-      Record_Timings : Boolean := False);
+      Record_Timings : Boolean := False;
+      Progress       : Progress_Report := null);
 
    --  A focused run is developer feedback, not the repository gate.  Empty
    --  filters mean every value at that level; a case filter therefore needs
@@ -146,7 +170,8 @@ package Landin.Testing is
       Case_Filter  : String;
       Transcript   : out Ada.Strings.Unbounded.Unbounded_String;
       Result       : out Summary;
-      Record_Timings : Boolean := False)
+      Record_Timings : Boolean := False;
+      Progress       : Progress_Report := null)
      with Pre => Case_Filter = "" or else Suite_Filter /= "";
 
 private

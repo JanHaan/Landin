@@ -247,6 +247,11 @@ package Landin.Syntax is
       --  to anything else.
       Size_Of,
       Align_Of,
+      --  D411's `offsetof T.field`: a byte offset.  Its one child is the
+      --  written selection, a name and the selections after it; which
+      --  prefix names the type and which names fields is resolution's and
+      --  checking's question, as it is for any qualified name.
+      Offset_Of,
       --  [0370]'s array-length query.  Its one operand is deliberately only
       --  a direct name.
       Len_Of,
@@ -1267,15 +1272,62 @@ package Landin.Syntax is
                   and then Index <= Match_Arm_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Match_Arm'Result);
 
+   --  An arm's first label.  D405 lets an arm without payload bindings
+   --  name several cases, `north, south:`; the others are its trailing
+   --  run, which otherwise holds the bindings of its one case.
    function Match_Pattern (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) = Match_Arm,
           Post => Contains (Of_Tree, Match_Pattern'Result);
 
+   function Match_Label_Count (Of_Tree : Tree; Id : Node_Id) return Positive
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Match_Arm;
+
+   --  The first label is Match_Pattern; an arm with bindings has one.
+   function Nth_Match_Label
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Arm
+                  and then Index <= Match_Label_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Match_Label'Result);
+
    function Match_Binding_Count
      (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Match_Arm;
+
+   --  D405: a match's labels in source order across all its arms, for
+   --  the walks that ask about each case named: exhaustiveness, the
+   --  tag compares, and the arm each one selects.
+   function Match_Label_Total (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Statement,
+          Post => Match_Label_Total'Result >= Match_Arm_Count (Of_Tree, Id);
+
+   --  The arm the Index-th label belongs to.
+   function Label_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Statement
+                  and then Index <= Match_Label_Total (Of_Tree, Id),
+          Post => Contains (Of_Tree, Label_Arm'Result)
+                  and then Kind (Of_Tree, Label_Arm'Result) = Match_Arm;
+
+   function Nth_Label
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Statement
+                  and then Index <= Match_Label_Total (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Label'Result);
+
+   --  Whether the Index-th label is the last its arm names, so a walk
+   --  over labels visits each arm's body once.
+   function Ends_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Match_Statement
+                 and then Index <= Match_Label_Total (Of_Tree, Id);
 
    function Nth_Match_Binding
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
@@ -1613,6 +1665,13 @@ package Landin.Syntax is
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) in Size_Of | Align_Of,
           Post => Contains (Of_Tree, Measured_Type'Result);
+
+   --  D411: the selection an `offsetof` measures, `T.field` and any
+   --  further fields, as Name_Reference and Member_Selection nodes.
+   function Offset_Path (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Offset_Of,
+          Post => Contains (Of_Tree, Offset_Path'Result);
 
    function Left_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

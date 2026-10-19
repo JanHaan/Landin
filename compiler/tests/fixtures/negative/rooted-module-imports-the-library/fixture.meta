@@ -1,0 +1,7 @@
+class: negative
+summary: a module under a fixture's own root that imports the library is analysed with the library, as refine compiles it, so the server's report is this file's L0301 rather than a library module it could not find
+program: main.ldn
+root: root
+codes: L0301
+constructs: 1420, 1480
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

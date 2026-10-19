@@ -286,7 +286,9 @@ vector_growth_retry: () -> (ok: bool) =
                       and pool.frees(inner) == 0
                       and pool.live(inner) == 1
 
-    fault.permit(counted, one + one)
+    --  The growth asks to grow in place first (D356), and the pool grows the
+    --  block in its slot (D386): one permit, and no second block.
+    fault.permit(counted, one)
     vec.push(values, counted, addr node_9) else (problem)
         _ = problem
         vec.release(values, counted)
@@ -295,21 +297,22 @@ vector_growth_retry: () -> (ok: bool) =
     ninth: ptr sample_node = vec.get(values, eight) else addr node_1
     retried: bool = vec.length(values) == 9 and vec.capacity(values) == 16
                     and ninth.val.value == 9
-                    and fault.attempts(counted) == 5
-                    and fault.delegated(counted) == 3
-                    and fault.successes(counted) == 2
+                    and fault.attempts(counted) == 4
+                    and fault.delegated(counted) == 2
+                    and fault.successes(counted) == 1
+                    and fault.growths(counted) == 1
                     and fault.injected_failures(counted) == 2
-                    and fault.frees(counted) == 1
+                    and fault.frees(counted) == 0
                     and fault.live(counted) == 1
-                    and pool.allocations(inner) == 2
-                    and pool.frees(inner) == 1
+                    and pool.allocations(inner) == 1
+                    and pool.frees(inner) == 0
                     and pool.live(inner) == 1
                     and pool.rejected_frees(inner) == 0
     vec.release(values, counted)
     released: bool = vec.length(values) == 0 and vec.capacity(values) == 0
-                     and fault.frees(counted) == 2
+                     and fault.frees(counted) == 1
                      and fault.live(counted) == 0
-                     and pool.frees(inner) == 2
+                     and pool.frees(inner) == 1
                      and pool.live(inner) == 0
                      and pool.rejected_frees(inner) == 0
     ok = preserved and retried and released
@@ -941,7 +944,9 @@ tree_append_retry: () -> (ok: bool) =
         inc at
     end while
 
-    fault.permit(counted, one + one)
+    --  The growth to sixteen nodes stays in the list's slot (D386): one
+    --  permit, and no second block.
+    fault.permit(counted, one)
     root: tree.node_id = tree.add_branch
         (value, counted, branch_name, tree.id(0), eight) else (problem)
         _ = problem
@@ -963,20 +968,21 @@ tree_append_retry: () -> (ok: bool) =
     appended: bool = tree.ordinal(root) == 8 and tree.length(value) == 9
                      and lenof root_name == 6 and root_first == 'b'
                      and total == 8
-                     and fault.attempts(counted) == 8
-                     and fault.delegated(counted) == 3
-                     and fault.successes(counted) == 2
+                     and fault.attempts(counted) == 7
+                     and fault.delegated(counted) == 2
+                     and fault.successes(counted) == 1
+                     and fault.growths(counted) == 1
                      and fault.injected_failures(counted) == 5
-                     and fault.frees(counted) == 1
+                     and fault.frees(counted) == 0
                      and fault.live(counted) == 1
-                     and pool.allocations(inner) == 2
-                     and pool.frees(inner) == 1
+                     and pool.allocations(inner) == 1
+                     and pool.frees(inner) == 0
                      and pool.live(inner) == 1
     tree.release(value, counted)
     released: bool = tree.length(value) == 0
-                     and fault.frees(counted) == 2
+                     and fault.frees(counted) == 1
                      and fault.live(counted) == 0
-                     and pool.frees(inner) == 2
+                     and pool.frees(inner) == 1
                      and pool.live(inner) == 0
                      and pool.rejected_frees(inner) == 0
     ok = initial and ids_ok and retained and appended and released

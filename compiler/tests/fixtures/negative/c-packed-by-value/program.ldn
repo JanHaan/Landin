@@ -1,0 +1,13 @@
+wire: type = layout(c, packed) struct
+    kind: u8
+    id: u32
+end wire
+
+holder: type = layout(c) struct
+    count: u32
+    packet: wire
+end holder
+
+extern(c) send: (packet: wire) -> (status: i32)
+extern(c) receive: () -> (whole: holder)
+extern(c) send_pointer: (packet: ptr wire) -> (status: i32)

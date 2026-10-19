@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D406 `_ = f() else none` keeps a failed value call's effects and runs the next statement, for direct, labelled, erased, function-value and generic calls, number and pointer results, and in a loop
+program: main.ldn
+constructs: 0940, 1030, 1370, 1390, 1930
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

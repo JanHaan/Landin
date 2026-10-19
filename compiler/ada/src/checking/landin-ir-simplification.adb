@@ -390,9 +390,41 @@ package body Landin.IR.Simplification is
                       (Into, Fields, Code.Measurement_Layout, Facts,
                        Landin.Targets.Maximum_Object_Size (Facts));
                begin
-                  Result := (if Code.Op = Measure_Size
-                             then Integer_Value (Placed.Size)
-                             else Integer_Value (Placed.Alignment));
+                  if Code.Op = Measure_Offset then
+                     --  D411: the path's first field in the run, then the
+                     --  offsets of the fields below it.
+                     declare
+                        First : constant Positive := Positive
+                          (Into.Paths.Element (Code.Nested.First + 1).Field);
+                        Reached : Field_Shape := Fields (First);
+                        Total : Landin.Targets.Byte_Count :=
+                          Placed.Offsets (First);
+                        Cache : Shape_Measurement.Layout_Cache;
+                     begin
+                        for Step in 2 .. Code.Nested.Count loop
+                           declare
+                              Field : constant Positive := Positive
+                                (Into.Paths.Element
+                                   (Code.Nested.First + Step).Field);
+                           begin
+                              Total := Landin.Targets."+"
+                                (Total,
+                                 Shape_Measurement
+                                   .Cached_Aggregate_Field_Offset
+                                     (Cache, Into, Reached, Field, Facts,
+                                      Landin.Targets.Maximum_Object_Size
+                                        (Facts)));
+                              Reached := Nth_Aggregate_Field
+                                (Into, Reached, Field);
+                           end;
+                        end loop;
+                        Result := Integer_Value (Total);
+                     end;
+                  else
+                     Result := (if Code.Op = Measure_Size
+                                then Integer_Value (Placed.Size)
+                                else Integer_Value (Placed.Alignment));
+                  end if;
                end;
             end;
          else
@@ -465,7 +497,7 @@ package body Landin.IR.Simplification is
                         Value (V) := (if Code.Negated
                                       then -Integer_Value (Code.Number)
                                       else Integer_Value (Code.Number));
-                     when Measure_Size | Measure_Align =>
+                     when Measurement_Kind =>
                         Known (V) := Measured (Code, Value (V));
                      when Load_Datum =>
                         Known (V) :=
@@ -744,7 +776,7 @@ package body Landin.IR.Simplification is
             Boolean_Result : Boolean := False;
             Is_Boolean : Boolean := False;
          begin
-            if Code.Op in Measure_Size | Measure_Align
+            if Code.Op in Measurement_Kind
               and then Plain (Code)
               and then Code.Result in Landin.Types.Integer_Name
             then

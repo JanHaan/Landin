@@ -134,10 +134,10 @@ class FixtureMetadataCache(unittest.TestCase):
             meta.write_text("targets: linux-x86-64\n", encoding="utf-8")
             driver = root / "compiler/tests/driver/fixture.json"
             driver.parent.mkdir(parents=True)
-            driver.write_text('{"targets": "cortex-m"}', encoding="utf-8")
+            driver.write_text('{"targets": "cortex-m0"}', encoding="utf-8")
             with patch.object(CHECK, "ROOT", str(root)):
                 records = CHECK.fixture_records()
-                meta.write_text("targets: macos-arm64\n", encoding="utf-8")
+                meta.write_text("targets: darwin-arm64\n", encoding="utf-8")
                 self.assertIs(CHECK.fixture_records(), records)
                 self.assertEqual(records["positive/example"][1]["targets"],
                                  "linux-x86-64")
@@ -150,7 +150,7 @@ class FixtureMetadataCache(unittest.TestCase):
         with tempfile.TemporaryDirectory() as first, \
                 tempfile.TemporaryDirectory() as second:
             for root, target in ((Path(first), "linux-x86-64"),
-                                 (Path(second), "macos-arm64")):
+                                 (Path(second), "darwin-arm64")):
                 meta = root / "compiler/tests/fixtures/positive/example/fixture.meta"
                 meta.parent.mkdir(parents=True)
                 meta.write_text("targets: %s\n" % target, encoding="utf-8")
@@ -161,7 +161,7 @@ class FixtureMetadataCache(unittest.TestCase):
             self.assertEqual(left["positive/example"][1]["targets"],
                              "linux-x86-64")
             self.assertEqual(right["positive/example"][1]["targets"],
-                             "macos-arm64")
+                             "darwin-arm64")
             CHECK._fixture_records.cache_clear()
 
 

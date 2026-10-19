@@ -12,12 +12,12 @@
 (require 'treesit nil t)
 
 (defconst landin-mode-keywords
-  '("addr" "align" "alignof" "and" "any" "arena" "as" "at" "atom" "begin"
+  '("addr" "align" "alignof" "and" "any" "as" "at" "atom" "begin"
     "big" "break" "caller" "complete" "concept" "continue" "dec"
     "defer" "distinct" "do" "else" "elsif" "end" "escaping" "extern"
     "fail" "fixed" "for" "from" "if" "import" "in" "inc" "inout" "is"
-    "layout" "lenof" "link" "little" "loop" "match" "mut" "not" "of" "option"
-    "or" "ptr" "public" "range" "register" "return" "set" "sink"
+    "layout" "lenof" "link" "little" "loop" "match" "mut" "not" "of" "offsetof"
+    "option" "or" "ptr" "public" "range" "register" "return" "set" "sink"
     "sizeof" "soa" "struct" "then" "try" "type" "unchecked" "undo" "uninit"
     "variant" "volatile" "when" "while" "with"))
 
@@ -165,7 +165,7 @@ Scan from a known code position so comment quotes cannot open a raw string."
                     "type" "unchecked" "undo" "variant" "when" "while" "with"]
                    @font-lock-keyword-face
                    (measurement_expression operator: (identifier) @font-lock-keyword-face
-                                           (:match "\\`lenof\\'" @font-lock-keyword-face))
+                                           (:match "\\`\\(?:len\\|offset\\)of\\'" @font-lock-keyword-face))
                    (of_keyword (identifier) @font-lock-keyword-face
                                (:match "\\`of\\'" @font-lock-keyword-face)))
                  :language 'landin :feature 'string

@@ -124,10 +124,14 @@ as they do on x86-64.
 The structural editor grammar's CLI is not a compiler tool, but the gate
 fetches it, so it is pinned the same way: tree-sitter `0.26.9`, the version
 `highlight/tree-sitter/package.json` names, as the release binary below.
+The gate fetches the Linux x86-64 binary; `nix develop` puts its own
+system's on `PATH`.
 
 | platform | archive | sha256 |
 |---|---|---|
 | Linux x86-64 | `tree-sitter-linux-x64.gz` | `9ce82137caa65864e7ca8b869fd391cef88c9bd2a01c4371b9c4dd26c2585efb` |
+| Linux arm64 | `tree-sitter-linux-arm64.gz` | `c8feeb32115958cb44442ca4d68f6d66cf7605dbd65681e62342181ebdd6db3b` |
+| macOS arm64 | `tree-sitter-macos-arm64.gz` | `e46725b2417c085b0761948abc0cc240bff6a3ab5d2128e3ad0de467ded3388d` |
 
 ## Warning and style policy
 

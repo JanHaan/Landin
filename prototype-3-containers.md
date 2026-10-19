@@ -1381,8 +1381,10 @@ for: `runtime/hosted-heap-provider` observes both old and replacement vector
 allocations live during growth, then observes their exact extents released.
 `runtime/r420-failing-providers` also injects the replacement failure over a
 two-slot reclaiming pool, proves the old pointer vector remains intact, then
-permits one retry, observes a successful replacement, and observes eventual
-exact release of both allocation extents.
+permits one retry and observes eventual exact release. Since D386 the pool
+grows that vector within its slot, so the retry is a growth in place rather
+than a replacement; the hosted heap above and the map rehash below keep the
+old and replacement extents live together.
 
 D198 supplies Z19's original three-acquisition case. Map rehash allocates its
 initialized bucket records, key storage and value storage in order. The three

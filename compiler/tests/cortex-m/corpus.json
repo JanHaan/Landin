@@ -20,6 +20,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: Cortex-M0 keeps C function types disabled (L0346), so no C function value is made there from an address.",
       "witness": "compiler/tests/fixtures/abi/c-function-from-zero-address-traps/fixture.meta"
     },
+    "abi/c-packed-records": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: Cortex-M0 keeps layout(c) records and C peers disabled (L0346); runtime/c-packed-record-fields runs the byte-packed record's unaligned accesses on Cortex-M0.",
+      "witness": "compiler/tests/fixtures/abi/c-packed-records/fixture.meta"
+    },
     "abi/clock-agrees-with-c": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's clocks exist only on a hosted system; runtime/clock-manual runs core/io's manual clock on Cortex-M0.",
@@ -80,6 +85,16 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's socket and signal headers exist only on a hosted system; runtime/network-addresses-firmware reads and writes addresses on Cortex-M0.",
       "witness": "compiler/tests/fixtures/abi/libc-socket-facts/fixture.meta"
     },
+    "abi/library-names-beside-libc": {
+      "mode": "restriction",
+      "reason": "Its C peer and platform/libc's read exist only on a hosted system; the backend suite's symbol case holds Cortex-M0's public routines and data to local symbols.",
+      "witness": "compiler/tests/fixtures/abi/library-names-beside-libc/fixture.meta"
+    },
+    "abi/link-symbol-exports": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/link-symbol-exports/fixture.meta"
+    },
     "abi/linux-file-identity": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
@@ -104,6 +119,11 @@
       "mode": "restriction",
       "reason": "Each system's errno numbers are its C header's, which only a hosted system has; platform/posix itself is refused on firmware.",
       "witness": "compiler/tests/fixtures/abi/posix-errno-numbers/fixture.meta"
+    },
+    "abi/public-routine-is-local": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/public-routine-is-local/fixture.meta"
     },
     "abi/r440-bindings-generated": {
       "mode": "restriction",
@@ -467,6 +487,9 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/c on the freestanding target before checking declarations."
     },
+    "runtime/c-packed-record-fields": {
+      "mode": "execute"
+    },
     "runtime/caller-is-an-ordinary-name": {
       "mode": "execute"
     },
@@ -651,10 +674,19 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/heap on the freestanding target before checking declarations."
     },
+    "runtime/core-pool-grow": {
+      "mode": "execute"
+    },
+    "runtime/core-pool-list-grows": {
+      "mode": "execute"
+    },
     "runtime/core-pool-resize": {
       "mode": "execute"
     },
     "runtime/core-region-resize": {
+      "mode": "execute"
+    },
+    "runtime/core-sort-context": {
       "mode": "execute"
     },
     "runtime/core-spill-pointer-items": {
@@ -868,6 +900,9 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
+    "runtime/discard-else-none-ignores-a-value-call-failure": {
+      "mode": "execute"
+    },
     "runtime/distinct-equality-and-flags": {
       "mode": "execute"
     },
@@ -929,6 +964,16 @@
     "runtime/evidence-projected-entries-kept": {
       "mode": "execute"
     },
+    "runtime/failure-words": {
+      "mode": "execute"
+    },
+    "runtime/failure-words-report": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/failure-words gives every phrase on Cortex-M0."
+    },
     "runtime/file-system-firmware": {
       "mode": "execute"
     },
@@ -967,6 +1012,13 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+    },
+    "runtime/flexible-member-trailing-bytes": {
+      "codes": [
+        "L0346"
+      ],
+      "mode": "refuse",
+      "reason": "A flexible array member belongs to a layout(c) record, and Cortex-M0 keeps C records disabled (L0346)."
     },
     "runtime/float-comparisons-branch-on-nan": {
       "mode": "execute"
@@ -1114,6 +1166,13 @@
     },
     "runtime/greatest-common-divisor": {
       "mode": "execute"
+    },
+    "runtime/hosted-assembly-reaches-no-evidence-entry": {
+      "codes": [
+        "L0346"
+      ],
+      "mode": "refuse",
+      "reason": "Cortex-M0 retains refusal of the general C source surface, and this program's C import is what a static hosted link would refuse; runtime/region-bounded-pool pins the same pruning on Cortex-M0 by image size."
     },
     "runtime/hosted-heap-provider": {
       "codes": [
@@ -1280,6 +1339,9 @@
     "runtime/library-shared-diag": {
       "mode": "execute"
     },
+    "runtime/library-shared-failure": {
+      "mode": "execute"
+    },
     "runtime/library-shared-fault": {
       "mode": "execute"
     },
@@ -1426,6 +1488,9 @@
       "mode": "execute"
     },
     "runtime/loop-values": {
+      "mode": "execute"
+    },
+    "runtime/match-arm-names-several-cases": {
       "mode": "execute"
     },
     "runtime/match-expressions-produce-values": {

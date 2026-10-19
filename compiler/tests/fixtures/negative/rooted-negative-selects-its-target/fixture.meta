@@ -1,0 +1,9 @@
+class: negative
+summary: a rooted negative names its target among its args, which come before the module its root gives, so a refusal particular to Darwin through a module that imports platform/linux is pinned on every lane
+program: main.ldn
+root: root
+args: --target=darwin-arm64
+expect: expected.txt
+codes: L0201
+constructs: 1420, 1480
+targets: darwin-arm64

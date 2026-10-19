@@ -10,7 +10,7 @@ import platform/linux
 --- fails `eintr` when a signal came before any byte.  On Darwin and
 --- FreeBSD it is the C library's `arc4random_buf`, which fills all of
 --- `into` and never fails.
-public link(symbol: "_landin_posix_random_bytes") random_bytes:
+public random_bytes:
     (into: []mut u8) -> (count: usize) ! errno =
     count = 0
     return when lenof into == 0

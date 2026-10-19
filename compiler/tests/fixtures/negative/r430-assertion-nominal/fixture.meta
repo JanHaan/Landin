@@ -1,5 +1,5 @@
 class: negative
-summary: Fixed configuration measurements admit scalar names only
+summary: A fixed condition measures scalar names only; a declared type's layout is measured by compiler.assert, after checking (D412)
 program: main.ldn
 codes: L0305
 constructs: 0370, 1510

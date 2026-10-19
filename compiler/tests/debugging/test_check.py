@@ -510,5 +510,105 @@ class ParserTransportTests(unittest.TestCase):
             self.assertEqual(transcript.read_text(), actual)
 
 
+PANIC_SPEC = importlib.util.spec_from_file_location(
+    "debugging_panic", Path(__file__).with_name("panic.py"))
+assert PANIC_SPEC is not None and PANIC_SPEC.loader is not None
+PANIC = importlib.util.module_from_spec(PANIC_SPEC)
+PANIC_SPEC.loader.exec_module(PANIC)
+
+
+class StageOutputTests(unittest.TestCase):
+    """A second run replaces its own output and refuses anything else."""
+
+    def test_new_and_empty_directories_are_taken(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for path in (Path(tmp) / "new" / "panic", Path(tmp) / "empty"):
+                path.parent.mkdir(exist_ok=True)
+                if path.name == "empty":
+                    path.mkdir()
+                made = PANIC.fresh(path)
+                self.assertEqual(made, path.resolve())
+                self.assertEqual([p.name for p in made.iterdir()],
+                                 [PANIC.STAGE_MARK])
+
+    def test_own_earlier_output_is_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            panic = Path(tmp) / "debugging" / "panic"
+            PANIC.fresh(panic)
+            (panic / "commands.json").write_text("earlier run\n")
+            (panic / "nested").mkdir()
+            again = PANIC.fresh(panic)
+            self.assertEqual([p.name for p in again.iterdir()],
+                             [PANIC.STAGE_MARK])
+
+    def test_another_directory_is_refused_naming_it_and_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            foreign = Path(tmp) / "mine"
+            foreign.mkdir()
+            (foreign / "notes.txt").write_text("not a debugger run's\n")
+            with self.assertRaises(FileExistsError) as raised:
+                PANIC.fresh(foreign)
+            self.assertIn(str(foreign.resolve()), str(raised.exception))
+            self.assertIn("--output", str(raised.exception))
+            self.assertTrue((foreign / "notes.txt").is_file())
+
+
+FRAMES_SPEC = importlib.util.spec_from_file_location(
+    "debugging_frames", Path(__file__).with_name("workload_frames.py"))
+assert FRAMES_SPEC is not None and FRAMES_SPEC.loader is not None
+FRAMES = importlib.util.module_from_spec(FRAMES_SPEC)
+FRAMES_SPEC.loader.exec_module(FRAMES)
+
+
+class WorkloadFrames(unittest.TestCase):
+    """Where each expected frame is declared is found again, or refused."""
+
+    RECORD = {"w": {"stops": {"s": ["leaf", "main"]}, "declared": {}}}
+
+    def computed(self, files: dict[str, str], record=None):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, text in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(text)
+            return FRAMES.computed(record or self.RECORD,
+                                   {"w": sorted(files)}, root)
+
+    def test_the_record_is_current(self) -> None:
+        record = CHECK.FRAMES
+        closures = __import__("json").loads(
+            Path(__file__).with_name("workload-sources.json").read_text())
+        declared, problems = FRAMES.computed(record, closures)
+        self.assertEqual(problems, [])
+        for workload, entry in record.items():
+            self.assertEqual(entry["declared"], declared[workload], workload)
+
+    def test_a_moved_routine_is_found_again(self) -> None:
+        declared, problems = self.computed(
+            {"a/a.ldn": "public leaf: () -> none =\nend leaf\n",
+             "main.ldn": "public main: () -> (code: i32) =\nend main\n"})
+        self.assertEqual(problems, [])
+        self.assertEqual(declared["w"], {"leaf": "a/a.ldn", "main": "main.ldn"})
+
+    def test_a_renamed_routine_is_refused(self) -> None:
+        _, problems = self.computed(
+            {"a/a.ldn": "leaf_renamed: () -> none =\nend leaf_renamed\n",
+             "main.ldn": "public main: () -> (code: i32) =\nend main\n"})
+        self.assertEqual(problems, ["w: no source the workload is built from"
+                                    " declares leaf"])
+
+    def test_two_declarations_need_the_record_to_choose(self) -> None:
+        files = {"a/a.ldn": "leaf: () -> none =\nend leaf\n",
+                 "b/b.ldn": "leaf: () -> none =\nend leaf\n",
+                 "main.ldn": "public main: () -> (code: i32) =\nend main\n"}
+        _, problems = self.computed(files)
+        self.assertIn("by hand", problems[0])
+        chosen = {"w": {"stops": {"s": ["leaf", "main"]},
+                        "declared": {"leaf": "b/b.ldn"}}}
+        declared, problems = self.computed(files, chosen)
+        self.assertEqual(problems, [])
+        self.assertEqual(declared["w"]["leaf"], "b/b.ldn")
+
+
 if __name__ == "__main__":
     unittest.main()

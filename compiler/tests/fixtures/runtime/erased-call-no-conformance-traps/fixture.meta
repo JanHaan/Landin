@@ -5,4 +5,4 @@ program: main.ldn
 traps: yes
 trap_report: main.ldn:15:5: trap: unreachable
 constructs: 0470, 1370, 1390, 1560
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

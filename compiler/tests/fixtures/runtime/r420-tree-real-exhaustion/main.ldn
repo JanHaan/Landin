@@ -102,7 +102,9 @@ public main: () -> (code: i32) =
     return when not arena_ok or arena.used(memory) <> extent
     mut words: [2048]u64 = zeroed
     mut records: [1]pool.slot = zeroed
-    slot_size: usize = 16 * sizeof tree.node
+    --  The slot holds the first eight nodes exactly, as the arena does, so a
+    --  growth in place is refused as a larger block is.
+    slot_size: usize = 8 * sizeof tree.node
     pool_base: ptr mut u8 = ptr(usize(addr words[0]))
     mut space: pool.space = zeroed
     slab := pool.over(space, pool_base, 16384,

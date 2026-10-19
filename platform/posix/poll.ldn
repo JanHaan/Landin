@@ -51,7 +51,7 @@ public poll_entry: type = poll_record
 --- An entry watching `watched` for the events `wanted` asks about; its
 --- `poll_error`, `poll_hung_up` and `poll_invalid` are reported whether
 --- asked or not.
-public link(symbol: "_landin_posix_watch") watch:
+public watch:
     (watched: descriptor, wanted: poll_events)
     -> (entry: poll_entry) =
     asked: poll_events = poll_input | poll_urgent | poll_output
@@ -61,7 +61,7 @@ end watch
 
 --- What happened to an entry's descriptor in the last `poll`; nothing,
 --- before one.
-public link(symbol: "_landin_posix_happened") happened:
+public happened:
     (entry: poll_entry) -> (events: poll_events) =
     events = entry.returned
 end happened
@@ -71,7 +71,7 @@ end happened
 --- at all when it is zero, POSIX's `poll`: how many entries had an event,
 --- each of which `happened` reads, zero when the time passed first, or
 --- the errno, `eintr` when a signal came first.
-public link(symbol: "_landin_posix_poll") poll:
+public poll:
     (entries: []mut poll_entry, milliseconds: i32)
     -> (ready: usize) ! errno =
     ready = try system_poll(entries, milliseconds)

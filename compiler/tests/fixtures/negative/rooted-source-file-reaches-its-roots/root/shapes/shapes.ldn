@@ -1,0 +1,3 @@
+public side: () -> (length: u32) =
+    length = 2
+end side

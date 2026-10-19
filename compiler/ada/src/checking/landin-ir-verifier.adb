@@ -242,7 +242,7 @@ package body Landin.IR.Verifier is
      is (case Of_Code is
             when Constant_Kind => 0,
             --  [0370] carries a type and not an operand.
-            when Measure_Size | Measure_Align => 0,
+            when Measurement_Kind => 0,
             when Load => 0,
             when Slice_Address => 4,
             when Empty_Slice_Base => 0,
@@ -2010,6 +2010,41 @@ package body Landin.IR.Verifier is
       function Is_C_Field
         (Shape : Field_Shape; Budget : Natural) return Boolean;
 
+      --  D413: a C record whose last field has no elements ends in C's
+      --  flexible array member, which no by-value position may hold.
+      function Has_Flexible_Member (Nominal : Nominal_Type_Id) return Boolean
+        is (Has_Nominal_Shape (Of_Unit, Nominal)
+            and then Has_C_Layout (Of_Unit, Nominal)
+            and then Nominal_Field_Count (Of_Unit, Nominal) > 0
+            and then Nth_Nominal_Field
+              (Of_Unit, Nominal, Nominal_Field_Count (Of_Unit, Nominal)).Kind
+              = Array_Field_Shape
+            and then Nth_Nominal_Field
+              (Of_Unit, Nominal, Nominal_Field_Count (Of_Unit, Nominal))
+              .Length = 0);
+
+      --  D410/D413: what a C signature may carry by value: a layout(c)
+      --  record, not a byte-packed one, with no flexible member and no
+      --  nested record that could not cross by value itself.
+      function Is_C_Value (Shape : Field_Shape; Budget : Natural)
+        return Boolean
+        is (case Shape.Kind is
+               when Aggregate_Field_Shape =>
+                 Budget > 0
+                    and then Has_Nominal_Shape (Of_Unit, Shape.Nominal)
+                    and then Landin.Layouts."="
+                      (Layout_Of (Of_Unit, Shape.Nominal), Landin.Layouts.C)
+                    and then not Has_Flexible_Member (Shape.Nominal)
+                    and then
+                      (for all Field in 1 .. Aggregate_Field_Count
+                         (Of_Unit, Shape) =>
+                         Is_C_Value
+                           (Nth_Aggregate_Field (Of_Unit, Shape, Field),
+                            Budget - 1)),
+                  when Array_Field_Shape =>
+                    Is_C_Value (Array_Element_Shape (Of_Unit, Shape), Budget),
+                  when others => True);
+
       function Is_C_Field
         (Shape : Field_Shape; Budget : Natural) return Boolean
       is
@@ -2029,6 +2064,7 @@ package body Landin.IR.Verifier is
                if not Has_Nominal_Shape (Of_Unit, Shape.Nominal)
                  or else not Has_C_Layout (Of_Unit, Shape.Nominal)
                  or else Aggregate_Field_Count (Of_Unit, Shape) = 0
+                 or else Has_Flexible_Member (Shape.Nominal)
                then
                   return False;
                end if;
@@ -2060,7 +2096,11 @@ package body Landin.IR.Verifier is
             when Landin.Types.Aggregate =>
                return Has_Nominal_Shape (Of_Unit, Part.Nominal)
                  and then Has_C_Layout (Of_Unit, Part.Nominal)
-                 and then Nominal_Field_Count (Of_Unit, Part.Nominal) > 0;
+                 and then Nominal_Field_Count (Of_Unit, Part.Nominal) > 0
+                 and then Is_C_Value
+                   ((Kind => Aggregate_Field_Shape, Nominal => Part.Nominal,
+                     others => <>),
+                    Nominal_Type_Count (Of_Unit) + 1);
             when others =>
                return False;
          end case;
@@ -3997,6 +4037,14 @@ package body Landin.IR.Verifier is
                         return (Kind => Bad, others => <>);
                      elsif Has_C_Layout (Of_Unit, Nominal)
                        and then not Is_C_Field (Shape, Budget)
+                       --  D413: the last field may be a flexible member.
+                       and then not
+                         (Field = Nominal_Field_Count (Of_Unit, Nominal)
+                          and then Field > 1
+                          and then Shape.Kind = Array_Field_Shape
+                          and then Shape.Length = 0
+                          and then Is_C_Field
+                            (Array_Element_Shape (Of_Unit, Shape), Budget))
                      then
                         return (Kind => Nominal_Metadata_Malformed,
                                 others => <>);
@@ -7658,7 +7706,25 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
-                           when Measure_Size | Measure_Align =>
+                           when Measurement_Kind =>
+                              --  D411: an offset names a path of fields
+                              --  below one of its run's own fields.
+                              if Op_Of (Of_Unit, Id, V) = Measure_Offset
+                                and then
+                                  (not Is_Aggregate_Measurement
+                                     (Of_Unit, Id, V)
+                                   or else Path_Of (Of_Unit, Id, V)'Length = 0
+                                   or else Natural
+                                     (Path_Of (Of_Unit, Id, V)
+                                        (Path_Of (Of_Unit, Id, V)'First)
+                                        .Field)
+                                     > Measurement_Field_Count
+                                         (Of_Unit, Id, V))
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
                               if Result_Of (Of_Unit, Id, V)
                                 /= Landin.Types.Usize
                               then

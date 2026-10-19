@@ -1,0 +1,31 @@
+--  The library `names` declares `errno`, `reset`, `read` and `environ`,
+--  and this program calls them beside platform/libc's own `read` and a C
+--  peer's global `reset`.  The peer then reads through C's `read`, `errno`
+--  and `environ`, which a global Landin definition of any of those names
+--  would have replaced or collided with.
+import names
+import platform/libc
+
+extern(c) link(symbol: "reset") c_reset: (value: i32) -> (result: i32)
+extern(c) peer_check: () -> (fault: i32)
+
+public main: () -> (code: i32) =
+    code = 1
+    return when names.errno() <> 7 or names.environ <> 11
+    code = 2
+    return when names.reset(4) <> 8 or c_reset(4) <> 104
+    code = 3
+    return when names.read(5) <> 6
+
+    --  The C library's `read` beside the library's: an invalid descriptor
+    --  fails with EBADF, nine on every hosted system.
+    code = 4
+    mut byte: [1]u8 = zeroed
+    return when libc.read(-1, addr byte[0], 1) <> -1
+    cell: ptr mut i32 = libc.errno_cell()
+    return when cell.val <> 9
+
+    code = 10 + peer_check()
+    return when code <> 10
+    code = 42
+end main

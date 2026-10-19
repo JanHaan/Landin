@@ -1,0 +1,1 @@
+link(symbol: "main") public counter: i32 = 1

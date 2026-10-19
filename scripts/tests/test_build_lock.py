@@ -177,6 +177,117 @@ echo "$LANDIN_BUILD_MODE"
         self.ready(waiting)
         self.release(waiting)
 
+    def test_a_waiter_names_what_holds_the_lock(self):
+        first = self.start(arguments=("--holder-marker",))
+        self.ready(first)
+        waiting = self.start()
+        said = self.line(waiting.stderr)
+        self.assertIn("waiting for build lock test-debug", said)
+        self.assertIn("held by pid %d:" % first.pid, said)
+        self.assertIn("worker.sh --holder-marker", said)
+        self.release(first)
+        self.ready(waiting)
+        self.release(waiting)
+
+    def build_tree(self):
+        build = self.root / "compiler/ada/build/test/debug"
+        (build / "link").mkdir(parents=True)
+        (build / "bin").mkdir()
+        for place, text in (("bin", "old"), ("link", "new")):
+            path = build / place / "refine"
+            path.write_text("#!/bin/sh\necho %s\n" % text)
+            path.chmod(0o755)
+        return build
+
+    def reader(self, build, **environment):
+        script = self.root / "reader.py"
+        script.write_text(
+            "import sys\n"
+            "sys.path.insert(0, %r)\n"
+            "import build_lock\n"
+            "assert build_lock.reading(sys.argv[1])\n"
+            "print('ready', flush=True)\n"
+            "sys.stdin.readline()\n" % str(self.root / "scripts"))
+        process = subprocess.Popen(
+            ["python3", str(script), str(build / "bin/refine")],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+            env={**os.environ, **environment})
+        self.addCleanup(lambda: process.poll() is None and process.kill())
+        return process
+
+    def publish(self, build, **environment):
+        return subprocess.Popen(
+            ["python3", str(self.root / "scripts/build_lock.py"), "--publish",
+             str(build), "refine"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env={**os.environ, "LANDIN_BUILD_TAG": "test",
+                 "LANDIN_BUILD_MODE": "debug", **environment})
+
+    def test_a_rebuild_never_replaces_refine_under_its_reader(self):
+        build = self.build_tree()
+        reader = self.reader(build)
+        self.ready(reader)
+        publisher = self.publish(build)
+        said = self.line(publisher.stderr)
+        self.assertIn("waiting for build lock test-debug.readers"
+                      " (to replace refine while another run uses it)", said)
+        self.assertIn("held by pid %d:" % reader.pid, said)
+        self.assertIsNone(publisher.poll())
+        self.assertIn("echo old", (build / "bin/refine").read_text())
+        self.release(reader)
+        publisher.communicate(timeout=10)
+        self.assertEqual(publisher.returncode, 0)
+        self.assertIn("echo new", (build / "bin/refine").read_text())
+        self.assertEqual(sorted(p.name for p in (build / "bin").iterdir()),
+                         ["refine"])
+
+    def test_a_reader_waits_for_cleanup_of_its_tag(self):
+        build = self.build_tree()
+        reader = self.reader(build)
+        self.ready(reader)
+        cleanup = self.start("clean.sh")
+        said = self.line(cleanup.stderr)
+        self.assertIn("test-debug.readers", said)
+        self.assertTrue((build / "bin/refine").exists())
+        self.release(reader)
+        cleanup.communicate(timeout=10)
+        self.assertEqual(cleanup.returncode, 0)
+        self.assertFalse(build.exists())
+
+    def test_a_build_inside_a_reader_refuses_rather_than_waits(self):
+        build = self.build_tree()
+        reader = self.reader(build)
+        self.ready(reader)
+        readers = self.root / "compiler/ada/.build-locks/test-debug.readers"
+        publisher = self.publish(
+            build, LANDIN_BUILD_READER="%s:%d" % (readers, reader.pid))
+        _, stderr = publisher.communicate(timeout=10)
+        self.assertEqual(publisher.returncode, 2)
+        self.assertIn("pid %d is running this build's refine" % reader.pid,
+                      stderr)
+        self.assertIn("echo old", (build / "bin/refine").read_text())
+        self.release(reader)
+
+    def test_an_executable_outside_a_build_needs_no_lock(self):
+        import sys
+        sys.path.insert(0, str(self.root / "scripts"))
+        try:
+            import build_lock
+            installed = self.root / "prefix/bin/refine"
+            self.assertFalse(build_lock.reading(installed))
+            #  One inside a build tree that no build published is named so.
+            unbuilt = self.root / "compiler/ada/build/test/release/bin/refine"
+            unbuilt.parent.mkdir(parents=True)
+            with self.assertRaises(FileNotFoundError) as raised:
+                build_lock.reading(unbuilt)
+            self.assertIn("no build of test/release has published it",
+                          str(raised.exception))
+            build_lock._release()
+        finally:
+            sys.path.remove(str(self.root / "scripts"))
+            sys.modules.pop("build_lock", None)
+
     def test_mode_is_validated_by_environment_loading_alone(self):
         # Never invoke a build or cleanup with a rejected mode.
         for mode in ("debug", "release", "", "unknown", "../other", "a/b"):

@@ -366,7 +366,7 @@ package body Landin.Tests.Fixture_Suite is
          Landin.Testing.Check
            (Item, Matches_Inventory
               (Found, "# scope | targets" & LF & LF
-               & "prototype-1 | cortex-m" & LF & Rest & LF & First),
+               & "prototype-1 | cortex-m0" & LF & Rest & LF & First),
             "comments and prototype scopes do not select fixtures");
          Landin.Testing.Check
            (Item, not Matches_Inventory (Found, Rest),
@@ -380,11 +380,11 @@ package body Landin.Tests.Fixture_Suite is
             "an undiscovered inventory fixture is refused");
          Landin.Testing.Check
            (Item, not Matches_Inventory
-              (Found, "unit/alpha | cortex-m" & LF & Rest),
+              (Found, "unit/alpha | cortex-m0" & LF & Rest),
             "a changed target list is refused");
          Landin.Testing.Check
            (Item, not Matches_Inventory
-              (Found, First & Rest & LF & "prototype-5 | cortex-m"),
+              (Found, First & Rest & LF & "prototype-5 | cortex-m0"),
             "an unknown scope cannot silently vanish");
          Landin.Testing.Check
            (Item, not Matches_Inventory
@@ -1143,7 +1143,10 @@ package body Landin.Tests.Fixture_Suite is
             Landin.Testing.Check
               (Item, Matches_Inventory
                  (Found, Ada.Strings.Unbounded.To_String (Text)),
-               "discovery matches every inventoried identity and target");
+               "discovery matches every inventoried identity and target"
+               & " in compiler/tests/targets.matrix, which a fixture's"
+               & " `targets:` or a new fixture changes; regenerate it with"
+               & " python3 check.py --coverage");
          end if;
       end;
 
@@ -1220,8 +1223,78 @@ package body Landin.Tests.Fixture_Suite is
          "the documented malformed cases are the reported ones");
    end Repository_Malformed_Cases_Are_Refused;
 
+   --  A rooted negative ran only at linux-x86-64: its module arguments
+   --  come from `root`, `args` then had to repeat them, and `expect` could
+   --  not stand beside `root` alone.  A rooted fixture's `args` are now
+   --  the options before its module, a target among them.
+   procedure A_Rooted_Negative_Names_Its_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Rooted_Negative_Names_Its_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Found : Catalogue;
+      Head  : constant String :=
+        "class: negative" & LF & "summary: rooted" & LF
+        & "program: main.ldn" & LF & "codes: L0201" & LF
+        & "constructs: 1420" & LF & "targets: darwin-arm64" & LF;
+
+      procedure Add (Name, Rest : String);
+
+      procedure Add (Name, Rest : String) is
+         Directory : constant String := "root/negative/" & Name;
+      begin
+         Host.Add_Directory (Directory);
+         Host.Add_Directory (Directory & "/imports");
+         Host.Add_File (Directory & "/main.ldn", "");
+         Host.Add_File (Directory & "/expected.txt", "");
+         Host.Add_File (Directory & "/fixture.meta", Head & Rest);
+      end Add;
+
+      Arguments : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/negative");
+      Add ("a-target", "root: imports" & LF
+           & "args: --target=darwin-arm64" & LF);
+      Add ("b-recorded", "root: imports" & LF & "expect: expected.txt" & LF);
+      Add ("c-module-in-args", "root: imports" & LF
+           & "args: --root=elsewhere ." & LF);
+      Add ("d-unrooted", "args: --target=darwin-arm64" & LF);
+      Add ("e-here", "root: ." & LF);
+      Discover (Found, "root", Host);
+
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 3,
+         "a rooted negative with a target and one with a report are kept");
+      Landin.Testing.Check_Equal
+        (Item, Args (Nth (Found, 1)), "--target=darwin-arm64",
+         "its target is kept as its args");
+      Landin.Testing.Check_Equal
+        (Item, Expect (Nth (Found, 2)), "expected.txt",
+         "a report beside root needs no args");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "so they name no module: --root=elsewhere")
+               and then Mentions (Found, "name no module: ."),
+         "a rooted fixture's args naming a module are refused by name");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "args without expect"),
+         "an unrooted fixture's args still need a report to compare");
+
+      Append_Module_Arguments (Nth (Found, 3), "root", Arguments);
+      Landin.Testing.Check
+        (Item, Natural (Arguments.Length) = 2
+               and then Arguments (1) = "--root=root/negative/e-here"
+               and then Arguments (2) = "root/negative/e-here",
+         "a root of . is the fixture's directory as it is spelled");
+   end A_Rooted_Negative_Names_Its_Target;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "fixtures", "a rooted negative names its target",
+         A_Rooted_Negative_Names_Its_Target'Access);
       Landin.Testing.Register
         (Into, "fixtures", "classes have directories",
          Classes_Have_Directories'Access);

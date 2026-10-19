@@ -10,9 +10,17 @@
 #  beside the build tree serialises concurrent runs, because two
 #  gprbuilds sharing one object directory corrupted each other's archive.
 #  A manifest is written only after the selected projects built, and a build tree
-#  without one is a failed or interrupted build and is rebuilt from clean,
-#  because gprbuild would otherwise reuse its half-written objects by
-#  timestamp.
+#  without one is a failed or interrupted build.  The ordinary build rebuilds
+#  that from clean, because gprbuild would otherwise reuse its half-written
+#  objects by timestamp.  The developer build keeps what a failed build
+#  compiled, since GPRbuild's checksum mode recompiles whatever no longer
+#  matches, and after an interrupted one discards only what that build
+#  wrote, any of which may be half-written.
+#
+#  The executables are linked into link/ and published into bin/ by a
+#  rename, while no tool that holds the build's readers lock is running
+#  them (scripts/build_lock.py).  Cleaning keeps bin/, so a failed or
+#  interrupted rebuild leaves the last published compiler where it was.
 
 . "$(dirname -- "$0")/env.sh"
 
@@ -45,6 +53,10 @@ done
 
 Manifest="$LANDIN_BUILD_DIR/source-manifest.txt"
 Tests_Manifest="$LANDIN_BUILD_DIR/tests-manifest.txt"
+#  What an unfinished build was building, and whether it failed or was cut
+#  short: the next run reads them to recompile only what it must.
+Attempt="$LANDIN_BUILD_DIR/attempt-manifest.txt"
+State="$LANDIN_BUILD_DIR/build-state"
 Identity_Source="$LANDIN_BUILD_DIR/generated/landin-build_identity.ads"
 Configuration="$LANDIN_ADA_DIR/.build-locks/$LANDIN_BUILD_TAG-$LANDIN_BUILD_MODE.cgpr"
 
@@ -99,6 +111,37 @@ EOF
 landin_fixed() {
     grep -E '^(mode |gnat |gprbuild |toolchain )|[.](adc|gpr|sh|py)$' <<EOF
 $1
+EOF
+}
+
+#  Everything in the build tree but bin/: whoever is running the published
+#  compiler keeps it, and the next successful build replaces it in one step.
+landin_clean_objects() {
+    for Entry in "$LANDIN_BUILD_DIR"/* "$LANDIN_BUILD_DIR"/.[!.]*; do
+        case "$Entry" in
+            "$LANDIN_BUILD_DIR/bin") continue ;;
+        esac
+        if [ -e "$Entry" ] || [ -L "$Entry" ]; then
+            rm -rf "$Entry"
+        fi
+    done
+}
+
+#  The files an interrupted build wrote after it began, any of which a
+#  killed compiler or archiver may have left half-written.  The earlier
+#  objects are whole, and the checksum mode decides which of them are
+#  current.  Coarse timestamps can only make this remove more.
+landin_discard_since() {
+    python3 - "$LANDIN_BUILD_DIR" "$1" <<'EOF'
+import os, sys
+root, began = sys.argv[1], os.stat(sys.argv[2]).st_mtime_ns
+for directory, names, files in os.walk(root):
+    if directory == root:
+        names[:] = [name for name in names if name != "bin"]
+    for name in files:
+        path = os.path.join(directory, name)
+        if os.lstat(path).st_mtime_ns >= began:
+            os.remove(path)
 EOF
 }
 
@@ -160,17 +203,37 @@ if [ "$Reuse" = "yes" ]; then
     exit 0
 fi
 
-if [ -d "$LANDIN_BUILD_DIR" ] && [ ! -f "$Manifest" ]; then
-    echo "landin: the last build did not finish; rebuilding from clean"
-    rm -rf "$LANDIN_BUILD_DIR"
-fi
-
 Previous=''
 if [ -f "$Manifest" ]; then
     Previous="$(cat "$Manifest")" || exit
+elif [ ! -d "$LANDIN_BUILD_DIR" ]; then
+    echo "landin: no earlier build of $LANDIN_BUILD_TAG/$LANDIN_BUILD_MODE; building from clean"
+else
+    #  No manifest: the last build did not finish.  It wrote down what it
+    #  was building and whether it got as far as failing.
+    Last=interrupted
+    if [ -f "$State" ]; then
+        Last="$(cat "$State")" || exit
+    fi
+    Why="it was interrupted"
+    if [ "$Last" = "failed" ]; then
+        Why="it failed"
+    fi
+    if [ "$Incremental" = "yes" ] && [ -f "$Attempt" ] && [ -f "$State" ]; then
+        Previous="$(cat "$Attempt")" || exit
+        if [ "$Last" = "failed" ]; then
+            echo "landin: the last build did not finish ($Why); keeping what it compiled"
+        else
+            echo "landin: the last build did not finish ($Why); discarding only what it wrote"
+            landin_discard_since "$State" || exit
+        fi
+    else
+        echo "landin: the last build did not finish ($Why); rebuilding from clean, keeping bin/"
+        landin_clean_objects
+    fi
 fi
 
-if [ -f "$Manifest" ] && [ "$Current" != "$Previous" ]; then
+if [ -n "$Previous" ] && [ "$Current" != "$Previous" ]; then
     if [ "$Incremental" = "yes" ]; then
         #  The manifest is sorted by its whole checksum row, so changing a
         #  file can move its path.  Inventory equality is set equality:
@@ -184,14 +247,14 @@ if [ -f "$Manifest" ] && [ "$Current" != "$Previous" ]; then
            || [ "$Old_Fixed" != "$New_Fixed" ]
         then
             #  Scripts and the toolchain identity count as the project here.
-            echo "landin: source inventory or project changed; rebuilding from clean"
-            rm -rf "$LANDIN_BUILD_DIR"
+            echo "landin: source inventory or project changed; rebuilding from clean, keeping bin/"
+            landin_clean_objects
         else
             echo "landin: source content changed; using checksum recompilation"
         fi
     else
-        echo "landin: sources changed since the last build; rebuilding from clean"
-        rm -rf "$LANDIN_BUILD_DIR"
+        echo "landin: sources changed since the last build; rebuilding from clean, keeping bin/"
+        landin_clean_objects
     fi
 fi
 
@@ -236,7 +299,11 @@ python3 "$LANDIN_ROOT/scripts/build_identity.py" \
 #  the manifest goes only when the selected projects built from the tree as it
 #  was when this run began.  The test stamp records separately whether the
 #  test executable belongs to this snapshot after a compiler-only build.
+#  What this attempt builds, and that it is running, are written first: the
+#  next run reads them if this one does not finish.
 rm -f "$Manifest"
+printf '%s\n' "$Current" > "$Attempt"
+printf 'running\n' > "$State"
 
 #  GNAT reports any short write as "disk full", whatever cut it short: a gate
 #  job on a guest with 37 GiB free failed so.  Its error stream is shown as it
@@ -261,21 +328,40 @@ landin_gprbuild() {
     return "$Status"
 }
 
+#  A build that ran to a failure leaves whole objects behind; only one that
+#  was cut short leaves the state saying it was running.
+landin_failed() {
+    Status=$?
+    printf 'failed\n' > "$State"
+    exit "$Status"
+}
+
 cd "$LANDIN_ADA_DIR"
-landin_gprbuild -p -P refine.gpr --config="$Configuration" "$@" || exit
+Executables=refine
+landin_gprbuild -p -P refine.gpr --config="$Configuration" \
+    -XLANDIN_EXEC_SUBDIR=link "$@" || landin_failed
 if [ "$Compiler_Only" = "no" ]; then
-    landin_gprbuild -p -P landin_tests.gpr --config="$Configuration" "$@" || exit
-    printf '%s\n' "$Current" > "$Tests_Manifest.tmp"
-    mv -f "$Tests_Manifest.tmp" "$Tests_Manifest"
+    landin_gprbuild -p -P landin_tests.gpr --config="$Configuration" \
+        -XLANDIN_EXEC_SUBDIR=link "$@" || landin_failed
+    Executables="refine landin_tests"
 fi
 
-Finished="$(landin_manifest)" || exit
+Finished="$(landin_manifest)" || landin_failed
 if [ "$Finished" != "$Current" ]; then
+    printf 'failed\n' > "$State"
     echo "landin: sources changed during build; leaving build unverified" >&2
     exit 1
 fi
 
+#  shellcheck disable=SC2086 # two fixed words
+python3 "$LANDIN_ROOT/scripts/build_lock.py" --publish "$LANDIN_BUILD_DIR" \
+    $Executables || landin_failed
+if [ "$Compiler_Only" = "no" ]; then
+    printf '%s\n' "$Current" > "$Tests_Manifest.tmp"
+    mv -f "$Tests_Manifest.tmp" "$Tests_Manifest"
+fi
 printf '%s\n' "$Current" > "$Manifest.tmp"
 mv -f "$Manifest.tmp" "$Manifest"
+rm -f "$State" "$Attempt"
 
 echo "built: $LANDIN_BUILD_DIR/bin/refine"

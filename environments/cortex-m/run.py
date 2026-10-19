@@ -344,6 +344,12 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--refine', type=Path, required=True)
     args = parser.parse_args()
+    #  A rebuild of this build waits for the lane, rather than replace
+    #  refine between two of its compilations.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import build_lock
+    if args.refine:
+        build_lock.reading(args.refine)
     tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)

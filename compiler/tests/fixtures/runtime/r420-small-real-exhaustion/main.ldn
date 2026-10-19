@@ -120,9 +120,10 @@ spilled_arm_survives_growth: () -> (ok: bool) =
          and arena.used(memory) == extent
 end spilled_arm_survives_growth
 
---  One pool slot lets the spill happen but cannot hold the old and the new
---  list at the same time, which is what the later growth needs. Releasing
---  the container returns the slot and a second container reuses it.
+--  One pool slot lets the spill happen and holds the list's next growth in
+--  place; the growth past the slot is refused with the list as it was.
+--  Releasing the container returns the slot and a second container reuses
+--  it.
 pool_spill_limit_and_reuse: () -> (ok: bool) =
     ok = false
     mut words: [2]u64 = zeroed
@@ -149,19 +150,32 @@ pool_spill_limit_and_reuse: () -> (ok: bool) =
     return when spill.length(addr values) <> 2 or spill.capacity(addr values) <> 2
       or pool.live(slab) <> 1 or pool.allocations(slab) <> 1
 
-    mut refused: bool = false
+    --  The four-item block fits the slot, so the list grows in it.
     spill.push(values, slab, 43) else (problem)
+        _ = problem
+        return
+    end
+    spill.push(values, slab, 44) else (problem)
+        _ = problem
+        return
+    end
+    return when spill.capacity(addr values) <> 4 or pool.live(slab) <> 1
+      or pool.allocations(slab) <> 1
+
+    mut refused: bool = false
+    spill.push(values, slab, 45) else (problem)
         refused = problem == mem.out_of_memory
     end
     mut kept: bool = false
     begin
         view := spill.used(values)
-        kept = lenof view == 2 and view[0] == 41 and view[1] == 42
+        kept = lenof view == 4 and view[0] == 41 and view[1] == 42
+               and view[2] == 43 and view[3] == 44
     end
-    --  The four-slot block would have fitted the slot; the old list still
-    --  occupies it, and no heap extended the pool behind the refusal.
-    return when not refused or not kept or spill.length(addr values) <> 2
-      or spill.capacity(addr values) <> 2 or pool.live(slab) <> 1
+    --  The eight-item block fits no slot; the list still occupies its own,
+    --  and no heap extended the pool behind the refusal.
+    return when not refused or not kept or spill.length(addr values) <> 4
+      or spill.capacity(addr values) <> 4 or pool.live(slab) <> 1
       or pool.allocations(slab) <> 1 or pool.frees(slab) <> 0
 
     spill.release(values, slab)

@@ -1,0 +1,49 @@
+--  A program that reports its failures to a person, as `path: reason`
+--  lines on standard error, with the library's own words for each reason:
+--  a file that is not there, a count that is not a number and one too
+--  large for its type.  It ends with status 1, as a tool that failed does.
+import core/failure
+import core/io
+import core/text
+import hosted/system
+
+--  `subject: reason` and a line ending, on standard error.
+report: (host: system.host, subject: []u8, reason: failure.reason) -> none =
+    stream: io.file = io.err(host)
+    io.write(host, stream, subject) else none
+    io.write(host, stream, ": ") else none
+    io.write(host, stream, failure.words(reason)) else none
+    io.write(host, stream, "\n") else none
+end report
+
+--  Read the file at `path`, reporting why it cannot be opened.
+opened: (host: system.host, path: []u8) -> (yes: bool) =
+    yes = false
+    file := io.open_read(host, text.host_over(path)) else (problem)
+        report(host, path, problem)
+        return
+    end
+    io.close(host, file) else none
+    yes = true
+end opened
+
+--  Read `count` as a byte count, reporting why it is not one.
+counted: (host: system.host, count: []u8) -> (yes: bool) =
+    yes = false
+    _ = text.parse_u8(count) else (problem)
+        report(host, count, problem)
+        return
+    end
+    yes = true
+end counted
+
+public main: () -> (code: i32) =
+    host := system.new()
+    code = 0
+    missing: bool = not opened(host, "landin-absent-notes.txt")
+    not_number: bool = not counted(host, "twelve")
+    too_large: bool = not counted(host, "300")
+    if missing and not_number and too_large then
+        code = 1
+    end if
+end main

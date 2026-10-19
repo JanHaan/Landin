@@ -58,6 +58,6 @@ receive: (buf: []mut u8) -> (result: u32) =
     compiler.completion_barrier()
 end receive
 
-public main: () -> (code: u32) =
+link(symbol: "main") public main: () -> (code: u32) =
     code = receive(buffer[0..<lenof buffer])
 end main

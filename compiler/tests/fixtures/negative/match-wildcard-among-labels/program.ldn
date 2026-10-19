@@ -1,0 +1,13 @@
+--  D405: `_` covers every case no other arm names, so it is an arm of its
+--  own and never one of several labels.
+north: atom
+south: atom
+east: atom
+compass: type = north | south | east
+
+heading: (c: compass) -> (n: i32) =
+    match c
+        north: n = 1
+        south, _: n = 2
+    end match
+end heading

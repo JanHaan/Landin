@@ -8,7 +8,7 @@ sp: (n: u32) -> (r: u32) = n + 1 end sp
 lr: (n: u32) -> (r: u32) = n + 1 end lr
 pc: (n: u32) -> (r: u32) = n + 1 end pc
 u: (n: u64) -> (r: u64) = n end u
-public main: () -> (code: u32) =
+link(symbol: "main") public main: () -> (code: u32) =
     f: callback = r0
     if f(41) == 42 and sp(41) == 42 and lr(41) == 42 and pc(41) == 42
       and lcm_step_1(41) == 42 and l1_1(41) == 42

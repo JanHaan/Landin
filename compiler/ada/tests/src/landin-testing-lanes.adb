@@ -14,15 +14,14 @@ package body Landin.Testing.Lanes is
    Runner_Name   : Unbounded.Unbounded_String;
    Driver_Name   : Unbounded.Unbounded_String;
 
-   --  The product targets' own names, and the label each one's fixtures
-   --  carry.  synthetic-32 has no corpus to execute, so it is no lane.
+   --  The label a product target's fixtures carry, which is its own name:
+   --  `targets:` spells a target as `--target` does.  synthetic-32 has no
+   --  corpus to execute, so it is no lane.
    function Label_Of (Name : String) return String
-     is (if Name = "linux-x86-64" then "linux-x86-64"
-         elsif Name = "linux-arm64" then "linux-arm64"
-         elsif Name = "linux-rv64" then "linux-rv64"
-         elsif Name = "darwin-arm64" then "macos-arm64"
-         elsif Name in "freebsd-x86-64" | "freebsd-arm64" then Name
-         elsif Name = "cortex-m0" then "cortex-m"
+     is (if Name in "linux-x86-64" | "linux-arm64" | "linux-rv64"
+                  | "darwin-arm64" | "freebsd-x86-64" | "freebsd-arm64"
+                  | "cortex-m0"
+         then Name
          else "");
 
    function Select_Target (Name : String) return Boolean is

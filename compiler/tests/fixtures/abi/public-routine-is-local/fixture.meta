@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: a public routine the program calls is a local symbol, so a C peer's weak reference to its name finds no global definition
+program: main.ldn
+c-sources: peer.c
+status: 42
+constructs: 1610, 1975
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+# ELF alone: a Mach-O link refuses a weak reference that nothing defines.
+# The backend suite holds the Mach-O assembly to the same local symbol.

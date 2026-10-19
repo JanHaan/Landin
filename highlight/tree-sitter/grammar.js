@@ -366,7 +366,8 @@ module.exports = grammar({
       field('convention', choice(alias('c', $.identifier),
                                   alias('optimal', $.identifier),
                                   alias('packed', $.identifier))),
-      optional(seq(',', $.scalar_type)),
+      // D410: `layout(c, packed)` is C's byte-packed record.
+      optional(seq(',', choice($.scalar_type, alias('packed', $.identifier)))),
       ')',
     ),
     // D233: several field names may share one type, `at` position included.
@@ -563,9 +564,14 @@ module.exports = grammar({
     match_expression: $ => prec.dynamic(4, seq(
       'match', field('value', $._expression), repeat1($.match_arm), 'end', 'match',
     )),
+    // D405: an arm names one case, which may bind its payload, or several
+    // without bindings; `_` is never one of several.
     match_arm: $ => seq(
       field('case', choice($.declaration_reference, 'ptr', '_')),
-      optional(seq('(', commaSep1($.match_binding), ')')),
+      optional(choice(
+        seq('(', commaSep1($.match_binding), ')'),
+        repeat1(seq(',', field('case', choice($.declaration_reference, 'ptr')))),
+      )),
       ':', field('body', choice($._statement, $._expression)),
     ),
     match_binding: $ => seq(optional('inout'), field('name', $._declaration_name)),

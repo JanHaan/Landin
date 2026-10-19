@@ -38,11 +38,12 @@ KEYWORDS = {
     # control
     "if", "then", "elsif", "else", "end", "while", "do", "for", "in", "loop",
     "break", "continue", "when", "complete", "match", "return", "fail", "try",
-    "with", "begin", "unchecked", "defer", "undo", "uninit", "arena",
+    "with", "begin", "unchecked", "defer", "undo", "uninit",
     # operators spelled as words
     "and", "or", "not",
     # memory and queries
-    "ptr", "addr", "sizeof", "alignof", "lenof", "inc", "dec", "any",
+    "ptr", "addr", "sizeof", "alignof", "lenof", "offsetof", "inc", "dec",
+    "any",
     # conventions and attributes
     "mut", "public", "volatile", "align", "link", "extern", "big", "little",
     "escaping", "caller", "fixed", "inout", "sink", "from", "of", "at",

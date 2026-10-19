@@ -1,0 +1,120 @@
+--- D410: a byte-packed C record.  Every field after `kind` sits at an
+--- odd offset, so each access below is unaligned wherever the record
+--- itself is.
+wire: type = layout(c, packed) struct
+    kind: u8
+    half: u16
+    word: u32
+    long: u64
+    signed: i32
+    single: f32
+    double: f64
+    flag: bool
+    size: usize
+    bytes: [3]u8
+end wire
+
+--- A packed record inside a packed record, at an odd offset again.
+frame: type = layout(c, packed) struct
+    lead: u8
+    body: wire
+    tail: u16
+end frame
+
+mut stored: wire = zeroed
+mut frames: [3]frame = zeroed
+
+--- Fills every field of a record with values whose bytes all differ.
+filled: (seed: u8) -> (record: wire) =
+    record = zeroed
+    record.kind = seed
+    record.half = 0x1234 + u16(seed)
+    record.word = 0x89ab_cdef
+    record.long = 0x0102_0304_0506_0708
+    record.signed = -123_456
+    record.single = 1.5
+    record.double = -2.25
+    record.flag = true
+    record.size = 0x7766_5544
+    record.bytes = [seed, 2, 3]
+end filled
+
+--- Whether a record holds what `filled` gave it.
+holds: (record: wire, seed: u8) -> (yes: bool) =
+    yes = record.kind == seed and record.half == 0x1234 + u16(seed)
+      and record.word == 0x89ab_cdef
+      and record.long == 0x0102_0304_0506_0708
+      and record.signed == -123_456 and record.single == 1.5
+      and record.double == -2.25 and record.flag
+      and record.size == 0x7766_5544 and record.bytes[0] == seed
+      and record.bytes[2] == 3
+end holds
+
+public main: () -> (code: i32) =
+    code = 1
+    return when sizeof wire <> 35 + sizeof usize or alignof wire <> 1
+      or sizeof frame <> sizeof wire + 3
+    code = 2
+    return when offsetof wire.half <> 1 or offsetof wire.long <> 7
+      or offsetof frame.body.word <> 4 or offsetof frame.tail <> 1 + sizeof wire
+
+    --  A local, written field by field and read back.
+    code = 3
+    mut local: wire = filled(7)
+    return when not holds(local, 7)
+    local.word = local.word + 1
+    code = 4
+    return when local.word <> 0x89ab_cdf0 or local.half <> 0x123b
+
+    --  Module state, and an element of an array of records whose
+    --  elements are each five bytes past an aligned one.
+    code = 5
+    stored = filled(9)
+    return when not holds(stored, 9)
+    for index in 0..<lenof frames do
+        frames[index].lead = u8(index)
+        frames[index].body = filled(u8(index) + 20)
+        frames[index].tail = 0xbeef
+    end for
+    code = 6
+    for index in 0..<lenof frames do
+        return when not holds(frames[index].body, u8(index) + 20)
+          or frames[index].tail <> 0xbeef
+          or frames[index].body.long <> 0x0102_0304_0506_0708
+    end for
+    code = 7
+    frames[1].body.signed = 77
+    return when frames[1].body.signed <> 77 or frames[2].body.signed <> -123_456
+
+    --  A whole copy keeps every byte.
+    code = 8
+    copy := frames[2].body
+    return when not holds(copy, 22)
+
+    --  The bytes of a buffer, read and written through a pointer at an
+    --  odd address.
+    code = 9
+    mut buffer: [64]u8 = zeroed
+    at: ptr mut wire = ptr(usize(addr buffer) + 3)
+    at.val = filled(11)
+    return when buffer[3] <> 11 or buffer[4] <> 0x3f or buffer[5] <> 0x12
+    code = 10
+    return when not holds(at.val, 11)
+    at.val.word = 0x0a0b_0c0d
+    return when buffer[3 + offsetof wire.word] <> 0x0d
+      or buffer[3 + offsetof wire.word + 3] <> 0x0a
+    --  A compound assignment and `inc` read and write in place, and a
+    --  traversal reads each element where it lies.
+    code = 11
+    index := usize(stored.kind) - 9 + 2
+    frames[index].body.word += 0x10
+    inc frames[index].tail
+    return when frames[2].body.word <> 0x89ab_cdff or frames[2].tail <> 0xbef0
+    mut total: u64 = 0
+    for each in frames do
+        total = total + u64(each.body.half) + u64(each.lead)
+    end for
+    code = 12
+    return when total <> 3 * 0x1234 + 20 + 21 + 22 + 0 + 1 + 2
+    code = 42
+end main

@@ -1,0 +1,9 @@
+class: negative
+summary: D382 an atom outside the declared error set is named, with the fail or call that raises it labelled, through a recovered error binding and through try
+constructs: 0940, 0960, 1030
+program: program.ldn
+codes: L0329, L0329
+targets: linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/error-outside-set-names-its-raise/program.ldn
+status: 1

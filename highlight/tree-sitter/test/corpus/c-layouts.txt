@@ -1,0 +1,53 @@
+==================
+A byte-packed C record and an offset measurement
+==================
+
+wire : type = layout(c, packed) struct
+  kind : u8
+  id : u32
+end wire
+
+at : usize = offsetof wire.id
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      (identifier)
+      (struct_body
+        (c_layout
+          (identifier)
+          (identifier)
+          (identifier))
+        (field
+          (identifier_list
+            (identifier))
+          (scalar_type))
+        (field
+          (identifier_list
+            (identifier))
+          (scalar_type))
+        (identifier))))
+  (public_declaration
+    (binding
+      (identifier_list
+        (identifier))
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (measurement_expression
+                            (identifier)
+                            (indexed_expression
+                              (indexed_expression
+                                (identifier))
+                              (member_selection
+                                (identifier)))))))))))))))))

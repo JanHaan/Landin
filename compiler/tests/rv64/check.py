@@ -352,6 +352,12 @@ def main():
     parser.add_argument('--gdb', default='gdb')
     parser.add_argument('--case', action='append', help='exact case, development only')
     args = parser.parse_args()
+    #  A rebuild of this build waits for the lane, rather than replace
+    #  refine between two of its compilations.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import build_lock
+    if args.refine:
+        build_lock.reading(args.refine)
     require(bool(args.prepare_only) != bool(args.prepared), 'select exactly one prepare or native execution stage')
     require(not args.prepare_only or args.refine, 'emission requires checked refine')
     args.output.mkdir(parents=True, exist_ok=False)

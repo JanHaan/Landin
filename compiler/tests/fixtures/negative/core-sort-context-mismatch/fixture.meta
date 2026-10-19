@@ -1,0 +1,8 @@
+class: negative
+summary: sort.sort_by deduces its context from the context argument and the comparison alike, and refuses a comparison whose context is another type
+expect: expected.txt
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: --root=../.. ../tests/fixtures/negative/core-sort-context-mismatch
+codes: L0340
+status: 1
+constructs: 0870, 1000, 1290, 1410, 1420

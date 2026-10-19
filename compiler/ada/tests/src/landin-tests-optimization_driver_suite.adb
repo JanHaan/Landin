@@ -110,9 +110,19 @@ package body Landin.Tests.Optimization_Driver_Suite is
          Host.Add_File ("main.ldn", Source);
          Args.Append ("main.ldn");
          Result := Landin.Driver.Execute (Args, Host, Tools);
+         --  D383: a check's report is what was checked, with no evidence
+         --  only emission makes.
          Landin.Testing.Check_Equal
-           (Item, Result.Status, Landin.Driver.Status_Misuse,
-            "a report needs an emitted artifact");
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "a check writes its report: "
+            & Ada.Strings.Unbounded.To_String (Result.Report));
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Host.Written ("report.json"), """routines"": []") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Host.Written ("report.json"), """sources"":[") /= 0,
+            "holding the sources and no routine: "
+            & Host.Written ("report.json"));
       end;
       declare
          Host : Landin.Testing.Fakes.Fake_Filesystem;

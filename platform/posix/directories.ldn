@@ -35,7 +35,7 @@ end directory_entry
 --- descriptor closed on exec as `open_at`'s is: `enotdir` when it is not
 --- a directory, `enoent` when it is missing.
 --- Close it with `close_directory`, which also closes its descriptor.
-public link(symbol: "_landin_posix_open_directory") open_directory:
+public open_directory:
     (at: descriptor, path: text.host_string)
     -> (opened: directory_stream) ! errno =
     mut room: path_room = zeroed
@@ -49,7 +49,7 @@ end open_directory
 --- `buffer` until the next read.  An entry with an empty name is the end
 --- of the directory.  Entries come in the system's order, `.` and `..`
 --- among them, as POSIX's `readdir` gives them.
-public link(symbol: "_landin_posix_read_directory") read_directory:
+public read_directory:
     (inout opened: directory_stream, buffer: []mut u8)
     -> (item: directory_entry from buffer) ! errno =
     fail einval when lenof buffer < directory_buffer
@@ -58,7 +58,7 @@ end read_directory
 
 --- Close the directory stream and its descriptor, which are released even
 --- when this fails.
-public link(symbol: "_landin_posix_close_directory") close_directory:
+public close_directory:
     (opened: directory_stream) -> none ! errno =
     try system_close_directory(opened)
 end close_directory
@@ -66,7 +66,7 @@ end close_directory
 --- Make the directory `path` names, relative to `at`, with the permission
 --- bits `permissions`, which the process umask filters: `eexist` when the
 --- name is taken, `enoent` when its parent is missing.
-public link(symbol: "_landin_posix_make_directory_at") make_directory_at:
+public make_directory_at:
     (at: descriptor, path: text.host_string,
      permissions: u32) -> none ! errno =
     mut room: path_room = zeroed
@@ -76,7 +76,7 @@ end make_directory_at
 
 --- Remove the name `path`, relative to `at`, of a file that is not a
 --- directory, POSIX's `unlinkat`.
-public link(symbol: "_landin_posix_unlink_at") unlink_at:
+public unlink_at:
     (at: descriptor, path: text.host_string) -> none ! errno =
     mut room: path_room = zeroed
     terminated: ptr u8 = try terminate(path, room[0..<lenof room])
@@ -85,7 +85,7 @@ end unlink_at
 
 --- Remove the empty directory `path` names, relative to `at`, POSIX's
 --- `unlinkat` with `AT_REMOVEDIR`: `enotempty` when it holds anything.
-public link(symbol: "_landin_posix_remove_directory_at") remove_directory_at:
+public remove_directory_at:
     (at: descriptor, path: text.host_string)
     -> none ! errno =
     mut room: path_room = zeroed

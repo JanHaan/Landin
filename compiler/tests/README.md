@@ -32,7 +32,27 @@ Generated and recorded are not the same word here. `check.py` writes the
 generated files and refuses each when it is stale; the last two are written
 by `./scripts/test.sh --record`, because producing them means running compiler
 stages and asking the target model, which `check.py` cannot do. It will not
-tell you those two are stale — the harness and the gate will. `constructs.matrix`
+tell you those two are stale — the harness and the gate will, and
+`lowering/the recorded corpus is current` names each fixture whose recorded
+IR differs.
+
+Each recorded artefact is re-recorded on its own, so changing one does not
+rewrite the others; read the difference before keeping it, because a
+recording is not a verdict:
+
+| command | rewrites |
+| --- | --- |
+| `./scripts/test.sh --record` | `lowering.ir`, `layout.targets` and every server session |
+| `./scripts/test.sh --record=lowering` | `lowering.ir` alone |
+| `./scripts/test.sh --record=layout` | `layout.targets` alone |
+| `./scripts/test.sh --record=server/NAME` | the one session `server/NAME/session.lsp` |
+| `./scripts/test.sh --record=CLASS/NAME` | one recorded fixture's `expect` file, with what `refine` reports for it now |
+
+A fixture's report is rewritten only while `refine` still exits with its
+`status` and reports its ordered `codes`; otherwise the command says which no
+longer holds and writes nothing, because those are the fixture's verdict and
+a recording replaces only bytes. `./scripts/dev-test.sh` takes the same
+options. `constructs.matrix`
 began as the list of every construct either document defines against what
 the corpus says about it, and is now the construct inventory: each
 row also gives the strongest claim per product target, read from fixture
@@ -98,6 +118,13 @@ every shard. The transcript begins `SHARD I of N`; only all N together are
 the complete run, which the harness's `shards partition the inventory`
 holds them to.
 
+Every run, filtered or not, writes one line to standard error as each suite
+ends, `progress: lexer: 42 cases, 0 failed, 3.2s`, so a complete run of half
+an hour says where it is while it runs and a stuck one is told from a slow
+one by the suite that stopped reporting; `LANDIN_TEST_TIMINGS=1` adds the
+table of suites and slowest cases at the end. Neither is in the transcript on
+standard output, which is the same on every host.
+
 `./scripts/dev-test.sh --host` runs every compiler case except the two
 native target-workload emission/execution cases. Its `HOST-ONLY` banner
 identifies the scope; compiler units, diagnostics and the complete IR golden
@@ -143,6 +170,14 @@ above the default runs only once the runner's own `/proc/cpuinfo`, read
 by a program the lane's driver links, confirms it: `Features` on arm64,
 and on RV64 the `isa` line, whose ISA string names each extension. QEMU's
 `max` RV64 CPU lacks T-Head's `xtheadba`, which `QEMU_CPU` adds.
+
+Before a cross lane runs any program, the harness asks its runner to run a
+probe the lane's driver links, which asks Linux for a signal's action with
+a guard word after the record. An emulator that writes past Linux's record,
+as Ubuntu 24.04's QEMU 8.2.2 does for riscv64, would break every program
+that sets a signal disposition before it wrote anything, so it is refused
+by its name, the version it reports and that reason, and no fixture runs;
+`fixture execution/a known-bad runner is refused` holds the refusal.
 
 An emulator is not the lane's own Linux, and a few fixtures fail under it
 for the host's reasons on every run. `cross-lanes.json` lists each one:
@@ -329,7 +364,15 @@ inventories are their closures` compares it on every run, from the build
 report the sessions read, and names each file added or removed and the
 command that rewrites the record,
 `python3 compiler/tests/debugging/workload_sources.py --refine REFINE --write`;
-without `--write` it only reports. It uses GDB to test the
+without `--write` it only reports. `debugging/workload-frames.json` holds the
+routines each workload's stack holds at each stop, which the GDB sessions in
+`debugging/check.py` and the LLDB sessions in `debugging/darwin_workloads.py`
+both read, and the file that declares each one; the test program's
+`debugger session frames are declared` reads every routine there on every
+run, so renaming or removing one fails where the library changes and names
+the session, the stop and
+`python3 compiler/tests/debugging/workload_frames.py --write`, which finds a
+moved routine again. A renamed one is renamed in that file's stops. It uses GDB to test the
 emitted program's line information, breakpoints, stepping, stack frames and
 selected parameters and locals. At speed it debugs `debugging/registers.ldn`
 alone, stopping past the last use of variables speed may keep in registers,
@@ -457,7 +500,8 @@ workspace copied into a temporary directory and its URI written in place of
 `file:///workspace`; the gate runs it beside the native report identity, with
 both build modes on Linux and on macOS. `./scripts/test.sh --record` rewrites
 every `<-` line and exit status with what the server sends now, as it does
-`lowering.ir`; read the difference before keeping it, because a recording is
+`lowering.ir`, and `./scripts/test.sh --record=server/NAME` rewrites only the
+session named; read the difference before keeping it, because a recording is
 not a verdict.
 
 ## Complete programs to try
@@ -584,8 +628,8 @@ emits assembly text.
 | `c-args` | no | whitespace-separated C compiler and linker arguments for an ABI fixture |
 | `c-shared` | no, and runtime or ABI only | comma-separated, ordered C sources relative to the fixture directory, each built into a shared object of its own that the program loads; their paths are its first arguments, before `run_args`. A runtime fixture that names it says `link: libc` |
 | `link` | no, and runtime only | `static` or `libc`: how a hosted lane links the executable, passed as `--link=`; absent means the target's default, static on Linux. A program that calls the C library names `libc`. An ABI fixture is always emitted with `--link=libc`, because the C driver links its assembly with the C runtime |
-| `expect` | no | the file holding the expected bytes |
-| `args` | no | the arguments `refine` is run with |
+| `expect` | no | the file holding the expected bytes, which `fixture execution/recorded expectations hold` compares and `./scripts/test.sh --record=CLASS/NAME` rewrites |
+| `args` | no | the arguments `refine` is run with; for a rooted fixture, only the options before the module its `root` gives, such as `--target=darwin-arm64` |
 | `run_args` | no | the arguments handed to a compiled runtime or ABI program |
 | `stdin` | no | a file below the fixture directory whose bytes a compiled runtime or ABI program reads as its standard input; without it the program's standard input is empty |
 | `run_expect` | no | the file holding a runtime or ABI program's expected bytes on the selected `stream` |
@@ -628,6 +672,16 @@ canonicalizes them without sorting the codes or removing duplicates. Both
 source-only and recorded negative executions compare that ordered list and
 the declared or default exit status. Recorded negatives also compare their
 exact report bytes, including those with `args` but no `program`.
+
+Two cases check a report, and neither is in the `fixtures` suite, which
+holds metadata alone and passes while a recorded report is stale.
+`--case='fixture execution/recorded expectations hold'` compares every
+recorded fixture's exact `expect` bytes and status, and
+`--case='parser/reports carry the pinned codes'` every negative's ordered
+`codes`; `--fixture=negative/NAME` runs the first for one fixture. After a
+change that moves a report, run those two. `check.py` holds this paragraph
+to naming them, and every `--suite` or `--case` a document writes to being
+one the test program registers.
 `float-literal-not-enabled` names one `L0301`: its one literal is a
 float in an integer context, refused by the checker, so the grammar must
 derive it. `check.py` holds every name in `codes` to
@@ -682,6 +736,17 @@ without keeping fixture-only copies. The parser's exact-code case retains its
 fake filesystem for ordinary negative fixtures, but reads the real module
 closure for a rooted negative because its pinned report depends on those
 imports resolving.
+
+A rooted fixture's `args` never name its module: the harness passes them
+first and then `--root` and the fixture's directory, and refuses an `args`
+word that does not begin with `-` or that is a `--root=`. So `args` is how a
+rooted negative selects its target, and with `--target=` in it the fixture is
+that target's verdict on every lane, as a recorded one is; such a negative
+needs no `expect`, since its ordered `codes` are compared at that target, and
+`expect` beside `root` needs no `args`. `negative/rooted-negative-selects-its-target`
+pins a refusal particular to Darwin through a module that imports
+`platform/linux`. A `root` of `.` is passed as the fixture's directory as
+it is spelled.
 
 An ABI fixture requires `program`, `c-sources`, `constructs`, and `targets`.
 `c-sources` is a comma-separated ordered list. Every entry must be a portable,
@@ -773,10 +838,20 @@ about a construct no fixture can yet use.
 
 `targets` is required, and `check.py` holds each name to the targets
 [the target applicability register](registers.md#target-applicability-coverage)
-allows: the seven product targets `linux-x86-64`, `linux-arm64`, `macos-arm64`,
-`freebsd-x86-64`, `freebsd-arm64`, `linux-rv64` and `cortex-m`, and `synthetic-32`, the 32-bit model that preceded the
+allows: the seven product targets `linux-x86-64`, `linux-arm64`, `darwin-arm64`,
+`freebsd-x86-64`, `freebsd-arm64`, `linux-rv64` and `cortex-m0`, and `synthetic-32`, the 32-bit model that preceded the
 Cortex-M backend. A name outside that list is refused, because that is how a
 fixture quietly stops applying to anything.
+
+Each target is spelled exactly as `refine --target=` spells it, so a fixture's
+`targets:` can be handed to the compiler one name at a time. The metadata
+once said `macos-arm64` and `cortex-m`, the lanes' names, and every reader
+that emitted a fixture for the targets it listed had to translate two of them;
+they were renamed when three agents in a row met the refusal. A lane keeps its
+own name — the `cortex-m` gate job, `compiler/tests/cortex-m/`, the
+`darwin-*` jobs — and `cortex-m` survives in the construct inventory only as
+a scope, the Cortex-M family a construct is accounted for on, which holds
+`cortex-m0` alone today and will hold each Cortex-M target added later.
 
 `linux-arm64` is the Linux arm64 lane's own name and its driver name alike,
 so a fixture whose `args:` select `--target=linux-arm64` names it, and one
@@ -1026,7 +1101,11 @@ does not touch, and that difference matters enough to state.
 tokeniser, and the catalogue's Ada text. It owns nothing here: producing
 these files means running compiler stages and asking the target model, so the
 Ada harness is what can produce them and **`python3 check.py` will not tell
-you either is stale.** `./scripts/test.sh` will, and so will the gate.
+you either is stale.** `./scripts/test.sh` will, and so will the gate;
+`lowering/the recorded corpus is current` names each fixture whose section
+changed, is not recorded or is no longer lowered, and
+`./scripts/test.sh --record=lowering` or `--record=layout` rewrites one
+file without the other.
 
 `layout.targets` exists for an ordering reason: target-parametric layout came
 before any 32-bit backend, a description is the only thing a compiler with no

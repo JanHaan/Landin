@@ -1,0 +1,50 @@
+--- Linux's `struct linux_dirent64`, its name a flexible array member.
+directory_record: type = layout(c) struct
+    inode: u64
+    offset: i64
+    length: u16
+    kind: u8
+    name: [0]u8
+end directory_record
+
+compiler.assert(sizeof directory_record == 24)
+compiler.assert(offsetof directory_record.name == 19)
+
+--- Writes one record and its name at `at`, as getdents64 would, and says
+--- where the next one begins.
+write_record: (inout buffer: [128]u8, at: usize, name: []u8) -> (next: usize) =
+    length := (offsetof directory_record.name + lenof name + 1 + 7) / 8 * 8
+    buffer[at + offsetof directory_record.length] = u8(length & 0xff)
+    buffer[at + offsetof directory_record.length + 1] = u8(length >> 8)
+    for index in 0..<lenof name do
+        buffer[at + offsetof directory_record.name + index] = name[index]
+    end for
+    next = at + length
+end write_record
+
+--- The name of the record at `at`: the bytes from its offset to the NUL.
+name_at: (buffer: []u8, at: usize) -> (name: []u8 from buffer) =
+    length := usize(buffer[at + offsetof directory_record.length])
+      | usize(buffer[at + offsetof directory_record.length + 1]) << 8
+    rest := buffer[at + offsetof directory_record.name..<at + length]
+    mut end_at: usize = 0
+    while rest[end_at] <> 0 do
+        inc end_at
+    end while
+    name = rest[0..<end_at]
+end name_at
+
+public main: () -> (code: i32) =
+    mut buffer: [128]u8 = zeroed
+    second := write_record(buffer, 0, "first")
+    third := write_record(buffer, second, "second.txt")
+    code = 1
+    return when second <> 32 or third <> 32 + 32
+    first_name := name_at(buffer, 0)
+    second_name := name_at(buffer, second)
+    code = 2
+    return when lenof first_name <> 5 or first_name[0] <> 102
+    code = 3
+    return when lenof second_name <> 10 or second_name[9] <> 116
+    code = 42
+end main

@@ -165,10 +165,23 @@ class GeneratedReference(unittest.TestCase):
         self.assertIn('href="library.html"', (self.destination / 'readme.html').read_text())
         self.assertIn('library-index.json', (self.destination / 'llms.txt').read_text())
 
+    def test_front_page_reaches_installation(self):
+        # The front page once linked no installation steps.
+        anchor = render_html.INSTALL_ANCHOR
+        self.assertIn(f'href="readme.html#{anchor}"',
+                      (self.destination / 'index.html').read_text())
+        readme = (self.destination / 'readme.html').read_text()
+        self.assertIn(f'id="{anchor}"', readme)
+        section = readme[readme.index(f'id="{anchor}"'):]
+        section = section[:section.index('id="your-first-program"')]
+        for said in ('no top-level directory', 'lib/landin',
+                     'refine version', 'library: '):
+            self.assertIn(said, section)
+
     def test_missing_item_prose_is_detected_despite_search_and_source_copies(self):
         target = self.destination / 'library-core-vec.html'
         original = target.read_text()
-        # The search JSON also holds the summary: remove only the visible text.
+        # The search index also holds the summary: remove only the visible text.
         start = original.index('<section class="api-item" id="item-new">')
         changed = original[:start] + original[start:].replace('Create an empty list without allocating.', 'Omitted.', 1)
         self.assertNotEqual(original, changed)
@@ -206,12 +219,40 @@ class GeneratedReference(unittest.TestCase):
 
     def test_search_is_local_and_handles_no_script_readers(self):
         text = (self.destination / 'library-core-io.html').read_text()
-        self.assertIn('type="application/json" id="api-search-data"', text)
+        self.assertIn(f'data-index="{library.SEARCH_SCRIPT}"', text)
         self.assertIn('<noscript>', text)
         self.assertIn('aria-controls="api-results"', text)
         self.assertNotIn('fetch(', library.SEARCH)
+        self.assertIn("createElement('script')", library.SEARCH)
         self.assertIn('textContent=item.name', library.SEARCH)
+        script = (self.destination / library.SEARCH_SCRIPT).read_text()
+        prefix = 'window.landinLibraryIndex='
+        self.assertTrue(script.startswith(prefix))
+        index = json.loads(script[len(prefix):].rstrip().removesuffix(';'))
+        self.assertEqual(index, json.loads(
+            (self.destination / 'library-index.json').read_text()))
 
+    def test_pages_carry_their_content_and_not_the_index(self):
+        """A page once carried a 400 KB copy of the whole search index.
+
+        The index is one script beside the pages, loaded on first search.
+        What a page carries beyond its own items and listing is the shell,
+        bounded here; a module's size is then its declarations'.
+        """
+        index = (self.destination / library.SEARCH_SCRIPT).read_text()
+        probe = index[len('window.landinLibraryIndex='):][:200]
+        for name in self.pages:
+            text = (self.destination / name).read_text()
+            with self.subTest(page=name):
+                self.assertNotIn(probe, text)
+                self.assertNotIn('api-search-data', text)
+                content = sum(len(m) for m in re.findall(
+                    r'<section class="api-item".*?</section>'
+                    r'|<pre class="api-signature">.*?</pre>'
+                    r'|<details id="example">.*?</details>', text, re.S))
+                self.assertLess(len(text) - content, 96 * 1024)
+        self.assertLess(max((self.destination / n).stat().st_size
+                            for n in self.pages), 1024 * 1024)
 
 if __name__ == '__main__':
     unittest.main()

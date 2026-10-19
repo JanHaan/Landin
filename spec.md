@@ -51,7 +51,7 @@ produces nothing of its own. Every other rule reads the tokens that remain,
 and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
-enclosing production recognises. Thus 'of', 'lenof', 'variant', 'caller', 'range', 'arena', 'concept',
+enclosing production recognises. Thus 'of', 'lenof', 'offsetof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
 'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
 'align', 'section', 'keep', 'vector', 'interrupt', 'naked', 'noreturn',
@@ -411,7 +411,7 @@ packed_unsigned  ::= "u1" | "u2" | "u3" | "u4" | "u5" | "u6" | "u7" | "u8"
                    | "u41" | "u42" | "u43" | "u44" | "u45" | "u46" | "u47" | "u48"
                    | "u49" | "u50" | "u51" | "u52" | "u53" | "u54" | "u55" | "u56"
                    | "u57" | "u58" | "u59" | "u60" | "u61" | "u62" | "u63" | "u64"
-struct_body      ::= ("layout" "(" ("c" | "optimal"
+struct_body      ::= ("layout" "(" ("c" ("," "packed")? | "optimal"
                      | "packed" ("," ("u8" | "u16" | "u32" | "u64"))?) ")")?
                      ("struct" member+ "end" identifier?
                      | "(" field ("," field)* ")")
@@ -718,9 +718,11 @@ if          ::= "if" condition "then" block
                 ("else" block)?
                 "end" "if"
 match       ::= "match" expression match_arm+ "end" "match"
-match_arm   ::= (declaration_reference | "ptr" | "_")
+match_arm   ::= (match_label | "_")
                 ("(" match_binding ("," match_binding)* ")")?
                 ":" (statement | expression)
+              | match_label ("," match_label)+ ":" (statement | expression)
+match_label ::= declaration_reference | "ptr"
 match_binding ::= "inout"? identifier
 unchecked   ::= "unchecked" "begin" block "end" "unchecked"
 bare_block  ::= "begin" block "end"
@@ -811,7 +813,10 @@ is not evaluated, as D31's literal is not, and an index inside that path is
 not evaluated either; a slice is evaluated once and its length read; a call
 is evaluated whatever its result's shape, because what it does is not known
 from its type. The word stays contextual: `lenof(x)` calls a routine named
-`lenof`, and `lenof[i]` indexes a binding of that name.
+`lenof`, and `lenof[i]` indexes a binding of that name. `offsetof t.field`
+measures where a field of the struct type `t` begins, through nested
+structs, as a `usize` (D411); it too is contextual, and only a name followed
+by a dotted name makes it a measurement.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 
@@ -852,6 +857,7 @@ empty_slice ::= "[" "]"
 measurement ::= ("sizeof" | "alignof") type
               | "lenof" (call | labeled_application | indexed)
               | "lenof" "(" array_literal ")"
+              | "offsetof" qualified_reference
 arguments   ::= expression ("," expression)* ("," assembly_operand)*
 assembly_operand ::= ("in" | "inout") identifier ":" type
                      "at" identifier "=" expression
@@ -1796,6 +1802,34 @@ other or with one definition; incompatible signatures and
 multiple definitions are refused. C imports and public C definitions default to
 their declared spelling. A private C definition without an override uses
 collision-safe internal naming.
+
+`public` is not an export (D415). The global symbols of a program, the names
+the linker resolves against the C library and every other object, are its
+hosted or firmware entry; its C imports and public C definitions under their
+declared spelling; every routine and module datum with a link name, public or
+not, which is how data is exported deliberately (D416); every public
+definition in a machine convention, platform/linux's `_landin_start` among
+them; and every Cortex-M routine or datum with [1640]'s section, alignment,
+vector or `keep`. Every other routine and datum, public or private, is a
+symbol local to the image under its own name: no C library or linked object
+can collide with it or be replaced by it, and a debugger, a backtrace and the
+symbol table name it as the source does. A C import's spelling is never
+checked against the selected C library's: nothing but an export can meet it.
+
+Within one program two items can still want one spelling: two modules'
+routines named `reset`, or a routine beside a C import of its own name, since
+an assembly reference to that name would reach the local definition. Each
+such item that is not an export takes its qualified spelling (D417): its
+module's logical path with every `/` replaced by `.`, or `main` for the
+entry module, then `.` and its name, so `core/arena`'s `reset` is
+`core.arena.reset` and an entry-module `read` beside C's is `main.read`. An
+export keeps its spelling and never yields. An identifier cannot hold `.`,
+so only an explicit link name can hold a qualified spelling as well; then,
+and for every instance of one generic routine after the first, the item takes
+the first of the qualified spelling followed by `.1`, `.2` and so on that no
+other item holds, in item order. The qualified spelling is a function of the
+declaration alone. Whether an item needs it depends on what else the
+program holds, and an instance's number on which instances it holds.
 A C function type is `extern(c) (parameters) -> returns`.
 Convention and variadic status are part of recursive function identity wherever
 a function is carried, including nested fields, parameters, results, generic
@@ -1856,7 +1890,10 @@ Landin signature identity. A distinct identity does not make an excluded
 base admissible. Such structs contain those leaves, nested C structs and
 nonempty fixed arrays of
 compatible fields, with the selected C field offsets, alignment and trailing
-padding. Ordinary Landin structs, variants, slices, text and `any` do not
+padding. A `layout(c, packed)` record (D410) and a record whose last field is
+a `[0]T` flexible array member (D413) are C records too, but a C signature
+takes or returns either, or a record holding one, only through a pointer
+(D414). Ordinary Landin structs, variants, slices, text and `any` do not
 become C records by having a similar byte count. Arrays are fields or pointees,
 not by-value C array parameters or results. Pointer permission, `escaping`
 and written `from` contracts remain Landin checks; a header alone establishes
@@ -2664,6 +2701,36 @@ trailing remark documentation.
 
 **Pinned by** `server/doc comments are the run above` and the `hover`
 session under `compiler/tests/server/`.
+
+### D381 — A refusal that reached a hiding local names the local and what it hides
+
+**The discrepancy:** [0140] lets an inner scope shadow an outer name, and
+[1450] lets a parameter or local shadow an import. Neither said what a
+refusal says when the shadowing is the mistake. A result named `time` hid
+`import core/time`, and `time.duration` in a type position was refused as
+"`duration` is not declared in any scope this reaches"; a parameter named
+`allocator` hid the concept of that name, and `any allocator` was refused as
+"`allocator` does not name a concept". Both pointed at what was looked for
+and neither at why it was not found.
+
+**Chosen:** when a use is refused because its name, or a qualified name's
+prefix, reached a parameter, result or local, and that declaration hides an
+import, a concept or another module declaration of the same name, the
+refusal says so: "`time` here is the result `time`, which hides
+`import core/time`, so `time.duration` names no type", with the hiding
+declaration labelled "this hides `import core/time`". L0201 in a type path,
+L0301 in a member selection and L0341 in a concept position each do this,
+and a concept reference that names no concept is one report however many
+positions read it. Which programs are accepted does not change; L0201 may now
+carry one secondary label, the hiding local, where it carried none.
+
+**The alternatives:** refusing the shadowing itself, which [0140] and [1450]
+admit and the library relies on; a warning on every local that hides an
+import, which fires on programs nobody misread; and naming only the import
+in a note, which leaves the reader to find which local hid it.
+
+**Pinned by** `negative/local-hides-an-import` and
+`negative/parameter-hides-a-concept`.
 
 ## DECISIONS: NUMBERS AND LITERALS
 
@@ -5793,8 +5860,9 @@ refused. When source legality otherwise admits the bound, the folded answer is
 D17's canonical element count and D18 checks its target byte extent exactly as
 it does for a literal bound. A final answer of zero is accepted: `[0]T` and any
 admitted fixed expression that folds to zero denote D17's canonical
-zero-element shape. Its size is zero, its alignment is one, and the ordinary
-rules for its context still apply; in
+zero-element shape. Its size is zero, its alignment is one (D413 gives a C
+record's last `[0]T` its element's alignment, as C's flexible array member
+has), and the ordinary rules for its context still apply; in
 particular this does not add empty literal syntax or make repetition valid in a
 context whose length is zero.
 
@@ -7016,10 +7084,101 @@ a hint nothing honours is text, and an obligation belongs to D211's optimizer
 contract rather than to source. `weak` for C interoperation was declined
 because the C boundary's link names are exact and no binding needed a weak
 one. Keeping the words described but refused by name was declined because
-they are not pending anything.
+they are not pending anything. D410 later admits C's byte-packed record with
+the addressability limits this decision named: its fields have no address of
+their own.
 
 **Pinned by** `negative/r720-field-byte-order-withdrawn` and
 `negative/r720-machine-attribute-words-withdrawn`.
+
+### D410 — A byte-packed C record has fields with no address of their own
+
+**The tour said** at [0750] that a struct keeps its fields in written order
+with natural alignment and that `layout(c)` follows the target's C rules,
+and at [0730] that `layout(packed)` is a register image of bits at stated
+positions. C's `__attribute__((packed))`, a record laid out to the byte with
+no padding, had no form: `layout(c, packed)` met the misleading L0101 "a
+packed image carrier is u8, u16, u32 or u64", and a program read such data as
+bytes and assembled each field with shifts. D239 withdrew per-field byte
+order because every access became a conversion and `addr` of the field read
+wrongly; a misaligned field has the same two problems.
+
+**Chosen:** `layout(c, packed)` is a C record laid out as C's packed
+attribute lays one out: its fields in written order, each at alignment one,
+with no padding, so its size is the sum of its fields' sizes and its
+alignment is one. Its placement asks no C ABI for an alignment, so it stands
+on every target, Cortex-M0 included, where `layout(c)` does not. D228's rule
+for a packed image's fields carries over, which answers D239's objection: a
+field, at any depth, has no address of its own. `addr`, an `inout` argument
+and a slice of anything inside the record are L0336, and the whole record is
+what a pointer reaches. Fields are read and written by copy. Everything the
+record holds by value besides a scalar or pointer is itself of alignment one
+— an array of `u8`, `i8`, `bool` or packed records, or a nested
+`layout(c, packed)` record — because a whole array or record is copied and
+passed as a value, and only a scalar is assembled where it lies; anything
+else is L0346 at the field. Another C record or an ordinary struct may hold
+a packed record as a field.
+
+A scalar inside a packed record may sit at any address. On x86-64 and arm64,
+Linux, Darwin and FreeBSD alike, an ordinary load or store does not need
+alignment and the backends emit one. RV64 and Cortex-M0 move such a scalar
+one byte at a time, least significant first: ARMv6-M faults on every
+unaligned halfword or word access, and a misaligned RISC-V access may trap
+or be emulated by the kernel. Lowering marks an address slot that reaches
+such a scalar, so an access through a computed element address is moved the
+same way. `layout(c, optimal)` and any second word but `packed` after `c` are
+L0103.
+
+**The alternatives:** a per-field `align(1)` would match C's per-member
+attribute, but [0760] keeps alignment a `link` label rather than a word of
+its own, and it adds field grammar and per-field address rules for no program
+that has asked. Keeping the boundary and naming the bytes-and-shifts route in
+a better refusal was declined: firmware's USB descriptors and wire headers
+are the records this form exists for, and the conversion cost falls only
+where C pays it too, on targets that require alignment. Admitting a field's
+address as an ordinary pointer was declined for D239's reason: a `ptr u32`
+promises an alignment the field does not have.
+
+**Pinned by** `positive/c-packed-records`,
+`runtime/c-packed-record-fields`, which runs on the hosted lanes and on
+Cortex-M0, `abi/c-packed-records` against an independently compiled C peer,
+`negative/c-packed-field-address`, `negative/c-packed-aligned-part` and
+`negative/c-layout-second-word`.
+
+### D413 — A C record's last zero-length array is its flexible array member
+
+**The tour said** at [0750] that `layout(c)` follows the target's C rules,
+and D136 gave `[0]T` size zero and alignment one. C's flexible array member,
+a record ending in an array of unstated length whose elements follow it in
+memory, as `struct linux_dirent64`'s name does, had no form: L0346 refused a
+`[0]u8` in a `layout(c)` struct and labelled the `struct` word, while the
+same field in an ordinary struct was admitted, and a program hand-computed
+the name's offset as 19.
+
+**Chosen:** the last field of a `layout(c)` or `layout(c, packed)` record may
+be `[0]T` of a C element, and it is the record's flexible array member. As C
+gives the member its element's alignment, it takes `T`'s alignment there, so
+the record's offset of it and its padded size are C's: `struct
+linux_dirent64` measures 24 with its name at 19. D136's zero-element shape
+keeps alignment one everywhere else. As in C, at least one field precedes
+it. The record's trailing elements are not storage the record owns: a
+program reaches them as a slice of the buffer the record was written into,
+at `offsetof record.member` (D411), which keeps that buffer's origin. Because
+those elements would overlap whatever follows the record, a record that ends
+in one is refused as an array element (L0304) and as a field of a C record
+(L0346), and a C signature takes it only by pointer (D414). A zero-length
+array before the last field is L0346 at that field.
+
+**The alternatives:** a slice field cannot cross to C and a fixed array
+states a length the record does not have. A `[]T` "trailing bytes" field
+type would be a second array form for one position. Leaving D136's alignment
+of one would put the member before C's padding and give a different size
+from C's, which is exactly the disagreement this form exists to remove.
+
+**Pinned by** `positive/c-packed-records`,
+`runtime/flexible-member-trailing-bytes`, `abi/c-packed-records`,
+`negative/flexible-member-placement`, `negative/r440-c-layout-zero-array`
+and `negative/parameterized-c-layout-repeated-invalid`.
 
 ## DECISIONS: STRUCTS, VARIANTS AND NESTING
 
@@ -7126,6 +7285,42 @@ answer came from their own target description. It was declined.
 `negative/measuring-refused-types`;
 `negative/struct-measurement-fold-overflow`; the recorded IR dump; and
 `runtime/measurements-answer-for-the-target` on Linux x86-64.
+
+### D411 — `offsetof t.field` measures where a field begins
+
+**The tour said** at [0370] that `sizeof`, `alignof` and `lenof` measure,
+and nothing measured an offset. A program measured one at run time as the
+difference of two addresses, `usize(addr record.kind) + sizeof u8 -
+usize(addr record)`, or worse computed it by hand, and a C programmer's
+`offsetof` had no Landin form.
+
+**Chosen:** `offsetof t.field` is a `usize`, the byte offset at which
+`field` of the struct type `t` begins in the selected target's layout. The
+selection may continue through nested struct fields, `offsetof
+frame.head.id`, and `t` may be named through its module. The word is
+contextual like `lenof`: only a name followed by a dotted name makes the
+measurement, so `offsetof(x)` still calls a routine of that name. The checker
+finds the prefix resolution bound to a type and holds every selection after
+it to a field; a missing field is L0308, and a scalar type, a path through an
+array element or a variant case, a variant part itself and a
+`layout(packed)` image's bit field, which has no byte offset, are L0304. A
+`layout(c, packed)` record's field has an offset like any other. Like D44's
+measurements the IR carries the question, not the answer: a
+`Measure_Offset` carries the record's field run, its layout policy and the
+path's source positions, and the backend answers it from the target's
+placement. The checker's module fold reads the same placement, so the
+measurement may stand in a module value and, by D412, in an assertion.
+
+**The alternatives:** a builtin `compiler.offset(t, field)` mirrors
+`compiler.assert`, but the `compiler` namespace holds configuration facts and
+directives, not runtime expressions. An offset query without nested paths
+would leave `dirent`'s name offset hand-derived from the field before it.
+Carrying the checker's offset as a constant in the IR was declined for D44's
+reason.
+
+**Pinned by** `positive/c-packed-records`,
+`runtime/c-packed-record-fields`, `runtime/flexible-member-trailing-bytes`,
+`abi/c-packed-records` and `negative/offsetof-refusals`.
 
 ### D45 — A named ordinary struct may hold a fixed scalar array for measurement
 
@@ -9398,7 +9593,7 @@ source order of arms is otherwise free. A duplicate is L0311, a missing case
 is L0312, and a case from another part is D76's L0334 identity mismatch. This
 first boundary gives each arm exactly one statement, with an `if` usable as
 that statement when a nested run is needed. D78 adds [1220]'s parenthesized
-payload bindings. Wildcards, scalar or nested subjects and general variant
+payload bindings, and D405 lets one arm name several cases. Wildcards, scalar or nested subjects and general variant
 values remain refused. D241 later makes a scalar subject a type error citing
 [1210]: an arm names an identity, and a number is compared with `if`.
 
@@ -10807,6 +11002,39 @@ a note that promises nobody's work.
 `negative/r720-refused-field-adds-no-cascade`,
 `negative/r491-inferred-repetition-refusals` and
 `negative/array-repetition-countless-inferred-initializer-not-enabled`.
+
+### D405 — One match arm names several cases, and none of them binds
+
+**The tour said** at [1210] "No fallthrough; list several labels instead",
+and [1220] writes `north, south: name = "along"`. D77 began with one case per
+arm, and the grammar's `match_arm` took one, so the tour's own example was
+refused with L0103, "a match arm puts `:` after its case".
+
+**Chosen:** `match_arm ::= match_label ("," match_label)+ ":" ...` beside the
+one-case arm: an arm may name several cases of an atom set, a variant part or
+a pointer union, separated by commas, and what it runs is shared. Every label
+counts toward exhaustiveness, and a label named twice, in one arm or across
+two, is L0311 whatever the subject; an atom set's duplicate, L0333 until
+now, joins the variant part's and the pointer union's. An arm that binds a
+payload names one case: bindings after several labels are L0103, "an arm that
+binds a payload names one case", whose note says to give that case an arm of
+its own. `_` covers every case no other arm names, so it is never one of
+several labels, L0100. Lowering compares the subject with each label in source
+order and branches to the one block the arm owns, so the body is lowered once;
+an arm reads no pointer only when none of its labels is the pointer case.
+
+**The alternatives:** labels that share bindings, `a(x), b(x): use(x)`, when
+every label binds the same names with the same types and conventions, which
+needs one alias per label under [1220]'s aliasing rules and has no program
+asking for it; and correcting the tour instead, which drops a feature it
+states in words to fit the parser. The labels on `if` and `match` that
+[1180] dropped were statement labels, not case labels, and are not revived.
+
+**Pinned by** `positive/match-arm-names-several-cases`, which is [1220]'s
+example as written, `runtime/match-arm-names-several-cases`,
+`negative/match-label-named-twice`,
+`negative/match-arm-binding-names-several-cases` and
+`negative/match-wildcard-among-labels`.
 
 ## DECISIONS: LIFETIME, ESCAPE AND ALLOCATION
 
@@ -12612,7 +12840,8 @@ D261 refuses in `else (_)`; the empty bound block,
 on its `end`; a statement prefix such as
 `ignore f()`, a keyword for one position the recovery already owns; and
 admitting `else none` on a value call by zeroing the result, which hides a
-missing value behind a plausible one.
+missing value behind a plausible one. D406 later admits it where the call is
+the whole operand of a discard, which leaves nothing unset that is read.
 
 **Pinned by** `positive/else-none-ignores-a-failure`,
 `runtime/else-none-ignores-a-failure`,
@@ -12641,6 +12870,65 @@ closes the declaration anywhere later, which would let a missing `end` turn a
 function into a binding.
 
 **Pinned by** `runtime/function-typed-module-binding-names-a-function`.
+
+### D382 — An atom outside the error set is named with the `fail` or call that raises it
+
+**The discrepancy:** [0940] puts every failing path in the function's `!`
+set, and L0329 refused a body that broke it with "this body can fail with an
+atom outside its declared error set", pointing twice at the signature. It
+named neither the atom nor the place it came from, so a `fail problem` whose
+binding still held its call's whole error set read as a refusal of the
+signature alone.
+
+**Chosen:** the refusal names the first atom outside the set,
+"this body can fail with `denied`, which is outside its declared error set",
+stays on the signature, where the atom would be added, and labels where the
+atom first entered the body: "this `fail` raises `denied`" for a `fail`,
+its value an atom or a recovered error binding; "this call can fail with
+`denied`" for a `try`; and "this traversal's providers can fail with
+`denied`" for a `try for`. The note says to add the atom or recover the
+failure where it is raised. Which programs are accepted does not change.
+
+**The alternatives:** one report for every atom outside the set, which
+repeats one mistake as often as a callee's set is wide; pointing the primary
+label at the `fail`, which hides the signature a reader may mean to widen;
+and naming every path the atom reaches the body through, which the first
+already shows how to find.
+
+**Pinned by** `negative/error-outside-set-names-its-raise`,
+`negative/fail-outside-declared-set` and
+`negative/for-fallible-undeclared-error`.
+
+### D406 — A discard ignores a value call's failure with `else none`
+
+**The tour said** at [1030] that an `else` discards a call's failure, and at
+[1930] that `_ =` discards a result. D376 admitted `else none` only on a call
+that returns none, because on a value call it would leave the result unset,
+and `negative/else-none-on-a-call-that-returns-a-value` pinned that refusal on
+`_ = count(false) else none` too. Ignoring both the failure and the result of
+a value call took the bound block, `_ = f() else (problem) end`, which names
+an error nobody reads, and a pointer result has no zero for `else 0`.
+
+**Chosen:** `else none` is admitted on a call that returns a value when the
+call is the whole operand of a discard, `_ = f() else none`. D376's reason
+does not reach it: the discard declares the result unread, so nothing is left
+unset that anything reads. It means the empty bound block: the call's effects
+up to its failure stay, and the next statement runs. A value call used any
+other way, bound, assigned, an argument or an operand, an argument inside a
+discard included, is still L0331, whose note now names both working forms:
+`_ = f() else none` to ignore the failure and the result, and
+`else (problem) ... end` to handle the error. This reverses one line of D376's
+pinned negative deliberately; the fixture now refuses the call as an argument
+inside the discard instead.
+
+**The alternatives:** only naming the bound block in L0331's note, which
+keeps an error name nobody reads; a new word, `else discard` or `ignore f()`,
+which D376 already declined for a position the recovery owns; and admitting
+`else none` on every value call by zeroing the result, which D376 refused for
+hiding a missing value behind a plausible one.
+
+**Pinned by** `runtime/discard-else-none-ignores-a-value-call-failure` and
+`negative/else-none-on-a-call-that-returns-a-value`.
 
 ## DECISIONS: CONTROL FLOW
 
@@ -14664,10 +14952,10 @@ conformance built it, and an instance's hidden table is any of its
 concept's. Code that can run starts from the roots: a routine with a
 reference no call makes (a function value, an image, an export, an import,
 a link name, a placement, a non-ordinary convention or the C ABI), one
-without parameters, as a firmware entry is, the panic handler the backend
-calls, and every routine of a program with an `assembler.block`, whose
-text may name anything. A routine a routine that can run calls can run,
-and an entry's target can run once that entry is kept; a routine that only
+without parameters, as a firmware entry is, and the panic handler the
+backend calls. A routine a routine that can run calls, takes the address
+of, or names in an `assembler.block`'s text can run, and an entry's target
+can run once that entry is kept; a routine that only
 routines that cannot run call cannot run either, so what it projects keeps
 nothing. An entry left out is a zero word in its place, so a table's size,
 its order and every offset D144 and D147 give stay as they were, and the
@@ -14675,6 +14963,23 @@ two identities of one physical table keep the same entries. The routine a
 zero word replaced is linked only if something else reaches it, and D303's
 L0500 count follows the kept entries. Calling through a left-out entry
 cannot happen, since nothing reads it.
+
+**Amended for assembly:** this decision first made every routine of a
+program with an `assembler.block` able to run, since its text may name
+anything. Every hosted Linux image holds blocks, the process entry's and
+the system call's, so a hosted image left out only the entries nothing at
+all projects, and no hosted fixture could pin the rest. A block names a
+routine exactly as D296 roots one: when the routine's name or link name,
+or either with a `_` before it, is a run of symbol characters in the
+text. Only a block in a routine that can run reaches what it names, as only
+such a routine's call does. Its operands are integer scalars (D248), so a
+routine's address reaches a block only through a function value, which
+already reaches the routine where it is taken. A spelling the backend
+invents for a routine whose name another item already holds is not a name
+the text can rely on, and names nothing here. The alternatives were keeping
+every routine live under a block, which left hosted pruning to the entries
+nothing projects, and rewriting the process entry alone, which leaves the
+system call's block, and any program's own, to keep everything.
 
 **The alternatives:** pruning on Cortex-M alone, which would link
 different routines for the same program on different targets and
@@ -14694,9 +14999,13 @@ image at every profile when every entry is kept,
 `runtime/region-bounded-pool`, whose region's in-place growth, called only
 from an entry nothing projects, would keep every allocator's `grow` and
 overflow the Cortex-M0 image at none/off were each routine a call reaches
-a root, and `runtime/evidence-projected-entries-kept`, whose projections
+a root, `runtime/evidence-projected-entries-kept`, whose projections
 read an entry from the other type's table and a parent's entry from a
-child's erased table on every target.
+child's erased table on every target, and
+`runtime/hosted-assembly-reaches-no-evidence-entry`, whose only projection
+of an entry naming a C import is in a routine only an unprojected entry
+names, so that a static Linux link refused it, at every profile, while a
+block kept every routine live.
 
 ## DECISIONS: MODULES AND COMPILE TIME
 
@@ -14803,7 +15112,8 @@ visibility. A namespace itself is no runtime or type value. `public` on a
 conformance is refused; every unmarked conformance in the reached graph still
 enters the single D142 register.
 
-The request supplies one entry directory and ordered roots. A module contains
+The request supplies one entry directory, or the entry module's source files
+(D383), and ordered roots. A module contains
 the bytewise-sorted direct regular `.ldn` children; other entries are ignored
 and an empty module is legal. Each import segment must match a listed directory
 entry exactly. Roots are tested in request order and the first complete
@@ -14961,7 +15271,9 @@ It retains D139's mathematical integer arithmetic, typed equality and bool
 operations, structural validation of both short-circuit operands, and absence
 of user calls. Both operands are type-checked even when evaluation will skip
 one; dead arithmetic is not evaluated. Nominal or aggregate measurements and runtime/module-name
-lookup are outside this fold and receive a precise refusal. A module-only
+lookup are outside this fold and receive a precise refusal; D412 later
+admits a declared type's measurement in `compiler.assert`, folded after
+checking. A module-only
 `compiler.assert(expression)` requires bool and diagnoses false at its source.
 All active assertions use that same fold; inactive assertions have no effect.
 
@@ -15018,6 +15330,41 @@ from the driver. All were declined.
 target-fact, ordered-library and pre-root builtin-import cases, plus
 `negative/option-outside-configuration`, `negative/tool-namespace-bindings`
 and `negative/function-tool-refusals` for the ordinary-resolution boundary.
+
+### D412 — A compiler assertion measures a declared type's layout
+
+**The tour said** at [1510] that `compiler.assert` checks a fixed condition
+before the program runs, and D202 closed that fold over the scalar types'
+measurements: `compiler.assert(sizeof record == 24)` was L0305, "D202: fixed
+measurements need a scalar name, not a declared type", with a note that no
+user routine runs, which was beside the point. A C programmer's
+`_Static_assert` on a record's size or a field's offset became a check at run
+time.
+
+**Chosen:** `sizeof` and `alignof` of any type and D411's `offsetof` stand in
+a `compiler.assert`. Configuration still validates such an assertion when it
+selects arms, but folds it only after checking has laid out the declared
+types it measures: resolution resolves the measured types and paths, the
+checker checks them as it checks any measurement, and the same closed fold
+then reads their sizes, alignments and offsets from the checked target
+layout beside the options and compiler facts it always read. This is
+measurement, not compile-time execution: no user routine runs, and the
+checker already computes target-aware layout (D44). A fixed condition and an
+option default still measure scalar types only, because a declared type's
+layout depends on the arms they select; a declared type there is L0305 with
+a note that says so.
+
+**The alternatives:** admitting layout measurements in fixed conditions
+would make the arms that declare a type depend on its own size. Folding every
+assertion after checking would delay the scalar and fact assertions that
+today fail before a program is resolved. A separate assertion form for
+layouts would split one directive in two for a reason the reader does not
+see.
+
+**Pinned by** `positive/c-packed-records`,
+`runtime/flexible-member-trailing-bytes`,
+`negative/layout-assertion-false`, `negative/r430-assertion-nominal` and the
+driver's `invalid options are refused`.
 
 ### D242 — A refused import answers for its name
 
@@ -15528,8 +15875,8 @@ simplification, selection and allocation. `--specialize=off|auto|all` defaults
 to auto. `--build-mode=debug|release` selects source configuration, not these
 axes. The explicit reference profile is none/off; none/all is meaningful.
 Malformed or repeated controls are misuse. Optimization controls require a
-source compilation and cannot accompany help/identity; a build report also
-requires emission. Checking without emission still checks the same language.
+source compilation and cannot accompany help/identity; a build report without
+emission holds only what was checked (D383). Checking without emission still checks the same language.
 
 `--build-report=PATH` requests deterministic typed JSON separate from source
 diagnostics, written only after successful emission/tool completion through
@@ -17181,6 +17528,227 @@ which a reader at the report has not yet run.
 **Pinned by** `check.py`'s note check and its control in
 `scripts/tests/test_check_controls.py`, and every recorded negative report the change
 rewrote.
+
+### D383 — `refine check` takes what `compile` takes about the program
+
+**The discrepancy:** `check` and `compile` read one program, and only
+`compile` took `--firmware-entry`, `--link` and `--build-report`; a Cortex-M
+probe could not be checked with the entry it is compiled with, and a
+program's source closure was learnt only by emitting assembly. With `--root`
+the operand had to be the entry module's directory, so a single file that
+imports from a root was L0007 under both commands.
+
+**Chosen:** `check` takes every option that says which program is compiled
+and how: `--target`, `--level`, `--root`, `--library`, `--option`,
+`--build-mode`, `--optimize`, `--specialize`, `--link`, `--firmware-entry`
+and `--build-report`, and none that says what is written, `--emit`, `-o`,
+`--debug`, `--panic-map`, `--keep-asm`, `--depfile`, `--toolchain`,
+`--linker` and `--dry-run`. Under `check`, `--link` selects the C runtime the
+program is configured with (`compiler.c_runtime`) and is refused for a target
+it would be refused for under `compile`; `--firmware-entry` requires
+Cortex-M and is refused, as L0502, when it names no entry routine; and
+`--build-report` writes the report of what was checked, its target, level,
+controls, link, sources and items, with the specialization, routine and
+layout evidence only emission produces left empty. A report that would
+overwrite a source is refused. With `--root`, the operand is the entry
+module's directory or the entry module's own source files: named files are
+one module, as without a root, and their imports are found under the
+library and then the roots in order, as a rooted directory's are. A path
+that is neither a directory nor a source file is still L0007.
+
+**The alternatives:** a separate `--sources` query for the source closure,
+a second command for what a check already knows; refusing `--link` under
+`check` because nothing is linked, which makes a build script spell its
+check and its compile differently; and reading a rooted file's whole
+directory as its module, which turns a file the reader named into one they
+did not.
+
+**Pinned by** `commands/check takes what compile takes`,
+`driver/invalid entry modules are diagnosed`,
+`negative/rooted-source-file-reaches-its-roots` and
+`negative/module-directory-invalid`.
+
+### D384 — A command-line refusal says where things go
+
+**The discrepancy:** `refine --root=X compile` was refused as "command-specific
+options must follow the command", naming neither the option nor its
+command; `refine -o x.s main.ldn` as "-o requires its own command", not
+saying which. Under `--root .`, `import lexer/lexer` was L0006 with the note
+"roots are searched in supplied order", which named neither the directories
+tried nor that an import path names one. L0500 named the Debian and Fedora
+packages and nothing for Nix, and nothing said that most of `refine` needs
+no C driver at all.
+
+**Chosen:** an option written before its command is refused with the option
+as it was written, the commands it belongs to and where it goes: "--root=X
+is an option of check and compile, and follows its command: refine compile
+--root=X ...", and ", not of check" when the command named does not take
+it. With no command, an option the implied `check` does not take is refused
+as "-o x.s is an option of compile; name the command first: refine compile
+-o x.s ...". `--library`'s note in L0006 says it follows the command. A rooted
+L0006 names every directory looked for, in root order. L0500's note names
+`nix-shell -p gcc` beside `apt` and `dnf` for the compiler's own Linux host,
+and says, for every target, that `refine check`, `fmt` and `lsp`, and
+`compile --emit=asm` or `--emit=ir`, need no C driver.
+
+**The alternatives:** accepting command-specific options before the
+command, which makes `refine --emit=asm check` ambiguous about which command
+was meant; and listing every root's whole search in a second note, which the
+one sentence already holds.
+
+**Pinned by** `commands/options before their command`,
+`driver/linux names every distribution's driver` and
+`negative/module-not-found`.
+
+### D385 — `refine fmt` takes a directory and marks where a line differs
+
+**The discrepancy:** `refine fmt --check core` was refused as "fmt formats
+files, not directories", so checking a tree meant listing its files by
+hand; and D359's note quoted the wanted line whole, so one leading space too
+many was hard to see.
+
+**Chosen:** a directory operand of `refine fmt`, `--check` or `--stdout` is
+the `.ldn` files under it, depth first in the order the host lists names,
+which is sorted. A name beginning with a dot is not entered, as a
+checkout's `.git` is not; a directory reached twice through a link is
+listed once; a source a directory reaches and an operand also names is
+formatted once, while one operand given twice is still refused. A directory
+holding no source is refused as L0002. `--stdout` still prints one source,
+so a directory holding more than one is refused with it. An L0008 for a
+respaced line marks the bytes that differ, from the first the layout changes
+to the last, or the byte an insertion goes before, and its note says from
+which column; a blank line removed or a line end changed is still marked
+whole.
+
+**The alternatives:** a `--recursive` flag, which makes the common case the
+longer spelling; formatting every file under a directory whatever its name,
+which rewrites what is not Landin; entering dot-named directories, which
+reaches a checkout's `.git`; and a unified diff in the note, which D359
+already declined.
+
+**Pinned by** `driver/fmt is a subcommand` and
+`scripts/tests/test_cli_native.py`'s `fmt` cases, which take a directory
+and read the column a line differs from.
+
+### D414 — A packed record or one with a flexible member crosses C by pointer
+
+**The tour said** at [1580] that `layout(c)` structs cross the C boundary by
+value, and the C classifiers place each by its fields' aligned offsets.
+Neither D410's byte-packed record nor D413's record with a flexible array
+member has a by-value transport the classifiers model: SysV sends a record
+with an unaligned field in MEMORY, AAPCS64 differs, and a flexible member's
+elements are not part of the value at all.
+
+**Chosen:** a C signature takes or returns such a record, or a record that
+holds one by value, only through a pointer. By value it is L0346, "this
+signature takes by value a C record that C reaches only through a pointer",
+whose note names `ptr` to the record. A pointer to either is an ordinary C
+pointer, and C reads and writes the record through it with the layout D410
+and D413 give it.
+
+**The alternatives:** implementing each C ABI's by-value rule for packed
+records would add a classifier path per target for a transport C programs
+avoid, since a packed record is a wire or register image passed by address.
+A flexible member's record by value is C's own truncation of the trailing
+elements and a mistake in either language.
+
+**Pinned by** `negative/c-packed-by-value`,
+`negative/flexible-member-by-value` and `abi/c-packed-records`.
+
+### D415 — `public` is not an export: only what is named for the linker is global
+
+**The tour said** at [0090] that `public` exports a name from its module, and
+at [1610] that `link` never implies export. Every backend made every public
+routine and datum a global symbol under its bare name, so a library name
+met the C library's and every linked object's: a public `errno` in
+`platform/libc` would have shadowed glibc's thread-local one and was renamed,
+`platform/posix`'s and `platform/linux`'s routines carried `_landin_posix_`
+and `_landin_linux_` link names so that none replaced C's `read`, and moving
+the arena gave `core/arena` a public `reset` the Cortex-M test harness's own
+`reset` met as the linker's "multiple definition". Nothing in the language
+said which names reach the C namespace. A private routine with a link name
+was global on arm64 and RV64 and local on x86-64.
+
+**Chosen:** [1975]'s list is the whole of a program's global symbols: the
+hosted or firmware entry, C imports and public C definitions under their
+declared spelling, every routine and datum with a link name whether public or
+not, every public definition in a machine convention, and every Cortex-M
+placement. Every other routine and datum is a local symbol under its own
+name, on every backend: x86-64, arm64 and RV64 ELF, Darwin's Mach-O and
+Cortex-M0. A collision with the C library or a linked object cannot happen,
+so none is detected, and the debugger, a backtrace and `nm` keep the source
+name. An export is what something outside the program can call, so it, and
+not a public routine, is what D296 roots and what marks a routine's address
+exposed; a public routine the program alone calls may be folded with
+another of the same code or specialized like a private one.
+
+**The alternatives:** module-qualified global names for every routine,
+`_landin_core_arena_reset`, which are stable but still global for no reason
+and rename every symbol a debugger shows; and refusing a public name that
+collides with the selected C library, which needs a list of glibc's,
+libSystem's and FreeBSD libc's exports per target and still misses a linked
+object such as the Cortex-M harness.
+
+**Pinned by** `abi/library-names-beside-libc`, whose library's `errno`,
+`reset`, `read` and `environ` link beside the C library's and a C peer's
+global `reset`; `abi/public-routine-is-local`, whose C peer's weak reference
+to a public routine's name finds nothing; and the backend suite's symbol
+case, which holds every backend's assembly to the same global and local
+symbols.
+
+### D416 — A datum takes a link name on a hosted target
+
+**The tour said** at [1610] that a link name stands before a function's name,
+and D229 enabled one on Cortex-M module data. A hosted datum with a link name
+was L0347, with a note about Cortex data linkage, so data could not be
+exported at all, and `platform/posix`'s poll flags took a `poll_` prefix
+rather than meet C's names.
+
+**Chosen:** a module datum takes `link(symbol: ...)` on every target, which
+makes it a global symbol under that name (D415) whether it is public or not.
+On a hosted target the name has [1975]'s external shape, as a routine's
+has, is never `main`, the hosted entry's, and like every link name is
+distinct from every other explicit one; L0347 refuses anything else and says
+so. Cortex-M data keep [1640]'s identifier shape and reserved prefixes.
+
+**The alternatives:** exporting public data by its own name, which D415
+declines for routines too; and leaving data unexportable, so a C peer that
+reads a Landin table has to be handed its address by a call.
+
+**Pinned by** `abi/link-symbol-exports`, whose C peer calls a C definition
+and reads and writes two data under their link names;
+`abi/r440-native-link-namespace`, whose exported datum holds a qualified
+spelling; and `negative/hosted-datum-link-main`, a datum linked as `main`.
+
+### D417 — Two items of one spelling: the one that is not an export takes its module's path
+
+**The tour said** nothing of how a program holds two items of one spelling.
+The backends renamed each colliding item `landin_<declaration
+number>_<name>`, a number that moved whenever any module earlier in the
+program gained or lost a declaration, and nothing documented it. Local
+symbols (D415) do not remove the need: one assembly file is one symbol
+namespace, and a routine named `read` beside a C import of `read` would
+capture the import's calls.
+
+**Chosen:** an item that is not an export and whose spelling another item
+of the program holds takes its module's logical path with every `/` as
+`.`, or `main` for the entry module, then `.` and its name:
+`core.arena.reset`, `main.read`. An identifier holds no `.`, so only an
+explicit link name can hold that too; then, and for every instance of one
+generic routine after the first, the item takes the first free of `.1`,
+`.2` and so on after it, in item order. The qualified spelling depends on
+the declaration alone, never on what else the program contains; whether an
+item needs it, and an instance's number, do. An export never yields.
+
+**The alternatives:** keeping the declaration number, which is the
+composition dependence this replaces; qualifying every symbol, which D415
+declines; and spelling an instance's type arguments into its symbol, which
+needs a mangling of every type and stays composition-dependent for an
+instance of a local type in two programs.
+
+**Pinned by** `abi/r440-native-link-namespace`, whose routine `foo` beside
+C's `foo` takes `main.foo.2` once a C function and an exported datum hold
+`main.foo` and `main.foo.1`, and the backend suite's namespace case.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -19068,6 +19636,10 @@ Public wrappers under their C names, which would interpose on libc's `read`,
 `runtime/r440-errno-detail` and the bottom frames of the Linux panic debugger
 sessions.
 
+D418 supersedes the `_landin_linux_` link names: under D415 no routine of
+the module but `_landin_start` and `_landin_start_main` is a global symbol,
+so none can replace the C library's, and each keeps its own name.
+
 ### D280 — A hosted Linux executable links statically by default
 
 **The tour said** at [1650] that hosted `main` follows the system C ABI and at
@@ -19313,6 +19885,11 @@ public routines all carry one so none is mistaken for C's.
 **Pinned by** the lowering record `compiler/tests/lowering.ir`, the
 cross-host assembly manifests, and `runtime/linux-system-calls`, which
 imports `platform/linux/numbers`.
+
+D415 supersedes this decision in part: a link name on any routine makes it
+an export, so it roots the routine whatever its convention, and an import
+roots no definition, because every routine that is not an export is a local
+symbol an import of its spelling never reaches.
 
 ### D303 — Every routine and datum has its own section, and a static link counts what it reaches
 
@@ -19709,6 +20286,10 @@ rule already scopes `platform/c` and `platform/cortex_m`.
 `runtime/posix-files`, `runtime/posix-directories`, `runtime/posix-memory`,
 `runtime/posix-poll` and `runtime/posix-errno`, and the firmware refusal of
 `runtime/posix-files` on Cortex-M.
+
+D418 supersedes the `_landin_posix_` link names: under D415 a public routine
+is a local symbol and replaces no C library function, so each keeps its own
+name.
 
 ### D298 — POSIX's descriptor, errors and status in Landin types
 
@@ -21320,3 +21901,131 @@ alone, which gives firmware and hosts two memory worlds.
 `negative/module-member-for-another-target`,
 `runtime/private-alias-of-constrained-template` and
 `negative/private-alias-constraint-held-at-use`.
+
+### D386 — A pool grows a block within its own slot
+
+**The tour said** at [1360] that one allocator concept serves a fixed buffer
+as a heap or an arena, and D197 and D337 gave `core/pool` uniform slots and
+a `resize` that keeps a block in its slot to any extent the slot holds. Its
+`grow` still refused every growth, so a container over a pool, which asks to
+grow in place before it allocates (D356), always took a second slot and
+copied, a pool of one slot refused a growth its slot could hold, and a
+program tested through a pool never met the path a heap or an arena takes.
+
+**Chosen:** the pool's `grow` keeps the block in its slot to any extent the
+slot holds and records that extent for the block's free, as `resize` does,
+and refuses a larger extent, a block that is not a live slot of `old_size`
+and an address inside a slot rather than at it, with the pool unchanged.
+The block does not move, so it keeps the alignment it was allocated with.
+`free`, `grow` and `resize` find their slot through one private routine,
+so they refuse alike, and `resize` is a growth or shrink in place. No slot
+is larger than another, so a growth past the slot finds nowhere to go, and
+`mem.reserve_storage`'s fresh allocation is refused as before. Every
+Cortex-M0 image over a pool that the corpus runs is smaller than it was.
+The fixtures that counted a second slot for a growth now count one
+allocation and hold the refusal past the slot instead.
+
+**The alternatives:** growth into the next slot when it is free, which
+makes a block span slots the free-index heap and the address-to-slot
+arithmetic cannot describe; keeping `grow` refused and leaving the in-slot
+growth to `resize`, which the containers never ask for before allocating;
+and a separate growth routine beside `resize`'s, which gives the pool two
+answers to one question.
+
+**Pinned by** `runtime/core-pool-grow` and `runtime/core-pool-list-grows`
+on every target, Cortex-M0 among them, `runtime/core-pool-resize`,
+`runtime/r420-list-real-exhaustion`, `runtime/r420-small-real-exhaustion`,
+`runtime/r420-small-vector-providers`, `runtime/r420-failing-providers`,
+`runtime/r420-reference-provider-matrix`, `runtime/r420-tree-real-exhaustion`,
+`runtime/core-tree-provider-failures` and `runtime/derived-containers`.
+
+### D387 — `core/sort` takes a comparison with a context
+
+**The tour said** at [1290] that a generic function takes a type as an
+ordinary parameter and at [0870] and [1000] that a function is a value of
+an ordinary function type. D270 and D273 made `core/sort` order items by
+their `cmp.ordered` evidence, which sees only the two items: records that
+refer into shared storage, an outside program's paths as offsets into one
+pool of names, could not be sorted by it, and that program wrote its own
+merge sort.
+
+**Chosen:** `sort.sort_by(values, by, less)` sorts with
+`less: (by: context, left: item, right: item) -> (yes: bool)`, generic over
+`item` and `context`, and passes `by` to every comparison unchanged. A
+context is any value: a slice of the shared storage, a record holding one,
+or a pointer through which the comparison counts or caches. It is the same
+heapsort as `sort`, with no allocation, constant storage and bounded depth,
+and the comparison must be a strict weak ordering while it runs. A context
+whose type disagrees with the comparison's is D138's L0340. `sort` and
+`sort_selection` are unchanged, so no image that sorts by evidence grows.
+
+**The alternatives:** a concept with an entry that takes a context, which a
+concept over one type cannot spell for an item type it does not name;
+evidence on a `distinct` wrapper that holds a pointer to the pool, which
+stores a reference in every item to order it; a closure, which the
+language does not have (D113); a stable merge sort, which needs storage
+the caller would have to supply, and which no consumer asked for; and
+`sort` rewritten over `sort_by`, which would call every evidence comparison
+through a function value.
+
+**Pinned by** `runtime/core-sort-context` on every target, Cortex-M0 among
+them, and `negative/core-sort-context-mismatch`.
+
+### D388 — A library failure atom has words for a person
+
+**The tour said** at [0940] that a failure is an atom with no payload, and
+D269 and D350 named the library's atoms for what they mean. Nothing turned
+one into words: an outside program that reported `path: reason` wrote its
+own table from the atoms to messages.
+
+**Chosen:** `core/failure` is a shared freestanding module of one type and
+one routine. `failure.reason` is the union of every atom a `core` module
+fails with, thirty-two of them from `core/mem`, `core/map`, `core/tree`,
+`core/io`, `core/net` and `core/text`, and `failure.words(problem)` returns
+a fixed phrase for each: lower case with no final stop, so that it reads
+after a subject and a colon, static text that borrows nothing, the same on
+every target and in every locale. A call's failure set widens to
+`failure.reason` whatever subset of it the call declares, so `else
+(problem)` passes it straight on. A set that also holds the program's own
+atom does not widen, and a `match` arm of `_` does not narrow its subject,
+so such a program names each library atom it passes on; that refusal is
+[0640]'s L0301. Atoms that are values rather than failures, a directory
+entry's kind or an order, have no words, and `platform/posix`'s errno
+detail stays with its provider (D207). A program that never calls `words`
+links none of it (D296); one that does carries every phrase, about 6 KB on
+Cortex-M0, which a `match` of thirty-two arms costs there.
+
+**The alternatives:** a `words` in each module, which a failure set mixing
+`io` and `net` atoms, as a socket's does, could not pass to either; a
+generated table indexed by the atom's code, which the language gives no
+way to read; phrases in sentence case or with a stop, which read wrongly
+after a colon; and a locale, which the library consults nowhere.
+
+**Pinned by** `runtime/failure-words` and `runtime/library-shared-failure`
+on every target, Cortex-M0 among them, `runtime/failure-words-report` on
+every hosted target and `negative/failure-words-own-atom`.
+
+### D418 — The POSIX and Linux layers keep their routines' own names
+
+**The tour said** nothing of the library's link names. Every public routine
+of `platform/posix` carried a `_landin_posix_` link name and every one of
+`platform/linux` a `_landin_linux_` one, D279 and D297 say, so that none
+replaced the C library's function of the same name when a program also
+linked libc; D296 therefore could not root a native routine by its link
+name, because doing so kept the whole of `platform/posix`.
+
+**Chosen:** under D415 a public routine is a local symbol, so it can replace
+nothing, and the prefixes are dropped: 174 link names go, and each routine
+keeps its own name, which a debugger and a backtrace now show. No C peer, C
+runtime or assembly block called any of them by a prefixed name. The two
+symbols the C runtime and the kernel do reach keep theirs: the process entry
+`_landin_start` and `_landin_host_initialize_arguments`, which a C-owned
+`main` calls. `_landin_start_main` stays a public C definition, which
+`_landin_start` calls from its assembly block.
+
+**The alternatives:** keeping the prefixes as harmless, which keeps a
+workaround for a collision that can no longer happen and makes every one of
+those routines a global symbol and a D296 root.
+
+**Pinned by** every hosted fixture, unchanged in behaviour, and
+`abi/library-names-beside-libc`.

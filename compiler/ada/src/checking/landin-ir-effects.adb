@@ -2,8 +2,8 @@ package body Landin.IR.Effects is
    function Of_Code (Op : Opcode) return Effect_Set is
    begin
       case Op is
-         when Number | Truth | Atom | Empty_Slice_Base | Measure_Size
-            | Measure_Align | Complement | Logical_Not | Wrapping_Multiply
+         when Number | Truth | Atom | Empty_Slice_Base | Measurement_Kind
+            | Complement | Logical_Not | Wrapping_Multiply
             | Wrapping_Add | Wrapping_Subtract | Bitwise_And | Bitwise_Xor
             | Bitwise_Or | Equal_To | Not_Equal_To | Less_Than | Less_Or_Equal
             | Greater_Than | Greater_Or_Equal | Choose | Failure_Test

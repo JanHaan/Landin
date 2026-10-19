@@ -1,0 +1,18 @@
+record: type = struct
+    kind: u8
+    values: [2]u32
+    shape: variant circle: (radius: u32) | square end shape
+end record
+
+image: type = layout(packed) struct
+    ready: bool at 0
+    count: u4 at 1..4
+end image
+
+count: type = u32
+
+missing: usize = offsetof record.nope
+scalar: usize = offsetof count.value
+bits: usize = offsetof image.count
+element: usize = offsetof record.values.first
+case_part: usize = offsetof record.shape

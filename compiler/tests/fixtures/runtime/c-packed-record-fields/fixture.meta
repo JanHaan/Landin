@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D410's layout(c, packed) record reads and writes every scalar width at unaligned offsets, in a local, module state, an array element, a nested record and a byte buffer reached through a pointer, and copies, passes and returns the whole record
+constructs: 0370, 0430, 0470, 0520, 0670, 0750, 1800, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

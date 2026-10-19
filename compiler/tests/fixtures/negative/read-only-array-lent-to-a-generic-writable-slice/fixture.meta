@@ -3,7 +3,7 @@ summary: D372 a fixed array lent to a generic routine's writable slice parameter
 program: program.ldn
 codes: L0301
 constructs: 0570, 1290
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/read-only-array-lent-to-a-generic-writable-slice/program.ldn
 status: 1

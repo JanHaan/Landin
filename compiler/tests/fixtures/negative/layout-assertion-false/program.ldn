@@ -1,0 +1,8 @@
+header: type = layout(c) struct
+    kind: u8
+    length: u16
+    id: u32
+end header
+
+compiler.assert(sizeof header == 8 and offsetof header.id == 4)
+compiler.assert(sizeof header == 7)

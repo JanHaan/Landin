@@ -409,8 +409,79 @@ package body Landin.Tests.Harness_Suite is
          "host scope retains diagnostics without target workload emission");
    end Host_Scope_Is_Explicit;
 
+   --  Material for the progress test: what the run reported, one line
+   --  per suite in the order it was told.
+   Reported : Unbounded.Unbounded_String;
+
+   procedure Note_Progress
+     (Suite : String; Cases, Failed : Natural; Seconds : Duration);
+
+   procedure Note_Progress
+     (Suite : String; Cases, Failed : Natural; Seconds : Duration) is
+   begin
+      Unbounded.Append
+        (Reported,
+         Suite & Natural'Image (Cases) & Natural'Image (Failed)
+         & (if Seconds >= 0.0 then " timed" else " untimed")
+         & Character'Val (10));
+   end Note_Progress;
+
+   --  An unfiltered run of half an hour printed nothing until it ended, so
+   --  a stuck run looked like a slow one.  Each suite now reports as it
+   --  ends, with its cases, its failures and its duration, and only once.
+   procedure Progress_Reports_Each_Suite
+     (Item : in out Landin.Testing.Context);
+
+   procedure Progress_Reports_Each_Suite
+     (Item : in out Landin.Testing.Context)
+   is
+      LF         : constant Character := Character'Val (10);
+      Scratch    : Landin.Testing.Registry;
+      Transcript : Unbounded.Unbounded_String;
+      Result     : Landin.Testing.Summary;
+      Plain      : Unbounded.Unbounded_String;
+      Unreported : Landin.Testing.Summary;
+      Reporting  : Unbounded.Unbounded_String;
+   begin
+      Landin.Testing.Register (Scratch, "beta", "one", Always_Passes'Access);
+      Landin.Testing.Register (Scratch, "alpha", "one", Always_Passes'Access);
+      Landin.Testing.Register (Scratch, "alpha", "two", Always_Fails'Access);
+      Landin.Testing.Register (Scratch, "alpha", "three",
+                               Always_Passes'Access);
+
+      Reported := Unbounded.Null_Unbounded_String;
+      Landin.Testing.Run
+        (Scratch, Transcript, Result, Progress => Note_Progress'Access);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Reported),
+         "alpha 3 1 timed" & LF & "beta 1 0 timed" & LF,
+         "each suite reports once as it ends, with its cases and failures");
+      Reporting := Transcript;
+
+      Reported := Unbounded.Null_Unbounded_String;
+      Landin.Testing.Run
+        (Scratch, "beta", "", Transcript, Result,
+         Progress => Note_Progress'Access);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Reported), "beta 1 0 timed" & LF,
+         "a filtered run reports only the suite it ran");
+
+      Landin.Testing.Run (Scratch, Plain, Unreported);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Reporting), Unbounded.To_String (Plain),
+         "progress stays out of the transcript");
+      Landin.Testing.Check_Equal
+        (Item,
+         Landin.Testing.Progress_Line ("lexer", 42, 1, 3.25),
+         "progress: lexer: 42 cases, 1 failed, 3.2s",
+         "the line names the suite, its cases, failures and seconds");
+   end Progress_Reports_Each_Suite;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "harness", "progress reports each suite",
+         Progress_Reports_Each_Suite'Access);
       Landin.Testing.Register
         (Into, "harness", "suite inventory counts names",
          Suite_Inventory_Counts_Names'Access);

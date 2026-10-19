@@ -19,7 +19,7 @@ natural divide-and-conquer recursion.
 
 ## Compile and run
 
-With `refine` installed, as [the README](README.md#your-first-program)
+With `refine` installed, as [the README](README.md#installing)
 describes, copy any program below into a `main.ldn` of its own and compile
 it where it is. For FizzBuzz:
 

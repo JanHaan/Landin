@@ -1,0 +1,113 @@
+--  D410's byte-packed records and D413's flexible array member against
+--  the C peer's own records: sizes, alignments and offsets agree, and
+--  each side reads what the other wrote at an odd address.
+
+wire: type = layout(c, packed) struct
+    kind: u8
+    half: u16
+    word: u32
+    wide: u64
+    number: i32
+    single: f32
+    twice: f64
+    flag: bool
+    size: usize
+    bytes: [3]u8
+end wire
+
+frame: type = layout(c, packed) struct
+    lead: u8
+    body: wire
+    tail: u16
+end frame
+
+entry: type = layout(c) struct
+    inode: u64
+    offset: i64
+    length: u16
+    kind: u8
+    name: [0]u8
+end entry
+
+words: type = layout(c) struct
+    kind: u8
+    data: [0]u32
+end words
+
+extern(c) wire_size: () -> (bytes: usize)
+extern(c) wire_alignment: () -> (bytes: usize)
+extern(c) frame_size: () -> (bytes: usize)
+extern(c) entry_size: () -> (bytes: usize)
+extern(c) entry_alignment: () -> (bytes: usize)
+extern(c) words_size: () -> (bytes: usize)
+extern(c) wire_offset: (which: i32) -> (offset: usize)
+extern(c) wire_fill: (record: ptr mut wire) -> none
+extern(c) wire_check: (record: ptr wire) -> (code: i32)
+extern(c) frame_check: (record: ptr frame) -> (code: i32)
+extern(c) entry_fill: (record: ptr mut entry) -> none
+
+public main: () -> (code: i32) =
+    code = 1
+    return when sizeof wire <> wire_size() or alignof wire <> wire_alignment()
+      or sizeof frame <> frame_size() or sizeof entry <> entry_size()
+      or alignof entry <> entry_alignment() or sizeof words <> words_size()
+    code = 2
+    return when offsetof wire.half <> wire_offset(0)
+      or offsetof wire.word <> wire_offset(1)
+      or offsetof wire.wide <> wire_offset(2)
+      or offsetof wire.number <> wire_offset(3)
+      or offsetof wire.single <> wire_offset(4)
+      or offsetof wire.twice <> wire_offset(5)
+      or offsetof wire.flag <> wire_offset(6)
+      or offsetof wire.size <> wire_offset(7)
+      or offsetof wire.bytes <> wire_offset(8)
+    code = 3
+    return when offsetof frame.body <> wire_offset(9)
+      or offsetof frame.tail <> wire_offset(10)
+      or offsetof entry.name <> wire_offset(11)
+      or offsetof words.data <> wire_offset(12)
+
+    --  C writes a record one byte past an aligned address; Landin reads it.
+    mut buffer: [96]u8 = zeroed
+    at: ptr mut wire = ptr(usize(addr buffer) + 1)
+    wire_fill(at)
+    code = 4
+    return when at.val.kind <> 7 or at.val.half <> 0x1234
+      or at.val.word <> 0x89ab_cdef or at.val.wide <> 0x0102_0304_0506_0708
+      or at.val.number <> -123_456 or at.val.single <> 1.5
+      or at.val.twice <> -2.25 or not at.val.flag
+      or at.val.size <> 0x7766_5544 or at.val.bytes[2] <> 3
+
+    --  Landin writes it; C reads it.
+    at.val.kind = 9
+    at.val.half = 0x4321
+    at.val.word = 0x0a0b_0c0d
+    at.val.wide = 0x1112_1314_1516_1718
+    at.val.number = -7
+    at.val.single = 0.25
+    at.val.twice = 1024.5
+    at.val.flag = false
+    at.val.size = 0x1_0203
+    at.val.bytes[1] = 5
+    code = 5
+    return when wire_check(at) <> 42
+
+    --  A packed record inside a packed record, at an odd address again.
+    framed: ptr mut frame = ptr(usize(addr buffer) + 3)
+    framed.val.lead = 3
+    framed.val.body.word = 0xfeed_face
+    framed.val.tail = 0xbeef
+    code = 6
+    return when frame_check(framed) <> 42
+
+    --  C fills an entry and its name; the name is the bytes at its offset.
+    mut record: [64]u8 = zeroed
+    filled: ptr mut entry = ptr(usize(addr record))
+    entry_fill(filled)
+    length: u16 = u16(record[16]) | u16(record[17]) << 8
+    name := record[offsetof entry.name..<usize(length)]
+    code = 7
+    return when lenof name <> 6 or name[0] <> 104 or name[4] <> 111
+      or name[5] <> 0
+    code = 42
+end main

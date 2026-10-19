@@ -11,7 +11,8 @@ every refused spelling and every diagnostic code in front of the prose.
 Nothing here is written twice. The vocabulary and the grammar come out of
 `spec.md`'s own `landin-grammar` fences, the refusals out of the two
 tables the compiler dispatches on, the codes out of the catalogue
-`check.py` already generates, and the invocation out of `examples.md`.
+`check.py` already generates, the installation out of the README and the
+invocation out of `examples.md`.
 A rule that moves in any of those moves here with it.
 
 Standard library only, like the rest of the site build.
@@ -210,7 +211,7 @@ def section(text, heading):
     return found.group(0).strip("\n") if found else ""
 
 
-def primer(source, release):
+def primer(source, release, site_url):
     spec = read(source, "spec.md")
     rules = grammar(spec)
     keywords, scalars, texts, other = vocabulary(rules)
@@ -219,6 +220,7 @@ def primer(source, release):
     codes = "\n".join(line for line in catalogue.splitlines()
                       if not line.startswith("#"))
     invocation = section(read(source, "examples.md"), "Compile and run")
+    installing = section(read(source, "README.md"), "Installing")
 
     #  Everything above is read out of something that can be renamed, and
     #  a reader that finds nothing would write a primer with a missing
@@ -231,7 +233,8 @@ def primer(source, release):
               ("the scalar_name production", scalars),
               ("the compiler's refusal tables", refused),
               ("the diagnostic catalogue", codes),
-              ("examples.md's `Compile and run`", invocation))
+              ("examples.md's `Compile and run`", invocation),
+              ("README.md's `Installing`", installing))
              if not got]
     if empty:
         raise SystemExit("llms: nothing read from " + ", ".join(empty)
@@ -248,8 +251,17 @@ def primer(source, release):
            "([1830]). Section 4 is that list. A", "program written against "
            "the whole tour fails with it, not with a parse", "error.", ""]
 
-    out += ["## 1. Compile and run", "",
-            invocation.split("\n", 1)[1].strip("\n"), ""]
+    #  A link written for the README's own page means nothing in a text
+    #  file, so the README's links resolve to its published page, and the
+    #  invocation's link to the README to the steps just above it there.
+    def published(text):
+        return re.sub(r"\]\((?:README\.md)?#([\w-]+)\)",
+                      lambda m: "](%s/readme.html#%s)" % (site_url, m[1]),
+                      text)
+
+    out += ["## 1. Install, compile and run", "",
+            published(installing.split("\n", 1)[1].strip("\n")), "",
+            published(invocation.split("\n", 1)[1].strip("\n")), ""]
 
     out += ["## 2. The vocabulary of the enabled kernel", "",
             "%d reserved words. Reserved everywhere, including in ordinary "
@@ -347,8 +359,12 @@ def index(pages, site_url, release, sizes):
                  "contracts, module overviews and executable examples. "
                  "The searchable inventory is [library-index.json](%s/library-index.json)."
                  % (site_url, site_url)),
+            ("", "- [Installing](%s/readme.html#installing): the nix "
+                 "routes, where a release archive unpacks and what "
+                 "`refine version` prints." % site_url),
             ("", "- [The primer](%s/llms-primer.txt): start here. Generated "
-                 "from the compiler's own tables — how to compile and run, "
+                 "from the compiler's own tables — how to install, compile "
+                 "and run, "
                  "the kernel's vocabulary, its grammar in one piece, every "
                  "spelling the compiler refuses by name, and every "
                  "diagnostic code. %s." % (site_url, sizes["primer"])),
@@ -422,7 +438,7 @@ def write(site, source, pages, site_url):
     head of the full one.
     """
     release = version(read(source, "README.md"))
-    brief = primer(source, release)
+    brief = primer(source, release, site_url)
     full = brief + "\n" + "\n\n".join(
         "".join(["=" * 72, "\n", name, "\n", "=" * 72, "\n\n",
                  read(source, name).strip("\n")])

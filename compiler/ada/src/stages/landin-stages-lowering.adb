@@ -2978,8 +2978,8 @@ package body Landin.Stages.Lowering is
                | Syn.Half_Open_Slice | Syn.Array_Literal
                | Syn.Array_Repetition | Syn.Mixed_Array_Repetition
                | Syn.Struct_Literal | Syn.Literal_Kind
-               | Syn.Size_Of | Syn.Align_Of | Syn.Unary_Kind
-               | Syn.Binary_Kind
+               | Syn.Size_Of | Syn.Align_Of | Syn.Offset_Of
+               | Syn.Unary_Kind | Syn.Binary_Kind
                | Syn.Field_Value | Syn.Call_Argument
                | Syn.Type_Name .. Syn.Function_Type
             =>
@@ -3303,7 +3303,11 @@ package body Landin.Stages.Lowering is
               IR.Add_Address_Slot
                 (Unit.all, Filling,
                  (if Shape.Kind = IR.Array_Field_Shape
-                  then Stored_Shape (Place, Shape) else Shape), Site);
+                  then Stored_Shape (Place, Shape) else Shape), Site,
+                 Unaligned => Shape.Kind = IR.Scalar_Field_Shape
+                   and then IR.Reaches_Byte_Packed
+                     (Unit.all, Filling, Place.Place,
+                      IR.Element_Total (Place.Base), Stored_Steps (Place)));
          begin
             IR.Emit_Store (Unit.all, Filling, Slot, Address, Site);
             return (Kind => IR.Runtime_Address, Address => Slot);
@@ -8912,6 +8916,36 @@ package body Landin.Stages.Lowering is
                   end;
                end;
 
+            --  D411: the measured record's field run, its layout policy and
+            --  the source positions of the selected path; a backend with
+            --  target facts answers the offset, as it answers a size.
+            when Syn.Offset_Of =>
+               declare
+                  Declared : constant Landin.Checking.Nominal_Type_Id :=
+                    Landin.Checking.Offset_Root (Types.all, Of_Tree, Node);
+                  Positions : constant Landin.Checking.Field_Positions :=
+                    Landin.Checking.Offset_Fields (Types.all, Of_Tree, Node);
+                  Fields : IR.Field_Shape_Array
+                    (1 .. Landin.Checking.Layout_Field_Count
+                      (Types.all, Declared));
+                  Path : IR.Path_Step_Array (Positions'Range);
+               begin
+                  for Field in Fields'Range loop
+                     Fields (Field) := Neutral_Field (Declared, Field);
+                  end loop;
+                  for Step in Positions'Range loop
+                     Path (Step) :=
+                       (Field => IR.Part_Position (Positions (Step)),
+                        Case_Index => 0);
+                  end loop;
+                  return IR.Emit_Aggregate_Measurement
+                    (Unit.all, Filling, IR.Measure_Offset, Fields,
+                     Scalar_At (Of_Tree, Node), Site,
+                     Policy => Landin.Checking.Layout_Of
+                       (Types.all, Declared),
+                     Path => Path);
+               end;
+
             --  [0370]: unlike byte measurements, an array's element count is
             --  target-neutral.  D14 takes it from a named array's type; D31
             --  takes it from a literal's source run without lowering an
@@ -9853,6 +9887,10 @@ package body Landin.Stages.Lowering is
              (Unit.all, Filling, Shape.Element, Res.No_Declaration,
               Site_Of (Of_Tree, Subject));
          Merge : IR.Block_Id := IR.No_Block;
+         --  D405: an arm's block is made at its first label, and every
+         --  label the arm names branches to it.
+         Taken     : IR.Block_Id := IR.No_Block;
+         Taken_Arm : Syn.Node_Id := Syn.No_Node;
 
          procedure Bind (Arm : Syn.Node_Id);
          procedure Close_To_Merge;
@@ -9979,17 +10017,19 @@ package body Landin.Stages.Lowering is
               (Unit.all, Filling, Saved_Tag, Loaded, Site);
          end;
 
-         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+         for Position in 1 .. Syn.Match_Label_Total (Of_Tree, Node) loop
             declare
                Arm : constant Syn.Node_Id :=
-                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+                 Syn.Label_Arm (Of_Tree, Node, Position);
                Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
                Inside : constant Res.Scope_Id :=
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
-               Taken : constant IR.Block_Id :=
-                 Fresh (Of_Tree, Runs, Inside);
             begin
-               if Position < Syn.Match_Arm_Count (Of_Tree, Node) then
+               if Arm /= Taken_Arm then
+                  Taken_Arm := Arm;
+                  Taken := Fresh (Of_Tree, Runs, Inside);
+               end if;
+               if Position < Syn.Match_Label_Total (Of_Tree, Node) then
                   declare
                      Next : constant IR.Block_Id :=
                        Fresh (Of_Tree, Node, Scope);
@@ -10002,7 +10042,7 @@ package body Landin.Stages.Lowering is
                           Ty.Magnitude
                             (Landin.Checking.Field_Index
                                (Types.all, Of_Tree,
-                                Syn.Match_Pattern (Of_Tree, Arm)) - 1),
+                                Syn.Nth_Label (Of_Tree, Node, Position)) - 1),
                           Negated => False,
                           Site    => Site);
                      Test : constant IR.Value_Id :=
@@ -10015,13 +10055,15 @@ package body Landin.Stages.Lowering is
                      IR.Leave_Block (Unit.all, Filling);
                      Current := IR.No_Block;
 
-                     Open (Taken);
-                     Bind (Arm);
-                     Lower_Statements
-                       (Of_Tree, Runs, Inside, Result, Destination,
-                        Destination_Field, Destination_Path);
-                     if Current /= IR.No_Block then
-                        Close_To_Merge;
+                     if Syn.Ends_Arm (Of_Tree, Node, Position) then
+                        Open (Taken);
+                        Bind (Arm);
+                        Lower_Statements
+                          (Of_Tree, Runs, Inside, Result, Destination,
+                           Destination_Field, Destination_Path);
+                        if Current /= IR.No_Block then
+                           Close_To_Merge;
+                        end if;
                      end if;
 
                      Open (Next);
@@ -10069,6 +10111,10 @@ package body Landin.Stages.Lowering is
              (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
               Atoms => Set_Id);
          Merge : IR.Block_Id := IR.No_Block;
+         --  D405: an arm's block is made at its first label, and every
+         --  label the arm names branches to it.
+         Taken     : IR.Block_Id := IR.No_Block;
+         Taken_Arm : Syn.Node_Id := Syn.No_Node;
 
          procedure Close_To_Merge;
 
@@ -10090,23 +10136,25 @@ package body Landin.Stages.Lowering is
             IR.Emit_Store (Unit.all, Filling, Saved, Value, Site);
          end;
 
-         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+         for Position in 1 .. Syn.Match_Label_Total (Of_Tree, Node) loop
             declare
                Arm : constant Syn.Node_Id :=
-                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+                 Syn.Label_Arm (Of_Tree, Node, Position);
                Pattern : constant Syn.Node_Id :=
-                 Syn.Match_Pattern (Of_Tree, Arm);
+                 Syn.Nth_Label (Of_Tree, Node, Position);
                Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
                Inside : constant Res.Scope_Id :=
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
-               Taken : constant IR.Block_Id :=
-                 Fresh (Of_Tree, Runs, Inside);
                Wildcard : constant Boolean :=
                  Syn.Name (Of_Tree, Pattern)
                    = Landin.Source.Names.No_Name;
                Last : constant Boolean :=
-                 Position = Syn.Match_Arm_Count (Of_Tree, Node);
+                 Position = Syn.Match_Label_Total (Of_Tree, Node);
             begin
+               if Arm /= Taken_Arm then
+                  Taken_Arm := Arm;
+                  Taken := Fresh (Of_Tree, Runs, Inside);
+               end if;
                if Wildcard or else Last then
                   Close_With_Jump (Taken, Site);
                   Open (Taken);
@@ -10141,12 +10189,14 @@ package body Landin.Stages.Lowering is
                      IR.Leave_Block (Unit.all, Filling);
                      Current := IR.No_Block;
 
-                     Open (Taken);
-                     Lower_Statements
-                       (Of_Tree, Runs, Inside, Result, Destination,
-                        Destination_Field, Destination_Path);
-                     if Current /= IR.No_Block then
-                        Close_To_Merge;
+                     if Syn.Ends_Arm (Of_Tree, Node, Position) then
+                        Open (Taken);
+                        Lower_Statements
+                          (Of_Tree, Runs, Inside, Result, Destination,
+                           Destination_Field, Destination_Path);
+                        if Current /= IR.No_Block then
+                           Close_To_Merge;
+                        end if;
                      end if;
 
                      Open (Next);
@@ -10183,6 +10233,10 @@ package body Landin.Stages.Lowering is
               Pointee => Pointee_For
                 (Landin.Checking.Reference_Of (Types.all, Of_Tree, Subject)));
          Merge : IR.Block_Id := IR.No_Block;
+         --  D405: an arm's block is made at its first label, and every
+         --  label the arm names branches to it.
+         Taken     : IR.Block_Id := IR.No_Block;
+         Taken_Arm : Syn.Node_Id := Syn.No_Node;
 
          procedure Bind (Arm : Syn.Node_Id);
          procedure Close_To_Merge;
@@ -10230,17 +10284,15 @@ package body Landin.Stages.Lowering is
             IR.Emit_Store (Unit.all, Filling, Saved, Value, Site);
          end;
 
-         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+         for Position in 1 .. Syn.Match_Label_Total (Of_Tree, Node) loop
             declare
                Arm : constant Syn.Node_Id :=
-                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+                 Syn.Label_Arm (Of_Tree, Node, Position);
                Pattern : constant Syn.Node_Id :=
-                 Syn.Match_Pattern (Of_Tree, Arm);
+                 Syn.Nth_Label (Of_Tree, Node, Position);
                Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
                Inside : constant Res.Scope_Id :=
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
-               Taken : constant IR.Block_Id :=
-                 Fresh (Of_Tree, Runs, Inside);
                Present : constant Boolean :=
                  Syn.Kind (Of_Tree, Pattern) = Syn.Pointer_Case;
                Wildcard : constant Boolean :=
@@ -10248,8 +10300,12 @@ package body Landin.Stages.Lowering is
                  and then Syn.Name (Of_Tree, Pattern)
                             = Landin.Source.Names.No_Name;
                Last : constant Boolean :=
-                 Position = Syn.Match_Arm_Count (Of_Tree, Node);
+                 Position = Syn.Match_Label_Total (Of_Tree, Node);
             begin
+               if Arm /= Taken_Arm then
+                  Taken_Arm := Arm;
+                  Taken := Fresh (Of_Tree, Runs, Inside);
+               end if;
                if Wildcard or else Last then
                   Close_With_Jump (Taken, Site);
                   Open (Taken);
@@ -10282,13 +10338,15 @@ package body Landin.Stages.Lowering is
                      IR.Leave_Block (Unit.all, Filling);
                      Current := IR.No_Block;
 
-                     Open (Taken);
-                     Bind (Arm);
-                     Lower_Statements
-                       (Of_Tree, Runs, Inside, Result, Destination,
-                        Destination_Field, Destination_Path);
-                     if Current /= IR.No_Block then
-                        Close_To_Merge;
+                     if Syn.Ends_Arm (Of_Tree, Node, Position) then
+                        Open (Taken);
+                        Bind (Arm);
+                        Lower_Statements
+                          (Of_Tree, Runs, Inside, Result, Destination,
+                           Destination_Field, Destination_Path);
+                        if Current /= IR.No_Block then
+                           Close_To_Merge;
+                        end if;
                      end if;
 
                      Open (Next);
@@ -10318,6 +10376,10 @@ package body Landin.Stages.Lowering is
          Saved : constant IR.Slot_Id :=
            Shaped_Temporary (Neutral_Value_Shape (Of_Tree, Subject), Site);
          Merge : IR.Block_Id := IR.No_Block;
+         --  D405: an arm's block is made at its first label, and every
+         --  label the arm names branches to it.
+         Taken     : IR.Block_Id := IR.No_Block;
+         Taken_Arm : Syn.Node_Id := Syn.No_Node;
 
          procedure Bind (Arm : Syn.Node_Id);
          procedure Close_To_Merge;
@@ -10362,17 +10424,15 @@ package body Landin.Stages.Lowering is
             return;
          end if;
 
-         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+         for Position in 1 .. Syn.Match_Label_Total (Of_Tree, Node) loop
             declare
                Arm : constant Syn.Node_Id :=
-                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+                 Syn.Label_Arm (Of_Tree, Node, Position);
                Pattern : constant Syn.Node_Id :=
-                 Syn.Match_Pattern (Of_Tree, Arm);
+                 Syn.Nth_Label (Of_Tree, Node, Position);
                Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
                Inside : constant Res.Scope_Id :=
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
-               Taken : constant IR.Block_Id :=
-                 Fresh (Of_Tree, Runs, Inside);
                Present : constant Boolean :=
                  Syn.Kind (Of_Tree, Pattern) = Syn.Pointer_Case;
                Wildcard : constant Boolean :=
@@ -10380,8 +10440,12 @@ package body Landin.Stages.Lowering is
                  and then Syn.Name (Of_Tree, Pattern)
                             = Landin.Source.Names.No_Name;
                Last : constant Boolean :=
-                 Position = Syn.Match_Arm_Count (Of_Tree, Node);
+                 Position = Syn.Match_Label_Total (Of_Tree, Node);
             begin
+               if Arm /= Taken_Arm then
+                  Taken_Arm := Arm;
+                  Taken := Fresh (Of_Tree, Runs, Inside);
+               end if;
                if Wildcard or else Last then
                   Close_With_Jump (Taken, Site);
                   Open (Taken);
@@ -10430,13 +10494,15 @@ package body Landin.Stages.Lowering is
                      IR.Leave_Block (Unit.all, Filling);
                      Current := IR.No_Block;
 
-                     Open (Taken);
-                     Bind (Arm);
-                     Lower_Statements
-                       (Of_Tree, Runs, Inside, Result, Destination,
-                        Destination_Field, Destination_Path);
-                     if Current /= IR.No_Block then
-                        Close_To_Merge;
+                     if Syn.Ends_Arm (Of_Tree, Node, Position) then
+                        Open (Taken);
+                        Bind (Arm);
+                        Lower_Statements
+                          (Of_Tree, Runs, Inside, Result, Destination,
+                           Destination_Field, Destination_Path);
+                        if Current /= IR.No_Block then
+                           Close_To_Merge;
+                        end if;
                      end if;
 
                      Open (Next);
@@ -13045,7 +13111,11 @@ package body Landin.Stages.Lowering is
                            Nested => Stored_Steps (Reached));
                         Slot : constant IR.Slot_Id := IR.Add_Address_Slot
                           (Unit.all, Filling,
-                           Neutral_Value_Shape (Of_Tree, Place), Site);
+                           Neutral_Value_Shape (Of_Tree, Place), Site,
+                           Unaligned => IR.Reaches_Byte_Packed
+                             (Unit.all, Filling, Reached.Place,
+                              IR.Element_Total (Reached.Base),
+                              Stored_Steps (Reached)));
                      begin
                         IR.Emit_Store
                           (Unit.all, Filling, Slot, Address, Site);
@@ -15908,21 +15978,20 @@ package body Landin.Stages.Lowering is
       --  among them, with D232's `panic_handler` and the firmware entry
       --  the driver selects by name only after this stage; and, in any
       --  module, what a C peer, a linker script, a kept section or the
-      --  process entry may name: a binding with a link symbol, a C
-      --  definition that is public, which [1975] names by its spelling, or
-      --  has a link symbol, a definition in a machine convention, such as
-      --  platform/linux's naked `_landin_start`, a definition whose link
-      --  name a bodyless import names, a routine or binding with a
-      --  placement, and one whose name or link name, or either with Mach-O's
-      --  leading `_`, stands as a word in the text of any `assembler.block`,
-      --  which reaches code and data by symbol where the resolver cannot
-      --  see it.  A module declaration that is neither a routine nor a
-      --  binding, a type whose length names a constant among them, is
-      --  walked as a root as well.  `public` alone is not an export, so a
-      --  public declaration nothing reaches is dropped like a private one;
-      --  nor is a native routine's link symbol, which [1975] makes its
-      --  linker identity and platform/posix gives every public routine so
-      --  that none is mistaken for C's.
+      --  process entry may name: a routine or binding with a link symbol,
+      --  a C definition that is public, which [1975] names by its
+      --  spelling, a definition in a machine convention, such as
+      --  platform/linux's naked `_landin_start`, a routine or binding
+      --  with a placement, and one whose name or link
+      --  name, or either with Mach-O's leading `_`, stands as a word in
+      --  the text of any `assembler.block`, which reaches code and data by
+      --  symbol where the resolver cannot see it.  A module declaration
+      --  that is neither a routine nor a binding, a type whose length
+      --  names a constant among them, is walked as a root as well.
+      --  `public` alone is not an export, so a public declaration nothing
+      --  reaches is dropped like a private one.  An import reaches no
+      --  definition here: D415 gives every unexported definition a local
+      --  symbol, so an import of the same spelling names C's.
       --
       --  A reached declaration reaches what its nodes name: the routine or
       --  binding any resolved reference binds, in any position, the
@@ -16004,24 +16073,6 @@ package body Landin.Stages.Lowering is
                         or else Assembly_Words.Contains (Linked)
                         or else Assembly_Words.Contains ("_" & Linked));
          end Named_In_Assembly;
-
-         --  The link name of every bodyless import.  A definition of the
-         --  same name is what the import reaches at link time, as
-         --  platform/linux's C view of `main` reaches the entry.
-         Imported : Word_Sets.Set;
-
-         procedure Note_Import (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
-
-         procedure Note_Import (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
-         begin
-            if Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration
-              and then Syn.Is_External (Of_Tree, Node)
-            then
-               Imported.Include
-                 (Link_Name_Of
-                    (Declaration_At (Syn.Source_Of (Of_Tree), Node)));
-            end if;
-         end Note_Import;
 
          Grouped : constant not null access Landin.Modules.Table :=
            Landin.Stages.Modules (Context);
@@ -16249,12 +16300,11 @@ package body Landin.Stages.Lowering is
                        or else
                          (Defined
                           and then
-                            ((Syn.Uses_C_ABI (Of_Tree, Node)
-                              and then (Linked
-                                        or else Syn.Is_Public (Of_Tree, Node)))
+                            (Linked
+                             or else (Syn.Uses_C_ABI (Of_Tree, Node)
+                                      and then Syn.Is_Public (Of_Tree, Node))
                              or else Syn.Machine_Convention (Of_Tree, Node)
-                               /= Landin.Machine.Ordinary
-                             or else Imported.Contains (Link_Name_Of (Id))))
+                               /= Landin.Machine.Ordinary))
                        or else Landin.Configuration.Placement_Of
                          (Source (Context, Src), Of_Tree, Node,
                           Spellings.all) /= Default
@@ -16347,18 +16397,6 @@ package body Landin.Stages.Lowering is
                         end loop;
                      end if;
                   end loop;
-               end;
-            end loop;
-
-            for Index in 1 .. Source_Count (Context) loop
-               declare
-                  Of_Tree : constant not null access constant Syn.Tree :=
-                    Tree_For (Nth_Source (Context, Index));
-                  procedure Walk is new
-                    Landin.Configuration.For_Each_Active_Declaration
-                      (Note_Import);
-               begin
-                  Walk (Activity.all, Of_Tree.all);
                end;
             end loop;
 
@@ -16500,7 +16538,14 @@ package body Landin.Stages.Lowering is
                      end if;
                      IR.Set_Signature
                        (Unit.all, Made, Signature_For (Source_Signature));
-                     if Syn.Is_Public (Of_Tree, Node) then
+                     --  D415: an export's address is reachable from
+                     --  outside the program; `public` alone is not.
+                     if Landin.Checking.Link_Symbol (Types.all, Id)
+                          /= Landin.Source.Names.No_Name
+                       or else (Syn.Is_Public (Of_Tree, Node)
+                                and then Syn.Machine_Convention (Of_Tree, Node)
+                                  not in Landin.Machine.Ordinary)
+                     then
                         IR.Mark_Address_Exposed (Unit.all, Made);
                      end if;
                      if Syn.Is_External (Of_Tree, Node) then
@@ -17520,6 +17565,12 @@ package body Landin.Stages.Lowering is
          --  Lowering folds module images, never a body's reads.
          function Image_Folding return Boolean is (False);
 
+         --  The checker recorded every accepted `offsetof`'s facts.
+         function Offset_Checked
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+           is (Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+               = Ty.Usize);
+
          package Folder is new Landin.Stages.Folding
            (Types              => Types,
             Meanings           => Meanings,
@@ -17533,7 +17584,8 @@ package body Landin.Stages.Lowering is
             Enter              => Enter_Fold,
             Leave              => Leave_Fold,
             Is_Final           => No_Final_Fold,
-            Reads_Run_Time     => Image_Folding);
+            Reads_Run_Time     => Image_Folding,
+            Offset_Facts       => Offset_Checked);
 
          procedure Fold_Constant
            (Of_Tree : Syn.Tree;

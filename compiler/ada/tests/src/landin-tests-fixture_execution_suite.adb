@@ -12,7 +12,6 @@ with Ada.Containers.Vectors;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Environment_Variables;
-with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
 with Landin.Backend.Toolchain;
@@ -328,6 +327,21 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return Result;
    end Split;
 
+   --  What refine is run with for a fixture's report: its `args`, and for
+   --  a rooted fixture the module arguments its `root` gives after them,
+   --  so a rooted fixture's `args` name only options such as its target.
+   function Invocation (Case_Item : Fixture) return Landin.Platform.Path_List;
+
+   function Invocation (Case_Item : Fixture) return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List := Split (Args (Case_Item));
+   begin
+      if Module_Root (Case_Item) /= "" then
+         Append_Module_Arguments (Case_Item, Fixture_Root, Result);
+      end if;
+      return Result;
+   end Invocation;
+
    function Label_Of (Item : Fixture) return String is
      (Class_Directory (Class (Item)) & "/" & Name (Item));
 
@@ -600,11 +614,186 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
       Run_With_Stream
         (Case_Item, Label, Runner, Program,
-         Lane_Arguments (Split (Args (Case_Item))), Outcome, Item);
+         Lane_Arguments (Invocation (Case_Item)), Outcome, Item);
+      --  A stale report names the command that re-records it alone.
       Check_Output
-        (Case_Item, Label, Outcome, Unbounded.To_String (Expected), Item);
+        (Case_Item,
+         Label & " (once the difference is read, ./scripts/test.sh"
+         & " --record=" & Label & " re-records it)",
+         Outcome, Unbounded.To_String (Expected), Item);
       Check_Compiler_Outcome (Case_Item, Outcome, Item);
    end Run_Recorded;
+
+   --  Record_Report over any host and runner, so a case can hold it to
+   --  its refusals without a compiler or the real tree.
+   procedure Record_Report_With
+     (Path    : String;
+      Host    : in out Landin.Platform.Filesystem'Class;
+      Runner  : Landin.Platform.Tool_Runner'Class;
+      Program : String;
+      Wrote   : out Boolean;
+      Said    : out Unbounded.Unbounded_String);
+
+   procedure Record_Report_With
+     (Path    : String;
+      Host    : in out Landin.Platform.Filesystem'Class;
+      Runner  : Landin.Platform.Tool_Runner'Class;
+      Program : String;
+      Wrote   : out Boolean;
+      Said    : out Unbounded.Unbounded_String)
+   is
+      Found : Catalogue;
+   begin
+      Wrote := False;
+      Said := Unbounded.Null_Unbounded_String;
+      if not Host.Exists (Program) then
+         Said := Unbounded.To_Unbounded_String
+           ("refine was not found at " & Program
+            & "; record through scripts/test.sh");
+         return;
+      end if;
+
+      Discover (Found, Fixture_Root, Host, Only => Path);
+      if Problem_Count (Found) /= 0 then
+         Said := Unbounded.To_Unbounded_String
+           (Path & ": " & Nth_Problem (Found, 1));
+         return;
+      elsif Count (Found) /= 1 or else Label_Of (Nth (Found, 1)) /= Path
+      then
+         Said := Unbounded.To_Unbounded_String
+           (Path & " names no fixture; name it CLASS/NAME, as --fixture"
+            & " does");
+         return;
+      elsif Expect (Nth (Found, 1)) = "" then
+         Said := Unbounded.To_Unbounded_String
+           (Path & " records no report: its metadata names no `expect`");
+         return;
+      end if;
+
+      declare
+         Case_Item : constant Fixture := Nth (Found, 1);
+         Where     : constant String :=
+           Fixture_Root & "/" & Path & "/" & Expect (Case_Item);
+         Outcome   : Landin.Platform.Tool_Result;
+         Verdict   : Landin.Testing.Context;
+         Status    : Landin.Platform.Write_Status;
+      begin
+         Run_With_Stream
+           (Case_Item, Path, Runner, Program,
+            Lane_Arguments (Invocation (Case_Item)), Outcome, Verdict);
+         Check_Compiler_Outcome (Case_Item, Outcome, Verdict);
+         if Landin.Testing.Failures (Verdict) /= 0 then
+            Said := Unbounded.To_Unbounded_String
+              (Path & ": not recorded, because the run no longer meets"
+               & " the fixture's metadata:" & ASCII.LF
+               & Landin.Testing.Failure_Text (Verdict));
+            return;
+         end if;
+         Host.Write_File (Where, Unbounded.To_String (Outcome.Output), Status);
+         Wrote := Status = Landin.Platform.Write_Ok;
+         Said := Unbounded.To_Unbounded_String
+           ((if Wrote then "wrote " else "could not write ")
+            & "compiler/tests/fixtures/" & Path & "/" & Expect (Case_Item));
+      end;
+   exception
+      when Landin.External_Tool_Failed =>
+         Wrote := False;
+         Said := Unbounded.To_Unbounded_String
+           ("refine could not be run: " & Program);
+   end Record_Report_With;
+
+   procedure Record_Report
+     (Path  : String;
+      Wrote : out Boolean;
+      Said  : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      Host   : Landin.Platform.Native.Native_Filesystem;
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+   begin
+      Record_Report_With (Path, Host, Runner, Refine_Path, Wrote, Said);
+   end Record_Report;
+
+   --  A report re-recorded by name writes the bytes refine reports now,
+   --  and only while its status and codes are still the ones pinned: a
+   --  recording replaces bytes and never a verdict.
+   procedure A_Report_Is_Recorded_By_Name
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Report_Is_Recorded_By_Name
+     (Item : in out Landin.Testing.Context)
+   is
+      Directory : constant String := Fixture_Root & "/negative/sample";
+      Expected  : constant String := Directory & "/expected.txt";
+      Report    : constant String :=
+        "error[L0100]: a fresh report" & ASCII.LF;
+
+      procedure Attempt
+        (Exit_Code : Integer; Output : String; Path : String;
+         Wrote : out Boolean; Said : out Unbounded.Unbounded_String;
+         Written : out Unbounded.Unbounded_String);
+
+      procedure Attempt
+        (Exit_Code : Integer; Output : String; Path : String;
+         Wrote : out Boolean; Said : out Unbounded.Unbounded_String;
+         Written : out Unbounded.Unbounded_String)
+      is
+         Host   : Landin.Testing.Fakes.Fake_Filesystem;
+         Runner : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_File ("/bin/refine", "");
+         Host.Add_Directory (Fixture_Root);
+         Host.Add_Directory (Fixture_Root & "/negative");
+         Host.Add_Directory (Directory);
+         Host.Add_File
+           (Directory & "/fixture.meta",
+            "class: negative" & ASCII.LF
+            & "summary: a refusal whose report is recorded" & ASCII.LF
+            & "program: program.ldn" & ASCII.LF
+            & "codes: L0100" & ASCII.LF
+            & "constructs: 0380" & ASCII.LF
+            & "targets: linux-x86-64" & ASCII.LF
+            & "expect: expected.txt" & ASCII.LF
+            & "args: " & Directory & "/program.ldn" & ASCII.LF);
+         Host.Add_File (Directory & "/program.ldn", "x: u8 = (" & ASCII.LF);
+         Host.Add_File (Expected, "error[L0100]: a stale report" & ASCII.LF);
+         Runner.Set_Result (Exit_Code, Output);
+         Record_Report_With
+           (Path, Host, Runner, "/bin/refine", Wrote, Said);
+         Written := Unbounded.To_Unbounded_String
+           (Landin.Testing.Fakes.Written (Host, Expected));
+      end Attempt;
+
+      Wrote   : Boolean;
+      Said    : Unbounded.Unbounded_String;
+      Written : Unbounded.Unbounded_String;
+   begin
+      Attempt (1, Report, "negative/sample", Wrote, Said, Written);
+      Landin.Testing.Check
+        (Item, Wrote, "a report still meeting its metadata is recorded: "
+         & Unbounded.To_String (Said));
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Written), Report,
+         "the recording is what refine reports now");
+
+      Attempt (0, Report, "negative/sample", Wrote, Said, Written);
+      Landin.Testing.Check
+        (Item, not Wrote and then Unbounded.To_String (Written) = ""
+         and then Unbounded.Index (Said, "no longer meets") > 0,
+         "a changed status is not recorded: " & Unbounded.To_String (Said));
+
+      Attempt (1, "error[L0101]: another refusal" & ASCII.LF,
+               "negative/sample", Wrote, Said, Written);
+      Landin.Testing.Check
+        (Item, not Wrote and then Unbounded.To_String (Written) = "",
+         "a changed code is not recorded: " & Unbounded.To_String (Said));
+
+      Attempt (1, Report, "negative/absent", Wrote, Said, Written);
+      Landin.Testing.Check
+        (Item, not Wrote and then Unbounded.Index (Said, "CLASS/NAME") > 0,
+         "an unknown fixture is refused with the naming rule: "
+         & Unbounded.To_String (Said));
+   end A_Report_Is_Recorded_By_Name;
+
 
    --  A compiler success can only satisfy this attempt with a new file.
    --  Removal is a host operation, so fake runners can pin stale-output
@@ -737,7 +926,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Outcome : Landin.Platform.Tool_Result;
       Args    : Landin.Platform.Path_List;
    begin
-      Append_Module_Arguments (Case_Item, Fixture_Root, Args);
+      Args := Invocation (Case_Item);
+      if Module_Root (Case_Item) = "" then
+         Append_Module_Arguments (Case_Item, Fixture_Root, Args);
+      end if;
       Runner.Run
         (Program, Lane_Arguments (Args), Outcome, Landin.Platform.Merged);
 
@@ -1508,6 +1700,240 @@ package body Landin.Tests.Fixture_Execution_Suite is
          end if;
       end;
    end Ask_Lane_Processor;
+
+   --  An emulator a cross lane runs its executables under is asked to show
+   --  it is not one known to break every program before any runs.  Ubuntu
+   --  24.04's qemu-riscv64, 8.2.2, wrote a 32-byte sigaction record over
+   --  Linux's 24-byte one for riscv64, so every program that set a signal
+   --  disposition overwrote its own frame and died before writing
+   --  anything, and a gate run said "the program returned a status" about
+   --  240 of them, naming nothing.  The probe is the record itself rather
+   --  than a version number: a C program the lane's driver links asks for
+   --  SIGPIPE's action through the system call with a guard word after
+   --  Linux's record, and an emulator that writes the guard is refused,
+   --  by its name and the version it reports, with the reason.  Words is
+   --  the record's length in machine words: three on RV64, which has no
+   --  restorer, and four on x86-64 and arm64.
+   procedure Probe_Runner
+     (Host        : Landin.Platform.Filesystem'Class;
+      Tools       : Landin.Platform.Tool_Runner'Class;
+      Runner_Name : String;
+      Driver      : String;
+      Words       : Positive;
+      Directory   : String;
+      Problem     : out Unbounded.Unbounded_String);
+
+   procedure Probe_Runner
+     (Host        : Landin.Platform.Filesystem'Class;
+      Tools       : Landin.Platform.Tool_Runner'Class;
+      Runner_Name : String;
+      Driver      : String;
+      Words       : Positive;
+      Directory   : String;
+      Problem     : out Unbounded.Unbounded_String)
+   is
+      Source  : constant String := Directory & "lane-runner.c";
+      Built   : constant String := Directory & "lane-runner";
+      Count   : constant String := Positive'Image (Words);
+      Written : Landin.Platform.Write_Status;
+      Args    : Landin.Platform.Path_List;
+      Linked  : Landin.Platform.Tool_Result;
+      Ran     : Landin.Platform.Tool_Result;
+      Through : Landin.Platform.Path_List;
+   begin
+      Problem := Unbounded.Null_Unbounded_String;
+      Host.Write_File
+        (Source,
+         "#define _GNU_SOURCE" & ASCII.LF
+         & "#include <signal.h>" & ASCII.LF
+         & "#include <string.h>" & ASCII.LF
+         & "#include <sys/syscall.h>" & ASCII.LF
+         & "#include <unistd.h>" & ASCII.LF
+         & "/* Linux's rt_sigaction record, and one guard word after it. */"
+         & ASCII.LF
+         & "struct record { unsigned long words[" & Count
+         & " ]; unsigned long guard; };" & ASCII.LF
+         & "int main(void)" & ASCII.LF
+         & "{" & ASCII.LF
+         & "    struct record old;" & ASCII.LF
+         & "    memset(&old, 0xa5, sizeof old);" & ASCII.LF
+         & "    if (syscall(SYS_rt_sigaction, SIGPIPE, (void *)0, &old, 8)"
+         & " != 0)" & ASCII.LF
+         & "        return 2;" & ASCII.LF
+         & "    return old.guard != (unsigned long)0xa5a5a5a5a5a5a5a5UL"
+         & " ? 3 : 0;" & ASCII.LF
+         & "}" & ASCII.LF,
+         Written);
+      if Written /= Landin.Platform.Write_Ok then
+         Problem := Unbounded.To_Unbounded_String
+           ("the runner probe could not be written at " & Source);
+         return;
+      end if;
+      Args.Append (Source);
+      Args.Append ("-std=c11");
+      Args.Append ("-o");
+      Args.Append (Built);
+      Tools.Run (Driver, Args, Linked, Landin.Platform.Merged);
+      if Linked.Ended /= Landin.Platform.Exited or else Linked.Exit_Code /= 0
+      then
+         Problem := Unbounded.To_Unbounded_String
+           (Driver & " could not link the runner probe: "
+            & Unbounded.To_String (Linked.Output));
+         return;
+      end if;
+      Through.Append (Built);
+      Tools.Run (Runner_Name, Through, Ran, Landin.Platform.Merged);
+      if Ran.Ended = Landin.Platform.Exited and then Ran.Exit_Code = 0 then
+         return;
+      end if;
+      declare
+         Version : Landin.Platform.Tool_Result;
+         Asked   : Landin.Platform.Path_List;
+         Line    : Unbounded.Unbounded_String;
+      begin
+         Asked.Append ("--version");
+         Tools.Run (Runner_Name, Asked, Version, Landin.Platform.Merged);
+         declare
+            Said : constant String := Unbounded.To_String (Version.Output);
+            Ends : constant Natural :=
+              Ada.Strings.Fixed.Index (Said, "" & ASCII.LF);
+         begin
+            Line := Unbounded.To_Unbounded_String
+              (if Ends = 0 then Said else Said (Said'First .. Ends - 1));
+         end;
+         Problem := Unbounded.To_Unbounded_String
+           (Runner_Name & " is refused before any program runs under it"
+            & (if Unbounded.Length (Line) = 0 then ""
+               else " (" & Unbounded.To_String (Line) & ")")
+            & ": "
+            & (if Ran.Ended = Landin.Platform.Exited
+                 and then Ran.Exit_Code = 3
+               then "asked for a signal's action, it wrote past Linux's"
+                    & Positive'Image (Words * 8) & "-byte sigaction record,"
+                    & " as Ubuntu 24.04's QEMU 8.2 does for riscv64, so"
+                    & " every program that sets a signal disposition would"
+                    & " overwrite its own frame and die before writing"
+                    & " anything"
+               else "it could not run the runner probe, which asks for a"
+                    & " signal's action ("
+                    & (if Ran.Ended = Landin.Platform.Exited
+                       then "status" & Integer'Image (Ran.Exit_Code)
+                       else "it did not exit")
+                    & "): " & Unbounded.To_String (Ran.Output))
+            & "; run the lane under the pinned QEMU, which nix develop"
+            & " provides and nix build .#qemu-user builds");
+      exception
+         when Landin.External_Tool_Failed =>
+            Problem := Unbounded.To_Unbounded_String
+              (Runner_Name & " could not run the runner probe");
+      end;
+   exception
+      when Landin.External_Tool_Failed =>
+         Problem := Unbounded.To_Unbounded_String
+           (Driver & " or " & Runner_Name
+            & " could not be started for the runner probe");
+   end Probe_Runner;
+
+   --  The lane's own runner, probed once before the workers start.
+   Runner_Asked   : Boolean := False;
+   Runner_Problem : Unbounded.Unbounded_String;
+
+   function Lane_Runner_Problem
+     (Host : Landin.Platform.Filesystem'Class) return String;
+
+   function Lane_Runner_Problem
+     (Host : Landin.Platform.Filesystem'Class) return String
+   is
+      Tools : Landin.Platform.Native.Tools.Native_Tool_Runner;
+   begin
+      if not Runner_Asked then
+         Runner_Asked := True;
+         if not Lanes.Is_Native and then Lanes.Runner /= ""
+           and then Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
+                    = Landin.Targets.Capabilities.Linux
+         then
+            Probe_Runner
+              (Host, Tools, Lanes.Runner,
+               Landin.Backend.Toolchain.Driver_For
+                 (Lanes.Target, Lanes.Toolchain),
+               (if Landin.Targets.Architecture_Of (Lanes.Target)
+                     = Landin.Targets.RV64
+                then 3 else 4),
+               Output_Directory, Runner_Problem);
+         end if;
+      end if;
+      return Unbounded.To_String (Runner_Problem);
+   end Lane_Runner_Problem;
+
+   --  The probe on fakes: an emulator that writes past the record is
+   --  refused by name, version and reason; one that does not is held to
+   --  nothing more.
+   procedure A_Known_Bad_Runner_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Known_Bad_Runner_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Probe
+        (Status : Integer; Problem : out Unbounded.Unbounded_String;
+         Linked : Integer := 0);
+
+      procedure Probe
+        (Status : Integer; Problem : out Unbounded.Unbounded_String;
+         Linked : Integer := 0)
+      is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Tools.Add_Result (Linked, "");
+         Tools.Add_Result (Status, "");
+         Tools.Add_Result
+           (0, "qemu-riscv64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.10)"
+               & ASCII.LF & "Copyright (c) 2003-2023" & ASCII.LF);
+         Probe_Runner
+           (Host, Tools, "qemu-riscv64", "riscv64-linux-gnu-gcc", 3, "/w/",
+            Problem);
+      end Probe;
+
+      Problem : Unbounded.Unbounded_String;
+   begin
+      Probe (0, Problem);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Problem), "",
+         "an emulator that keeps to Linux's record runs the lane");
+
+      Probe (3, Problem);
+      declare
+         Said : constant String := Unbounded.To_String (Problem);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index (Said, "qemu-riscv64 is refused") = 1
+            and then Ada.Strings.Fixed.Index
+              (Said, "(qemu-riscv64 version 8.2.2 (Debian") > 0
+            and then Ada.Strings.Fixed.Index
+              (Said, "past Linux's 24-byte sigaction record") > 0
+            and then Ada.Strings.Fixed.Index (Said, ".#qemu-user") > 0,
+            "a known-bad emulator is refused by name, version and reason: "
+            & Said);
+      end;
+
+      Probe (139, Problem);
+      Landin.Testing.Check
+        (Item,
+         Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Problem), "status 139") > 0,
+         "an emulator that cannot run the probe at all is refused too: "
+         & Unbounded.To_String (Problem));
+
+      Probe (0, Problem, Linked => 1);
+      Landin.Testing.Check
+        (Item,
+         Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Problem), "could not link the runner probe")
+         > 0,
+         "a probe the driver cannot link says so");
+   end A_Known_Bad_Runner_Is_Refused;
 
    --  Whether the lane's processor has every feature of a level of its
    --  family.  The flags are the kernel's names, which are the feature
@@ -2513,6 +2939,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
 
+      if Lane_Runner_Problem (Host) /= "" then
+         Landin.Testing.Fail (Item, Lane_Runner_Problem (Host));
+         return;
+      end if;
+
       declare
          type Piece_Kind is (Runtime_Piece, ABI_Piece);
 
@@ -2740,6 +3171,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
                  (Item, Wanted & ": names no " & Lanes.Fixture_Label
                   & " target, so the " & Lanes.Target_Name
                   & " lane does not run it");
+            elsif Label_Of (Case_Item) = Wanted
+              and then Class (Case_Item) in Runtime | Abi
+              and then Lane_Runner_Problem (Host) /= ""
+            then
+               Ran := Ran + 1;
+               Landin.Testing.Fail (Item, Lane_Runner_Problem (Host));
             elsif Label_Of (Case_Item) = Wanted then
                Ran := Ran + 1;
 
@@ -3250,6 +3687,226 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end loop;
    end Debugger_Workload_Inventories_Hold;
 
+   --  The debugger sessions expect each workload's stack to hold named
+   --  routines at each stop, and only the gate's GDB and LLDB jobs ran
+   --  them, so renaming or removing one of those routines in the library
+   --  failed there and nowhere a change is made.  workload-frames.json
+   --  holds the stops both debuggers read and the file declaring each
+   --  routine; this reads each one there, on every run, and names the
+   --  session, the stop and the command that finds a moved routine again.
+   --  Real host: it reads the real repository's sources.
+   procedure Debugger_Session_Frames_Are_Declared
+     (Item : in out Landin.Testing.Context);
+
+   procedure Debugger_Session_Frames_Are_Declared
+     (Item : in out Landin.Testing.Context)
+   is
+      Frames_Path  : constant String :=
+        "../tests/debugging/workload-frames.json";
+      Sources_Path : constant String :=
+        "../tests/debugging/workload-sources.json";
+      Regenerate   : constant String :=
+        "python3 compiler/tests/debugging/workload_frames.py --write";
+      Sessions     : constant String :=
+        "GDB in compiler/tests/debugging/check.py, LLDB in"
+        & " compiler/tests/debugging/darwin_workloads.py";
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Frames  : Landin.Json.Document;
+      Sources : Landin.Json.Document;
+
+      function Load
+        (Path : String; Into : in out Landin.Json.Document) return Boolean;
+
+      function Load
+        (Path : String; Into : in out Landin.Json.Document) return Boolean
+      is
+         Text : Unbounded.Unbounded_String;
+         Read : Landin.Platform.Read_Status;
+      begin
+         Host.Read_File (Path, Text, Read);
+         if Read /= Landin.Platform.Read_Ok then
+            Landin.Testing.Fail (Item, Path & " is unreadable");
+            return False;
+         end if;
+         Landin.Json.Parse (Into, Unbounded.To_String (Text));
+         if not Landin.Json.Ok (Into)
+           or else not Landin.Json.Is_Kind
+             (Into, Landin.Json.Root (Into), Landin.Json.Object_Value)
+         then
+            Landin.Testing.Fail (Item, Path & " is not a JSON object");
+            return False;
+         end if;
+         return True;
+      end Load;
+
+      --  Whether Text declares Routine at its top level: a line that
+      --  begins with the name, or with `public` and the name, then `:`.
+      function Declares (Text, Routine : String) return Boolean;
+
+      function Declares (Text, Routine : String) return Boolean is
+         Line : Positive := Text'First;
+         Ends : Natural;
+
+         function At_Line (From : Positive; Last : Natural) return Boolean;
+
+         function At_Line (From : Positive; Last : Natural) return Boolean is
+            Rest : Positive := From;
+         begin
+            if Last - From + 1 > 7 and then Text (From .. From + 6) = "public "
+            then
+               Rest := From + 7;
+               while Rest <= Last and then Text (Rest) = ' ' loop
+                  Rest := Rest + 1;
+               end loop;
+            end if;
+            if Last - Rest + 1 <= Routine'Length
+              or else Text (Rest .. Rest + Routine'Length - 1) /= Routine
+            then
+               return False;
+            end if;
+            Rest := Rest + Routine'Length;
+            while Rest <= Last and then Text (Rest) = ' ' loop
+               Rest := Rest + 1;
+            end loop;
+            return Rest <= Last and then Text (Rest) = ':';
+         end At_Line;
+      begin
+         while Line <= Text'Last loop
+            Ends := Ada.Strings.Fixed.Index
+              (Text (Line .. Text'Last), [1 => ASCII.LF]);
+            if Ends = 0 then
+               Ends := Text'Last + 1;
+            end if;
+            if At_Line (Line, Ends - 1) then
+               return True;
+            end if;
+            Line := Ends + 1;
+         end loop;
+         return False;
+      end Declares;
+
+      procedure Hold
+        (Workload : String; Stop : String; Routine : String;
+         Declared : Landin.Json.Value; Closure : Landin.Json.Value);
+
+      procedure Hold
+        (Workload : String; Stop : String; Routine : String;
+         Declared : Landin.Json.Value; Closure : Landin.Json.Value)
+      is
+         Named    : constant Landin.Json.Value :=
+           Landin.Json.Member (Frames, Declared, Routine);
+         Session  : constant String :=
+           "the " & Workload & " debugger session (" & Sessions
+           & ") expects " & Routine & " in its stack at " & Stop;
+         In_Closure : Boolean := False;
+      begin
+         if not Landin.Json.Is_Kind (Frames, Named, Landin.Json.String_Value)
+         then
+            Landin.Testing.Fail
+              (Item, Session & ", and workload-frames.json names no file"
+               & " declaring it; regenerate it with " & Regenerate);
+            return;
+         end if;
+         declare
+            File : constant String := Landin.Json.Text (Frames, Named);
+            Text : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            if Landin.Json.Is_Kind (Sources, Closure, Landin.Json.Array_Value)
+            then
+               for Position in 1 .. Landin.Json.Length (Sources, Closure) loop
+                  if Landin.Json.Text
+                    (Sources, Landin.Json.Element (Sources, Closure, Position))
+                    = File
+                  then
+                     In_Closure := True;
+                  end if;
+               end loop;
+            end if;
+            Host.Read_File ("../../" & File, Text, Read);
+            if not In_Closure then
+               Landin.Testing.Fail
+                 (Item, Session & " from " & File & ", which the workload is"
+                  & " not built from; regenerate it with " & Regenerate);
+            elsif Read /= Landin.Platform.Read_Ok
+              or else not Declares (Unbounded.To_String (Text), Routine)
+            then
+               Landin.Testing.Fail
+                 (Item, Session & ", and " & File & " no longer declares it;"
+                  & " a moved routine is found again by " & Regenerate
+                  & ", and a renamed one is renamed in the stops of"
+                  & " compiler/tests/debugging/workload-frames.json");
+            else
+               Landin.Testing.Check (Item, True, Session);
+            end if;
+         end;
+      end Hold;
+   begin
+      if not Load (Frames_Path, Frames)
+        or else not Load (Sources_Path, Sources)
+      then
+         return;
+      end if;
+      Landin.Testing.Check_Equal
+        (Item, Landin.Json.Length (Frames, Landin.Json.Root (Frames)), 3,
+         "the frames name the three debugger workloads");
+      for Position in
+        1 .. Landin.Json.Length (Frames, Landin.Json.Root (Frames))
+      loop
+         declare
+            Workload : constant String :=
+              Landin.Json.Key (Frames, Landin.Json.Root (Frames), Position);
+            Entry_Value : constant Landin.Json.Value :=
+              Landin.Json.Member_Value
+                (Frames, Landin.Json.Root (Frames), Position);
+            Stops    : constant Landin.Json.Value :=
+              Landin.Json.Member (Frames, Entry_Value, "stops");
+            Beneath  : constant Landin.Json.Value :=
+              Landin.Json.Member (Frames, Entry_Value, "beneath");
+            Declared : constant Landin.Json.Value :=
+              Landin.Json.Member (Frames, Entry_Value, "declared");
+            Closure  : constant Landin.Json.Value :=
+              Landin.Json.Member
+                (Sources, Landin.Json.Root (Sources), Workload);
+         begin
+            if not Landin.Json.Is_Kind
+                (Frames, Stops, Landin.Json.Object_Value)
+              or else Landin.Json.Length (Frames, Stops) = 0
+            then
+               Landin.Testing.Fail
+                 (Item, Workload & " has no stops in " & Frames_Path);
+            else
+               for Stop in 1 .. Landin.Json.Length (Frames, Stops) loop
+                  declare
+                     Stack : constant Landin.Json.Value :=
+                       Landin.Json.Member_Value (Frames, Stops, Stop);
+                  begin
+                     for Frame in 1 .. Landin.Json.Length (Frames, Stack) loop
+                        Hold
+                          (Workload,
+                           "stop " & Landin.Json.Key (Frames, Stops, Stop),
+                           Landin.Json.Text
+                             (Frames,
+                              Landin.Json.Element (Frames, Stack, Frame)),
+                           Declared, Closure);
+                     end loop;
+                  end;
+               end loop;
+            end if;
+            if Landin.Json.Is_Kind (Frames, Beneath, Landin.Json.Array_Value)
+            then
+               for Frame in 1 .. Landin.Json.Length (Frames, Beneath) loop
+                  Hold
+                    (Workload, "every stop",
+                     Landin.Json.Text
+                       (Frames, Landin.Json.Element (Frames, Beneath, Frame)),
+                     Declared, Closure);
+               end loop;
+            end if;
+         end;
+      end loop;
+   end Debugger_Session_Frames_Are_Declared;
+
    procedure Register
      (Into : in out Landin.Testing.Registry;
       Include_Target_Workloads : Boolean := True) is
@@ -3258,6 +3915,16 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Into, "fixture execution",
          "debugger workload inventories are their closures",
          Debugger_Workload_Inventories_Hold'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "debugger session frames are declared",
+         Debugger_Session_Frames_Are_Declared'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution", "a report is recorded by name",
+         A_Report_Is_Recorded_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution", "a known-bad runner is refused",
+         A_Known_Bad_Runner_Is_Refused'Access);
       Landin.Testing.Register
         (Into, "fixture execution",
          "outputs belong to their producing attempt",

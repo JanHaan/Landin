@@ -3,4 +3,4 @@ error[L0006]: module not found: absent
   |
 1 | import absent
   | ^^^^^^^^^^^^^
-  = note: [1420]: roots are searched in supplied order
+  = note: [1420]: an import names a directory under a root, and roots are searched in the order given; no directory ../tests/fixtures/negative/module-not-found/root/absent was found

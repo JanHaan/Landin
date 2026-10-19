@@ -1,0 +1,8 @@
+class: negative
+summary: D381 a result or parameter that hides an import is named as the cause, in a type path and in a selection, with the local labelled
+constructs: 0140, 1450, 1860
+codes: L0201, L0301
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: --root=../tests/fixtures/negative/local-hides-an-import/root ../tests/fixtures/negative/local-hides-an-import/entry
+status: 1

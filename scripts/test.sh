@@ -4,7 +4,9 @@
 #
 #  Arguments are passed through.  --record writes compiler/tests/lowering.ir,
 #  compiler/tests/layout.targets and the server sessions' transcripts and runs
-#  no case.  --record-and-run does
+#  no case; --record=lowering, --record=layout, --record=server/NAME and
+#  --record=CLASS/NAME each write one of them, the last a fixture's report.
+#  --record-and-run does
 #  both invocations after one build.  --suite, --case and --fixture select a
 #  visibly FILTERED developer run; none replaces the no-argument gate.
 #  --host explicitly excludes native target workload emission/execution and reports

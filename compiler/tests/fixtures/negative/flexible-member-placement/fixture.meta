@@ -1,0 +1,9 @@
+class: negative
+summary: D413 admits a zero-length array in a C record only as its last field, and a record ending in one neither as a field of a C record nor as an array element
+constructs: 0520, 0750, 1580
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0346, L0346, L0304, L0304
+expect: expected.txt
+args: ../tests/fixtures/negative/flexible-member-placement/program.ldn
+status: 1

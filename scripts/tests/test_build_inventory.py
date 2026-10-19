@@ -30,15 +30,28 @@ BASE = ["1 10 /src/main.adb", "2 20 /src/host.c", "3 30 /src/host.h",
 
 
 class BuildInventory(unittest.TestCase):
-    def decision(self, old, new, incremental="yes", fail_tool=None):
+    def decision(self, old, new, incremental="yes", fail_tool=None,
+                 unfinished=None):
         # This is deliberately the production branch including both inventory
         # and fixed-identity comparisons, not a copy of its regexes. Its only
         # destructive operation addresses our disposable fixture directory.
+        # It returns whether an object and the published compiler survived.
         with tempfile.TemporaryDirectory(prefix="landin-inventory-") as tmp:
             build = Path(tmp) / "build"
-            build.mkdir()
+            (build / "bin").mkdir(parents=True)
+            published = build / "bin" / "refine"
+            published.write_text("published compiler\n")
+            obj = build / "refine-obj" / "main.o"
+            obj.parent.mkdir()
+            obj.write_text("object\n")
             manifest = build / "source-manifest.txt"
-            manifest.write_text("\n".join(sorted(old)) + "\n")
+            attempt = build / "attempt-manifest.txt"
+            state = build / "build-state"
+            if unfinished is None:
+                manifest.write_text("\n".join(sorted(old)) + "\n")
+            else:
+                attempt.write_text("\n".join(sorted(old)) + "\n")
+                state.write_text(unfinished + "\n")
             env = dict(os.environ)
             if fail_tool:
                 fake = Path(tmp) / fail_tool
@@ -48,10 +61,14 @@ class BuildInventory(unittest.TestCase):
             result = subprocess.run(
                 ["sh", "-eu", "-c", DECISION], text=True, capture_output=True,
                 env={**env, "Manifest": str(manifest),
+                     "Attempt": str(attempt), "State": str(state),
                      "LANDIN_BUILD_DIR": str(build),
+                     "LANDIN_BUILD_TAG": "test", "LANDIN_BUILD_MODE": "debug",
                      "Current": "\n".join(sorted(new)),
                      "Incremental": incremental}, check=True, timeout=5)
-            return build.exists(), result.stdout
+            self.assertEqual(published.read_text(), "published compiler\n",
+                             "a rebuild removed the published compiler")
+            return obj.exists(), result.stdout
 
     def test_inventory_add_remove_rename(self):
         for extension in ("c", "h", "adb", "ads"):
@@ -86,6 +103,33 @@ class BuildInventory(unittest.TestCase):
 
     def test_unchanged_does_nothing(self):
         self.assertEqual(self.decision(BASE, BASE), (True, ""))
+
+    def test_failed_developer_build_keeps_what_it_compiled(self):
+        exists, text = self.decision(BASE, BASE, unfinished="failed")
+        self.assertTrue(exists)
+        self.assertIn("did not finish (it failed); keeping what it compiled",
+                      text)
+        changed = ["9 10 /src/main.adb"] + BASE[1:]
+        exists, text = self.decision(BASE, changed, unfinished="failed")
+        self.assertTrue(exists)
+        self.assertIn("using checksum recompilation", text)
+        added = BASE + ["7 70 /src/member.adb"]
+        exists, text = self.decision(BASE, added, unfinished="failed")
+        self.assertFalse(exists)
+        self.assertIn("inventory or project changed", text)
+
+    def test_interrupted_developer_build_announces_its_discard(self):
+        _, text = self.decision(BASE, BASE, unfinished="running")
+        self.assertIn("(it was interrupted); discarding only what it wrote",
+                      text)
+
+    def test_unfinished_ordinary_build_is_clean_but_keeps_bin(self):
+        for state in ("failed", "running"):
+            with self.subTest(state=state):
+                exists, text = self.decision(BASE, BASE, incremental="no",
+                                             unfinished=state)
+                self.assertFalse(exists)
+                self.assertIn("rebuilding from clean, keeping bin/", text)
 
     def test_ordinary_gate_still_cleans_content_changes(self):
         new = ["9 10 /src/main.adb"] + BASE[1:]
@@ -188,16 +232,16 @@ class ConfiguredBuild(unittest.TestCase):
         self.root = Path(temporary.name)
         scripts = self.root / "scripts"
         scripts.mkdir()
-        for name in ("build.sh", "build_config.py", "build_identity.py"):
+        for name in ("build.sh", "build_config.py", "build_identity.py",
+                     "build_lock.py"):
             shutil.copyfile(ROOT / "scripts" / name, scripts / name)
-        (scripts / "build_lock.py").write_text("# fixture lock identity\n")
         (scripts / "env.sh").write_text('''set -eu
 LANDIN_ROOT="$FAKE_ROOT"
 LANDIN_ADA_DIR="$LANDIN_ROOT/compiler/ada"
 LANDIN_BUILD_TAG=test
 LANDIN_BUILD_MODE=debug
 LANDIN_BUILD_DIR="$LANDIN_ADA_DIR/build/test/debug"
-export LANDIN_BUILD_DIR
+export LANDIN_BUILD_DIR LANDIN_BUILD_TAG LANDIN_BUILD_MODE
 landin_build_lock() { :; }
 landin_require() { command -v "$1" >/dev/null; }
 ''')
@@ -245,10 +289,14 @@ if os.environ.get("FAKE_EDIT_ON_PROJECT") == project:
     source = root / "compiler/ada/src/main.adb"
     source.write_text(source.read_text() + "edited during build\\n")
 build = pathlib.Path(os.environ["LANDIN_BUILD_DIR"])
-(build / "bin").mkdir(parents=True, exist_ok=True)
+exec_dir = build / next(arg.split("=", 1)[1] for arg in sys.argv[1:]
+                        if arg.startswith("-XLANDIN_EXEC_SUBDIR="))
+exec_dir.mkdir(parents=True, exist_ok=True)
+(build / "refine-obj").mkdir(exist_ok=True)
+(build / "refine-obj" / "built.o").write_text("object")
 project = sys.argv[sys.argv.index("-P") + 1]
 name = {"refine.gpr": "refine", "landin_tests.gpr": "landin_tests"}[project]
-path = build / "bin" / name
+path = exec_dir / name
 path.write_text("#!/bin/sh\\necho " + artifact + "\\n")
 path.chmod(0o755)
 ''')
@@ -517,9 +565,80 @@ path.write_text("-- generated at " + str(path) + "\\n"
                     marker.write_text("old object")
                     retried = self.run_build(extra=extra)
                     self.assertEqual(retried.returncode, 0, retried.stderr)
-                    self.assertIn("last build did not finish", retried.stdout)
-                    self.assertFalse(marker.exists())
+                    self.assertIn("last build did not finish (it failed)",
+                                  retried.stdout)
+                    # The checksum mode recompiles what the edit changed;
+                    # only the ordinary build starts from clean.
+                    self.assertEqual(marker.exists(), incremental == "yes")
                     self.assertTrue(self.manifest.is_file())
+
+    def test_failed_build_keeps_the_published_compiler(self):
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        published = self.build / "bin/refine"
+        self.assertEqual(published.read_bytes(),
+                         (self.build / "link/refine").read_bytes())
+        identity = published.stat().st_ino
+        failed = self.run_build("-j1", extra={"FAKE_BUILD_FAILURE": "compile"})
+        self.assertEqual(failed.returncode, 4, failed.stderr)
+        self.assertEqual(published.stat().st_ino, identity)
+        self.assertEqual((self.build / "build-state").read_text(), "failed\n")
+        for incremental in ("yes", "no"):
+            with self.subTest(incremental=incremental):
+                failed = self.run_build("-j1", extra={
+                    "FAKE_BUILD_FAILURE": "compile",
+                    "LANDIN_BUILD_INCREMENTAL": incremental})
+                self.assertEqual(failed.returncode, 4, failed.stderr)
+                self.assertTrue(os.access(published, os.X_OK))
+                self.assertEqual(published.stat().st_ino, identity)
+
+    def test_interrupted_build_discards_only_what_it_wrote(self):
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        earlier = self.build / "refine-obj/earlier.o"
+        earlier.write_text("whole object")
+        half = self.build / "refine-obj/half.o"
+        half.write_text("half-writ")
+        state = self.build / "build-state"
+        (self.build / "attempt-manifest.txt").write_text(
+            self.manifest.read_text())
+        state.write_text("running\n")
+        self.manifest.unlink()
+        began = state.stat().st_mtime
+        os.utime(earlier, (began - 10, began - 10))
+        os.utime(half, (began + 1, began + 1))
+        published = self.build / "bin/refine"
+        identity = published.stat().st_ino
+        os.utime(published, (began + 1, began + 1))
+        retried = self.run_build()
+        self.assertEqual(retried.returncode, 0, retried.stderr)
+        self.assertIn("(it was interrupted); discarding only what it wrote",
+                      retried.stdout)
+        self.assertTrue(earlier.exists())
+        self.assertFalse(half.exists())
+        self.assertEqual(published.stat().st_ino, identity)
+        self.assertFalse(state.exists())
+        self.assertTrue(self.manifest.is_file())
+
+    def test_changed_executable_is_published_by_rename(self):
+        first = self.run_build()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        published = self.build / "bin/refine"
+        identity = published.stat().st_ino
+        # Unchanged content is not republished.
+        self.manifest.unlink()
+        again = self.run_build()
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertEqual(published.stat().st_ino, identity)
+        self.executable(self.builder, self.builder.read_text().replace(
+            'artifact = "old"', 'artifact = "new"'))
+        rebuilt = self.run_build()
+        self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
+        self.assertNotEqual(published.stat().st_ino, identity)
+        self.assertEqual(subprocess.check_output([published], text=True),
+                         "new\n")
+        self.assertEqual(sorted(p.name for p in published.parent.iterdir()),
+                         ["landin_tests", "refine"])
 
     def test_disk_full_reports_what_was_free(self):
         for failure in ("disk", "compile"):

@@ -95,6 +95,17 @@ driver can resolve another archive search policy. Missing archives fail; `-l`
 and `-hidden-l` cannot guarantee archive selection when a dylib is also present.
 No GNU build-id flags reach the Darwin driver. Caller-source sidecars use the Mach-O identity contract below.
 
+Only an export is a global symbol (D415): the hosted or firmware entry, C
+imports and public C definitions, anything with a link name, a public
+definition in a machine convention and a Cortex-M placement. Every other
+routine and datum is local to the image under its own name, on every
+backend, so it can neither collide with nor replace a C library's or a
+linked object's symbol. Inside the one assembly file a program emits, an
+item whose name another item holds and that is not an export takes its
+module-qualified spelling, `core.arena.reset`, as [1975] states (D417);
+symbol allocation is the same in every backend. On ELF a local symbol is
+`STB_LOCAL`, `t` or `d` in `nm`; on Mach-O it lacks `N_EXT`.
+
 A logical external name such as `_entry` stays unchanged in checking and IR.
 The target mapping yields `_entry` on ELF and `__entry` on Darwin. Quoting an
 assembly operand is a later rendering step, and a leading underscore in source

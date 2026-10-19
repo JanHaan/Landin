@@ -1,0 +1,6 @@
+error[L0346]: this signature takes by value a C record that C reaches only through a pointer
+  --> ../tests/fixtures/negative/flexible-member-by-value/program.ldn:6:1
+  |
+6 | extern(c) take: (record: entry) -> none
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this C signature
+  = note: D410/D413: a layout(c, packed) record, and one that ends in a flexible array member or holds such a record, crosses to C by pointer; pass `ptr` to the record instead

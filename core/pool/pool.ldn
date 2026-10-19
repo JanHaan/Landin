@@ -38,10 +38,10 @@ fixed_pool: type = struct
 end fixed_pool
 
 --- Reclaiming allocator over uniform slots in caller storage, as a handle:
---- copies share one pool. Reuses the lowest free index, never grows in place,
---- and uses no fallback allocator. Even a zero-byte allocation occupies a
---- slot. A resize keeps the block in its slot, to any extent the slot holds,
---- and refuses a larger one.
+--- copies share one pool. Reuses the lowest free index and uses no fallback
+--- allocator. Even a zero-byte allocation occupies a slot. A growth or a
+--- resize keeps the block in its slot, to any extent the slot holds, and
+--- refuses a larger one.
 public provider: type = fixed_pool
 
 slot_stride: (size: usize, alignment: usize)
@@ -195,73 +195,60 @@ pool_alloc: (self: fixed_pool, size: usize, alignment: usize)
     inc state.val.live_count
 end pool_alloc
 
-pool_free: (self: fixed_pool, block: ptr mut u8, size: usize) -> none =
+--  Record the extent `new_size` for the live slot that holds `block` with
+--  the extent `old_size`, and return its index, or return the slot count,
+--  changing nothing, when `block` is no such slot: a free, a growth and a
+--  resize each find their slot this way, so each refuses what the others do.
+retag: (self: fixed_pool, block: ptr mut u8, old_size: usize,
+        new_size: usize) -> (index: usize) =
     state: ptr mut pool_state = self.state
-    if state.val.slot_count == 0 then
-        inc state.val.rejected_frees
-        return
-    end if
+    index = state.val.slot_count
     first_address: usize = usize(self.base) + state.val.first_offset
     address: usize = usize(block)
-    if address < first_address then
-        inc state.val.rejected_frees
-        return
-    end if
+    return when address < first_address
     distance: usize = address - first_address
-    if distance % state.val.stride <> 0 then
-        inc state.val.rejected_frees
-        return
-    end if
-    index: usize = distance / state.val.stride
-    if index >= state.val.slot_count then
-        inc state.val.rejected_frees
-        return
-    end if
-    selected: ptr mut slot = addr self.bookkeeping[index]
-    if selected.val.size == 0 -% 1 or selected.val.size <> size then
-        inc state.val.rejected_frees
-        return
-    end if
+    return when distance % state.val.stride <> 0
+    found: usize = distance / state.val.stride
+    return when found >= index
+    selected: ptr mut slot = addr self.bookkeeping[found]
+    return when selected.val.size == 0 -% 1 or selected.val.size <> old_size
+    selected.val.size = new_size
+    index = found
+end retag
 
-    selected.val.size = 0 -% 1
+pool_free: (self: fixed_pool, block: ptr mut u8, size: usize) -> none =
+    state: ptr mut pool_state = self.state
+    index: usize = retag(self, block, size, 0 -% 1)
+    if index == state.val.slot_count then
+        inc state.val.rejected_frees
+        return
+    end if
     return_free_index(self, index)
     inc state.val.frees
     dec state.val.live_count
 end pool_free
 
+--  Every slot has the same size, so a block grows in its own slot or not
+--  at all: an extent the slot holds is recorded for the block's free, and
+--  a larger one, or a block that is not a live slot of `old_size`, is
+--  refused with the pool unchanged.  The block stays where it is, so it
+--  keeps the alignment it was allocated with.
 pool_grow: (self: fixed_pool, block: ptr mut u8,
             old_size: usize, new_size: usize, alignment: usize)
            -> (grown: bool) =
-    _ = self.state
-    _ = block
-    _ = old_size
-    _ = new_size
     _ = alignment
-    grown = false
+    state: ptr mut pool_state = self.state
+    grown = new_size <= state.val.slot_size
+            and retag(self, block, old_size, new_size) <> state.val.slot_count
 end pool_grow
 
---  Every slot has the same size, so a block is resized in its own slot or
---  not at all: an extent the slot holds is recorded for the block's free,
---  and a larger one, or a block that is not a live slot of `old_size`, is
---  refused with the pool unchanged.
+--  A resize is a growth or a shrink in the block's own slot, and one the
+--  slot cannot hold is refused: another slot is no larger.
 pool_resize: (self: fixed_pool, block: ptr mut u8,
               old_size: usize, new_size: usize, alignment: usize)
              -> (moved: ptr mut u8) ! mem.out_of_memory =
-    _ = alignment
-    state: ptr mut pool_state = self.state
-    fail mem.out_of_memory when new_size > state.val.slot_size
-      or state.val.slot_count == 0
-    first_address: usize = usize(self.base) + state.val.first_offset
-    address: usize = usize(block)
-    fail mem.out_of_memory when address < first_address
-    distance: usize = address - first_address
-    fail mem.out_of_memory when distance % state.val.stride <> 0
-    index: usize = distance / state.val.stride
-    fail mem.out_of_memory when index >= state.val.slot_count
-    selected: ptr mut slot = addr self.bookkeeping[index]
-    fail mem.out_of_memory when selected.val.size == 0 -% 1
-      or selected.val.size <> old_size
-    selected.val.size = new_size
+    fail mem.out_of_memory
+        when not pool_grow(self, block, old_size, new_size, alignment)
     --  [0810]: the block borrows nothing, as an allocation does.
     moved = ptr(usize(block))
 end pool_resize

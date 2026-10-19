@@ -36,9 +36,10 @@ package Landin.Testing.Lanes is
    --  The name `refine --target=` takes for the lane.
    function Target_Name return String;
 
-   --  The label a fixture's `targets:` names for the lane: `linux-x86-64`,
-   --  `linux-arm64`, `linux-rv64`, `macos-arm64`, `freebsd-x86-64`,
-   --  `freebsd-arm64` or `cortex-m`.
+   --  The label a fixture's `targets:` names for the lane, which is the
+   --  lane's own --target name: `linux-x86-64`, `linux-arm64`,
+   --  `linux-rv64`, `darwin-arm64`, `freebsd-x86-64`, `freebsd-arm64` or
+   --  `cortex-m0`.
    function Fixture_Label return String;
 
    --  Whether a fixture whose `targets:` is TARGETS belongs to the lane.

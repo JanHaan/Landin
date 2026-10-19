@@ -46,7 +46,21 @@ else
     echo "TextMate test dependencies absent; tokenizer smoke skipped"
 fi
 
+#  The pinned CLI is the grammar package's own, as the gate installs it, or
+#  the one `nix develop` puts on PATH -- the same release binary, held to
+#  the same checksum.  Another version on PATH is not the pinned CLI.
+tree_pin=$(sed -n 's/^LANDIN_TREE_SITTER_VERSION=//p' "$root/environments/pins.sh")
 tree_cli="$root/highlight/tree-sitter/node_modules/.bin/tree-sitter"
+tree_other=
+if ! test -x "$tree_cli" && tree_path=$(command -v tree-sitter); then
+    tree_version=$("$tree_path" --version 2>/dev/null | sed -n '1s/^tree-sitter \([^ ]*\).*/\1/p')
+    if test "$tree_version" = "$tree_pin"; then
+        tree_cli=$tree_path
+    else
+        tree_other="$tree_path is ${tree_version:-of no known version}, not the pinned $tree_pin"
+        echo "tree-sitter: $tree_other; not used"
+    fi
+fi
 
 #  The structural block is optional, and --integration is the one
 #  caller that cannot treat it so.  The grammar's drift from the kernel went
@@ -55,10 +69,13 @@ tree_cli="$root/highlight/tree-sitter/node_modules/.bin/tree-sitter"
 #  worse than no run, since it is the editor grammar's language-wide
 #  evidence.  Ask for the corpus and the pinned CLI is mandatory.
 if test "$integration" = true && ! test -x "$tree_cli"; then
-    echo "$0: --integration needs the pinned tree-sitter CLI at" >&2
-    echo "  highlight/tree-sitter/node_modules/.bin/tree-sitter" >&2
-    echo "  (npm install in highlight/tree-sitter); refusing to report a" >&2
-    echo "  corpus pass that did not run" >&2
+    echo "$0: --integration needs the pinned tree-sitter CLI $tree_pin:" >&2
+    echo "  nix develop puts it on PATH, or npm install in" >&2
+    echo "  highlight/tree-sitter puts it at node_modules/.bin/tree-sitter" >&2
+    if test -n "$tree_other"; then
+        echo "  ($tree_other)" >&2
+    fi
+    echo "  refusing to report a corpus pass that did not run" >&2
     exit 1
 fi
 
@@ -70,7 +87,13 @@ if test -x "$tree_cli"; then
         cd "$root/highlight/tree-sitter"
         export XDG_CONFIG_HOME="$tree_work/config"
         export XDG_CACHE_HOME="$tree_work/cache"
-        npm run generate
+        #  What package.json's `generate` script runs, without needing npm.
+        #  Where there is no Node, the CLI's own QuickJS evaluates grammar.js;
+        #  it generates the same parser byte for byte.
+        if test -z "${TREE_SITTER_JS_RUNTIME-}" && ! command -v node >/dev/null 2>&1; then
+            export TREE_SITTER_JS_RUNTIME=native
+        fi
+        "$tree_cli" generate
         "$tree_cli" test
         "$tree_cli" parse --quiet \
           "$root/highlight/tests/structural.ldn"

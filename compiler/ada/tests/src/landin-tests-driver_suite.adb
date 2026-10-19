@@ -7,6 +7,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Driver;
 with Landin.Platform;
+with Landin.Source;
 with Landin.Testing.Fakes;
 with Landin.Syntax.Parser;
 
@@ -1133,10 +1134,12 @@ package body Landin.Tests.Driver_Suite is
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Args : Landin.Platform.Path_List;
    begin
+      --  D383: a source file is the entry module under roots, so what is
+      --  refused is a path that is neither a directory nor a source.
       Host.Add_Directory ("root");
-      Host.Add_File ("entry.ldn", "value: i32 = 1" & LF);
+      Host.Add_File ("entry", "value: i32 = 1" & LF);
       Args.Append ("--root=root");
-      Args.Append ("entry.ldn");
+      Args.Append ("entry");
 
       declare
          Result : constant Landin.Driver.Outcome :=
@@ -1656,7 +1659,8 @@ package body Landin.Tests.Driver_Suite is
                    Landin.Driver.Status_Misuse, "invalid or repeated",
                    "--option=x=2");
             Check (Help, First, "--root=lib",
-                   Landin.Driver.Status_Misuse, "exactly one entry",
+                   Landin.Driver.Status_Misuse,
+                   "one entry-module directory, or the entry module's",
                    Input => False);
             Check (Help, First, "--emit=asm",
                    Landin.Driver.Status_Misuse, "need a source",
@@ -3452,7 +3456,12 @@ package body Landin.Tests.Driver_Suite is
       Refuse ("compiler.assert(false)", "", "assertion is false");
       Refuse ("compiler.assert(1)", "", "compiler.assert needs bool");
       Refuse ("compiler.assert(true or f())", "", "closed fixed");
-      Refuse ("compiler.assert(sizeof thing == 8)", "", "scalar name");
+      --  D412: a declared type is measured once checking has laid it out,
+      --  so an unknown one is a name error and a wrong size is false.
+      Refuse ("compiler.assert(sizeof thing == 8)", "", "not declared");
+      Refuse ("thing: type = struct" & ASCII.LF & "    value: i32" & ASCII.LF
+              & "end thing" & ASCII.LF & "compiler.assert(sizeof thing == 8)",
+              "", "assertion is false");
       Refuse ("compiler.assert(compiler.c_sysv_lp64 + 1 == 2)", "",
               "incompatible types");
       Refuse ("compiler.assert(compiler.c_sysv_lp64)", "",
@@ -5284,13 +5293,14 @@ package body Landin.Tests.Driver_Suite is
                                  Landin.Diagnostics.Code
                                    (Landin.Diagnostics.Get
                                       (Checked.Found, Index)) = "L0008")
-                     and then Contains (Report, "loose.ldn:1:1")
+                     and then Contains (Report, "loose.ldn:1:3")
                      and then Contains (Report, "loose.ldn:3:1")
                      and then Contains (Report, "loose.ldn:4:1")
                      and then not Contains (Report, "loose.ldn:2:1"),
                "once for every line the layout changes (D359)");
             Landin.Testing.Check
-              (Item, Contains (Report, "the layout writes it `a: u32 = 1`")
+              (Item, Contains (Report, "the layout writes it `a: u32 = 1`,"
+                                       & " which differs from column 3")
                      and then Contains (Report, "the layout removes it")
                      and then Contains
                        (Report, "the layout ends the file's last line"),
@@ -5447,8 +5457,83 @@ package body Landin.Tests.Driver_Suite is
                      "--check with --stdout");
             Refused (["--stdout", "loose.ldn", "hidden.ldn"],
                      "--stdout with two sources");
-            Refused (["module"], "a directory");
+            Refused (["module"], "a directory with no source under it");
             Refused (["loose.ldn", "loose.ldn"], "one source twice");
+         end;
+      end;
+
+      --  D385: a respaced line is marked from the first byte
+      --  the layout changes, so one space too many is under the caret.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_File ("spaced.ldn", "b: u32 =  2" & LF);
+         declare
+            Checked : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--check", "spaced.ldn"]));
+            Where : constant Landin.Source.Span :=
+              Landin.Diagnostics.Span_Of
+                (Landin.Diagnostics.Primary
+                   (Landin.Diagnostics.Get (Checked.Found, 1)));
+            use type Landin.Source.Byte_Offset;
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Unbounded.To_String (Checked.Report),
+                               "spaced.ldn:1:10")
+                     and then Where.Last - Where.First = 1,
+               "the one extra space is what is marked: "
+               & Unbounded.To_String (Checked.Report));
+         end;
+      end;
+
+      --  D385: a directory is the `.ldn` files under it, depth
+      --  first in the order the host lists them, a dot-named directory
+      --  left out and a source named twice formatted once.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_Directory ("tree");
+         Host.Add_Directory ("tree/inner");
+         Host.Add_Directory ("tree/.hidden");
+         Host.Add_File ("tree/top.ldn", Loose);
+         Host.Add_File ("tree/inner/deep.ldn", Loose);
+         Host.Add_File ("tree/inner/laid.ldn", Laid_Out);
+         Host.Add_File ("tree/inner/notes.txt", Loose);
+         Host.Add_File ("tree/.hidden/kept.ldn", Loose);
+         declare
+            Checked : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--check", "tree", "tree/top.ldn"]));
+            Report : constant String := Unbounded.To_String (Checked.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Checked.Status = Landin.Driver.Status_Reported
+                     and then Landin.Diagnostics.Count (Checked.Found) = 6
+                     and then Contains (Report, "tree/top.ldn:1:3")
+                     and then Contains (Report, "tree/inner/deep.ldn:1:3")
+                     and then not Contains (Report, "laid.ldn")
+                     and then not Contains (Report, "notes.txt")
+                     and then not Contains (Report, ".hidden"),
+               "--check reads every source under the directory once: "
+               & Report);
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index (Report, "tree/inner/deep.ldn")
+                     < Ada.Strings.Fixed.Index (Report, "tree/top.ldn"),
+               "depth first, in the order the host lists names");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0, "--check writes nothing");
+         end;
+         declare
+            Rewritten : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["tree"]));
+         begin
+            Landin.Testing.Check
+              (Item, Rewritten.Status = Landin.Driver.Status_Success
+                     and then Host.Written ("tree/top.ldn") = Laid_Out
+                     and then Host.Written ("tree/inner/deep.ldn")
+                       = Laid_Out
+                     and then Host.Written ("tree/.hidden/kept.ldn") = ""
+                     and then Host.Write_Count = 2,
+               "fmt rewrites the sources under it and nothing else");
          end;
       end;
 

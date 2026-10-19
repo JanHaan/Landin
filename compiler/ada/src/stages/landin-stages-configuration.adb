@@ -2,6 +2,7 @@ with Landin.Targets.Capabilities;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
+with Landin.Checking;
 with Landin.Configuration;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Checking;
@@ -41,12 +42,39 @@ package body Landin.Stages.Configuration is
       return "configuration";
    end Name;
 
+   procedure Configure
+     (Whole   : in out Compilation'Class;
+      Outcome : out Stage_Outcome;
+      Late    : Boolean);
+
    overriding procedure Run
      (Item    : Instance;
       Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome)
    is
       pragma Unreferenced (Item);
+   begin
+      Configure (Whole, Outcome, Late => False);
+   end Run;
+
+   procedure Check_Layout_Assertions (Whole : in out Compilation'Class) is
+      Ignored : Stage_Outcome;
+   begin
+      if Landin.Configuration.Deferred_Count
+        (Configurations (Compilation (Whole)).all) > 0
+      then
+         Configure (Whole, Ignored, Late => True);
+      end if;
+   end Check_Layout_Assertions;
+
+   --  Late is D412's second pass: options are gathered again so the
+   --  deferred assertions read the same values, but only those assertions'
+   --  reports are kept, and the configuration table is not changed.
+   procedure Configure
+     (Whole   : in out Compilation'Class;
+      Outcome : out Stage_Outcome;
+      Late    : Boolean)
+   is
       --  The one view every helper below takes; see Landin.Stages.Run.
       Context : Compilation renames Compilation (Whole);
 
@@ -126,6 +154,16 @@ package body Landin.Stages.Configuration is
       function Evaluate (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Fixed_Value;
 
+      --  D412: whether Validate admits a declared type's measurement, as
+      --  it does inside a compiler assertion, and whether a subtree makes
+      --  one; and the measurement's answer, which the late pass reads from
+      --  the checked layout.
+      Measuring_Layout : Boolean := False;
+      function Measures_Layout (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Boolean;
+      function Layout_Measure (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Fixed_Value;
+
       function Spelled (Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Names.all, Name));
 
@@ -148,6 +186,130 @@ package body Landin.Stages.Configuration is
               (Of_Tree, Syn.Target_Of (Of_Tree, Node))
             and then Spelled (Syn.Name
               (Of_Tree, Syn.Target_Of (Of_Tree, Node))) = "feature");
+
+      function Measures_Layout (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Boolean is
+      begin
+         if Node = Syn.No_Node then
+            return False;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Offset_Of then
+            return True;
+         elsif Syn.Kind (Of_Tree, Node) in Syn.Size_Of | Syn.Align_Of then
+            return Scalar_Type (Of_Tree, Syn.Measured_Type (Of_Tree, Node))
+              not in Ty.Scalar_Name;
+         end if;
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            if Measures_Layout (Of_Tree, Syn.Slot (Of_Tree, Node, Position))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Measures_Layout;
+
+      function Layout_Measure (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Fixed_Value
+      is
+         use type Landin.Checking.Nominal_Type_Id;
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Context);
+      begin
+         --  Only the late pass evaluates one; the checker has reported
+         --  every measured type or path it refused.
+         if not Late then
+            return (Kind => Bad_Value);
+         end if;
+         if Syn.Kind (Of_Tree, Node) = Syn.Offset_Of then
+            declare
+               Offset : Landin.Targets.Byte_Count;
+               Known : Boolean;
+            begin
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 /= Ty.Usize
+               then
+                  return (Kind => Bad_Value);
+               end if;
+               Landin.Checking.Offset_Value
+                 (Types.all, Of_Tree, Node, Offset, Known);
+               return (if Known
+                       then (Kind => Number,
+                             Integer_Value => Ty.Folded (Offset))
+                       else (Kind => Bad_Value));
+            end;
+         end if;
+         declare
+            Asked : constant Syn.Node_Id := Syn.Measured_Type (Of_Tree, Node);
+            Sizing : constant Boolean :=
+              Syn.Kind (Of_Tree, Node) = Syn.Size_Of;
+         begin
+            case Landin.Checking.Type_Of (Types.all, Of_Tree, Asked) is
+               when Ty.Aggregate =>
+                  declare
+                     Declared : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Nominal_Of (Types.all, Of_Tree, Asked);
+                  begin
+                     if Declared = Landin.Checking.No_Nominal_Type
+                       or else not Landin.Checking.Has_Layout
+                         (Types.all, Declared)
+                     then
+                        return (Kind => Bad_Value);
+                     end if;
+                     return (Kind => Number, Integer_Value =>
+                       (if Sizing
+                        then Ty.Folded (Landin.Checking.Layout_Size
+                          (Types.all, Declared))
+                        else Ty.Folded (Landin.Checking.Layout_Alignment
+                          (Types.all, Declared))));
+                  end;
+               when Ty.Fixed_Array =>
+                  declare
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Checking.Array_Type_Extent
+                       (Types.all, Of_Tree, Asked, Target (Context), Size,
+                        Alignment);
+                     return (Kind => Number, Integer_Value =>
+                       (if Sizing then Ty.Folded (Size)
+                        else Ty.Folded (Alignment)));
+                  end;
+               when Ty.Scalar_Name =>
+                  declare
+                     Size : constant Landin.Targets.Scalar_Size :=
+                       Ty.Storage_Size
+                         (Landin.Checking.Type_Of (Types.all, Of_Tree, Asked),
+                          Target (Context));
+                  begin
+                     return (Kind => Number, Integer_Value =>
+                       (if Sizing then Ty.Folded (Landin.Targets.Bytes (Size))
+                        else Ty.Folded (Landin.Targets.Alignment_Of
+                          (Target (Context), Size))));
+                  end;
+               when Ty.Pointer_Value | Ty.Function_Value | Ty.Slice_Value
+                  | Ty.Any_Value | Ty.Atom_Value =>
+                  declare
+                     Carrier : constant Ty.Scalar_Name :=
+                       (if Landin.Checking.Type_Of (Types.all, Of_Tree, Asked)
+                             = Ty.Atom_Value
+                        then Ty.U32 else Ty.Usize);
+                     Words : constant Ty.Folded :=
+                       (if Landin.Checking.Type_Of (Types.all, Of_Tree, Asked)
+                             in Ty.Slice_Value | Ty.Any_Value
+                        then 2 else 1);
+                     Size : constant Landin.Targets.Scalar_Size :=
+                       Ty.Storage_Size (Carrier, Target (Context));
+                  begin
+                     return (Kind => Number, Integer_Value =>
+                       (if Sizing
+                        then Ty.Folded (Landin.Targets.Bytes (Size)) * Words
+                        else Ty.Folded (Landin.Targets.Alignment_Of
+                          (Target (Context), Size))));
+                  end;
+               when others =>
+                  return (Kind => Bad_Value);
+            end case;
+         end;
+      end Layout_Measure;
 
       function Option_Index (Name : Landin.Source.Names.Name_Id)
         return Natural is
@@ -286,8 +448,8 @@ package body Landin.Stages.Configuration is
       begin
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Integer_Literal | Syn.Size_Of | Syn.Align_Of
-               | Syn.Negation | Syn.Add | Syn.Subtract | Syn.Multiply
-               | Syn.Divide | Syn.Remainder =>
+               | Syn.Offset_Of | Syn.Negation | Syn.Add | Syn.Subtract
+               | Syn.Multiply | Syn.Divide | Syn.Remainder =>
                return Number;
             when Syn.True_Literal | Syn.False_Literal | Syn.Logical_Not
                | Syn.Equal_To | Syn.Not_Equal_To | Syn.Less_Than
@@ -412,14 +574,21 @@ package body Landin.Stages.Configuration is
                   Valid := False;
                end if;
 
-            when Syn.Size_Of | Syn.Align_Of =>
-               if Scalar_Type (Of_Tree, Syn.Measured_Type (Of_Tree, Node))
-                 not in Ty.Scalar_Name
+            when Syn.Size_Of | Syn.Align_Of | Syn.Offset_Of =>
+               if (Syn.Kind (Of_Tree, Node) = Syn.Offset_Of
+                   or else Scalar_Type
+                     (Of_Tree, Syn.Measured_Type (Of_Tree, Node))
+                       not in Ty.Scalar_Name)
+                 and then not Measuring_Layout
                then
                   Report_Not_Fixed
                     (Of_Tree, Node,
-                     "D202: fixed measurements need a scalar name,"
-                     & " not a declared type");
+                     "a declared type's layout is not known when fixed"
+                     & " arms and options are chosen",
+                     Note => "D412: only compiler.assert measures a"
+                       & " declared type, after checking has laid it out;"
+                       & " a fixed condition or option default measures"
+                       & " scalar types");
                   Valid := False;
                end if;
 
@@ -619,7 +788,14 @@ package body Landin.Stages.Configuration is
                     with "an unvalidated compiler fact was evaluated: "
                       & Word;
                end;
+            when Syn.Offset_Of =>
+               return Layout_Measure (Of_Tree, Node);
             when Syn.Size_Of | Syn.Align_Of =>
+               if Scalar_Type (Of_Tree, Syn.Measured_Type (Of_Tree, Node))
+                 not in Ty.Scalar_Name
+               then
+                  return Layout_Measure (Of_Tree, Node);
+               end if;
                declare
                   Kind_Of_Type : constant Ty.Scalar_Name := Scalar_Type
                     (Of_Tree, Syn.Measured_Type (Of_Tree, Node));
@@ -843,9 +1019,11 @@ package body Landin.Stages.Configuration is
                   Note => "D202: configuration atom names cannot be reused"
                     & " by options");
             else
-               Landin.Configuration.Record_Option
-                 (Activity.all, Syn.Name (Of_Tree, Node),
-                  Syn.Origin (Of_Tree, Node));
+               if not Late then
+                  Landin.Configuration.Record_Option
+                    (Activity.all, Syn.Name (Of_Tree, Node),
+                     Syn.Origin (Of_Tree, Node));
+               end if;
                Options.Append
                  (Option_Entry'(Name => Syn.Name (Of_Tree, Node),
                    Source => Syn.Source_Of (Of_Tree), Node => Node,
@@ -1041,7 +1219,20 @@ package body Landin.Stages.Configuration is
                  & " takes exactly one positional argument");
          else
             Argument := Syn.Nth_Argument (Of_Tree, Call, 1);
-            if Base = "compiler" then
+            if Base = "compiler"
+              and then not Late
+              and then Measures_Layout (Of_Tree, Argument)
+            then
+               --  D412: validated now, folded once checking has laid out
+               --  the declared types it measures.
+               Measuring_Layout := True;
+               if Validate (Of_Tree, Argument) then
+                  Landin.Configuration.Defer_Assertion
+                    (Activity.all, Syn.Source_Of (Of_Tree), Node);
+               end if;
+               Measuring_Layout := False;
+            elsif Base = "compiler" then
+               Measuring_Layout := Late;
                if Validate (Of_Tree, Argument) then
                   Value := Evaluate (Of_Tree, Argument);
                   if Value.Kind = Bad_Value then
@@ -1064,6 +1255,7 @@ package body Landin.Stages.Configuration is
                         Into => Found);
                   end if;
                end if;
+               Measuring_Layout := False;
             elsif Syn.Kind (Of_Tree, Argument) /= Syn.Text_Literal then
                Report_Configuration_Rule
                  (Bad.Invalid_Tool_Directive, Of_Tree, Argument,
@@ -1179,6 +1371,56 @@ package body Landin.Stages.Configuration is
       end Configure_Declaration;
 
    begin
+      if Late then
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Trees.all, Nth_Source (Context, Index));
+            begin
+               for Which in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                  Gather_Options
+                    (Of_Tree.all,
+                     Syn.Nth_Declaration (Of_Tree.all, Which), False);
+               end loop;
+            end;
+         end loop;
+         for Index in 1 .. Natural (Options.Length) loop
+            declare
+               Value : constant Fixed_Value := Evaluate_Option (Index);
+               pragma Unreferenced (Value);
+            begin
+               null;
+            end;
+         end loop;
+         --  The first pass reported every option; keep only what the
+         --  deferred assertions say.
+         declare
+            Fresh : Landin.Diagnostics.Diagnostic_List;
+         begin
+            Found := Fresh;
+         end;
+         for Index in 1 .. Landin.Configuration.Deferred_Count
+           (Activity.all)
+         loop
+            Configure_Directive
+              (Landin.Syntax.Forest.Tree_Of
+                 (Trees.all,
+                  Landin.Configuration.Deferred_Source
+                    (Activity.all, Index)).all,
+               Landin.Configuration.Deferred_Node (Activity.all, Index));
+         end loop;
+         declare
+            Ordered : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Diagnostics.Sorted (Found);
+         begin
+            for Index in 1 .. Landin.Diagnostics.Count (Ordered) loop
+               Report (Context, Landin.Diagnostics.Get (Ordered, Index));
+            end loop;
+         end;
+         Outcome := (if Failed (Context) then Stop else Continue);
+         return;
+      end if;
       Landin.Configuration.Prepare (Activity.all);
       for Index in 1 .. Source_Count (Context) loop
          declare
@@ -1314,6 +1556,6 @@ package body Landin.Stages.Configuration is
          end loop;
       end;
       Outcome := (if Failed (Context) then Stop else Continue);
-   end Run;
+   end Configure;
 
 end Landin.Stages.Configuration;

@@ -1,0 +1,6 @@
+error[L0201]: module `linux` declares `getuid` only for another target
+  --> ../tests/fixtures/negative/rooted-negative-selects-its-target/root/probe/probe.ldn:6:16
+  |
+6 |     id = linux.getuid()
+  |                ^^^^^^
+  = note: [1480]: the module's `fixed if` does not select that declaration on this target; it is a call this system does not have, not a misspelling

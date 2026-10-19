@@ -28,8 +28,9 @@ with every named refusal and the wording of its [1830] note.
   source behaviour a fixture could discriminate. A named refusal is not a
   state; it is part of a row.
 - **Targets** are `all` (Linux x86-64, arm64 and RV64, FreeBSD x86-64 and arm64, macOS arm64 and Cortex-M), `hosted`,
-  `cortex-m` or `none`; `synthetic-32` is a pre-Cortex model and applies to
-  no construct. **Gaps** are applicable targets without the state's
+  `cortex-m` or `none`; `cortex-m` is the Cortex-M family, today
+  `cortex-m0` alone, and a scope rather than a target's spelling.
+  `synthetic-32` is a pre-Cortex model and applies to no construct. **Gaps** are applicable targets without the state's
   evidence, and every gap needs an owning item.
 - **Owners** are live roadmap items or successor families. A finished owner,
   an unknown owner or an owner the disposition does not mention is refused.
@@ -305,14 +306,14 @@ fixture's own record rather than asserted here.
 
 ## Target applicability coverage
 
-These are applicability assignments, not backend claims. Fixture metadata
-makes the finer assignment and `targets.matrix` lists every fixture; a
+These are applicability assignments, not backend claims. A target is spelled
+as `--target` spells it. Fixture metadata makes the finer assignment and `targets.matrix` lists every fixture; a
 missing `targets:` is a gate failure. `synthetic-32` is the executable target
 model used before the Cortex-M backend existed.
 
 | Scope | Targets |
 | --- | --- |
-| `prototype-1` | cortex-m |
-| `prototype-2` | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64 |
-| `prototype-3` | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m, synthetic-32 |
-| `prototype-4` | linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64 |
+| `prototype-1` | cortex-m0 |
+| `prototype-2` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |
+| `prototype-3` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, synthetic-32 |
+| `prototype-4` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |

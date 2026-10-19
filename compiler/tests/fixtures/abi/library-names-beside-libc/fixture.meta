@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: a library's public routines named errno, reset and read and its datum named environ are local symbols, so they link and run beside the C library's own and a C peer's global reset, which C's read, errno and environ still reach
+program: main.ldn
+root: root
+c-sources: peer.c
+status: 42
+constructs: 1610, 1975
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

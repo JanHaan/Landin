@@ -1,0 +1,11 @@
+north: atom
+south: atom
+east: atom
+compass: type = north | south | east
+
+heading: (c: compass) -> (n: i32) =
+    match c
+        north, south: n = 1
+        east: n = 2
+    end match
+end heading

@@ -16,9 +16,9 @@ from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 MODULES = tuple('core/'+name for name in
-                ('arena', 'cmp', 'diag', 'fault', 'io', 'map', 'mem', 'net',
-                 'panic', 'pool', 'random', 'region', 'sort', 'spill', 'text',
-                 'time', 'tree', 'vec')) + ('platform/cortex_m',)
+                ('arena', 'cmp', 'diag', 'failure', 'fault', 'io', 'map', 'mem',
+                 'net', 'panic', 'pool', 'random', 'region', 'sort', 'spill',
+                 'text', 'time', 'tree', 'vec')) + ('platform/cortex_m',)
 
 
 def imports(program):

@@ -422,6 +422,29 @@ package body Landin.Driver.Loading is
               and then Landin.Driver.Library.Is_Library_Import (Logical)
             then Library_At else Named_Roots);
 
+      --  D384: an import's path names a directory under a root, and the
+      --  directories looked in, in root order, are what a reader needs to
+      --  see why `lexer/lexer` under `--root .` was not found.
+      function Looked_For (Logical : String) return String;
+
+      function Looked_For (Logical : String) return String is
+         Text : Unbounded.Unbounded_String;
+         First : constant Natural := First_Root (Logical);
+         Last : constant Natural := Last_Root (Logical);
+      begin
+         for Index in First .. Last loop
+            Unbounded.Append
+              (Text,
+               (if Index = First then ""
+                elsif Index = Last then " and "
+                else ", ")
+               & Joined_Path (Searched.Element (Index), Logical));
+         end loop;
+         return "[1420]: an import names a directory under a root, and"
+           & " roots are searched in the order given; no directory "
+           & Unbounded.To_String (Text) & " was found";
+      end Looked_For;
+
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id) return String
@@ -920,6 +943,7 @@ package body Landin.Driver.Loading is
                            --  uses are resolution's.
                            Target := Landin.Modules.No_Module;
                         elsif Named_Files
+                          and then Named_Roots = 0
                           and then not Landin.Driver.Library
                             .Is_Library_Import (Logical)
                         then
@@ -1045,7 +1069,9 @@ package body Landin.Driver.Loading is
                                              (Host),
                                        Note    => "D275: name the directory"
                                          & " holding core, hosted and"
-                                         & " platform with --library=DIR",
+                                         & " platform with --library=DIR"
+                                         & " after the command, as in"
+                                         & " `refine check --library=DIR`",
                                        Into    => Found);
                                     Landin.Stages.Report
                                       (Context,
@@ -1074,9 +1100,7 @@ package body Landin.Driver.Loading is
                                          (Tree.all, Import_Node),
                                        Message => "module not found: "
                                                   & Logical,
-                                       Note    => "[1420]: roots are"
-                                                  & " searched in"
-                                                  & " supplied order",
+                                       Note    => Looked_For (Logical),
                                        Fixes   => Modules_Near
                                          (Tree.all, Import_Node),
                                        Into    => Found);
@@ -1179,5 +1203,19 @@ package body Landin.Driver.Loading is
          null, Previous, Watch_Syntax, Implicit, Cache,
          Dependency_Directories);
    end Load_Library_Imports;
+
+   procedure Load_Rooted_Imports
+     (Context : in out Landin.Stages.Compilation;
+      Host    : Landin.Platform.Filesystem'Class;
+      Roots   : Landin.Platform.Path_List;
+      Library : String;
+      Dependency_Directories : access Landin.Platform.Path_List := null;
+      Implicit : String := "")
+   is
+   begin
+      Discover
+        (Context, Host, Roots, Library, "", True,
+         null, null, null, Implicit, null, Dependency_Directories);
+   end Load_Rooted_Imports;
 
 end Landin.Driver.Loading;

@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: a hosted program reports each failure as path or value, a colon and failure.words' phrase for the library atom, on standard error, for a file that is not there, a count that is not a number and one too large for u8, and ends with status 1
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+status: 1
+constructs: 0600, 0640, 0940, 1410, 1420, 1970
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

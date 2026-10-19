@@ -1,0 +1,40 @@
+error[L0336]: a part of a byte-packed record has no address of its own
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:19:16
+   |
+19 |     at := addr packet.id
+   |                ^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:19:11
+   |
+19 |     at := addr packet.id
+   |           ^^^^^^^^^^^^^^ this address operation
+  = note: D410: a layout(c, packed) record's fields are read and written by copy; take the address of the whole record, or copy the part to a local
+error[L0336]: a part of a byte-packed record has no address for an inout parameter
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:20:10
+   |
+20 |     poke(packet.id)
+   |          ^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:13:8
+   |
+13 | poke: (inout target: u32) -> none =
+   |        ^^^^^^^^^^^^^^^^^ this inout parameter
+  = note: D410: a layout(c, packed) record's fields are read and written by copy; pass the whole record, or copy the part to a local
+error[L0336]: a part of a byte-packed record has no address of its own
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:21:13
+   |
+21 |     part := packet.bytes[0..<2]
+   |             ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:21:13
+   |
+21 |     part := packet.bytes[0..<2]
+   |             ^^^^^^^^^^^^^^^^^^^ this slice operation
+  = note: D410: a layout(c, packed) record's fields are read and written by copy; take the address of the whole record, or copy the part to a local
+error[L0336]: a part of a byte-packed record has no address of its own
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:22:18
+   |
+22 |     deep := addr packet.nested.value
+   |                  ^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-field-address/program.ldn:22:13
+   |
+22 |     deep := addr packet.nested.value
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^ this address operation
+  = note: D410: a layout(c, packed) record's fields are read and written by copy; take the address of the whole record, or copy the part to a local

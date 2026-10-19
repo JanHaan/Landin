@@ -1,0 +1,9 @@
+class: negative
+summary: D405 a case named twice is L0311, in one arm or across two, for an atom set and a variant part
+program: program.ldn
+codes: L0311, L0311
+constructs: 0640, 1210
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/match-label-named-twice/program.ldn
+status: 1

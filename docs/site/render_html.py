@@ -1999,6 +1999,13 @@ def pitch_html(text):
                        'aria-label="the fine print">*</a>', 1)
 
 
+#  Where the front page sends a reader who wants the compiler: the README's
+#  own section, which says where an archive unpacks and what `refine
+#  version` prints.  The build refuses a README without it rather than
+#  publishing a link to nothing.
+INSTALL_ANCHOR = "installing"
+
+
 def index_page(docs, counts, intro, status, progress, program, symbols,
                says, footnote):
     """The front door: what the language is, what it looks like, where to go.
@@ -2089,7 +2096,8 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
     hero = "".join(f"<p>{pitch_html(t)}</p>" for t in intro)
     hero += ('<div class="hero-actions">'
              '<a class="primary" href="tour.html">read the tour</a>'
-             '<a href="spec.html">browse the specification</a></div>')
+             '<a href="spec.html">browse the specification</a>'
+             f'<a href="readme.html#{INSTALL_ANCHOR}">install refine</a></div>')
     if status:
         version, headline, detail = status_parts(status)
         hero += ('<aside class="status" aria-label="Project status">'
@@ -2534,6 +2542,10 @@ def main(argv):
         if not status:
             raise SystemExit("render_html: README.md has no **Status:** "
                              "line for the front page")
+        if f'id="{INSTALL_ANCHOR}"' not in (SITE / "readme.html").read_text():
+            raise SystemExit("render_html: README.md has no section the "
+                             "front page's install link can reach, #"
+                             + INSTALL_ANCHOR)
         if not program[2]:
             raise SystemExit("render_html: " + LANDING_PROGRAM
                              + " declares no construct the tour defines")

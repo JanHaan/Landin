@@ -211,37 +211,43 @@ package body Landin.Backend.Toolchain is
       Dash : constant Natural := Ada.Strings.Fixed.Index (Triplet, "-");
       Machine : constant String :=
         (if Dash = 0 then Triplet else Triplet (Triplet'First .. Dash - 1));
+      --  D364 as D384 amends it: only a link needs a driver, so a reader
+      --  without one is told what still works.
+      Without : constant String :=
+        "; refine check, fmt and lsp, and compile --emit=asm or --emit=ir,"
+        & " need no C driver";
    begin
       if Named /= "" then
          return "install " & Named & ", or name another driver with"
-           & " --toolchain=NAME";
+           & " --toolchain=NAME" & Without;
       elsif Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
       then
          return "install Apple's command line tools with"
            & " `xcode-select --install`, or name a driver with"
-           & " --toolchain=NAME";
+           & " --toolchain=NAME" & Without;
       elsif Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Cortex_M0_ELF
       then
          return "install the Arm embedded GCC (Debian and Ubuntu:"
            & " `apt install gcc-arm-none-eabi`), or name a driver with"
-           & " --toolchain=NAME";
+           & " --toolchain=NAME" & Without;
       elsif Landin.Targets.Capabilities.Hosted_System_Of (Facts)
         = Landin.Targets.Capabilities.Linux
       then
          if Native then
             return "install GCC (Debian and Ubuntu: `apt install gcc`;"
-              & " Fedora: `dnf install gcc`), or name a driver with"
-              & " --toolchain=NAME";
+              & " Fedora: `dnf install gcc`; Nix: `nix-shell -p gcc`), or"
+              & " name a driver with --toolchain=NAME" & Without;
          end if;
          return "install a GCC that targets " & Machine
            & " Linux (Debian and Ubuntu: `apt install gcc-"
            & (if Machine = "x86_64" then "x86-64" else Machine)
-           & "-linux-gnu`), or name a driver with --toolchain=NAME";
+           & "-linux-gnu`), or name a driver with --toolchain=NAME"
+           & Without;
       end if;
       return "install " & Driver_For (Facts, Named)
-        & ", or name another driver with --toolchain=NAME";
+        & ", or name another driver with --toolchain=NAME" & Without;
    end Install_Advice;
 
    procedure Resolve_Libraries

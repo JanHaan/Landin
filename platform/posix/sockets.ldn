@@ -94,7 +94,7 @@ unix_path_offset: usize = 2
 --- sockaddr_in`, 16 bytes, for an IPv4 address and `struct sockaddr_in6`,
 --- 28 bytes, for an IPv6 one, the port in network order and the IPv6 flow
 --- label and scope zero.
-public link(symbol: "_landin_posix_internet_address") internet_address:
+public internet_address:
     (at: net.address) -> (made: socket_address) =
     made = (bytes: zeroed, length: 16)
     made.bytes[2] = u8(at.port >> 8)
@@ -118,7 +118,7 @@ end internet_address
 --- 108 bytes on Linux or 104 on Darwin and FreeBSD, and `einval` for an
 --- empty path or one holding a NUL, which Linux would read as an abstract
 --- name.
-public link(symbol: "_landin_posix_unix_address") unix_address:
+public unix_address:
     (path: text.host_string) -> (made: socket_address) ! errno =
     bytes: []u8 = text.host_bytes(path)
     fail einval when lenof bytes == 0
@@ -134,7 +134,7 @@ end unix_address
 
 --- The family of the socket address `at`: `eafnosupport` for one this
 --- module does not name.
-public link(symbol: "_landin_posix_family_of") family_of:
+public family_of:
     (at: socket_address) -> (family: socket_family) ! errno =
     number: i32 = family_number(at)
     family = if number == system_family_number(internet) then internet
@@ -147,7 +147,7 @@ end family_of
 --- The internet address and port the socket address `at` holds, its IPv6
 --- scope dropped: `eafnosupport` for a Unix-domain one, or a record too
 --- short for its family.
-public link(symbol: "_landin_posix_address_of") address_of:
+public address_of:
     (at: socket_address) -> (result: net.address) ! errno =
     family: socket_family = try family_of(at)
     port: u16 = (u16(at.bytes[2]) << 8) | u16(at.bytes[3])
@@ -171,7 +171,7 @@ end address_of
 --- lent from it: `eafnosupport` for an internet address, and `erange` when
 --- the path does not fit `room`.  A socket bound to no path has an empty
 --- one.
-public link(symbol: "_landin_posix_unix_path") unix_path:
+public unix_path:
     (at: socket_address, room: []mut u8)
     -> (path: text.host_string from room) ! errno =
     family: socket_family = try family_of(at)
@@ -194,7 +194,7 @@ end unix_path
 --- SIGPIPE: `eafnosupport` when the system does not have the family, as
 --- one without IPv6 does not.  On Darwin, which has no SOCK_CLOEXEC, the
 --- flag is set just after the socket is made, as `pipe`'s is.
-public link(symbol: "_landin_posix_socket") socket:
+public socket:
     (family: socket_family, kind: socket_kind) -> (made: descriptor)
     ! errno =
     made = try system_socket(family, kind)
@@ -202,7 +202,7 @@ end socket
 
 --- Make a pair of connected Unix-domain sockets of `kind`, each closed on
 --- exec and raising no SIGPIPE.
-public link(symbol: "_landin_posix_socket_pair") socket_pair:
+public socket_pair:
     (kind: socket_kind) -> (ends: connected_pair) ! errno =
     ends = try system_socket_pair(kind)
 end socket_pair
@@ -210,7 +210,7 @@ end socket_pair
 --- Bind `socket` to the address `at`: `eaddrinuse` when another socket
 --- holds it, `eaddrnotavail` when no interface here has it, `eacces` for a
 --- port the process may not take.
-public link(symbol: "_landin_posix_bind") bind:
+public bind:
     (socket: descriptor, at: socket_address) -> none ! errno =
     try system_bind(socket, addr at.bytes[0], at.length)
 end bind
@@ -218,7 +218,7 @@ end bind
 --- Make the bound stream socket `socket` a listener, with at most `backlog`
 --- connections waiting to be accepted, which each system caps at its own
 --- limit.
-public link(symbol: "_landin_posix_listen") listen:
+public listen:
     (socket: descriptor, backlog: i32) -> none ! errno =
     try system_listen(socket, backlog)
 end listen
@@ -230,7 +230,7 @@ end listen
 --- Darwin and FreeBSD do not, so it is waited out here with `poll` for
 --- the limit `receive_timeout` reads.  On Darwin the new socket is marked
 --- closed on exec just after it is made.
-public link(symbol: "_landin_posix_accept") accept:
+public accept:
     (listener: descriptor) -> (accepted: descriptor) ! errno =
     accepted = try system_accept(listener)
 end accept
@@ -239,7 +239,7 @@ end accept
 --- `eintr` when a signal came first, after which the connection goes on and
 --- its outcome is what `poll` for `poll_output` and then `pending_error`
 --- say.
-public link(symbol: "_landin_posix_connect") connect:
+public connect:
     (socket: descriptor, to: socket_address) -> none ! errno =
     try system_connect(socket, addr to.bytes[0], to.length)
 end connect
@@ -248,7 +248,7 @@ end connect
 --- accepted, which a stream may find short, or the errno, `epipe` once
 --- the peer has gone, without SIGPIPE, and `eagain` when the send time
 --- limit passed.
-public link(symbol: "_landin_posix_send") send:
+public send:
     (socket: descriptor, bytes: []u8) -> (count: usize) ! errno =
     count = try system_send(socket, bytes)
 end send
@@ -257,14 +257,14 @@ end send
 --- count, zero once a stream's peer has finished sending, or the errno,
 --- `eagain` when the receive time limit passed and `econnreset` when the
 --- peer reset the connection.
-public link(symbol: "_landin_posix_receive") receive:
+public receive:
     (socket: descriptor, into: []mut u8) -> (count: usize) ! errno =
     count = try system_receive(socket, into)
 end receive
 
 --- Send `bytes` as one datagram to `to`: the count, which is all of them,
 --- or the errno, `emsgsize` for a datagram larger than the system sends.
-public link(symbol: "_landin_posix_send_to") send_to:
+public send_to:
     (socket: descriptor, bytes: []u8, to: socket_address)
     -> (count: usize) ! errno =
     count = try system_send_to(socket, bytes, addr to.bytes[0], to.length)
@@ -278,7 +278,7 @@ end received
 
 --- Receive the next datagram into `into` and the address of its sender: a
 --- datagram longer than `into` is cut to it.
-public link(symbol: "_landin_posix_receive_from") receive_from:
+public receive_from:
     (socket: descriptor, into: []mut u8) -> (result: received) ! errno =
     result = (count: 0, sender: (bytes: zeroed, length: 128))
     result.count = try system_receive_from(socket, into,
@@ -288,7 +288,7 @@ end receive_from
 
 --- Stop receiving, sending or both on `socket`: `enotconn` when it is not
 --- connected.
-public link(symbol: "_landin_posix_shutdown") shutdown:
+public shutdown:
     (socket: descriptor, side: shutdown_side) -> none ! errno =
     how: i32 = match side
         shut_reading: 0
@@ -299,7 +299,7 @@ public link(symbol: "_landin_posix_shutdown") shutdown:
 end shutdown
 
 --- The address `socket` is bound to, POSIX's `getsockname`.
-public link(symbol: "_landin_posix_socket_name") socket_name:
+public socket_name:
     (socket: descriptor) -> (at: socket_address) ! errno =
     at = (bytes: zeroed, length: 128)
     try system_socket_name(socket, addr at.bytes[0], addr at.length)
@@ -307,7 +307,7 @@ end socket_name
 
 --- The address of the peer `socket` is connected to, POSIX's
 --- `getpeername`: `enotconn` when there is none.
-public link(symbol: "_landin_posix_peer_name") peer_name:
+public peer_name:
     (socket: descriptor) -> (at: socket_address) ! errno =
     at = (bytes: zeroed, length: 128)
     try system_peer_name(socket, addr at.bytes[0], addr at.length)
@@ -334,13 +334,13 @@ end flag_set
 --- Let the listener `socket` bind an address that earlier connections
 --- still hold in TIME_WAIT, `SO_REUSEADDR`, never one another listener
 --- holds.  Set it before `bind`.
-public link(symbol: "_landin_posix_set_reuse_address") set_reuse_address:
+public set_reuse_address:
     (socket: descriptor, on: bool) -> none ! errno =
     try flag_set(socket, reuse_address, on)
 end set_reuse_address
 
 --- Send a stream's small writes at once, `TCP_NODELAY`.
-public link(symbol: "_landin_posix_set_no_delay") set_no_delay:
+public set_no_delay:
     (socket: descriptor, on: bool) -> none ! errno =
     try flag_set(socket, no_delay, on)
 end set_no_delay
@@ -348,7 +348,7 @@ end set_no_delay
 --- Make an IPv6 socket take IPv6 alone, never IPv4 through mapped
 --- addresses, `IPV6_V6ONLY`, which Darwin and FreeBSD do from the start
 --- and Linux does not.  Set it before `bind`.
-public link(symbol: "_landin_posix_set_ipv6_only") set_ipv6_only:
+public set_ipv6_only:
     (socket: descriptor, on: bool) -> none ! errno =
     try flag_set(socket, ipv6_only, on)
 end set_ipv6_only
@@ -357,7 +357,7 @@ end set_ipv6_only
 --- `SO_RCVTIMEO`, after which it fails `eagain`; a span of zero waits as
 --- long as it takes.  The system keeps microseconds, so a part of one
 --- counts as a whole one, and Linux keeps its own ticks.
-public link(symbol: "_landin_posix_set_receive_timeout") set_receive_timeout:
+public set_receive_timeout:
     (socket: descriptor, span: time_value) -> none ! errno =
     fail einval when span.seconds < 0 or span.nanoseconds >= 1000000000
     try system_set_time(socket, receive_limit, span)
@@ -365,7 +365,7 @@ end set_receive_timeout
 
 --- Limit how long a send on `socket` waits, `SO_SNDTIMEO`, as
 --- `set_receive_timeout` limits a receive.
-public link(symbol: "_landin_posix_set_send_timeout") set_send_timeout:
+public set_send_timeout:
     (socket: descriptor, span: time_value) -> none ! errno =
     fail einval when span.seconds < 0 or span.nanoseconds >= 1000000000
     try system_set_time(socket, send_limit, span)
@@ -374,7 +374,7 @@ end set_send_timeout
 --- How long a receive on `socket` waits, as `set_receive_timeout` set it,
 --- zero for no limit, to the microsecond: `unlisted` when the system gives
 --- back a record of another size, as QEMU's user emulation does.
-public link(symbol: "_landin_posix_receive_timeout") receive_timeout:
+public receive_timeout:
     (socket: descriptor) -> (span: time_value) ! errno =
     span = try system_get_time(socket, receive_limit)
 end receive_timeout
@@ -382,7 +382,7 @@ end receive_timeout
 --- Fail with the error pending on `socket`, `SO_ERROR`, clearing it, or
 --- return when there is none: how a connection `connect` began and a
 --- signal interrupted ended.
-public link(symbol: "_landin_posix_pending_error") pending_error:
+public pending_error:
     (socket: descriptor) -> none ! errno =
     number: i32 = try system_get_number(socket, pending)
     fail errno_of(number) when number <> 0

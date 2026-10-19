@@ -12033,6 +12033,7 @@ package body Landin.Tests.Checking_Suite is
            or else Starts ("a linked or C declaration")
          then "L0347"
          elsif Starts ("this layout(c) struct")
+           or else Starts ("this field of a layout(c) struct")
            or else Starts ("this signature is not representable")
          then "L0346"
          else Code);
@@ -12378,7 +12379,7 @@ package body Landin.Tests.Checking_Suite is
       Check_C_Boundary_Source
         (Item, "bad: type = layout(c) struct" & LF
          & "    values: [2][0]i32" & LF & "end bad" & LF,
-         "this layout(c) struct has a non-C representation");
+         "this field of a layout(c) struct has no C representation");
       --  D241: D25's first element supplies a callable element shape as it
       --  supplies a scalar one; counted repetition keeps a scalar.
       Check_C_Boundary_Source

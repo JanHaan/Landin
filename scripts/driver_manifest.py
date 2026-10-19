@@ -349,7 +349,16 @@ def emit(refine, root, work, out, targets=TARGETS):
             if not fixture.is_dir():
                 continue
             meta = meta_of(fixture)
-            if "args" in meta:
+            #  A rooted fixture's `args` are options before the module its
+            #  root gives, as the test program runs it.
+            if meta.get("root") and ("args" in meta or "expect" in meta):
+                place = "../tests/fixtures/%s/%s" % (klass, fixture.name)
+                module = (place if meta["root"] == "."
+                          else "%s/%s" % (place, meta["root"]))
+                recorded.append((fixture, " ".join(
+                    [meta.get("args", ""), "--root=" + module,
+                     place]).strip()))
+            elif "args" in meta:
                 recorded.append((fixture, meta["args"]))
             if not meta.get("program"):
                 continue

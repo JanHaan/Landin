@@ -154,6 +154,12 @@ Exported from the module. Without it, module-internal.
 public version: u32 = 3
 ```
 
+`public` exports a name to other modules, not to the linker. A public
+routine or datum is a symbol local to the program's image under its own
+name, so no C library or linked object can collide with it; what C or a
+linker reaches is named for it, as [1600] and [1610] show and [1975]
+states.
+
 ### [0100] Several names may share one declaration
 
 Several names may share one declaration, which is the same
@@ -174,7 +180,17 @@ condition bindings keep one name each (D233).
 
 ```landin
 mut low, high: u32 = next_seed() -- one call; high starts equal to low
-clamp: (inout low, high: i32, value: i32) -> (result: i32) = ... end
+clamp: (inout low, high: i32, value: i32) -> (result: i32) =
+    if high < low then
+        high = low
+    end if
+    result = value
+    if result < low then
+        result = low
+    elsif result > high then
+        result = high
+    end if
+end clamp
 ```
 
 ### [0110] Left of ':' is always the name being introduced
@@ -501,6 +517,8 @@ scalar element type but are not evaluated or read.
 lenof measures a name, a field or element through it, or what a call
 returns. A call runs; an array a name or a path reaches is not read,
 because its type holds its length.
+offsetof measures where a field of a struct type begins, in bytes and
+through nested structs; like lenof, the word is a name everywhere else.
 
 ```landin
 w1 := sizeof u32
@@ -509,6 +527,7 @@ n1 := lenof grid
 n2 := lenof ([next(), next(), next()]) -- 3; next is not called
 n3 := lenof table.keys -- a field
 n4 := lenof read_all(source) -- read_all is called
+o1 := offsetof packet.id -- 4: one byte of padding after kind
 ```
 
 ### [0380] addr takes an address
@@ -588,8 +607,16 @@ is the one relaxation the language has, it goes one way,
 and it is what makes a read-only parameter usable at all.
 
 ```landin
-add_up: (xs: []i32) -> (total: i32) = ... end
-add_up(writable_slice) -- fine, []mut i32 relaxes to []i32
+add_up: (xs: []i32) -> (total: i32) =
+    total = 0
+    for x in xs do
+        total += x
+    end for
+end add_up
+
+add_written: (writable_slice: []mut i32) -> (total: i32) =
+    total = add_up(writable_slice) -- fine, []mut i32 relaxes to []i32
+end add_written
 ```
 
 ### [0450] Permission is shallow
@@ -1549,6 +1576,11 @@ never reorder an unannotated struct.
 calling convention. The enabled C subset uses native-endian scalar fields,
 fixed arrays, nested nonempty C structs and explicitly C-convention callback
 fields. Optimal layout does not qualify a record for C transport.
+`layout(c, packed)` is C's byte-packed record: every field at alignment one
+and no padding, as `__attribute__((packed))` lays one out. Its fields are read
+and written by copy and have no address of their own (D410), and C takes the
+record through a pointer (D414). A C record's last field may be `[0]T`, C's
+flexible array member, whose elements follow the record in memory (D413).
 Byte order is not a property of a field. A field holds the target's own order,
 which `compiler.byte_order` names [1560]; a program reading or writing another
 order converts where the bytes cross, with shifts [0320] or an ordinary
@@ -1658,7 +1690,7 @@ result also owes the destination contract below; `from` does not grant
 permission to write.
 
 ```landin
-used: (t: type, l: list(t)) -> (s: []mut t from l) = ... end
+used: (t: type, l: list(t)) -> (s: []mut t from l) = l.items[0..<l.len] end
 ```
 
 One accessor, not two. It hands out the widest permission
@@ -1962,7 +1994,7 @@ triple_it: (x: i32) -> (r: i32) = x * 3 end
 Nothing returned, and never returns:
 
 ```landin
-log_it: (m: utf8) -> none = ... end
+log_it: (m: utf8) -> none = end log_it
 halt_it: () -> noreturn = loop do end loop end halt_it
 ```
 
@@ -2115,7 +2147,7 @@ before the check, so a `defer` or `undo` may restore the field. A failure needs
 no successful named result under [0930], but it still hands back `inout` storage.
 
 ```landin
-consume: (t: type, sink items: []t) -> none = ... end consume
+consume: (t: type, sink items: []t) -> none = end consume
 
 reset: (t: type, inout l: list(t)) -> none =
     consume(l.items) -- l.items is dead from here
@@ -2258,7 +2290,9 @@ know which retention or delivery policy its caller selected.
 
 ```landin
 parse: (src: utf8, inout d: diagnostics)
-       -> (tree: ptr node) ! out_of_memory | too_deep = ... end
+       -> (tree: ptr node) ! out_of_memory | too_deep =
+    tree = try statements(src, d)
+end parse
 ```
 
 ### [0960] Propagating: try, visible at the call or traversal site
@@ -2355,9 +2389,16 @@ flush(out) else none
 `else none` is the bound block with nothing in it, without the
 name nobody would read: what the call did before it failed
 stays done, and the next statement runs. A call that returns a
-value does not take it, because a failure is never ignored by
-leaving a result unset; give that call `else value`, a block,
-or `try` (D376).
+value takes it only when the call is all a discard throws away,
+because a failure is never ignored by leaving a result unset
+that something reads (D376, D406):
+
+```landin
+_ = parse_header(input) else none
+```
+
+Used any other way, that call gets `else value`, a block, or
+`try`.
 
 ### [0970] Early exit
 
@@ -2750,6 +2791,9 @@ end demo_flow
 Pattern matching: constant patterns, case patterns with
 binding, and the wildcard. No fallthrough; list several
 labels instead. A missing case is a compile error.
+Several labels share one arm, `north, south:`, and each counts
+toward exhaustiveness; an arm that binds a payload names one
+case, and `_` is an arm of its own (D405).
 The constants a pattern names are atoms [0630]: a subject is an atom set, a
 variant part or a pointer union [0480], and an arm names an identity. A number
 has no identity to name, so it is compared with `if` and `elsif` rather than
@@ -3151,7 +3195,7 @@ have. Substitution, not execution.
 
 ```landin
 list: type (t: type) = struct
-    items: []t
+    items: []mut t
     len: usize
 end list
 ```
@@ -3175,8 +3219,16 @@ static list, and D139 selects module declaration lists with a closed fixed
 condition; none of the three mechanisms executes user code.
 
 ```landin
-map: type (key_type: type is hashable, value_type: type) = struct ... end map
-cleared: type (t: type is zeroable, fixed capacity: u32) = struct ... end cleared
+map: type (key_type: type is hashable, value_type: type) = struct
+    keys: []mut key_type
+    values: []mut value_type
+    len: usize
+end map
+
+cleared: type (t: type is zeroable, fixed capacity: u32) = struct
+    items: [capacity]t
+    len: u32
+end cleared
 ```
 
 The two constrained examples above use D142's enabled direct constraints. The
@@ -3216,7 +3268,13 @@ allocator: type = concept (provider: type)
 end allocator
 
 push: (t: type, provider: type is allocator, inout l: list(t), memory: provider,
-      escaping v: t) -> none ! out_of_memory = ... end
+       escaping v: t) -> none ! out_of_memory =
+    if l.len == lenof l.items then
+        try reserve(l, memory)
+    end if
+    l.items[l.len] = v
+    inc l.len
+end push
 ```
 
 The list is edited, so it is passed `inout`; the allocator is a service, so
@@ -3629,7 +3687,8 @@ project-first, so ordinary source-module naming collisions can be overridden
 locally. The three compiler-owned modules retain their reserved identities.
 
 The bootstrap request spells that narrow seam as repeated `--root=DIR`
-options followed by one entry-module directory. With no root option it retains
+options followed by one entry-module directory, or the entry module's own
+source files, which are then one module (D383). With no root option it retains
 the earlier explicit-file compatibility mode as one synthetic module. The
 compiler adds one root of its own, the library it ships with, found beside
 its executable: core, hosted and platform always resolve from it, after
@@ -3722,13 +3781,17 @@ compiler.assert(sizeof usize == 8)
 An assertion is a module directive, also permitted in a selected `fixed if`
 arm. It uses the same closed fixed expressions as [1500], requires bool,
 and rejects false at the source site. Inactive assertions have no effect.
+An assertion may also measure a declared type and a field's offset,
+`compiler.assert(sizeof header == 8)`; it is then checked once the type is
+laid out (D412).
 
 ### [1520] A compile-time value parameter
 
 A compile-time value parameter.
 
 ```landin
-make_buffer: (fixed capacity: u32, t: type) -> (b: [capacity]t) = ... end
+make_buffer: (fixed capacity: u32, t: type is zeroable)
+             -> (b: [capacity]t) = zeroed end
 ```
 
 ### [1530] Your own build switches
@@ -3967,7 +4030,8 @@ can therefore change archive resolution.
 Exporting to C. `extern(c)` chooses the convention; it does not mean
 bodyless, public or imported. A bodyless declaration imports a C routine. A
 Landin body defines one, and may remain private when only its callback address
-is needed. `public` separately exposes a definition. Conversely, [1610]'s
+is needed. `public` separately exposes a definition, and on a C definition
+also makes its declared name a global symbol C can call. Conversely, [1610]'s
 standalone `link(symbol: text)` leaves an ordinary definition on the native
 Landin convention; linkage never selects C. C signatures are nongeneric, use
 `in` parameters and at most one return. No declared or inferred
@@ -3996,8 +4060,11 @@ extern(c) link(symbol: "foreign_add") add: (a: i32, b: i32) -> (r: i32)
 ```
 
 The standalone form still requires the ordinary `= body end` and keeps the
-native Landin convention: `link` never implies C, bodylessness or export. In
-either form it changes neither lookup nor signature nor visibility. The decoded
+native Landin convention: `link` never implies C or bodylessness. It does
+export: the link name is a global symbol whether or not the declaration is
+public, and a module datum may take one too, so data is exported
+deliberately [1975]. In either form it changes neither lookup nor signature
+nor Landin visibility. The decoded
 link name has the precise safe ASCII shape `[A-Za-z_.$][A-Za-z0-9_.$]*`: its
 first byte is a letter, underscore, dot or dollar, and only a later byte may
 additionally be a digit. It is the logical external name before the platform's
@@ -4008,8 +4075,10 @@ excluded. The backend quotes the identity where target assembly syntax requires
 it after applying that prefix. Compatible bodyless C declarations may share
 one spelling and one definition, but incompatible signatures and multiple
 definitions are refused.
-C imports and public C definitions default to their declared name; private C
-definitions without an override use collision-safe internal names. This C
+C imports and public C definitions default to their declared name. A private C
+definition without an override is, like every other unexported routine and
+datum, a local symbol, renamed only where the program holds its name twice
+[1975]. This C
 boundary does not enable Cortex C signatures. D229 separately enables Cortex
 module-data symbols, machine conventions and the placement in [1640].
 

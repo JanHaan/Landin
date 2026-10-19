@@ -285,6 +285,11 @@ package Landin.IR is
       --  does for bitwise operations and shifts in numeric scalar datums.
       Measure_Size,
       Measure_Align,
+      --  D411's `offsetof`: the byte offset of a field path inside an
+      --  aggregate measurement's field run.  Like the other two it carries
+      --  the question, the run and the path of source positions, and a
+      --  stage with target facts answers it.
+      Measure_Offset,
       --  [1820]'s prefix operators.
       Negation,
       Complement,
@@ -368,6 +373,8 @@ package Landin.IR is
       Halt);
 
    subtype Constant_Kind is Opcode range Number .. Atom;
+
+   subtype Measurement_Kind is Opcode range Measure_Size .. Measure_Offset;
 
    subtype Unary_Kind is Opcode range Negation .. Logical_Not;
 
@@ -2017,7 +2024,8 @@ package Landin.IR is
       Item   : Item_Id;
       Shape  : Field_Shape;
       Site   : Landin.Provenance.Origin;
-      Declares : Declaration_Id := No_Declaration) return Slot_Id
+      Declares : Declaration_Id := No_Declaration;
+      Unaligned : Boolean := False) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Slot_Count (Into, Item) = Slot_Count (Into, Item)'Old + 1
@@ -2030,6 +2038,29 @@ package Landin.IR is
    function Is_Address
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   --  D410: an address slot whose scalar lies inside a byte-packed C
+   --  record, and so may not be a multiple of the scalar's size.  A target
+   --  whose ordinary accesses need alignment moves it byte by byte.
+   function Is_Unaligned_Address
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   --  D410: whether the part a storage operation reaches through Field and
+   --  Path lies inside a byte-packed C record: the storage is one and a
+   --  field of it is selected, or the path enters one on its way.
+   function Reaches_Byte_Packed
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Place   : Storage;
+      Field   : Element_Total;
+      Path    : Path_Step_Array) return Boolean;
+
+   --  The same question from a shape: whether Path, walked from Root,
+   --  enters a byte-packed C record, Root included.
+   function Enters_Byte_Packed
+     (Of_Unit : Unit; Root : Field_Shape; Path : Path_Step_Array)
+      return Boolean;
 
    function Address_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
@@ -2778,7 +2809,7 @@ package Landin.IR is
                              | Copy_Array | Clear_Array | Fill_Array
                              | Copy_Variant | Select_Variant
                              | Load_Variant_Tag | Load_Variant_Field
-                             | Store_Variant_Field;
+                             | Store_Variant_Field | Measure_Offset;
 
    --  D121's run below the element an indexed operation reaches.  Empty
    --  when the element is itself the scalar the operation names; a step
@@ -2937,7 +2968,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Measure_Size | Measure_Align;
+                          in Measurement_Kind;
 
    --  Which scalar type [0370] is asking about.  An aggregate measurement
    --  instead carries the declaration-order field run below.
@@ -2946,7 +2977,7 @@ package Landin.IR is
      return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Measure_Size | Measure_Align
+                          in Measurement_Kind
                  and then not Is_Aggregate_Measurement
                                     (Of_Unit, Item, Value);
 
@@ -2954,7 +2985,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Measure_Size | Measure_Align
+                          in Measurement_Kind
                  and then Is_Aggregate_Measurement
                                     (Of_Unit, Item, Value);
 
@@ -2963,7 +2994,7 @@ package Landin.IR is
       return Field_Shape
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Measure_Size | Measure_Align
+                          in Measurement_Kind
                  and then Is_Aggregate_Measurement (Of_Unit, Item, Value)
                  and then Field
                           <= Measurement_Field_Count (Of_Unit, Item, Value);
@@ -3031,10 +3062,12 @@ package Landin.IR is
       Site    : Landin.Provenance.Origin;
       Cases   : Case_Run_Array := No_Case_Runs;
       Payloads : Field_Shape_Array := No_Field_Shapes;
-      Policy : Landin.Layouts.Policy := Landin.Layouts.Natural)
+      Policy : Landin.Layouts.Policy := Landin.Layouts.Natural;
+      Path : Path_Step_Array := No_Path_Steps)
       return Value_Id
      with Pre  => Is_Emitting (Into, Item)
-                  and then Of_Code in Measure_Size | Measure_Align
+                  and then Of_Code in Measurement_Kind
+                  and then (Of_Code = Measure_Offset) = (Path'Length > 0)
                   and then Fields'Length > 0
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted
@@ -4195,6 +4228,8 @@ private
       --  True only for Add_Address_Slot.  Element then describes the
       --  complete target-neutral shape reached by its stored address.
       Addressed   : Boolean                   := False;
+      --  Is_Unaligned_Address's answer, for an address slot.
+      Unaligned   : Boolean                   := False;
       Declaration : Declaration_Id            := No_Declaration;
       Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Site        : Landin.Provenance.Origin  :=

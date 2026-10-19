@@ -436,6 +436,11 @@ def main() -> int:
     parser.add_argument("--output", type=Path,
                         help="write the measured record here")
     args = parser.parse_args()
+    #  A rebuild of this build waits for the record, rather than replace
+    #  refine between the two compilations it compares.
+    sys.path.insert(0, str(repository_root() / "scripts"))
+    import build_lock
+    build_lock.reading(args.refine)
     refine = args.refine.resolve(strict=True)
     targets = tuple(args.targets.split(","))
     for target in targets:

@@ -2,4 +2,4 @@
 # ignored, so a typo cannot quietly remove a fixture from the suite.
 class: unit
 summary: line maps agree for LF, CR LF, a lone CR and a missing final newline
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, darwin-arm64, synthetic-32

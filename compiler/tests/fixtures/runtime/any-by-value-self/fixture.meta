@@ -4,4 +4,4 @@ summary: a concept entry taking a record provider by value is dispatched through
 program: main.ldn
 status: 42
 constructs: 1230, 1240, 1370, 1380, 1390, 0790
-targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

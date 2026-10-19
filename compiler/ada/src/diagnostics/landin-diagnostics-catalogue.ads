@@ -719,7 +719,7 @@ package Landin.Diagnostics.Catalogue is
                => True,
             when No_Toolchain .. Firmware_Frame_Exceeds_Stack => False);
 
-   --  The admitted secondary-label interval. Every code except L0300,
+   --  The admitted secondary-label interval. Every code except L0201, L0300,
    --  L0304, L0305, L0306 and L0325 has one exact count. L0300 and L0306
    --  point only at the direct defect when it is written there, but a
    --  substitution-dependent occurrence is primary at the application and
@@ -795,6 +795,10 @@ package Landin.Diagnostics.Catalogue is
             --  and an erased pair has the site that asked for the image.
             when Not_Known_At_Compile_Time => 1,
             when Size_Limit_Exceeded => 1,
+            --  D381: a qualified name whose prefix reached a local that
+            --  hides an import points at that local, the one second place
+            --  an unresolved name can have.
+            when Unresolved_Name => 1,
             when others => Minimum_Secondaries (Of_Code));
 
    --  How many notes. [1830] promises a diagnostic that names the construct

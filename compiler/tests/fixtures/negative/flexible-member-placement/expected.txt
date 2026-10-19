@@ -1,0 +1,34 @@
+error[L0346]: only a C record's last field may be a zero-length array
+  --> ../tests/fixtures/negative/flexible-member-placement/program.ldn:7:5
+  |
+7 |     name: [0]u8
+  |     ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/flexible-member-placement/program.ldn:6:25
+  |
+6 | early: type = layout(c) struct
+  |                         ^^^^^^ this C layout
+  = note: D413: `[0]T` is C's flexible array member, whose elements follow the record; move it last or give the array a length
+error[L0346]: a record ending in a flexible array member is not a field of a C record
+  --> ../tests/fixtures/negative/flexible-member-placement/program.ldn:12:5
+   |
+12 |     first: entry
+   |     ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/flexible-member-placement/program.ldn:11:26
+   |
+11 | holder: type = layout(c) struct
+   |                          ^^^^^^ this C layout
+  = note: D413: its trailing elements would overlap the field after it; hold a pointer to the record instead
+error[L0304]: a record that ends in a flexible array member is not an array element
+  --> ../tests/fixtures/negative/flexible-member-placement/program.ldn:16:12
+   |
+16 | mut table: [4]entry = zeroed
+   |            ^^^^^^^^
+  = note: the tour describes it at [0520]
+  = note: this is a recorded source-form boundary
+error[L0304]: a record that ends in a flexible array member is not an array element
+  --> ../tests/fixtures/negative/flexible-member-placement/program.ldn:19:12
+   |
+19 |     local: [2]entry = zeroed
+   |            ^^^^^^^^
+  = note: the tour describes it at [0520]
+  = note: this is a recorded source-form boundary

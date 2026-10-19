@@ -4,4 +4,4 @@ summary: a generic from clause naming a type-formal parameter is satisfied by an
 program: main.ldn
 status: 42
 constructs: 0790, 1290, 1300
-targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

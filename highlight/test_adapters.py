@@ -204,6 +204,36 @@ def symbol_collection_smoke() -> None:
     assert (None, "raw_atom") in scanned[26]
 
 
+def withdrawn_word_smoke(grammar: dict[str, object], emacs: str) -> None:
+    """`arena` is a name, not a keyword, in every lexical rendering.
+
+    D212 withdrew [0820]'s lexical `arena` block, and `core/arena` is an
+    ordinary module, so `arena.over(...)` must read as the name it is. A
+    highlighter that kept the word would colour every use of the module as
+    syntax.
+    """
+    assert "arena" not in KEYWORDS, "the scanner lists arena as a keyword"
+    scanned = list(Scanner().scan("pool := arena.over(backing)"))
+    assert ("k", "arena") not in scanned, scanned
+    assert (None, "arena") in scanned, scanned
+    keywords = textmate_pattern(grammar, "keyword.control.landin")
+    assert not re.search(keywords, "arena"), "TextMate colours arena"
+    assert re.search(keywords, "uninit"), "TextMate keyword rule is wrong"
+    assert '"arena"' not in emacs, "Emacs colours arena"
+    for relative in ("vim/syntax/landin.vim", "nano/landin.nanorc",
+                     "kate/landin.xml", "notepad-plus-plus/Landin.xml",
+                     "sublime/Landin.tmLanguage"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        assert not re.search(r"\barena\b", text), f"{relative} colours arena"
+    try:
+        from pygments.token import Keyword
+        from landin_pygments import LandinLexer
+    except ModuleNotFoundError:
+        return
+    assert not any(token in Keyword and text == "arena" for token, text
+                   in LandinLexer().get_tokens("pool := arena.over(backing)\n"))
+
+
 def pygments_smoke(source: str) -> None:
     try:
         from pygments.token import Comment, Keyword, Name, Number, String
@@ -318,6 +348,7 @@ def main() -> int:
     emacs = (ROOT / "emacs/landin-mode.el").read_text(encoding="utf-8")
     assert balanced_lisp(emacs), "unbalanced Emacs Lisp"
     check_grammar_revision(helix, zed, emacs)
+    withdrawn_word_smoke(grammar, emacs)
     for word in KEYWORDS | TYPES | CONSTANTS:
         assert f'"{word}"' in emacs, f"Emacs vocabulary omits {word}"
     modules = re.search(

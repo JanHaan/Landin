@@ -2172,10 +2172,16 @@ def check_pinned_toolchain(full_run):
 
 GATE_TOOL_PINS = ("LANDIN_CLANG_UBUNTU", "LANDIN_TREE_SITTER_VERSION",
                   "LANDIN_TREE_SITTER_SHA256_X86_64_LINUX",
+                  "LANDIN_TREE_SITTER_SHA256_AARCH64_LINUX",
+                  "LANDIN_TREE_SITTER_SHA256_AARCH64_DARWIN",
                   "LANDIN_CROSS_QEMU_NIX", "LANDIN_CROSS_GCC_NIX")
 #  The cross lane's versions, which the nix shell holds its package set to:
 #  read from the pins by name, and never written in flake.nix itself.
 CROSS_LANE_PINS = ("LANDIN_CROSS_QEMU_NIX", "LANDIN_CROSS_GCC_NIX")
+#  The shell's tree-sitter CLI is the gate's release binary, fetched by the
+#  pinned version and checked against the pinned sha256 for its system.
+SHELL_TREE_SITTER_READS = ('pin "LANDIN_TREE_SITTER_VERSION"',
+                           'pin "LANDIN_TREE_SITTER_SHA256_${suffix}"')
 
 
 def gate_tool_pin_problems(pins, pins_text, record, record_text):
@@ -2229,6 +2235,41 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
             out.append((flake, 1, "flake.nix names %s's %s literally instead "
                                   "of reading it from environments/pins.sh"
                         % (name, values[name])))
+    for read in SHELL_TREE_SITTER_READS:
+        if read not in flake_text:
+            out.append((flake, 1, "flake.nix does not take the shell's "
+                                  "tree-sitter CLI from environments/pins.sh"
+                                  " (%s)" % read))
+    for name in GATE_TOOL_PINS:
+        if name.startswith("LANDIN_TREE_SITTER") and values[name] in flake_text:
+            out.append((flake, 1, "flake.nix names %s's %s literally instead "
+                                  "of reading it from environments/pins.sh"
+                        % (name, values[name])))
+    return out + shell_hook_problems(flake, flake_text)
+
+
+def shell_hook_problems(flake, flake_text):
+    """The development shell writes nothing to a command's standard output.
+
+    `nix develop -c cmd > file` runs the shell hook too, and its banner on
+    standard output went into the file: a source rewritten that way was
+    silently corrupted.  And the shell's bash is the interactive one, with
+    `compgen` and `complete`, which stdenv's bash is built without.
+    """
+    out = []
+    hook = re.search(r"shellHook = ''(.*?)'';", flake_text, re.S)
+    if hook is None:
+        return [(flake, 1, "flake.nix has no shellHook to check")]
+    for line in hook.group(1).splitlines():
+        command = line.strip()
+        if (re.match(r"(echo|printf)\b", command)
+                and not re.search(r">&2\s*$", command)):
+            out.append((flake, 1, "the shell hook writes to standard output,"
+                                  " which `nix develop -c cmd > file` captures:"
+                                  " %s" % command))
+    if "pkgs.bashInteractive" not in flake_text:
+        out.append((flake, 1, "the shell has no pkgs.bashInteractive, so its"
+                              " bash has no compgen or complete"))
     return out
 
 
@@ -2299,6 +2340,96 @@ def check_developer_loops(full_run):
         if "./scripts/build.sh && ./scripts/test.sh" in script:
             out.append(("scripts/linux-loop.sh", 1,
                         "the default loop builds twice; test.sh owns the build"))
+    return out
+
+
+#  Where a reader is told which cases check a thing, keyed by the file
+#  that describes it.  A recorded negative's report was stale while
+#  `--suite=fixtures` passed, because the two cases that compare it are
+#  in other suites; the format's own description names them.
+REQUIRED_SELECTORS = {
+    "compiler/tests/README.md": (
+        "--case='fixture execution/recorded expectations hold'",
+        "--case='parser/reports carry the pinned codes'",
+    ),
+}
+
+
+def registered_cases():
+    """Every (suite, case) the test program registers, read from source."""
+    directory = os.path.join(ROOT, "compiler/ada/tests/src")
+    if not os.path.isdir(directory):
+        return None
+    out = set()
+    for name in sorted(os.listdir(directory)):
+        if not name.endswith(".adb"):
+            continue
+        with io.open(os.path.join(directory, name), encoding="utf-8") as f:
+            text = f.read()
+        for found in re.finditer(
+                r'Landin\.Testing\.Register\s*\(\s*\w+\s*,\s*"([^"\n]+)"'
+                r'\s*,\s*"([^"\n]+)"', text):
+            out.add((found.group(1), found.group(2)))
+    return out
+
+
+def check_harness_selectors(full_run):
+    """A `--suite` or `--case` a document writes is one the harness has.
+
+    The selectors are exact names, and a renamed case leaves every
+    document that told a reader to run it pointing at nothing, which the
+    harness answers only with its usage line.  The roadmap is excluded:
+    its register quotes the selectors people tried, wrong ones included.
+    """
+    if not full_run:
+        return []
+    cases = registered_cases()
+    if not cases:
+        return [("compiler/ada/tests/src", 1,
+                 "the test program's registrations could not be read")]
+    suites = {suite for suite, _ in cases}
+    out = []
+    skipped = {".git", "build", "node_modules", ".scratch", "site"}
+    for here, directories, files in os.walk(ROOT):
+        directories[:] = sorted(d for d in directories if d not in skipped)
+        for name in sorted(files):
+            if not name.endswith(".md"):
+                continue
+            path = os.path.join(here, name)
+            where = os.path.relpath(path, ROOT).replace(os.sep, "/")
+            if where == ROADMAP:
+                continue
+            with io.open(path, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+            for found in re.finditer(
+                    r"--(suite|case)=(?:'([^'\n]+)'|([^\s`'\"\\)]+))", text):
+                kind = found.group(1)
+                value = found.group(2) or found.group(3)
+                if re.fullmatch(r"[A-Z/_.]+", value) or "$" in value:
+                    continue
+                line = text.count("\n", 0, found.start()) + 1
+                if kind == "suite" and value not in suites:
+                    out.append((where, line,
+                                "--suite=%s names no suite the test program"
+                                " registers" % value))
+                elif kind == "case":
+                    suite, slash, case = value.partition("/")
+                    if not slash or (suite, case) not in cases:
+                        out.append((where, line,
+                                    "--case=%s names no registered case;"
+                                    " a case is SUITE/NAME, exactly"
+                                    % value))
+    for relative, selectors in REQUIRED_SELECTORS.items():
+        path = os.path.join(ROOT, relative)
+        text = ""
+        if os.path.exists(path):
+            with io.open(path, encoding="utf-8") as f:
+                text = f.read()
+        for selector in selectors:
+            if selector not in text:
+                out.append((relative, 1,
+                            "the cases that check what this describes are"
+                            " no longer named here: %s" % selector))
     return out
 
 
@@ -3815,6 +3946,163 @@ def check_catalogue(full_run):
     return out
 
 
+REPORTING_PACKAGES = ("Checking", "Syntactic", "Resolution", "Modules")
+
+
+def ada_without_comments(text):
+    """Ada text with every `--` comment blanked, strings kept, lines kept."""
+    out = []
+    for line in text.split("\n"):
+        inside = False
+        for index, char in enumerate(line):
+            if char == '"':
+                inside = not inside
+            elif not inside and line.startswith("--", index):
+                line = line[:index]
+                break
+        out.append(line)
+    return "\n".join(out)
+
+
+def ada_call_arguments(text, opening):
+    """The top-level arguments of the call whose `(` is at `opening`."""
+    depth, inside, current, parts = 0, False, [], []
+    for index in range(opening, len(text)):
+        char = text[index]
+        if inside:
+            inside = char != '"'
+        elif char == '"':
+            inside = True
+        elif char in "([":
+            depth += 1
+            if depth == 1:
+                continue
+        elif char in ")]":
+            depth -= 1
+            if depth == 0:
+                parts.append("".join(current).strip())
+                return parts
+        elif char == "," and depth == 1:
+            parts.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    return None
+
+
+def reporting_failures():
+    """Each reporting package's failures, mapped to the catalogue's names."""
+    out = {}
+    for package in REPORTING_PACKAGES:
+        path = os.path.join(ROOT, "compiler/ada/src/diagnostics",
+                            "landin-diagnostics-%s.ads" % package.lower())
+        if not os.path.exists(path):
+            return None
+        with io.open(path, encoding="utf-8") as stream:
+            text = ada_without_comments(stream.read())
+        found = re.search(r"function Code_For \(Item : Failure\).*?"
+                          r"is \(case Item is(.*?)\);", text, re.S)
+        if not found:
+            return None
+        arms = {}
+        for piece in re.split(r"\bwhen\b", found.group(1))[1:]:
+            head, _, value = piece.partition("=>")
+            value = value.strip().rstrip(",").strip().split(".")[-1].strip()
+            for one in head.split("|"):
+                arms[one.strip()] = value
+        out[package] = arms
+    return out
+
+
+def check_catalogue_labels(full_run):
+    """A report's second places are the catalogue row's, read at the call.
+
+    Each reporting package raises a compiler defect when the diagnostic
+    it built carries fewer second places than its code's row asks for, or
+    more, so a new report that forgot its `Because` was found by running
+    it.  Every call that names its failure and gives its `Because` as a
+    literal, or gives none, is decided here instead: the labels it can
+    attach must fall inside its row's minimum and maximum.  A `Because`
+    computed while the compiler runs is still held only by the package's
+    own check, and a wrapper that passes its failure through is held at
+    its own callers' literal.  `Modules` attaches no label at all, so a
+    code it raises must ask for none.
+    """
+    if not full_run:
+        return []
+    rows = catalogue_rows()
+    failures = reporting_failures()
+    if rows is None or failures is None:
+        return [("compiler/ada/src/diagnostics", 1,
+                 "the reporting packages could not be read for their"
+                 " label counts")]
+    bounds = {}
+    for row in rows:
+        try:
+            low = int(row["minimum"])
+        except ValueError:
+            continue
+        high = int(row["maximum"]) if row["maximum"].isdigit() else low
+        bounds[row["name"]] = (low, high, row["code"])
+    out = []
+    source_root = os.path.join(ROOT, "compiler/ada/src")
+    for here, _, files in sorted(os.walk(source_root)):
+        for name in sorted(files):
+            if not name.endswith((".ads", ".adb")):
+                continue
+            path = os.path.join(here, name)
+            where = os.path.relpath(path, ROOT)
+            with io.open(path, encoding="utf-8") as stream:
+                text = ada_without_comments(stream.read())
+            aliases = {"Landin.Diagnostics." + package: package
+                       for package in REPORTING_PACKAGES}
+            for found in re.finditer(
+                    r"package (\w+) renames Landin\.Diagnostics\.(%s);"
+                    % "|".join(REPORTING_PACKAGES), text):
+                aliases[found.group(1)] = found.group(2)
+            for alias, package in aliases.items():
+                for call in re.finditer(r"(?<![\w.])%s\.Report\s*\("
+                                        % re.escape(alias), text):
+                    arguments = ada_call_arguments(text, call.end() - 1)
+                    if arguments is None:
+                        continue
+                    named = {}
+                    for index, argument in enumerate(arguments):
+                        pair = re.match(r"(\w+)\s*=>\s*(.*)$", argument, re.S)
+                        if pair:
+                            named[pair.group(1)] = pair.group(2).strip()
+                        elif index == 0:
+                            named["Item"] = argument
+                    item = re.fullmatch(r"(?:%s\.)?(\w+)" % re.escape(alias),
+                                        named.get("Item", ""))
+                    if not item or item.group(1) not in failures[package]:
+                        continue
+                    code_name = failures[package][item.group(1)]
+                    if code_name not in bounds:
+                        continue
+                    low, high, code = bounds[code_name]
+                    because = named.get("Because")
+                    if package == "Modules" or because in (None, '""'):
+                        labels = 0
+                    elif re.fullmatch(r'"[^"]+"(\s*&.*)?', because, re.S):
+                        labels = 1
+                    else:
+                        continue
+                    if not low <= labels <= high:
+                        line = text.count("\n", 0, call.start()) + 1
+                        out.append((where, line,
+                                    "this %s report of %s attaches %d second"
+                                    " place%s and the catalogue row asks for"
+                                    " %s; give it %s"
+                                    % (package, code, labels,
+                                       "" if labels == 1 else "s",
+                                       ("%d" % low) if low == high
+                                       else "%d to %d" % (low, high),
+                                       "a Because and its place"
+                                       if labels < low else "none")))
+    return out
+
+
 def third_party_notices():
     """The root inventory must name the notices beside vendored material."""
     out = []
@@ -3875,7 +4163,7 @@ def shared_routine_witnesses():
 
 
 def tour_example_witnesses():
-    """The allocator examples retain their compiled source witnesses."""
+    """Tour examples that retain their compiled source witnesses."""
     tour = io.open(os.path.join(ROOT, "tour.md"), encoding="utf-8").read()
     where = "compiler/tests/fixtures/positive/r491-tour-allocator-examples/main.ldn"
     source = io.open(os.path.join(ROOT, where), encoding="utf-8").read()
@@ -3885,6 +4173,12 @@ def tour_example_witnesses():
                           tour, re.M | re.S)
         if not found or found.group() not in source:
             out.append((where, 1, "compiled witness differs from tour " + name))
+    #  D405: [1220]'s several-label arm checks as the tour writes it.
+    where = "compiler/tests/fixtures/positive/match-arm-names-several-cases/program.ldn"
+    source = io.open(os.path.join(ROOT, where), encoding="utf-8").read()
+    found = re.search(r"^describe: \(.*?^end describe$", tour, re.M | re.S)
+    if not found or found.group() not in source:
+        out.append((where, 1, "compiled witness differs from tour describe"))
     return out
 
 
@@ -4270,13 +4564,13 @@ def construct_evidence():
 #  roadmap ends on; synthetic-32 is the model that preceded Cortex-M and
 #  applies to no construct.  A scope names the targets a construct must be accounted for
 #  on, and a state says what kind of evidence can account for it.
-PRODUCT_TARGETS = ("linux-x86-64", "linux-arm64", "macos-arm64",
+PRODUCT_TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64",
                    "freebsd-x86-64", "freebsd-arm64", "linux-rv64",
-                   "cortex-m")
+                   "cortex-m0")
 TARGET_SCOPES = {"all": PRODUCT_TARGETS,
-                 "hosted": ("linux-x86-64", "linux-arm64", "macos-arm64",
+                 "hosted": ("linux-x86-64", "linux-arm64", "darwin-arm64",
                             "freebsd-x86-64", "freebsd-arm64", "linux-rv64"),
-                 "cortex-m": ("cortex-m",),
+                 "cortex-m": ("cortex-m0",),
                  "none": ()}
 INVENTORY_HEADING = "## Construct inventory"
 HOSTED_COMPILE_TIME_HEADING = "## Hosted compile-time evidence"
@@ -4367,9 +4661,10 @@ def refusal_entries():
     return out
 
 
-#  The driver spells the Cortex target `cortex-m0` and the applicability
-#  register spells it `cortex-m`: one names a described target, the other
-#  a product family, and neither is free to be the other's spelling.
+#  A fixture's `targets:` and the applicability register name a target as
+#  `--target` spells it, `cortex-m0` as the driver does.  `cortex-m` is a
+#  construct inventory scope, the family a construct must be accounted for
+#  on, and is never a target's spelling.
 CORTEX_TARGET_FLAG = "--target=cortex-m0"
 
 
@@ -4452,7 +4747,7 @@ def cortex_target_problems():
     A positive or negative fixture may carry Cortex-M evidence,
     because a verdict reached before emission is reached on every host.
     The claim is worth having only while it cannot drift from the run:
-    a fixture that names `cortex-m` among its targets must select
+    a fixture that names `cortex-m0` among its targets must select
     `--target=cortex-m0`, and one that selects it must say so.  The rule
     that inventory equality is not semantic coverage is what this
     keeps: without it the target column could be filled by editing a
@@ -4460,18 +4755,29 @@ def cortex_target_problems():
     """
     problems = []
     for name, (path, fields) in sorted(fixture_records().items()):
+        named = "cortex-m0" in [
+            one.strip() for one in fields.get("targets", "").split(",")]
+        #  D361: firmware keeps D232's bare trap and writes no report, so a
+        #  fixture whose oracle includes the report line cannot be a
+        #  Cortex-M verdict.  Its corpus row still runs it and holds it to
+        #  trapping; the rule is the corpus's, and the refusal names it.
+        if fields.get("trap_report") and named:
+            problems.append((path, 0, (
+                "%s names cortex-m0 and has a trap_report:, which firmware "
+                "never writes (D361); drop cortex-m0 from its targets: and "
+                "keep its \"execute\" row, which runs it to its trap "
+                "(environments/cortex-m/README.md, The corpus inventory)"
+                % name)))
         if name.split("/")[0] not in ("positive", "negative", "end-to-end"):
             continue
-        named = "cortex-m" in [
-            one.strip() for one in fields.get("targets", "").split(",")]
         selected = selects_cortex_target(fields)
         if named and not selected:
             problems.append((path, 0, (
-                "%s names cortex-m and no argument selects %s"
+                "%s names cortex-m0 and no argument selects %s"
                 % (name, CORTEX_TARGET_FLAG))))
         elif selected and not named:
             problems.append((path, 0, (
-                "%s selects %s and does not name cortex-m among its targets"
+                "%s selects %s and does not name cortex-m0 among its targets"
                 % (name, CORTEX_TARGET_FLAG))))
     return problems
 
@@ -4513,7 +4819,7 @@ def unplaced_hint(name, target):
     The corpus's rules are environments/cortex-m/README.md's; a refusal that
     says only that nothing places the claim sends its reader to the code.
     """
-    if target != "cortex-m" or name.split("/")[0] not in ("runtime", "abi"):
+    if target != "cortex-m0" or name.split("/")[0] not in ("runtime", "abi"):
         return ""
     with io.open(os.path.join(ROOT, CORTEX_CORPUS), encoding="utf-8") as stream:
         corpus = json.load(stream)["fixtures"]
@@ -4521,13 +4827,13 @@ def unplaced_hint(name, target):
     rules = " (environments/cortex-m/README.md, The corpus inventory)"
     if row is None:
         return ("; %s has no row for it: add an \"execute\" row, or drop "
-                "cortex-m from its targets:%s" % (CORTEX_CORPUS, rules))
+                "cortex-m0 from its targets:%s" % (CORTEX_CORPUS, rules))
     if "profile_limit" in row:
         return ("; its %s row records a profile_limit, and an image that "
-                "overflows is no execution: drop cortex-m from its targets:, "
+                "overflows is no execution: drop cortex-m0 from its targets:, "
                 "or remove the limit once every profile fits%s"
                 % (CORTEX_CORPUS, rules))
-    return ("; its %s row's mode is %s, which places no verdict: drop cortex-m "
+    return ("; its %s row's mode is %s, which places no verdict: drop cortex-m0 "
             "from its targets:%s" % (CORTEX_CORPUS, row.get("mode"), rules))
 
 
@@ -4574,7 +4880,7 @@ def cortex_probe_problems(titles):
                 problems.append((CORTEX_PROBES, 0, (
                     "probe %s says %s runs %s and it does not name it"
                     % (name, runner, source))))
-        if probe.get("targets") != "cortex-m":
+        if probe.get("targets") != "cortex-m0":
             problems.append((CORTEX_PROBES, 0, (
                 "probe %s is Cortex-M evidence and says otherwise" % name)))
         if not (probe.get("evidence") or "").strip():
@@ -4619,7 +4925,7 @@ def fixture_target_claims():
     Prototype coverage reads the per-fixture answer this already computed.
     The prototype derivation register needs the verdict each product target reached for one
     named derivation, not the union over a construct, and deriving both from
-    one reader is what stops the two registers from disagreeing.  `cortex-m`
+    one reader is what stops the two registers from disagreeing.  `cortex-m0`
     is claimed here even where the fixture does not name it, because the
     corpus records a verdict the embedded lane actually reaches; a target a
     fixture names and no record places is `cortex_target_problems`' concern
@@ -4658,13 +4964,13 @@ def fixture_target_claims():
                     claim(name, lane, "executed")
             change = parity["differences"].get(name, {})
             if "replacement" in change or (
-                    "macos-arm64" in targets and "limit" not in change):
-                claim(name, "macos-arm64", "executed")
+                    "darwin-arm64" in targets and "limit" not in change):
+                claim(name, "darwin-arm64", "executed")
             row = corpus.get(name, {})
             if row.get("mode") == "execute" and "profile_limit" not in row:
-                claim(name, "cortex-m", "executed")
+                claim(name, "cortex-m0", "executed")
             elif row.get("mode") == "refuse":
-                claim(name, "cortex-m", "refused")
+                claim(name, "cortex-m0", "refused")
         elif kind in ("positive", "negative", "end-to-end"):
             #  An end-to-end fixture's verdict is its recorded status: the
             #  compiler's own identity exits 0 and is no refusal.
@@ -4681,15 +4987,15 @@ def fixture_target_claims():
             #  end-to-end fixtures with a program or arguments, which
             #  compiler/tests/darwin/diagnostics.py runs; the manifest may
             #  make a fixed conditional select differently on arm64.
-            if ("macos-arm64" in targets
+            if ("darwin-arm64" in targets
                     and (fields.get("program") or fields.get("args"))):
                 status = parity["diagnostics"].get(name, {}).get("status")
-                claim(name, "macos-arm64", verdict if status is None else
+                claim(name, "darwin-arm64", verdict if status is None else
                       "compiled" if status == "0" else "refused")
-            if "cortex-m" in targets and selects_cortex_target(fields):
-                claim(name, "cortex-m", verdict)
+            if "cortex-m0" in targets and selects_cortex_target(fields):
+                claim(name, "cortex-m0", verdict)
     if driver.get("constructs"):
-        claim("firmware/derived-driver", "cortex-m", "executed")
+        claim("firmware/derived-driver", "cortex-m0", "executed")
     return best
 
 
@@ -4722,7 +5028,7 @@ def construct_target_evidence():
                 claim(one, target, what)
     for probe in cortex_probe_records():
         for one in listed(probe.get("constructs", "")):
-            claim(one, "cortex-m", "executed")
+            claim(one, "cortex-m0", "executed")
     return best
 
 
@@ -5218,7 +5524,7 @@ def prototype_row_evidence(name, fields):
         if fields.get("codes"):
             outputs.append("codes " + fields["codes"])
         for field, label in (("run_expect",
-                              fields.get("stream", "stdout") + " stream"),
+                              fields.get("stream", "merged") + " stream"),
                              ("expect", "report")):
             if fields.get(field):
                 digest = golden_digest(os.path.join(
@@ -5814,8 +6120,8 @@ def check_coverage_registers(full_run):
             out.append((REGISTERS, 1, "freestanding closure lacks " + evidence))
 
     allowed = set()
-    known_targets = {"linux-x86-64", "linux-arm64", "macos-arm64",
-                     "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "cortex-m",
+    known_targets = {"linux-x86-64", "linux-arm64", "darwin-arm64",
+                     "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "cortex-m0",
                      "synthetic-32"}
     if scopes is None:
         out.append((REGISTERS, 1, "the target applicability register is absent"))
@@ -6181,6 +6487,7 @@ TOUR_NAME = "tour.md"
 #  `formatting/the tour is in the layout` refuses the line on an example
 #  that parses and is in the layout after all.
 TOUR_LAYOUT_EXEMPTION = "-- not in the layout: "
+TOUR_PLACEHOLDER = re.compile(r"\.\.\.\s*end\b")
 
 
 def tour_layout_problems(source, tokens):
@@ -6276,6 +6583,16 @@ def check_tour_layout(full_run):
                 n += 1
             body = lines[start:n]
             n += 1
+            #  A body written `... end` is no source at all: a reader who
+            #  copies it is refused (L0102), and neither the formatter nor
+            #  the test program can hold its layout.  `! ...` is the
+            #  inferred error set and stays.
+            for at, line in enumerate(body):
+                if TOUR_PLACEHOLDER.search(line):
+                    out.append((TOUR_NAME, start + at + 1, "a placeholder"
+                                " body no parse accepts; write the body,"
+                                " or the struct's fields, the example"
+                                " stands for"))
             if body and body[0].startswith(TOUR_LAYOUT_EXEMPTION.rstrip()):
                 if not body[0].startswith(TOUR_LAYOUT_EXEMPTION) \
                         or not body[0][len(TOUR_LAYOUT_EXEMPTION):].strip():
@@ -7932,7 +8249,8 @@ def check_debugger_contract(full_run):
     if not full_run:
         return []
     paths = ["scripts/debug.sh", "compiler/tests/debugging/check.py",
-             "compiler/tests/debugging/workload-sources.json"]
+             "compiler/tests/debugging/workload-sources.json",
+             "compiler/tests/debugging/workload-frames.json"]
     out = absent(paths)
     if not out:
         import runpy
@@ -8086,6 +8404,95 @@ def check_macos_environment(full_run):
     return out
 
 
+FAILURE_WORDS = "core/failure/failure.ldn"
+
+
+def check_failure_words(full_run):
+    """Every atom a core module fails with has words in core/failure.
+
+    D388 gave each library failure atom a phrase, and the set `words` takes
+    is written out by hand, so a new atom in a `!` set or a `fail` would
+    otherwise reach a program with no words, and a program passing it on
+    would be refused.  This holds the set to the atoms core's signatures
+    and `fail` statements name, in both directions.
+    """
+    if not full_run:
+        return []
+    core = os.path.join(ROOT, "core")
+    words = os.path.join(ROOT, FAILURE_WORDS)
+    if not os.path.isdir(core) or not os.path.exists(words):
+        return [(FAILURE_WORDS, 1, "core/failure is missing")]
+    atoms, aliases, failures = set(), {}, {}
+    declared = re.compile(r"^public ([a-z_][a-z0-9_]*): atom\s*$")
+    alias = re.compile(r"^public ([a-z_][a-z0-9_]*): type = ([a-z_.| ]+)$")
+    name = r"[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?"
+    raised = re.compile(r"\bfail (" + name + r")\b")
+    for here, directories, files in os.walk(core):
+        directories.sort()
+        module = os.path.relpath(here, core).split(os.sep)[-1]
+        for file in sorted(files):
+            if not file.endswith(".ldn"):
+                continue
+            path = os.path.join(here, file)
+            relative = os.path.relpath(path, ROOT)
+            with io.open(path, encoding="utf-8") as source:
+                lines = source.read().splitlines()
+            in_set = False
+            for n, line in enumerate(lines, 1):
+                code = line.split("--", 1)[0]
+                found = declared.match(code)
+                if found:
+                    atoms.add(module + "." + found.group(1))
+                found = alias.match(code.rstrip())
+                if found and "|" in found.group(2):
+                    aliases[module + "." + found.group(1)] = [
+                        part.strip() for part in found.group(2).split("|")]
+                names = []
+                if "!" in code:
+                    names += re.findall(name, code.split("!", 1)[1])
+                    in_set = True
+                elif in_set and code.strip().startswith("|"):
+                    names += re.findall(name, code)
+                else:
+                    in_set = False
+                names += raised.findall(code)
+                for spelled in names:
+                    if spelled.split(".")[-1] in ("when", "else", "fail"):
+                        continue
+                    if "." not in spelled:
+                        spelled = module + "." + spelled
+                    failures.setdefault(spelled, (relative, n))
+    for spelled, members in list(aliases.items()):
+        aliases[spelled] = [m if "." in m else spelled.split(".")[0] + "." + m
+                            for m in members]
+    raised_atoms = {}
+    for spelled, where in failures.items():
+        for member in aliases.get(spelled, [spelled]):
+            if member in atoms:
+                raised_atoms.setdefault(member, where)
+    with io.open(words, encoding="utf-8") as source:
+        text = source.read()
+    found = re.search(r"^public reason: type = (.*?)\n\n", text,
+                      re.M | re.S)
+    if not found:
+        return [(FAILURE_WORDS, 1, "no `public reason: type =` union")]
+    line = text[:found.start()].count("\n") + 1
+    listed = {part.strip() for part in found.group(1).split("|")
+              if part.strip()}
+    out = []
+    for member in sorted(set(raised_atoms) - listed):
+        relative, n = raised_atoms[member]
+        out.append((FAILURE_WORDS, line,
+                    "%s fails with %s (%s:%d), which failure.reason does not "
+                    "hold, so it has no words (D388)"
+                    % (member.split(".")[0], member, relative, n)))
+    for member in sorted(listed - set(raised_atoms)):
+        out.append((FAILURE_WORDS, line,
+                    "failure.reason holds %s, which no core routine fails "
+                    "with" % member))
+    return out
+
+
 def check_library_documentation(full_run):
     """Keep source docs and module overviews complete before rendering."""
     if not full_run:
@@ -8193,6 +8600,7 @@ def main(argv):
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)
     extra += check_developer_loops(full_run)
+    extra += check_harness_selectors(full_run)
     extra += check_source_locations(full_run)
     extra += check_optimization_contract(full_run)
     extra += check_array_prose(full_run)
@@ -8210,6 +8618,7 @@ def main(argv):
     extra += check_first_program(full_run)
     extra += check_from_c_page(full_run)
     extra += check_library_documentation(full_run)
+    extra += check_failure_words(full_run)
     extra += check_benchmark_game_oracles(full_run)
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)
@@ -8225,6 +8634,7 @@ def main(argv):
     extra += check_discussion_targets(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
+    extra += check_catalogue_labels(full_run)
     extra += check_diagnostic_matrix(full_run)
     extra += check_explanations(full_run)
     extra += check_layout_page(full_run)

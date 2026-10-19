@@ -18,9 +18,10 @@
 --  itself makes; their numbers are wrapped.ldn's, which the same generator
 --  writes from the same tables.
 --
---  Every public routine carries a link name of its own, so none of them is
---  mistaken for, or replaces, the C library's function of the same name in
---  a program that also links libc.
+--  Only the process entry `_landin_start` and the C routine
+--  `_landin_start_main` it calls are global symbols (D415): every other
+--  routine is local, so none is mistaken for, or replaces, the C
+--  library's function of the same name in a program that also links libc.
 --
 --  Everything here is declared on Linux only.  Landin has no conditional
 --  import, so platform/posix imports this module on every system it
@@ -42,7 +43,7 @@ fixed if compiler.os == linux then
         ---
         --- rax names the call and carries its result; rdi, rsi, rdx, r10,
         --- r8 and r9 carry its arguments; the kernel overwrites rcx and r11.
-        public link(symbol: "_landin_linux_system_call") system_call:
+        public system_call:
             (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
             -> (result: i64) =
             result = assembler.block("syscall", inout n: i64 at rax = number,
@@ -78,7 +79,7 @@ fixed if compiler.os == linux then
         ---
         --- x8 names the call; x0 to x5 carry its arguments and x0 its
         --- result.
-        public link(symbol: "_landin_linux_system_call") system_call:
+        public system_call:
             (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
             -> (result: i64) =
             result = assembler.block("svc #0", in n: i64 at x8 = number,
@@ -113,7 +114,7 @@ fixed if compiler.os == linux then
         ---
         --- a7 names the call; a0 to a5 carry its arguments and a0 its
         --- result.
-        public link(symbol: "_landin_linux_system_call") system_call:
+        public system_call:
             (number: i64, a: i64, b: i64, c: i64, d: i64, e: i64, f: i64)
             -> (result: i64) =
             result = assembler.block("ecall", in n: i64 at x17 = number,
@@ -236,7 +237,7 @@ fixed if compiler.os == linux then
 
     --- Read at most `length` bytes from `descriptor` into `data`: the
     --- count read, zero at end of file, or minus the errno.
-    public link(symbol: "_landin_linux_read") read:
+    public read:
         (descriptor: i32, data: ptr mut u8, length: usize) -> (result: isize) =
         result = isize(system_call(read_number, i64(descriptor),
                                    i64(usize(data)), i64(length), 0, 0, 0))
@@ -244,7 +245,7 @@ fixed if compiler.os == linux then
 
     --- Write at most `length` bytes from `data` to `descriptor`: the count
     --- accepted, which may be short, or minus the errno.
-    public link(symbol: "_landin_linux_write") write:
+    public write:
         (descriptor: i32, data: ptr u8, length: usize) -> (result: isize) =
         result = isize(system_call(write_number, i64(descriptor),
                                    i64(usize(data)), i64(length), 0, 0, 0))
@@ -253,7 +254,7 @@ fixed if compiler.os == linux then
     --- Open `path`, relative to `directory` (or `at_fdcwd`), with `flags`
     --- and, for `o_creat`, the permission bits `mode`: the new descriptor,
     --- or minus the errno.
-    public link(symbol: "_landin_linux_openat") openat:
+    public openat:
         (directory: i32, path: ptr u8, flags: i32, mode: u32)
         -> (result: i32) =
         result = i32(system_call(openat_number, i64(directory),
@@ -263,7 +264,7 @@ fixed if compiler.os == linux then
 
     --- Close `descriptor`: zero, or minus the errno.  The descriptor is
     --- released even when this fails, so a failed close is never retried.
-    public link(symbol: "_landin_linux_close") close:
+    public close:
         (descriptor: i32) -> (result: i32) =
         result = i32(system_call(close_number, i64(descriptor), 0, 0, 0, 0,
                                  0))
@@ -273,7 +274,7 @@ fixed if compiler.os == linux then
     --- zero, or minus the errno.  `flags` zero follows symbolic links and
     --- `at_symlink_nofollow` does not; `mask` asks for fields beyond the
     --- basic ones.
-    public link(symbol: "_landin_linux_statx") statx:
+    public statx:
         (directory: i32, path: ptr u8, flags: i32, mask: u32,
          into: ptr mut file_status) -> (result: i32) =
         result = i32(system_call(statx_number, i64(directory),
@@ -290,7 +291,7 @@ fixed if compiler.os == linux then
     --- to a multiple of eight; it is little-endian on every architecture
     --- Linux runs Landin on.  The records come in no promised order and
     --- include `.` and `..`.
-    public link(symbol: "_landin_linux_getdents64") getdents64:
+    public getdents64:
         (descriptor: i32, into: ptr mut u8, length: usize) -> (result: isize) =
         result = isize(system_call(getdents64_number, i64(descriptor),
                                    i64(usize(into)), i64(length), 0, 0, 0))
@@ -299,7 +300,7 @@ fixed if compiler.os == linux then
     --- Make the directory `path`, relative to `directory` (or `at_fdcwd`),
     --- with the permission bits `mode`, which the process umask filters:
     --- zero, or minus the errno, EEXIST when the name is taken.
-    public link(symbol: "_landin_linux_mkdirat") mkdirat:
+    public mkdirat:
         (directory: i32, path: ptr u8, mode: u32) -> (result: i32) =
         result = i32(system_call(mkdirat_number, i64(directory),
                                  i64(usize(path)), i64(mode), 0, 0, 0))
@@ -308,7 +309,7 @@ fixed if compiler.os == linux then
     --- Remove the name `path`, relative to `directory` (or `at_fdcwd`): a
     --- file with `flags` zero, an empty directory with `at_removedir`.
     --- Zero, or minus the errno.
-    public link(symbol: "_landin_linux_unlinkat") unlinkat:
+    public unlinkat:
         (directory: i32, path: ptr u8, flags: i32) -> (result: i32) =
         result = i32(system_call(unlinkat_number, i64(directory),
                                  i64(usize(path)), i64(flags), 0, 0, 0))
@@ -316,7 +317,7 @@ fixed if compiler.os == linux then
 
     --- Map `length` bytes: the mapping's address, or minus the errno.
     --- With `map_anonymous` the descriptor is -1 and the offset zero.
-    public link(symbol: "_landin_linux_mmap") mmap:
+    public mmap:
         (address: usize, length: usize, protection: i32, flags: i32,
          descriptor: i32, offset: i64) -> (result: i64) =
         result = system_call(mmap_number, i64(address), i64(length),
@@ -325,7 +326,7 @@ fixed if compiler.os == linux then
     end mmap
 
     --- Unmap the `length` bytes at `address`: zero, or minus the errno.
-    public link(symbol: "_landin_linux_munmap") munmap:
+    public munmap:
         (address: usize, length: usize) -> (result: i32) =
         result = i32(system_call(munmap_number, i64(address), i64(length), 0,
                                  0, 0, 0))
@@ -335,7 +336,7 @@ fixed if compiler.os == linux then
     --- long: where it is, or with `mremap_maymove` wherever the kernel
     --- finds room, its pages moved rather than copied.  The mapping's
     --- address, or minus the errno.
-    public link(symbol: "_landin_linux_mremap") mremap:
+    public mremap:
         (address: usize, length: usize, new_length: usize, flags: i32)
         -> (result: i64) =
         result = system_call(mremap_number, i64(address), i64(length),
@@ -370,7 +371,7 @@ fixed if compiler.os == linux then
     --- `limit` passes, with no signal mask: the number of records whose
     --- `returned` is nonzero, zero when the limit passed first, or minus
     --- the errno.  arm64 and RV64 have no `poll` call; this is their one.
-    public link(symbol: "_landin_linux_ppoll") ppoll:
+    public ppoll:
         (records: ptr mut poll_record, count: usize, limit: poll_limit)
         -> (result: i32) =
         address: usize = match limit
@@ -410,7 +411,7 @@ fixed if compiler.os == linux then
     --- Make a pipe and put its reading end in `ends[0]` and its writing end
     --- in `ends[1]`, with `flags`, `o_cloexec` among them: zero, or minus
     --- the errno.
-    public link(symbol: "_landin_linux_pipe2") pipe2:
+    public pipe2:
         (ends: ptr mut i32, flags: i32) -> (result: i32) =
         result = i32(system_call(pipe2_number, i64(usize(ends)), i64(flags),
                                  0, 0, 0, 0))
@@ -420,7 +421,7 @@ fixed if compiler.os == linux then
     --- with `flags`: `target`, or minus the errno, EINVAL when the two are
     --- the same.  arm64 and RV64 have no `dup2`; this is every
     --- architecture's.
-    public link(symbol: "_landin_linux_dup3") dup3:
+    public dup3:
         (source: i32, target: i32, flags: i32) -> (result: i32) =
         result = i32(system_call(dup3_number, i64(source), i64(target),
                                  i64(flags), 0, 0, 0))
@@ -428,7 +429,7 @@ fixed if compiler.os == linux then
 
     --- `fcntl(descriptor, command, argument)` for a command whose argument
     --- is an integer: its result, or minus the errno.
-    public link(symbol: "_landin_linux_fcntl") fcntl:
+    public fcntl:
         (descriptor: i32, command: i32, argument: i64) -> (result: i32) =
         result = i32(system_call(fcntl_number, i64(descriptor),
                                  i64(command), argument, 0, 0, 0))
@@ -440,7 +441,7 @@ fixed if compiler.os == linux then
     --- or minus the errno.  The child is a copy of the whole address space,
     --- and of the calling thread alone.  arm64 and RV64 have no `fork`;
     --- this is every architecture's.
-    public link(symbol: "_landin_linux_fork") fork:
+    public fork:
         () -> (result: i64) =
         result = system_call(clone_number, sigchld, 0, 0, 0, 0, 0)
     end fork
@@ -449,7 +450,7 @@ fixed if compiler.os == linux then
     --- NUL-terminated strings of the null-terminated `arguments` and
     --- `environment` tables: it does not return when it succeeds, and
     --- returns minus the errno when it fails.
-    public link(symbol: "_landin_linux_execve") execve:
+    public execve:
         (path: ptr u8, arguments: ptr ptr u8, environment: ptr ptr u8)
         -> (result: i32) =
         result = i32(system_call(execve_number, i64(usize(path)),
@@ -460,7 +461,7 @@ fixed if compiler.os == linux then
     --- Wait for the child `child` to end, or with `options` for less, and
     --- put its status in `status`, with no resource record: the child's ID,
     --- or minus the errno, ECHILD when it is not this process's child.
-    public link(symbol: "_landin_linux_wait4") wait4:
+    public wait4:
         (child: i32, status: ptr mut i32, options: i32) -> (result: i32) =
         result = i32(system_call(wait4_number, i64(child),
                                  i64(usize(status)), i64(options), 0, 0, 0))
@@ -469,7 +470,7 @@ fixed if compiler.os == linux then
     --- Close, or with `close_range_cloexec` mark closed on exec, the
     --- descriptors from `first` to `last`: zero, or minus the errno, ENOSYS
     --- from a kernel older than 5.9 and EINVAL for a flag older than 5.11.
-    public link(symbol: "_landin_linux_close_range") close_range:
+    public close_range:
         (first: u32, last: u32, flags: u32) -> (result: i32) =
         result = i32(system_call(close_range_number, i64(first), i64(last),
                                  i64(flags), 0, 0, 0))
@@ -488,7 +489,7 @@ fixed if compiler.os == linux then
     --- EINVAL for a clock the kernel does not have.  This is the system
     --- call itself; the vDSO's `clock_gettime`, which `vdso.symbol` finds,
     --- answers the same without entering the kernel.
-    public link(symbol: "_landin_linux_clock_gettime") clock_gettime:
+    public clock_gettime:
         (clock: i32, into: ptr mut timespec) -> (result: i32) =
         result = i32(system_call(clock_gettime_number, i64(clock),
                                  i64(usize(into)), 0, 0, 0, 0))
@@ -498,7 +499,7 @@ fixed if compiler.os == linux then
     --- relative to now when `flags` is zero: zero once it has passed, or
     --- minus the errno, EINTR when a signal came first, with what was left
     --- of the request in `remaining`.
-    public link(symbol: "_landin_linux_clock_nanosleep") clock_nanosleep:
+    public clock_nanosleep:
         (clock: i32, flags: i32, request: ptr timespec,
          remaining: ptr mut timespec) -> (result: i32) =
         result = i32(system_call(clock_nanosleep_number, i64(clock),
@@ -516,7 +517,7 @@ fixed if compiler.os == linux then
     --- `flags` holds `grnd_nonblock`: the count filled, which a request
     --- over 256 bytes may find short, or minus the errno, EINTR when a
     --- signal came before any byte.
-    public link(symbol: "_landin_linux_getrandom") getrandom:
+    public getrandom:
         (into: ptr mut u8, length: usize, flags: u32) -> (result: isize) =
         result = isize(system_call(getrandom_number, i64(usize(into)),
                                    i64(length), i64(flags), 0, 0, 0))
@@ -526,7 +527,7 @@ fixed if compiler.os == linux then
     --- `offset` bytes into the file, without moving its position: the
     --- count read, zero at or past its end, or minus the errno, ESPIPE for
     --- a pipe or a socket, which has no offsets.
-    public link(symbol: "_landin_linux_pread64") pread64:
+    public pread64:
         (descriptor: i32, data: ptr mut u8, length: usize, offset: i64)
         -> (result: isize) =
         result = isize(system_call(pread64_number, i64(descriptor),
@@ -539,7 +540,7 @@ fixed if compiler.os == linux then
     --- count accepted, or minus the errno.  A write past the end extends
     --- the file, and what lies between reads as zeros.  On a file opened
     --- with `o_append` Linux writes at the end whatever `offset` says.
-    public link(symbol: "_landin_linux_pwrite64") pwrite64:
+    public pwrite64:
         (descriptor: i32, data: ptr u8, length: usize, offset: i64)
         -> (result: isize) =
         result = isize(system_call(pwrite64_number, i64(descriptor),
@@ -549,7 +550,7 @@ fixed if compiler.os == linux then
 
     --- Give the file open as `descriptor` the size `length`, cutting what
     --- lies beyond it or extending it with zeros: zero, or minus the errno.
-    public link(symbol: "_landin_linux_ftruncate") ftruncate:
+    public ftruncate:
         (descriptor: i32, length: i64) -> (result: i32) =
         result = i32(system_call(ftruncate_number, i64(descriptor), length,
                                  0, 0, 0, 0))
@@ -557,7 +558,7 @@ fixed if compiler.os == linux then
 
     --- Write what the system holds of the file open as `descriptor` to its
     --- device, its data and its status: zero, or minus the errno.
-    public link(symbol: "_landin_linux_fsync") fsync:
+    public fsync:
         (descriptor: i32) -> (result: i32) =
         result = i32(system_call(fsync_number, i64(descriptor), 0, 0, 0, 0,
                                  0))
@@ -565,7 +566,7 @@ fixed if compiler.os == linux then
 
     --- `fsync` of the data alone, and of the status only where reading the
     --- data back needs it, as a size does: zero, or minus the errno.
-    public link(symbol: "_landin_linux_fdatasync") fdatasync:
+    public fdatasync:
         (descriptor: i32) -> (result: i32) =
         result = i32(system_call(fdatasync_number, i64(descriptor), 0, 0, 0,
                                  0, 0))
@@ -574,7 +575,7 @@ fixed if compiler.os == linux then
     --- Put the working directory's absolute path, with a NUL after it, in
     --- the `length` bytes at `into`: the bytes put there, NUL included, or
     --- minus the errno, ERANGE when they do not fit.
-    public link(symbol: "_landin_linux_getcwd") getcwd:
+    public getcwd:
         (into: ptr mut u8, length: usize) -> (result: isize) =
         result = isize(system_call(getcwd_number, i64(usize(into)),
                                    i64(length), 0, 0, 0, 0))
@@ -585,7 +586,7 @@ fixed if compiler.os == linux then
     --- `renameat`: a file already named `new` is replaced in the one step.
     --- Zero, or minus the errno, EXDEV across file systems.  arm64 and RV64
     --- have no `rename`; this is every architecture's.
-    public link(symbol: "_landin_linux_renameat2") renameat2:
+    public renameat2:
         (old_directory: i32, old: ptr u8, new_directory: i32, new: ptr u8,
          flags: u32) -> (result: i32) =
         result = i32(system_call(renameat2_number, i64(old_directory),
@@ -598,7 +599,7 @@ fixed if compiler.os == linux then
     --- final symbolic link of `old` unless `flags` holds
     --- `at_symlink_follow`: zero, or minus the errno, EEXIST when `new` is
     --- taken.
-    public link(symbol: "_landin_linux_linkat") linkat:
+    public linkat:
         (old_directory: i32, old: ptr u8, new_directory: i32, new: ptr u8,
          flags: i32) -> (result: i32) =
         result = i32(system_call(linkat_number, i64(old_directory),
@@ -609,7 +610,7 @@ fixed if compiler.os == linux then
     --- Make `path`, relative to `directory`, a symbolic link whose target is
     --- `target`, which need name nothing: zero, or minus the errno, EEXIST
     --- when `path` is taken.
-    public link(symbol: "_landin_linux_symlinkat") symlinkat:
+    public symlinkat:
         (target: ptr u8, directory: i32, path: ptr u8) -> (result: i32) =
         result = i32(system_call(symlinkat_number, i64(usize(target)),
                                  i64(directory), i64(usize(path)), 0, 0, 0))
@@ -619,7 +620,7 @@ fixed if compiler.os == linux then
     --- in at most `length` bytes at `into`, with no NUL after it: the bytes
     --- put there, as many as fit, or minus the errno, EINVAL when `path` is
     --- no symbolic link.
-    public link(symbol: "_landin_linux_readlinkat") readlinkat:
+    public readlinkat:
         (directory: i32, path: ptr u8, into: ptr mut u8, length: usize)
         -> (result: isize) =
         result = isize(system_call(readlinkat_number, i64(directory),
@@ -631,7 +632,7 @@ fixed if compiler.os == linux then
     --- `directory`, following a final symbolic link, to `mode`: zero, or
     --- minus the errno, EPERM when the process neither owns the file nor
     --- may override that.  The call takes no flags.
-    public link(symbol: "_landin_linux_fchmodat") fchmodat:
+    public fchmodat:
         (directory: i32, path: ptr u8, mode: u32) -> (result: i32) =
         result = i32(system_call(fchmodat_number, i64(directory),
                                  i64(usize(path)), i64(mode), 0, 0, 0))
@@ -639,7 +640,7 @@ fixed if compiler.os == linux then
 
     --- Set the permission bits of the file open as `descriptor` to `mode`:
     --- zero, or minus the errno.
-    public link(symbol: "_landin_linux_fchmod") fchmod:
+    public fchmod:
         (descriptor: i32, mode: u32) -> (result: i32) =
         result = i32(system_call(fchmod_number, i64(descriptor), i64(mode),
                                  0, 0, 0, 0))
@@ -650,7 +651,7 @@ fixed if compiler.os == linux then
     --- `0xFFFFFFFF`; a final symbolic link is followed unless `flags` holds
     --- `at_symlink_nofollow`.  Zero, or minus the errno, EPERM unless the
     --- process may.
-    public link(symbol: "_landin_linux_fchownat") fchownat:
+    public fchownat:
         (directory: i32, path: ptr u8, user: u32, group: u32, flags: i32)
         -> (result: i32) =
         result = i32(system_call(fchownat_number, i64(directory),
@@ -660,7 +661,7 @@ fixed if compiler.os == linux then
 
     --- Set the owner and group of the file open as `descriptor`, as
     --- `fchownat` does: zero, or minus the errno.
-    public link(symbol: "_landin_linux_fchown") fchown:
+    public fchown:
         (descriptor: i32, user: u32, group: u32) -> (result: i32) =
         result = i32(system_call(fchown_number, i64(descriptor), i64(user),
                                  i64(group), 0, 0, 0))
@@ -677,7 +678,7 @@ fixed if compiler.os == linux then
     --- path is `no_path`, to the two `timespec`s at `times`, access first:
     --- zero, or minus the errno.  A final symbolic link is followed unless
     --- `flags` holds `at_symlink_nofollow`, which sets the link's own.
-    public link(symbol: "_landin_linux_utimensat") utimensat:
+    public utimensat:
         (directory: i32, path: path_given, times: ptr timespec, flags: i32)
         -> (result: i32) =
         named: i64 = match path
@@ -693,7 +694,7 @@ fixed if compiler.os == linux then
     --- with `lock_nb` not to wait for it, or `lock_un`.  Zero, or minus the
     --- errno, EWOULDBLOCK when another open file holds it and `lock_nb`
     --- was given.
-    public link(symbol: "_landin_linux_flock") flock:
+    public flock:
         (descriptor: i32, operation: i32) -> (result: i32) =
         result = i32(system_call(flock_number, i64(descriptor),
                                  i64(operation), 0, 0, 0, 0))
@@ -702,29 +703,29 @@ fixed if compiler.os == linux then
     --- `ioctl(descriptor, request, argument)`, the argument an integer or
     --- a pointer as `i64(usize(p))`: its result, or minus the errno,
     --- ENOTTY when the request is not one for this kind of file.
-    public link(symbol: "_landin_linux_ioctl") ioctl:
+    public ioctl:
         (descriptor: i32, request: u64, argument: i64) -> (result: i32) =
         result = i32(system_call(ioctl_number, i64(descriptor), i64(request),
                                  argument, 0, 0, 0))
     end ioctl
 
     --- The process's real user ID.  It cannot fail.
-    public link(symbol: "_landin_linux_getuid") getuid: () -> (user: u32) =
+    public getuid: () -> (user: u32) =
         user = u32(system_call(getuid_number, 0, 0, 0, 0, 0, 0))
     end getuid
 
     --- The process's effective user ID, which permission checks use.
-    public link(symbol: "_landin_linux_geteuid") geteuid: () -> (user: u32) =
+    public geteuid: () -> (user: u32) =
         user = u32(system_call(geteuid_number, 0, 0, 0, 0, 0, 0))
     end geteuid
 
     --- The process's real group ID.
-    public link(symbol: "_landin_linux_getgid") getgid: () -> (group: u32) =
+    public getgid: () -> (group: u32) =
         group = u32(system_call(getgid_number, 0, 0, 0, 0, 0, 0))
     end getgid
 
     --- The process's effective group ID.
-    public link(symbol: "_landin_linux_getegid") getegid: () -> (group: u32) =
+    public getegid: () -> (group: u32) =
         group = u32(system_call(getegid_number, 0, 0, 0, 0, 0, 0))
     end getegid
 
@@ -959,7 +960,7 @@ fixed if compiler.os == linux then
     --- kind's flags, for `protocol`, zero for the kind's own: the new
     --- descriptor, or minus the errno, EAFNOSUPPORT for a domain the
     --- kernel does not have.
-    public link(symbol: "_landin_linux_socket") socket:
+    public socket:
         (domain: i32, kind: i32, protocol: i32) -> (result: i32) =
         result = i32(system_call(socket_number, i64(domain), i64(kind),
                                  i64(protocol), 0, 0, 0))
@@ -967,7 +968,7 @@ fixed if compiler.os == linux then
 
     --- Make a pair of connected Unix-domain sockets of `kind` and put them
     --- in `ends[0]` and `ends[1]`: zero, or minus the errno.
-    public link(symbol: "_landin_linux_socketpair") socketpair:
+    public socketpair:
         (domain: i32, kind: i32, protocol: i32, ends: ptr mut i32)
         -> (result: i32) =
         result = i32(system_call(socketpair_number, i64(domain), i64(kind),
@@ -976,7 +977,7 @@ fixed if compiler.os == linux then
 
     --- Give `descriptor` the address in the `length` bytes at `address`:
     --- zero, or minus the errno, EADDRINUSE when it is taken.
-    public link(symbol: "_landin_linux_bind") bind:
+    public bind:
         (descriptor: i32, address: ptr u8, length: u32) -> (result: i32) =
         result = i32(system_call(bind_number, i64(descriptor),
                                  i64(usize(address)), i64(length), 0, 0, 0))
@@ -985,7 +986,7 @@ fixed if compiler.os == linux then
     --- Make the bound stream socket `descriptor` accept connections, with
     --- at most `backlog` waiting, which the kernel caps at its own
     --- `somaxconn`: zero, or minus the errno.
-    public link(symbol: "_landin_linux_listen") listen:
+    public listen:
         (descriptor: i32, backlog: i32) -> (result: i32) =
         result = i32(system_call(listen_number, i64(descriptor),
                                  i64(backlog), 0, 0, 0, 0))
@@ -994,7 +995,7 @@ fixed if compiler.os == linux then
     --- Take the next connection waiting on `descriptor` as a new socket,
     --- with `flags`, `sock_cloexec` among them, and the peer's address in
     --- `address` when it is given: the new descriptor, or minus the errno.
-    public link(symbol: "_landin_linux_accept4") accept4:
+    public accept4:
         (descriptor: i32, address: address_filled, length: address_length,
          flags: i32) -> (result: i32) =
         result = i32(system_call(accept4_number, i64(descriptor),
@@ -1005,7 +1006,7 @@ fixed if compiler.os == linux then
     --- Connect `descriptor` to the address in the `length` bytes at
     --- `address`: zero, or minus the errno, ECONNREFUSED when nothing
     --- listens there.
-    public link(symbol: "_landin_linux_connect") connect:
+    public connect:
         (descriptor: i32, address: ptr u8, length: u32) -> (result: i32) =
         result = i32(system_call(connect_number, i64(descriptor),
                                  i64(usize(address)), i64(length), 0, 0, 0))
@@ -1015,7 +1016,7 @@ fixed if compiler.os == linux then
     --- `flags`, to `address` when it is given and to the connected peer
     --- when it is not: the count sent, which a stream may find short, or
     --- minus the errno.  x86-64 and arm64 have no `send`; this is it.
-    public link(symbol: "_landin_linux_sendto") sendto:
+    public sendto:
         (descriptor: i32, data: ptr u8, length: usize, flags: i32,
          address: address_given, address_size: u32) -> (result: isize) =
         result = isize(system_call(sendto_number, i64(descriptor),
@@ -1028,7 +1029,7 @@ fixed if compiler.os == linux then
     --- `flags`, and the sender's address in `address` when it is given:
     --- the count received, zero when a stream's peer has finished sending,
     --- or minus the errno, EAGAIN when the receive time limit passed.
-    public link(symbol: "_landin_linux_recvfrom") recvfrom:
+    public recvfrom:
         (descriptor: i32, data: ptr mut u8, length: usize, flags: i32,
          address: address_filled, address_size: address_length)
         -> (result: isize) =
@@ -1040,7 +1041,7 @@ fixed if compiler.os == linux then
 
     --- Stop receiving, sending or both on `descriptor`, `shut_rd`,
     --- `shut_wr` or `shut_rdwr`: zero, or minus the errno.
-    public link(symbol: "_landin_linux_shutdown") shutdown:
+    public shutdown:
         (descriptor: i32, side: i32) -> (result: i32) =
         result = i32(system_call(shutdown_number, i64(descriptor), i64(side),
                                  0, 0, 0, 0))
@@ -1048,7 +1049,7 @@ fixed if compiler.os == linux then
 
     --- Set the option `name` at `level` of `descriptor` to the `length`
     --- bytes at `value`: zero, or minus the errno.
-    public link(symbol: "_landin_linux_setsockopt") setsockopt:
+    public setsockopt:
         (descriptor: i32, level: i32, name: i32, value: ptr u8, length: u32)
         -> (result: i32) =
         result = i32(system_call(setsockopt_number, i64(descriptor),
@@ -1059,7 +1060,7 @@ fixed if compiler.os == linux then
     --- Read the option `name` at `level` of `descriptor` into `value`,
     --- whose room `length` holds and which then holds the option's own
     --- length: zero, or minus the errno.
-    public link(symbol: "_landin_linux_getsockopt") getsockopt:
+    public getsockopt:
         (descriptor: i32, level: i32, name: i32, value: ptr mut u8,
          length: ptr mut u32) -> (result: i32) =
         result = i32(system_call(getsockopt_number, i64(descriptor),
@@ -1070,7 +1071,7 @@ fixed if compiler.os == linux then
     --- Put the address `descriptor` is bound to in `address`, whose room
     --- `length` holds and which then holds the address's own length: zero,
     --- or minus the errno.
-    public link(symbol: "_landin_linux_getsockname") getsockname:
+    public getsockname:
         (descriptor: i32, address: ptr mut u8, length: ptr mut u32)
         -> (result: i32) =
         result = i32(system_call(getsockname_number, i64(descriptor),
@@ -1081,7 +1082,7 @@ fixed if compiler.os == linux then
     --- Put the address of the peer `descriptor` is connected to in
     --- `address`, as `getsockname` does: zero, or minus the errno, ENOTCONN
     --- when there is none.
-    public link(symbol: "_landin_linux_getpeername") getpeername:
+    public getpeername:
         (descriptor: i32, address: ptr mut u8, length: ptr mut u32)
         -> (result: i32) =
         result = i32(system_call(getpeername_number, i64(descriptor),
@@ -1130,7 +1131,7 @@ fixed if compiler.os == linux then
     --- Set the action of `signal` to `action` when it is given, and put the
     --- one it had in `previous` when that is given: zero, or minus the
     --- errno.  The signal set is the kernel's, eight bytes.
-    public link(symbol: "_landin_linux_rt_sigaction") rt_sigaction:
+    public rt_sigaction:
         (signal: i32, action: action_given, previous: action_kept)
         -> (result: i32) =
         setting: i64 = match action
@@ -1146,7 +1147,7 @@ fixed if compiler.os == linux then
     end rt_sigaction
 
     --- End every thread of the process with `status`.  It does not return.
-    public link(symbol: "_landin_linux_exit_group") exit_group:
+    public exit_group:
         (status: i32) -> noreturn =
         _ = system_call(exit_group_number, i64(status), 0, 0, 0, 0, 0)
         compiler.unreachable()
@@ -1186,7 +1187,7 @@ fixed if compiler.os == linux then
     --- itself, or C's `environ` after it changed, fail these and leave
     --- `environment` and `auxiliary` as they were.  A program
     --- `_landin_start` started has its roots already and takes nothing.
-    public link(symbol: "_landin_linux_adopt_start") adopt_start:
+    public adopt_start:
         (count: i32, values: ptr ptr u8, environment: ptr ptr u8)
         -> (adopted: bool) =
         adopted = auxiliary_root <> 0
@@ -1240,7 +1241,7 @@ fixed if compiler.os == linux then
 
     --- The environment `_landin_start` found on the initial stack, or the
     --- one `adopt_start` took from C's `main` under `--link=libc`.
-    public link(symbol: "_landin_linux_environment") environment:
+    public environment:
         () -> (table: environment_table) =
         if environment_root == 0 then
             table = no_environment
@@ -1253,7 +1254,7 @@ fixed if compiler.os == linux then
     --- The auxiliary-vector entry tagged `tag` (`6` is the page size), as
     --- `_landin_start` found it, or `adopt_start` under `--link=libc`:
     --- whether there is one, and its value.
-    public link(symbol: "_landin_linux_auxiliary") auxiliary:
+    public auxiliary:
         (tag: u64) -> (found: bool, value: u64) =
         found = false
         value = 0
@@ -1273,7 +1274,7 @@ fixed if compiler.os == linux then
     end auxiliary
 
     --- The page size the kernel reported, or 4096 when it reported none.
-    public link(symbol: "_landin_linux_page_size") page_size:
+    public page_size:
         () -> (bytes: usize) =
         (found, value) := auxiliary(6)
         bytes = if found then usize(value) else usize(4096) end if
@@ -1357,7 +1358,7 @@ fixed if compiler.os == linux then
         end if
 
         --- The words this processor gives.
-        public link(symbol: "_landin_linux_read_cpu_words") read_cpu_words:
+        public read_cpu_words:
             () -> (words: cpu_words) =
             top: u32 = cpuid_a(0)
             extended_top: u32 = cpuid_a(0x80000000)
@@ -1419,7 +1420,7 @@ fixed if compiler.os == linux then
 
         fixed if compiler.feature.avx512f then
             --- The level this executable was built for.
-            public link(symbol: "_landin_linux_level") level:
+            public level:
                 () -> (name: []u8) =
                 name = "x86-64-v4"
             end level
@@ -1432,7 +1433,7 @@ fixed if compiler.os == linux then
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 name = missing_v2(words)
                 return when lenof name <> 0
@@ -1442,7 +1443,7 @@ fixed if compiler.os == linux then
             end missing_feature
         elsif compiler.feature.avx then
             --- The level this executable was built for.
-            public link(symbol: "_landin_linux_level") level:
+            public level:
                 () -> (name: []u8) =
                 name = "x86-64-v3"
             end level
@@ -1455,7 +1456,7 @@ fixed if compiler.os == linux then
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 name = missing_v2(words)
                 return when lenof name <> 0
@@ -1463,7 +1464,7 @@ fixed if compiler.os == linux then
             end missing_feature
         elsif compiler.feature.popcnt then
             --- The level this executable was built for.
-            public link(symbol: "_landin_linux_level") level:
+            public level:
                 () -> (name: []u8) =
                 name = "x86-64-v2"
             end level
@@ -1476,13 +1477,13 @@ fixed if compiler.os == linux then
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 name = missing_v2(words)
             end missing_feature
         else
             --- The level this executable was built for.
-            public link(symbol: "_landin_linux_level") level:
+            public level:
                 () -> (name: []u8) =
                 name = "x86-64-v1"
             end level
@@ -1494,7 +1495,7 @@ fixed if compiler.os == linux then
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 _ = words
                 name = ""
@@ -1509,7 +1510,7 @@ fixed if compiler.os == linux then
         end cpu_words
 
         --- The words this processor gives.
-        public link(symbol: "_landin_linux_read_cpu_words") read_cpu_words:
+        public read_cpu_words:
             () -> (words: cpu_words) =
             (found, value) := auxiliary(16)
             words = (hwcap: if found then value else 0 end if)
@@ -1517,7 +1518,7 @@ fixed if compiler.os == linux then
 
         fixed if compiler.feature.lse then
             --- The level this executable was built for.
-            public link(symbol: "_landin_linux_level") level:
+            public level:
                 () -> (name: []u8) =
                 name = "armv8.1-a"
             end level
@@ -1531,7 +1532,7 @@ fixed if compiler.os == linux then
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there: HWCAP_ATOMICS, HWCAP_CRC32 and
             --- HWCAP_ASIMDRDM.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 hwcap: u64 = words.hwcap
                 name = if (hwcap & 0x100) == 0 then "lse"
@@ -1541,7 +1542,7 @@ fixed if compiler.os == linux then
             end missing_feature
         else
             --- The level this executable was built for.
-            public link(symbol: "_landin_linux_level") level:
+            public level:
                 () -> (name: []u8) =
                 name = "armv8-a"
             end level
@@ -1553,7 +1554,7 @@ fixed if compiler.os == linux then
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 _ = words
                 name = ""
@@ -1575,7 +1576,7 @@ fixed if compiler.os == linux then
         end probe_pair
 
         --- The words this processor gives.
-        public link(symbol: "_landin_linux_read_cpu_words") read_cpu_words:
+        public read_cpu_words:
             () -> (words: cpu_words) =
             mut pair: probe_pair = (key: 4, value: 0)
             result: i64 = system_call(riscv_hwprobe_number,
@@ -1587,13 +1588,13 @@ fixed if compiler.os == linux then
         fixed if compiler.feature.zba then
             fixed if compiler.feature.xtheadba then
                 --- The level this executable was built for.
-                public link(symbol: "_landin_linux_level") level:
+                public level:
                     () -> (name: []u8) =
                     name = "rv64gc_zba_xtheadba"
                 end level
             else
                 --- The level this executable was built for.
-                public link(symbol: "_landin_linux_level") level:
+                public level:
                     () -> (name: []u8) =
                     name = "rv64gc_zba"
                 end level
@@ -1607,7 +1608,7 @@ fixed if compiler.os == linux then
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there: RISCV_HWPROBE_EXT_ZBA.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 name = if (words.extensions & 0x8) == 0 then "zba"
                        else "" end if
@@ -1615,13 +1616,13 @@ fixed if compiler.os == linux then
         else
             fixed if compiler.feature.xtheadba then
                 --- The level this executable was built for.
-                public link(symbol: "_landin_linux_level") level:
+                public level:
                     () -> (name: []u8) =
                     name = "rv64gc_xtheadba"
                 end level
             else
                 --- The level this executable was built for.
-                public link(symbol: "_landin_linux_level") level:
+                public level:
                     () -> (name: []u8) =
                     name = "rv64gc"
                 end level
@@ -1634,7 +1635,7 @@ fixed if compiler.os == linux then
             --- The first feature of this executable's level that `words`
             --- lacks, by the name `compiler.feature` gives it, or "" when
             --- the level is all there.
-            public link(symbol: "_landin_linux_missing_feature") missing_feature:
+            public missing_feature:
                 (words: cpu_words) -> (name: []u8) =
                 _ = words
                 name = ""

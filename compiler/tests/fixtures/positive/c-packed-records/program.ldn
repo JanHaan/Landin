@@ -1,0 +1,46 @@
+--- A wire header packed to the byte, as C's `__attribute__((packed))`
+--- lays it out: no padding, alignment one.
+header: type = layout(c, packed) struct
+    kind: u8
+    length: u16
+    id: u32
+end header
+
+--- A packed record inside a packed record, and a byte array.
+frame: type = layout(c, packed) struct
+    lead: u8
+    head: header
+    address: [6]u8
+end frame
+
+--- Linux's `struct linux_dirent64`: the name is a flexible array member.
+directory_record: type = layout(c) struct
+    inode: u64
+    offset: i64
+    length: u16
+    kind: u8
+    name: [0]u8
+end directory_record
+
+--- A natural record measured through a nested field.
+pair: type = struct
+    first: u8
+    second: header
+end pair
+
+compiler.assert(sizeof header == 7 and alignof header == 1)
+compiler.assert(offsetof header.id == 3 and offsetof frame.head.id == 4)
+compiler.assert(sizeof frame == 14 and offsetof frame.address == 8)
+compiler.assert(sizeof directory_record == 24)
+compiler.assert(offsetof directory_record.name == 19)
+compiler.assert(offsetof pair.second.length == 2 and sizeof pair == 8)
+
+name_offset: usize = offsetof directory_record.name
+
+--- C takes a byte-packed record by pointer.
+extern(c) send: (packet: ptr header) -> (status: i32)
+
+--- A field is read and written by copy.
+bump: (packet: ptr mut header) -> none =
+    packet.val.id = packet.val.id + 1
+end bump

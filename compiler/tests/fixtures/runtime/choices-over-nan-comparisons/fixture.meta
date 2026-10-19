@@ -4,4 +4,4 @@ summary: an if whose arms only compute a value chooses it without branching at s
 constructs: 0170, 0240, 0400, 0410, 0520, 0570, 1050, 1810, 1890, 1950
 program: main.ldn
 status: 42
-targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

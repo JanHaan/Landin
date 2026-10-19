@@ -1,8 +1,8 @@
 --  Real inner-provider exhaustion for vec.list(pointer) and vec.list(any).
 --  No allocation here is refused by an injected schedule: every refusal below
 --  is the backing arena running out of bytes or the fixed pool running out of
---  slots. Arenas extend a topmost allocation in place; pools still need an
---  old and a new slot at once for vector replacement.
+--  room. Arenas extend a topmost allocation in place, and pools extend a
+--  block within its slot; a growth past the slot finds no larger slot.
 
 import core/arena
 import core/mem
@@ -209,8 +209,8 @@ arena_interleaved_case: () -> (ok: bool) =
     vec.release(values, bump)
 end arena_interleaved_case
 
---  One slot wide enough for the grown block still cannot satisfy a growth
---  that needs the old and the new block at the same time.
+--  One slot wide enough for the grown block holds the growth in place, and
+--  the growth past it is refused with the list as it was.
 single_slot_case: () -> (ok: bool) =
     ok = false
     mut words: [16]u64 = zeroed
@@ -229,13 +229,19 @@ single_slot_case: () -> (ok: bool) =
     return when not fill(slab, values, eight)
     return when vec.capacity(values) <> 8 or pool.live(slab) <> 1
 
+    --  Sixteen items fill the slot the first eight were given.
+    sixteen: usize = 16
+    return when not fill(slab, values, sixteen)
+    return when not contents_ok(values, sixteen)
+      or vec.capacity(values) <> 16 or pool.allocations(slab) <> 1
+
     mut exhausted: bool = false
-    vec.push(values, slab, entry(eight)) else (problem)
+    vec.push(values, slab, entry(sixteen)) else (problem)
         exhausted = problem == mem.out_of_memory
     end
-    --  The old block is still the only live one and nothing fell back.
-    return when not exhausted or not contents_ok(values, eight)
-      or vec.capacity(values) <> 8 or pool.live(slab) <> 1
+    --  The block is still the only live one and nothing fell back.
+    return when not exhausted or not contents_ok(values, sixteen)
+      or vec.capacity(values) <> 16 or pool.live(slab) <> 1
       or pool.allocations(slab) <> 1 or pool.frees(slab) <> 0
 
     vec.release(values, slab)
@@ -252,8 +258,9 @@ single_slot_case: () -> (ok: bool) =
          and pool.rejected_frees(slab) == 0
 end single_slot_case
 
---  The same growth succeeds when a second slot can hold the new block while
---  the old one is still live. That is what the single-slot refusal measured.
+--  A second slot changes nothing: the growth stays in the first slot and
+--  leaves the second free, and a growth past the slot is still refused,
+--  since no slot is larger than the one the block has.
 two_slot_case: () -> (ok: bool) =
     ok = false
     mut words: [32]u64 = zeroed
@@ -270,12 +277,20 @@ two_slot_case: () -> (ok: bool) =
 
     nine: usize = 9
     return when not fill(slab, values, nine)
-    --  Two slots were taken and the old one returned inside that one growth.
+    --  One slot was taken, and the growth kept the block in it.
     grown: bool = contents_ok(values, nine) and vec.capacity(values) == 16
-                  and pool.allocations(slab) == 2
-                  and pool.frees(slab) == 1 and pool.live(slab) == 1
+                  and pool.allocations(slab) == 1
+                  and pool.frees(slab) == 0 and pool.live(slab) == 1
+    sixteen: usize = 16
+    return when not grown or not fill(slab, values, sixteen)
+    mut exhausted: bool = false
+    vec.push(values, slab, entry(sixteen)) else (problem)
+        exhausted = problem == mem.out_of_memory
+    end
+    refused: bool = exhausted and contents_ok(values, sixteen)
+                    and pool.allocations(slab) == 1 and pool.live(slab) == 1
     vec.release(values, slab)
-    ok = grown and pool.live(slab) == 0 and pool.frees(slab) == 2
+    ok = refused and pool.live(slab) == 0 and pool.frees(slab) == 1
          and pool.rejected_frees(slab) == 0
 end two_slot_case
 
@@ -318,7 +333,7 @@ arena_any_case: (escaping a: any counter, escaping b: any counter)
          and arena.used(bump) == 16 * item_bytes
 end arena_any_case
 
---  The erased item repeats the simultaneous old-and-new pool shape.
+--  The erased item repeats the in-slot growth and its refusal.
 single_slot_any_case: (escaping a: any counter, escaping b: any counter)
                       -> (ok: bool) =
     ok = false
@@ -341,13 +356,19 @@ single_slot_any_case: (escaping a: any counter, escaping b: any counter)
     return when not fill_erased(slab, values, eight, a, b)
     return when vec.capacity(values) <> 8 or pool.live(slab) <> 1
 
+    --  The sixteen-item block fits the slot, so the list grows in it.
+    sixteen: usize = 16
+    return when not fill_erased(slab, values, sixteen, a, b)
+    return when not erased_ok(values, sixteen)
+      or vec.capacity(values) <> 16 or pool.allocations(slab) <> 1
+
     mut exhausted: bool = false
     vec.push(values, slab, a) else (problem)
         exhausted = problem == mem.out_of_memory
     end
-    --  The sixteen-item block fits the slot; the old list still occupies it.
-    return when not exhausted or not erased_ok(values, eight)
-      or vec.capacity(values) <> 8 or pool.live(slab) <> 1
+    --  A growth past the slot is refused with the list as it was.
+    return when not exhausted or not erased_ok(values, sixteen)
+      or vec.capacity(values) <> 16 or pool.live(slab) <> 1
       or pool.allocations(slab) <> 1 or pool.frees(slab) <> 0
 
     vec.release(values, slab)
@@ -363,7 +384,8 @@ single_slot_any_case: (escaping a: any counter, escaping b: any counter)
          and pool.rejected_frees(slab) == 0
 end single_slot_any_case
 
---  A second slot lets the same erased growth hold both blocks and succeed.
+--  A second slot is left free by the same erased growth, which stays in the
+--  slot it was given.
 two_slot_any_case: (escaping a: any counter, escaping b: any counter)
                    -> (ok: bool) =
     ok = false
@@ -386,10 +408,10 @@ two_slot_any_case: (escaping a: any counter, escaping b: any counter)
     nine: usize = 9
     return when not fill_erased(slab, values, nine, a, b)
     grown: bool = erased_ok(values, nine) and vec.capacity(values) == 16
-                  and pool.allocations(slab) == 2
-                  and pool.frees(slab) == 1 and pool.live(slab) == 1
+                  and pool.allocations(slab) == 1
+                  and pool.frees(slab) == 0 and pool.live(slab) == 1
     vec.release(values, slab)
-    ok = grown and pool.live(slab) == 0 and pool.frees(slab) == 2
+    ok = grown and pool.live(slab) == 0 and pool.frees(slab) == 1
          and pool.rejected_frees(slab) == 0
 end two_slot_any_case
 

@@ -1,0 +1,73 @@
+--  Words for a person: a short English phrase for each failure atom the
+--  core library raises, for a program that reports a failure as text.  It
+--  holds no state and allocates nothing, and a program that never calls
+--  `words` carries none of it (D296).
+
+import core/io
+import core/map
+import core/mem
+import core/net
+import core/text
+import core/tree
+
+--- Every atom a `core` module fails with: the set `words` takes. A call's
+--- failure, `problem` in its `else (problem)`, widens to it whatever subset
+--- of these atoms the call declares. A set that also holds an atom of the
+--- program's own does not: a `match` arm names each library atom and passes
+--- that atom on, since a `_` arm leaves the set as it was.
+public reason: type = mem.out_of_bounds | mem.empty | mem.full | mem.not_empty
+    | mem.out_of_memory | map.missing | map.end_of_entries
+    | tree.no_such_node | tree.invalid_children
+    | tree.too_many_nodes | tree.too_many_leaves
+    | io.not_found | io.no_access | io.io_failed
+    | io.no_argument | io.already_exists | io.no_variable
+    | io.line_too_long | io.not_a_terminal
+    | net.invalid_address | net.refused | net.unreachable
+    | net.address_in_use | net.address_unavailable
+    | net.timed_out | net.disconnected | text.past_end
+    | text.invalid_text | text.invalid_number
+    | text.number_overflow | text.no_space
+    | text.invalid_format
+
+--- A short English phrase for a library failure, in lower case with no
+--- final stop, so that it reads after a subject and a colon as
+--- `settings: not found` does. The phrase is static text: it borrows
+--- nothing and is never freed. Every atom of `reason` has its own phrase,
+--- and the phrases are fixed: a program may compare them, and no locale
+--- changes them.
+public words: (problem: reason) -> (phrase: []u8) =
+    phrase = match problem
+        mem.out_of_bounds: "index out of bounds"
+        mem.empty: "nothing to take"
+        mem.full: "no room for another item"
+        mem.not_empty: "storage still holds items"
+        mem.out_of_memory: "out of memory"
+        map.missing: "no such key"
+        map.end_of_entries: "no more entries"
+        tree.no_such_node: "no such node"
+        tree.invalid_children: "children outside the tree"
+        tree.too_many_nodes: "too many nodes"
+        tree.too_many_leaves: "too many leaves"
+        io.not_found: "not found"
+        io.no_access: "permission denied"
+        io.io_failed: "input or output failed"
+        io.no_argument: "no such argument"
+        io.already_exists: "already exists"
+        io.no_variable: "no such variable"
+        io.line_too_long: "line too long"
+        io.not_a_terminal: "not a terminal"
+        net.invalid_address: "invalid address"
+        net.refused: "connection refused"
+        net.unreachable: "address unreachable"
+        net.address_in_use: "address in use"
+        net.address_unavailable: "address not available"
+        net.timed_out: "timed out"
+        net.disconnected: "peer disconnected"
+        text.past_end: "past the end"
+        text.invalid_text: "invalid UTF-8"
+        text.invalid_number: "not a number"
+        text.number_overflow: "number out of range"
+        text.no_space: "no room for the output"
+        text.invalid_format: "template does not fit its values"
+    end match
+end words

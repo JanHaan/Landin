@@ -1,0 +1,8 @@
+writer: type = concept (t: type)
+    put: (s: ptr t, b: u8) -> none
+end writer
+
+emit: (writer: u32, out: ptr any writer) -> none =
+    _ = writer
+    _ = out
+end emit

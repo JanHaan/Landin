@@ -69,6 +69,18 @@ package Landin.Driver.Loading is
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit     : String := "");
 
+   --  D383: named source files with roots.  The files are read already
+   --  by Load_Files and are the entry module, as they are without a root;
+   --  an import of the library resolves from Library, and any other from
+   --  Roots in their order, as a rooted entry directory's imports do.
+   procedure Load_Rooted_Imports
+     (Context : in out Landin.Stages.Compilation;
+      Host    : Landin.Platform.Filesystem'Class;
+      Roots   : Landin.Platform.Path_List;
+      Library : String;
+      Dependency_Directories : access Landin.Platform.Path_List := null;
+      Implicit : String := "");
+
    --  Implicit, in either load, names one library module the program holds
    --  whether or not an import reaches it: platform/linux, whose process
    --  entry a static Linux executable starts at.  It is loaded from the

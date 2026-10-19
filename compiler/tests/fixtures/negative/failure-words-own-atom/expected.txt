@@ -1,0 +1,10 @@
+error[L0301]: this is not an atom admitted by the set required here
+  --> ../tests/fixtures/negative/failure-words-own-atom/main.ldn:19:30
+   |
+19 |             _: failure.words(problem)
+   |                              ^^^^^^^
+  --> ../../core/failure/failure.ldn:38:16
+   |
+38 | public words: (problem: reason) -> (phrase: []u8) =
+   |                ^^^^^^^^^^^^^^^ this atom-valued parameter
+  = note: [0640]: an atom value may widen only into a union that contains its identity

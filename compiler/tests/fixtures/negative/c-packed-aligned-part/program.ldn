@@ -1,0 +1,18 @@
+aligned: type = layout(c) struct
+    value: u32
+end aligned
+
+ports: type = layout(c, packed) struct
+    kind: u8
+    numbers: [4]u16
+end ports
+
+nested: type = layout(c, packed) struct
+    kind: u8
+    inner: aligned
+end nested
+
+holder: type = struct
+    first: ports
+    second: nested
+end holder

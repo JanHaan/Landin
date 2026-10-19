@@ -1,0 +1,7 @@
+--  A root module that reaches the library, as an application's does.
+import core/cmp
+
+--- The order of two keys.
+public order_of: (left: []u8, right: []u8) -> (result: cmp.order) =
+    result = cmp.compare(left, right)
+end order_of

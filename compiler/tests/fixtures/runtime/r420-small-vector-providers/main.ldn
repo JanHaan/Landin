@@ -96,8 +96,9 @@ fixed_path: () -> (ok: bool) =
              and view[0] == 31 and view[1] == 42 and view[2] == 33
     end
     spill.release(values, slab)
-    ok = ok and pool.allocations(slab) == 2
-         and pool.frees(slab) == 2 and pool.live(slab) == 0
+    --  The growth to four items stayed in the first block's slot.
+    ok = ok and pool.allocations(slab) == 1
+         and pool.frees(slab) == 1 and pool.live(slab) == 0
          and pool.rejected_frees(slab) == 0
 end fixed_path
 
@@ -155,10 +156,8 @@ failing_path: () -> (ok: bool) =
     end
 
     --  A growth asks to grow in place before it allocates (D356), and the
-    --  pool grows no block where it is: two permits, one refused by the
-    --  pool and one block.
-    two: usize = 2
-    fault.permit(counted, two)
+    --  pool grows the block in its slot: one permit, and no second block.
+    fault.permit(counted, one)
     spill.push(values, counted, 53) else none
     begin
         view := spill.used(values)
@@ -166,15 +165,15 @@ failing_path: () -> (ok: bool) =
              and spill.capacity(addr values) == 4 and view[2] == 53
     end
     spill.release(values, counted)
-    ok = ok and fault.attempts(counted) == 6
-         and fault.delegated(counted) == 3
-         and fault.successes(counted) == 2
+    ok = ok and fault.attempts(counted) == 5
+         and fault.delegated(counted) == 2
+         and fault.successes(counted) == 1
          and fault.injected_failures(counted) == 3
-         and fault.inner_failures(counted) == 1
-         and fault.growths(counted) == 0
-         and fault.frees(counted) == 2 and fault.live(counted) == 0
-         and pool.allocations(inner) == 2
-         and pool.frees(inner) == 2 and pool.live(inner) == 0
+         and fault.inner_failures(counted) == 0
+         and fault.growths(counted) == 1
+         and fault.frees(counted) == 1 and fault.live(counted) == 0
+         and pool.allocations(inner) == 1
+         and pool.frees(inner) == 1 and pool.live(inner) == 0
          and pool.rejected_frees(inner) == 0
 end failing_path
 

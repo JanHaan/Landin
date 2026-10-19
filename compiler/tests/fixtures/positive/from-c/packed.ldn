@@ -1,0 +1,10 @@
+--- A record packed to the byte: `id` begins at 1, and the record is 5 bytes.
+wire: type = layout(c, packed) struct
+    kind: u8
+    id: u32
+end wire
+
+--- A field is read by copy, wherever the record lies.
+wire_id: (packet: ptr wire) -> (id: u32) =
+    id = packet.val.id
+end wire_id

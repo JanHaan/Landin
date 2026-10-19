@@ -6,4 +6,4 @@ args: --target=cortex-m0 ../tests/fixtures/negative/written-type-machine-convent
 status: 1
 codes: L0301
 constructs: 0310, 0650, 0870, 1990
-targets: cortex-m
+targets: cortex-m0

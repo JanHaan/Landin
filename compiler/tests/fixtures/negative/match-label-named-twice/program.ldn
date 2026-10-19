@@ -1,0 +1,27 @@
+--  D405: a label named twice is L0311, twice in one arm or once in each
+--  of two, for an atom set as for a variant part.
+north: atom
+south: atom
+compass: type = north | south
+
+shape: type = struct
+    kind: variant
+        point |
+        dot |
+        circle: (radius: i32)
+    end kind
+end shape
+
+heading: (c: compass) -> (n: i32) =
+    match c
+        north, south, north: n = 1
+    end match
+end heading
+
+size: (s: shape) -> (n: i32) =
+    match s.kind
+        point, dot: n = 0
+        circle(radius): n = radius
+        dot: n = 1
+    end match
+end size

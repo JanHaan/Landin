@@ -85,7 +85,26 @@ package body Landin.Commands is
       Expanded : Landin.Platform.Path_List;
       Seen : array (C.Option) of Boolean := [others => False];
       Specific_Before : Boolean := False;
+      --  D384: the first command-specific option written before any
+      --  command, as it was written, for the refusal to name.
+      First_Specific : US.Unbounded_String;
+      First_Flag : C.Option := C.Help_Flag;
       Literal : Boolean := False;
+      --  How the option given before its command is placed after it.
+      function Placed (Command : C.Action) return String;
+      function Placed (Command : C.Action) return String is
+        (US.To_String (First_Specific) & " is an option of "
+         & C.Owners (First_Flag)
+         & (if Command = C.Overview
+               or else C.Accepts (Command, First_Flag)
+            then ""
+            else ", not of " & C.Name (Command))
+         & ", and follows its command: refine "
+         & C.Name
+             (if Command /= C.Overview
+                and then C.Accepts (Command, First_Flag)
+              then Command else C.First_Owner (First_Flag))
+         & " " & US.To_String (First_Specific) & " ...");
       Index : Positive := 1;
       procedure Refuse (Message : String);
       procedure Refuse (Message : String) is
@@ -115,8 +134,7 @@ package body Landin.Commands is
                   Refuse ("version query conflicts with another command");
                else
                   if Text = "--version" and then Specific_Before then
-                     Refuse
-                       ("command-specific options must follow the command");
+                     Refuse (Placed (C.Version));
                   end if;
                   Result.Legacy_Identity := Text = "--identify";
                   Result.Command := C.Version;
@@ -162,6 +180,15 @@ package body Landin.Commands is
                      end if;
                      if not C.Shared (Flag) then
                         if not Result.Explicit_Command then
+                           if not Specific_Before then
+                              First_Flag := Flag;
+                              First_Specific := US.To_Unbounded_String
+                                (Stem & (if C.Takes_Value (Flag)
+                                         then (if Stem = "-o" then " "
+                                               else "=")
+                                              & US.To_String (Value)
+                                         else ""));
+                           end if;
                            Specific_Before := True;
                         elsif not Result.Legacy_Identity
                           and then not C.Accepts (Result.Command, Flag)
@@ -220,7 +247,7 @@ package body Landin.Commands is
                Result.Command := C.Named (Text);
                Result.Explicit_Command := True;
                if Specific_Before then
-                  Refuse ("command-specific options must follow the command");
+                  Refuse (Placed (Result.Command));
                end if;
             elsif not Literal and then not Result.Explicit_Command
               and then Result.Operands.Is_Empty and then Text = "build"
@@ -246,7 +273,20 @@ package body Landin.Commands is
          for Flag in C.Option loop
             if Seen (Flag) and then not C.Accepts (Result.Command, Flag)
             then
-               Refuse (C.Name (Flag) & " requires its own command");
+               --  D384: which command it is an option of, and where it
+               --  goes, rather than that it needs one.
+               declare
+                  Written : constant String :=
+                    (if Flag = First_Flag
+                       and then US.Length (First_Specific) > 0
+                     then US.To_String (First_Specific)
+                     else C.Name (Flag));
+               begin
+                  Refuse (Written & " is an option of "
+                    & C.Owners (Flag) & "; name the command first: refine "
+                    & C.Name (C.First_Owner (Flag)) & " " & Written
+                    & " ...");
+               end;
             end if;
          end loop;
       end if;

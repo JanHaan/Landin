@@ -6,4 +6,4 @@ expect: expected.txt
 args: ../tests/fixtures/negative/atom-union-as-a-conformance-target-needs-a-name/program.ldn
 status: 1
 constructs: 0640, 1240, 1790
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

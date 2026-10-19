@@ -3574,6 +3574,31 @@ package body Landin.Stages.Checking.References is
                   Merged : Table_Access := Origins;
                   First  : Boolean := True;
                   Value  : Origin_Fact := No_Value_Edge;
+
+                  --  Whether a label names a case that holds no pointer.
+                  function Reads_None (Pattern : Syn.Node_Id) return Boolean
+                    is (Res.Verdict_Of
+                          (Meanings.all, Tree, Pattern) = Res.Bound
+                        and then
+                          ((Landin.Checking.Holds
+                              (Types.all, Subject_Reference)
+                            and then Landin.Checking.Is_Optional_Pointer
+                              (Types.all, Subject_Reference)
+                            and then Res.Bound_To
+                              (Meanings.all, Tree, Pattern)
+                              = Landin.Checking.Descriptor_Of
+                                (Types.all, Subject_Reference).Empty_Atom)
+                           --  [0480]/[1870]: an atom arm of a union of
+                           --  several atoms and a pointer reads none.
+                           or else
+                             (Subject_Union
+                                /= Landin.Checking.No_Nominal_Type
+                              and then Landin.Checking.Contains_Atom
+                                (Types.all,
+                                 Landin.Checking.Union_Atoms
+                                   (Types.all, Subject_Union),
+                                 Res.Bound_To
+                                   (Meanings.all, Tree, Pattern)))));
                begin
                   if not Falls_Through then
                      Statement_Value := No_Value_Edge;
@@ -3583,37 +3608,20 @@ package body Landin.Stages.Checking.References is
                      declare
                         This : constant Syn.Node_Id :=
                           Syn.Nth_Match_Arm (Tree, Node, Arm);
-                        Pattern : constant Syn.Node_Id :=
-                          Syn.Match_Pattern (Tree, This);
                      begin
                         Origins := Before;
                         Falls_Through := True;
+                        --  D405: an arm of several labels reads none only
+                        --  when none of its cases holds the pointer.
                         if Subject_Id /= Res.No_Declaration
                           and then not Is_Exposed (Subject_Id)
                           and then Res.Sort_Of (Meanings.all, Subject_Id)
                             /= Res.Module_Binding
-                          and then Res.Verdict_Of
-                            (Meanings.all, Tree, Pattern) = Res.Bound
                           and then
-                            ((Landin.Checking.Holds
-                                (Types.all, Subject_Reference)
-                              and then Landin.Checking.Is_Optional_Pointer
-                                (Types.all, Subject_Reference)
-                              and then Res.Bound_To
-                                (Meanings.all, Tree, Pattern)
-                                = Landin.Checking.Descriptor_Of
-                                  (Types.all, Subject_Reference).Empty_Atom)
-                             --  [0480]/[1870]: an atom arm of a union of
-                             --  several atoms and a pointer reads none.
-                             or else
-                               (Subject_Union
-                                  /= Landin.Checking.No_Nominal_Type
-                                and then Landin.Checking.Contains_Atom
-                                  (Types.all,
-                                   Landin.Checking.Union_Atoms
-                                     (Types.all, Subject_Union),
-                                   Res.Bound_To
-                                     (Meanings.all, Tree, Pattern))))
+                            (for all Label in 1 .. Syn.Match_Label_Count
+                                                     (Tree, This)
+                             => Reads_None
+                                  (Syn.Nth_Match_Label (Tree, This, Label)))
                         then
                            --  This arm reads no reference, even when the
                            --  subject's present sibling has tracked sources.

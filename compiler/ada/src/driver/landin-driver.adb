@@ -175,7 +175,7 @@ package body Landin.Driver is
    function Usage return String is
      ("usage: refine [options] [source.ldn ...]" & LF
       & "       refine explain [CODE ...]" & LF
-      & "       refine fmt [--check|--stdout] source.ldn ..." & LF
+      & "       refine fmt [--check|--stdout] source.ldn|DIR ..." & LF
       & "       refine lsp" & LF
       & LF
       & "  --help              print this text" & LF
@@ -207,7 +207,9 @@ package body Landin.Driver is
       & LF
       & "Source files are scanned, parsed, resolved and checked as one"
       & LF
-      & "module. With --root, pass one entry-module directory; its imports"
+      & "module. With --root, pass one entry-module directory, or the"
+      & LF
+      & "entry module's source files; its imports"
       & LF
       & "are found under the roots in option order. Either way core, hosted"
       & LF
@@ -372,6 +374,7 @@ package body Landin.Driver is
       Sources : Landin.Source.Sets.Source_Set;
       Named   : Landin.Platform.Path_List;
       Seen    : Path_Sets.Set;
+      Explicit : Path_Sets.Set;
       Check   : Boolean := False;
       Printing : Boolean := False;
       Misused : Boolean := False;
@@ -415,13 +418,60 @@ package body Landin.Driver is
                  Ada.Strings.Fixed.Trim
                    (Was, Ada.Strings.Maps.Null_Set,
                     Ada.Strings.Maps.To_Set (" " & ASCII.HT));
+               Line : constant Landin.Source.Span :=
+                 Landin.Source.Line_Text_Span (Snapshot, Change.Line);
+               --  D385: a respaced line is marked where it differs, from
+               --  its first byte the layout changes to its last, so one
+               --  space too many is under the caret rather than somewhere
+               --  in a line quoted whole.
+               function Marked return Landin.Source.Span;
+               function Marked return Landin.Source.Span is
+                  Length : constant Natural := Was'Length;
+                  Same_Before : Natural := 0;
+                  Same_After : Natural := 0;
+                  First : Natural;
+                  Last : Natural;
+               begin
+                  if Change.Kind /= Landin.Formatting.Respaced
+                    or else Length = 0
+                  then
+                     return Line;
+                  end if;
+                  while Same_Before < Length
+                    and then Same_Before < Wanted'Length
+                    and then Was (Was'First + Same_Before)
+                      = Wanted (Wanted'First + Same_Before)
+                  loop
+                     Same_Before := Same_Before + 1;
+                  end loop;
+                  while Same_After < Length - Same_Before
+                    and then Same_After < Wanted'Length - Same_Before
+                    and then Was (Was'Last - Same_After)
+                      = Wanted (Wanted'Last - Same_After)
+                  loop
+                     Same_After := Same_After + 1;
+                  end loop;
+                  First := Same_Before;
+                  Last := Length - Same_After;
+                  --  An insertion removes no byte: mark the byte it goes
+                  --  before, or the last one when it goes at the end.
+                  if Last = First then
+                     if First = Length then
+                        First := First - 1;
+                     else
+                        Last := Last + 1;
+                     end if;
+                  end if;
+                  return
+                    (First => Line.First + Landin.Source.Byte_Offset (First),
+                     Last  => Line.First + Landin.Source.Byte_Offset (Last));
+               end Marked;
                Item : Landin.Diagnostics.Diagnostic :=
                  Landin.Diagnostics.Make
                    (Code    => Rows.Code (Rows.Not_Formatted),
                     Level   => Landin.Diagnostics.Error,
                     Source  => Answer.Id,
-                    Where   => Landin.Source.Line_Text_Span
-                      (Snapshot, Change.Line),
+                    Where   => Marked,
                     Message =>
                       (if Change.Kind = Landin.Formatting.Removed
                        then "this blank line is not in the layout"
@@ -449,7 +499,14 @@ package body Landin.Driver is
                          else "the layout writes it `" & Wanted & "`"
                          & (if Trimmed = Wanted and then Trimmed /= Was
                             then ", without the space at its end"
-                            else "")));
+                            else "")
+                         & ", which differs from column"
+                         & Landin.Source.Column_Number'Image
+                             (Landin.Source.Position_Of
+                                (Snapshot,
+                                 Landin.Diagnostics.Span_Of
+                                   (Landin.Diagnostics.Primary (Item)).First)
+                                .Column)));
                end case;
                if First then
                   Landin.Diagnostics.Add_Note
@@ -461,6 +518,52 @@ package body Landin.Driver is
             end;
          end loop;
       end Not_Formatted;
+      --  D385: every `.ldn` file under a directory, in the order the host
+      --  lists names, depth first; a name beginning with a dot is not
+      --  entered, as a checkout's `.git` is not, and a directory reached
+      --  twice, through a link, is listed once.  A source a directory
+      --  reaches that is already named is formatted once.
+      Visited : Landin.Platform.Path_List;
+      procedure Add_Directory (Directory : String);
+      procedure Add_Directory (Directory : String) is
+         use type Landin.Platform.List_Status;
+         Entries : Landin.Platform.Path_List;
+         Listed : Landin.Platform.List_Status;
+         Identity : constant Landin.Platform.File_Identity :=
+           Host.Existing_Identity (Directory);
+      begin
+         if Identity.Valid then
+            for Other of Visited loop
+               if Host.Existing_Identity (Other) = Identity then
+                  return;
+               end if;
+            end loop;
+         end if;
+         Visited.Append (Directory);
+         Host.List_Directory (Directory, Entries, Listed);
+         if Listed /= Landin.Platform.List_Ok then
+            Misused := True;
+            Refuse (Code_Unreadable, "fmt cannot list " & Directory);
+            return;
+         end if;
+         for Name of Entries loop
+            if Name'Length > 0 and then Name (Name'First) /= '.' then
+               declare
+                  Path : constant String :=
+                    Loading.Joined_Path (Directory, Name);
+               begin
+                  if Host.Is_Directory (Path) then
+                     Add_Directory (Path);
+                  elsif Loading.Is_Source_Name (Name)
+                    and then not Seen.Contains (Path)
+                  then
+                     Seen.Insert (Path);
+                     Named.Append (Path);
+                  end if;
+               end;
+            end if;
+         end loop;
+      end Add_Directory;
    begin
       for Index in 2 .. Natural (Arguments.Length) loop
          declare
@@ -478,14 +581,27 @@ package body Landin.Driver is
                        "fmt takes no option but --check or --stdout, once: "
                        & Argument);
             elsif Host.Is_Directory (Argument) then
-               Misused := True;
-               Refuse (Code_Unknown_Option,
-                       "fmt formats files, not directories: " & Argument);
-            elsif Seen.Contains (Argument) then
+               --  D385: a directory is the `.ldn` files under it.
+               declare
+                  Before : constant Natural := Natural (Named.Length);
+               begin
+                  Add_Directory (Argument);
+                  if Natural (Named.Length) = Before and then not Misused
+                  then
+                     Misused := True;
+                     Refuse (Code_Unknown_Option,
+                             "fmt found no .ldn source under " & Argument);
+                  end if;
+               end;
+            elsif Explicit.Contains (Argument) then
                Misused := True;
                Refuse (Code_Unknown_Option,
                        "fmt is given one source twice: " & Argument);
+            elsif Seen.Contains (Argument) then
+               --  A directory named before it already holds it.
+               Explicit.Insert (Argument);
             else
+               Explicit.Insert (Argument);
                Seen.Insert (Argument);
                Named.Append (Argument);
             end if;
@@ -952,17 +1068,18 @@ package body Landin.Driver is
          Index := Index + 1;
       end loop;
 
-      --  Compilation controls do not modify informational actions, and a
-      --  build report describes an emitted artifact, not a checking request.
+      --  Compilation controls do not modify informational actions, and
+      --  debug information and a panic map describe an emitted artifact;
+      --  a build report may describe a check (D383).
       if ((Optimize_Seen or Specialize_Seen or Report_Seen
            or Debug_Seen or Panic_Map or Stage_Report_Seen
-           or Toolchain_Seen or Linker_Seen)
+           or Toolchain_Seen or Linker_Seen or Link_Seen or Firmware_Seen)
           and then (Wants_Usage or Wants_Identity))
-        or else ((Report_Seen or Debug_Seen or Firmware_Seen or Panic_Map)
-                 and then Emit = Emit_Nothing)
+        or else ((Debug_Seen or Panic_Map) and then Emit = Emit_Nothing)
         or else ((Debug_Seen or Panic_Map) and then Emit = Emit_IR)
         or else (Keep_Assembly and then Emit /= Emit_Executable)
-        or else ((Optimize_Seen or Specialize_Seen)
+        or else ((Optimize_Seen or Specialize_Seen or Report_Seen
+                  or Firmware_Seen or Link_Seen)
                  and then Natural (Inputs.Length) = 0)
         or else (Output_Seen
                  and then Unbounded.Length (Output_Problem) = 0
@@ -1168,25 +1285,29 @@ package body Landin.Driver is
          function Incompatible_Action return String
            is (if (Optimize_Seen or Specialize_Seen or Report_Seen
                    or Debug_Seen or Panic_Map or Stage_Report_Seen
-                   or Toolchain_Seen or Linker_Seen)
+                   or Toolchain_Seen or Linker_Seen or Link_Seen
+                   or Firmware_Seen)
                   and then (Wants_Usage or Wants_Identity)
                then (if Wants_Usage then "--help" else "--identify")
                     & " prints and compiles nothing, so it takes no"
                     & " compilation option"
-               elsif (Report_Seen or Debug_Seen or Firmware_Seen
-                      or Panic_Map)
-                 and then Emit = Emit_Nothing
-               then "--build-report, --debug, --firmware-entry and"
-                    & " --panic-map describe what is emitted; add --emit"
+               elsif (Debug_Seen or Panic_Map) and then Emit = Emit_Nothing
+               then "--debug and --panic-map describe what is emitted;"
+                    & " add --emit"
                elsif (Debug_Seen or Panic_Map) and then Emit = Emit_IR
                then "--debug and --panic-map describe machine code, and"
                     & " --emit=ir writes the IR before any is chosen"
                elsif Keep_Assembly and then Emit /= Emit_Executable
                then "--keep-asm keeps an executable's assembly beside it;"
                     & " --emit=asm writes the assembly alone"
-               elsif (Optimize_Seen or Specialize_Seen)
+               elsif (Optimize_Seen or Specialize_Seen or Report_Seen
+                      or Firmware_Seen or Link_Seen)
                  and then Natural (Inputs.Length) = 0
-               then "--optimize and --specialize need a source to compile"
+               then (if Optimize_Seen then "--optimize"
+                     elsif Specialize_Seen then "--specialize"
+                     elsif Report_Seen then "--build-report"
+                     elsif Firmware_Seen then "--firmware-entry"
+                     else "--link") & " needs a source to compile"
                elsif Emit = Emit_Nothing
                then "-o names what is emitted, and nothing is: add"
                     & " --emit=asm or --emit=exe"
@@ -2546,6 +2667,63 @@ package body Landin.Driver is
             Write_Build_Report;
          end Emit_Requested;
 
+         --  D383: what a check says beyond the program's acceptance when
+         --  it is asked: that the firmware entry named is one, and the
+         --  build report of what was checked, its sources and items, with
+         --  no evidence only emission makes.
+         procedure Check_Requested;
+         procedure Check_Requested is
+            Report_Path : constant String :=
+              Unbounded.To_String (Build_Report_Path);
+            Source_Paths : Landin.Platform.Path_List;
+            Written : Landin.Platform.Write_Status;
+            Evidence : Landin.Build_Reports.Report;
+         begin
+            if Firmware_Seen
+              and then Landin.Targets.Architecture_Of (Facts)
+                = Landin.Targets.Cortex_M0
+              and then Landin.Backend.Entry_Point.Firmware_Start
+                (Landin.Stages.Code (Context).all,
+                 Landin.Stages.Meanings (Context).all,
+                 Landin.Stages.Modules (Context).all,
+                 Landin.Stages.Identities (Context).all,
+                 Unbounded.To_String (Firmware_Name)) = Landin.IR.No_Item
+            then
+               Note_No_Entry (For_Firmware => True);
+               return;
+            end if;
+            if not Report_Seen or else Dry_Run then
+               return;
+            end if;
+            for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+               Source_Paths.Append
+                 (Landin.Source.Name
+                    (Landin.Stages.Source
+                       (Context, Landin.Stages.Nth_Source (Context, Index))));
+            end loop;
+            if Host.Paths_Overlap_Any (Report_Path, Source_Paths) then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option,
+                  "build report collides with source: " & Report_Path);
+               return;
+            end if;
+            Landin.Build_Reports.Clear (Evidence);
+            Host.Write_File
+              (Report_Path,
+               Landin.Build_Reports.Sources.JSON
+                 (Evidence, Context, Optimization,
+                  Link =>
+                    (if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                          = Landin.Targets.Capabilities.No_Hosted_System
+                     then ""
+                     elsif Static_Link then "static" else "libc")),
+               Written);
+            if Written /= Landin.Platform.Write_Ok then
+               Note_Failure (Code_Unwritable, "cannot write: " & Report_Path);
+            end if;
+         end Check_Requested;
+
          --  D362: `refine compile prog.s -o prog` links an assembly file
          --  through the same driver, arguments and output protection as a
          --  compiled program.  Nothing is compiled, so nothing is read but
@@ -2623,6 +2801,14 @@ package body Landin.Driver is
             end if;
             Link_Assembly (Operand, Product, "", Destinations);
          end Link_Operand;
+
+         --  D383: rooted operands that are the entry module's source
+         --  files rather than its directory.
+         Rooted_Files : constant Boolean :=
+           not Roots.Is_Empty and then not Inputs.Is_Empty
+           and then (for all Path of Inputs =>
+                       Loading.Is_Source_Name (Path)
+                       and then not Host.Is_Directory (Path));
 
          --  Whether the one operand is assembly to link, and if not, why
          --  an assembly operand cannot be what this request means.
@@ -2768,13 +2954,6 @@ package body Landin.Driver is
             Note_Failure (Code_Unknown_Option, Option_Problem (Option));
          end loop;
 
-         if Link_Seen and then Emit = Emit_Nothing then
-            Bad_Use := True;
-            Note_Failure
-              (Code_Unknown_Option,
-               "--link requires --emit=exe or --emit=asm");
-         end if;
-
          if Emit /= Emit_Executable then
             if Toolchain_Seen then
                Bad_Use := True;
@@ -2858,24 +3037,31 @@ package body Landin.Driver is
                & Unbounded.To_String (Stage_Report_Path));
          end if;
 
+         --  D383: with roots, the operand is the entry module's directory
+         --  or its source files, as without them.
          if Natural (Roots.Length) > 0
-           and then Natural (Inputs.Length) /= 1
+           and then (Natural (Inputs.Length) = 0
+                     or else (Natural (Inputs.Length) > 1
+                              and then not Rooted_Files))
          then
             Bad_Use := True;
             Note_Failure
               (Code_Unknown_Option,
-               "a rooted module request needs exactly one entry directory");
+               "a rooted request names one entry-module directory, or the"
+               & " entry module's source files");
          end if;
 
          --  Target facts and emission options are known before any source
          --  is loaded.  A source error must not hide an incompatible request.
-         if Emit /= Emit_Nothing and then Rejected.Is_Empty then
+         if (Emit /= Emit_Nothing or else Firmware_Seen or else Link_Seen)
+           and then Rejected.Is_Empty
+         then
             declare
                Cortex : constant Boolean :=
                  Landin.Targets.Architecture_Of (Facts)
                    = Landin.Targets.Cortex_M0;
             begin
-               if Debug_Enabled and then
+               if Emit /= Emit_Nothing and then Debug_Enabled and then
                  (Landin.Targets.Capabilities.Debug_Format_Of (Facts)
                     = Landin.Targets.Capabilities.No_Debug_Format
                   or else Lines_Debug /= Cortex)
@@ -3009,7 +3195,19 @@ package body Landin.Driver is
                  (if Library_Seen then Unbounded.To_String (Library_Path)
                   else Landin.Driver.Library.Located (Host));
             begin
-               if Natural (Roots.Length) > 0 then
+               if Natural (Roots.Length) > 0 and then Rooted_Files then
+                  Loading.Load_Files (Context, Host, Inputs);
+                  if Landin.Stages.Source_Count (Context) > 0
+                    and then not Landin.Stages.Failed (Context)
+                  then
+                     Loading.Load_Rooted_Imports
+                       (Context, Host, Roots, Library_Root,
+                        Dependency_Directories =>
+                          (if Depfile /= ""
+                           then Dependency_Directories'Access else null),
+                        Implicit => Implicit_Module);
+                  end if;
+               elsif Natural (Roots.Length) > 0 then
                   if Natural (Inputs.Length) = 1 then
                      Loading.Load_Reachable_Program
                        (Context, Host, Roots, Inputs.Element (1),
@@ -3118,6 +3316,12 @@ package body Landin.Driver is
                      end;
                   end if;
                   Stage_Ended ("emission");
+               elsif Emit = Emit_Nothing
+                 and then not Policy_Denied
+                 and then not Bad_Use
+                 and then not Landin.Stages.Failed (Context)
+               then
+                  Check_Requested;
                end if;
             end if;
          end if;

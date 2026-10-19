@@ -26,6 +26,10 @@ package Landin.Commands.Catalogue is
    function Takes_Value (Flag : Option) return Boolean;
    function Shared (Flag : Option) return Boolean;
    function Accepts (Command : Action; Flag : Option) return Boolean;
+   --  The commands that take a command-specific option, as a reader says
+   --  them: "check, compile and version"; and the first of them.
+   function Owners (Flag : Option) return String;
+   function First_Owner (Flag : Option) return Action;
    function Repeatable (Flag : Option) return Boolean;
    function Valid_Value (Flag : Option; Text : String) return Boolean;
    function Known_Option (Text : String) return Boolean;

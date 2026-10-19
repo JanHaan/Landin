@@ -68,6 +68,23 @@ class TourLayout(unittest.TestCase):
         self.assertIn("2 spaces", found[0][2])
         self.assertIn("says what it shows", found[1][2])
 
+    def test_a_placeholder_body_is_refused(self):
+        # `... end` bodies parse nowhere, and a reader copies them.
+        saved = CHECK.TOUR_NAME
+        self.addCleanup(setattr, CHECK, "TOUR_NAME", saved)
+        with tempfile.TemporaryDirectory() as directory:
+            tour = Path(directory) / "tour.md"
+            tour.write_text(
+                "```landin\nf: () -> none = ... end\n```\n"
+                "```landin\nt: type = struct ... end t\n```\n"
+                "```landin\ng: () -> none ! ... =\n    h()\nend g\n```\n"
+                "## WHAT WAS TRIED AND DROPPED\n"
+                "```landin\nf: () -> none = ... end\n```\n")
+            CHECK.TOUR_NAME = str(tour)
+            found = CHECK.check_tour_layout(True)
+        self.assertEqual([line for _, line, _ in found], [2, 5])
+        self.assertTrue(all("placeholder" in what for _, _, what in found))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4696,7 +4696,7 @@ package body Landin.Checking is
    function Has_C_Layout (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
      is (Is_Prepared (Of_Table) and then Has_Layout (Of_Table, Id)
-         and then Layout_Of (Of_Table, Id) = Landin.Layouts.C);
+         and then Landin.Layouts.Is_C (Layout_Of (Of_Table, Id)));
 
    function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
@@ -4795,6 +4795,49 @@ package body Landin.Checking is
       end case;
       Fits := Size <= Maximum;
    end Measure_Shape;
+
+   --  D413: C's flexible array member.  A C record's last field of zero
+   --  elements takes its element's alignment, as C gives the member, so
+   --  the record's offset of it and its padded size are C's.  D136's
+   --  zero-element shape keeps alignment one everywhere else.  D410's
+   --  byte-packed record places every field at alignment one.
+   procedure Adjust_C_Extents
+     (Of_Table : Table;
+      Fields   : Field_Shape_Array;
+      Policy   : Landin.Layouts.Policy;
+      Facts    : Landin.Targets.Target_Facts;
+      Extents  : in out Landin.Targets.Layouts.Field_Extent_Array);
+
+   procedure Adjust_C_Extents
+     (Of_Table : Table;
+      Fields   : Field_Shape_Array;
+      Policy   : Landin.Layouts.Policy;
+      Facts    : Landin.Targets.Target_Facts;
+      Extents  : in out Landin.Targets.Layouts.Field_Extent_Array) is
+   begin
+      if Policy = Landin.Layouts.C_Packed then
+         for Extent of Extents loop
+            Extent.Alignment := 1;
+         end loop;
+      elsif Policy = Landin.Layouts.C
+        and then Fields'Length > 0
+        and then Fields (Fields'Last).Kind = Fixed_Array_Field
+        and then Fields (Fields'Last).Length = 0
+      then
+         declare
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+            Fits : Boolean;
+         begin
+            Measure_Shape
+              (Of_Table, Array_Field_Element (Of_Table, Fields (Fields'Last)),
+               Facts, Size, Alignment, Fits);
+            if Fits then
+               Extents (Extents'Last).Alignment := Alignment;
+            end if;
+         end;
+      end if;
+   end Adjust_C_Extents;
 
    procedure Lay_Out
      (Into  : in out Table;
@@ -4968,6 +5011,7 @@ package body Landin.Checking is
             return;
          end if;
       end loop;
+      Adjust_C_Extents (Into, Fields, Policy, Facts, Extents);
       --  Make owns expected placement failures.  Map only that computation
       --  to source-level rejection; malformed shapes above and defects while
       --  publishing the completed layout below must remain compiler defects.
@@ -5161,6 +5205,108 @@ package body Landin.Checking is
      is (Landin.Targets.Size_Of
            (Of_Table.Layouts.Element
               (Nominal_Identities.Position (Of_Table, Id)).Placed));
+
+   --  The written selection of an `offsetof`, root first.
+   type Node_Chain is array (Positive range <>) of Landin.Syntax.Node_Id;
+
+   function Offset_Chain
+     (Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id)
+      return Node_Chain;
+
+   function Offset_Chain
+     (Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id)
+      return Node_Chain
+   is
+      Path : constant Landin.Syntax.Node_Id :=
+        Landin.Syntax.Offset_Path (Of_Tree, Node);
+      Depth : Positive := 1;
+      Walk : Landin.Syntax.Node_Id := Path;
+   begin
+      while Landin.Syntax.Kind (Of_Tree, Walk)
+        = Landin.Syntax.Member_Selection
+      loop
+         Depth := Depth + 1;
+         Walk := Landin.Syntax.Target_Of (Of_Tree, Walk);
+      end loop;
+      declare
+         Chain : Node_Chain (1 .. Depth);
+      begin
+         Walk := Path;
+         for Index in reverse Chain'Range loop
+            Chain (Index) := Walk;
+            if Index > 1 then
+               Walk := Landin.Syntax.Target_Of (Of_Tree, Walk);
+            end if;
+         end loop;
+         return Chain;
+      end;
+   end Offset_Chain;
+
+   function Offset_Root
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id is
+   begin
+      for Step of Offset_Chain (Of_Tree, Node) loop
+         if Nominal_Of (Of_Table, Of_Tree, Step) /= No_Nominal_Type then
+            return Nominal_Of (Of_Table, Of_Tree, Step);
+         end if;
+      end loop;
+      return No_Nominal_Type;
+   end Offset_Root;
+
+   function Offset_Fields
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Field_Positions
+   is
+      Chain : constant Node_Chain :=
+        Offset_Chain (Of_Tree, Node);
+      Result : Field_Positions (1 .. Chain'Length);
+      Count : Natural := 0;
+      Seen_Root : Boolean := False;
+   begin
+      for Step of Chain loop
+         if Seen_Root then
+            if Field_Index (Of_Table, Of_Tree, Step) = 0 then
+               return Result (1 .. 0);
+            end if;
+            Count := Count + 1;
+            Result (Count) := Field_Index (Of_Table, Of_Tree, Step);
+         elsif Nominal_Of (Of_Table, Of_Tree, Step) /= No_Nominal_Type then
+            Seen_Root := True;
+         end if;
+      end loop;
+      return Result (1 .. Count);
+   end Offset_Fields;
+
+   procedure Offset_Value
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id;
+      Offset   : out Landin.Targets.Byte_Count;
+      Known    : out Boolean)
+   is
+      Nominal : Nominal_Type_Id := Offset_Root (Of_Table, Of_Tree, Node);
+      Fields : constant Field_Positions :=
+        Offset_Fields (Of_Table, Of_Tree, Node);
+   begin
+      Offset := 0;
+      Known := False;
+      if Nominal = No_Nominal_Type or else Fields'Length = 0 then
+         return;
+      end if;
+      for Field of Fields loop
+         if not Has_Layout (Of_Table, Nominal)
+           or else Field > Layout_Field_Count (Of_Table, Nominal)
+         then
+            return;
+         end if;
+         Offset := Offset + Field_Offset (Of_Table, Nominal, Field);
+         Nominal := Field_Shape_Of (Of_Table, Nominal, Field).Nominal;
+      end loop;
+      Known := True;
+   end Offset_Value;
 
    function Field_Index
      (Of_Table : Table;

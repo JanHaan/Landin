@@ -1,7 +1,7 @@
 -- Compiler-generated frame, constant and long conditional-transfer control.
 index: (n: usize) -> (r: usize) = n end index
 choose: (b: bool) -> (r: bool) = b end choose
-public main: () -> (code: u32) =
+link(symbol: "main") public main: () -> (code: u32) =
     mut bytes: [2304]u8 = zeroed
     bytes[index(0)] = 1
     bytes[index(31)] = 2

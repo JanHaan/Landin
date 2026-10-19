@@ -703,8 +703,173 @@ package body Landin.Tests.Commands_Suite is
       end;
    end Warning_Controls;
 
+   --  D384: an option written before its command, or
+   --  with no command, is refused naming the commands it belongs to and
+   --  where it goes, with the option as it was written.
+   procedure Options_Before_Their_Command
+     (Item : in out Landin.Testing.Context);
+   procedure Options_Before_Their_Command
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      procedure Refused (Args : Landin.Platform.Path_List; Says : String);
+      procedure Refused (Args : Landin.Platform.Path_List; Says : String) is
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute (Args, Host, Tools, Meter);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse,
+            "a misplaced option is misuse");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Result.Report), Says),
+            "the refusal says " & Says & ": "
+            & US.To_String (Result.Report));
+      end Refused;
+   begin
+      Host.Raise_On_Read;
+      Refused (["--root=lib", "compile", "a.ldn"],
+               "--root=lib is an option of check and compile, and follows"
+               & " its command: refine compile --root=lib ...");
+      Refused (["--library", "/opt/lib", "compile", "a.ldn"],
+               "--library=/opt/lib is an option of check, compile and"
+               & " version, and follows its command: refine compile"
+               & " --library=/opt/lib ...");
+      Refused (["--emit=asm", "check", "a.ldn"],
+               "--emit=asm is an option of compile, not of check, and"
+               & " follows its command: refine compile --emit=asm ...");
+      Refused (["--target=linux-x86-64", "--version"],
+               "--target=linux-x86-64 is an option of check and compile,"
+               & " not of version");
+      Refused (["-o", "x.s", "main.ldn"],
+               "-o x.s is an option of compile; name the command first:"
+               & " refine compile -o x.s ...");
+      Refused (["--library=/opt/lib", "--depfile=d", "main.ldn"],
+               "--depfile is an option of compile; name the command first");
+      Landin.Testing.Check_Equal
+        (Item, Host.Write_Count, 0, "misuse writes nothing");
+   end Options_Before_Their_Command;
+
+   --  D383: check takes the options that say what program is
+   --  compiled, a single source file with --root, --firmware-entry,
+   --  --link and --build-report among them, and holds them as compile
+   --  does without emitting anything.
+   procedure Check_Takes_What_Compile_Takes
+     (Item : in out Landin.Testing.Context);
+   procedure Check_Takes_What_Compile_Takes
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      LF : constant Character := ASCII.LF;
+      function Run (Args : Landin.Platform.Path_List)
+        return Landin.Driver.Outcome
+        is (Landin.Commands.Execute (Args, Host, Tools, Meter));
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Host.Add_File
+        ("fw.ldn",
+         "public start: () -> noreturn =" & LF & "    loop do" & LF
+         & "    end loop" & LF & "end start" & LF);
+      Host.Add_Directory ("lib");
+      Host.Add_Directory ("lib/shapes");
+      Host.Add_File
+        ("lib/shapes/shapes.ldn",
+         "public side: () -> (length: i32) = length = 2 end side");
+      Host.Add_File
+        ("rooted.ldn",
+         "import shapes" & LF & LF
+         & "public main: () -> (code: i32) = code = shapes.side() end main");
+      declare
+         Rooted : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=linux-x86-64", "--root=lib",
+                 "rooted.ldn"]);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Rooted.Status, Landin.Driver.Status_Success,
+            "one source file with --root reaches the root's module: "
+            & US.To_String (Rooted.Report));
+      end;
+      declare
+         Entered : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=cortex-m0", "--firmware-entry=start",
+                 "fw.ldn"]);
+         Missing : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=cortex-m0", "--firmware-entry=absent",
+                 "fw.ldn"]);
+         Hosted : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=linux-x86-64", "--firmware-entry=start",
+                 "fw.ldn"]);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Entered.Status, Landin.Driver.Status_Success,
+            "check takes the firmware entry: "
+            & US.To_String (Entered.Report));
+         Landin.Testing.Check
+           (Item, Missing.Status = Landin.Driver.Status_Reported
+                  and then Contains (US.To_String (Missing.Report),
+                                     "--firmware-entry=absent"),
+            "and refuses one that names no entry: "
+            & US.To_String (Missing.Report));
+         Landin.Testing.Check
+           (Item, Hosted.Status = Landin.Driver.Status_Misuse
+                  and then Contains (US.To_String (Hosted.Report),
+                    "--firmware-entry requires --target=cortex-m0"),
+            "a hosted target refuses it as compile does");
+      end;
+      declare
+         Libc : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=linux-x86-64", "--link=libc",
+                 "main.ldn"]);
+         Firmware : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=cortex-m0", "--link=libc", "fw.ldn"]);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Libc.Status, Landin.Driver.Status_Success,
+            "check takes --link: " & US.To_String (Libc.Report));
+         Landin.Testing.Check_Equal
+           (Item, Firmware.Status, Landin.Driver.Status_Misuse,
+            "and refuses it for a target with no hosted system");
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Host.Write_Count, 0, "none of these writes anything");
+      declare
+         Reported : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=linux-x86-64",
+                 "--build-report=report.json", "main.ldn"]);
+         Collides : constant Landin.Driver.Outcome :=
+           Run (["check", "--target=linux-x86-64",
+                 "--build-report=main.ldn", "main.ldn"]);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Reported.Status, Landin.Driver.Status_Success,
+            "check takes --build-report: "
+            & US.To_String (Reported.Report));
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("report.json"),
+                            """format"":""landin-build-report-1""")
+                  and then Contains (Host.Written ("report.json"),
+                                     """sources"":[")
+                  and then Contains (Host.Written ("report.json"),
+                                     """link"":""static"""),
+            "and writes what it checked: " & Host.Written ("report.json"));
+         Landin.Testing.Check
+           (Item, Collides.Status = Landin.Driver.Status_Misuse
+                  and then Host.Written ("main.ldn") = "",
+            "a report over a source is refused, as compile refuses it");
+      end;
+   end Check_Takes_What_Compile_Takes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "commands", "options before their command",
+         Options_Before_Their_Command'Access);
+      Landin.Testing.Register
+        (Into, "commands", "check takes what compile takes",
+         Check_Takes_What_Compile_Takes'Access);
       Landin.Testing.Register
         (Into, "commands", "version identity", Version_Identity'Access);
       Landin.Testing.Register

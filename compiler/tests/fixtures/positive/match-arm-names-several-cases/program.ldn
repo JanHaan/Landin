@@ -1,0 +1,14 @@
+--  D405: [1220]'s example as the tour writes it.  `north, south` is one
+--  arm naming two atoms, and `_` covers the two left over.
+north: atom
+south: atom
+east: atom
+west: atom
+compass: type = north | south | east | west
+
+describe: (c: compass) -> (name: utf8) =
+    match c
+        north, south: name = "along"
+        _: name = "across"
+    end match
+end describe

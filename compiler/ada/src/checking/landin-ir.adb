@@ -270,7 +270,7 @@ package body Landin.IR is
    function Has_C_Layout
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
      is (Nominal_Field_Run_Is_Valid (Of_Unit, Id)
-         and then Layout_Of (Of_Unit, Id) = Landin.Layouts.C);
+         and then Landin.Layouts.Is_C (Layout_Of (Of_Unit, Id)));
 
    function Nominal_Field_Count
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Natural is
@@ -2144,7 +2144,8 @@ package body Landin.IR is
       Item   : Item_Id;
       Shape  : Field_Shape;
       Site   : Landin.Provenance.Origin;
-      Declares : Declaration_Id := No_Declaration) return Slot_Id
+      Declares : Declaration_Id := No_Declaration;
+      Unaligned : Boolean := False) return Slot_Id
    is
       Held : Item_Record := Element (Into, Item);
    begin
@@ -2153,6 +2154,7 @@ package body Landin.IR is
         (Slot_Record'(Of_Type   => Landin.Types.Usize,
                       Element   => Shape,
                       Addressed => True,
+                      Unaligned => Unaligned,
                       Declaration => Declares,
                       Site      => Site,
                       others    => <>));
@@ -2160,6 +2162,98 @@ package body Landin.IR is
       Into.Items (Positive (Item)) := Held;
       return Slot_Id (Held.Slots.Count);
    end Add_Address_Slot;
+
+   function Reaches_Byte_Packed
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Place   : Storage;
+      Field   : Element_Total;
+      Path    : Path_Step_Array) return Boolean
+   is
+      Reached : Field_Shape;
+   begin
+      if Field = 0 then
+         --  A run that starts at whole storage starts at an array; only
+         --  its path can enter a record.
+         case Place.Kind is
+            when Module_Datum =>
+               if Result_Of (Of_Unit, Place.Datum)
+                 /= Landin.Types.Fixed_Array
+               then
+                  return False;
+               end if;
+               Reached := Whole_Array_Shape (Of_Unit, Place.Datum);
+            when Frame_Slot =>
+               if not Is_Array (Of_Unit, Item, Place.Slot) then
+                  return False;
+               end if;
+               Reached := Whole_Slot_Array_Shape (Of_Unit, Item, Place.Slot);
+            when Runtime_Address =>
+               Reached := Address_Shape (Of_Unit, Item, Place.Address);
+         end case;
+      else
+         case Place.Kind is
+            when Module_Datum =>
+               if Result_Of (Of_Unit, Place.Datum)
+                 = Landin.Types.Fixed_Array
+               then
+                  Reached := Array_Element_Shape (Of_Unit, Place.Datum);
+               elsif Layout_Of (Of_Unit, Place.Datum)
+                 = Landin.Layouts.C_Packed
+               then
+                  return True;
+               else
+                  Reached := Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field));
+               end if;
+            when Frame_Slot =>
+               if Is_Array (Of_Unit, Item, Place.Slot) then
+                  Reached := Slot_Array_Element_Shape
+                    (Of_Unit, Item, Place.Slot);
+               elsif Layout_Of (Of_Unit, Item, Place.Slot)
+                 = Landin.Layouts.C_Packed
+               then
+                  return True;
+               else
+                  Reached := Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field));
+               end if;
+            when Runtime_Address =>
+               declare
+                  Whole : constant Field_Shape :=
+                    Address_Shape (Of_Unit, Item, Place.Address);
+               begin
+                  if Is_Unaligned_Address (Of_Unit, Item, Place.Address)
+                    or else Layout_Of (Of_Unit, Whole)
+                      = Landin.Layouts.C_Packed
+                  then
+                     return True;
+                  elsif Whole.Kind = Array_Field_Shape then
+                     Reached := Array_Element_Shape (Of_Unit, Whole);
+                  else
+                     Reached := Nth_Aggregate_Field
+                       (Of_Unit, Whole, Positive (Field));
+                  end if;
+               end;
+         end case;
+      end if;
+      return Enters_Byte_Packed (Of_Unit, Reached, Path);
+   end Reaches_Byte_Packed;
+
+   function Enters_Byte_Packed
+     (Of_Unit : Unit; Root : Field_Shape; Path : Path_Step_Array)
+      return Boolean
+   is
+      Reached : Field_Shape := Root;
+   begin
+      for Step of Path loop
+         if Layout_Of (Of_Unit, Reached) = Landin.Layouts.C_Packed then
+            return True;
+         end if;
+         Reached := Shape_At (Of_Unit, Reached, [1 => Step]);
+      end loop;
+      return False;
+   end Enters_Byte_Packed;
 
    function Part_Count (Of_Unit : Unit; Item : Item_Id) return Element_Total
      is (if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
@@ -2607,6 +2701,10 @@ package body Landin.IR is
    function Is_Address
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Addressed);
+
+   function Is_Unaligned_Address
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     is (Of_Unit.Slots.Element (Slot_At (Of_Unit, Item, Slot)).Unaligned);
 
    function Address_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
@@ -3977,9 +4075,11 @@ package body Landin.IR is
       Site    : Landin.Provenance.Origin;
       Cases   : Case_Run_Array := No_Case_Runs;
       Payloads : Field_Shape_Array := No_Field_Shapes;
-      Policy : Landin.Layouts.Policy := Landin.Layouts.Natural)
+      Policy : Landin.Layouts.Policy := Landin.Layouts.Natural;
+      Path : Path_Step_Array := No_Path_Steps)
       return Value_Id
    is
+      Steps : constant Run := Stored_Path (Into, Path);
       Payload_Base : constant Natural :=
         Natural (Into.Variant_Fields.Length);
       Case_Base : constant Natural :=
@@ -4039,6 +4139,7 @@ package body Landin.IR is
                          Measurement_Field_Total => Fields'Length,
                          Aggregate_Measurement   => True,
                          Measurement_Layout      => Policy,
+                         Nested                  => Steps,
                          others                  => <>));
       end;
    end Emit_Aggregate_Measurement;

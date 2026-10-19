@@ -65,3 +65,53 @@ public sort_selection: (item: type is cmp.ordered, values: []mut item) -> none =
         inc at
     end while
 end sort_selection
+
+--  Restore the max-heap property below root as `sift_down` does, ordering
+--  by `less` with `by` passed to every comparison.
+sift_down_by: (item: type, context: type, values: []mut item, root: usize,
+               count: usize, by: context,
+               less: (by: context, left: item, right: item) -> (yes: bool))
+              -> none =
+    mut at := root
+    while at < count / 2 do
+        mut child: usize = at * 2 + 1
+        if child + 1 < count and less(by, values[child], values[child + 1]) then
+            inc child
+        end if
+        if not less(by, values[at], values[child]) then
+            return
+        end if
+        saved: item = values[at]
+        values[at] = values[child]
+        values[child] = saved
+        at = child
+    end while
+end sift_down_by
+
+--- Sort an initialized mutable slice in place by a comparison that is
+--- given a context: `less(by, left, right)` says whether `left` goes before
+--- `right`, and `by` is passed to every call unchanged, so items that refer
+--- into shared storage, such as offsets into one pool of names, are
+--- ordered by what they refer to. Heapsort, as `sort` is: worst-case
+--- O(n log n) comparisons, constant auxiliary storage, bounded call depth
+--- and no allocation. `less` must be a strict weak ordering for as long as
+--- the sort runs; equal items need not keep their order.
+public sort_by: (item: type, context: type, values: []mut item, by: context,
+                 less: (by: context, left: item, right: item) -> (yes: bool))
+                -> none =
+    count: usize = lenof values
+    mut start: usize = count / 2
+    while start > 0 do
+        dec start
+        sift_down_by(values, start, count, by, less)
+    end while
+    mut remaining := count
+    zero: usize = 0
+    while remaining > 1 do
+        dec remaining
+        saved: item = values[zero]
+        values[zero] = values[remaining]
+        values[remaining] = saved
+        sift_down_by(values, zero, remaining, by, less)
+    end while
+end sort_by

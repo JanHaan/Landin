@@ -19,14 +19,14 @@ end window_size
 
 --- Whether `opened` is a terminal, POSIX's `isatty`: false for a file, a
 --- pipe, a socket, and a descriptor that is not open.
-public link(symbol: "_landin_posix_is_terminal") is_terminal:
+public is_terminal:
     (opened: descriptor) -> (yes: bool) =
     yes = system_is_terminal(opened)
 end is_terminal
 
 --- The size of the terminal `opened`, `TIOCGWINSZ`: `enotty` for anything
 --- but a terminal.  A terminal nothing has sized is zero by zero.
-public link(symbol: "_landin_posix_window_size_of") window_size_of:
+public window_size_of:
     (opened: descriptor) -> (size: window_size) ! errno =
     size = try system_window_size(opened)
 end window_size_of
@@ -34,7 +34,7 @@ end window_size_of
 --- Set the size of the terminal `opened`, `TIOCSWINSZ`, as a terminal
 --- emulator does for the program it runs, which the system tells of the
 --- change with SIGWINCH: `enotty` for anything but a terminal.
-public link(symbol: "_landin_posix_set_window_size") set_window_size:
+public set_window_size:
     (opened: descriptor, size: window_size) -> none ! errno =
     try system_set_window_size(opened, size)
 end set_window_size
@@ -66,7 +66,7 @@ public mode_change: type = immediately | after_output | discarding_input
 
 --- The settings of the terminal `opened`, POSIX's `tcgetattr`: `enotty`
 --- for anything but a terminal.
-public link(symbol: "_landin_posix_terminal_mode_of") terminal_mode_of:
+public terminal_mode_of:
     (opened: descriptor) -> (mode: terminal_mode) ! errno =
     mode = try system_terminal_mode(opened)
 end terminal_mode_of
@@ -77,7 +77,7 @@ end terminal_mode_of
 --- gives it back the settings it found, on every way out: there are no
 --- destructors, so `defer` is the idiom, and a program ended by a signal
 --- leaves the terminal as it was changed.
-public link(symbol: "_landin_posix_set_terminal_mode") set_terminal_mode:
+public set_terminal_mode:
     (opened: descriptor, mode: terminal_mode, change: mode_change)
     -> none ! errno =
     try system_set_terminal_mode(opened, mode, change)
@@ -88,21 +88,21 @@ end set_terminal_mode
 --- control character, no translation of carriage returns and eight-bit
 --- characters; output passed through unprocessed, so a newline moves down
 --- without returning; and a read waiting for at least one byte.
-public link(symbol: "_landin_posix_raw_mode") raw_mode:
+public raw_mode:
     (mode: terminal_mode) -> (raw: terminal_mode) =
     raw = system_raw_mode(mode)
 end raw_mode
 
 --- Whether `mode` reads a line at a time with echo, a terminal's ordinary
 --- settings, `ICANON` and `ECHO`: false for one `raw_mode` made.
-public link(symbol: "_landin_posix_reads_lines") reads_lines:
+public reads_lines:
     (mode: terminal_mode) -> (yes: bool) =
     yes = system_reads_lines(mode)
 end reads_lines
 
 --- Whether two settings are the same in every mode and character, as a
 --- program restoring a terminal checks it.
-public link(symbol: "_landin_posix_same_terminal_mode") same_terminal_mode:
+public same_terminal_mode:
     (left: terminal_mode, right: terminal_mode) -> (same: bool) =
     same = system_same_mode(left, right)
 end same_terminal_mode
@@ -123,7 +123,7 @@ end pseudo_terminal
 --- On Linux it is /dev/ptmx and `TIOCGPTPEER`, Linux 4.13's; on Darwin the
 --- controller is marked closed on exec just after it is opened.  Close
 --- both when done.
-public link(symbol: "_landin_posix_open_pseudo_terminal") open_pseudo_terminal:
+public open_pseudo_terminal:
     () -> (pair: pseudo_terminal) ! errno =
     pair = try system_open_pseudo_terminal()
 end open_pseudo_terminal

@@ -1740,7 +1740,14 @@ package body Landin.Tests.Parser_Suite is
                               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
                               Arguments : Landin.Platform.Path_List;
                            begin
-                              Arguments.Append ("--target=linux-x86-64");
+                              --  Its `args` are options before the module
+                              --  its root gives, a target among them.
+                              if Fixtures.Args (Fixture) = "" then
+                                 Arguments.Append ("--target=linux-x86-64");
+                              else
+                                 Arguments := Arguments_Of
+                                   ("", Fixtures.Args (Fixture));
+                              end if;
                               Fixtures.Append_Module_Arguments
                                 (Fixture, Corpus, Arguments);
                               Check_Outcome

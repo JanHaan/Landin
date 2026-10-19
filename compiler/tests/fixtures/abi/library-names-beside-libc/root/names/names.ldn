@@ -1,0 +1,21 @@
+--  Routines and a datum named as the C library names its own.  `public`
+--  makes none of them a global symbol (D415): each is local to the image,
+--  so neither the C library nor a C peer collides with it or reaches it.
+
+--- Seven, which is not C's `errno`.
+public errno: () -> (value: i32) =
+    value = 7
+end errno
+
+--- Twice `value`, which no C `reset` computes here.
+public reset: (value: i32) -> (doubled: i32) =
+    doubled = value * 2
+end reset
+
+--- `count` and one, which is not C's `read`.
+public read: (count: i32) -> (next: i32) =
+    next = count + 1
+end read
+
+--- Eleven, which is not C's `environ`.
+public environ: i32 = 11

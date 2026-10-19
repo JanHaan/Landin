@@ -1,0 +1,15 @@
+missing, denied: atom
+
+risky: () -> none ! denied =
+    fail denied
+end risky
+
+recovered: () -> none ! missing =
+    risky() else (problem)
+        fail problem
+    end
+end recovered
+
+tried: () -> none ! missing =
+    try risky()
+end tried

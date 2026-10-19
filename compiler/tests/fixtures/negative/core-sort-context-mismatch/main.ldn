@@ -1,0 +1,23 @@
+--  The comparison's context must be the context the sort is given: a
+--  comparison over a byte pool cannot be given the records' own count.
+import core/cmp
+import core/sort
+
+name: type = struct
+    start: usize
+    length: usize
+end name
+
+before: (pool: []u8, left: name, right: name) -> (yes: bool) =
+    yes = cmp.compare(pool[left.start..<left.start + left.length],
+                      pool[right.start..<right.start + right.length])
+          == cmp.less
+end before
+
+public main: () -> (code: i32) =
+    code = 1
+    mut names: [2]name = [(start: 0, length: 4), (start: 4, length: 5)]
+    count: usize = 2
+    sort.sort_by(names[0..<2], count, before)
+    code = 0
+end main

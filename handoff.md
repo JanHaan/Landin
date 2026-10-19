@@ -250,7 +250,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R13.71 — What the newcomer's path met (planned).**
+**Next roadmap item: R14.10 — Prototype 5 (planned).**
 
 ---
 

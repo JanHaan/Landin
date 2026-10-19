@@ -1,0 +1,20 @@
+error[L0201]: `clock` here is the result `clock`, which hides `import clock`, so `clock.duration` names no type
+  --> ../tests/fixtures/negative/local-hides-an-import/entry/main.ldn:4:11
+  |
+4 |     span: clock.duration = 1
+  |           ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/local-hides-an-import/entry/main.ldn:3:15
+  |
+3 | later: () -> (clock: u64) =
+  |               ^^^^^^^^^^ this hides `import clock`
+  = note: [1450]: a parameter or local may shadow an import; rename it to reach the import's members
+error[L0301]: `clock` here is the parameter `clock`, which hides `import clock`, and `u64` has no field to select
+  --> ../tests/fixtures/negative/local-hides-an-import/entry/main.ldn:9:12
+  |
+9 |     span = clock.seconds(clock)
+  |            ^^^^^
+  --> ../tests/fixtures/negative/local-hides-an-import/entry/main.ldn:8:10
+  |
+8 | sooner: (clock: u64) -> (span: u64) =
+  |          ^^^^^^^^^^ this hides `import clock`
+  = note: [1820]: the kernel selects a field of a struct [0670] and nothing else

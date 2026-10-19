@@ -1,0 +1,20 @@
+error[L0346]: a byte-packed record holds an array or record by value only when its alignment is one
+  --> ../tests/fixtures/negative/c-packed-aligned-part/program.ldn:7:5
+  |
+7 |     numbers: [4]u16
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-aligned-part/program.ldn:5:33
+  |
+5 | ports: type = layout(c, packed) struct
+  |                                 ^^^^^^ this C layout
+  = note: D410: a field of a layout(c, packed) record may sit at any address, so an array's element or a nested record is u8, i8, bool or layout(c, packed)
+error[L0346]: a byte-packed record holds an array or record by value only when its alignment is one
+  --> ../tests/fixtures/negative/c-packed-aligned-part/program.ldn:12:5
+   |
+12 |     inner: aligned
+   |     ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-packed-aligned-part/program.ldn:10:34
+   |
+10 | nested: type = layout(c, packed) struct
+   |                                  ^^^^^^ this C layout
+  = note: D410: a field of a layout(c, packed) record may sit at any address, so an array's element or a nested record is u8, i8, bool or layout(c, packed)

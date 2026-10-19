@@ -68,9 +68,21 @@ package body Landin.Backend is
       return True;
    end Shares_Evidence_Table;
 
+   package Item_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => IR.Item_Id);
+
+   --  Every routine a word of an `assembler.block`'s text may name, by
+   --  that word.
+   package Word_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+     (Key_Type => String, Element_Type => Item_Vectors.Vector,
+      Hash => Ada.Strings.Hash, Equivalent_Keys => "=",
+      "=" => Item_Vectors."=");
+
    function Kept_Evidence_Entries
-     (Of_Unit : IR.Unit;
-      Handler : IR.Item_Id) return Kept_Entries
+     (Of_Unit  : IR.Unit;
+      Handler  : IR.Item_Id;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table) return Kept_Entries
    is
       use type Landin.IR.Item_Kind;
       use type Landin.IR.Opcode;
@@ -161,6 +173,60 @@ package body Landin.Backend is
          Live (Positive (Item)) := True;
       end Note_Exposed;
 
+      --  The routines a block's text may name, by the words D296 roots:
+      --  a routine's name and link name.  A word with a leading `_`, as
+      --  Mach-O spells a symbol, also names what it names without it.
+      Named : Word_Maps.Map;
+
+      procedure Name (Word : String; Item : IR.Item_Id);
+      procedure Reach_Named (Word : String);
+      procedure Reach_Words (Text : String);
+
+      procedure Name (Word : String; Item : IR.Item_Id) is
+         Position : constant Word_Maps.Cursor := Named.Find (Word);
+      begin
+         if Word'Length = 0 then
+            return;
+         elsif Word_Maps.Has_Element (Position) then
+            Named.Reference (Position).Append (Item);
+         else
+            Named.Insert (Word, Item_Vectors.To_Vector (Item, 1));
+         end if;
+      end Name;
+
+      procedure Reach_Named (Word : String) is
+         Position : constant Word_Maps.Cursor := Named.Find (Word);
+      begin
+         if Word_Maps.Has_Element (Position) then
+            for Target of Named.Constant_Reference (Position) loop
+               Reach (Target);
+            end loop;
+         end if;
+      end Reach_Named;
+
+      --  Every run of symbol characters in Text, as D296 reads one.
+      procedure Reach_Words (Text : String) is
+         function Symbolic (C : Character) return Boolean is
+           (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.' | '$');
+         First : Natural := 0;
+      begin
+         for Index in Text'Range loop
+            if Symbolic (Text (Index)) then
+               if First = 0 then
+                  First := Index;
+               end if;
+               if Index = Text'Last or else not Symbolic (Text (Index + 1))
+               then
+                  Reach_Named (Text (First .. Index));
+                  if Text (First) = '_' and then Index > First then
+                     Reach_Named (Text (First + 1 .. Index));
+                  end if;
+                  First := 0;
+               end if;
+            end if;
+         end loop;
+      end Reach_Words;
+
       Any_Assembly : Boolean := False;
    begin
       for Table in 1 .. Tables loop
@@ -197,58 +263,82 @@ package body Landin.Backend is
          end;
       end loop;
 
-      --  Only an ordinary routine with parameters, which nothing but a
-      --  call or an evidence entry names, can be left unreached; every
-      --  other routine, and the panic handler the backend calls, is a
-      --  root.  A routine only unreached routines call stays unreached.
-      if not Any_Assembly then
-         for Index in 1 .. Items loop
-            declare
-               Target : constant IR.Item_Id := IR.Item_Id (Index);
-               Signature : constant IR.Signature_Id :=
-                 (if IR.Kind_Of (Of_Unit, Target) = IR.Routine
-                  then IR.Signature_Of (Of_Unit, Target)
-                  else IR.No_Signature);
-               Placed : constant Landin.Machine.Placement :=
-                 IR.Placement_Of (Of_Unit, Target);
-            begin
-               if Signature /= IR.No_Signature
-                 and then Target /= Handler
-                 and then not IR.Is_External (Of_Unit, Target)
-                 and then IR.Link_Symbol (Of_Unit, Target)
-                   = Landin.Source.Names.No_Name
-                 and then Placed.Section = Landin.Source.Names.No_Name
-                 and then Placed.Vector = 0
-                 and then not Placed.Keep
-                 and then not IR.Signature_Uses_C_ABI (Of_Unit, Signature)
-                 and then IR.Signature_Machine (Of_Unit, Signature)
-                   = Landin.Machine.Ordinary
-                 and then IR.Signature_Parameter_Count
-                   (Of_Unit, Signature) > 0
-               then
-                  Live (Index) := False;
-               end if;
-            end;
-         end loop;
-         IR.Visit_Address_Exposures_Beside_Evidence
-           (Of_Unit, Note_Exposed'Access);
+      --  A block names a routine by the words D296 roots, so the routines
+      --  are indexed by them only when there is a block to read.
+      if Any_Assembly then
          for Index in 1 .. Items loop
             declare
                Item : constant IR.Item_Id := IR.Item_Id (Index);
-               Function_Image : constant IR.Item_Id :=
-                 IR.Function_Target (Of_Unit, Item);
-               Address_Image : constant IR.Item_Id :=
-                 IR.Address_Target (Of_Unit, Item);
+               Declared : constant IR.Declaration_Id :=
+                 IR.Declares (Of_Unit, Item);
+               Linked : constant Landin.Source.Names.Name_Id :=
+                 IR.Link_Symbol (Of_Unit, Item);
             begin
-               if Function_Image /= IR.No_Item then
-                  Live (Positive (Function_Image)) := True;
-               end if;
-               if Address_Image /= IR.No_Item then
-                  Live (Positive (Address_Image)) := True;
+               if IR.Kind_Of (Of_Unit, Item) = IR.Routine then
+                  if Declared /= IR.No_Declaration then
+                     Name (Landin.Source.Names.Spelling
+                             (Names, Landin.Resolution.Name_Of
+                                (Meanings, Declared)), Item);
+                  end if;
+                  if Linked /= Landin.Source.Names.No_Name then
+                     Name (Landin.Source.Names.Spelling (Names, Linked), Item);
+                  end if;
                end if;
             end;
          end loop;
       end if;
+
+      --  Only an ordinary routine with parameters, which nothing but a
+      --  call, a block's text or an evidence entry names, can be left
+      --  unreached; every other routine, and the panic handler the backend
+      --  calls, is a root.  A routine only unreached routines call or
+      --  name stays unreached.
+      for Index in 1 .. Items loop
+         declare
+            Target : constant IR.Item_Id := IR.Item_Id (Index);
+            Signature : constant IR.Signature_Id :=
+              (if IR.Kind_Of (Of_Unit, Target) = IR.Routine
+               then IR.Signature_Of (Of_Unit, Target)
+               else IR.No_Signature);
+            Placed : constant Landin.Machine.Placement :=
+              IR.Placement_Of (Of_Unit, Target);
+         begin
+            if Signature /= IR.No_Signature
+              and then Target /= Handler
+              and then not IR.Is_External (Of_Unit, Target)
+              and then IR.Link_Symbol (Of_Unit, Target)
+                = Landin.Source.Names.No_Name
+              and then Placed.Section = Landin.Source.Names.No_Name
+              and then Placed.Vector = 0
+              and then not Placed.Keep
+              and then not IR.Signature_Uses_C_ABI (Of_Unit, Signature)
+              and then IR.Signature_Machine (Of_Unit, Signature)
+                = Landin.Machine.Ordinary
+              and then IR.Signature_Parameter_Count
+                (Of_Unit, Signature) > 0
+            then
+               Live (Index) := False;
+            end if;
+         end;
+      end loop;
+      IR.Visit_Address_Exposures_Beside_Evidence
+        (Of_Unit, Note_Exposed'Access);
+      for Index in 1 .. Items loop
+         declare
+            Item : constant IR.Item_Id := IR.Item_Id (Index);
+            Function_Image : constant IR.Item_Id :=
+              IR.Function_Target (Of_Unit, Item);
+            Address_Image : constant IR.Item_Id :=
+              IR.Address_Target (Of_Unit, Item);
+         begin
+            if Function_Image /= IR.No_Item then
+               Live (Positive (Function_Image)) := True;
+            end if;
+            if Address_Image /= IR.No_Item then
+               Live (Positive (Address_Image)) := True;
+            end if;
+         end;
+      end loop;
 
       --  Each item waits at most once: the roots now, and later only what
       --  Reach makes live.
@@ -285,6 +375,9 @@ package body Landin.Backend is
                            Keep_In_Family
                              (Positive (IR.Evidence_Of (Of_Unit, Item, Value)),
                               IR.Evidence_Entry_Of (Of_Unit, Item, Value));
+                        when IR.Assembly =>
+                           Reach_Words (Landin.Source.Names.Spelling
+                             (Names, IR.Assembly_Text (Of_Unit, Item, Value)));
                         when others =>
                            null;
                      end case;
@@ -619,8 +712,13 @@ package body Landin.Backend is
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment)
    is
+      use type Landin.IR.Opcode;
    begin
-      if Landin.IR.Is_Aggregate_Measurement (Of_Unit, Item, Value) then
+      if Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Measure_Offset
+      then
+         Size := Measurement_Answer (Of_Unit, Item, Value, Facts);
+         Alignment := 1;
+      elsif Landin.IR.Is_Aggregate_Measurement (Of_Unit, Item, Value) then
          declare
             Placed : constant Layout.Plan :=
               Measurement_Layout (Of_Unit, Item, Value, Facts);
@@ -638,6 +736,44 @@ package body Landin.Backend is
          end;
       end if;
    end Measurement_Extent;
+
+   function Measurement_Answer
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Value   : Landin.IR.Value_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count
+   is
+      use type Landin.IR.Opcode;
+   begin
+      if Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Measure_Offset
+      then
+         declare
+            Path : constant Landin.IR.Path_Step_Array :=
+              Landin.IR.Path_Of (Of_Unit, Item, Value);
+            First : constant Positive := Positive (Path (Path'First).Field);
+            Placed : constant Layout.Plan :=
+              Measurement_Layout (Of_Unit, Item, Value, Facts);
+            Cache : IR.Shape_Measurement.Layout_Cache;
+         begin
+            return Placed.Offsets (First)
+              + Path_Offset
+                  (Of_Unit,
+                   Landin.IR.Nth_Measurement_Field
+                     (Of_Unit, Item, Value, First),
+                   Path (Path'First + 1 .. Path'Last), Facts, Cache);
+         end;
+      end if;
+      declare
+         Size : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment;
+      begin
+         Measurement_Extent (Of_Unit, Item, Value, Facts, Size, Alignment);
+         return (if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                      = Landin.IR.Measure_Align
+                 then Landin.Targets.Byte_Count (Alignment) else Size);
+      end;
+   end Measurement_Answer;
 
    ------------------------------------------------------------------
    --  An aggregate cell
@@ -1101,6 +1237,53 @@ package body Landin.Backend is
          Into.Held.Insert (Spelling, 1);
       end if;
    end Add;
+
+   function Is_Exported
+     (Of_Unit        : Landin.IR.Unit;
+      Meanings       : Landin.Resolution.Table;
+      Item           : Landin.IR.Item_Id;
+      Hosted_Entry   : Landin.IR.Item_Id;
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item)
+      return Boolean
+   is
+      use type Landin.Machine.Convention;
+      use type Landin.Machine.Placement;
+      use type Landin.IR.Signature_Id;
+      use type Landin.Source.Names.Name_Id;
+      Declared : constant Landin.IR.Declaration_Id :=
+        Landin.IR.Declares (Of_Unit, Item);
+      Signature : constant Landin.IR.Signature_Id :=
+        Landin.IR.Signature_Of (Of_Unit, Item);
+      Default : constant Landin.Machine.Placement := (others => <>);
+   begin
+      return Item = Hosted_Entry
+        or else (Firmware_Entry /= Landin.IR.No_Item
+                 and then Item = Firmware_Entry)
+        or else Landin.IR.Is_External (Of_Unit, Item)
+        or else Landin.IR.Link_Symbol (Of_Unit, Item)
+          /= Landin.Source.Names.No_Name
+        or else Landin.IR.Placement_Of (Of_Unit, Item) /= Default
+        or else (Declared /= Landin.IR.No_Declaration
+                 and then Landin.Resolution.Is_Public (Meanings, Declared)
+                 and then Signature /= Landin.IR.No_Signature
+                 and then Landin.IR.Signature_Machine (Of_Unit, Signature)
+                   /= Landin.Machine.Ordinary);
+   end Is_Exported;
+
+   function Qualified_Symbol
+     (Meanings : Landin.Resolution.Table;
+      Declared : Landin.IR.Declaration_Id;
+      Spelling : String) return String
+   is
+      Path : String := Landin.Resolution.Module_Path_Of (Meanings, Declared);
+   begin
+      for C of Path loop
+         if C = '/' then
+            C := '.';
+         end if;
+      end loop;
+      return (if Path = "" then "main" else Path) & "." & Spelling;
+   end Qualified_Symbol;
 
    procedure Remove (Into : in out Spelling_Counts; Spelling : String) is
       Found : Spelling_Maps.Cursor := Into.Held.Find (Spelling);

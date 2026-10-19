@@ -160,6 +160,9 @@ because the pass could be requested and skipped in the same run. The gate's
 `editor-grammar` job runs it on each full gate run with the release binary of the
 CLI version `tree-sitter/package.json` names, checked against the sha256 in
 `environments/pins.sh`, and fails if regenerating the parser changes the
-committed one. `AGENTS.md` describes the verified explanatory-only reuse
+committed one. `nix develop` puts the same release binary, held to the same
+checksum for its own system, on `PATH`, where the suite takes it when the
+grammar package has no CLI of its own; without Node it generates through the
+CLI's built-in QuickJS, which reproduces the committed parser byte for byte. `AGENTS.md` describes the verified explanatory-only reuse
 exception. Each editor directory contains the shortest installation path for
 that editor.

@@ -1,0 +1,9 @@
+class: negative
+summary: D410 holds an array or nested record in a byte-packed record by value only when its alignment is one
+constructs: 0520, 0750, 1580
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0346, L0346
+expect: expected.txt
+args: ../tests/fixtures/negative/c-packed-aligned-part/program.ldn
+status: 1

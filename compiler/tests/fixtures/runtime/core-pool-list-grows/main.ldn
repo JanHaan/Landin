@@ -1,0 +1,38 @@
+--  A list over a pool grows within the slot its first block was given:
+--  sixteen bytes take one slot's growths, and the seventeenth is refused
+--  with the list as it was, though the second slot is free, since no slot
+--  is larger than the one the list has.
+import core/mem
+import core/pool
+import core/vec
+
+list_grows_in_slot: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut backing: [32]u8 = zeroed
+    mut slots: [2]pool.slot = zeroed
+    mut space: pool.space = zeroed
+    slab := try pool.over(space, addr backing[0], 32, 16, 2, 1, slots[0..<2])
+    mut values := vec.new(item: u8)
+    for at in usize(0)..<usize(16) do
+        try vec.push(values, slab, u8(at))
+    end for
+    return when vec.capacity(values) <> 16 or pool.allocations(slab) <> 1
+    mut refused: bool = false
+    vec.push(values, slab, u8(16)) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    mut kept: bool = refused and vec.length(values) == 16
+    for at in usize(0)..<usize(16) do
+        saved: u8 = vec.get(values, at) else u8(255)
+        kept = kept and saved == u8(at)
+    end for
+    vec.release(values, slab)
+    ok = kept and pool.allocations(slab) == 1 and pool.frees(slab) == 1
+         and pool.live(slab) == 0 and pool.rejected_frees(slab) == 0
+end list_grows_in_slot
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not (list_grows_in_slot() else false)
+    code = 42
+end main

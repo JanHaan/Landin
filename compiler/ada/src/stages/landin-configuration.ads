@@ -92,6 +92,19 @@ package Landin.Configuration is
    function Library_Name
      (In_Table : Table; Index : Positive) return String;
 
+   --  D412: an active `compiler.assert` that measures a declared type's
+   --  layout waits for checking, which knows that layout; configuration
+   --  records it here, and resolution, checking and the late fold read it.
+   procedure Defer_Assertion
+     (Into : in out Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id);
+   function Deferred_Count (In_Table : Table) return Natural;
+   function Deferred_Source
+     (In_Table : Table; Index : Positive) return Landin.Source.Source_Id;
+   function Deferred_Node
+     (In_Table : Table; Index : Positive) return Landin.Syntax.Node_Id;
+
    procedure Prepare (Into : in out Table);
 
    procedure Mark_Inactive
@@ -144,7 +157,11 @@ private
    package Option_Sites is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Option_Site);
 
+   package Deferrals is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Inactive_Node);
+
    type Table is record
+      Deferred : Deferrals.Vector;
       Inactive : Entries.Set;
       Settings : Overrides.Vector;
       Linked   : Libraries.Vector;

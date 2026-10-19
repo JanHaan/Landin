@@ -74,6 +74,9 @@ package body Landin.Resolution is
            (Scope'(Sort => Module_Scope, Enclosing => Program_Scope,
                    others => <>));
          Into.Module_Scopes.Append (Scope_Id (Into.Scopes.Length));
+         Into.Module_Paths.Append
+           (Landin.Modules.Logical_Path
+              (Modules, Landin.Modules.Module_Id (Index)));
       end loop;
       for Index in 1 .. Landin.Syntax.Forest.Count (Trees) loop
          declare
@@ -169,6 +172,24 @@ package body Landin.Resolution is
    function Is_Public (Of_Table : Table; Id : Declaration_Id)
      return Boolean
      is (Element (Of_Table, Id).Public);
+
+   function Module_Path_Of (Of_Table : Table; Id : Declaration_Id)
+     return String
+   is
+      Scope : Scope_Id := Scope_Of (Of_Table, Id);
+   begin
+      while Scope /= No_Scope
+        and then Sort_Of (Of_Table, Scope) /= Module_Scope
+      loop
+         Scope := Enclosing (Of_Table, Scope);
+      end loop;
+      for Index in 1 .. Natural (Of_Table.Module_Scopes.Length) loop
+         if Of_Table.Module_Scopes.Element (Index) = Scope then
+            return Of_Table.Module_Paths.Element (Index);
+         end if;
+      end loop;
+      return "";
+   end Module_Path_Of;
 
    function Declared_Here
      (Of_Table : Table;

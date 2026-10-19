@@ -66,6 +66,7 @@
 --  it does -- so this decides what is said and never what is accepted.
 
 private with Ada.Containers.Hashed_Maps;
+private with Ada.Containers.Indefinite_Vectors;
 private with Ada.Containers.Vectors;
 
 with Landin.Provenance;
@@ -296,6 +297,14 @@ package Landin.Resolution is
    --  the parser refused the word on a statement and said so.
    function Is_Public (Of_Table : Table; Id : Declaration_Id)
      return Boolean
+     with Pre => Contains (Of_Table, Id);
+
+   --  The logical path of the module that declared Id, `core/arena`, or
+   --  "" for the entry module.  A backend qualifies a symbol whose own
+   --  name is taken in the program with it (D417), so the qualified
+   --  spelling depends on the declaration alone.
+   function Module_Path_Of (Of_Table : Table; Id : Declaration_Id)
+     return String
      with Pre => Contains (Of_Table, Id);
 
    --  What this scope itself gives that name, so a duplicate is something
@@ -877,11 +886,16 @@ private
       Hash            => Hash_Slot,
       Equivalent_Keys => "=");
 
+   package Path_Vectors is new Ada.Containers.Indefinite_Vectors
+     (Index_Type => Positive, Element_Type => String);
+
    type Table is tagged limited record
       Ready        : Boolean := False;
       Declarations : Declaration_Vectors.Vector;
       Scopes       : Scope_Vectors.Vector;
       Module_Scopes : Scope_Id_Vectors.Vector;
+      --  Each module's logical path, in Module_Id order.
+      Module_Paths  : Path_Vectors.Vector;
       File_Scopes   : Scope_Id_Vectors.Vector;
       Imports       : Import_Maps.Map;
       --  Bindings linked by file scope in the order they were made.  The

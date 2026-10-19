@@ -261,7 +261,7 @@ package body Landin.Backend.Entry_Point is
 
       --  A table names only the entries D374 keeps; the rest are zero.
       Kept : constant Kept_Entries :=
-        Kept_Evidence_Entries (Of_Unit, Handler);
+        Kept_Evidence_Entries (Of_Unit, Handler, Meanings, Names);
 
       procedure Reach_Evidence (Id : Landin.IR.Evidence_Id) is
       begin

@@ -326,6 +326,9 @@ package body Landin.Syntax.Parser is
             Lenof_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "lenof");
 
+            Offsetof_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "offsetof");
+
             Of_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "of");
 
@@ -4773,7 +4776,30 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Identifier then
                   Advance;
                end if;
-               if Peek = Tok.Comma then
+               if Peek = Tok.Comma
+                 and then Policy = Landin.Layouts.C
+               then
+                  --  D410: `layout(c, packed)` is C's byte-packed record,
+                  --  the one word a C layout takes after its comma.
+                  Advance;
+                  if Peek = Tok.Identifier
+                    and then Landin.Source.Names.Spelling
+                      (Names, Named_Here) = "packed"
+                  then
+                     Policy := Landin.Layouts.C_Packed;
+                  else
+                     Complain
+                       (Syn.Token_Expected, Here,
+                        "a C layout takes only `packed` after its comma",
+                        Note => "[0750]/D410: `layout(c, packed)` places"
+                          & " every field at alignment one, as C's"
+                          & " `__attribute__((packed))` does",
+                        Related => Opened, Because => "this annotation");
+                  end if;
+                  if Peek = Tok.Identifier then
+                     Advance;
+                  end if;
+               elsif Peek = Tok.Comma then
                   Advance;
                   if Policy = Landin.Layouts.Packed
                     and then Peek = Tok.Identifier
@@ -9752,31 +9778,94 @@ package body Landin.Syntax.Parser is
 
                   declare
                      At_Case : constant Landin.Source.Span := Here;
-                     Named   : constant Landin.Source.Names.Name_Id :=
-                       (if Peek in Tok.Underscore | Tok.Kw_Ptr
-                        then Landin.Source.Names.No_Name else Named_Here);
                      Pattern, Runs : Node_Id;
                      Bindings : Slot_Vectors.Vector;
+                     Labels   : Slot_Vectors.Vector;
                      Kept : Boolean;
+
+                     --  One case of the arm: a name, `ptr` or `_`.
+                     function Parse_Label return Node_Id;
+
+                     function Parse_Label return Node_Id is
+                        At_Label : constant Landin.Source.Span := Here;
+                     begin
+                        if Peek = Tok.Kw_Ptr then
+                           --  D189/[0480]: the present case of a pointer
+                           --  union is spelled with the reserved word, so
+                           --  it is its own node kind rather than a name
+                           --  resolution would look up and fail to find.
+                           Advance;
+                           return Add
+                             (Of_Kind  => Pointer_Case,
+                              At_Token => At_Label);
+                        elsif Peek = Tok.Underscore then
+                           Advance;
+                           return Add
+                             (Of_Kind  => Name_Reference,
+                              At_Token => At_Label,
+                              Named    => Landin.Source.Names.No_Name);
+                        else
+                           return Parse_Qualified_Reference
+                             (Name_Reference);
+                        end if;
+                     end Parse_Label;
                   begin
-                     if Peek = Tok.Kw_Ptr then
-                        --  D189/[0480]: the present case of a pointer union
-                        --  is spelled with the reserved word, so it is its
-                        --  own node kind rather than a name resolution
-                        --  would look up and fail to find.
+                     Pattern := Parse_Label;
+
+                     --  D405: an arm may name several cases, which share
+                     --  what it runs.  `_` is every case left over, so it
+                     --  is never one of several.
+                     while Peek = Tok.Comma loop
                         Advance;
-                        Pattern := Add
-                          (Of_Kind  => Pointer_Case,
-                           At_Token => At_Case);
-                     elsif Peek = Tok.Underscore then
+                        if Peek not in Tok.Identifier | Tok.Underscore
+                                     | Tok.Kw_Ptr
+                        then
+                           Complain
+                             (Item    => Syn.Name_Expected,
+                              Where   => Here,
+                              Message => "a case name follows `,` in a"
+                                         & " match arm",
+                              Note    => "D405: an arm names one case or"
+                                         & " several, separated by commas,"
+                                         & " then `:` and what it runs");
+                           exit;
+                        end if;
+                        if Peek = Tok.Underscore
+                          or else (Labels.Is_Empty
+                                   and then Kind (Result, Pattern)
+                                     = Name_Reference
+                                   and then Name (Result, Pattern)
+                                     = Landin.Source.Names.No_Name)
+                        then
+                           Complain
+                             (Item    => Syn.Name_Expected,
+                              Where   =>
+                                (if Peek = Tok.Underscore then Here
+                                 else At_Case),
+                              Message => "`_` is an arm of its own, never"
+                                         & " one of several labels",
+                              Note    => "D405: `_` covers every case no"
+                                         & " other arm names; list the"
+                                         & " cases, or write `_:` alone");
+                        end if;
+                        Labels.Append (Parse_Label);
+                     end loop;
+
+                     if Peek = Tok.Left_Paren and then not Labels.Is_Empty
+                     then
+                        Complain
+                          (Item    => Syn.Token_Expected,
+                           Where   => Here,
+                           Message => "an arm that binds a payload names"
+                                      & " one case",
+                           Note    => "D405: several cases share an arm"
+                                      & " only without bindings; give the"
+                                      & " case whose payload is bound an"
+                                      & " arm of its own",
+                           Related => At_Case,
+                           Because => "this arm names several cases");
                         Advance;
-                        Pattern := Add
-                          (Of_Kind  => Name_Reference,
-                           At_Token => At_Case,
-                           Named    => Named);
-                     else
-                        Pattern := Parse_Qualified_Reference
-                          (Name_Reference);
+                        Resync_Parentheses;
                      end if;
 
                      if Peek = Tok.Left_Paren then
@@ -9835,8 +9924,9 @@ package body Landin.Syntax.Parser is
                      Kept := Expect
                        (Wanted  => Tok.Colon,
                         Message => "a match arm puts `:` after its case",
-                        Note    => "D77: an arm is its case, `:` and what it"
-                                   & " runs",
+                        Note    => "D77, D405: an arm is its case, or"
+                                   & " several separated by commas, then"
+                                   & " `:` and what it runs",
                         Related => At_Case,
                         Because => "this case");
                      pragma Unreferenced (Kept);
@@ -9903,7 +9993,9 @@ package body Landin.Syntax.Parser is
                              At_Token => At_Case,
                              Extent   => Join (At_Case, After_Previous),
                              Children => [Pattern, Runs]
-                                         & To_List (Bindings)));
+                                         & To_List
+                                             (if Labels.Is_Empty
+                                              then Bindings else Labels)));
                   end;
                   <<Next_Arm>>
                end loop;
@@ -10697,6 +10789,40 @@ package body Landin.Syntax.Parser is
                   return Add
                     (Len_Of, At_Item,
                      Children => [1 => Parse_Primary]);
+               end if;
+
+               --  D411's `offsetof T.field`.  The word is contextual like
+               --  `lenof`: only a name followed by a dotted name after it
+               --  makes the measurement, so `offsetof(x)` still calls and
+               --  `offsetof.x` still selects.  The selection is kept whole;
+               --  which prefix names the type is resolution's question.
+               if Peek = Tok.Identifier
+                 and then Named_Here = Offsetof_Id
+                 and then Ahead (1) = Tok.Identifier
+                 and then Ahead (2) = Tok.Dot
+                 and then Ahead (3) = Tok.Identifier
+               then
+                  Advance;
+                  declare
+                     Opened : constant Landin.Source.Span := Here;
+                     Path : Node_Id :=
+                       Add (Name_Reference, Opened, Named => Named_Here);
+                  begin
+                     Advance;
+                     while Peek = Tok.Dot and then Ahead (1) = Tok.Identifier
+                     loop
+                        Advance;
+                        Path := Add
+                          (Member_Selection, Here,
+                           Extent => Join (Opened, Here),
+                           Children => [Path], Named => Named_Here);
+                        Advance;
+                     end loop;
+                     return Add
+                       (Offset_Of, At_Item,
+                        Extent => Join (At_Item, After_Previous),
+                        Children => [1 => Path]);
+                  end;
                end if;
 
                --  [0370]: `sizeof` and `alignof` take a type where every

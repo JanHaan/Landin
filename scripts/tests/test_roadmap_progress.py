@@ -351,7 +351,7 @@ class HostedParity(unittest.TestCase):
             self.assertTrue(self.problems(kinds=(kind,)))
 
     def test_other_target_and_metadata_without_program_are_not_execution(self):
-        self.assertTrue(self.problems(targets="macos-arm64"))
+        self.assertTrue(self.problems(targets="darwin-arm64"))
         self.assertTrue(self.problems(program=""))
 
     def test_static_exception_requires_its_exact_diagnostic_program(self):

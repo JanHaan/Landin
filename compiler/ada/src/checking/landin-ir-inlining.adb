@@ -136,7 +136,7 @@ package body Landin.IR.Inlining is
               (Code.Op in Load_Datum | Load_Field | Load_Element
                         | Load_Indirect | Load_Variant_Tag
                         | Load_Variant_Field | Conversion | Range_Check
-                        | Measure_Size | Measure_Align | Unary_Kind
+                        | Measurement_Kind | Unary_Kind
                         | Binary_Kind | Failure_Test | Call | Indirect_Call
                or else (Code.Op = Load
                         and then not Slot_Record_Of

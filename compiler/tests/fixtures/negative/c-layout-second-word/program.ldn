@@ -1,0 +1,3 @@
+record: type = layout(c, optimal) struct
+    kind: u8
+end record

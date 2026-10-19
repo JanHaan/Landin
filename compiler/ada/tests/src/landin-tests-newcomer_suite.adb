@@ -80,6 +80,17 @@ package body Landin.Tests.Newcomer_Suite is
         is (Landin.Platform.Joined
               (Landin.Backend.Toolchain.Driver_Candidates
                  (Facts, Named, Native)));
+      procedure Says_What_Needs_None (Facts : Landin.Targets.Target_Facts);
+      procedure Says_What_Needs_None (Facts : Landin.Targets.Target_Facts)
+      is
+      begin
+         Landin.Testing.Check
+           (Item, Contains
+              (Landin.Backend.Toolchain.Install_Advice (Facts, "", False),
+               "refine check, fmt and lsp, and compile --emit=asm or"
+               & " --emit=ir, need no C driver"),
+            "every target's advice says what needs no driver");
+      end Says_What_Needs_None;
    begin
       Landin.Testing.Check_Equal
         (Item, Listed (Landin.Targets.Linux_X86_64, "", True),
@@ -103,6 +114,18 @@ package body Landin.Tests.Newcomer_Suite is
               (Landin.Targets.Linux_Arm64, "", False),
             "apt install gcc-aarch64-linux-gnu"),
          "a cross target is told which cross compiler to install");
+      --  D384: the host's own GCC through Nix too, and which
+      --  commands need no driver at all, for every target.
+      Landin.Testing.Check
+        (Item, Contains
+           (Landin.Backend.Toolchain.Install_Advice
+              (Landin.Targets.Linux_X86_64, "", True),
+            "Nix: `nix-shell -p gcc`"),
+         "the host's GCC is named for Nix as for Debian and Fedora");
+      Says_What_Needs_None (Landin.Targets.Linux_X86_64);
+      Says_What_Needs_None (Landin.Targets.Linux_Arm64);
+      Says_What_Needs_None (Landin.Targets.Darwin_Arm64);
+      Says_What_Needs_None (Landin.Targets.Cortex_M);
    end Linux_Names_Every_Distribution_Driver;
 
    procedure A_Stock_Driver_Links (Item : in out Landin.Testing.Context);

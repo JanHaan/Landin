@@ -1,0 +1,10 @@
+error[L0340]: this makes `context` a slice, but it is already `usize`
+  --> ../tests/fixtures/negative/core-sort-context-mismatch/main.ldn:21:39
+   |
+21 |     sort.sort_by(names[0..<2], count, before)
+   |                                       ^^^^^^
+  --> ../tests/fixtures/negative/core-sort-context-mismatch/main.ldn:21:32
+   |
+21 |     sort.sort_by(names[0..<2], count, before)
+   |                                ^^^^^ this decided it first
+  = note: D138: every argument that decides `context` must decide the same

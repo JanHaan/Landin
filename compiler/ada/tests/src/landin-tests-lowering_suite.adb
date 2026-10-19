@@ -7977,6 +7977,142 @@ package body Landin.Tests.Lowering_Suite is
       Wrote := Status = Landin.Platform.Write_Ok;
    end Record_Artefact;
 
+   --  Which fixtures' sections of two renderings of the corpus differ,
+   --  one line each: "changed", "not recorded" for a fixture only the
+   --  lowering produces now, "no longer lowered" for one only the record
+   --  has, and the header when that is what moved.  A stale corpus once
+   --  failed with one sentence for every fixture together, and finding the
+   --  one that moved took re-recording a copy of the tree and diffing it.
+   function Corpus_Differences (Recorded, Current : String) return String;
+
+   function Corpus_Differences (Recorded, Current : String) return String
+   is
+      package Unbounded renames Ada.Strings.Unbounded;
+
+      Marker : constant String := "file ";
+
+      --  The section that begins at a line `file NAME`, through the line
+      --  before the next one; the header is the section named "".
+      type Section is record
+         Name  : Unbounded.Unbounded_String;
+         First : Positive := 1;
+         Last  : Natural := 0;
+      end record;
+
+      package Section_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Section);
+
+      function Sections (Text : String) return Section_Vectors.Vector;
+
+      function Sections (Text : String) return Section_Vectors.Vector is
+         Result : Section_Vectors.Vector;
+         Start  : Positive := Text'First;
+         Line   : Positive := Text'First;
+         Ends   : Natural;
+         Name   : Unbounded.Unbounded_String;
+      begin
+         while Line <= Text'Last loop
+            Ends := Ada.Strings.Fixed.Index
+              (Text (Line .. Text'Last), [1 => LF]);
+            if Ends = 0 then
+               Ends := Text'Last + 1;
+            end if;
+            if Ends - Line > Marker'Length
+              and then Text (Line .. Line + Marker'Length - 1) = Marker
+            then
+               if Line > Start or else Unbounded.Length (Name) > 0 then
+                  Result.Append (Section'(Name, Start, Line - 1));
+               end if;
+               Name := Unbounded.To_Unbounded_String
+                 (Text (Line + Marker'Length .. Ends - 1));
+               Start := Line;
+            end if;
+            Line := Ends + 1;
+         end loop;
+         if Text'Length > 0 then
+            Result.Append (Section'(Name, Start, Text'Last));
+         end if;
+         return Result;
+      end Sections;
+
+      Old_Parts : constant Section_Vectors.Vector := Sections (Recorded);
+      New_Parts : constant Section_Vectors.Vector := Sections (Current);
+      Out_Text  : Unbounded.Unbounded_String;
+
+      procedure Say (Name : Unbounded.Unbounded_String; What : String);
+
+      procedure Say (Name : Unbounded.Unbounded_String; What : String) is
+      begin
+         Unbounded.Append
+           (Out_Text,
+            "  " & (if Unbounded.Length (Name) = 0 then "the header"
+                    else Unbounded.To_String (Name))
+            & ": " & What & LF);
+      end Say;
+
+      use type Unbounded.Unbounded_String;
+   begin
+      for Now of New_Parts loop
+         declare
+            Was : Natural := 0;
+         begin
+            for Index in 1 .. Natural (Old_Parts.Length) loop
+               if Old_Parts (Index).Name = Now.Name then
+                  Was := Index;
+               end if;
+            end loop;
+            if Was = 0 then
+               Say (Now.Name, "not recorded");
+            elsif Recorded (Old_Parts (Was).First .. Old_Parts (Was).Last)
+              /= Current (Now.First .. Now.Last)
+            then
+               Say (Now.Name, "changed");
+            end if;
+         end;
+      end loop;
+      for Was of Old_Parts loop
+         if not (for some Now of New_Parts => Now.Name = Was.Name) then
+            Say (Was.Name, "no longer lowered");
+         end if;
+      end loop;
+      if Unbounded.Length (Out_Text) = 0 and then Recorded /= Current then
+         Unbounded.Append (Out_Text, "  the order of the fixtures" & LF);
+      end if;
+      return Unbounded.To_String (Out_Text);
+   end Corpus_Differences;
+
+   procedure A_Stale_Corpus_Names_Its_Fixtures
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Stale_Corpus_Names_Its_Fixtures
+     (Item : in out Landin.Testing.Context)
+   is
+      Header : constant String := "# header" & LF;
+      A      : constant String := "file positive/a/main.ldn" & LF & "x" & LF;
+      B      : constant String := "file positive/b/main.ldn" & LF & "y" & LF;
+      B2     : constant String := "file positive/b/main.ldn" & LF & "z" & LF;
+      C      : constant String := "file positive/c/main.ldn" & LF & "w" & LF;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Corpus_Differences (Header & A & B, Header & A & B), "",
+         "an unchanged corpus names nothing");
+      Landin.Testing.Check_Equal
+        (Item, Corpus_Differences (Header & A & B, Header & A & B2),
+         "  positive/b/main.ldn: changed" & LF,
+         "a changed fixture is named, and only it");
+      Landin.Testing.Check_Equal
+        (Item, Corpus_Differences (Header & A & B, Header & B & C),
+         "  positive/c/main.ldn: not recorded" & LF
+         & "  positive/a/main.ldn: no longer lowered" & LF,
+         "an added and a removed fixture are each named");
+      Landin.Testing.Check_Equal
+        (Item, Corpus_Differences (Header & A, "# other" & LF & A),
+         "  the header: changed" & LF, "a changed header is named");
+      Landin.Testing.Check_Equal
+        (Item, Corpus_Differences (Header & A & B, Header & B & A),
+         "  the order of the fixtures" & LF, "a reordering is named");
+   end A_Stale_Corpus_Names_Its_Fixtures;
+
    procedure The_Recorded_Corpus_Is_Current
      (Item : in out Landin.Testing.Context);
 
@@ -8021,11 +8157,20 @@ package body Landin.Tests.Lowering_Suite is
          Ada.Strings.Fixed.Index
            (Unbounded.To_String (Recorded), Alias_Marker) > 0,
          "the recorded IR contains the rooted r440-c-aliases fixture");
-      Landin.Testing.Check
-        (Item,
-         Unbounded.To_String (Recorded) = Unbounded.To_String (Built.Text),
-         "the recorded IR is what the lowering produces now"
-         & " (regenerate with ./scripts/test.sh --record)");
+      declare
+         Moved : constant String :=
+           Corpus_Differences
+             (Unbounded.To_String (Recorded),
+              Unbounded.To_String (Built.Text));
+      begin
+         Landin.Testing.Check
+           (Item,
+            Unbounded.To_String (Recorded) = Unbounded.To_String (Built.Text),
+            "the recorded IR is what the lowering produces now; it differs"
+            & " for" & LF & Moved
+            & "  regenerate it with ./scripts/test.sh --record=lowering and"
+            & " read the difference");
+      end;
    end The_Recorded_Corpus_Is_Current;
 
    --  D64 commits labelled scalar fields in source order, then writes the
@@ -14275,6 +14420,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a stale corpus names its fixtures",
+         A_Stale_Corpus_Names_Its_Fixtures'Access);
       Landin.Testing.Register
         (Into, "lowering", "equal-width targets keep neutral IR",
          Equal_Width_Targets_Keep_Neutral_IR'Access);

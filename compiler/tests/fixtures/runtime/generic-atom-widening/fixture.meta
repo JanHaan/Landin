@@ -4,4 +4,4 @@ summary: an atom literal, an atom of a smaller set and a value of the whole set 
 program: main.ldn
 status: 42
 constructs: 0640, 1290, 1920
-targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

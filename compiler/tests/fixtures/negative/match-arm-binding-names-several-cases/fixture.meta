@@ -1,0 +1,9 @@
+class: negative
+summary: D405 an arm that binds a payload names one case, and the refusal names the split
+program: program.ldn
+codes: L0103
+constructs: 1210, 1220
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/match-arm-binding-names-several-cases/program.ldn
+status: 1

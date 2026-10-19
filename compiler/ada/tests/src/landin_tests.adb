@@ -73,6 +73,8 @@ procedure Landin_Tests is
    Suite_Filter : Unbounded.Unbounded_String;
    Case_Filter  : Unbounded.Unbounded_String;
    Fixture      : Unbounded.Unbounded_String;
+   --  What --record=WHAT names, or empty for every recorded artefact.
+   Recording    : Unbounded.Unbounded_String;
    Of_Shard     : Landin.Testing.Shard := Landin.Testing.Whole;
 
    --  Every suite resolves the repository's trees relative to compiler/ada
@@ -154,6 +156,10 @@ procedure Landin_Tests is
         (Text_IO.Standard_Error,
          "usage: landin_tests [--record | --suite=NAME |"
          & " --case=SUITE/NAME | --fixture=CLASS/NAME]");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       landin_tests --record=lowering | --record=layout |"
+         & " --record=server/NAME | --record=CLASS/NAME");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       landin_tests --host [--suite=NAME | --case=SUITE/NAME]");
@@ -288,6 +294,12 @@ procedure Landin_Tests is
       begin
          if Argument = "--record" then
             Mode := Record_Artefacts;
+         elsif Starts_With (Argument, "--record=")
+           and then Argument'Length > 9
+         then
+            Mode := Record_Artefacts;
+            Recording := Unbounded.To_Unbounded_String
+              (Argument (Argument'First + 9 .. Argument'Last));
          elsif Argument = "--host" then
             Mode := Run_Host;
          elsif Starts_With (Argument, "--suite=")
@@ -351,47 +363,79 @@ begin
    --  by an argument a human typed: no environment variable, and nothing
    --  that rewrites a golden because it did not match.
    if Mode = Record_Artefacts then
+      if not Ada.Directories.Exists (Marker) then
+         Text_IO.Put_Line
+           (Text_IO.Standard_Error,
+            "landin_tests --record must be run from compiler/ada");
+         Ada.Command_Line.Set_Exit_Status (2);
+         return;
+      end if;
+
       declare
-         Path  : constant String := "../tests/lowering.ir";
-         Wrote : Boolean;
+         What  : constant String := Unbounded.To_String (Recording);
+         Wrote : Boolean := True;
+
+         procedure Wrote_Or_Not (Done : Boolean; Name : String);
+
+         procedure Wrote_Or_Not (Done : Boolean; Name : String) is
+         begin
+            if Done then
+               Text_IO.Put_Line ("wrote " & Name);
+            else
+               Text_IO.Put_Line
+                 (Text_IO.Standard_Error, "could not write " & Name);
+               Wrote := False;
+            end if;
+         end Wrote_Or_Not;
       begin
-         if not Ada.Directories.Exists (Marker) then
-            Text_IO.Put_Line
-              (Text_IO.Standard_Error,
-               "landin_tests --record must be run from compiler/ada");
-            Ada.Command_Line.Set_Exit_Status (2);
-            return;
+         --  Each artefact on its own, so re-recording one never rewrites
+         --  the others; with nothing named, all three as before.
+         if What = "" or else What = "lowering" then
+            Landin.Tests.Lowering_Suite.Record_Artefact
+              ("../tests/lowering.ir", Wrote);
+            Wrote_Or_Not (Wrote, "compiler/tests/lowering.ir");
          end if;
-
-         Landin.Tests.Lowering_Suite.Record_Artefact (Path, Wrote);
-
-         if Wrote then
-            Text_IO.Put_Line ("wrote compiler/tests/lowering.ir");
-
+         if Wrote and then (What = "" or else What = "layout") then
             Landin.Tests.Targets_Suite.Record_Artefact
               ("../tests/layout.targets", Wrote);
-
-            if Wrote then
-               Text_IO.Put_Line ("wrote compiler/tests/layout.targets");
-
-               Landin.Tests.Server_Suite.Record_Sessions (Wrote);
-               if Wrote then
-                  Text_IO.Put_Line ("wrote compiler/tests/server");
+            Wrote_Or_Not (Wrote, "compiler/tests/layout.targets");
+         end if;
+         if Wrote and then What = "" then
+            Landin.Tests.Server_Suite.Record_Sessions (Wrote);
+            Wrote_Or_Not (Wrote, "compiler/tests/server");
+         elsif Starts_With (What, "server/") then
+            declare
+               Name  : constant String := What (What'First + 7 .. What'Last);
+               Found : Boolean;
+            begin
+               Landin.Tests.Server_Suite.Record_Session (Name, Found, Wrote);
+               if Found then
+                  Wrote_Or_Not
+                    (Wrote, "compiler/tests/server/" & Name & "/session.lsp");
                else
                   Text_IO.Put_Line
                     (Text_IO.Standard_Error,
-                     "could not write ../tests/server");
-                  Ada.Command_Line.Set_Exit_Status (1);
+                     "landin_tests: no session compiler/tests/server/" & Name
+                     & "/session.lsp to record");
+                  Wrote := False;
                end if;
-            else
-               Text_IO.Put_Line
-                 (Text_IO.Standard_Error,
-                  "could not write ../tests/layout.targets");
-               Ada.Command_Line.Set_Exit_Status (1);
-            end if;
-         else
-            Text_IO.Put_Line
-              (Text_IO.Standard_Error, "could not write " & Path);
+            end;
+         elsif What /= "" and then What /= "lowering" and then What /= "layout"
+         then
+            declare
+               Said : Unbounded.Unbounded_String;
+            begin
+               Landin.Tests.Fixture_Execution_Suite.Record_Report
+                 (What, Wrote, Said);
+               if Wrote then
+                  Text_IO.Put_Line (Unbounded.To_String (Said));
+               else
+                  Text_IO.Put_Line
+                    (Text_IO.Standard_Error, Unbounded.To_String (Said));
+               end if;
+            end;
+         end if;
+         if not Wrote then
             Ada.Command_Line.Set_Exit_Status (1);
          end if;
       end;
@@ -472,13 +516,15 @@ begin
          Landin.Testing.Run
            (Cases, Of_Shard, Transcript, Result,
             Record_Timings =>
-              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"));
+              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
+            Progress       => Landin.Testing.Write_Progress'Access);
       when Run_Suite =>
          Landin.Testing.Run
            (Cases, Unbounded.To_String (Suite_Filter), "",
             Transcript, Result,
             Record_Timings =>
-              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"));
+              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
+            Progress       => Landin.Testing.Write_Progress'Access);
       when Run_Case =>
          Landin.Testing.Run
            (Cases,
@@ -486,7 +532,8 @@ begin
             Unbounded.To_String (Case_Filter),
             Transcript, Result,
             Record_Timings =>
-              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"));
+              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
+            Progress       => Landin.Testing.Write_Progress'Access);
       when Run_Fixture =>
          Landin.Testing.Run
            (Cases, "fixture execution", "selected fixture executes",

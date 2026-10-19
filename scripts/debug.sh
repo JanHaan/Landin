@@ -1,7 +1,15 @@
 #!/bin/sh
 # Exercise an already-built compiler; never race a build or hide a non-run.
 . "$(dirname -- "$0")/env.sh"
-landin_build_lock mode "$@"
+# Help reads nothing of the build, so it does not wait for its lock.
+for Argument do
+    case "$Argument" in
+        -h | --help) Help=yes ;;
+    esac
+done
+if [ -z "${Help:-}" ]; then
+    landin_build_lock mode "$@"
+fi
 # Target selection is explicit; native checks never fall back to a transport.
 if [ "${1:-}" = "--target=darwin-arm64" ]; then
     shift
@@ -11,7 +19,24 @@ if [ "${1:-}" = "--target=darwin-arm64" ]; then
         --refine "$LANDIN_BUILD_DIR/bin/refine" "$@"
 fi
 
-: "${LANDIN_GNAT_HOME:?set LANDIN_GNAT_HOME to the pinned Linux installation}"
+#  The pinned installation: LANDIN_GNAT_HOME when it is set, as env.sh
+#  reads it, and otherwise the one whose gnat is on PATH, which is how
+#  `nix develop` and an installation added to PATH both provide it.
+if [ -z "${LANDIN_GNAT_HOME:-}" ]; then
+    if Gnat="$(command -v gnat)"; then
+        LANDIN_GNAT_HOME="$(CDPATH='' cd -- "$(dirname -- "$Gnat")/.." && pwd)"
+    else
+        echo "landin: debug.sh needs the pinned Linux GNAT installation:" >&2
+        echo "landin: no gnat is on PATH and LANDIN_GNAT_HOME is unset" >&2
+        echo "landin: run inside nix develop, or set LANDIN_GNAT_HOME" >&2
+        exit 127
+    fi
+fi
+if [ ! -x "$LANDIN_GNAT_HOME/bin/gnat" ]; then
+    echo "landin: LANDIN_GNAT_HOME is '$LANDIN_GNAT_HOME', which has no bin/gnat;" >&2
+    echo "landin: name the pinned Linux GNAT installation" >&2
+    exit 2
+fi
 landin_require python3
 
 if [ -n "${LANDIN_GDB:-}" ]; then

@@ -361,6 +361,46 @@
             ++ map crossLane crossLanes
           );
 
+          #  The structural editor grammar's CLI: the release binary
+          #  tree-sitter publishes for the pinned version, checked against
+          #  the sha256 environments/pins.sh holds for this system -- the
+          #  binary the gate's editor-grammar job runs, not nixpkgs'
+          #  tree-sitter at whatever version the lock carries.  Its Linux
+          #  build is linked for a glibc system, so its interpreter is
+          #  patched to the store as the toolchain archives' are.
+          treeSitterVersion = pin "LANDIN_TREE_SITTER_VERSION";
+          treeSitterAsset =
+            {
+              x86_64-linux = "linux-x64";
+              aarch64-linux = "linux-arm64";
+              aarch64-darwin = "macos-arm64";
+            }
+            .${system};
+          treeSitter = pkgs.stdenvNoCC.mkDerivation {
+            pname = "landin-tree-sitter";
+            version = treeSitterVersion;
+            src = pkgs.fetchurl {
+              url =
+                "https://github.com/tree-sitter/tree-sitter/releases/download/"
+                + "v${treeSitterVersion}/tree-sitter-${treeSitterAsset}.gz";
+              sha256 = pin "LANDIN_TREE_SITTER_SHA256_${suffix}";
+            };
+            dontUnpack = true;
+            nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              pkgs.autoPatchelfHook
+            ];
+            buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              (lib.getLib pkgs.stdenv.cc.cc)
+            ];
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out/bin"
+              gunzip -c "$src" > "$out/bin/tree-sitter"
+              chmod 755 "$out/bin/tree-sitter"
+              runHook postInstall
+            '';
+          };
+
         in
         {
           #  The published compiler, fetched rather than built.
@@ -464,6 +504,7 @@
               gnat
               gprbuild
               pkgs.makeWrapper
+              pkgs.python3 #  scripts/build_identity.py
             ];
 
             dontConfigure = true;
@@ -471,8 +512,13 @@
             #  The project puts its objects under build/$TAG/$MODE, and the
             #  tag is 'nix' here for the same reason the shell sets it: so
             #  these objects cannot be confused with another host's.
+            #  The library project compiles the build identity the scripts
+            #  generate, so it is generated here as build.sh does; with no
+            #  repository in the source, it names the source digest.
             buildPhase = ''
               runHook preBuild
+              python3 scripts/build_identity.py --root . --mode release \
+                --output compiler/ada/build/nix/release/generated/landin-build_identity.ads
               cd compiler/ada
               LANDIN_BUILD_TAG=nix LANDIN_BUILD_MODE=release \
                 gprbuild -p -P refine.gpr -j''${NIX_BUILD_CORES:-1}
@@ -518,6 +564,14 @@
               gnat
               gprbuild
               pkgs.python3 #  check.py and docs/site/render_html.py
+              #  The structural editor grammar's corpus, highlight/test.sh
+              #  --integration, at the gate's pinned version.
+              treeSitter
+              #  stdenv's bash is built without readline, so it has no
+              #  `compgen` or `complete` and a completion script run through
+              #  `bash` fails here as it does on no contributor's system.
+              #  This one comes first on PATH.
+              pkgs.bashInteractive
             ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               #  The external C header frontend.  Selecting the LLVM 19
               #  package set matches Debian stable's versioned clang-19 rather
@@ -551,8 +605,11 @@
               export LANDIN_GNAT_HOME="${gnat}"
               export LANDIN_GPRBUILD_HOME="${gprbuild}"
               export LANDIN_BUILD_TAG=nix-${system}
-              echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix-${system}'"
-              echo "landin: ./scripts/toolchain.sh prints what is actually on PATH"
+              #  On standard error: `nix develop -c cmd > file` runs this hook
+              #  too, and the banner written to standard output went into the
+              #  file -- a source rewritten that way was silently corrupted.
+              echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix-${system}'" >&2
+              echo "landin: ./scripts/toolchain.sh prints what is actually on PATH" >&2
             '';
           };
         }

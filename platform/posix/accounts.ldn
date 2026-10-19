@@ -62,7 +62,7 @@ public group_entry: type = struct
 end group_entry
 
 --- The process's real user ID, POSIX's `getuid`: who started it.
-public link(symbol: "_landin_posix_real_user") real_user:
+public real_user:
     () -> (user: user_id) =
     user = user_value(system_real_user())
 end real_user
@@ -70,19 +70,19 @@ end real_user
 --- The process's effective user ID, POSIX's `geteuid`, which the system
 --- checks permissions against: zero, `root`, may read and write any file
 --- whatever its permission bits say.
-public link(symbol: "_landin_posix_effective_user") effective_user:
+public effective_user:
     () -> (user: user_id) =
     user = user_value(system_effective_user())
 end effective_user
 
 --- The process's real group ID, POSIX's `getgid`.
-public link(symbol: "_landin_posix_real_group") real_group:
+public real_group:
     () -> (group: group_id) =
     group = group_value(system_real_group())
 end real_group
 
 --- The process's effective group ID, POSIX's `getegid`.
-public link(symbol: "_landin_posix_effective_group") effective_group:
+public effective_group:
     () -> (group: group_id) =
     group = group_value(system_effective_group())
 end effective_group
@@ -127,7 +127,7 @@ end identity_of
 --- ID that is not a decimal below `0xFFFFFFFF` is `malformed_entry`.  A
 --- comment, an empty line and an NIS line beginning `+` or `-`, which a
 --- lookup skips, are no accounts either.
-public link(symbol: "_landin_posix_parse_account") parse_account:
+public parse_account:
     (line: []u8) -> (found: account from line) ! malformed_entry =
     mut at: [7]field = [7 of (start: 0, stop: 0)]
     try fields_of(line, 7, at)
@@ -146,7 +146,7 @@ end parse_account
 --- Read one line of /etc/group's form, without its newline, as a group
 --- lent from `line`: four fields, `name`, `password`, `group` and the
 --- members separated by commas, as `parse_account` reads an account.
-public link(symbol: "_landin_posix_parse_group") parse_group:
+public parse_group:
     (line: []u8) -> (found: group_entry from line) ! malformed_entry =
     mut at: [7]field = [7 of (start: 0, stop: 0)]
     try fields_of(line, 4, at)
@@ -161,7 +161,7 @@ end parse_group
 
 --- How many members `entry` names: the names between its commas, an
 --- empty one, as `,,` or a trailing comma leaves, not among them.
-public link(symbol: "_landin_posix_member_count") member_count:
+public member_count:
     (entry: group_entry) -> (count: usize) =
     names: []u8 = text.host_bytes(entry.members)
     count = 0
@@ -176,7 +176,7 @@ end member_count
 
 --- The member `index` of `entry`, from zero, as `member_count` counts
 --- them, lent as the group is; an index at or past the count traps.
-public link(symbol: "_landin_posix_member") member:
+public member:
     (entry: group_entry, index: usize)
     -> (name: text.host_string from entry) =
     names: []u8 = text.host_bytes(entry.members)
@@ -204,7 +204,7 @@ end member
 --- every database the system is set to; a static Linux program reads
 --- /etc/passwd, the first entry with that ID, skipping every line that is
 --- not one.  A kilobyte holds an ordinary account.
-public link(symbol: "_landin_posix_account_with_id") account_with_id:
+public account_with_id:
     (user: user_id, buffer: []mut u8)
     -> (found: account from buffer) ! errno | no_account =
     found = try system_account(buffer, true, u32(user), no_name[0..<0])
@@ -212,7 +212,7 @@ end account_with_id
 
 --- The account named `name`, read into `buffer`, as `account_with_id`
 --- finds one by its ID; a name holding a NUL or a colon names none.
-public link(symbol: "_landin_posix_account_named") account_named:
+public account_named:
     (name: text.host_string, buffer: []mut u8)
     -> (found: account from buffer) ! errno | no_account =
     found = try system_account(buffer, false, 0, text.host_bytes(name))
@@ -222,7 +222,7 @@ end account_named
 --- it, as `account_with_id` finds an account, from /etc/group on a static
 --- Linux program.  Its members' names are separated by commas whatever
 --- database gave them.
-public link(symbol: "_landin_posix_group_with_id") group_with_id:
+public group_with_id:
     (group: group_id, buffer: []mut u8)
     -> (found: group_entry from buffer) ! errno | no_account =
     found = try system_group(buffer, true, u32(group), no_name[0..<0])
@@ -230,7 +230,7 @@ end group_with_id
 
 --- The group named `name`, read into `buffer`, as `group_with_id` finds
 --- one by its ID.
-public link(symbol: "_landin_posix_group_named") group_named:
+public group_named:
     (name: text.host_string, buffer: []mut u8)
     -> (found: group_entry from buffer) ! errno | no_account =
     found = try system_group(buffer, false, 0, text.host_bytes(name))

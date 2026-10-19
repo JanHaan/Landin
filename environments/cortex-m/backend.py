@@ -158,8 +158,25 @@ def load_extents(path):
     return {'FLASH': flash, 'RAM': ram}
 
 
+def routine_sizes(listing):
+    """Each routine's bytes, largest first, from `nm -S --defined-only`.
+
+    A routine is a sized symbol in a code section, `T` or `t`; Thumb
+    addresses and the vector table's words are not routines and have no
+    size there.  Equal sizes keep the order of their names.
+    """
+    sizes = {}
+    for line in listing.splitlines():
+        parts = line.split()
+        if len(parts) == 4 and parts[2] in ('T', 't'):
+            sizes[parts[3]] = int(parts[1], 16)
+    return dict(sorted(sizes.items(), key=lambda item: (-item[1], item[0])))
+
+
 def image_sizes(run, elf, name='sections'):
-    """Each region's use against its limit, and each allocated section's size."""
+    """Each region's use against its limit, each allocated section's size
+    and each routine's, so where an image's bytes go is read from the
+    corpus rather than from hand-run tools, overflowing or not."""
     listing = run.command(name, [run.bin / 'arm-none-eabi-size', '-A', elf])
     sections = {}
     for line in listing.splitlines():
@@ -167,10 +184,20 @@ def image_sizes(run, elf, name='sections'):
         if len(parts) == 3 and parts[0].startswith('.') and parts[1].isdigit():
             if parts[0] in ('.isr_vector', '.text', '.data', '.bss') and int(parts[1]):
                 sections[parts[0]] = int(parts[1])
+    routines = routine_sizes(run.command(
+        name + '-routines', [run.bin / 'arm-none-eabi-nm', '-S', '--defined-only', elf]))
     used = load_extents(elf)
     return {'regions': {region: {'used': used[region], 'limit': limit}
                         for region, limit in REGIONS.items()},
-            'sections': sections}
+            'sections': sections, 'routines': routines}
+
+
+def describe_routines(sizes, count=3):
+    """The largest routines of an image, for a corpus line; "" without any."""
+    routines = list(sizes.get('routines', {}).items())[:count]
+    if not routines:
+        return ''
+    return 'largest routines ' + ', '.join('%s %d' % item for item in routines)
 
 
 def describe_sizes(sizes):

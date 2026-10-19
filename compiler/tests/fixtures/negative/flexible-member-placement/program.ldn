@@ -1,0 +1,20 @@
+entry: type = layout(c) struct
+    length: u16
+    name: [0]u8
+end entry
+
+early: type = layout(c) struct
+    name: [0]u8
+    length: u16
+end early
+
+holder: type = layout(c) struct
+    first: entry
+    count: u32
+end holder
+
+mut table: [4]entry = zeroed
+
+use: () -> none =
+    local: [2]entry = zeroed
+end use

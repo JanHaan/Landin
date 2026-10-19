@@ -1,7 +1,7 @@
 class: negative
 summary: a counted wrapper requires writable caller-owned state for its injector
 expect: expected.txt
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 args: --root=../.. ../tests/fixtures/negative/core-fault-needs-mutable-inner
 codes: L0303
 status: 1

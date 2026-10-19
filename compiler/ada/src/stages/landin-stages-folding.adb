@@ -755,6 +755,24 @@ package body Landin.Stages.Folding is
                end if;
             end;
 
+         when Syn.Offset_Of =>
+            --  D411: a field's byte offset in the checked target layout.
+            declare
+               Offset : Landin.Targets.Byte_Count;
+               Sure : Boolean;
+            begin
+               if Offset_Facts (Of_Tree, Node) then
+                  Landin.Checking.Offset_Value
+                    (Types.all, Of_Tree, Node, Offset, Sure);
+               else
+                  Sure := False;
+               end if;
+               if Sure then
+                  Value := Ty.Folded (Offset);
+                  Known := True;
+               end if;
+            end;
+
          when Syn.Len_Of =>
             --  [0370]: an element count is target-neutral: D14 takes it
             --  from a named array's type, D31 from a literal's source run.

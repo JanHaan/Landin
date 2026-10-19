@@ -16,8 +16,12 @@ package body Landin.Targets.Layouts is
       begin
          for Position of Into.Order loop
             declare
+               --  D410: a byte-packed C record places every field at
+               --  alignment one, so it has no padding and alignment one.
                Field : constant Field_Extent :=
-                 Fields (Fields'First + Position - 1);
+                 (if Policy = Landin.Layouts.C_Packed
+                  then (Fields (Fields'First + Position - 1).Size, 1)
+                  else Fields (Fields'First + Position - 1));
             begin
                if not Can_Place
                  (Layout, Field.Size, Field.Alignment, Byte_Count'Last)

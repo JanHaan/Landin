@@ -1074,8 +1074,12 @@ package body Landin.Stages.Resolution is
                        Landin.Resolution.Open_Scope
                          (Meanings.all, Landin.Resolution.Block, Inside);
                   begin
-                     Resolve
-                       (Of_Tree, Syn.Match_Pattern (Of_Tree, This), Inside);
+                     for Label in 1 .. Syn.Match_Label_Count (Of_Tree, This)
+                     loop
+                        Resolve
+                          (Of_Tree, Syn.Nth_Match_Label (Of_Tree, This, Label),
+                           Inside);
+                     end loop;
                      Landin.Resolution.Record_Scope
                        (Meanings.all, Of_Tree, Runs, Arm_Scope);
 
@@ -2242,6 +2246,45 @@ package body Landin.Stages.Resolution is
                 (Resolve_Declaration);
          begin
             Walk (Activity.all, Of_Tree.all);
+         end;
+      end loop;
+
+      --  D412: a compiler assertion that measures a declared type names it
+      --  in the file's scope; nothing else in a directive is a name here.
+      for Index in 1 .. Landin.Configuration.Deferred_Count (Activity.all)
+      loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Trees.all,
+                 Landin.Configuration.Deferred_Source (Activity.all, Index));
+
+            procedure Measured (Node : Syn.Node_Id);
+
+            procedure Measured (Node : Syn.Node_Id) is
+            begin
+               if Node = Syn.No_Node then
+                  return;
+               elsif Syn.Kind (Of_Tree.all, Node)
+                 in Syn.Size_Of | Syn.Align_Of
+               then
+                  Resolve
+                    (Of_Tree.all, Syn.Measured_Type (Of_Tree.all, Node),
+                     File_Base (Of_Tree.all));
+               elsif Syn.Kind (Of_Tree.all, Node) = Syn.Offset_Of then
+                  Resolve
+                    (Of_Tree.all, Syn.Offset_Path (Of_Tree.all, Node),
+                     File_Base (Of_Tree.all));
+               else
+                  for Position in 1 .. Syn.Slot_Count (Of_Tree.all, Node)
+                  loop
+                     Measured (Syn.Slot (Of_Tree.all, Node, Position));
+                  end loop;
+               end if;
+            end Measured;
+         begin
+            Measured
+              (Landin.Configuration.Deferred_Node (Activity.all, Index));
          end;
       end loop;
 

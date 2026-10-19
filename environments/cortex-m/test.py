@@ -134,9 +134,9 @@ class ProbeFailures(unittest.TestCase):
             'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
             'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
             {'library-shared-'+name for name in
-             ('arena', 'cmp', 'diag', 'fault', 'io', 'map', 'mem', 'net',
-              'panic', 'pool', 'random', 'region', 'sort', 'spill', 'text',
-              'time', 'tree', 'vec')})
+             ('arena', 'cmp', 'diag', 'failure', 'fault', 'io', 'map', 'mem',
+              'net', 'panic', 'pool', 'random', 'region', 'sort', 'spill',
+              'text', 'time', 'tree', 'vec')})
 
     def test_shared_library_inventory_requires_each_small_consumer(self):
         from freestanding import MODULES, ROOT
@@ -247,7 +247,8 @@ class ProbeFailures(unittest.TestCase):
                 (run.out / 'image.json').write_text(json.dumps({
                     'regions': {'FLASH': {'used': 400, 'limit': 32768},
                                 'RAM': {'used': 0, 'limit': 12288}},
-                    'sections': {'.isr_vector': 192, '.text': 208}}))
+                    'sections': {'.isr_vector': 192, '.text': 208},
+                    'routines': {'main': 120}}))
                 return root / 'program.elf'
             with (patch('backend.build', side_effect=build),
                   patch('backend.execute'),
@@ -333,6 +334,34 @@ class ProbeFailures(unittest.TestCase):
                             'verdict': 'executed', 'image': sizes})
         self.assertEqual(line, 'cortex corpus: runtime/x size/auto executed: '
                                + describe_sizes(sizes))
+
+    def test_the_corpus_gives_each_routine_size(self):
+        from backend import describe_routines, routine_sizes
+        from backend_corpus import corpus_line
+        listing = ('00000000 000000c0 T _landin_harness_vectors\n'
+                   '000000c1 00000010 t small\n'
+                   '000000d1 00000400 T parse_entry\n'
+                   '000004d1 00000020 T tie_b\n'
+                   '000004f1 00000020 T tie_a\n'
+                   '20000000 00000008 D buffer\n'
+                   '00000201 T unsized\n')
+        routines = routine_sizes(listing)
+        self.assertEqual(list(routines.items()),
+                         [('parse_entry', 1024), ('_landin_harness_vectors', 192),
+                          ('tie_a', 32), ('tie_b', 32), ('small', 16)])
+        sizes = {'regions': {'FLASH': {'used': 32800, 'limit': 32768},
+                             'RAM': {'used': 8, 'limit': 12288}},
+                 'sections': {'.text': 32608}, 'routines': routines}
+        self.assertEqual(describe_routines(sizes),
+                         'largest routines parse_entry 1024, _landin_harness_vectors 192,'
+                         ' tie_a 32')
+        #  An image that overflowed is measured by relinking, and its line
+        #  gives its routines as a fitting one's does.
+        line = corpus_line({'fixture': 'runtime/x', 'optimize': 'none', 'specialize': 'off',
+                            'verdict': 'selected-image-limit', 'image': sizes})
+        self.assertTrue(line.endswith('; largest routines parse_entry 1024,'
+                                      ' _landin_harness_vectors 192, tie_a 32'), line)
+        self.assertIn('over by 32', line)
 
     def test_a_limit_no_profile_meets_is_stale(self):
         from backend_corpus import stale_limits

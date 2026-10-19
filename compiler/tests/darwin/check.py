@@ -36,12 +36,20 @@ def hash_file(path):
 #  before its terminal instruction.  A fixture's `trap_report:` is that
 #  line exactly: the file is named relative to its module's root, so where
 #  the lane put the fixture cannot change it.
-TRAP_REPORT = re.compile(rb"^(?:.*: )?trap: (?:out_of_range|overflow|bad_conversion|unreachable)\n\Z")
-
-
 def reports_trap(output, line):
     wanted = line.encode()
     return wanted in output.split(b"\n")
+
+
+def merged(meta):
+    """Whether a program's two streams are read as one.
+
+    `merged` is the default, as compiler/tests/README.md says and the test
+    program, the FreeBSD and the RV64 lanes take it: only `stream: output`
+    separates them, and then standard error must be empty, a trap's report
+    included, exactly as there.
+    """
+    return meta.get("stream", "merged") == "merged"
 
 
 def outcome(meta, status, stdout, stderr, expected=None):
@@ -50,15 +58,12 @@ def outcome(meta, status, stdout, stderr, expected=None):
         if meta.get("trap_report"):
             require(reports_trap(stdout + stderr, meta["trap_report"]),
                     f"trap report missing: {meta['trap_report']!r} in {(stdout + stderr)[:400]!r}")
-        #  The report is the trap's, not the program's output.
-        if meta.get("stream") != "merged" and TRAP_REPORT.match(stderr):
-            stderr = b""
     else:
         require(status == int(meta["status"]), f"expected status {meta['status']}, got {status}")
     if expected is not None:
-        actual = stdout + stderr if meta.get("stream") == "merged" else stdout
+        actual = stdout + stderr if merged(meta) else stdout
         require(actual == expected, f"output mismatch: {actual[:400]!r}")
-    if meta.get("stream") != "merged":
+    if not merged(meta):
         require(not stderr, f"unexpected stderr: {stderr[:400]!r}")
 
 
@@ -229,12 +234,11 @@ def main(argv=None):
             base = ROOT / "compiler/tests/fixtures" / name
             meta = dict(line.split(": ", 1) for line in (base / "fixture.meta").read_text().splitlines()
                         if ": " in line and not line.startswith("#"))
-            meta.setdefault("stream", "merged")
             #  A fixture that does not name macOS arm64 is another lane's,
             #  as compiler/tests/README.md says of every target; one with a
             #  replacement or overlay below still names it or is replaced.
             if (args.parity and name not in differences
-                    and "macos-arm64" not in [t.strip() for t in
+                    and "darwin-arm64" not in [t.strip() for t in
                                               meta.get("targets", "").split(",")]):
                 continue
             if args.parity and name in differences:
@@ -335,7 +339,7 @@ def main(argv=None):
                 status, stdout, stderr = run.command([executable, *shared,
                                                       *shlex.split(meta.get("run_args", ""))],
                                                      label + "-execute", cwd, expected=None, timeout=30,
-                                                     merged=meta.get("stream") == "merged",
+                                                     merged=merged(meta),
                                                      stdin=standard_input(base, meta))
                 expected = ((base / meta["run_expect"]).read_bytes() if "run_expect" in meta
                             else meta["stdout"].encode() if "stdout" in meta else None)

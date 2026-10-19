@@ -1,0 +1,10 @@
+error[L0301]: this is `u32` and `i32` belongs here
+  --> ../tests/fixtures/negative/rooted-source-file-reaches-its-roots/program.ldn:4:14
+  |
+4 |     length = shapes.side()
+  |              ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/rooted-source-file-reaches-its-roots/program.ldn:4:5
+  |
+4 |     length = shapes.side()
+  |     ^^^^^^ the place written here
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

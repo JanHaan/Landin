@@ -222,7 +222,8 @@ package body Landin.Build_Reports is
                   when Landin.Layouts.Natural => "natural",
                   when Landin.Layouts.C => "c",
                   when Landin.Layouts.Optimal => "optimal",
-                  when Landin.Layouts.Packed => "packed");
+                  when Landin.Layouts.Packed => "packed",
+                  when Landin.Layouts.C_Packed => "c-packed");
          begin
             if Index > 1 then
                Put (",");

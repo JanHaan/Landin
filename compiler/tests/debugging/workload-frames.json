@@ -1,0 +1,112 @@
+{
+  "parser": {
+    "stops": {
+      "digits": [
+        "parse_digits",
+        "parse_digits",
+        "parse_entry",
+        "parse_and_append",
+        "parse_sequence"
+      ],
+      "recovery": [
+        "recover_to_boundary",
+        "parse_entry",
+        "parse_and_append",
+        "parse_sequence"
+      ],
+      "nested": [
+        "parse_sequence",
+        "parse_entry",
+        "parse_and_append",
+        "parse_sequence"
+      ],
+      "done": [
+        "main"
+      ]
+    },
+    "beneath": [
+      "parse_file",
+      "main"
+    ],
+    "declared": {
+      "parse_digits": "examples/config_parser/parser/parser.ldn",
+      "parse_entry": "examples/config_parser/parser/parser.ldn",
+      "parse_and_append": "examples/config_parser/parser/parser.ldn",
+      "parse_sequence": "examples/config_parser/parser/parser.ldn",
+      "recover_to_boundary": "examples/config_parser/parser/parser.ldn",
+      "main": "compiler/tests/fixtures/runtime/derived-parser/main.ldn",
+      "parse_file": "examples/config_parser/parser/parser.ldn"
+    }
+  },
+  "containers": {
+    "stops": {
+      "sorted": [
+        "numbers_path",
+        "containers_run",
+        "main"
+      ],
+      "done": [
+        "containers_run",
+        "main"
+      ],
+      "evidence": [
+        "evidence_less",
+        "containers_run",
+        "main"
+      ],
+      "signed": [
+        "less_i32",
+        "evidence_less",
+        "containers_run",
+        "main"
+      ],
+      "unsigned": [
+        "less_u32",
+        "evidence_less",
+        "containers_run",
+        "main"
+      ]
+    },
+    "declared": {
+      "numbers_path": "examples/derived_containers/workload/workload.ldn",
+      "containers_run": "examples/derived_containers/workload/workload.ldn",
+      "main": "compiler/tests/fixtures/runtime/derived-containers/main.ldn",
+      "evidence_less": "examples/derived_containers/workload/workload.ldn",
+      "less_i32": "core/cmp/cmp.ldn",
+      "less_u32": "core/cmp/cmp.ldn"
+    }
+  },
+  "hosted": {
+    "stops": {
+      "sample": [
+        "sample_keep",
+        "process",
+        "run_logged",
+        "run",
+        "main"
+      ],
+      "sample-updated": [
+        "sample_keep",
+        "process",
+        "run_logged",
+        "run",
+        "main"
+      ],
+      "text": [
+        "text_emit",
+        "process",
+        "run_logged",
+        "run",
+        "main"
+      ]
+    },
+    "declared": {
+      "sample_keep": "examples/derived_hosted/app/filter.ldn",
+      "process": "examples/derived_hosted/app/app.ldn",
+      "run_logged": "examples/derived_hosted/app/app.ldn",
+      "run": "examples/derived_hosted/app/app.ldn",
+      "main": "compiler/tests/fixtures/runtime/derived-hosted-memory/main.ldn",
+      "text_emit": "examples/derived_hosted/app/dest.ldn"
+    }
+  }
+}

@@ -21,7 +21,7 @@
 #  States: 191 executed, 5 compiled, 2 transferred, 4 advisory.
 #  8 rows name an open owner; 0 have target gaps.
 #
-#  id | in | evidence | linux-x86-64 | linux-arm64 | macos-arm64 | freebsd-x86-64 | freebsd-arm64 | linux-rv64 | cortex-m | refusals | state | targets | gaps | owner | title
+#  id | in | evidence | linux-x86-64 | linux-arm64 | darwin-arm64 | freebsd-x86-64 | freebsd-arm64 | linux-rv64 | cortex-m0 | refusals | state | targets | gaps | owner | title
 0010 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
 0020 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Block comment. Nests properly
 0030 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Doc comment. Attaches to the declaration that follows

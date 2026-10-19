@@ -159,8 +159,9 @@ public main: () -> (code: i32) =
         return
     end
     fixed_ok: bool = exercise(slab, a, b)
+    --  Every growth stays in its list's 1024-byte slot: two blocks in all.
     if heap_ok and arena_ok and fixed_ok and arena.used(bump) > 0
-      and pool.live(slab) == 0 and pool.allocations(slab) == 8
-      and pool.frees(slab) == 8 and pool.rejected_frees(slab) == 0
+      and pool.live(slab) == 0 and pool.allocations(slab) == 2
+      and pool.frees(slab) == 2 and pool.rejected_frees(slab) == 0
     then code = 42 end if
 end main

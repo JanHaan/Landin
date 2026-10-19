@@ -1,0 +1,20 @@
+error[L0311]: this atom is matched twice
+  --> ../tests/fixtures/negative/match-label-named-twice/program.ldn:17:23
+   |
+17 |         north, south, north: n = 1
+   |                       ^^^^^
+  --> ../tests/fixtures/negative/match-label-named-twice/program.ldn:17:9
+   |
+17 |         north, south, north: n = 1
+   |         ^^^^^ first matched here
+  = note: [0640]: an exhaustive match names each atom at most once
+error[L0311]: this variant case is matched twice
+  --> ../tests/fixtures/negative/match-label-named-twice/program.ldn:25:9
+   |
+25 |         dot: n = 1
+   |         ^^^
+  --> ../tests/fixtures/negative/match-label-named-twice/program.ldn:23:16
+   |
+23 |         point, dot: n = 0
+   |                ^^^ first matched here
+  = note: D77: an exhaustive match names each case exactly once

@@ -1,0 +1,5 @@
+class: positive
+summary: D410's layout(c, packed) records, D411's offsetof, D412's layout assertions and D413's flexible array member, declared, measured and asserted
+constructs: 0370, 0520, 0670, 0750, 1510, 1580
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

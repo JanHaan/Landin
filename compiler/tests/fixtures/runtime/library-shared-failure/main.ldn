@@ -1,0 +1,19 @@
+import core/cmp
+import core/failure
+import core/text
+
+exercise: () -> (ok: bool) =
+    ok = false
+    _ = text.parse_u8("256") else (problem)
+        ok = cmp.compare(failure.words(problem), "number out of range")
+             == cmp.equal
+        0
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    if exercise() then
+        code = 42
+    end if
+end main

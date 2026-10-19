@@ -34,8 +34,8 @@ def main():
     parser.add_argument('--workload', choices=linux.WORKLOADS, help='development only')
     args = parser.parse_args()
     assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'native arm64 Mac required'
-    output = args.output.resolve()
-    output.mkdir(parents=True, exist_ok=False)
+    import panic
+    output = panic.fresh(args.output)
     capture = Capture(output)
 
     def run(label, argv, expected=0):
@@ -70,7 +70,6 @@ def main():
         if args.workload:
             print('FILTERED derived debugger development passed')
             return
-    import panic
     panic_evidence = panic.measure(args.refine, output / 'panic',
         debugger=tools['lldb']['path'], profile=args.profile)
     for opt, spec in PROFILES:

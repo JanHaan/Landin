@@ -1,0 +1,7 @@
+entry: type = layout(c) struct
+    length: u16
+    name: [0]u8
+end entry
+
+extern(c) take: (record: entry) -> none
+extern(c) take_pointer: (record: ptr entry) -> none

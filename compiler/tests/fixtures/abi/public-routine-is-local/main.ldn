@@ -1,0 +1,19 @@
+--  A public routine is not an export (D415).  `visible_probe` is in the
+--  image, and the program reaches it through a function value so that no
+--  optimization removes it, but it is a local symbol: the C peer's weak
+--  reference to the same name finds no global definition.
+
+extern(c) peer_finds_probe: () -> (found: i32)
+
+public visible_probe: (value: i32) -> (result: i32) =
+    result = value + 2
+end visible_probe
+
+public main: () -> (code: i32) =
+    step: (value: i32) -> (result: i32) = visible_probe
+    code = 1
+    return when step(40) <> 42
+    code = 2
+    return when peer_finds_probe() <> 0
+    code = 42
+end main

@@ -2,7 +2,7 @@ class: end-to-end
 summary: --link is a usage error on a target with no hosted system
 program: main.ldn
 constructs: 1970, 1975
-targets: cortex-m
+targets: cortex-m0
 expect: expected.txt
 args: compile --target=cortex-m0 --link=libc --emit=asm ../tests/fixtures/end-to-end/link-needs-hosted-system/main.ldn
 status: 2

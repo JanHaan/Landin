@@ -4,4 +4,4 @@ summary: [1820] measures with `lenof` a field path, an element path, a slice of 
 program: main.ldn
 status: 42
 constructs: 0370, 0570, 1030, 1820
-targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

@@ -1,0 +1,9 @@
+class: negative
+summary: D411 measures a field of a declared struct through nested structs, and refuses a missing field, a scalar type, a packed image's bits, a path through an array and a variant part
+constructs: 0370, 0680, 0730, 0750
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0308, L0304, L0304, L0304, L0304
+expect: expected.txt
+args: ../tests/fixtures/negative/offsetof-refusals/program.ldn
+status: 1

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D413's flexible array member places a record's trailing bytes at offsetof, D411's measurement, which a program slices from the buffer the records were written into; D412's assertion holds the layout C gives it
+constructs: 0370, 0520, 0570, 0750, 1510, 1580
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

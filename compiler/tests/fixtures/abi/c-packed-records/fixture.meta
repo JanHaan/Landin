@@ -1,0 +1,8 @@
+class: abi
+profiles: standard
+summary: D410's layout(c, packed) records and D413's flexible array member agree with an independently compiled C peer's __attribute__((packed)) and flexible-member records in sizeof, _Alignof and offsetof, and each side reads what the other wrote at an odd address
+program: program.ldn
+c-sources: peer.c
+status: 42
+constructs: 0370, 0430, 0470, 0750, 1570, 1580
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

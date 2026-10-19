@@ -6,4 +6,4 @@ expect: expected.txt
 args: ../tests/fixtures/negative/line-leading-parenthesis-argument-is-not-declared-yet/program.ldn
 status: 1
 constructs: 1750, 1840
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

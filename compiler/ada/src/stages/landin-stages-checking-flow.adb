@@ -1922,7 +1922,8 @@ package body Landin.Stages.Checking.Flow is
          --  anonymous function likewise forms one static code address; its
          --  separately checked no-capture body reads nothing in this flow.
          if Syn.Kind (Of_Tree, Node)
-              in Syn.Size_Of | Syn.Align_Of | Syn.Anonymous_Function
+              in Syn.Size_Of | Syn.Align_Of | Syn.Offset_Of
+                 | Syn.Anonymous_Function
            or else Measures_Unevaluated (Of_Tree, Node)
          then
             return;
@@ -2085,6 +2086,7 @@ package body Landin.Stages.Checking.Flow is
          --  D31 includes calls inside an array literal measured by lenof.
          if Syn.Kind (Of_Tree, Root)
               in Syn.Anonymous_Function | Syn.Size_Of | Syn.Align_Of
+                 | Syn.Offset_Of
            or else Measures_Unevaluated (Of_Tree, Root)
          then
             return False;
@@ -2138,7 +2140,8 @@ package body Landin.Stages.Checking.Flow is
                  (Of_Tree, Syn.Value_Of (Of_Tree, Node), Result,
                   State, Edges, Whole_As, Discarded => True);
 
-            when Syn.Anonymous_Function | Syn.Size_Of | Syn.Align_Of =>
+            when Syn.Anonymous_Function | Syn.Size_Of | Syn.Align_Of
+               | Syn.Offset_Of =>
                Edges := Fallthrough_Edge;
 
             when Syn.Len_Of =>

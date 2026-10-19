@@ -1,0 +1,23 @@
+--  failure.words takes the library's atoms and no others: a failure that
+--  may be the program's own atom does not widen to its set, and a `_` arm
+--  leaves the set as it was, so the library's atoms are named one by one.
+import core/failure
+import core/io
+
+unconfigured: atom
+
+load: (configured: bool) -> none ! unconfigured | io.not_found =
+    fail unconfigured when not configured
+    fail io.not_found
+end load
+
+public main: () -> (code: i32) =
+    code = 1
+    load(false) else (problem)
+        phrase: []u8 = match problem
+            unconfigured: "not configured"
+            _: failure.words(problem)
+        end match
+        code = i32(lenof phrase)
+    end
+end main

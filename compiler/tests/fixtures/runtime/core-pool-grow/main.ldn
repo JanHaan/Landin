@@ -1,0 +1,61 @@
+--  mem.grow through a pool: a block grows within its own slot to any
+--  extent the slot holds, keeping its bytes, and is then freed with that
+--  extent; whatever the slot cannot hold, or a block that is not a live
+--  slot of the extent given, is refused with the pool unchanged.
+import core/mem
+import core/pool
+
+--  The first `count` bytes at `block` set to 1, 2, 3 and on.
+ramp: (block: ptr mut u8, count: usize) -> none =
+    for at in usize(0)..<count do
+        cell: ptr mut u8 = ptr(usize(block) + at)
+        cell.val = u8(at + 1)
+    end for
+end ramp
+
+holds_ramp: (block: ptr mut u8, count: usize) -> (yes: bool) =
+    yes = false
+    for at in usize(0)..<count do
+        cell: ptr u8 = ptr(usize(block) + at)
+        return when cell.val <> u8(at + 1)
+    end for
+    yes = true
+end holds_ramp
+
+grows_in_slot: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut backing: [64]u8 = zeroed
+    mut slots: [2]pool.slot = zeroed
+    mut space: pool.space = zeroed
+    slab := try pool.over(space, addr backing[0], 64, 16, 2, 1, slots[0..<2])
+    block := try mem.allocate(slab, usize(4), usize(1))
+    ramp(block, 4)
+    --  Any extent the slot holds is a growth in place.
+    return when not mem.grow(slab, block, usize(4), usize(12), usize(1))
+      or not holds_ramp(block, 4)
+    return when not mem.grow(slab, block, usize(12), usize(16), usize(1))
+    --  Past the slot, from an extent the block does not have, or for an
+    --  address inside the slot rather than at it: refused.
+    inside: ptr mut u8 = ptr(usize(block) + 1)
+    return when mem.grow(slab, block, usize(16), usize(17), usize(1))
+      or mem.grow(slab, block, usize(4), usize(8), usize(1))
+      or mem.grow(slab, inside, usize(16), usize(16), usize(1))
+    --  The second slot is free, so it does not grow either.
+    other: ptr mut u8 = ptr(usize(block) + 16)
+    return when mem.grow(slab, other, usize(0), usize(4), usize(1))
+      or pool.live(slab) <> 1 or pool.allocations(slab) <> 1
+      or not holds_ramp(block, 4)
+    --  The block is now freed with the extent it grew to, and only that.
+    mem.free(slab, block, usize(4))
+    return when pool.rejected_frees(slab) <> 1 or pool.live(slab) <> 1
+    mem.free(slab, block, usize(16))
+    --  A freed block grows no more.
+    return when mem.grow(slab, block, usize(16), usize(16), usize(1))
+    ok = pool.live(slab) == 0 and pool.frees(slab) == 1
+end grows_in_slot
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not (grows_in_slot() else false)
+    code = 42
+end main

@@ -36,8 +36,9 @@ LANDIN_TEST_JOBS=1 ./scripts/dev-test.sh --host --target=linux-x86-64 --suite=ch
 ```
 
 For debugger changes, run an affected native workload/profile with
-`scripts/debug.sh` after building this checkout's compiler. Its output
-directory must be new. Full native parity and debugger matrices belong to
+`scripts/debug.sh` after building this checkout's compiler. A second run
+replaces its own earlier output; an `--output` naming any other nonempty
+directory is refused. Full native parity and debugger matrices belong to
 the candidate CI run, rather than every local editing loop.
 
 Push the final candidate to a branch and let its complete gate finish. Use

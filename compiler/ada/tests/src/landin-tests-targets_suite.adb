@@ -243,7 +243,7 @@ package body Landin.Tests.Targets_Suite is
            and then not Selection.Is_Described ("linux-aarch64")
            and then not Selection.Is_Described ("Linux-x86-64")
            and then not Selection.Is_Described (""),
-         "a triplet, a fixture label or another spelling selects nothing");
+         "a triplet, a lane's name or another spelling selects nothing");
 
       --  D257: a build names its host by the triplet it was built for, and
       --  only the parts that say which description applies are read.

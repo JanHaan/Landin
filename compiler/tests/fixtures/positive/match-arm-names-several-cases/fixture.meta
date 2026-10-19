@@ -1,0 +1,5 @@
+class: positive
+summary: D405 [1220]'s example checks as written: one arm names several atoms, and the wildcard covers the rest
+constructs: 0630, 0640, 1210, 1220
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

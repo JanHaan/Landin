@@ -4,4 +4,4 @@ summary: [1820] opens a call's recovery with `else (name)` in a `then` or `elsif
 program: main.ldn
 status: 42
 constructs: 1030, 1050, 1820
-targets: linux-x86-64, linux-arm64, linux-rv64, macos-arm64, freebsd-x86-64, freebsd-arm64, cortex-m
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

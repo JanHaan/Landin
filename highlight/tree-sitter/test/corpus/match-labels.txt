@@ -1,0 +1,113 @@
+==================
+A match arm names several cases
+==================
+
+f: (c: compass) -> (n: i32) =
+    match c
+        north, south: n = 1
+        ptr (p): n = 2
+        _: n = 3
+    end match
+end f
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (scalar_type))))
+      (block
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (match_expression
+                              (logical_or_expression
+                                (logical_and_expression
+                                  (comparison_expression
+                                    (alternation_expression
+                                      (exclusion_expression
+                                        (conjunction_expression
+                                          (shift_expression
+                                            (sum_expression
+                                              (product_expression
+                                                (unary_expression
+                                                  (indexed_expression
+                                                    (identifier))))))))))))
+                              (match_arm
+                                (declaration_reference
+                                  (identifier))
+                                (declaration_reference
+                                  (identifier))
+                                (assignment_statement
+                                  (place
+                                    (indexed_expression
+                                      (identifier)))
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))))
+                              (match_arm
+                                (match_binding
+                                  (identifier))
+                                (assignment_statement
+                                  (place
+                                    (indexed_expression
+                                      (identifier)))
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))))
+                              (match_arm
+                                (assignment_statement
+                                  (place
+                                    (indexed_expression
+                                      (identifier)))
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))))))))))))))))
+      (identifier))))

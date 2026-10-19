@@ -157,23 +157,59 @@ section, WHAT WAS TRIED AND DROPPED, keeps
 the reversals, the things that were designed and then taken out again,
 because a reader who does not know them will propose them back.
 
-## Your first program
+## Installing
 
-Install the toolchain. With nix, either of these puts `refine` on your
-`PATH`, the first building it from source and the second fetching the
-published executable:
+`refine` is one executable, with its standard library in a directory beside
+it. With nix, either of these puts `refine` on your `PATH`, the first
+building it from source and the second fetching the published executable:
 
 ```sh
 nix profile install github:JanHaan/Landin
 nix profile install github:JanHaan/Landin#refine-bin
 ```
 
-A release archive unpacks into `bin/refine` with the library in
-`lib/landin` beside it; put its `bin` on your `PATH`. Archives up to 0.2.7
-hold `refine` alone. To build from source instead, see
-[Building](#building).
+Without nix, take the archive for your platform from
+[the releases page](https://github.com/JanHaan/Landin/releases). Each is
+named `landin-VERSION-PLATFORM.tar.gz`, for `x86_64-linux`, `aarch64-linux`
+or `aarch64-darwin`, with its SHA-256 sum beside it in a `.sha256` file. An
+archive has no top-level directory: it holds `bin/refine`, the library under
+`lib/landin` and the three licence files, and puts them in whichever
+directory you unpack it into, so make one for it and put its `bin` on your
+`PATH`:
 
-Save this anywhere as `hello/main.ldn`:
+```sh
+mkdir -p ~/landin
+tar -xzf landin-VERSION-PLATFORM.tar.gz -C ~/landin
+export PATH="$HOME/landin/bin:$PATH"
+refine version
+```
+
+For a release, `refine version` prints the release's own version and the
+library it found beside itself:
+
+```text
+refine VERSION
+library: /home/you/landin/lib/landin
+```
+
+A compiler built from a checkout says `refine dev (01234567)` instead, the
+commit it was built from, with `, dirty` after it when the checkout was
+modified; [Building](#building) says how that line is decided.
+
+On Linux, linking an executable also needs a C compiler driver: the `gcc`
+your distribution installs, or on NixOS `nix-shell -p gcc`. `refine check`,
+`refine fmt`, `refine lsp` and `refine compile --emit=asm` run without one,
+and a link that finds none says what to install. macOS links through the
+Xcode command-line tools.
+
+Every archive after 0.2.7 is laid out as above. The archives of 0.2.7 and
+earlier releases came before the library was shipped: they hold `refine`
+alone, and their `refine version` prints only the first line. To build from
+source instead, see [Building](#building).
+
+## Your first program
+
+With `refine` installed, save this anywhere as `hello/main.ldn`:
 
 ```landin
 import core/io
@@ -206,8 +242,10 @@ Hello from Landin
 The compile leaves `hello` and nothing else: the assembly it links is removed
 afterwards, and `--keep-asm` keeps it as `hello.s`. On Linux it links
 through the GCC your distribution installs, `x86_64-linux-gnu-gcc` on Debian
-and Ubuntu, `x86_64-redhat-linux-gcc` on Fedora, or `gcc`; without one,
-`refine` says what to install. A check that fails, such as an index past
+and Ubuntu, `x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which on NixOS
+`nix-shell -p gcc` provides; without one, `refine` says what to install.
+Only linking needs a C driver: `refine check`, `refine fmt`, `refine lsp`
+and `refine compile --emit=asm` or `--emit=ir` run without one. A check that fails, such as an index past
 the end of an array, ends the program with a line naming the file, line,
 column and kind, `main.ldn:4:12: trap: out_of_range`, before the system
 reports the trap.
@@ -264,7 +302,11 @@ compile` and `refine help compile` give the same command help.
 `refine help reference` prints the complete interface, and
 `refine completion bash|zsh|fish` prints shell completion definitions from
 the same option catalogue. Shared options work before or after the command;
-command-specific options follow it. Values accept a space or `=`, repeatable
+command-specific options follow it, and one written before it is refused
+naming the command it belongs to and where it goes. `check` takes every
+option that says which program is compiled, `--link`, `--firmware-entry`
+and `--build-report` among them, and with `--root` the operand is the entry
+module's directory or its source files. Values accept a space or `=`, repeatable
 options retain their order, and duplicate single-valued options are refused.
 Use `--` before literal operands. `@FILE` expands a bounded response file with
 single/double quotes and backslash escapes, without shell expansion.
@@ -329,12 +371,13 @@ what you wrote is a construct the tour describes and the kernel omits, the
 note names the paragraph that describes it and says whether the form is a
 recorded boundary, withdrawn or transferred to a successor.
 
-`refine fmt source.ldn ...` rewrites each named source in the one layout
+`refine fmt source.ldn ...` rewrites each named source, or every `.ldn` file
+under a named directory, in the one layout
 [`docs/format.md`](docs/format.md) shows, changing its space and nothing
 else; `refine fmt --check` writes nothing and reports every line that is not
-in it, showing the line as the layout writes it, and `refine fmt --stdout`
-prints one source in the layout. The library roots, the examples and the
-tour's examples are kept in that layout.
+in it, showing the line as the layout writes it and marking where it differs,
+and `refine fmt --stdout` prints one source in the layout. The library
+roots, the examples and the tour's examples are kept in that layout.
 
 `refine lsp` is a language server over standard input and output: an editor
 started with it gets diagnostics, definitions, hover types, formatting and
@@ -347,7 +390,9 @@ quick fixes from the compiler's own stages, as
 This is the maintained inventory of what the compiler does today:
 
 - **Command interface.** Explicit `check` and `compile` commands share a
-  catalogue for help and scoped shell completion. Build identity and target
+  catalogue for help and scoped shell completion, and `check` takes what
+  `compile` takes about the program. `refine fmt` formats files or the
+  `.ldn` files under a directory, and `--check` marks where a line differs. Build identity and target
   queries, human/short/JSON diagnostics, response files, Make depfiles,
   dry-run plans and tool traces support command-line consumers. Quiet mode
   preserves selected warnings and errors. Compilation requests select,
@@ -360,7 +405,9 @@ This is the maintained inventory of what the compiler does today:
   `[]u8(text)`, the enabled scalar conversions, range subtypes and
   `unchecked` regions. An atom union may be written in place as a
   binding's, parameter's, return's or field's type, `lenof` measures a field
-  or element path or a call's result, and `else (problem)` recovers a call in
+  or element path or a call's result, `offsetof t.field` measures where a
+  field begins, `compiler.assert` measures a declared type's size, alignment
+  and field offsets, and `else (problem)` recovers a call in
   an `if` arm as anywhere else; `else none` ignores the failure of a call
   that returns none. A module binding of function type may be
   written on one line, `chosen: () -> (v: i32) = seven`. Generics take fixed
@@ -379,11 +426,14 @@ This is the maintained inventory of what the compiler does today:
   checked encoded fields. `compiler/tests/constructs.matrix` records every
   normative construct's state, targets and evidence, and `check.py` refuses a
   stale or unexplained row.
-- **The library.** The eighteen shared `core/*` modules thread arena and pool
+- **The library.** The nineteen shared `core/*` modules thread arena and pool
   allocators and a failure injector as capabilities and supply raw memory,
-  vectors, inline-prefix spill lists, maps, trees, sorting, byte-oriented and
-  validated text, caller-backed I/O, bulk cleanup, panic dispatch and the
-  `any`-dispatched `core/diag.log`. A service, an allocator or an I/O
+  vectors, inline-prefix spill lists, maps, trees, sorting by ordering
+  evidence or by a comparison given a context, byte-oriented and validated
+  text, caller-backed I/O, bulk cleanup, panic dispatch, the
+  `any`-dispatched `core/diag.log` and, in `core/failure`, a phrase for a
+  person for every library failure atom. A pool grows a block within its
+  slot. A service, an allocator or an I/O
   provider, is a handle passed by value over state its caller declares, so a
   program and its logger write through one and a region allocates beside its
   parent without either locking it. I/O separates reader, writer, file and
@@ -469,11 +519,16 @@ This is the maintained inventory of what the compiler does today:
   favour of ordinary allocator capabilities. The [library reference](docs/library.md)
   is generated from public signatures and doc comments, with module browsing,
   search, source links and examples taken directly from runtime fixtures.
-- **The C boundary.** The C ABI of each hosted target, `layout(c)`, callbacks
+- **The C boundary.** The C ABI of each hosted target, `layout(c)`, C's
+  byte-packed records as `layout(c, packed)` on every target, whose unaligned
+  fields RV64 and Cortex-M0 move a byte at a time, and a
+  last-field flexible array member, both passed to C by pointer, callbacks
   and variadic calls, a C function value made from an address a loader
   found, with [`bindings/`](bindings/README.md) generating
   bindings from an external Clang's view of a header. Unsupported C forms are
-  refused by name.
+  refused by name. Only the entry, C imports, public C definitions, link names and
+  Cortex-M placements are global symbols; every other routine and datum,
+  public or not, is local to the image, so none meets the C library's names.
 - **Targets.** Linux x86-64, Linux arm64, Linux RV64, Darwin arm64 and
   FreeBSD x86-64 and arm64 build hosted executables; FreeBSD is emitted on Linux and runs
   in [architecture-specific VMs](environments/freebsd/README.md) with separate
@@ -584,7 +639,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R13.71 — What the newcomer's path met (planned).**
+**Next roadmap item: R14.10 — Prototype 5 (planned).**
 
 ## Questions, bugs and ideas
 

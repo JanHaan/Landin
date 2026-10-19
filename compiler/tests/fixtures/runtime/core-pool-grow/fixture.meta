@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: mem.grow through a pool extends a block within its slot to any extent the slot holds, with its bytes, recording the extent its free must give; a larger extent, an extent the block does not have, a freed slot or an address that is no slot is refused with the pool unchanged
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0940, 1150, 1360, 1410
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

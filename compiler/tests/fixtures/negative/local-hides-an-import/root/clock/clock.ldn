@@ -1,0 +1,5 @@
+public duration: type = u64
+
+public seconds: (count: u64) -> (span: duration) =
+    span = count
+end seconds

@@ -2,7 +2,7 @@ class: end-to-end
 summary: --link=static is a usage error on a system reached only through its C library
 program: main.ldn
 constructs: 1970, 1975
-targets: macos-arm64
+targets: darwin-arm64
 expect: expected.txt
 args: compile --target=darwin-arm64 --link=static --emit=asm ../tests/fixtures/end-to-end/link-static-needs-linux/main.ldn
 status: 2

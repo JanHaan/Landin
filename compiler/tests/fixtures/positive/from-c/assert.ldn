@@ -1,2 +1,5 @@
 -- This module is written for a 64-bit target.
 compiler.assert(sizeof usize == 8)
+
+-- The record C reads has C's size and the offset C gives its id.
+compiler.assert(sizeof header == 8 and offsetof header.id == 4)

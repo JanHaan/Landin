@@ -89,14 +89,14 @@ class Inventory(unittest.TestCase):
         owner finishes, goes missing or stops being named.
         """
         row = self.row("1860")
-        return {row: "| `[1860]` | compiled | all | cortex-m | %s |"
+        return {row: "| `[1860]` | compiled | all | cortex-m0 | %s |"
                      " Hosted compile-time rule; %s stands"
                      " here for the owner a recorded gap needs. |"
                      % (self.LIVE, self.LIVE)}
 
     @staticmethod
     def without_cortex(targets):
-        targets["1860"].pop("cortex-m")
+        targets["1860"].pop("cortex-m0")
 
     def test_an_owner_must_be_live_and_named(self):
         (row, synthetic), = self.gapped().items()
@@ -126,12 +126,12 @@ class Inventory(unittest.TestCase):
 
     def test_gaps_follow_the_corpus_both_ways(self):
         def lose(targets):
-            targets["0010"].pop("cortex-m")
+            targets["0010"].pop("cortex-m0")
         self.refused(self.problems(targets=lose),
-                     "[0010] records gaps none; the corpus leaves cortex-m")
+                     "[0010] records gaps none; the corpus leaves cortex-m0")
 
         self.refused(self.problems(self.gapped(), live=True),
-                     "[1860] records gaps cortex-m; the corpus leaves none")
+                     "[1860] records gaps cortex-m0; the corpus leaves none")
 
     def test_a_gap_needs_an_owning_item(self):
         (row, synthetic), = self.gapped().items()
@@ -300,16 +300,16 @@ class Inventory(unittest.TestCase):
         held = self.inputs["targets"]
         #  Darwin runs a native replacement for a Linux-only archive
         #  fixture, and the firmware driver runs outside the hosted harness.
-        self.assertEqual(held["1590"]["macos-arm64"], "executed")
-        self.assertEqual(held["1590"]["cortex-m"], "refused")
-        self.assertEqual(held["1570"]["cortex-m"], "executed")
-        self.assertEqual(held["1630"]["macos-arm64"], "executed")
+        self.assertEqual(held["1590"]["darwin-arm64"], "executed")
+        self.assertEqual(held["1590"]["cortex-m0"], "refused")
+        self.assertEqual(held["1570"]["cortex-m0"], "executed")
+        self.assertEqual(held["1630"]["darwin-arm64"], "executed")
         #  The two later Cortex-M records.  A compile-time fixture that
         #  selects --target=cortex-m0 carries its verdict there, and the
         #  firmware's machine probe carries [1610]'s link names, which no fixture claims.
-        self.assertEqual(held["1860"]["cortex-m"], "refused")
-        self.assertEqual(held["1730"]["cortex-m"], "compiled")
-        self.assertEqual(held["1610"]["cortex-m"], "executed")
+        self.assertEqual(held["1860"]["cortex-m0"], "refused")
+        self.assertEqual(held["1730"]["cortex-m0"], "compiled")
+        self.assertEqual(held["1610"]["cortex-m0"], "executed")
 
     def test_a_cortex_claim_must_be_the_run_that_was_made(self):
         """The column's own rule, without which it is editable prose."""
@@ -322,6 +322,21 @@ class Inventory(unittest.TestCase):
         self.assertFalse(CHECK.selects_cortex_target(
             records["negative/name-declared-nowhere"][1]))
 
+    def test_a_trap_report_is_never_a_cortex_claim(self):
+        """Firmware writes no trap report, so such a fixture cannot claim it."""
+        records = CHECK.fixture_records()
+        name = "runtime/computed-array-index-traps"
+        meta, fields = records[name]
+        self.assertTrue(fields.get("trap_report"))
+        claimed = dict(records)
+        claimed[name] = (meta, dict(fields, targets=fields["targets"] + ", cortex-m0"))
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: claimed):
+            messages = [m for _, _, m in CHECK.cortex_target_problems()]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("has a trap_report:, which firmware never writes", messages[0])
+        self.assertIn("The corpus inventory", messages[0])
+
     def test_every_named_target_is_placed_by_a_record(self):
         """A target line with no record behind it is refused, not believed."""
         self.assertEqual(CHECK.unplaced_target_problems(), [])
@@ -330,14 +345,14 @@ class Inventory(unittest.TestCase):
         #  runner, and exits 0 on both hosts.
         self.assertEqual(claims["end-to-end/refine-identity"],
                          {"linux-x86-64": "compiled", "linux-arm64": "compiled",
-                          "linux-rv64": "compiled", "macos-arm64": "compiled"})
+                          "linux-rv64": "compiled", "darwin-arm64": "compiled"})
         altered = {name: dict(held) for name, held in claims.items()}
-        del altered["end-to-end/refine-identity"]["macos-arm64"]
+        del altered["end-to-end/refine-identity"]["darwin-arm64"]
         del altered["runtime/derived-parser"]["linux-x86-64"]
         with unittest.mock.patch.object(CHECK, "fixture_target_claims",
                                         return_value=altered):
             messages = [m for _, _, m in CHECK.unplaced_target_problems()]
-        self.assertIn("end-to-end/refine-identity claims macos-arm64 and no "
+        self.assertIn("end-to-end/refine-identity claims darwin-arm64 and no "
                       "record places it", messages)
         self.assertIn("runtime/derived-parser claims linux-x86-64 and no "
                       "record places it", messages)
@@ -350,7 +365,7 @@ class Inventory(unittest.TestCase):
         name = "runtime/add-exits-with-its-sum"
         meta, fields = records[name]
         dropped = dict(records)
-        dropped[name] = (meta, dict(fields, targets="linux-x86-64, macos-arm64"))
+        dropped[name] = (meta, dict(fields, targets="linux-x86-64, darwin-arm64"))
         with unittest.mock.patch.object(CHECK, "fixture_records",
                                         lambda: dropped):
             self.refused([m for _, _, m in CHECK.arm64_linux_problems()],

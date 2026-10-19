@@ -1,0 +1,7 @@
+--  A module of the fixture's own root that reaches a Linux-only module.
+import platform/linux
+
+--- The process's user, as Linux numbers it.
+public own: () -> (id: u32) =
+    id = linux.getuid()
+end own

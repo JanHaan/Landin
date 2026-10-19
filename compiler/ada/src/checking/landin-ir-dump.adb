@@ -805,7 +805,7 @@ package body Landin.IR.Dump is
                            (Of_Unit, Item, Value)))
                  & Operands (Item, Value);
 
-            when Measure_Size | Measure_Align =>
+            when Measurement_Kind =>
                if not Is_Aggregate_Measurement (Of_Unit, Item, Value) then
                   return Lead & " measured "
                     & Shown (Measured_Of (Of_Unit, Item, Value))
@@ -827,7 +827,9 @@ package body Landin.IR.Dump is
                           (Fields, " " & Shape_Text (Part));
                      end;
                   end loop;
-                  return Lead & " fields" & Unbounded.To_String (Fields);
+                  return Lead & " fields" & Unbounded.To_String (Fields)
+                    & (if Op_Of (Of_Unit, Item, Value) = Measure_Offset
+                       then " offset" & Path_Qualifier else "");
                end;
 
             when Function_Address =>
@@ -1008,7 +1010,10 @@ package body Landin.IR.Dump is
             if Has_C_Layout (Of_Unit, Id) then
                Put
                  ("nominal " & Trimmed (Natural'Image (Which))
-                  & " " & Nominal_Named (Id) & " layout(c) "
+                  & " " & Nominal_Named (Id)
+                  & (if Landin.Layouts."="
+                          (Layout_Of (Of_Unit, Id), Landin.Layouts.C_Packed)
+                     then " layout(c, packed) " else " layout(c) ")
                   & Shape_Text
                     ((Kind => Aggregate_Field_Shape,
                       Nominal => Id, others => <>)));
@@ -1454,7 +1459,9 @@ package body Landin.IR.Dump is
                     ("  slot " & Trimmed (Slot_Id'Image (Slot))
                      & " " & Named (Declares (Of_Unit, Id, Slot)) & " "
                      & (if Is_Address (Of_Unit, Id, Slot)
-                        then "address of "
+                        then (if Is_Unaligned_Address (Of_Unit, Id, Slot)
+                              then "unaligned " else "")
+                          & "address of "
                           & Shape_Text (Address_Shape (Of_Unit, Id, Slot))
                         elsif Is_Array (Of_Unit, Id, Slot)
                         then "elements "

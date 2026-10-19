@@ -423,7 +423,7 @@ end if
 
 --- The errno atom for the number `value` on this system: `unlisted` for a
 --- number it does not define.
-public link(symbol: "_landin_posix_errno_of") errno_of:
+public errno_of:
     (value: i32) -> (problem: errno) =
     problem = unlisted
     return when value <= 0 or usize(value) >= lenof errno_table
@@ -433,7 +433,7 @@ end errno_of
 --- The number `problem` has on this system, as C's `errno` holds it: zero for
 --- `unlisted` and for an errno this system does not define.  ENOTSUP is
 --- EOPNOTSUPP's number on Linux and FreeBSD.
-public link(symbol: "_landin_posix_number") number:
+public number:
     (problem: errno) -> (value: i32) =
     value = 0
     return when problem == unlisted

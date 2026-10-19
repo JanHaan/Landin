@@ -1,0 +1,5 @@
+import shapes
+
+measured: () -> (length: i32) =
+    length = shapes.side()
+end measured

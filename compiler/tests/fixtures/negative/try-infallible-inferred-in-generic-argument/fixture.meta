@@ -6,4 +6,4 @@ args: ../tests/fixtures/negative/try-infallible-inferred-in-generic-argument/mai
 status: 1
 constructs: 0960, 1290
 codes: L0329
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

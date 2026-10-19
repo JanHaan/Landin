@@ -6,7 +6,7 @@
       "name": "firmware-machine",
       "source": "environments/cortex-m/probes/firmware-machine.ldn",
       "runner": "environments/cortex-m/firmware.py",
-      "targets": "cortex-m",
+      "targets": "cortex-m0",
       "constructs": "1610",
       "evidence": "The compiler-owned firmware's machine probe gives a module datum the link name `assembly_data` and a native function the link name `worker`, and the QEMU session resolves both spellings in the linked image: it breaks at `*worker`, reads `*(unsigned*)&assembly_data` as 18 before the body and 99 after it. The names the session uses are the written link symbols and not the Landin names, so a wrong or dropped symbol fails the run. This is [1610]'s standalone native form, which D229 enables on Cortex-M; the `extern(c)` form stays disabled there until a C surface for Cortex-M0 is enabled, which remains open work."
     }

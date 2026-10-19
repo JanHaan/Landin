@@ -268,8 +268,28 @@ package body Landin.Configuration is
      (In_Table : Table; Index : Positive) return String
      is (In_Table.Linked.Element (Index));
 
+   procedure Defer_Assertion
+     (Into : in out Table;
+      Source : Landin.Source.Source_Id;
+      Node : Landin.Syntax.Node_Id) is
+   begin
+      Into.Deferred.Append (Inactive_Node'(Source => Source, Node => Node));
+   end Defer_Assertion;
+
+   function Deferred_Count (In_Table : Table) return Natural
+     is (Natural (In_Table.Deferred.Length));
+
+   function Deferred_Source
+     (In_Table : Table; Index : Positive) return Landin.Source.Source_Id
+     is (In_Table.Deferred.Element (Index).Source);
+
+   function Deferred_Node
+     (In_Table : Table; Index : Positive) return Landin.Syntax.Node_Id
+     is (In_Table.Deferred.Element (Index).Node);
+
    procedure Prepare (Into : in out Table) is
    begin
+      Into.Deferred.Clear;
       Into.Inactive.Clear;
       Into.Linked.Clear;
       Into.Declared.Clear;

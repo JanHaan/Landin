@@ -213,6 +213,15 @@ the shape being measured. Field access retains the identity of the field;
 it does not carry a byte offset. The target layout machinery derives sizes,
 alignment, padding and placement from those shapes and explicit target
 facts. Source field order and physical placement order are separate facts.
+An `offsetof` is the same kind of question: its measurement carries the
+record's field run, its layout policy and the path of field positions, and
+the backend answers it from the placement it computes for the target.
+
+A `layout(c, packed)` record places fields at alignment one, so a scalar
+inside it may be unaligned. A backend can tell from the shapes along a field
+path, and an address slot that lowering forms for such a scalar is marked
+unaligned in the IR, so a target whose ordinary loads need alignment moves
+it a byte at a time while the others load it whole.
 
 Target facts also enter verification and simplification where an answer
 requires them. A folded initializer must fit the type that will hold it, and
@@ -346,10 +355,13 @@ that can run projects entry N from some table of that concept (D374): the
 concept rather than the table a projection names, because an `any` value
 may carry any of its concept's tables. Code that can run is what a root
 reaches, a root being a routine something other than a call names, or one
-without parameters, or the panic handler: a routine only a left-out entry's
-target calls projects nothing. An entry left out is a zero word in its
-place, so every offset D144 and D147 give stays put, and the routine it
-named is linked only if something else reaches it.
+without parameters, or the panic handler, through calls, taken addresses
+and the routines an `assembler.block`'s text names by name or link name:
+a routine only a left-out entry's target calls projects nothing, on a
+hosted target whose startup and system calls are blocks as on any other.
+An entry left out is a zero word in its place, so every offset D144 and
+D147 give stays put, and the routine it named is linked only if something
+else reaches it.
 
 ## Calls, evidence and failure
 

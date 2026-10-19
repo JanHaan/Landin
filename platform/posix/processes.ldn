@@ -10,7 +10,7 @@ import platform/linux
 
 --- End the process with `status` at once, POSIX's `_exit`: nothing more
 --- of the program runs, and no C stream is flushed.
-public link(symbol: "_landin_posix_exit") exit:
+public exit:
     (status: i32) -> noreturn =
     system_exit(status)
 end exit
@@ -99,7 +99,7 @@ end _landin_host_initialize_arguments
 --- Whether SIGPIPE is ignored in this process, as
 --- `_landin_host_initialize_arguments` makes it when it was the default:
 --- a write to a pipe or a socket nobody reads then fails with `epipe`.
-public link(symbol: "_landin_posix_broken_pipe_ignored") broken_pipe_ignored:
+public broken_pipe_ignored:
     () -> (ignored: bool) =
     ignored = system_broken_pipe_ignored()
 end broken_pipe_ignored
@@ -116,7 +116,7 @@ end argument_table
 --- argument root has been established: the hosted entry establishes one
 --- before `main` runs, and a C `main` calls
 --- `_landin_host_initialize_arguments` itself.
-public link(symbol: "_landin_posix_arguments") arguments:
+public arguments:
     () -> (table: argument_table) =
     held: ptr ptr u8 = match root_values
         no_table: compiler.unreachable()
@@ -132,7 +132,7 @@ end arguments
 --- process's own storage, which nothing copies.  An index at or past the
 --- table's `count` traps, as does a null entry, which C promises none
 --- below argc is.
-public link(symbol: "_landin_posix_argument") argument:
+public argument:
     (table: argument_table, index: usize)
     -> (value: text.host_string from table) =
     if index >= table.count then
@@ -151,7 +151,7 @@ end argument
 --- string lending the process's own storage.  It is empty when the
 --- parent gave no arguments at all, and it traps before the argument root
 --- exists, as `arguments` does.
-public link(symbol: "_landin_posix_program_name") program_name:
+public program_name:
     () -> (name: text.host_string) =
     held: ptr ptr u8 = match root_values
         no_table: compiler.unreachable()
@@ -187,7 +187,7 @@ empty_environment: [1]usize = [0]
 --- environment is not safe beside threads, and a child is given the one
 --- its parent builds instead.  It traps before the argument root exists,
 --- as `arguments` does.
-public link(symbol: "_landin_posix_environment") environment:
+public environment:
     () -> (table: environment_table) =
     _ = arguments()
     values: ptr ptr u8 = match root_environment
@@ -209,7 +209,7 @@ end environment
 --- nothing copies.  An entry with no `=` is a name with an empty value.  An
 --- index at or past the table's `count` traps, as does a null entry, which
 --- a table changed since it was counted may hold.
-public link(symbol: "_landin_posix_variable") variable:
+public variable:
     (table: environment_table, index: usize)
     -> (item: io.variable from table) =
     if index >= table.count then
@@ -242,7 +242,7 @@ end pipe_ends
 --- `emfile` when the process has no descriptor to spare.  A pipe holds 64
 --- KiB on Linux and between 16 and 64 KiB on Darwin and FreeBSD, and a
 --- write to a full one waits until its reader reads.
-public link(symbol: "_landin_posix_pipe") pipe:
+public pipe:
     () -> (ends: pipe_ends) ! errno =
     ends = try system_pipe()
 end pipe
@@ -250,7 +250,7 @@ end pipe
 --- Whether `opened` is closed when the process executes a program, its
 --- `FD_CLOEXEC` flag, as every descriptor this module makes is: or the
 --- errno, `ebadf` for a descriptor that is not open.
-public link(symbol: "_landin_posix_closed_on_exec") closed_on_exec:
+public closed_on_exec:
     (opened: descriptor) -> (yes: bool) ! errno =
     yes = try system_closed_on_exec(opened)
 end closed_on_exec
@@ -304,7 +304,7 @@ public inherited_streams: standard_streams = (input: standard_input,
 --- `posix_spawnattr_setsigdefault`.  The
 --- block of strings and tables the child is given is mapped for the call
 --- and unmapped after it.
-public link(symbol: "_landin_posix_spawn") spawn:
+public spawn:
     (path: text.host_string, arguments: []text.host_string,
      environment: []io.variable, streams: standard_streams)
     -> (child: process_id) ! errno =
@@ -426,7 +426,7 @@ end child_status
 --- `waitpid`, after which it is gone: or the errno, `echild` for no child
 --- of this process, `eintr` when a signal came first and the child is
 --- still to be waited for.
-public link(symbol: "_landin_posix_wait") wait:
+public wait:
     (child: process_id) -> (status: child_status) ! errno =
     word: i32 = try system_wait(child)
     --  The status word is the same on all three systems: the low seven

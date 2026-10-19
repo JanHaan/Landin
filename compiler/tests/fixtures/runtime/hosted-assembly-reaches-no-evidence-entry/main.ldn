@@ -1,0 +1,39 @@
+--  A table keeps only the entries a routine that can run projects, and a
+--  hosted image's `assembler.block`s make no other routine able to run
+--  (D374).  Every hosted Linux image holds the process entry's block and
+--  the system call's.  Nothing projects `loud`, so `loud_thing` cannot
+--  run, and its projection of `shout` keeps nothing: `shout_thing`, and
+--  the C import only it names, stay out of the image, and a static link
+--  goes ahead.
+extern(c) puts: (text: cstring) -> (result: i32)
+
+speaker: type = concept (t: type)
+    quiet: (self: ptr t) -> (value: i32)
+    loud: (self: ptr t) -> (value: i32)
+    shout: (self: ptr t) -> (value: i32)
+end speaker
+
+thing: type = struct
+    value: i32
+end thing
+
+quiet_thing: (self: ptr thing) -> (value: i32) =
+    value = self.val.value
+end quiet_thing
+
+loud_thing: (self: ptr thing) -> (value: i32) =
+    erased: any speaker = any(self)
+    value = erased.shout()
+end loud_thing
+
+shout_thing: (self: ptr thing) -> (value: i32) =
+    value = puts("never")
+end shout_thing
+
+thing is speaker (quiet: quiet_thing, loud: loud_thing, shout: shout_thing)
+
+public main: () -> (code: i32) =
+    item: thing = (value: 1)
+    erased: any speaker = any(addr item)
+    code = erased.quiet() - 1
+end main

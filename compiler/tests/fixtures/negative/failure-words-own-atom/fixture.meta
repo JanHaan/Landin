@@ -1,0 +1,8 @@
+class: negative
+summary: failure.words takes only the library's failure atoms, so a failure set holding the program's own atom does not widen to failure.reason, even in a match's `_` arm, which does not narrow its subject
+expect: expected.txt
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: --root=../.. ../tests/fixtures/negative/failure-words-own-atom
+codes: L0301
+status: 1
+constructs: 0630, 0640, 0940, 1210, 1410, 1420

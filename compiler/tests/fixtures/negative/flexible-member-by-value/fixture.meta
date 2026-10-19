@@ -1,0 +1,9 @@
+class: negative
+summary: D414 sends a record that ends in a flexible array member to C by pointer and never by value
+constructs: 0520, 0750, 1580
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+codes: L0346
+expect: expected.txt
+args: ../tests/fixtures/negative/flexible-member-by-value/program.ldn
+status: 1

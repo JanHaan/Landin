@@ -6,4 +6,4 @@ root: ../../../../..
 status: 42
 codes: L0349
 constructs: 0120, 0370, 0700, 1420, 1500, 1510, 1795
-targets: linux-x86-64, macos-arm64, freebsd-x86-64
+targets: linux-x86-64, darwin-arm64, freebsd-x86-64

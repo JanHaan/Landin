@@ -2,7 +2,7 @@
 flags: type = layout(packed, u8) struct
     bits: [8]bool at 0..7
 end flags
-public main: () -> (code: u32) =
+link(symbol: "main") public main: () -> (code: u32) =
     destructive: ptr u8 = ptr(0x40030018)
     command: ptr mut u8 = ptr(0x40030019)
     pending: ptr mut u8 = ptr(0x4003001a)

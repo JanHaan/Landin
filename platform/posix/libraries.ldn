@@ -62,7 +62,7 @@ symbol_room: type = [4096]u8
 --- every path of this module is, and an empty path is `enoent`, as it is
 --- to every other call here: the loader would give the program itself
 --- for it, which is no library this layer loads (D336).
-public link(symbol: "_landin_posix_open_library") open_library:
+public open_library:
     (path: text.host_string, scope: symbol_scope)
     -> (loaded: library) ! errno | no_library =
     fail enoent when lenof text.host_bytes(path) == 0
@@ -90,7 +90,7 @@ end mode_of
 --- the address is the program's to know: a function is made a value by
 --- naming its C function type, `adder(address)`, and is the program's to
 --- call only while `loaded` stays loaded.
-public link(symbol: "_landin_posix_find_symbol") find_symbol:
+public find_symbol:
     (loaded: library, name: []u8) -> (address: usize) ! errno | no_symbol =
     fail enametoolong when lenof name >= sizeof symbol_room
     mut room: symbol_room = zeroed
@@ -109,7 +109,7 @@ end find_symbol
 --- name nothing.  `no_library` when the loader refuses.  A handle whose
 --- every use was already given back names nothing either: closing it again
 --- is not this module's to catch, as it is not C's.
-public link(symbol: "_landin_posix_close_library") close_library:
+public close_library:
     (loaded: library) -> none ! no_library =
     fail no_library when libc.dlclose(loaded.handle) <> 0
 end close_library
@@ -120,7 +120,7 @@ end close_library
 --- clears them, and the next call of this module that loads, finds or
 --- closes may replace them, so they are asked for at once.  They are for
 --- a person to read; their wording is each system's own.
-public link(symbol: "_landin_posix_library_failure") library_failure:
+public library_failure:
     (into: []mut u8) -> (message: []u8 from into) =
     message = into[0..<0]
     match libc.dlerror()

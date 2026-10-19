@@ -1,0 +1,14 @@
+--  D405: several cases share an arm only without payload bindings; an arm
+--  that binds names one case, and the refusal says to split it.
+shape: type = struct
+    kind: variant
+        circle: (radius: i32) |
+        square: (side: i32)
+    end kind
+end shape
+
+size: (s: shape) -> (n: i32) =
+    match s.kind
+        circle, square(side): n = side
+    end match
+end size

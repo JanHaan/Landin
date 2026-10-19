@@ -1,10 +1,11 @@
 import core/mem
 
---- The name in the record at `at` of what `getdents64` read: the bytes after
---- the fixed part, up to the NUL that ends them. Every hosted target is
+--- The name in the record at `at` of what `getdents64` read: the bytes from
+--- the name's offset up to the NUL that ends them. Every hosted target is
 --- little-endian, so the length's low byte comes first.
 record_name: (buffer: []u8, at: usize) -> (name: []u8 from buffer) =
-    length: u16 = u16(buffer[at + 16]) | u16(buffer[at + 17]) << 8
-    rest := buffer[at + name_offset()..<at + usize(length)]
+    length_at := at + offsetof directory_record.length
+    length := usize(buffer[length_at]) | usize(buffer[length_at + 1]) << 8
+    rest := buffer[at + name_offset..<at + length]
     name = rest[0..<mem.find(rest, 0)]
 end record_name

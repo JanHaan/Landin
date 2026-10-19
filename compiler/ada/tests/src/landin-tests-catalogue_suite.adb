@@ -72,6 +72,7 @@ package body Landin.Tests.Catalogue_Suite is
                       | Rows.Unsupported_Use
                       | Rows.Not_Known_At_Compile_Time
                       | Rows.Size_Limit_Exceeded
+                      | Rows.Unresolved_Name
          then
             Landin.Testing.Check_Equal
               (Item, Rows.Minimum_Secondaries (Name),
@@ -90,6 +91,13 @@ package body Landin.Tests.Catalogue_Suite is
            and then Rows.Minimum_Secondaries (Rows.Unsupported_Use) = 0
            and then Rows.Maximum_Secondaries (Rows.Unsupported_Use) = 1,
          "dependent checker reports admit one template label");
+      --  D381: an unresolved qualified name may point at the local that
+      --  hid its import.
+      Landin.Testing.Check
+        (Item,
+         Rows.Minimum_Secondaries (Rows.Unresolved_Name) = 0
+           and then Rows.Maximum_Secondaries (Rows.Unresolved_Name) = 1,
+         "an unresolved name admits the local that hid it");
 
       --  Distinct, because a number that names two rules is worse than no
       --  number at all.

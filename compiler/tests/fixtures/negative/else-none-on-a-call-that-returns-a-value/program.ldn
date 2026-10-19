@@ -1,7 +1,9 @@
 --  D376: `else none` ignores a failure only where no result is lost with it.
 --  On a call that returns a value -- direct, labelled, erased, through a
---  function value, generic or discarded with `_ =` -- it is refused once,
---  with the forms that work.
+--  function value, generic or an argument inside a discard -- it is refused
+--  once, with the forms that work.  D406 admits `_ = count(false) else
+--  none`, where the call is the discard's whole operand, so this line once
+--  refused here is now the argument's.
 refused: atom
 
 count: (flag: bool) -> (n: u32) ! refused =
@@ -27,6 +29,10 @@ same: (t: type, value: t) -> (out: t) ! refused =
     out = value
 end same
 
+widen: (n: u32) -> (wide: u64) =
+    wide = u64(n)
+end widen
+
 forms: () -> (total: u32) =
     direct := count(true) else none
     labelled := count(flag: true) else none
@@ -36,6 +42,6 @@ forms: () -> (total: u32) =
     through: (flag: bool) -> (n: u32) ! refused = count
     indirect := through(false) else none
     generic := same(u32(7)) else none
-    _ = count(false) else none
+    _ = widen(count(false) else none)
     total = direct + labelled + read + indirect + generic
 end forms

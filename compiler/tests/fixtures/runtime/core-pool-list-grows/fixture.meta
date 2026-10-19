@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a list over a pool of two slots grows within its first block's slot, one allocation for sixteen bytes, and a growth past the slot is refused with the list's items kept, though the second slot is free
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0940, 1150, 1360, 1410
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

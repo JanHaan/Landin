@@ -23,6 +23,15 @@ package body Landin.Diagnostics.Explanations is
                & " the request and not a program was wrong."
                & LF
                & LF
+               & "An option that belongs to a command is written after it."
+               & " One written before its command, or with no command at a"
+               & "ll, is refused naming the commands it belongs to and whe"
+               & "re it goes, as it was written: `refine --root=lib compil"
+               & "e main.ldn` is told `refine compile --root=lib ...`, and"
+               & " `refine -o x.s main.ldn` that `-o x.s` is an option of "
+               & "`compile` (D384)."
+               & LF
+               & LF
                & "Give `--target=` only once. Repeating it is a misuse eve"
                & "n when both names are the same; the driver does not choo"
                & "se between target selections."
@@ -36,9 +45,12 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & LF
                & "`--link=static|libc` chooses how a hosted executable is "
-               & "linked and requires `--emit=exe` or `--emit=asm`; `stati"
-               & "c` needs a Linux target, and a target with no hosted sys"
-               & "tem takes neither.",
+               & "linked, and under `refine check` which C runtime the pro"
+               & "gram is checked with; `static` needs a Linux target, and"
+               & " a target with no hosted system takes neither. `check` t"
+               & "akes `--firmware-entry` and `--build-report` as `compile"
+               & "` does, and refuses an entry that names no firmware rout"
+               & "ine (D383).",
             when Catalogue.Unreadable_Source =>
                "A source named on the command line is missing or cannot "
                & "be read. Check the path and its permissions.",
@@ -70,21 +82,26 @@ package body Landin.Diagnostics.Explanations is
                "No import root holds the module an import names [1420]. "
                & "Roots are searched in the order `--root=` gives them, an"
                & "d a path's segments are directories under a root, spelle"
-               & "d exactly. When a directory near the missing segment is "
-               & "there, the diagnostic offers it as a likely fix; named f"
-               & "iles with no `--root` are offered the library's `core`, "
-               & "`hosted` or `platform` when the first segment is near on"
-               & "e. An import of `core`, `hosted` or `platform` when `ref"
-               & "ine` found no library beside itself, as a copied `refine"
-               & "` does not, names where it looked; name the library's di"
-               & "rectory with `--library=DIR` (D363).",
+               & "d exactly; the note names every directory looked for, in"
+               & " that order, so `import lexer/lexer` under `--root .` sa"
+               & "ys it looked for `./lexer/lexer` (D384). When a director"
+               & "y near the missing segment is there, the diagnostic offe"
+               & "rs it as a likely fix; named files with no `--root` are "
+               & "offered the library's `core`, `hosted` or `platform` whe"
+               & "n the first segment is near one. An import of `core`, `h"
+               & "osted` or `platform` when `refine` found no library besi"
+               & "de itself, as a copied `refine` does not, names where it"
+               & " looked; name the library's directory with `--library=DI"
+               & "R` (D363).",
             when Catalogue.Module_Directory_Invalid =>
-               "With `--root=`, the entry module must be a readable dire"
-               & "ctory [1410]. Pass the directory, not a file inside it. "
-               & "This code also reports an import root or intermediate di"
-               & "rectory that cannot be listed while searching in root or"
-               & "der [1420]. Check the named path and its permissions; a "
-               & "genuinely absent module is reported by L0006.",
+               "With `--root=`, the entry module is a readable directory"
+               & " [1410], or the entry module's own source files, which a"
+               & "re then one module as named files are without a root (D3"
+               & "83). A path that is neither is refused. This code also r"
+               & "eports an import root or intermediate directory that can"
+               & "not be listed while searching in root order [1420]. Chec"
+               & "k the named path and its permissions; a genuinely absent"
+               & " module is reported by L0006.",
             when Catalogue.Module_Unavailable_For_Target =>
                "An import names a source namespace unavailable for the s"
                & "elected target (D267). `hosted/*` requires a hosted targ"
@@ -108,11 +125,14 @@ package body Landin.Diagnostics.Explanations is
                & "out D252 decides and `docs/format.md` shows. There is on"
                & "e diagnostic for every such line, and its note shows the"
                & " line as the layout writes it, or says that the layout r"
-               & "emoves the blank line or changes its line end (D359). No"
-               & "thing is wrong with the program: run `refine fmt` on the"
-               & " file to put it in the layout, which changes its space a"
-               & "nd nothing else, or `refine fmt --stdout` to see the who"
-               & "le file laid out.",
+               & "emoves the blank line or changes its line end (D359). A "
+               & "line whose spacing changes is marked where it differs, f"
+               & "rom the first byte the layout changes to the last, and t"
+               & "he note names the column it differs from (D385). Nothing"
+               & " is wrong with the program: run `refine fmt` on the file"
+               & " to put it in the layout, which changes its space and no"
+               & "thing else, or `refine fmt --stdout` to see the whole fi"
+               & "le laid out.",
             when Catalogue.Unknown_Level =>
                "`--level=`, or the language server's `level` option, nam"
                & "es no CPU feature level of the selected target's family "
@@ -165,7 +185,10 @@ package body Landin.Diagnostics.Explanations is
                & "ere a case belongs: compare values with `if` and `elsif`"
                & " (D369). Statements on the lines under a bare `else` wer"
                & "e meant as a recovery block, which binds the error first"
-               & ": `else (problem)`, closed by `end` (D370).",
+               & ": `else (problem)`, closed by `end` (D370). `_` among se"
+               & "veral labels of one arm is refused too: it covers every "
+               & "case no other arm names, so it is an arm of its own (D40"
+               & "5).",
             when Catalogue.Type_Expected =>
                "A type position holds nothing the kernel enables as a ty"
                & "pe [1790].",
@@ -178,7 +201,10 @@ package body Landin.Diagnostics.Explanations is
                & "d label points at the construct that required it. When a"
                & " name near the required keyword stands in its place, suc"
                & "h as `thne` for `then`, the diagnostic offers the keywor"
-               & "d as a likely fix.",
+               & "d as a likely fix. An arm that names several cases binds"
+               & " no payload, so bindings after them are refused here: gi"
+               & "ve the case whose payload is bound an arm of its own (D4"
+               & "05).",
             when Catalogue.Unclosed_Construct =>
                "A construct opened and its `end` never arrived [1800]. T"
                & "he second label shows where it opened; close it there.",
@@ -227,7 +253,14 @@ package body Landin.Diagnostics.Explanations is
                & "ares only in a `fixed if` arm this target does not selec"
                & "t, a Linux call written for Darwin among them, is named "
                & "as one this system does not have, since no spelling of i"
-               & "t would be found here.",
+               & "t would be found here."
+               & LF
+               & LF
+               & "A parameter, result or local may hide an import of its o"
+               & "wn name [1450], so `time.duration` written where a resul"
+               & "t is called `time` names no type. The diagnostic says so"
+               & ", names the local and the import it hides, and points at"
+               & " the local; rename it (D381).",
             when Catalogue.Inaccessible_Name =>
                "A declaration of another module is used and it is not `p"
                & "ublic` [1410]. The second label shows the declaration. M"
@@ -327,15 +360,19 @@ package body Landin.Diagnostics.Explanations is
                & "dule value, array bound or fixed configuration expressio"
                & "n can depend on a runtime value or call, contain an unkn"
                & "own fixed name or form, or depend on itself, within one "
-               & "module or through several. Change such an expression to "
-               & "one the closed fold can evaluate. A value another module"
-               & " exports, named through that module as `sizes.page`, is "
-               & "known as it is in its own module; a field of a record im"
-               & "age, an element of an array image and a call are not, in"
-               & " either. A module function binding without an initialize"
-               & "r has no implicit zero function address; give it an init"
-               & "ial function address, such as a declared function or ano"
-               & "ther module function value whose image is known.",
+               & "module or through several. A fixed condition or option d"
+               & "efault measures scalar types only: a declared type's siz"
+               & "e, alignment or field offset is measured by `compiler.as"
+               & "sert`, once checking has laid the type out (D412). Chang"
+               & "e such an expression to one the closed fold can evaluate"
+               & ". A value another module exports, named through that mod"
+               & "ule as `sizes.page`, is known as it is in its own module"
+               & "; a field of a record image, an element of an array imag"
+               & "e and a call are not, in either. A module function bindi"
+               & "ng without an initializer has no implicit zero function "
+               & "address; give it an initial function address, such as a "
+               & "declared function or another module function value whose"
+               & " image is known.",
             when Catalogue.Impossible_Operand =>
                "An operand the operation cannot take, where the compiler"
                & " knows it [1950]: a divisor of zero, a shift by a negati"
@@ -373,7 +410,10 @@ package body Landin.Diagnostics.Explanations is
                & "For a case declared as `pair: (first: u8, second: bool)`"
                & ", the construction `pair(first: 1)` omits `second`.",
             when Catalogue.Variant_Case_Named_Twice =>
-               "A match names one variant case twice [1210].",
+               "A match names one case twice [1210]: a variant case, an "
+               & "atom of a set or a pointer union's case, twice in one ar"
+               & "m or once in each of two (D405). Keep one label and dele"
+               & "te the other.",
             when Catalogue.Variant_Case_Not_Matched =>
                "A match leaves a case unnamed [1210]. For a variant part"
                & ", add an arm naming each missing case. For an atom set o"
@@ -513,20 +553,22 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Error_Contract_Violated =>
                "A failure does not follow the declared error contract [0"
                & "940] [0960] [1030]. `fail` carries exactly one atom of t"
-               & "he function's declared error set. A call to a failing fu"
-               & "nction handles the outcome with `else` or propagates it "
-               & "with `try`, and neither form applies to a call that cann"
-               & "ot fail. A public or first-class signature writes a conc"
-               & "rete error set instead of `! ...`. Add the atom to the e"
-               & "rror set, handle or propagate the call, or remove the ha"
-               & "ndling from an infallible call. The implicit provider ca"
-               & "lls in `try for` also propagate their declared errors: t"
-               & "he enclosing routine must declare or infer those atoms, "
-               & "and its caller may recover them through ordinary call `e"
-               & "lse`. In an `if` arm, `else value` after a call divides "
-               & "the `if` [1820], which leaves the call unrecovered: writ"
-               & "e `(f() else 0)`, or bind the error with `else (problem)"
-               & "`.",
+               & "he function's declared error set. A body that can fail w"
+               & "ith an atom outside it is told which atom, and the `fail"
+               & "`, the call or the `try for` it first came through is la"
+               & "belled (D382). A call to a failing function handles the "
+               & "outcome with `else` or propagates it with `try`, and nei"
+               & "ther form applies to a call that cannot fail. A public o"
+               & "r first-class signature writes a concrete error set inst"
+               & "ead of `! ...`. Add the atom to the error set, handle or"
+               & " propagate the call, or remove the handling from an infa"
+               & "llible call. The implicit provider calls in `try for` al"
+               & "so propagate their declared errors: the enclosing routin"
+               & "e must declare or infer those atoms, and its caller may "
+               & "recover them through ordinary call `else`. In an `if` ar"
+               & "m, `else value` after a call divides the `if` [1820], wh"
+               & "ich leaves the call unrecovered: write `(f() else 0)`, o"
+               & "r bind the error with `else (problem)`.",
             when Catalogue.Assembly_Block_Contract =>
                "An assembly block, operand or template breaks [1630]'s b"
                & "lock contract or [1990]'s register rules. Only `assemble"
@@ -544,15 +586,17 @@ package body Landin.Diagnostics.Explanations is
                & "s no value to use, infer from, or discard [1920] [1930],"
                & " nor one for its `else` to yield in place of a result [1"
                & "030]: `else none` ignores its failure, and is refused on"
-               & " a call that does return a value (D376). An `if`, `match"
-               & "` or bare `begin` used as a statement takes no value fro"
-               & "m its branches, so a branch that ends with one would dro"
-               & "p it; in an `if` arm that value is often a call's `else "
-               & "value` the `if` took as its own [1820]. Destructuring bi"
-               & "nds the names of a multiple result, each at most once [0"
-               & "990]. Discard the result explicitly, use a call that ret"
-               & "urns one, or bind the result names the signature declare"
-               & "s.",
+               & " a call that does return a value (D376) unless the call "
+               & "is the whole operand of a discard, `_ = f() else none` ("
+               & "D406); to use the value, handle the error with `else (pr"
+               & "oblem) ... end`. An `if`, `match` or bare `begin` used a"
+               & "s a statement takes no value from its branches, so a bra"
+               & "nch that ends with one would drop it; in an `if` arm tha"
+               & "t value is often a call's `else value` the `if` took as "
+               & "its own [1820]. Destructuring binds the names of a multi"
+               & "ple result, each at most once [0990]. Discard the result"
+               & " explicitly, use a call that returns one, or bind the re"
+               & "sult names the signature declares.",
             when Catalogue.Control_Value =>
                "A `break` must carry a value exactly when its target nee"
                & "ds one [1180] [1190]; every value-producing fallthrough "
@@ -572,12 +616,13 @@ package body Landin.Diagnostics.Explanations is
                "A `match` arm does not fit its subject [1210]. A subject"
                & " is an atom set, a variant part or a pointer union. Each"
                & " arm names a case or atom of that subject at most once ("
-               & "D77) [0640] [0480]. A `ptr` arm matches only a pointer u"
-               & "nion and binds one read-only pointer [1220]. Atom arms b"
-               & "ind no payload [0630]. A wildcard arm comes last and bin"
-               & "ds nothing. Variant payload names are positional and com"
-               & "plete (D78). Rewrite the arm in the form its subject adm"
-               & "its, or compare numbers with `if` and `elsif`.",
+               & "D77) [0640] [0480], and a name twice is L0311. A `ptr` a"
+               & "rm matches only a pointer union and binds one read-only "
+               & "pointer [1220]. Atom arms bind no payload [0630]. A wild"
+               & "card arm comes last and binds nothing. Variant payload n"
+               & "ames are positional and complete (D78). Rewrite the arm "
+               & "in the form its subject admits, or compare numbers with "
+               & "`if` and `elsif`.",
             when Catalogue.Aggregate_Form =>
                "A struct, variant or array value is built or used outsid"
                & "e its admitted form [0700] [0720]. A construction applie"
@@ -609,8 +654,11 @@ package body Landin.Diagnostics.Explanations is
                & "s a field representation, not an ordinary value type. A "
                & "packed field has no address of its own, cannot be passed"
                & " `inout`, and cannot be sliced; the image is not a scala"
-               & "r operand (D228). Correct the layout, or work through th"
-               & "e containing image and its fields.",
+               & "r operand (D228). A field of a `layout(c, packed)` recor"
+               & "d, at any depth, has no address of its own either (D410)"
+               & ": it is read and written by copy. Correct the layout, or"
+               & " work through the containing image or record and its fie"
+               & "lds.",
             when Catalogue.Place_Required =>
                "An operation that needs a distinct addressable place was"
                & " given something else. `addr` takes a storage place [043"
@@ -660,7 +708,9 @@ package body Landin.Diagnostics.Explanations is
                & "y once by label, and provides each entry with a function"
                & " of exactly the required signature. A parameterized conf"
                & "ormance applies its complete binder. Correct the declara"
-               & "tion against the concept it names.",
+               & "tion against the concept it names. A parameter or local "
+               & "named after a concept hides it [0140], and the diagnosti"
+               & "c then names the parameter as the cause (D381).",
             when Catalogue.Erased_Contract =>
                "An `any` value or its dispatch is used outside the erase"
                & "d contract [1370] [1380] [1390] (D145-D147). `any C` nam"
@@ -707,18 +757,28 @@ package body Landin.Diagnostics.Explanations is
                & "cluded. A `layout(c)` struct has at least one field and "
                & "holds only C representations: scalars, pointers, fixed C"
                & " callbacks, nonempty fixed arrays or recursively `layout"
-               & "(c)` structs, with no tagged variants. A variadic C decl"
-               & "aration needs at least one fixed parameter and target su"
-               & "pport; a variadic definition needs a generated adapter. "
-               & "Variadic calls take positional scalar, pointer or fixed "
-               & "C callback tail arguments, without labels or static argu"
-               & "ments. Change `inout` or `sink` to `in`; pass a pointer "
-               & "if C must write through a parameter. Remove `caller` and"
-               & " constraints, specialize generics, represent errors thro"
-               & "ugh an ordinary C result, and combine multiple results i"
-               & "nto one C-representable result. Pass a pointer to a by-v"
-               & "alue array or other unsupported aggregate, or change the"
-               & " type or layout to one C represents.",
+               & "(c)` structs, with no tagged variants; the label names t"
+               & "he field that is not one. Its last field may be a `[0]T`"
+               & " flexible array member after at least one other field (D"
+               & "413), and a record ending in one is not a field of anoth"
+               & "er C record. A `layout(c, packed)` record holds an array"
+               & " or nested record by value only when its alignment is on"
+               & "e: `u8`, `i8`, `bool` or a packed record (D410). A packe"
+               & "d record, a record with a flexible member, and a record "
+               & "holding either cross a C signature only by pointer (D414"
+               & "). A variadic C declaration needs at least one fixed par"
+               & "ameter and target support; a variadic definition needs a"
+               & " generated adapter. Variadic calls take positional scala"
+               & "r, pointer or fixed C callback tail arguments, without l"
+               & "abels or static arguments. Change `inout` or `sink` to `"
+               & "in`; pass a pointer if C must write through a parameter."
+               & " Remove `caller` and constraints, specialize generics, r"
+               & "epresent errors through an ordinary C result, and combin"
+               & "e multiple results into one C-representable result. Pass"
+               & " a pointer to a by-value array or other unsupported aggr"
+               & "egate, or change the type or layout to one C represents."
+               & " Pass `ptr` to a packed record or one with a flexible me"
+               & "mber.",
             when Catalogue.Linkage_Contract =>
                "A link symbol, hosted initializer or firmware placement "
                & "breaks [1610]'s, [1975]'s or [1640]'s contract. A link s"
@@ -728,9 +788,11 @@ package body Landin.Diagnostics.Explanations is
                & ") (count: i32, values: ptr ptr u8, environment: ptr ptr "
                & "u8) -> none`, which takes C's `argc`, `argv` and `envp`."
                & " Only the entry module's hosted `main` takes the `main` "
-               & "symbol. Cortex data symbols and sections use the spellin"
-               & "gs, alignments and vectors [1640] lists. Rename the symb"
-               & "ol or correct the declaration.",
+               & "symbol. A datum's link symbol on a hosted target has a r"
+               & "outine's shape and is never `main`; Cortex data symbols "
+               & "and sections use the spellings, alignments and vectors ["
+               & "1640] lists. Rename the symbol or correct the declaratio"
+               & "n.",
             when Catalogue.Traversal_Source =>
                "A `for` source is not something the loop can traverse [1"
                & "150]. A range traversal runs over integers, an array or "
@@ -778,13 +840,16 @@ package body Landin.Diagnostics.Explanations is
                & "target names can be started. On Linux the message lists "
                & "every driver looked for, the target's own GCC and the na"
                & "mes Debian, Ubuntu and Fedora give it, and the note says"
-               & " which package to install (D364); the program's own refu"
-               & "sals come first, so a static link that meets a C symbol "
-               & "is refused for that before anything asks for a driver. C"
-               & "hoose a target with a backend, change the debug or firmw"
-               & "are configuration, link with `--link=libc`, or select or"
-               & " install a toolchain as the note directs. `--toolchain=`"
-               & " only helps when a toolchain is absent or unavailable.",
+               & " which package to install, through `nix-shell -p gcc` on"
+               & " Nix (D364), and that `refine check`, `fmt` and `lsp`, a"
+               & "nd `compile --emit=asm` or `--emit=ir`, need no C driver"
+               & " (D384); the program's own refusals come first, so a sta"
+               & "tic link that meets a C symbol is refused for that befor"
+               & "e anything asks for a driver. Choose a target with a bac"
+               & "kend, change the debug or firmware configuration, link w"
+               & "ith `--link=libc`, or select or install a toolchain as t"
+               & "he note directs. `--toolchain=` only helps when a toolch"
+               & "ain is absent or unavailable.",
             when Catalogue.Toolchain_Failed =>
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"

@@ -17,7 +17,7 @@ package body Landin.Testing.Fixtures is
    --  describes is how a fixture quietly stops applying to anything.
    function Is_Named_Target (Name : String) return Boolean is
      (Name in "linux-x86-64" | "linux-arm64" | "linux-rv64"
-            | "macos-arm64" | "cortex-m"
+            | "darwin-arm64" | "cortex-m0"
             | "freebsd-x86-64" | "freebsd-arm64" | "synthetic-32");
 
    --  Whether a `targets:` list names LABEL.
@@ -229,7 +229,13 @@ package body Landin.Testing.Fixtures is
         Fixture_Root & "/" & Class_Directory (Class (Item)) & "/"
         & Name (Item);
    begin
-      if Module_Root (Item) /= "" then
+      --  A root of `.` is the fixture's own directory, spelled as it is,
+      --  so a report names its files as one written by hand would.
+      if Module_Root (Item) = "." then
+         Landin.Platform.Add (To, "--root=" & Directory);
+         Landin.Platform.Add (To, Directory);
+         return;
+      elsif Module_Root (Item) /= "" then
          Landin.Platform.Add
            (To, "--root=" & Directory & "/" & Module_Root (Item));
          Landin.Platform.Add (To, Directory);
@@ -1166,12 +1172,50 @@ package body Landin.Testing.Fixtures is
       --  An expectation nothing can produce is the failure mode this
       --  format was written to prevent: a golden file that looks like
       --  coverage and is never compared to anything.
-      if Seen_Expect and then not Seen_Args then
+      --  A rooted fixture's module arguments come from `root`, so its
+      --  report has an invocation without `args`, and its `args` are only
+      --  the options refine takes before them: a target, most often, which
+      --  a rooted negative's ordered `codes` are compared at even with no
+      --  `expect`.
+      if Seen_Expect and then not Seen_Args and then not Seen_Root then
          Complain ("expect without args: nothing would produce it");
       end if;
 
-      if Seen_Args and then not Seen_Expect then
+      if Seen_Args and then not Seen_Expect
+        and then not (Seen_Root and then Seen_Class
+                      and then Item.Class = Negative_Program)
+      then
          Complain ("args without expect: nothing would be compared");
+      end if;
+
+      if Seen_Args and then Seen_Root then
+         declare
+            Value : constant String := Unbounded.To_String (Item.Args);
+            First : Positive := Value'First;
+         begin
+            for Index in Value'First .. Value'Last + 1 loop
+               if Index > Value'Last or else Value (Index) = ' ' then
+                  if Index > First then
+                     declare
+                        Word : constant String := Value (First .. Index - 1);
+                     begin
+                        if Word (Word'First) /= '-'
+                          or else (Word'Length >= 7
+                                   and then Word (Word'First
+                                                  .. Word'First + 6)
+                                            = "--root=")
+                        then
+                           Complain
+                             ("a rooted fixture's args are the options"
+                              & " refine takes before the module its root"
+                              & " gives, so they name no module: " & Word);
+                        end if;
+                     end;
+                  end if;
+                  First := Index + 1;
+               end if;
+            end loop;
+         end;
       end if;
 
       if Seen_Levels then

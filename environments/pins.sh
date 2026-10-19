@@ -23,10 +23,13 @@ LANDIN_BASE_IMAGE=docker.io/library/debian@sha256:f324c7ff54321e8d9c588493a20244
 #  grammar's CLI is the release binary tree-sitter publishes for this version,
 #  checked against this sha256 before it replaces the npm package's
 #  unverified download; highlight/tree-sitter/package.json names the same
-#  version.  check.py holds all three to agreeing.
+#  version.  check.py holds all three to agreeing.  The nix shell fetches
+#  the same release binary for its own system, held to the same checksums.
 LANDIN_CLANG_UBUNTU=1:19.1.1-1ubuntu1~24.04.2
 LANDIN_TREE_SITTER_VERSION=0.26.9
 LANDIN_TREE_SITTER_SHA256_X86_64_LINUX=9ce82137caa65864e7ca8b869fd391cef88c9bd2a01c4371b9c4dd26c2585efb
+LANDIN_TREE_SITTER_SHA256_AARCH64_LINUX=c8feeb32115958cb44442ca4d68f6d66cf7605dbd65681e62342181ebdd6db3b
+LANDIN_TREE_SITTER_SHA256_AARCH64_DARWIN=e46725b2417c085b0761948abc0cc240bff6a3ab5d2128e3ad0de467ded3388d
 
 #  The cross lane: QEMU's user emulation and the cross drivers that link
 #  another Linux target's executables.  The nix shell takes both from

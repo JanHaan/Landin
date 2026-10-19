@@ -17,54 +17,48 @@ def stops_for(workload):
         lines = shared.parser_lines()
         source = shared.PARSER_SOURCE
         return [
-            stop('digits', source, lines['digits'],
-                 ['parse_digits', 'parse_digits', 'parse_entry', 'parse_and_append', 'parse_sequence'],
+            stop('digits', source, lines['digits'], shared.frames('parser', 'digits'),
                  {'accumulated': 4, 'cursor.offset': 27, 'ends.offset': 28},
                  when={'accumulated': 4}, complete_parser=True,
                  caller_values={'accumulated': 0, 'cursor.offset': 26}),
-            stop('recovery', source, lines['recovery'],
-                 ['recover_to_boundary', 'parse_entry', 'parse_and_append', 'parse_sequence'],
+            stop('recovery', source, lines['recovery'], shared.frames('parser', 'recovery'),
                  {'parser.depth': 0, 'parser.look.what': 1,
                   'parser.look.begins.offset': 36, 'parser.look.ends.offset': 38},
                  when={'parser.look.begins.offset': 36}, complete_parser=True),
-            stop('nested', source, lines['nested'],
-                 ['parse_sequence', 'parse_entry', 'parse_and_append', 'parse_sequence'],
+            stop('nested', source, lines['nested'], shared.frames('parser', 'nested'),
                  {'parser.depth': 1, 'parser.look.what': 6,
                   'parser.look.begins.offset': 48, 'source.len': 92},
                  when={'parser.depth': 1}, complete_parser=True),
-            stop('done', shared.PARSER_FIXTURE / 'main.ldn', lines['done'], ['main'],
+            stop('done', shared.PARSER_FIXTURE / 'main.ldn', lines['done'],
+                 shared.frames('parser', 'done'),
                  {'valid': 1, 'source_length': 92, 'saw_out_of_memory': 1, 'saw_io_failure': 1})]
     if workload == 'containers':
         lines = shared.container_lines()
         source = shared.CONTAINER_SOURCE
         return [
-            stop('sorted', source, lines['sorted'], ['numbers_path', 'containers_run', 'main'],
+            stop('sorted', source, lines['sorted'], shared.frames('containers', 'sorted'),
                  {'count': 20, 'first': 1, 'last': 20}),
-            stop('done', source, lines['done'], ['containers_run', 'main'],
+            stop('done', source, lines['done'], shared.frames('containers', 'done'),
                  dict.fromkeys(shared.CONTAINER_DONE_VALUES, 1)),
             *[stop(instance, source, lines['evidence'],
-                   ['evidence_less', 'containers_run', 'main'],
+                   shared.frames('containers', 'evidence'),
                    {'left': left, 'right': 1}, when={'left': left}, steps=[
-                       dict(action='in', function=provider, line=lines[instance + '-provider'],
-                            stack=[provider, 'evidence_less', 'containers_run', 'main'],
-                            values={'left': left, 'right': 1}),
-                       dict(action='out', function='evidence_less', line=lines['evidence']),
-                       dict(action='out', function='containers_run', line=lines[instance + '-call']),
-                       dict(action='over', function='containers_run', line=lines[instance + '-ready'],
+                       dict(action='in', function=stack[0], line=lines[instance + '-provider'],
+                            stack=stack, values={'left': left, 'right': 1}),
+                       dict(action='out', function=stack[1], line=lines['evidence']),
+                       dict(action='out', function=stack[2], line=lines[instance + '-call']),
+                       dict(action='over', function=stack[2], line=lines[instance + '-ready'],
                             values={('signed_order' if instance == 'signed' else 'unsigned_order_ok'): 1})])
-              for instance, provider, left in (('signed', 'less_i32', -1),
-                                               ('unsigned', 'less_u32', 4294967295))]]
+              for instance, left in (('signed', -1), ('unsigned', 4294967295))
+              for stack in [shared.frames('containers', instance)]]]
     assert workload == 'hosted'
     lines = shared.hosted_lines()
     source = shared.HOSTED_SOURCE.parent
-    return [stop(name, source / filename, lines[name], stack, values)
-            for name, filename, stack, values in (
-                ('sample', 'filter.ldn', ['sample_keep', 'process', 'run_logged', 'run', 'main'],
-                 {'self.*.seen': 0, 'self.*.every': 2}),
-                ('sample-updated', 'filter.ldn', ['sample_keep', 'process', 'run_logged', 'run', 'main'],
-                 {'self.*.seen': 1}),
-                ('text', 'dest.ldn', ['text_emit', 'process', 'run_logged', 'run', 'main'],
-                 {'pending.delivered': 0}))]
+    return [stop(name, source / filename, lines[name], shared.frames('hosted', name), values)
+            for name, filename, values in (
+                ('sample', 'filter.ldn', {'self.*.seen': 0, 'self.*.every': 2}),
+                ('sample-updated', 'filter.ldn', {'self.*.seen': 1}),
+                ('text', 'dest.ldn', {'pending.delivered': 0}))]
 
 
 def measure(refine, output, capture, tools, selected=None, profile=None):

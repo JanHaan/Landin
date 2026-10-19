@@ -785,6 +785,10 @@
       "required": false,
       "types": [
         {
+          "type": "identifier",
+          "named": true
+        },
+        {
           "type": "scalar_type",
           "named": true
         }
@@ -2220,7 +2224,7 @@
         ]
       },
       "case": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
           {

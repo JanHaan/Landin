@@ -3,7 +3,7 @@ summary: D377 admits an erased call no conformance answers, and constructing the
 program: program.ldn
 codes: L0318
 constructs: 1290, 1370, 1380, 1390
-targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt
 args: ../tests/fixtures/negative/erased-construction-without-conformance/program.ldn
 status: 1

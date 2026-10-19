@@ -4,4 +4,4 @@ summary: D376 `else none` keeps a failed call's effects and runs the next statem
 program: main.ldn
 constructs: 0940, 1030, 1050, 1130, 1370, 1390
 status: 42
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

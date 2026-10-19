@@ -12,8 +12,9 @@ the documentation convention.
 
 ## Availability inventory
 
-The shared freestanding modules are `core/arena`, `core/cmp`, `core/diag`, `core/fault`,
-`core/io` with its submodule `core/io/fake`, `core/map`, `core/mem`,
+The shared freestanding modules are `core/arena`, `core/cmp`, `core/diag`,
+`core/failure`, `core/fault`, `core/io` with its submodule `core/io/fake`,
+`core/map`, `core/mem`,
 `core/net`, `core/panic`, `core/pool`, `core/random`, `core/region`,
 `core/sort`, `core/spill`, `core/text`, `core/time`, `core/tree` and
 `core/vec`. Every public interface is
@@ -104,12 +105,15 @@ prefixed only where one module holds several types (`io.memory_over`). A
 provider's counters are plural nouns: `pool.allocations`, `pool.frees`,
 `fault.frees`. A module is named by a short noun or a conventional
 abbreviation: `mem`, `vec`, `cmp`, `io`, `diag`, `map`, `sort`, `arena`, `pool`,
-`spill`, `fault` (D274).
+`spill`, `fault`, `failure` (D274).
 
 Two atoms serve every core container: `mem.out_of_bounds` for an index past
 the initialized prefix and `mem.empty` for taking from nothing. Key lookups
 keep their own, `map.missing` and `tree.no_such_node`, because a missing key
-is not a bad index.
+is not a bad index. Every atom a `core` module fails with is in
+`failure.reason` and has a phrase for a person in `failure.words`, lower case
+with no final stop, so a program reports `settings: not found` without a
+table of its own; a new failure atom adds its phrase there (D388).
 
 `core/io` is four narrow concepts over one provider type, `reader`, `writer`,
 `files` and `process`, with `world` their composition and `writer_of` lending
@@ -257,7 +261,9 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/mem` | `allocator` with `alloc`/`grow`/`resize`/`free` taking the handle by value, `allocate`/`resize`/`free`, `relocate` for a provider that resizes by moving, the `aligned_offset` a bump provider advances with, typed `storage`, `new`/`delete` and byte buffers. Byte storage can release its initialized prefix in one typed transition before disposal. Requests and capacities use target `usize`. Raw backing and its lifetime belong to the caller. |
 | `core/arena` | The caller-backed monotonic `arena` over an `arena.space`, made by `over` or `over_unchecked`, with `used` and `reset`. Its state, its backing and their lifetime belong to the caller. A program that imports no provider, `core/arena`'s or another, still builds: an erased allocator call no conformance answers is a trap no value reaches (D377). |
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
-| `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
+| `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. A growth or a resize keeps a block in its slot to any extent the slot holds, so a list over a pool grows in place until its slot is full (`runtime/core-pool-grow`, 16.5 KB at size/auto, and `runtime/core-pool-list-grows`, 23.3 KB) (D386). No backing allocation or fallback heap. |
+| `core/sort` | Heapsort and selection sort by `cmp.ordered` evidence, and `sort_by`, heapsort by a comparison given a context, with no allocation; `runtime/core-sort-context`, which sorts records into a shared pool of names with `cmp.compare`, is 10.7 KB at size/auto (D387). |
+| `core/failure` | `failure.words`, a phrase for each of the 32 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. |
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
@@ -636,3 +642,14 @@ New since: `tree.kind`, `tree.leaves` and `tree.children`; `spill.clear`,
 `spill.last` and `spill.reserve`; `diag.message`; `mem.arena_reset`;
 `mem.grow`; `map.removed`; `io.format`; and `platform/posix` and `platform/libc` laid out one file per
 facility and per system (D346).
+
+## Migrating to what the newcomer's path met
+
+Three things an outside program met in the library are answered (D386 to
+D388).
+
+| Was | Now |
+|---|---|
+| a pool that refused every growth in place, so a container over it grew into a second slot and a one-slot pool refused the growth | `mem.grow` through a pool keeps the block in its slot to any extent the slot holds; a container grows in place, its counters show one allocation and no free for the growth, and a growth past the slot is still refused |
+| a sort written by hand for records that refer into shared storage | `sort.sort_by(values, by, less)`, the comparison given the context on every call |
+| a program's own table from failure atoms to messages | `failure.words(problem)`, from `import core/failure` |

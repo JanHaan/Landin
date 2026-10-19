@@ -1,0 +1,8 @@
+--  Refused on Darwin, where platform/linux is not available; the same
+--  source compiles for Linux, so only a rooted negative that names its
+--  target can pin the refusal.
+import probe
+
+public main: () -> (code: i32) =
+    code = i32(probe.own() & 1)
+end main

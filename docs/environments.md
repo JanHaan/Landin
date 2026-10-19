@@ -206,6 +206,24 @@ and tags can run concurrently. Host cleanup waits for both modes; `clean.sh
 standard-library `fcntl` supplies these locks on the supported macOS and Linux
 hosts; the kernel releases them when the last using process exits.
 
+A build links its executables into its tree's `link/` and then publishes
+them into `bin/` by a rename, so nothing ever finds `bin/refine` missing or
+half-written. A tool that runs a build's `refine` without its mode lock — a
+corpus lane, `test_determinism.py`, `emit_manifest.py` — holds that build's
+readers lock instead, through `scripts/build_lock.py`'s `reading()`: several
+can run at once, and a rebuild compiles beside them and waits to publish
+until they finish, rather than replace the compiler between two of their
+requests. Whoever waits for a lock says which lock, and the pid and command
+of each process that holds it.
+
+Every build says why it builds what it does: no earlier build, sources
+changed, the inventory or a project changed, or the last build did not
+finish. A clean rebuild removes everything but `bin/`. The developer build
+keeps what a failed build compiled, because the checksum mode recompiles
+whatever no longer matches its source, and after an interrupted build it
+discards only the files that build wrote, any of which may be half-written;
+the ordinary build starts those from clean.
+
 A session profile taken while aggregates and value layout were implemented had enough timestamps to set the priority: clean
 debug and release builds and whole-fixture runs occupied almost all measured
 time, while all six measured container lifecycle phases rounded to zero
@@ -335,6 +353,17 @@ fixed by `flake.lock`, matching the Debian environments' Clang major without
 following nixpkgs' default. The Darwin shell does not pretend that its SDK is a
 Linux sysroot; run binding-generator tests through `scripts/linux-loop.sh`
 there.
+
+The shell also holds the editor grammar's tree-sitter CLI, the release
+binary of the version `environments/pins.sh` pins, checked against its
+checksum for each of the three systems, so `highlight/test.sh --integration`
+runs in it without `npm`. Its `bash` is nixpkgs' interactive one, because
+stdenv's has no `compgen` or `complete` and the completion case of
+`scripts/tests/test_cli_native.py` needs both. Its two `landin:` banner
+lines go to standard error, so `nix develop -c cmd > file` captures only
+what the command writes; `check.py` holds the hook to that. `scripts/debug.sh`
+takes the pinned installation from the `gnat` on `PATH` when
+`LANDIN_GNAT_HOME` is unset, which in this shell is the wrapped GNAT.
 
 Its Linux behaviour is not settled by the local container, and that is not a
 formality. The pinned gprbuild dies with a segmentation fault when argv[0]

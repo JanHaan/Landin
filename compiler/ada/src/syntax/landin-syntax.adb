@@ -58,6 +58,7 @@ package body Landin.Syntax is
             when Literal_Kind             => 0,
             --  The one slot is [1790]'s type, not an expression.
             when Size_Of | Align_Of       => 1,
+            when Offset_Of                => 1,
             when Unary_Kind               => 1,
             when Binary_Kind              => 2,
             when Field_Value | Call_Argument => 1,
@@ -176,9 +177,8 @@ package body Landin.Syntax is
      return Landin.Layouts.Policy is (Element (Of_Tree, Id).Layout);
 
    function Has_C_Layout (Of_Tree : Tree; Id : Node_Id) return Boolean is
-      use type Landin.Layouts.Policy;
    begin
-      return Layout_Of (Of_Tree, Id) = Landin.Layouts.C;
+      return Landin.Layouts.Is_C (Layout_Of (Of_Tree, Id));
    end Has_C_Layout;
 
    function Bit_First (Of_Tree : Tree; Id : Node_Id) return Node_Id
@@ -461,6 +461,9 @@ package body Landin.Syntax is
      is (Slot (Of_Tree, Id, 1));
 
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Offset_Path (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
 
    function Value_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
@@ -791,13 +794,98 @@ package body Landin.Syntax is
    function Match_Pattern (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
 
+   --  D405: the trailing run is either the one case's bindings or the
+   --  arm's further labels, never both, so its first item says which.
+   function Run_Binds (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Run_Length (Of_Tree, Id) > 0
+         and then Kind (Of_Tree, Nth_Item (Of_Tree, Id, 1))
+                    = Match_Binding);
+
+   function Match_Label_Count (Of_Tree : Tree; Id : Node_Id) return Positive
+     is (if Run_Binds (Of_Tree, Id) then 1
+         else 1 + Run_Length (Of_Tree, Id));
+
+   function Nth_Match_Label
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (if Index = 1 then Slot (Of_Tree, Id, 1)
+         else Nth_Item (Of_Tree, Id, Index - 1));
+
    function Match_Binding_Count
      (Of_Tree : Tree; Id : Node_Id) return Natural
-     is (Run_Length (Of_Tree, Id));
+     is (if Run_Binds (Of_Tree, Id) then Run_Length (Of_Tree, Id) else 0);
 
    function Nth_Match_Binding
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
+
+   function Match_Label_Total (Of_Tree : Tree; Id : Node_Id) return Natural
+   is
+      Total : Natural := 0;
+   begin
+      for Arm in 1 .. Match_Arm_Count (Of_Tree, Id) loop
+         Total := Total
+           + Match_Label_Count (Of_Tree, Nth_Match_Arm (Of_Tree, Id, Arm));
+      end loop;
+      return Total;
+   end Match_Label_Total;
+
+   --  The arm holding the Index-th label and that label's place in it.
+   procedure Locate_Label
+     (Of_Tree : Tree;
+      Id      : Node_Id;
+      Index   : Positive;
+      Arm     : out Node_Id;
+      Within  : out Positive);
+
+   procedure Locate_Label
+     (Of_Tree : Tree;
+      Id      : Node_Id;
+      Index   : Positive;
+      Arm     : out Node_Id;
+      Within  : out Positive)
+   is
+      Left : Positive := Index;
+   begin
+      for Position in 1 .. Match_Arm_Count (Of_Tree, Id) loop
+         Arm := Nth_Match_Arm (Of_Tree, Id, Position);
+         if Left <= Match_Label_Count (Of_Tree, Arm) then
+            Within := Left;
+            return;
+         end if;
+         Left := Left - Match_Label_Count (Of_Tree, Arm);
+      end loop;
+      raise Compiler_Defect with "a match label past its last arm";
+   end Locate_Label;
+
+   function Label_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Arm    : Node_Id;
+      Within : Positive;
+   begin
+      Locate_Label (Of_Tree, Id, Index, Arm, Within);
+      return Arm;
+   end Label_Arm;
+
+   function Nth_Label
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Arm    : Node_Id;
+      Within : Positive;
+   begin
+      Locate_Label (Of_Tree, Id, Index, Arm, Within);
+      return Nth_Match_Label (Of_Tree, Arm, Within);
+   end Nth_Label;
+
+   function Ends_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Boolean
+   is
+      Arm    : Node_Id;
+      Within : Positive;
+   begin
+      Locate_Label (Of_Tree, Id, Index, Arm, Within);
+      return Within = Match_Label_Count (Of_Tree, Arm);
+   end Ends_Arm;
 
    function Statement_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Run_Length (Of_Tree, Id));

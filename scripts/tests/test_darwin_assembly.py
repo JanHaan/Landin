@@ -2,6 +2,7 @@
 """Darwin parity frame negative controls."""
 import importlib.util
 import os
+import re
 from pathlib import Path
 import signal
 import sys
@@ -118,6 +119,51 @@ class DarwinStandardInputTests(unittest.TestCase):
             self.assertEqual(CHECK.standard_input(base, {}), os.devnull)
             _, stdout, _ = run.command(echo, "empty", base)
             self.assertEqual(stdout, b"")
+
+class StreamDefaultTests(unittest.TestCase):
+    """A fixture without `stream:` is merged on every lane."""
+
+    TRAP = b"main.ldn:4:9: trap: out_of_range\n"
+
+    def test_an_unnamed_stream_is_merged(self):
+        CHECK.outcome({"status": "0"}, 0, b"out\n", b"err\n",
+                      expected=b"out\nerr\n")
+        CHECK.outcome({"traps": "yes", "trap_report": self.TRAP.decode().strip()},
+                      -signal.SIGTRAP, b"", self.TRAP)
+
+    def test_a_separate_stream_still_requires_an_empty_standard_error(self):
+        with self.assertRaisesRegex(ValueError, "unexpected stderr"):
+            CHECK.outcome({"status": "0", "stream": "output"}, 0, b"", b"err\n")
+        #  The test program excuses no trap report there, and neither
+        #  does this lane.
+        with self.assertRaisesRegex(ValueError, "unexpected stderr"):
+            CHECK.outcome({"traps": "yes", "stream": "output",
+                           "trap_report": self.TRAP.decode().strip()},
+                          -signal.SIGTRAP, b"", self.TRAP)
+
+    def test_every_lane_reads_the_same_default(self):
+        lanes = [ROOT / "compiler/tests" / lane / "check.py"
+                 for lane in ("darwin", "freebsd", "rv64")]
+        lanes += [ROOT / "compiler/tests/darwin/diagnostics.py",
+                  ROOT / "check.py"]
+        #  Each lane spells its own reading of `stream:`.  A read that
+        #  names a default names `merged`; one that names none may only
+        #  ask whether the key says `output`, which an absent key does not.
+        for path in lanes:
+            text = path.read_text()
+            with self.subTest(lane=str(path.relative_to(ROOT))):
+                reads = re.findall(
+                    r"""get\((['"])stream\1([^)]*)\)\s*(?:[=!]=\s*(['"])(\w+)\3)?""",
+                    text)
+                self.assertTrue(reads or "merged(meta)" in text)
+                for _, default, _, compared in reads:
+                    if default:
+                        self.assertRegex(default, r"""^,\s*(['"])merged\1$""")
+                    else:
+                        self.assertEqual(compared, "output")
+        ada = (ROOT / "compiler/ada/tests/src/landin-testing-fixtures.ads").read_text()
+        self.assertIn("Stream    : Stream_Choice := Merged;", ada)
+
 
 if __name__ == "__main__":
     unittest.main()

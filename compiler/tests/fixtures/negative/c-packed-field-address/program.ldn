@@ -1,0 +1,24 @@
+inner: type = layout(c, packed) struct
+    mark: u8
+    value: u32
+end inner
+
+wire: type = layout(c, packed) struct
+    kind: u8
+    id: u32
+    bytes: [4]u8
+    nested: inner
+end wire
+
+poke: (inout target: u32) -> none =
+    target = 1
+end poke
+
+use: () -> none =
+    mut packet: wire = zeroed
+    at := addr packet.id
+    poke(packet.id)
+    part := packet.bytes[0..<2]
+    deep := addr packet.nested.value
+    whole := addr packet
+end use

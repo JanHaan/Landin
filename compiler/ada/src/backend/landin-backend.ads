@@ -38,6 +38,7 @@ with Landin.IR;
 with Landin.IR.Shape_Measurement;
 with Landin.Targets;
 with Landin.Layouts;
+with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Targets.Assembly;
 with Landin.Targets.Layouts;
@@ -124,26 +125,30 @@ package Landin.Backend is
    --  table of the same family (Landin.IR.Evidence_Family), direct and
    --  erased families apart, since a projection's table at runtime may be
    --  any table of its concept.  A routine that can run is a root or one
-   --  that a routine that can run calls, takes the address of, or names
-   --  in a kept entry.  A root has a reference no call makes: an image, an
-   --  exposure, an import or export, a link name, a placement, a
-   --  non-ordinary convention or the C ABI; or it has no parameters, as a
-   --  firmware entry has; or it is Handler, the panic handler the backend
-   --  calls.  A routine only another routine calls is no root, so one that
-   --  only a left-out entry's target calls cannot run and projects
-   --  nothing.  With any `assembler.block` in the unit, whose text may
-   --  name anything, every routine can run.  A table without a family
-   --  keeps every entry.  An entry
-   --  left out is a zero word in its place, so a table's layout never
-   --  changes, and the routine it named is linked only if something else
-   --  reaches it.  The two identities of one physical table (see
-   --  Shares_Evidence_Table) answer alike.  Every target asks this, so
-   --  every target links the same routines.
+   --  that a routine that can run calls, takes the address of, names in
+   --  an `assembler.block`'s text, or names in a kept entry.  A root has
+   --  a reference no call makes: an image, an exposure, an import or
+   --  export, a link name, a placement, a non-ordinary convention or the
+   --  C ABI; or it has no parameters, as a firmware entry has; or it is
+   --  Handler, the panic handler the backend calls.  A routine only
+   --  another routine calls is no root, so one that only a left-out
+   --  entry's target calls cannot run and projects nothing.  A block
+   --  names a routine when the routine's name or link name, either one
+   --  also with a leading `_`, is a run of symbol characters in its text,
+   --  the words D296 roots; its operands are integers and name nothing.
+   --  Meanings and Names spell both.  A table without a family keeps
+   --  every entry.  An entry left out is a zero word in its place, so a
+   --  table's layout never changes, and the routine it named is linked
+   --  only if something else reaches it.  The two identities of one
+   --  physical table (see Shares_Evidence_Table) answer alike.  Every
+   --  target asks this, so every target links the same routines.
    type Kept_Entries is private;
 
    function Kept_Evidence_Entries
-     (Of_Unit : Landin.IR.Unit;
-      Handler : Landin.IR.Item_Id) return Kept_Entries;
+     (Of_Unit  : Landin.IR.Unit;
+      Handler  : Landin.IR.Item_Id;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table) return Kept_Entries;
 
    function Is_Kept
      (Of_Kept : Kept_Entries;
@@ -314,6 +319,7 @@ package Landin.Backend is
    --  measurements carry declaration-order scalar or compact fixed-array
    --  fields and D74/D75's shared variant case runs; this
    --  target-owning seam derives their padded placement with Landin.Targets.
+   --  D411: a Measure_Offset answers its offset as Size, alignment one.
    procedure Measurement_Extent
      (Of_Unit   : Landin.IR.Unit;
       Item      : Landin.IR.Item_Id;
@@ -323,7 +329,21 @@ package Landin.Backend is
       Alignment : out Landin.Targets.Byte_Alignment)
      with Pre => Landin.IR.Holds (Of_Unit, Item, Value)
                  and then Landin.IR.Op_Of (Of_Unit, Item, Value)
-                          in Landin.IR.Measure_Size | Landin.IR.Measure_Align;
+                          in Landin.IR.Measurement_Kind;
+
+   --  The number one measurement instruction stands for on this target:
+   --  a size, an alignment, or D411's byte offset of a field path, which
+   --  is the run's placement of the path's first field plus the offsets
+   --  the rest of the path replays inside it.
+   function Measurement_Answer
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Value   : Landin.IR.Value_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count
+     with Pre => Landin.IR.Holds (Of_Unit, Item, Value)
+                 and then Landin.IR.Op_Of (Of_Unit, Item, Value)
+                          in Landin.IR.Measurement_Kind;
 
    function Value_Offset
      (Of_Frame : Frame; Value : Landin.IR.Value_Id)
@@ -428,6 +448,33 @@ package Landin.Backend is
 
    function Count
      (Of_Counts : Spelling_Counts; Spelling : String) return Natural;
+
+   --  D415: whether Item is a global symbol.  `public` alone is not an
+   --  export.  Global are the hosted or firmware entry, an import, an item
+   --  with a link symbol -- an explicit `link(symbol: ...)`, or the
+   --  spelling the checker notes for a public C definition -- a public
+   --  definition in a machine convention, platform/linux's naked
+   --  `_landin_start` among them, and a Cortex-M placement.  Every other
+   --  routine and datum is a local symbol under its own name, so no C
+   --  library or linked object can collide with it.
+   function Is_Exported
+     (Of_Unit        : Landin.IR.Unit;
+      Meanings       : Landin.Resolution.Table;
+      Item           : Landin.IR.Item_Id;
+      Hosted_Entry   : Landin.IR.Item_Id;
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item)
+      return Boolean;
+
+   --  D417: the symbol an item takes when another item of the program
+   --  holds its own spelling.  Its module's logical path with every `/`
+   --  a `.`, or `main` for the entry module, then `.` and the spelling:
+   --  `core.arena.reset`.  An identifier holds no `.`, so only an explicit
+   --  link name can hold this too; then, as for a second instance of one
+   --  generic routine, the caller appends `.1`, `.2` and so on.
+   function Qualified_Symbol
+     (Meanings : Landin.Resolution.Table;
+      Declared : Landin.IR.Declaration_Id;
+      Spelling : String) return String;
 
    --  [1630]: one block's operands with every `general` register chosen,
    --  each at the width its type selects.  Every backend emits the same

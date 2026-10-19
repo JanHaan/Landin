@@ -1,0 +1,9 @@
+class: negative
+summary: D405 the wildcard is an arm of its own, never one of several labels
+program: program.ldn
+codes: L0100
+constructs: 1210
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/match-wildcard-among-labels/program.ldn
+status: 1

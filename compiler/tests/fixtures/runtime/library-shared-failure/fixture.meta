@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: Small shared core/failure consumer gives a parse's failure its words
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+constructs: 0600, 0940, 1410, 1420, 1480

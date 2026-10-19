@@ -1,0 +1,21 @@
+--  What a program exports by name (D415, D416): a C definition and two
+--  data under link names, one of which the C peer writes.  None is public,
+--  and `public` alone would export none of them.
+
+extern(c) peer_uses_exports: () -> (fault: i32)
+
+extern(c) link(symbol: "landin_export_scaled") scaled:
+    (value: i32) -> (result: i32) =
+    result = value * 3
+end scaled
+
+link(symbol: "landin_export_limit") limit: i32 = 14
+link(symbol: "landin_export_written") mut written: i32 = 0
+
+public main: () -> (code: i32) =
+    code = 10 + peer_uses_exports()
+    return when code <> 10
+    code = 3
+    return when written <> 9 or limit <> 14 or scaled(2) <> 6
+    code = 42
+end main

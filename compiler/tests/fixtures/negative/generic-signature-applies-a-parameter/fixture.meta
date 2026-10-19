@@ -3,4 +3,4 @@ summary: a generic signature's type application that names a parameter is refuse
 constructs: 1230, 1350, 1800
 program: program.ldn
 codes: L0304, L0304, L0304
-targets: linux-x86-64, linux-arm64, macos-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

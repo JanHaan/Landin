@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: sort.sort_by orders records that refer into a shared pool of names by the bytes they refer to, the pool passed to every comparison as its context, keeps a sorted view sorted, counts its comparisons through a pointer context within heapsort's bound, and makes none for a view of no items or of one
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0600, 0870, 1000, 1150, 1290, 1410, 1420
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

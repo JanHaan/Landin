@@ -226,7 +226,7 @@ fixed if compiler.os == linux then
     --- Every offset is held to lie within the image before it is read, so
     --- an image that is not a 64-bit little-endian ELF object, is
     --- truncated or contradicts itself finds nothing and never traps.
-    public link(symbol: "_landin_linux_vdso_find") find:
+    public find:
         (image: []u8, name: []u8, version: []u8)
         -> (found: bool, offset: usize) =
         found = false
@@ -314,7 +314,7 @@ fixed if compiler.os == linux then
     --- found no auxiliary vector, as when a C `main` built the tables it
     --- passed the argument initializer itself, or when the image's first
     --- page does not describe a load segment.
-    public link(symbol: "_landin_linux_vdso_image") kernel_image:
+    public kernel_image:
         () -> (found: bool, image: []u8) =
         (found: named, value: base) := linux.auxiliary(at_sysinfo_ehdr)
         found = false
@@ -334,7 +334,7 @@ fixed if compiler.os == linux then
     --- The address of the vDSO's function `name` of version `version`,
     --- found by `find` in `kernel_image`: whether it is there, and
     --- where.
-    public link(symbol: "_landin_linux_vdso_symbol") symbol:
+    public symbol:
         (name: []u8, version: []u8) -> (found: bool, address: usize) =
         (found: present, image) := kernel_image()
         found = false

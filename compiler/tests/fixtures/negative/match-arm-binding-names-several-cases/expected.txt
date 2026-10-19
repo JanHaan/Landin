@@ -1,0 +1,10 @@
+error[L0103]: an arm that binds a payload names one case
+  --> ../tests/fixtures/negative/match-arm-binding-names-several-cases/program.ldn:12:23
+   |
+12 |         circle, square(side): n = side
+   |                       ^
+  --> ../tests/fixtures/negative/match-arm-binding-names-several-cases/program.ldn:12:9
+   |
+12 |         circle, square(side): n = side
+   |         ^^^^^^ this arm names several cases
+  = note: D405: several cases share an arm only without bindings; give the case whose payload is bound an arm of its own

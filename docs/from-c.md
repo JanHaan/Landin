@@ -97,17 +97,23 @@ silent false [1530].
 
 ```c
 _Static_assert(sizeof(size_t) == 8, "64-bit only");
+_Static_assert(sizeof(struct header) == 8 && offsetof(struct header, id) == 4,
+               "C's layout");
 ```
 
 ```landin
 -- This module is written for a 64-bit target.
 compiler.assert(sizeof usize == 8)
+
+-- The record C reads has C's size and the offset C gives its id.
+compiler.assert(sizeof header == 8 and offsetof header.id == 4)
 ```
 
 The condition is a closed fold over literals, the compiler's facts and the
-sizes of scalar types [1510]. A declared type's size is not among them
-(D202), so `_Static_assert(sizeof(struct header) == 8)` has no Landin form
-yet. Check such a size once at run time, at the start of `main`.
+sizes, alignments and field offsets of types [1510]. An assertion that
+measures a declared type is checked once the type is laid out for the
+selected target (D412); it runs no code. A `fixed if` condition measures
+scalar types only, because the arms it selects may declare the type.
 
 ## Types and memory
 
@@ -141,11 +147,27 @@ where it crosses (D239).
 struct __attribute__((packed)) wire { uint8_t kind; uint32_t id; };
 ```
 
-Landin has no byte-packed record yet. `layout(packed)` is a different
-thing, a hardware register's bits at stated positions (D228), and a packed
-C record is refused at the C boundary [1580]. Today, read and write such
-data as bytes and assemble each field with shifts, as the flexible array
-entry below reads a record's length.
+```landin
+--- A record packed to the byte: `id` begins at 1, and the record is 5 bytes.
+wire: type = layout(c, packed) struct
+    kind: u8
+    id: u32
+end wire
+
+--- A field is read by copy, wherever the record lies.
+wire_id: (packet: ptr wire) -> (id: u32) =
+    id = packet.val.id
+end wire_id
+```
+
+`layout(c, packed)` places every field at alignment one with no padding,
+as the attribute does (D410). A field may therefore sit at any address, so
+it has no address of its own: `addr packet.val.id`, an `inout` argument and
+a slice of a field are refused, and a field is read and written by copy.
+Where a target needs aligned loads, the compiler moves such a field a byte at
+a time. C takes a packed record through a pointer and never by value
+(D414). `layout(packed)` is a different thing, a hardware register's bits at
+stated positions (D228).
 
 ### `offsetof`
 
@@ -154,27 +176,24 @@ size_t at = offsetof(struct linux_dirent64, d_name);
 ```
 
 ```landin
---- The fixed part of Linux's `struct linux_dirent64`; the name follows it.
+--- Linux's `struct linux_dirent64`; its name is a flexible array member.
 directory_record: type = layout(c) struct
     inode: u64
     offset: i64
     length: u16
     kind: u8
+    name: [0]u8
 end directory_record
 
---- Where the name begins: the byte after `kind`, measured.
-name_offset: () -> (bytes: usize) =
-    record: directory_record = zeroed
-    bytes = usize(addr record.kind) + sizeof u8 - usize(addr record)
-end name_offset
+--- Where the name begins: 19, the byte after `kind`.
+name_offset: usize = offsetof directory_record.name
 ```
 
-Landin has no offset query yet. Today, measure an offset at run time: an
-address converts to an integer, and the difference of two is the offset
-[0470]. Do not compute it by hand or from `sizeof`, which counts the padding
-after the last field: `sizeof directory_record` is 24, and the name begins
-at 19. The register in `ROADMAP.md` holds the offset query as open work,
-with the trailing array below.
+`offsetof t.field` is a `usize`, measured for the selected target, and the
+selection may continue through nested structs, as in `offsetof frame.head.id`
+(D411). Like `lenof`, the word is a name everywhere else. Do not compute an
+offset by hand or from `sizeof`, which counts the padding after the last
+field: `sizeof directory_record` is 24, and the name begins at 19.
 
 ### Flexible array members
 
@@ -187,22 +206,24 @@ struct linux_dirent64 { ino64_t d_ino; off64_t d_off;
 ```landin
 import core/mem
 
---- The name in the record at `at` of what `getdents64` read: the bytes after
---- the fixed part, up to the NUL that ends them. Every hosted target is
+--- The name in the record at `at` of what `getdents64` read: the bytes from
+--- the name's offset up to the NUL that ends them. Every hosted target is
 --- little-endian, so the length's low byte comes first.
 record_name: (buffer: []u8, at: usize) -> (name: []u8 from buffer) =
-    length: u16 = u16(buffer[at + 16]) | u16(buffer[at + 17]) << 8
-    rest := buffer[at + name_offset()..<at + usize(length)]
+    length_at := at + offsetof directory_record.length
+    length := usize(buffer[length_at]) | usize(buffer[length_at + 1]) << 8
+    rest := buffer[at + name_offset..<at + length]
     name = rest[0..<mem.find(rest, 0)]
 end record_name
 ```
 
-A struct has no trailing array of unstated length: a fixed array has a
-length, and a slice field cannot cross to C, which L0346 refuses [1580].
-Today, declare the fixed part as a `layout(c)` struct, read the record
-from the bytes the call filled, and take the trailing part as a slice of
-them, which keeps its length and its origin. The register in `ROADMAP.md`
-holds this gap with `offsetof`.
+A C record's last field may be `[0]T`, C's flexible array member: it takes
+its element's alignment, so the record's size and the member's offset are
+C's (D413). Its elements are not the record's own storage. Take them as a
+slice of the bytes the call filled, from `offsetof` to the record's length,
+which keeps their length and their origin. Because the elements would
+overlap whatever follows, such a record is no array element and no field of
+another C record, and C takes it through a pointer (D414).
 
 ### `union`
 
@@ -756,10 +777,6 @@ crosses the boundary [1600].
 
 | C habit | what to write today |
 | --- | --- |
-| `offsetof` | the difference of two addresses, measured at run time |
-| a flexible array member | the fixed part as a `layout(c)` struct, the trailing bytes as a slice |
-| `_Static_assert` on a struct's size or an offset | a check at run time, at the start of `main` |
-| a byte-packed struct | the bytes, with each field assembled by shifts |
 | pointer arithmetic that keeps the base's origin | the address as an integer; the result borrows nothing |
 | several `case` labels on one arm | one arm for each case, or `_` for the rest |
 
