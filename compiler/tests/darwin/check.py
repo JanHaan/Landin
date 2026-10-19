@@ -250,11 +250,14 @@ def main(argv=None):
             if args.parity and name in differences:
                 if "replacement" in differences[name]:
                     continue
-                meta.update({k: v for k, v in differences[name].items() if k != "reason"})
+                #  The overlay is JSON, so a status is a number there; the
+                #  metadata reader reads text, as from a fixture.meta.
+                meta.update({k: str(v) for k, v in differences[name].items() if k != "reason"})
             candidates.append((name, base, meta))
         for case in PROFILES["darwin"]:
             candidates.append((case["name"], HERE, fixture_meta.Metadata.of(
-                {**case, "class": case.get("class", "abi"), "c-sources": case.get("c", "")},
+                {**{k: str(v) for k, v in case.items()},
+                 "class": case.get("class", "abi"), "c-sources": case.get("c", "")},
                 case.get("class", "abi") + "/" + case["name"])))
         names = {name for name, _, _ in candidates}
         require(not args.case or set(args.case) <= names, "unknown exact case")
