@@ -74,7 +74,7 @@ The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.18, R13.19, R13.31, R13.32, R13.60, R13.33, R13.34, R13.36, R13.61, R13.35, R13.70, R13.71, R13.72, R14.10, R14.20, R14.30, R14.40, R12, R13.20, R14.25, R15, R16
+Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.18, R13.19, R13.31, R13.32, R13.60, R13.33, R13.34, R13.36, R13.61, R13.35, R13.70, R13.71, R13.72, R13.73, R14.10, R14.20, R14.30, R14.40, R12, R13.20, R14.25, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
 R12.10 depends on R13.35 to hold the first boundary, and on R13.70 for the
@@ -2399,6 +2399,45 @@ contributor meets take several selectors and name their faults. An atom
 gate passed on the commit that closes this item, with RV64's hardware jobs
 suspended.
 
+### R13.73 — Documentation that teaches
+
+Status: active
+Depends on: R13.72
+
+The tour began as "Learn X in Y minutes" and drifted into a design
+document. Its preamble was a version history, 153 of its 173 entries
+opened by repeating their own heading, design rationale and decision
+records sat in the middle of what a newcomer reads first, and nothing
+showed a hello world or what replaces `printf`. `docs/from-c.md` opened
+with how its fixture is checked, and the library reference and its
+pages read as walls of text. This item makes the published documents
+teach, and decides nothing about the language: a rule a rewrite would
+drop moves to `spec.md` first.
+
+The tour: it opens with a hello world and a formatted line, and says how
+to read it; the version history moves to the handoff. Every entry is a
+heading that is a title, one sentence saying what the construct is, its
+example, why it is that way, and its edge cases last, pointing to
+`spec.md` rather than repeating it. Design history, rejected
+alternatives and implementation detail leave the entries for `spec.md`'s
+register and the library reference. Sections are ordered so that a
+reader can write a function before meeting pointers. Every `[NNNN]` keeps
+its number, and the tour stays one page.
+
+`docs/from-c.md` leads with the C habits and their Landin forms, and puts
+how its fixture is checked at the end; the gaps are a table. The README's
+first program uses `else none`. The library reference reads in order as
+text (SR-251), and its sections are paragraphs a reader can scan rather
+than one paragraph per module. `examples.md` gains the everyday hosted
+tasks — reading standard input, listing a directory, running a command,
+printing formatted values — and an example that puts a failure into
+words, each run by the outside-user lane (SR-51, SR-250).
+
+Exit: an outside reader with no project context writes a small hosted
+program from the tour and the examples alone, and what they met is in the
+register; `python3 check.py`, the script tests and the tour's layout case
+pass.
+
 ### R13 gate
 
 - The shared freestanding, target-specific freestanding and hosted roots are
@@ -2752,7 +2791,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-33 | Usability | A runtime fixture cannot report a status from inside a panic handler, so the trap dispatch fixture shows the handler saw the right kind and site only by re-entering it on a match and spinning otherwise, which a missing dispatch would also satisfy as a trap. | The next panic or trap fixture. | A portable way for a handler to report, on firmware too, used to pin dispatch exactly. | open |
 | SR-35 | Usability | The mutation campaign's one-report-on-the-line share is 90.5% against a 90% bar. The largest misses are reports one line from the mistake: a deleted `end` or value reported on the next line, and missing tokens the parser meets on the next line, some genuinely ambiguous. | A frontend change that moves the share, or the next work on the parser's recovery. | The share raised with margin, or the bar's meaning restated for the ambiguous cases. | watch |
 | SR-46 | Competitive optimization | An immutable module `bool` is loaded from memory rather than folded, so `return when baseline` kept a whole check routine in a baseline image until the check was split per level. An immutable module `usize` is reloaded the same way at `--optimize speed`: `word: usize = sizeof usize` in `core/mem` is read from memory in every loop, and `3 * word` becomes a run-time `mulq`. | A measured image or hot path holding a foldable module constant. | Immutable scalar module values folded at their uses, with an image comparison. | retired: R13.61 folds a read of an immutable module value, `bool` and `usize` among them, and the arithmetic and checks that become constant |
-| SR-51 | Usability | `examples.md` holds benchmark programs only: nothing shows a newcomer how to list a directory, read standard input or run a command, so a task is learnt from the library's source. Every hosted item's consumer is now published but R13.35's, which loads libraries a fixture builds: the outside-user lane links statically and assumes no C compiler, so it cannot run there honestly. | An outside-user lane that links with `--link=libc` and has a C compiler, or a published example of loading that needs neither. | Each hosted item's consumer published in `examples.md` and run by the outside-user lane. | open |
+| SR-51 | Usability | `examples.md` holds benchmark programs only: nothing shows a newcomer how to list a directory, read standard input or run a command, so a task is learnt from the library's source. Every hosted item's consumer is now published but R13.35's, which loads libraries a fixture builds: the outside-user lane links statically and assumes no C compiler, so it cannot run there honestly. | An outside-user lane that links with `--link=libc` and has a C compiler, or a published example of loading that needs neither. | Each hosted item's consumer published in `examples.md` and run by the outside-user lane. | scheduled R13.73 |
 | SR-79 | Usability | A gate's `darwin-host` build failed at the bind with gnatbind's "error: disk full" writing the binder's generated main on a macOS runner guest with 37 GiB free, after three passes of the same job there. GNAT reports any short write as "disk full", so the message sent the investigation to clean disks that were not full; the cause is unknown, and the root runner service's open-file limit of 256 is unconfirmed. `scripts/build.sh` now reports the free space and open-file limit beside the message. | The next "disk full" from a build, read with the space and limit it reports. | The cause named, and either removed from the runner or reported by the build in its own words. | open |
 | SR-82 | Broader standard library | `hosted/linux` gives every Linux system call by number with one raw call that takes and returns integers, and typed wrappers only for the calls the library itself uses; a program calling anything else converts its own pointers, flags and structures, and the checker sees none of them. | A consumer that needs an unwrapped call, or a proposal for a complete Linux binding. | A typed wrapper for each call, generated with the numbers or written, with its flags and structures and their layouts checked per architecture. | open |
 | SR-86 | Usability | A second `io.terminate_path` into the same scratch silently re-points a path still in use, because a fresh `[]mut` view of the scratch is not an `inout` use of it, so the checker does not see the first path's borrow end. | The next change to `core/io`'s paths or to the borrow rules for `[]mut` views. | Either the second terminate refused while the first path lives, or a path form that cannot alias. | retired: `io.terminate_path` no longer exists, since R13.18 made paths host strings (D299) |
@@ -2784,8 +2823,8 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-231 | Competitive optimization | An atom `match` re-tests its subject's set at every arm, so `failure.words`'s 32 arms cost about 6.3 KiB of Cortex-M0 code at size/auto, about 200 bytes an arm. R13.72 tests the subject once, through a sealed slot the backends do not revalidate, which took `failure.words` on Cortex-M0 at size/auto from 6,336 to 3,552 bytes; the arms remain a compare-and-jump chain of about 110 bytes each, because a table needs a multiway IR terminator. | The next Cortex-M code-size item. | A multiway IR terminator and an atom `match` lowered through it as a table or jump, with the image measured. | open |
 | SR-236 | Release readiness | `nix build .#refine`, the documented default, failed from 2026-10-08 until R13.71 with "build/nix/release/generated is not a valid directory", because nothing in CI builds the flake. | Nix CI, or the next flake change. | The flake's packages built by a job, or by the flake change's own check. | open |
 | SR-247 | Usability | In the language server, hover over an `offsetof` expression shows `usize` but hover over its field name shows nothing. | The next server item. | The field's hover and definition through `offsetof`. | open |
-| SR-250 | Usability | No published example turns a failure into words for a person: every example discards its failures, so the second outside reading found `core/failure.words` only by chance in the README. | The next change to `examples.md` or `core/failure`. | An example reporting a failure through `failure.words`, run by the outside-user lane. | open |
-| SR-251 | Usability | The library reference pages read badly as text: the second outside reader met hundreds of lines of style and script before the signatures, which then ran together, and read the shipped `.ldn` sources instead. | The next change to the reference generator. | A text form of the reference, or pages whose text reads in order. | open |
+| SR-250 | Usability | No published example turns a failure into words for a person: every example discards its failures, so the second outside reading found `core/failure.words` only by chance in the README. | The next change to `examples.md` or `core/failure`. | An example reporting a failure through `failure.words`, run by the outside-user lane. | scheduled R13.73 |
+| SR-251 | Usability | The library reference pages read badly as text: the second outside reader met hundreds of lines of style and script before the signatures, which then ran together, and read the shipped `.ldn` sources instead. | The next change to the reference generator. | A text form of the reference, or pages whose text reads in order. | scheduled R13.73 |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |

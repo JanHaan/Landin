@@ -64,15 +64,15 @@
 0400 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | No `++` and no `--`
 0410 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Evaluation order is fixed
 0420 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | The dot is not only field access
-0430 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Pointer type, address, dereference
-0440 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A mut reference satisfies a plain one, never the reverse
+0430 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | `ptr`, `addr` and `.val`
+0440 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A writable pointer passes where a read-only one is expected
 0450 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Permission is shallow
-0460 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Address literal
-0470 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Both directions between a pointer and an integer are the
+0460 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A pointer to a fixed address
+0470 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Converting between pointers and integers
 0480 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | There is no null
 0490 | tour | - | - | - | - | - | - | - | - | - | advisory | none | none | none | Pointers are a system tool
-0500 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Three operations sit between pointers and slices
-0510 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | slice_from is where uninitialised storage is smuggled in
+0500 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | No pointer arithmetic outside the library
+0510 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Storage that is not filled yet: `raw(t)`
 0520 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | boundary | executed | all | none | none | Array: a value
 0530 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | The length may be inferred from the literal
 0540 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | boundary | executed | all | none | none | zeroed is the all-bits-zero image of a type

@@ -250,7 +250,28 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R14.10 — Prototype 5 (planned).**
+**Current roadmap work: R13.73 — Documentation that teaches.**
+
+## Versions
+
+The specification's version is the README's status line; the tour repeats
+it. What each version changed, with the decisions in `spec.md` that record
+it:
+
+| version | what it changed |
+|---|---|
+| 0.1.0 | The first version of the specification proper, after seventeen pre-release revisions, four prototype programs and two outside reviews. |
+| 0.2.0 | Sealed the first implementation roadmap: a working compiler, with the specification held to what that compiler could be made to do. |
+| 0.2.1 | The specification arranged by subject under the second roadmap, and the rules an outside review found unwritten or wrong: D243 to D245, and where Darwin puts a small composite on the stack [1975]. |
+| 0.2.2 | Assembly with typed operands bound to registers [1630], D248, lowered on Cortex-M0, x86-64 and arm64. A refusal by name says what the form is, D246; a routine or struct holds at most a stated number of what it declares, D247. |
+| 0.2.3 | The compiler as a tool. A warning is the compiler's judgement with the exact fix that settles it, D251; a source has one layout, which `refine fmt` gives it, D252; an editor is answered by `refine lsp`, past a broken routine body, D253; a doc comment is about the declaration directly below it, [2000] and D254. A UTF-8 index decodes the codepoint it selects, D249, and a range selection is a view and not a place, D250. |
+| 0.2.4 | Linux arm64, the standard AAPCS64 with an unsigned plain char, D256. A build assumes a CPU feature level that changes no layout, D255, and targets the compiler's own host unless another is named, D257. A traversal that can fail is written `try for`, [0960] and [1320]; a capability parameter selects a provider without excluding new roots, D258; a UTF-8 ordinal index spans the whole text view, D259. |
+| 0.2.5 | A parse's mistake stays inside its construct and the reports it causes are suppressed, D260; a refused statement is reported as the smallest change that mends it, offered to tools as a repair, D261; an import without a root is refused at the import, D262; a checker refusal poisons what it refused, D263. |
+| 0.2.6 | FreeBSD x86-64 and arm64, with hosted system identity separate from C transport, D264; Linux RV64 with LP64D and explicit ISA extension sets, D265; conversions that apply the type as written, D266. `refine` gets explicit commands, shared presentation options and build-system dependency files; warnings may also advise without a repair, and command-line policy can enable, suppress or deny them, D251. |
+| 0.2.7 | The compiler identifies its exact release, its development commit and a modified checkout. |
+
+The history before 0.1.0 is kept in a separate archive. The part of it with
+lasting value is at the end of the tour, under WHAT WAS TRIED AND DROPPED.
 
 ---
 

@@ -7,65 +7,83 @@ you are being an idiot.
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.2.7 — compiler version and checkout identity.
-0.1.0 was the first version
-of the specification proper, arrived at over seventeen pre-release
-revisions, four prototype programs and two outside reviews; 0.2.0
-sealed the first implementation roadmap that followed, over which a
-working compiler was built and the specification was held to what that
-compiler could be made to do. 0.2.1 arranged the specification by
-subject under a second roadmap and added the rules an outside review of
-that work found unwritten or wrong — D243 to D245 in `spec.md`, and
-where Darwin puts a small composite on the stack [1975]. 0.2.2 gave
-[1630]'s assembly typed operands bound to registers, D248, and lowered
-it on Cortex-M0, x86-64 and arm64; a refusal by name says what the form
-is, D246; and a routine or struct holds at most a stated number of what
-it declares, D247. 0.2.3 was the compiler as a tool: a warning is the
-compiler's judgement with the exact fix that settles it, D251; a source
-has one layout, which `refine fmt` gives it, D252; an editor is answered
-by `refine lsp`, past a broken routine body, D253; and a doc comment is
-about the declaration directly below it, [2000] and D254. A UTF-8 index
-decodes the codepoint it selects, D249, and a range selection is a view
-and not a place, D250. 0.2.4 added Linux arm64, the standard AAPCS64 with
-an unsigned plain char, D256; a build assumes a CPU feature level that
-changes no layout, D255, and targets the compiler's own host unless
-another is named, D257. A traversal that can fail is written `try for`,
-[0960] and [1320]; a capability parameter selects a provider without
-excluding new roots, D258; and a UTF-8 ordinal index spans the whole
-text view, D259. 0.2.5 keeps a parse's mistake inside its construct and
-suppresses the reports caused by it, D260; reports a refused statement as
-the smallest change that mends it and offers that repair to tools, D261;
-refuses an import without a root at the import, D262; and lets a checker
-refusal poison what it refused, D263. 0.2.6 adds FreeBSD x86-64 and arm64,
-with hosted system identity separate from C transport, D264; Linux RV64
-with LP64D and explicit ISA extension sets, D265; and conversions that apply
-the type as written, D266. It gives `refine` explicit commands,
-shared presentation options and build-system dependency files; warnings may
-also advise without a repair, and command-line policy can enable, suppress
-or deny them, D251. 0.2.7 makes the compiler identify its exact release,
-its development commit and a modified checkout. That history is kept in a separate
-archive; the part of it with
-lasting value is at the end of this file, under WHAT WAS TRIED AND
-DROPPED.
+Version 0.2.7 — what each version changed is in
+[the handoff](handoff.md#versions).
 
-Numbering: [NNNN] is stable, which is the point of it — an insert never
-renumbers anything, so the order things are read in and the order of
-the numbers need not agree. They no longer do. Both documents are
-arranged by subject rather than by the order things were found, so
-[1000] is read before [0900] here and [1950] sits beside [1890] in
-`spec.md`, and that is the numbering working rather than failing. Gaps
-of ten leave room. Sections carry titles and no numbers, because
-nothing cites a section. Refer to decisions by number.
+## Hello, world
 
-This file explains the language and does not decide it. `spec.md` is the
-normative document: it holds the grammar of the kernel the compiler
-enables today, the rules this file left unsaid, and the register of
-decisions taken while implementing them. Where the two could be read
-differently, `spec.md` decides. Everything still open, every
-implementation dependency and every disposition is owned by ROADMAP.md,
-not by a second list here.
-A C programmer finds the Landin form of each familiar habit, and the
-habits with none yet, in [Landin for C programmers](docs/from-c.md).
+Save this as `hello/main.ldn`:
+
+```landin
+import core/io
+import hosted/system
+
+public main: () -> (code: i32) =
+    host := system.new()
+    io.write(host, io.out(host), "Hello, world!\n") else none
+    code = 0
+end main
+```
+
+Compile it and run it:
+
+```sh
+refine compile main.ldn -o hello
+./hello
+```
+
+Line by line:
+
+- `import core/io` brings in the reader and writer interfaces, and
+  `hosted/system` the operating system that provides them.
+- `main` takes nothing and returns one named result, `code`, which becomes
+  the exit status. A routine sets its results by assigning them.
+- `system.new()` is the program's handle on the operating system. Nothing
+  in Landin touches files, the terminal or the network without one, so a
+  routine's parameters tell you what it can reach ([1660]).
+- `io.write` can fail, and Landin will not let a failure pass unnoticed.
+  `else none` says that here it does not matter ([1030]).
+
+To print values, use `format`. Each `{}` takes the next value from the
+list:
+
+```landin
+say_born: (host: system.host, name: utf8, year: u32) -> none =
+    mut buffer: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), buffer)
+    defer io.flush(out) else none
+    io.format(out, "{} was born in {}.\n", [any(addr name), any(addr year)]) else none
+end say_born
+```
+
+`say_born(host, "Ada", 1815)` prints `Ada was born in 1815.`
+
+- `buffered_over` collects output in a buffer you supply, here on the
+  stack, so printing allocates nothing.
+- `defer` runs `flush` when the routine ends, however it ends. There are
+  no destructors, so nothing flushes for you ([1100]).
+- `any(addr name)` hands `format` a value it can turn into text ([1370]).
+  Integers, `bool`, `utf8` and byte strings are formattable; a type of
+  your own becomes so by declaring a conformance ([1240]).
+
+[`examples.md`](examples.md) has complete programs that read files, list
+directories and talk over sockets.
+
+## How to read this tour
+
+Read it from the top. Each entry is one idea, with an example, and the
+sections build on each other.
+
+The numbers in brackets, such as [0430], never change, so other documents
+and the compiler's own messages can point here: a refusal ends with a note
+such as "the tour describes it at [0520]". The numbers are not in reading
+order, and do not need to be.
+
+This tour teaches; it leaves out rules a reader would guess anyway.
+[`spec.md`](spec.md) is the specification, and where the two could be read
+differently, it decides. If you write C,
+[Landin for C programmers](docs/from-c.md) maps each habit you bring to its
+Landin form.
 
 *32 TB is an unverified goal. What it measures at the hosted end, and what
 evidence would prove it, are still open, and nothing hosted today
@@ -573,38 +591,33 @@ the decimal point.
 
 ## POINTERS
 
-### [0430] Pointer type, address, dereference
+Most code never needs a pointer: slices, handles and indices do the
+everyday work ([0490]). Pointers are for hardware, the C boundary and the
+inside of libraries. When you do need one, it is spelled in words.
 
-Pointer type, address, dereference. All words, no sigils.
-mut inside the type says the pointee may be written; without
-it the pointee is read-only. .val names the pointee, so it
-reads on the right of an assignment and, with mut, is an
-ordinary target on the left.
+### [0430] `ptr`, `addr` and `.val`
 
-`addr p.val` addresses the pointee and keeps `p`'s origin. Likewise,
-`addr items[i]` for a slice addresses its backing element. Taking `addr p`
-instead addresses the pointer variable itself, whose storage may be local.
+`ptr u32` is a pointer to a `u32`. `addr` takes an address, and `.val` is
+the thing pointed at, on either side of an assignment.
 
 ```landin
 mut value: u32 = 42
 p: ptr mut u32 = addr value
-v := p.val
-p.val = 43
-ro: ptr u32 = addr value -- same address, read-only through ro
--- ro.val = 1              -- error
+v := p.val -- read through p
+p.val = 43 -- write through p
+ro: ptr u32 = addr value -- same address, read-only
+-- ro.val = 1 -- error: ro cannot write
 ```
 
-`addr` of a writable place yields a mutable pointer; `addr` of an immutable
-place yields a read-only pointer. A mutable binding holding that read-only
-pointer may replace the pointer, but cannot write through it [0450].
+`mut` inside the type is what lets you write through the pointer. `addr` of
+a mutable variable gives a `ptr mut`, and `addr` of an immutable one a plain
+`ptr`.
 
-### [0440] A mut reference satisfies a plain one, never the reverse
+`addr p.val` is the address of the thing `p` points at, and `addr items[i]`
+the address of a slice's element. `addr p` is something else: the address
+of the variable `p` itself, which may live on the stack.
 
-A mut reference satisfies a plain one, never the reverse.
-That is not a conversion and [0310] is not bent: no bit
-changes and nothing is lost, a permission is forgotten. It
-is the one relaxation the language has, it goes one way,
-and it is what makes a read-only parameter usable at all.
+### [0440] A writable pointer passes where a read-only one is expected
 
 ```landin
 add_up: (xs: []i32) -> (total: i32) =
@@ -615,65 +628,58 @@ add_up: (xs: []i32) -> (total: i32) =
 end add_up
 
 add_written: (writable_slice: []mut i32) -> (total: i32) =
-    total = add_up(writable_slice) -- fine, []mut i32 relaxes to []i32
+    total = add_up(writable_slice) -- fine: []mut i32 relaxes to []i32
 end add_written
 ```
 
+No bit changes; the callee simply forgets that it could write. This is the
+only implicit relaxation in the language, and it only goes this way: a
+read-only reference never becomes a writable one.
+
 ### [0450] Permission is shallow
 
-Permission is shallow: it comes from the reference type and
-from nowhere else. An immutable binding or an 'in' parameter
-protects the value it holds, not what that value points at —
-so a list handed over as 'in' still yields writable elements
-if its storage is writable.
-Deeper protection would mean knowing which references a
-value owns and which it merely borrows, and this language
-does not track ownership [0910]. Where a read-only view is
-wanted, hand one out: that is what an accessor is for, and
-the caller relaxes what it gets by [0440].
+Read-only applies to one level only. An immutable binding, or an `in`
+parameter, protects the value it holds, not what that value points at. A
+list handed over as `in` still has writable elements if its storage is
+writable.
 
-### [0460] Address literal
+Protecting deeper would mean knowing which references a value owns and
+which it borrows, and Landin does not track ownership ([0910]). When you
+want to hand out a read-only view, hand out a read-only reference; an
+accessor is how.
 
-Address literal. The pointee type comes from context, and a
-register is written through, so it is a mut pointee sitting
-in an immutable binding — which is exactly the pair [0070]
-separates. What makes an access to it a device transaction is the
-operation that performs it [0850], not the pointer's type.
+### [0460] A pointer to a fixed address
+
+`ptr(...)` turns an address into a pointer. The pointer type comes from the
+declaration.
 
 ```landin
 gpio: ptr mut u32 = ptr(0x4001_0000)
 ```
 
-### [0470] Both directions between a pointer and an integer are the
+This binding is immutable, but the register behind it is written: the two
+questions of [0070] really are separate. Nothing in the pointer's type
+makes access to it a device transaction. The operation that reads or writes
+does that ([0850]).
 
-Both directions between a pointer and an integer are the
-ordinary conversion of [0700], a type applied to a value.
-No special word: this is the one conversion the language
-marks by what it costs rather than by how it is spelled.
+### [0470] Converting between pointers and integers
+
+A pointer and an integer convert both ways like any other conversion
+([0700]): apply the type.
 
 ```landin
 dma_source := u32(addr port.val.dr)
 ```
 
-What it costs: an integer that used to be a pointer has no
-origin. Build a pointer back out of one and you get
-something that borrows nothing, whose lifetime nobody
-knows, and about which the compiler will say nothing ever
-again. It is the one place inside the language where the
-lifetime system is deliberately left behind, on the same
-footing as the C boundary. Taking the address of a
-register is unremarkable by comparison: volatility is a
-property of the access operation, not of the number [0850].
+The cost is on the way back. An integer has no origin, so a pointer made
+from one borrows nothing as far as the compiler knows, and it will say
+nothing more about that pointer's lifetime. This is the one place inside the
+language where lifetime checking is left behind, much as at the C boundary.
 
 ### [0480] There is no null
 
-There is no null. "maybe a pointer" is an ordinary union of
-an atom and a pointer type. With one atom, the compiler represents
-it as a plain pointer with 0 for the empty case. The spelling does
-not decide how a union of several atoms and a pointer is laid out:
-with several atoms, the atom's own code is stored beside the pointer and
-code zero, which no atom has, marks the present case, so a smaller union or
-an atom set widens into it without changing a bit (D235).
+"Maybe a pointer" is a union of an atom and a pointer type. With a single
+atom, the compiler stores it as a plain pointer, with 0 meaning the atom.
 
 ```landin
 none_found: atom
@@ -695,99 +701,64 @@ read: (m: maybe_ptr, fallback: u32) -> (value: u32) =
 end read
 ```
 
-A pointer goes into the union without being written down as anything; coming
-back out is a match, and both cases have to be named. Which case it holds can
-be asked without one, `m == none_found` or `m <> none_found`, because that
-reads no address; two unions do not compare. `ptr` is the arm for
-the present case, and the name in brackets after it is the pointer itself.
-On a return edge, an exact `from` clause applies only when this optional value
-actually carries the pointer. An edge provably returning `none_found` has no
-reference origin to compare: absence is not the untracked pointer produced by
-[0470].
+A pointer goes into the union with no ceremony. Getting it out takes a
+`match`, and the `match` has to name both cases: `ptr (p)` is the present
+case, with the pointer bound to `p`.
+
+To ask only which case it holds, compare with the atom: `m == none_found`
+or `m <> none_found`. That reads no address, so it needs no `match`. Two
+such unions do not compare with each other.
+
+How a union of several atoms and a pointer is laid out, and how `from`
+applies when a routine returns the atom, are in `spec.md` (D189, D235,
+D429).
 
 ### [0490] Pointers are a system tool
 
-Pointers are a system tool: hardware, the C boundary, and
-library internals. Everyday code uses slices, handles and
-indices.
+Use pointers for hardware, the C boundary and library internals. Everyday
+code uses slices ([0520]), handles and indices.
 
-### [0500] Three operations sit between pointers and slices
+### [0500] No pointer arithmetic outside the library
 
-Three operations were proposed between pointers and slices, in core where
-system-tool policy belongs:
+There is no `p + n` on pointers, and no built-in operation that turns a
+pointer into a slice. Code that really needs to compute an address converts
+to an integer and back ([0470]), and gives up lifetime checking when it does.
+Inside the standard library, `core/mem` does this for you, behind its
+private storage operations. If you need an element's address, take it from
+a slice that you know is not empty: `addr items[0]`.
 
-```landin
-mem.offset: (p: ptr mut u8, n: usize) -> (q: ptr mut u8)
-mem.base_of: (t: type, s: []t) -> (p: ptr u8)
-mem.base_of: (t: type, s: []mut t) -> (p: ptr mut u8)
-mem.slice_from: (t: type, p: ptr mut u8, n: usize) -> (s: []mut t)
-```
+`spec.md` records why the proposed `mem.offset`, `mem.base_of` and
+`mem.slice_from` were dropped (D151, D196).
 
-Implementation pressure rejected the third one [0510]: no operation may turn
-an arbitrary allocation into a slice that claims every slot already contains
-`t`. The repository `core/mem` instead keeps pointer arithmetic inside its
-private raw-storage operations. It can copy one initialized slot directly into
-the next slot of a private replacement, but it exposes neither spare capacity
-nor a general pointer-to-slice conversion. The library records `offset` and
-`base_of` as unneeded conveniences: allocator internals use [0470]'s explicit address
-conversion, and consumers obtain an element address only after checking that
-a slice is nonempty. Neither name is a compiler primitive or an enabled
-library API. D196 records the disposition without reopening `slice_from`.
+### [0510] Storage that is not filled yet: `raw(t)`
 
-### [0510] slice_from is where uninitialised storage is smuggled in
+A growing array has room for more items than it holds. The empty slots
+contain no `t` yet, so no slice may cover them: a `[]mut t` over them would
+claim values that do not exist. Neither may they be zero-filled, because many
+types, pointers among them, have no zero value ([0540]).
 
-slice_from is where uninitialised storage is smuggled in,
-and calling that an answer was too kind to it. It hands
-back a `[]mut t` over memory holding no `t`, so the type says
-more than is true from the allocation until the write, and
-nothing checks the gap. Containers hold the invariant
-themselves — a growing array by its length, a hash table by
-its state array — and that works, for a container whose
-author is careful.
-Where it does not work is inline storage. A list with an inline prefix of
-`capacity` items holds an `[capacity]t` that is not full yet, and there
-is no honest value to put in the empty slots: [0540] forbids zeroed for a `t` with
-no zero image, and ptr is such a `t`. So until there is a way
-to say uninitialised in a type, that shape is restricted to
-a `t` that has a zero image, and general uninitialised
-generic storage is not supported.
-The answer is `core/mem`'s `raw(t)`. It is an ordinary parameterised
-struct whose identity and fields stay private to that module. A caller may
-hold the inferred result of `reserve`; another core module names the same
-private identity through the public alias `storage(t)`. Neither route exposes
-the representation. `capacity` and `initialized` report the two counts,
-`admit` initializes exactly the next slot, `get` reads only the initialized
-prefix, `replace` writes an existing initialized slot, and `used` exposes that
-prefix as a mutable slice `from storage`. `release` removes only its tail, and
-`dispose` returns the backing byte pointer only when the prefix is empty and
-backing is present. It clears that backing to the private union's absent atom;
-a repeated disposal reports `empty`, never a zero or fabricated pointer.
-`transfer` copies one initialized source
-slot directly into the next slot of a private replacement, without exposing a
-reference-valued item between the two states. The four invalid requests are
-foreseeable and therefore declared outcomes: `full`, `out_of_bounds`,
-`empty`, and `not_empty`.
-For byte storage, `clear` shortens the typed initialized prefix to
-zero in one step; it leaves the backing allocation for `dispose` to return.
+`core/mem`'s `raw(t)` is the answer. It holds a block of storage and counts
+how much of it is initialized, and only ever shows you that initialized
+prefix:
 
-Growth uses two raw values. Allocate and reserve an empty replacement, copy
-the old initialized prefix into it, and roll that private replacement back if
-any admission fails. After every copy succeeds, release the old tail to zero,
-dispose its allocation, and assign the replacement to the published binding.
-That last assignment is the publication point. The private initialized slice
-is the length witness. The first complete typed store precedes taking its
-singleton slice; a later append writes the next item before a narrow
-`unchecked` range extension publishes it. No slice ever describes spare
-capacity and no spare byte is read as `t`. A `used` view must end before a
-capacity or prefix transition; writes through aliases retain [0860]'s stated
-local-analysis limitation.
+| operation | what it does |
+|---|---|
+| `capacity`, `initialized` | the two counts |
+| `admit` | initialize the next slot |
+| `get`, `replace` | read or overwrite an initialized slot |
+| `used` | the initialized prefix as a `[]mut t` |
+| `release` | drop items from the end |
+| `transfer` | move one item into another `raw`, for growing |
+| `dispose` | hand the block back once it is empty |
 
-This is not a memory-safety claim. Before `dispose`, save `capacity * sizeof t`
-as the allocator's release extent; the caller still supplies a live, aligned
-allocation large enough for that many slots. Pointer validity, alignment and a
-lying extent remain outside the language guarantees [1720]. The private module
-boundary enforces the state transitions without a `raw` keyword, a new built-in
-type kind, or the dishonest `slice_from` operation.
+The four ways of asking for something impossible are ordinary failures:
+`full`, `out_of_bounds`, `empty` and `not_empty`. To grow, reserve a bigger
+`raw`, `transfer` every item into it, and only then dispose of the old block
+and publish the new one; if any step fails, the old block is untouched.
+
+This keeps the empty slots out of reach. It does not make raw storage safe:
+the allocation you supply must be live, aligned and as large as you say
+([1720]).
 
 ## ARRAYS, SLICES AND TEXT
 
