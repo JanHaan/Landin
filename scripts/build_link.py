@@ -47,8 +47,13 @@ def digest(path):
     return hashed.hexdigest()
 
 
-def members(archive):
-    """{member name: sha256} of a System V / GNU `ar` archive, if any."""
+def bodies(archive):
+    """{member name: bytes} of an `ar` archive, if any.
+
+    Reads both forms GPRbuild meets: System V / GNU, whose long names sit in
+    a `//` member, and BSD, which Darwin's tools write, where a name `#1/N`
+    means the first N bytes of the member are its name, padded with NULs.
+    Symbol tables of either form are not members."""
     if not Path(archive).exists():
         return {}
     data = Path(archive).read_bytes()
@@ -63,7 +68,10 @@ def members(archive):
         size = int(header[48:58])
         body = data[at + 60:at + 60 + size]
         at += 60 + size + (size & 1)
-        if name in (b"/", b"/SYM64/"):
+        if name.startswith(b"#1/") and name[3:].isdigit():
+            length = int(name[3:])
+            name, body = body[:length].rstrip(b"\0"), body[length:]
+        if name in (b"/", b"/SYM64/") or name.startswith(b"__.SYMDEF"):
             continue
         if name == b"//":
             names = body
@@ -73,8 +81,25 @@ def members(archive):
             name = names[start:names.index(b"/\n", start)]
         else:
             name = name.removesuffix(b"/")
-        found[name.decode()] = hashlib.sha256(body).hexdigest()
+        found[name.decode()] = body
     return found
+
+
+def members(archive):
+    """{member name: sha256} of an `ar` archive, if any."""
+    return {name: hashlib.sha256(body).hexdigest()
+            for name, body in bodies(archive).items()}
+
+
+def holds(member, compiled):
+    """Whether an archive MEMBER is the COMPILED object.  BSD archivers may
+    pad a member to eight bytes, so up to seven bytes of NUL or newline
+    after the object's own bytes are padding."""
+    if member is None or compiled is None:
+        return member is compiled
+    tail = member[len(compiled):]
+    return (member.startswith(compiled) and len(tail) < 8
+            and not tail.strip(b"\0\n"))
 
 
 def stamp(build, name):
@@ -97,18 +122,20 @@ def inputs(build, objects, archived):
 def stale_library(build, archived):
     """The objects the library archive does not hold as compiled, if any."""
     build = Path(build)
-    compiled = {path.name: digest(path)
+    compiled = {path.name: path.read_bytes()
                 for path in (build / LIBRARY_OBJECTS).glob("*.o")}
     return sorted(name for name in set(archived) | set(compiled)
-                  if archived.get(name) != compiled.get(name))
+                  if not holds(archived.get(name), compiled.get(name)))
 
 
 def verify(build, name, objects, before):
     build = Path(build)
     executable = build / "link" / name
     record_path = build / "link" / f".{name}.linked"
-    archived = members(build / LIBRARY)
-    stale = stale_library(build, archived)
+    held = bodies(build / LIBRARY)
+    stale = stale_library(build, held)
+    archived = {member: hashlib.sha256(body).hexdigest()
+                for member, body in held.items()}
     if stale:
         print(f"landin: {LIBRARY} does not hold the compiled {stale[0]}"
               + (f" and {len(stale) - 1} more" if len(stale) > 1 else "")

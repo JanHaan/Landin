@@ -43,6 +43,25 @@ def archive(members):
     return data
 
 
+def bsd_archive(members, pad=0):
+    """A BSD ar archive of MEMBERS, as Darwin's tools write one: a sorted
+    symbol table and every name stored as `#1/N` in front of its body, each
+    body padded with PAD newlines."""
+    def header(name, size):
+        return (name.ljust(16).encode() + b"0".ljust(12) + b"0".ljust(6)
+                + b"0".ljust(6) + b"644".ljust(8) + str(size).ljust(10).encode()
+                + b"`\n")
+    def member(name, body):
+        stored = name.encode() + b"\0" * (-len(name) % 8)
+        body = stored + body + b"\n" * pad
+        return header(f"#1/{len(stored)}", len(body)) + body + (
+            b"\n" if len(body) & 1 else b"")
+    data = b"!<arch>\n" + member("__.SYMDEF SORTED", b"\0" * 8)
+    for name, body in members.items():
+        data += member(name, body)
+    return data
+
+
 class BuildLink(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="landin link ")
@@ -73,6 +92,21 @@ class BuildLink(unittest.TestCase):
             {name: hashlib.sha256(body).hexdigest()
              for name, body in self.objects.items()})
         self.assertEqual(LINK.members(self.build / "lib/absent.a"), {})
+
+    def test_members_of_a_bsd_archive(self):
+        library = self.build / "lib/bsd.a"
+        library.write_bytes(bsd_archive(self.objects))
+        self.assertEqual(
+            LINK.members(library),
+            {name: hashlib.sha256(body).hexdigest()
+             for name, body in self.objects.items()})
+        padded = self.build / "lib/padded.a"
+        padded.write_bytes(bsd_archive(self.objects, pad=3))
+        held = LINK.bodies(padded)
+        self.assertEqual(sorted(held), sorted(self.objects))
+        for name, body in self.objects.items():
+            self.assertTrue(LINK.holds(held[name], body))
+            self.assertFalse(LINK.holds(held[name], body + b"x"))
 
     def test_a_fresh_link_is_recorded(self):
         before = LINK.stamp(self.build, "refine")
