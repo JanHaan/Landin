@@ -2417,7 +2417,7 @@ item 1 ROUTINE give_up result none signature 1 params 0 slots 0 blocks 1 values 
     1 NUMBER i32 2
     2 CALL none callee 75 exit signature 66 <- 1
     3 HALT
-item 2 ROUTINE print_arguments result none signature 2 params 1 slots 25 blocks 13 values 93
+item 2 ROUTINE print_arguments result none signature 2 params 1 slots 25 blocks 13 values 92
   slot 1 host aggregate fields usize usize param 1
   slot 2 index usize
   slot 3 - usize
@@ -2469,86 +2469,85 @@ item 2 ROUTINE print_arguments result none signature 2 params 1 slots 25 blocks 
     23 FAILURE_TEST bool <- 22
     24 BRANCH target 7 alternative 8 <- 23
   block 4 scope 100 BLOCK length 1
-    93 LEAVE
+    92 LEAVE
   block 5 scope 101 BLOCK length 5
-    88 LOAD usize slot 2
-    89 NUMBER usize 1
-    90 ADD usize <- 88 89
-    91 STORE slot 2 <- 90
-    92 JUMP target 2
+    87 LOAD usize slot 2
+    88 NUMBER usize 1
+    89 ADD usize <- 87 88
+    90 STORE slot 2 <- 89
+    91 JUMP target 2
   block 6 scope 100 BLOCK length 2
     9 TRUTH bool false
     10 BRANCH target 5 alternative 2 <- 9
-  block 7 scope 101 BLOCK length 4
+  block 7 scope 101 BLOCK length 3
     25 LOAD u32 slot 5
     26 STORE slot 7 <- 25
-    27 LOAD u32 slot 7
-    28 LEAVE
+    27 LEAVE
   block 8 scope 101 BLOCK length 1
-    29 JUMP target 9
+    28 JUMP target 9
   block 9 scope 101 BLOCK length 24
-    30 STORAGE_ADDRESS usize storage slot 1
-    31 STORE slot 9 <- 30
-    32 STORAGE_ADDRESS usize storage slot 10
-    33 STORE slot 11 <- 32
-    34 COPY_ARRAY from address slot 9 to address slot 11
-    35 STORAGE_ADDRESS usize storage slot 10
-    36 STORE slot 12 <- 35
-    37 STORAGE_ADDRESS usize storage slot 1
-    38 STORAGE_ADDRESS usize storage slot 13
-    39 EVIDENCE_ADDRESS usize evidence 10
-    40 CALL none callee 250 - signature 190 <- 38 39 37
-    41 STORAGE_ADDRESS usize storage slot 13
-    42 STORE slot 14 <- 41
-    43 STORAGE_ADDRESS usize storage slot 4
-    44 STORAGE_ADDRESS usize storage slot 15
-    45 CALL none callee 110 host_bytes signature 96 <- 44 43
-    46 STORAGE_ADDRESS usize storage slot 15
-    47 LOAD usize slot 12
-    48 LOAD usize slot 14
-    49 EVIDENCE_ADDRESS usize evidence 8
-    50 CALL none callee 251 - signature 192 failure slot 8 <- 49 47 48 46
-    51 LOAD u32 slot 8
-    52 FAILURE_TEST bool <- 51
-    53 BRANCH target 10 alternative 11 <- 52
+    29 STORAGE_ADDRESS usize storage slot 1
+    30 STORE slot 9 <- 29
+    31 STORAGE_ADDRESS usize storage slot 10
+    32 STORE slot 11 <- 31
+    33 COPY_ARRAY from address slot 9 to address slot 11
+    34 STORAGE_ADDRESS usize storage slot 10
+    35 STORE slot 12 <- 34
+    36 STORAGE_ADDRESS usize storage slot 1
+    37 STORAGE_ADDRESS usize storage slot 13
+    38 EVIDENCE_ADDRESS usize evidence 10
+    39 CALL none callee 250 - signature 190 <- 37 38 36
+    40 STORAGE_ADDRESS usize storage slot 13
+    41 STORE slot 14 <- 40
+    42 STORAGE_ADDRESS usize storage slot 4
+    43 STORAGE_ADDRESS usize storage slot 15
+    44 CALL none callee 110 host_bytes signature 96 <- 43 42
+    45 STORAGE_ADDRESS usize storage slot 15
+    46 LOAD usize slot 12
+    47 LOAD usize slot 14
+    48 EVIDENCE_ADDRESS usize evidence 8
+    49 CALL none callee 251 - signature 192 failure slot 8 <- 48 46 47 45
+    50 LOAD u32 slot 8
+    51 FAILURE_TEST bool <- 50
+    52 BRANCH target 10 alternative 11 <- 51
   block 10 scope 101 BLOCK length 4
-    54 LOAD u32 slot 8
-    55 STORE slot 16 <- 54
-    56 LOAD u32 slot 16
-    57 FAIL <- 56
+    53 LOAD u32 slot 8
+    54 STORE slot 16 <- 53
+    55 LOAD u32 slot 16
+    56 FAIL <- 55
   block 11 scope 101 BLOCK length 25
-    58 STORAGE_ADDRESS usize storage slot 1
-    59 STORE slot 18 <- 58
-    60 STORAGE_ADDRESS usize storage slot 19
-    61 STORE slot 20 <- 60
-    62 COPY_ARRAY from address slot 18 to address slot 20
-    63 STORAGE_ADDRESS usize storage slot 19
-    64 STORE slot 21 <- 63
-    65 STORAGE_ADDRESS usize storage slot 1
-    66 STORAGE_ADDRESS usize storage slot 22
-    67 EVIDENCE_ADDRESS usize evidence 10
-    68 CALL none callee 250 - signature 190 <- 66 67 65
-    69 STORAGE_ADDRESS usize storage slot 22
-    70 STORE slot 23 <- 69
-    71 STORAGE_ADDRESS usize storage datum 264 -
-    72 NUMBER usize 1
-    73 STORE_FIELD slot 24 field 1 <- 71
-    74 STORE_FIELD slot 24 field 2 <- 72
-    75 STORAGE_ADDRESS usize storage slot 24
-    76 LOAD usize slot 21
-    77 LOAD usize slot 23
-    78 EVIDENCE_ADDRESS usize evidence 8
-    79 CALL none callee 251 - signature 192 failure slot 17 <- 78 76 77 75
-    80 LOAD u32 slot 17
-    81 FAILURE_TEST bool <- 80
-    82 BRANCH target 12 alternative 13 <- 81
+    57 STORAGE_ADDRESS usize storage slot 1
+    58 STORE slot 18 <- 57
+    59 STORAGE_ADDRESS usize storage slot 19
+    60 STORE slot 20 <- 59
+    61 COPY_ARRAY from address slot 18 to address slot 20
+    62 STORAGE_ADDRESS usize storage slot 19
+    63 STORE slot 21 <- 62
+    64 STORAGE_ADDRESS usize storage slot 1
+    65 STORAGE_ADDRESS usize storage slot 22
+    66 EVIDENCE_ADDRESS usize evidence 10
+    67 CALL none callee 250 - signature 190 <- 65 66 64
+    68 STORAGE_ADDRESS usize storage slot 22
+    69 STORE slot 23 <- 68
+    70 STORAGE_ADDRESS usize storage datum 264 -
+    71 NUMBER usize 1
+    72 STORE_FIELD slot 24 field 1 <- 70
+    73 STORE_FIELD slot 24 field 2 <- 71
+    74 STORAGE_ADDRESS usize storage slot 24
+    75 LOAD usize slot 21
+    76 LOAD usize slot 23
+    77 EVIDENCE_ADDRESS usize evidence 8
+    78 CALL none callee 251 - signature 192 failure slot 17 <- 77 75 76 74
+    79 LOAD u32 slot 17
+    80 FAILURE_TEST bool <- 79
+    81 BRANCH target 12 alternative 13 <- 80
   block 12 scope 101 BLOCK length 4
-    83 LOAD u32 slot 17
-    84 STORE slot 25 <- 83
-    85 LOAD u32 slot 25
-    86 FAIL <- 85
+    82 LOAD u32 slot 17
+    83 STORE slot 25 <- 82
+    84 LOAD u32 slot 25
+    85 FAIL <- 84
   block 13 scope 101 BLOCK length 1
-    87 JUMP target 5
+    86 JUMP target 5
 item 3 ROUTINE entry_at result u32 signature 3 params 2 slots 7 blocks 1 values 21
   slot 1 table usize param 1
   slot 2 index usize param 2
@@ -3083,7 +3082,7 @@ item 11 ROUTINE record_name result array signature 11 params 3 slots 31 blocks 1
     94 STORE_FIELD slot 4 field 1 <- 93
     95 STORE_FIELD slot 4 field 2 <- 92
     96 LEAVE
-item 12 ROUTINE home_directory result struct signature 12 params 2 slots 12 blocks 4 values 35
+item 12 ROUTINE home_directory result struct signature 12 params 2 slots 12 blocks 4 values 34
   slot 1 home_directory usize param 1
   slot 2 host aggregate fields usize usize param 2
   slot 3 home aggregate fields [2]usize return
@@ -3119,22 +3118,21 @@ item 12 ROUTINE home_directory result struct signature 12 params 2 slots 12 bloc
     20 LOAD u32 slot 4
     21 FAILURE_TEST bool <- 20
     22 BRANCH target 2 alternative 3 <- 21
-  block 2 scope 134 BLOCK length 11
+  block 2 scope 134 BLOCK length 10
     23 LOAD u32 slot 4
     24 STORE slot 11 <- 23
-    25 LOAD u32 slot 11
-    26 STORAGE_ADDRESS usize storage datum 268 -
-    27 NUMBER usize 1
-    28 STORE_FIELD slot 12 field 1 <- 26
-    29 STORE_FIELD slot 12 field 2 <- 27
-    30 STORAGE_ADDRESS usize storage slot 12
-    31 STORAGE_ADDRESS usize storage slot 3
-    32 CALL none callee 109 host_over signature 95 <- 31 30
-    33 JUMP target 4
+    25 STORAGE_ADDRESS usize storage datum 268 -
+    26 NUMBER usize 1
+    27 STORE_FIELD slot 12 field 1 <- 25
+    28 STORE_FIELD slot 12 field 2 <- 26
+    29 STORAGE_ADDRESS usize storage slot 12
+    30 STORAGE_ADDRESS usize storage slot 3
+    31 CALL none callee 109 host_over signature 95 <- 30 29
+    32 JUMP target 4
   block 3 scope 134 BLOCK length 1
-    34 JUMP target 4
+    33 JUMP target 4
   block 4 scope 134 BLOCK length 1
-    35 LEAVE
+    34 LEAVE
 item 13 ROUTINE config_path result struct signature 13 params 1 slots 3 blocks 1 values 8
   slot 1 config_path usize param 1
   slot 2 path aggregate fields [2]usize return
@@ -3237,7 +3235,7 @@ item 14 ROUTINE has_zero result bool signature 14 params 1 slots 11 blocks 14 va
     49 JUMP target 14
   block 14 scope 141 BLOCK length 1
     50 JUMP target 10
-item 15 ROUTINE main result i32 signature 15 params 0 slots 13 blocks 10 values 59
+item 15 ROUTINE main result i32 signature 15 params 0 slots 13 blocks 10 values 58
   slot 1 code i32 return
   slot 2 host aggregate fields usize usize
   slot 3 - usize
@@ -3305,21 +3303,20 @@ item 15 ROUTINE main result i32 signature 15 params 0 slots 13 blocks 10 values 
     45 LOAD u32 slot 12
     46 FAILURE_TEST bool <- 45
     47 BRANCH target 8 alternative 9 <- 46
-  block 8 scope 144 BLOCK length 7
+  block 8 scope 144 BLOCK length 6
     48 LOAD u32 slot 12
     49 STORE slot 13 <- 48
-    50 LOAD u32 slot 13
-    51 NUMBER i32 1
-    52 STORE slot 1 <- 51
-    53 LOAD i32 slot 1
-    54 LEAVE <- 53
+    50 NUMBER i32 1
+    51 STORE slot 1 <- 50
+    52 LOAD i32 slot 1
+    53 LEAVE <- 52
   block 9 scope 144 BLOCK length 1
-    55 JUMP target 10
+    54 JUMP target 10
   block 10 scope 144 BLOCK length 4
-    56 NUMBER i32 0
-    57 STORE slot 1 <- 56
-    58 LOAD i32 slot 1
-    59 LEAVE <- 58
+    55 NUMBER i32 0
+    56 STORE slot 1 <- 55
+    57 LOAD i32 slot 1
+    58 LEAVE <- 57
 item 16 ROUTINE from_heap_or_arena result i32 signature 16 params 0 slots 17 blocks 5 values 53
   slot 1 sum i32 return
   slot 2 origin aggregate fields i32 i32

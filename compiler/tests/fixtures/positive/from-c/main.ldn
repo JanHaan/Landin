@@ -9,7 +9,6 @@ public main: () -> (code: i32) =
         return
     end if
     print_arguments(host) else (problem)
-        _ = problem
         code = 1
         return
     end
