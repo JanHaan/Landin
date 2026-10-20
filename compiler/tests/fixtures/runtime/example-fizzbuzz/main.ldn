@@ -6,7 +6,7 @@ import hosted/system
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [512]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     for n in 1..100 do

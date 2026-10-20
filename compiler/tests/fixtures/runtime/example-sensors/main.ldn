@@ -36,7 +36,7 @@ end read_door
 thermometer is sensor (read: read_thermometer)
 door is sensor (read: read_door)
 
---  Generic over where the memory comes from; the caller decides.
+--- Generic over where the memory comes from; the caller decides.
 poll: (provider: type is mem.allocator, memory: provider,
        sensors: []mut any sensor)
       -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
@@ -54,7 +54,7 @@ end poll
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     --  The readings live in an arena over 256 bytes of this frame.

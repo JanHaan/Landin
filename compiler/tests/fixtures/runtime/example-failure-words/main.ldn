@@ -5,14 +5,14 @@ import core/io
 import core/text
 import hosted/system
 
---  The percentage written in `given`, a whole number from 0 to 100.
+--- The percentage written in `given`, a whole number from 0 to 100.
 percent: (given: utf8) -> (value: u8)
          ! text.invalid_number | text.number_overflow =
     value = try text.parse_u8(text.bytes(given))
     fail text.number_overflow when value > 100
 end percent
 
---  One line for a person: what was being done, a colon, and why it failed.
+--- One line for a person: what was being done, a colon, and why it failed.
 report: (inout out: io.buffered_writer(system.host), subject: []u8,
          problem: failure.reason) -> none =
     reason: []u8 = failure.words(problem)
@@ -23,7 +23,7 @@ end report
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 0
 

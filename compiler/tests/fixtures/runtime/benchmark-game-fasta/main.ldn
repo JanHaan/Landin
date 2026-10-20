@@ -43,9 +43,9 @@ next_random: (inout seed: u32) -> (value: f64) =
     value = f64(seed) / 139968.0
 end next_random
 
---  The first symbol whose cumulative probability exceeds RANDOM, or the
---  last.  Every comparison is made, so the loop has no exit that depends
---  on the random number.
+--- The first of `symbols` whose cumulative probability exceeds `random`,
+--- or the last.  Every comparison is made, so the loop has no exit that
+--- depends on the random number.
 select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
                -> (selected: u8) =
     mut index: usize = 0
@@ -99,7 +99,7 @@ write_random: (inout out: io.buffered_writer(system.host), symbols: []u8,
     end while
 end write_random
 
---  The three sequences for N, written through OUT.
+--- The three sequences for `n`, written through `out`.
 fasta: (inout out: io.buffered_writer(system.host), n: usize)
        -> none ! io.io_failed =
     mut seed: u32 = 42
@@ -116,7 +116,7 @@ fasta: (inout out: io.buffered_writer(system.host), n: usize)
     try write_random(out, human_symbols, human, seed, n * 5)
 end fasta
 
---  The sequence length named by the first argument.
+--- The sequence length named by the first argument.
 sequence_size: (host: system.host)
                -> (n: usize)
                ! io.no_argument | text.invalid_number | text.number_overflow =
@@ -129,20 +129,17 @@ public main: () -> (code: i32) =
     host := system.new()
     code = 1
     n := sequence_size(host) else (problem)
-        _ = problem
         io.write(host, io.err(host), "usage: fasta N\n") else none
         return
     end
 
     mut storage: [16384]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<16384])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     fasta(out, n) else (problem)
-        _ = problem
         return
     end
     io.flush(out) else (problem)
-        _ = problem
         return
     end
     code = 0

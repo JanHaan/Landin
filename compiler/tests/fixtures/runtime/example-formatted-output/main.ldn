@@ -14,7 +14,7 @@ public main: () -> (code: i32) =
     --  The lines wait in this buffer and are written when it fills, and
     --  the deferred flush writes what is left on the way out of main.
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     people: [3]person = [(name: "Ada Lovelace", born: 1815, died: 1852),

@@ -7,10 +7,10 @@ import core/text
 import core/time
 import hosted/system
 
---  What the shell runs: it says what its environment holds, complains
---  once, sleeps for a second and ends with code 3.  Its environment is
---  only what the program gives it, so the HOME the program itself has is
---  not among it; its PATH is, which is how the shell finds `sleep`.
+--- What the shell runs: it says what its environment holds, complains
+--- once, sleeps for a second and ends with code 3.  Its environment is
+--- only what the program gives it, so the HOME the program itself has is
+--- not among it; its PATH is, which is how the shell finds `sleep`.
 script: []u8 = """
     printf 'NAME=%s\n' "$NAME"
     printf 'GREETING=%s\n' "$GREETING"
@@ -20,10 +20,10 @@ script: []u8 = """
     exit 3
     """
 
---  Read what the child writes to its output and its errors into the two
---  builders, from whichever has something, until both have ended, and
---  wait for it.  Reading both while it runs is what lets a child write
---  more than a pipe holds to either.
+--- Read what the child `started` writes to its output and its errors into
+--- `output` and `errors`, from whichever has something, until both have
+--- ended, and wait for it.  Reading both while it runs is what lets a child
+--- write more than a pipe holds to either.
 capture: (provider: type is io.programs, host: provider,
           sink started: io.child, inout output: text.builder,
           inout errors: text.builder)
@@ -31,7 +31,7 @@ capture: (provider: type is io.programs, host: provider,
     mut running: io.child = started
     mut buffer: [256]u8 = zeroed
     loop do
-        part: io.child_read = try io.read_child(host, running, buffer[0..<256])
+        part: io.child_read = try io.read_child(host, running, buffer)
         break when part.finished
         if part.stream == io.child_errors then
             try text.append(errors, buffer[0..<part.count])
@@ -42,7 +42,7 @@ capture: (provider: type is io.programs, host: provider,
     ended = try io.wait(host, running)
 end capture
 
---  Write each line of BYTES to OUT after a bar.
+--- Write each line of `bytes` to `out` after a bar.
 quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
          bytes: []u8) -> none ! ... =
     mut start: usize = 0
@@ -60,8 +60,8 @@ quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     end if
 end quoted
 
---  Report what the child wrote, how it ended and how long it took, which
---  is never less than the second it slept.
+--- Report to `out` what the child wrote, how it ended and how long it
+--- took, which is never less than the second it slept.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
          output: []u8, errors: []u8, ended: io.ending, took: time.duration)
         -> none ! ... =
@@ -70,7 +70,7 @@ report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     try io.put(out, "and complained:\n")
     try quoted(out, errors)
     mut room: [64]u8 = zeroed
-    mut line := text.over(room[0..<64])
+    mut line := text.over(room)
     match ended.how
         io.exited(code): try text.format(line, "and exited with code {}\n",
                                          [any(addr code)])
@@ -85,21 +85,18 @@ report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     try io.put(out, text.used(line))
 end report
 
---  The parent's own PATH, the one variable of its environment it passes
---  on, or the directories every hosted system keeps `sleep` in when it
---  has none.
+--- The parent's own PATH, the one variable of its environment it passes
+--- on, or the directories every hosted system keeps `sleep` in when it
+--- has none.
 search_path: (host: system.host) -> (path: text.host_string from host) =
-    path = text.host_over("/bin:/usr/bin")
-    path = io.variable_named(host, text.host_over("PATH")) else (problem)
-        _ = problem
-        return
-    end
+    path = io.variable_named(host, text.host_over("PATH"))
+        else text.host_over("/bin:/usr/bin")
 end search_path
 
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
     arguments: [2]text.host_string = [text.host_over("-c"),
@@ -111,27 +108,23 @@ public main: () -> (code: i32) =
          (name: text.host_over("PATH"), value: search_path(host))]
     began: time.instant = time.now(host)
     started := io.spawn(host, text.host_over("/bin/sh"),
-                        arguments[0..<2], variables[0..<3],
+                        arguments, variables,
                         io.capturing) else (problem)
-        _ = problem
         return
     end
     mut said: [512]u8 = zeroed
     mut complained: [512]u8 = zeroed
-    mut output := text.over(said[0..<512])
-    mut errors := text.over(complained[0..<512])
+    mut output := text.over(said)
+    mut errors := text.over(complained)
     ended: io.ending = capture(host, started, output, errors) else (problem)
-        _ = problem
         return
     end
     took: time.duration = time.elapsed(began, time.now(host))
     report(out, text.used(output), text.used(errors), ended,
            took) else (problem)
-        _ = problem
         return
     end
     io.flush(out) else (problem)
-        _ = problem
         return
     end
     match ended.how

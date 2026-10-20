@@ -3,7 +3,7 @@
 import core/io
 import hosted/system
 
---  Mark every number below `lenof composite` that is not prime.
+--- Mark every number below `lenof composite` that is not prime.
 sieve: (composite: []mut bool) -> none =
     composite[0] = true
     composite[1] = true
@@ -25,11 +25,11 @@ end sieve
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [512]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     mut composite: [100]bool = zeroed
-    sieve(composite[0..<100])
+    sieve(composite)
     io.put(out, "primes below 100:") else none
     mut count: u32 = 0
     for number in 0..<lenof composite do

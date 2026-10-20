@@ -28,7 +28,8 @@ in_set: (real_coordinate: f64, imaginary_coordinate: f64)
     member = real_squared + imaginary_squared <= 4.0
 end in_set
 
---  Pack one row of the N by N image into ROW, eight pixels to a byte.
+--- Pack one row of the `n` by `n` image into `row`, eight pixels to a
+--- byte.
 pack_row: (n: usize, imaginary_coordinate: f64, row: []mut u8) -> none =
     coordinate_size: f64 = f64(n)
     first: usize = 0
@@ -66,7 +67,7 @@ render: (inout out: io.buffered_writer(system.host), n: usize, row: []mut u8)
     end for
 end render
 
---  The image size named by the first argument.
+--- The image size named by the first argument.
 image_size: (host: system.host)
             -> (n: usize)
             ! io.no_argument | text.invalid_number | text.number_overflow =
@@ -80,27 +81,23 @@ public main: () -> (code: i32) =
     memory := heap.new()
     code = 1
     n := image_size(host) else (problem)
-        _ = problem
         io.write(host, io.err(host), "usage: mandelbrot N\n") else none
         return
     end
 
     mut row := mem.new_bytes(memory, (n + 7) / 8) else (problem)
-        _ = problem
         io.write(host, io.err(host), "mandelbrot: out of memory\n") else none
         return
     end
     defer mem.delete_bytes(memory, row)
 
     mut storage: [16384]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<16384])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     render(out, n, mem.bytes(row)) else (problem)
-        _ = problem
         return
     end
     io.flush(out) else (problem)
-        _ = problem
         return
     end
     code = 0

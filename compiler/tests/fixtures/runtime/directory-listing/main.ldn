@@ -1,8 +1,9 @@
 --  List a directory: each entry's kind, a file's size in bytes and the
---  entry's name, in byte order.  The program first builds the directory it
---  lists, so it can check what it reads back, and removes it again at the
---  end.  A name is bytes, which need not be UTF-8: core/text validates each
---  one, and a name that is not prints with its other bytes escaped.
+--  entry's name, in byte order.  `list` reads the entries and `show`
+--  prints them.  A name is bytes, which need not be UTF-8: core/text
+--  validates each one, and a name that is not prints with its other bytes
+--  escaped.  The code after the comment `Everything below` only builds a
+--  directory to list and checks the result.
 import core/cmp
 import core/io
 import core/mem
@@ -10,17 +11,53 @@ import core/sort
 import core/text
 import hosted/system
 
---  The directory the program builds, lists and removes, in the directory
---  it runs in.
-top: []u8 = "listing-scratch"
+--- Read every entry of the directory at `path` into `into`, with each
+--- file's size; `count` is how many there are.
+list: (host: system.host, path: []u8, into: []mut kept)
+      -> (count: usize) ! ... =
+    count = 0
+    mut buffer: [1024]u8 = zeroed
+    mut listing: io.directory =
+        try io.open_directory(host, text.host_over(path), buffer)
+    defer io.close_directory(host, listing) else none
+    loop do
+        item: io.entry = try io.read_entry(host, listing)
+        name: []u8 = text.host_bytes(item.name)
+        break when lenof name == 0
+        fail too_many when count == lenof into
+        fail too_long when lenof name > 255
+        try mem.copy(into[count].name[0..<255], name)
+        into[count].length = lenof name
+        into[count].kind = item.kind
+        into[count].size = 0
+        if item.kind == io.regular then
+            into[count].size = try io.entry_size(host, listing, item.name)
+        end if
+        inc count
+    end loop
+end list
 
---  More entries than the listing keeps, or a name longer than it keeps.
-too_many: atom
-too_long: atom
+--- Sort `entries` and write them to `out`, a line each, and then how many
+--- there are and the files' bytes; `total` is those bytes.
+show: (inout out: io.buffered_writer(system.host), entries: []mut kept)
+      -> (total: u64) ! ... =
+    sort.sort(entries)
+    mut room: [300]u8 = zeroed
+    mut text_line := text.over(room)
+    total = 0
+    for entry in entries do
+        try line(entry, text_line)
+        try io.put(out, text.used(text_line))
+        total += entry.size
+    end for
+    count: usize = lenof entries
+    try io.format(out, "{} entries, {} bytes in files\n",
+                  [any(addr count), any(addr total)])
+end show
 
---  An entry kept past the read that gave it.  The directory lends a name
---  only until its next read, which reuses the buffer the name is in, so
---  the listing keeps a copy.
+--- An entry kept past the read that gave it.  The directory lends a name
+--- only until its next read, which reuses the buffer the name is in, so
+--- the listing keeps a copy.
 kept: type = struct
     name: [255]u8
     length: usize
@@ -28,7 +65,11 @@ kept: type = struct
     size: u64
 end kept
 
---  Byte order, the order `ls` gives in the C locale.
+--- More entries than the listing keeps, or a name longer than it keeps.
+too_many: atom
+too_long: atom
+
+--- Byte order, the order `ls` gives in the C locale.
 before: (left: kept, right: kept) -> (yes: bool) =
     yes = cmp.compare(left.name[0..<left.length],
                       right.name[0..<right.length]) == cmp.less
@@ -36,9 +77,27 @@ end before
 
 kept is cmp.ordered (less: before)
 
---  A name as the listing shows it: as it is when it is UTF-8, and
---  otherwise with each byte outside printable ASCII written as `\xHH`, so
---  the line stays text.  Its conformance lets `format` write it.
+--- One line for `entry` into `into`: its kind, a file's size or `-`, and
+--- its name as it is shown.
+line: (entry: kept, inout into: text.builder) -> none ! ... =
+    word: []u8 = match entry.kind
+        io.regular: "file"
+        io.subdirectory: "directory"
+        io.symbolic_link: "link"
+        io.special: "special"
+    end match
+    dash: []u8 = "-"
+    size: u64 = entry.size
+    amount: any text.formattable =
+        if entry.kind == io.regular then any(addr size) else any(addr dash) end if
+    name: shown = (name: entry.name[0..<entry.length])
+    text.clear(into)
+    try text.format(into, "{} {} {}\n", [any(addr word), amount, any(addr name)])
+end line
+
+--- A name as the listing shows it: as it is when it is UTF-8, and
+--- otherwise with each byte outside printable ASCII written as `\xHH`, so
+--- the line stays text.  Its conformance lets `format` write it.
 shown: type = struct
     name: []u8
 end shown
@@ -71,8 +130,19 @@ escaped: (name: []u8, inout into: text.builder) -> none ! text.no_space =
     end for
 end escaped
 
---  The path of NAME in the top directory, or of the top directory itself
---  when NAME is empty, built in PATH.
+--  Everything below only sets up the demonstration: it builds a small
+--  directory where the program runs, lists it, checks that the listing
+--  holds what it built, and removes the directory again.
+
+--- The directory the program builds, lists and removes, in the directory
+--- it runs in.
+top: []u8 = "listing-scratch"
+
+--- The listing does not hold what the program built.
+differs: atom
+
+--- The path of `name` in the top directory, or of the top directory itself
+--- when `name` is empty, built in `path`.
 joined: (name: []u8, inout path: text.builder) -> none ! text.no_space =
     text.clear(path)
     try text.append(path, top)
@@ -82,10 +152,10 @@ joined: (name: []u8, inout path: text.builder) -> none ! text.no_space =
     end if
 end joined
 
---  Make the file NAME in the top directory, holding CONTENTS.
+--- Make the file `name` in the top directory, holding `contents`.
 make_file: (host: system.host, name: []u8, contents: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
-    mut path := text.over(scratch[0..<64])
+    mut path := text.over(scratch)
     try joined(name, path)
     opened: io.file = try io.open_write(host, text.host_over(text.used(path)))
     io.write(host, opened, contents) else (problem)
@@ -95,7 +165,7 @@ make_file: (host: system.host, name: []u8, contents: []u8) -> none ! ... =
     try io.close(host, opened)
 end make_file
 
---  Remove the file PATH names, or with DIRECTORY the empty directory.
+--- Remove the file `path` names, or with `directory` the empty directory.
 remove: (host: system.host, path: text.host_string, directory: bool)
         -> none ! ... =
     if directory then
@@ -105,18 +175,18 @@ remove: (host: system.host, path: text.host_string, directory: bool)
     end if
 end remove
 
---  Remove NAME from the top directory, or the top directory itself when
---  NAME is empty, if it is there.
+--- Remove `name` from the top directory, or the top directory itself when
+--- `name` is empty, if it is there.
 forget: (host: system.host, name: []u8, directory: bool) -> none ! ... =
     mut scratch: [64]u8 = zeroed
-    mut path := text.over(scratch[0..<64])
+    mut path := text.over(scratch)
     try joined(name, path)
     remove(host, text.host_over(text.used(path)), directory) else (problem)
         fail problem when problem <> io.not_found
     end
 end forget
 
---  Remove everything the program makes, whatever an earlier run left.
+--- Remove everything the program makes, whatever an earlier run left.
 clear: (host: system.host) -> none ! ... =
     try forget(host, "nested/gamma.log", false)
     try forget(host, "nested", true)
@@ -127,17 +197,17 @@ clear: (host: system.host) -> none ! ... =
     try forget(host, "", true)
 end clear
 
---  Make the directory NAME in the top directory, or the top directory
---  itself when NAME is empty.
+--- Make the directory `name` in the top directory, or the top directory
+--- itself when `name` is empty.
 make_directory: (host: system.host, name: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
-    mut path := text.over(scratch[0..<64])
+    mut path := text.over(scratch)
     try joined(name, path)
     try io.make_directory(host, text.host_over(text.used(path)))
 end make_directory
 
---  Four files, one of them empty and one with a name beyond ASCII, and a
---  subdirectory holding a fifth.
+--- Four files, one of them empty and one with a name beyond ASCII, and a
+--- subdirectory holding a fifth.
 build: (host: system.host) -> none ! ... =
     try clear(host)
     try make_directory(host, "")
@@ -147,105 +217,37 @@ build: (host: system.host) -> none ! ... =
     for at in usize(0)..<usize(1000) do
         lines[at] = line_of_beta[at % 5]
     end for
-    try make_file(host, "beta.log", lines[0..<1000])
+    try make_file(host, "beta.log", lines)
     try make_file(host, "café.log", "café\n")
     try make_file(host, "empty", "")
     try make_directory(host, "nested")
     try make_file(host, "nested/gamma.log", "gamma\n")
 end build
 
---  Read every entry of the top directory into INTO, with each file's size,
---  and return how many there are.
-list: (host: system.host, into: []mut kept) -> (count: usize) ! ... =
-    count = 0
-    mut buffer: [1024]u8 = zeroed
-    mut listing: io.directory =
-        try io.open_directory(host, text.host_over(top), buffer[0..<1024])
-    defer io.close_directory(host, listing) else none
-    loop do
-        item: io.entry = try io.read_entry(host, listing)
-        name: []u8 = text.host_bytes(item.name)
-        break when lenof name == 0
-        fail too_many when count == lenof into
-        fail too_long when lenof name > 255
-        try mem.copy(into[count].name[0..<255], name)
-        into[count].length = lenof name
-        into[count].kind = item.kind
-        into[count].size = 0
-        if item.kind == io.regular then
-            into[count].size = try io.entry_size(host, listing, item.name)
-        end if
-        inc count
-    end loop
-end list
-
---  One line per entry into LINE: its kind, a file's size or `-`, and its
---  name as it is shown.
-line: (entry: kept, inout into: text.builder) -> none ! ... =
-    word: []u8 = match entry.kind
-        io.regular: "file"
-        io.subdirectory: "directory"
-        io.symbolic_link: "link"
-        io.special: "special"
-    end match
-    dash: []u8 = "-"
-    size: u64 = entry.size
-    amount: any text.formattable =
-        if entry.kind == io.regular then any(addr size) else any(addr dash) end if
-    name: shown = (name: entry.name[0..<entry.length])
-    text.clear(into)
-    try text.format(into, "{} {} {}\n", [any(addr word), amount, any(addr name)])
-end line
-
---  Write the sorted listing and a total of the files' bytes through a
---  buffered writer, and say whether it holds what `build` made.
-show: (host: system.host, entries: []mut kept) -> (ok: bool) ! ... =
-    sort.sort(entries)
-    mut storage: [512]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
-    --  Whatever waits is written on every way out; the flush at the end
-    --  is the one whose failure is reported.
-    defer io.flush(out) else none
-    mut room: [300]u8 = zeroed
-    mut text_line := text.over(room[0..<300])
-    mut total: u64 = 0
-    for entry in entries do
-        try line(entry, text_line)
-        try io.put(out, text.used(text_line))
-        total += entry.size
-    end for
-    count: usize = lenof entries
-    text.clear(text_line)
-    try text.format(text_line, "{} entries, {} bytes in files\n",
-                    [any(addr count), any(addr total)])
-    try io.put(out, text.used(text_line))
-    try io.flush(out)
-    ok = count == 5 and total == 1012
-end show
+--- Build the directory, list it to `out`, check the listing and remove the
+--- directory.
+demonstrate: (host: system.host, inout out: io.buffered_writer(system.host))
+             -> none ! ... =
+    try build(host)
+    blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
+    mut entries: [8]kept = [8 of blank]
+    count: usize = try list(host, top, entries)
+    total: u64 = try show(out, entries[0..<count])
+    try clear(host)
+    fail differs when count <> 5 or total <> 1012
+end demonstrate
 
 public main: () -> (code: i32) =
     host := system.new()
+    mut storage: [512]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
     code = 1
-    build(host) else (problem)
-        _ = problem
+    demonstrate(host, out) else (problem)
         return
     end
-    blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
-    mut entries: [8]kept = [8 of blank]
-    code = 2
-    count: usize = list(host, entries[0..<8]) else (problem)
-        _ = problem
+    io.flush(out) else (problem)
         return
     end
-    code = 3
-    ok: bool = show(host, entries[0..<count]) else (problem)
-        _ = problem
-        return
-    end
-    code = 4
-    clear(host) else (problem)
-        _ = problem
-        return
-    end
-    code = if ok then 0 else 5 end if
+    code = 0
 end main
