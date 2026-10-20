@@ -3033,11 +3033,16 @@ When a routine returns a reference derived from a parameter, its signature
 says so with `from`. The caller then knows that the thing it passed in has
 to hold still while it uses the result.
 
-Here `list(t)` is the growable list declared in [1350]: a slice `items`
-and a count `len`, for any element type `t` ([1290]).
+Here a `batch` holds a writable slice of readings and how many of them
+are filled in:
 
 ```landin
-used: (t: type, l: list(t)) -> (s: []mut t from l) = l.items[0..<l.len] end
+batch: type = struct
+    items: []mut u32
+    count: usize
+end batch
+
+filled_part: (b: batch) -> (s: []mut u32 from b) = b.items[0..<b.count] end
 ```
 
 - `from` names where the reference came from; it says nothing about
@@ -3047,9 +3052,9 @@ used: (t: type, l: list(t)) -> (s: []mut t from l) = l.items[0..<l.len] end
   That is what an allocator returns, which is why two live allocations
   from one allocator are unremarkable.
 
-One accessor is enough. `used` hands out the widest permission the storage
-has, and a caller who wants less relaxes it ([0440]):
-`xs: []t = used(l)`. There is no const and non-const pair.
+One accessor is enough. `filled_part` hands out the widest permission the
+storage has, and a caller who wants less relaxes it ([0440]):
+`xs: []u32 = filled_part(b)`. There is no const and non-const pair.
 
 The clause is checked against the body in both directions. Returning
 something derived from a parameter without naming it is an error, and so
@@ -3420,24 +3425,25 @@ function that returns a type: that would be compile-time execution,
 which Landin does not have. Substitution, not execution.
 
 ```landin
-list: type (t: type) = struct
-    items: []mut t
-    len: usize
-end list
+pair: type (t: type) = struct
+    first: t
+    second: t
+end pair
 ```
 
-`list(i32)` and `list(u8)` are different types, and every use of
-`list(i32)` is the same type. A type parameter may carry one concept
+`pair(i32)` and `pair(u8)` are different types, and every use of
+`pair(i32)` is the same type. A growable container is generic the same
+way: `core/vec`'s `list(t)` is one, and [0510] explains how it keeps its
+empty slots out of sight. A type parameter may carry one concept
 constraint, and a `fixed` parameter is an integer known at compile time.
 Here `hashable` is a concept `core/cmp` provides, and `zeroable` is
 [0540]'s:
 
 ```landin
-map: type (key_type: type is hashable, value_type: type) = struct
-    keys: []mut key_type
-    values: []mut value_type
-    len: usize
-end map
+key_value: type (key_type: type is hashable, value_type: type) = struct
+    key: key_type
+    value: value_type
+end key_value
 
 cleared: type (t: type is zeroable, fixed capacity: u32) = struct
     items: [capacity]t
@@ -3445,8 +3451,8 @@ cleared: type (t: type is zeroable, fixed capacity: u32) = struct
 end cleared
 ```
 
-Applications are positional and complete: `map(u32, utf8)`, never
-`map(u32)`. A `fixed` argument is an integer literal, or a `fixed`
+Applications are positional and complete: `key_value(u32, utf8)`,
+never `key_value(u32)`. A `fixed` argument is an integer literal, or a `fixed`
 parameter passed on by another generic declaration, and it must fit its
 declared type. Whether an argument type may go where the body puts it,
 as a field or an array element, is checked after substitution.
@@ -3468,13 +3474,13 @@ because it holds for every one of them.
 
 The examples use two concepts met later: `iterable`, which `for` loops
 use ([1320]), and `allocator` ([1360]). `counted(provider)` is an
-allocator that wraps another, and the `list_...` and `counted_...` names
+allocator that wraps another, and the `pair_...` and `counted_...` names
 are the functions that supply each entry.
 
 ```landin
-(t: type) list(t) is iterable (cur: usize, item_type: t,
-                               first: list_first, at_end: list_at_end,
-                               item: list_item, next: list_next)
+(t: type) pair(t) is iterable (cur: u8, item_type: t,
+                               first: pair_first, at_end: pair_at_end,
+                               item: pair_item, next: pair_next)
 
 (provider: type is allocator) counted(provider) is allocator
     (alloc: counted_alloc, grow: counted_grow, resize: counted_resize,
@@ -3489,8 +3495,8 @@ and leaves functions of exactly the concept's shape.
 
 The target must be the whole generic type applied to the binder in
 order, each variable used once: one conformance covers the whole family
-`list(t)`. Another family for the same template and concept, or a
-concrete exception such as `list(u8) is iterable`, is a collision
+`pair(t)`. Another family for the same template and concept, or a
+concrete exception such as `pair(u8) is iterable`, is a collision
 ([1280]). Without this form no generic container could be traversed,
 sorted or handed to other generic code.
 
@@ -3568,7 +3574,7 @@ end iterable
 ```
 
 The conformance supplies the cursor type `cur` and the `item_type`, as
-[1250]'s `list` does. The loop evaluates `s` once and keeps a private
+[1250]'s `pair` does. The loop evaluates `s` once and keeps a private
 copy; each provider gets a read-only pointer to that copy, so a large
 struct is copied once, not on every call. The labels may come in any
 order. The four signatures are exact: no permission, error set or `from`
@@ -3617,8 +3623,7 @@ container runs on the heap, in an arena or on a fixed buffer, and a
 deliberately failing allocator makes the out-of-memory paths testable,
 which almost nobody bothers with in C.
 
-The `push` below adds to [1350]'s `list`; `reserve` stands for a helper
-that makes `items` larger through `memory`.
+This is `core/mem`'s concept:
 
 ```landin
 allocator: type = concept (provider: type)
@@ -3631,21 +3636,20 @@ allocator: type = concept (provider: type)
             -> (moved: ptr mut u8) ! out_of_memory
     free: (self: provider, p: ptr mut u8, size: usize) -> none
 end allocator
-
-push: (t: type, provider: type is allocator, inout l: list(t), memory: provider,
-       escaping v: t) -> none ! out_of_memory =
-    if l.len == lenof l.items then
-        try reserve(l, memory)
-    end if
-    l.items[l.len] = v
-    inc l.len
-end push
 ```
 
-This sketch keeps its spare slots inside `items`, past `len`, which is
-only sound if they already hold real `t` values. `core/vec` keeps them in
-a `raw(t)` instead, so nothing can see a slot before it is filled
-([0510]).
+A routine that adds to a list takes the list `inout` and the allocator as
+an ordinary argument:
+
+```landin
+record_reading: (provider: type is mem.allocator, inout readings: vec.list(u32),
+                 memory: provider, value: u32) -> none ! mem.out_of_memory =
+    try vec.push(readings, memory, value)
+end record_reading
+```
+
+The same `record_reading` runs with `heap.new()` as `memory`, or with an
+arena over a buffer on the stack ([0820]).
 
 The list is changed, so it is passed `inout`. The allocator is a
 service, so it is a handle: a small copyable value, passed `in`, that
@@ -3655,10 +3659,10 @@ containers can allocate from one handle, and a region from its parent
 while both are live.
 
 The allocator is passed to each call, not stored in the container. A
-stored allocator would make the type `list(t, provider)`, so a list in
-an arena and a list on the heap would be different types and no
-function could take both. Passing it keeps the type `list(t)` and costs
-one argument at every call that can allocate.
+stored allocator would make the type `vec.list(t, provider)`, so a list
+in an arena and a list on the heap would be different types and no
+function could take both. Passing it keeps the type `vec.list(t)` and
+costs one argument at every call that can allocate.
 
 The four entries:
 
