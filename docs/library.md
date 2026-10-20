@@ -19,15 +19,105 @@ obligations.
 
 ## Common tasks
 
-A hosted program imports `hosted/system` and makes its handle once,
-`host := system.new()`; every call below takes that `host`.
+This program does the common tasks of a small tool in one place. It
+numbers the lines of the file named on the command line, as `cat -n`
+does, and when the file cannot be read it says why on standard error:
+
+```landin
+--  Number the lines of the file named on the command line, as `cat -n`
+--  does, and say in words why when it cannot be read.
+import core/failure
+import core/io
+import core/text
+import hosted/system
+
+--- Write each line of the file at `path` to `out` after its number.
+numbered: (inout out: io.buffered_writer(system.host), host: system.host,
+           path: text.host_string) -> none ! ... =
+    file := try io.open_read(host, path)
+    defer io.close(host, file) else none
+    mut buffer: [4096]u8 = zeroed
+    mut lines := io.lines_over(host, file, buffer)
+    mut number: u64 = 0
+    loop do
+        item := try io.read_line(lines)
+        break when item.finished
+        inc number
+        try io.format(out, "{}: {}\n", [any(addr number), any(addr item.bytes)])
+    end loop
+end numbered
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    code = 1
+    path := io.argument_at(host, 0) else (problem)
+        io.write(host, io.err(host), "usage: number FILE\n") else none
+        return
+    end
+    numbered(out, host, path) else (problem)
+        io.write(host, io.err(host), text.host_bytes(path)) else none
+        io.write(host, io.err(host), ": ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
+    code = 0
+end main
+```
+
+- `numbered` can fail, so its signature ends in `!`. `! ...` asks the
+  compiler to work out the set from the body's `try`s, which a routine
+  that is not `public` may do [0960].
+- `main` cannot fail, so it handles each failure with `else` [1030].
+  `else (problem)` names the atom, and `failure.words(problem)` turns it
+  into words for a person, such as `not found`.
+- The output goes through a buffered writer over a buffer `main`
+  declares. The deferred `io.flush` writes what waits on every way out,
+  and the deferred `io.close` closes the file however `numbered` ends.
+
+Compiled and run over a four-line file:
+
+```sh
+refine compile main.ldn -o number && ./number input.txt
+```
+
+```text
+1: first line
+2: second line
+3: 
+4: last, without a newline
+```
+
+Named a file that is not there, it says why on standard error and exits
+with 1:
+
+```sh
+./number missing.conf
+```
+
+```text
+missing.conf: not found
+```
+
+Both runs are the compiler's own tests:
+[the program](../compiler/tests/fixtures/runtime/library-common-tasks/main.ldn)
+and [its failing run](../compiler/tests/fixtures/runtime/library-common-tasks-missing/fixture.meta).
+
+Which module does what:
 
 | Task | Calls | Module |
 |---|---|---|
-| Print a formatted line | `mut out := io.buffered_over(host, io.out(host), storage[0..<256])`, then `defer io.flush(out) else none`, then `try io.format(out, "{} lines\n", [any(addr count)])` | [core/io](../core/io) |
-| Read a file named on the command line, line by line | `path := try io.argument_at(host, 0)`, `file := try io.open_read(host, path)`, `mut lines := io.lines_over(host, file, buffer[0..<4096])`, then `item := try io.read_line(lines)` until `item.finished` | [core/io](../core/io) |
-| Turn a failure into words for a person | `failure.words(problem)` in an `else (problem)` gives `not found`, `permission denied` and so on | [core/failure](../core/failure) |
-| Get the handle the calls take | `system.new()` | [hosted/system](../hosted/system) |
+| Get the handle every hosted call takes | `host := system.new()` | [hosted/system](../hosted/system) |
+| Print a formatted line | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` and `io.flush(out)` | [core/io](../core/io) |
+| Get a command-line argument | `io.argument_at(host, 0)`, and `io.argument_count(host)` | [core/io](../core/io) |
+| Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
+| Write straight to standard error | `io.write(host, io.err(host), bytes)` | [core/io](../core/io) |
+| Turn a failure into words for a person | `failure.words(problem)` | [core/failure](../core/failure) |
+| Right-align a number in a column | `text.over(buffer)` makes a builder, `text.append_u64(line, value)` writes the number, `text.align_right(line, start, width, u8(' '))` pads it from `start`, and `io.put(out, text.used(line))` prints it | [core/text](../core/text) |
+| Print a float with two decimals | scale it to whole hundredths and print the integer parts, as [core/text](../core/text)'s program shows; floats are not formattable | [core/text](../core/text) |
 
 ## Reading a signature
 
@@ -38,13 +128,21 @@ A call writes far less: `io.argument_at(host, 0)`.
 
 | In a signature | What it means |
 |---|---|
-| `provider: type is process`, first | A type parameter. The compiler deduces it from the arguments, so a call leaves it out [1300]. A call names one only where no argument has that type, as `vec.new(item: i32)`. |
+| `provider: type is process`, first | A type parameter. The compiler deduces it from the arguments, so a call usually leaves it out [1300]. A call may name it instead, and then names every type parameter, as `vec.new(item: i32)` must, since no argument has that type. |
+| `provider: type` | A type parameter with no requirement: any type will do. |
 | `is process` | The type must conform to the concept `process`: a named set of operations [1230] [1240]. |
-| `host: provider` | The provider: the handle a call works through, here the one `system.new()` made. An allocator's handle is called `memory`. |
+| `host: provider` | The provider: the handle a call works through, here the one `system.new()` made. An allocator is passed the same way, usually as `memory: provider` beside its own `provider: type is mem.allocator`. |
 | evidence | The table that tells generic code how a type does a concept's operations [1240] [1310]. A conformance such as `u32 is formattable (...)` supplies it. |
-| `world` | `core/io`'s concept for an ordinary program's provider: a `reader`, `writer`, `files` and `process` in one. `system.new()`'s `host` is one. |
+| `world` | `core/io`'s concept for an ordinary program's provider: a `reader`, `writer`, `files` and `process` in one. `system.new()`'s `host` is one. In `core/io`, `memory` is the memory world, a provider over the caller's storage. |
+| `buffered_writer(provider)` | A generic type applied to a type: a buffered writer over whichever provider the call deduces [1250]. |
+| `public builder: type = builder_value` | A public name for a type whose fields are the module's own. You hold one and pass it to the module's calls; reading a field is refused. |
+| `[]mut u8` | A slice the call may write through [0570]. A plain `[]u8` it only reads. |
+| `[]any text.formattable` | A slice of values of any type that conforms to `formattable` [1370]. A call writes it as an array literal, `[any(addr count), any(addr name)]`. |
+| `-> none` | The call returns nothing. |
+| `-> (lines: line_reader(provider) from buffer, host)` | A named result. `from buffer, host` says it borrows from both and must not outlive either [0790]. |
+| `-> (name: []u8, value: []u8)` | Several named results, read as fields of the call's result or taken apart by name [0990]. |
 | `! no_argument` | What the call can fail with [0940]: pass it on with `try`, or handle it with `else`. |
-| `from host` | The result borrows from `host` and must not outlive it [0790]. |
+| `! ...` | A routine that is not `public` may let the compiler work its set out from its body [0960]. The library's public calls always write theirs. |
 | `inout` | The call may change the argument in place [0900]. |
 | `sink` | The call consumes the argument [0910]. |
 
@@ -58,8 +156,9 @@ the same comments appear in editor hover. The
 evidence; the [tour](../tour.md) teaches the language.
 
 Each module below opens with what it is for, then its main calls, then how
-it behaves. Its page ends with a complete program that uses it, which the
-compiler's own tests run.
+it behaves. Its page lists the items, and ends with a complete program
+that uses the module, which the compiler's own tests run; where the
+program prints, the page gives the command and its output too.
 
 ## What the library does not cover yet
 
@@ -348,7 +447,7 @@ builder as it was:
 
 | Append | Writes |
 |---|---|
-| `append` | bytes as they are: the byte string a listing used to append by hand |
+| `append` | bytes as they are |
 | `append_byte` | one byte |
 | `append_text` | a `utf8` |
 | `append_host` | a host string's bytes |
@@ -364,6 +463,23 @@ Width and padding apply to whatever was written since an earlier
 `length`. `align_right` puts a fill byte before the piece until it is as
 wide as the field, and `align_left` after it. The fill goes before a sign
 too, so a zero fill suits an unsigned value.
+
+To right-align a number in a column, note where it starts, append it and
+align what was appended. The fill is a byte, so a space is `u8(' ')`:
+
+```landin
+--- Append `value` to `line` in decimal, right-aligned in a field `width`
+--- bytes wide.
+append_right: (inout line: text.builder, value: u64, width: usize)
+              -> none ! text.no_space =
+    start: usize = text.length(line)
+    try text.append_u64(line, value)
+    try text.align_right(line, start, width, u8(' '))
+end append_right
+```
+
+A builder over `mut buffer: [64]u8 = zeroed` is `text.over(buffer)`, and
+`io.put(out, text.used(line))` prints what it holds.
 
 ### Formatting
 
@@ -387,6 +503,39 @@ integer types in decimal, `bool` as `true` or `false`, `utf8`, `[]u8` and
 host strings, and a program declares it for a type of its own. Floats,
 `f32` and `f64`, are not formattable yet.
 
+To print a float, scale it to an integer and print the parts. Converting
+a float to an integer truncates toward zero and traps when the value does
+not fit, so this adds a half to round, and takes the sign off first so
+that a negative value rounds the same way:
+
+```landin
+--- Append `value` with two decimals, rounded half away from zero.  Floats
+--- are not formattable, so this scales the value to whole hundredths and
+--- writes the integer part, a point and the two digits after it.
+append_hundredths: (inout line: text.builder, value: f64)
+                   -> none ! text.no_space =
+    mut magnitude: f64 = value
+    if value < 0.0 then
+        magnitude = -value
+    end if
+    --  The conversion truncates toward zero, so adding a half rounds.
+    hundredths: u64 = u64(magnitude * 100.0 + 0.5)
+    if value < 0.0 and hundredths > 0 then
+        try text.append_byte(line, u8('-'))
+    end if
+    try text.append_u64(line, hundredths / 100)
+    try text.append_byte(line, u8('.'))
+    start: usize = text.length(line)
+    try text.append_u64(line, hundredths % 100)
+    try text.align_right(line, start, 2, u8('0'))
+end append_hundredths
+```
+
+The `0` fill writes five hundredths as `05`, so 2.05 never prints as
+`2.5`, and a value that rounds to zero prints without a sign, `0.00`. A
+value too large for a `u64` once scaled, a NaN or an infinity traps at
+the conversion.
+
 No locale is consulted anywhere: the same values give the same bytes
 everywhere, on Cortex-M0 as on a hosted system.
 
@@ -409,11 +558,14 @@ The scan goes from the left and reports whichever it meets first.
 `usize` and `isize` are the target's, 32 bits on Cortex-M.
 
 The builder's appends are the library's one decimal writer, and these
-parses its one parser. The slice writers `write_byte`, `write_u32`,
-`write_u64` and `write_usize` and `prefix` are retired, and `core/net`
-reads its addresses' numbers through these parses.
+parses its one parser: `core/net` reads its addresses' numbers through
+them.
 
-[Executable example](../compiler/tests/fixtures/runtime/library-shared-text/main.ldn)
+[Executable example](../compiler/tests/fixtures/runtime/library-text-columns/main.ldn)
+
+The program prints a price list: each item's name aligned left, its
+count right-aligned under its heading, and its price, an `f64`, with two
+decimals.
 
 ## core/io
 
@@ -435,15 +587,17 @@ The capabilities are concepts, and a program names only the ones it uses:
 
 Typical use, as in the tour's first program. Every call takes `host`,
 the handle `system.new()` makes in [hosted/system](../hosted/system),
-which a hosted program imports beside `core/io`:
+which a hosted program imports beside `core/io`. A call written with
+`try` is in a routine that can fail; `main` cannot, and handles each
+failure with `else` instead, as the program at the end of the page does:
 
 | Task | Calls |
 |---|---|
-| Print a formatted line | `mut out := io.buffered_over(host, io.out(host), storage[0..<256])` makes a buffered writer over your buffer, `defer io.flush(out) else none` writes what waits on the way out, and `try io.format(out, "{} of {}\n", [any(addr done), any(addr total)])` fills each `{}` with a value. |
+| Print a formatted line | `mut out := io.buffered_over(host, io.out(host), storage)` makes a buffered writer over your buffer, an array such as `mut storage: [256]u8 = zeroed`, `defer io.flush(out) else none` writes what waits on the way out, and `try io.format(out, "{} of {}\n", [any(addr done), any(addr total)])` fills each `{}` with a value. |
 | Print bytes as they are | `try io.put(out, "done\n")`, through the same writer. |
 | Write straight to a stream | `io.write(host, io.err(host), bytes)` writes all the bytes, or fails with `io_failed`. |
 | Get an argument | `path := try io.argument_at(host, 0)` lends the first argument after the program's name as a host string, or fails with `no_argument`; `io.argument_count(host)` counts them. |
-| Read a file line by line | `file := try io.open_read(host, path)` opens it, `mut lines := io.lines_over(host, file, buffer[0..<4096])` makes a line reader over your buffer, and `item := try io.read_line(lines)` gives each line in `item.bytes` until `item.finished`; `try io.close(host, file)` closes it. |
+| Read a file line by line | `file := try io.open_read(host, path)` opens it, `mut lines := io.lines_over(host, file, buffer)` makes a line reader over your buffer, and `item := try io.read_line(lines)` gives each line in `item.bytes` until `item.finished`; `try io.close(host, file)` closes it. |
 
 ### Providers
 
@@ -686,7 +840,9 @@ A failed flush reports the writer's `io_failed` and keeps every byte the
 writer did not take, so the next flush writes each byte once. `format`
 refuses a text larger than the whole buffer with `text.no_space`. Its
 values are `text.formattable`'s types, as `text.format`'s are: integers,
-`bool`, `utf8`, `[]u8` and host strings. Floats are not formattable yet.
+`bool`, `utf8`, `[]u8` and host strings. Floats are not formattable yet:
+to print one, scale it to an integer and print the parts, as
+`append_hundredths` in [core/text](../core/text) does for two decimals.
 
 There are no destructors: bytes still waiting when the program ends are
 never written. Flush before every way out, `defer io.flush(out) else ...`
@@ -710,7 +866,12 @@ until the next read.
   `line_too_long`, and the rest of it is skipped, so the next read gives
   the line after it.
 
-[Executable example](../compiler/tests/fixtures/runtime/library-shared-io/main.ldn)
+[Executable example](../compiler/tests/fixtures/runtime/library-common-tasks/main.ldn)
+
+The program numbers the lines of the file named on the command line,
+reading it through a line reader and printing through a buffered writer.
+When the file cannot be read it says why on standard error, in
+`failure.words`' phrase, and exits with 1.
 
 ## core/io/fake
 
@@ -1278,7 +1439,12 @@ fails to.
 A sleep a signal interrupts, or the system ends early, sleeps on: it
 never returns before the deadline as `now` reads it.
 
-[Executable example](../compiler/tests/fixtures/runtime/core-io-erased-system/main.ldn)
+[Executable example](../compiler/tests/fixtures/runtime/library-system-arguments/main.ldn)
+
+The program prints the arguments `system.new()`'s provider lends, one to
+a line after its index. It then looks for a settings file that is not
+there and prints why it could not be opened, in `failure.words`' phrase
+and by `system.last_errno`'s number, before going on with its defaults.
 
 ## platform/posix
 

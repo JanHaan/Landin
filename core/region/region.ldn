@@ -27,9 +27,10 @@ end space_value
 --- fills it; it must outlive the region handle, and `release` empties it.
 public space: type (fixed capacity: usize) = space_value(capacity)
 
+--  A capacity of zero means the growing ledger: spec.md's D356.
 --- Caller-owned state of a region whose ledger grows through its parent:
 --- the one ledger a capacity of zero means, since a bounded ledger of no
---- records could hold nothing (D356).  Declare it `zeroed`.
+--- records could hold nothing.  Declare it `zeroed`.
 public growing_space: type = space_value(0)
 
 region_value: type (provider: type) = struct

@@ -1,12 +1,5 @@
 # Landin prototype 1 — a driver from a vendor SVD
 
-Current with specification 0.2.7. Its own findings X1-X9 are all
-resolved below. The bootstrap compiler exists, but this Cortex-M program uses
-future constructs and deliberate omissions, so it remains a specification
-test: every line is meant to follow a rule that is written down, and every
-place where the tour was silent is recorded at the end, under WHERE THE
-SPECIFICATION WAS SILENT.
-
 > **Not learning material.** This is a design stress test: a Cortex-M0
 > driver written from a vendor SVD, written before the compiler existed to
 > find where the specification was silent, ambiguous or wrong. It is not a
@@ -17,6 +10,17 @@ SPECIFICATION WAS SILENT.
 > true. The program that actually runs is [the derived
 > driver](compiler/tests/driver/DERIVATION.md), on the pinned Cortex-M0
 > emulator. To learn Landin, read [the tour](tour.md).
+>
+> The sketch itself begins at its first module heading, `chip/vendor/gpio`.
+> The notes between this banner and that heading reconcile the sketch with
+> the specification, and a reader can skip them.
+
+Current with specification 0.2.7. Its own findings X1-X9 are all
+resolved below. The bootstrap compiler exists, but this Cortex-M program uses
+future constructs and deliberate omissions, so it remains a specification
+test: every line is meant to follow a rule that is written down, and every
+place where the tour was silent is recorded at the end, under WHERE THE
+SPECIFICATION WAS SILENT.
 
 The target is a Cortex-M0 class part. GPIO, a timer, and a UART that
 receives by DMA and signals completion from an interrupt handler.

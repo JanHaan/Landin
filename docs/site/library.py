@@ -276,7 +276,10 @@ def overviews(root, modules):
             raise ValueError(f'{module}: example has no fixture metadata')
         if module in result:
             raise ValueError(f'duplicate overview: {module}')
-        result[module] = (body[:example.start()].strip(), path)
+        # What follows the link describes the program, and the page puts
+        # it with the program, at its end.
+        result[module] = (body[:example.start()].strip(), path,
+                          body[example.end():].strip())
     if set(result) != set(modules):
         raise ValueError('library overviews and source modules differ: '
                          + ', '.join(sorted(set(result) ^ set(modules))))
@@ -598,7 +601,7 @@ def write(root, destination, render):
         body += '</ul>\n'
     emit('library.html', 'Library reference', body, 'docs/library.md and core, hosted, platform sources')
     for module, items in modules.items():
-        overview, example_path = descriptions[module]
+        overview, example_path, example_prose = descriptions[module]
         aliases = {}
         for path, text in sources.items():
             if str(Path(path).parent) == module:
@@ -671,12 +674,8 @@ def write(root, destination, render):
         if table:
             body += (f'<li><a href="#values">{len(tabled)} values by target</a> '
                      '<span class="api-kind">table</span></li>\n')
-        body += ('</ul>\n<details id="example"><summary>Executable example</summary>\n'
-                 '<p>This complete program is maintained in the repository runtime tests. ')
-        body += f'<a href="{source_name(example_path)}#L1">View source</a>.</p>\n'
-        example = (root / example_path).read_text()
-        sources[example_path] = example
-        body += render.listing_of(render.render_landin(example.splitlines(), render.Highlighter())) + '</details>\n'
+        body += ('<li><a href="#example">example program</a> '
+                 '<span class="api-kind">program</span></li>\n</ul>\n')
         if table:
             body += value_section(table, module, source_name, reference, render,
                                   lambda ref: anchors.get(ref))
@@ -692,6 +691,8 @@ def write(root, destination, render):
                 body += f'<p class="api-source"><a href="{source_name(variant.source)}#L{variant.line}">{variant.source}:{variant.line}</a></p>\n'
                 body += prose(variant.documentation, variant.source)
             body += '</section>\n'
+        body += example_section(root, example_path, example_prose, prose, render)
+        sources[example_path] = (root / example_path).read_text()
         emit(page_name(module), module, body, module + '/*.ldn', module, overview.split('\n\n')[0])
     for path, text in sources.items():
         hl = render.Highlighter()
@@ -702,7 +703,8 @@ def write(root, destination, render):
     (destination / 'library-index.json').write_text(json.dumps(index, indent=2) + '\n')
     (destination / SEARCH_SCRIPT).write_text(search_index(index))
     verify(destination, pages, modules, render, sources,
-           {module: text for module, (text, _) in descriptions.items()})
+           {module: text for module, (text, _, _) in descriptions.items()},
+           {module: after for module, (_, _, after) in descriptions.items()})
     return pages
 
 
@@ -739,7 +741,75 @@ def verify_table(module, page, table, render):
                                  f'{sorted(missing)}')
 
 
-def verify(destination, pages, modules, render, sources=None, overviews=None):
+def fixture_fields(directory):
+    """A fixture.meta's keys, each its first value; {} where there is none."""
+    meta = directory / 'fixture.meta'
+    fields = {}
+    if meta.is_file():
+        for line in meta.read_text().splitlines():
+            key, colon, value = line.partition(':')
+            if colon and key.strip() not in fields:
+                fields[key.strip()] = value.strip()
+    return fields
+
+
+def example_run(root, example_path):
+    """The command that runs a module's program and what it prints, as
+    Markdown, from its fixture's own metadata; '' for one that prints
+    nothing the fixture compares.
+
+    The harness gives a `run_files` file as a path wherever its lane put
+    the fixture, and the page writes the name; a program shown here
+    prints no such path.
+    """
+    directory = (root / example_path).parent
+    fields = fixture_fields(directory)
+    expected = fields.get('run_expect')
+    if not expected or fields.get('class') != 'runtime':
+        return ''
+    name = directory.name.removeprefix('library-')
+    words = fields.get('run_args', '').split()
+    files = [f.strip() for f in fields.get('run_files', '').split(',') if f.strip()]
+    command = f'refine compile main.ldn -o {name} && ./{name}'
+    command += ''.join(' ' + w for w in words + files)
+    stdin = fields.get('stdin')
+    if stdin:
+        command += ' < ' + stdin
+    out = []
+    for given in files + ([stdin] if stdin else []):
+        out.append(f'With `{given}` holding:\n\n```text\n'
+                   + (directory / given).read_text().rstrip('\n') + '\n```\n')
+    status = fields.get('status', '0')
+    ends = '' if status == '0' else f', and it exits with {status}'
+    stream = ('standard output' if fields.get('stream') == 'output'
+              else 'standard output and standard error together')
+    out.append(f'Compiled and run, it prints this on {stream}{ends}:\n\n'
+               f'```sh\n{command}\n```\n\n```text\n'
+               + (directory / expected).read_text().rstrip('\n') + '\n```\n')
+    return '\n'.join(out)
+
+
+def example_section(root, example_path, example_prose, prose, render):
+    """The page's last section: the module's complete program."""
+    body = ('<section class="api-example" id="example">\n'
+            '<h2>Example program</h2>\n')
+    if example_prose:
+        body += prose(example_prose)
+    body += ('<p>This complete program is one of the compiler\'s runtime tests. '
+             f'<a href="{source_name(example_path)}#L1">View source</a>.</p>\n')
+    run = example_run(root, example_path)
+    example = (root / example_path).read_text()
+    listing = render.listing_of(render.render_landin(example.splitlines(),
+                                                     render.Highlighter()))
+    if example_prose or run:
+        body += listing + (prose(run) if run else '')
+    else:
+        body += '<details><summary>The program</summary>\n' + listing + '</details>\n'
+    return body + '</section>\n'
+
+
+def verify(destination, pages, modules, render, sources=None, overviews=None,
+           examples=None):
     """Check every local destination and each item's own visible content.
 
     With `overviews`, each module's prose from docs/library.md as well:
@@ -873,11 +943,23 @@ def verify(destination, pages, modules, render, sources=None, overviews=None):
         start = written.index('<p class="api-condition">')
         region = written[start:written.index('<h2>Items</h2>', start)]
         got = Counter(render.WORD.findall(html.unescape(re.sub(r'<[^>]+>', ' ', region))))
+        # A fenced program's words are its highlighted tokens, split by
+        # their markup; check.py holds each such block to a fixture's text.
+        prose_only = re.sub(r'^```\w*\n.*?^```$', '', text, flags=re.M | re.S)
         want = Counter(render.WORD.findall(
-            re.sub(r'\]\([^)]+\)', ']', text.replace('\\|', '|'))))
+            re.sub(r'\]\([^)]+\)', ']', prose_only.replace('\\|', '|'))))
         missing = want - got
         if missing:
             raise ValueError(f'{module}: overview lost words: {sorted(missing)}')
+    for module, text in (examples or {}).items():
+        written = (destination / page_name(module)).read_text()
+        start = written.index('<section class="api-example" id="example">')
+        region = written[start:written.index('</section>', start)]
+        got = Counter(render.WORD.findall(html.unescape(re.sub(r'<[^>]+>', ' ', region))))
+        want = Counter(render.WORD.findall(re.sub(r'\]\([^)]+\)', ']', text)))
+        missing = want - got
+        if missing:
+            raise ValueError(f'{module}: example prose lost words: {sorted(missing)}')
     for module, items in modules.items():
         page = parsed[page_name(module)]
         grouped = {}

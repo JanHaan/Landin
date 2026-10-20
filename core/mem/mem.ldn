@@ -210,12 +210,13 @@ public release_storage: (item: type, provider: type is allocator,
     provider.free(memory, block, extent)
 end release_storage
 
+--  The containers' one way of taking slots: spec.md's D356.
 --- Make room for at least `want` items, keeping the initialized prefix:
 --- the block grows in place where the provider can grow it, and otherwise
 --- the items move to a fresh block, which is published last, and the old
 --- one is freed.  `out_of_memory` leaves the storage, its prefix and its
---- capacity as they were.  The containers' one way of taking slots
---- (D356); a move invalidates views of the old block.
+--- capacity as they were.  The containers' one way of taking slots; a move
+--- invalidates views of the old block.
 public reserve_storage: (item: type, provider: type is allocator,
                          inout store: storage(item), memory: provider,
                          want: usize) -> none ! out_of_memory =

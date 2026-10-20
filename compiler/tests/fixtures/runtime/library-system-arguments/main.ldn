@@ -1,0 +1,38 @@
+--  Print the arguments the program was given, one to a line after its
+--  index, then look for a settings file.  When it cannot be opened the
+--  program says why, in the library's words and by the system's own error
+--  number, and goes on with its defaults.
+import core/failure
+import core/io
+import core/text
+import hosted/system
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    code = 1
+    count: usize = io.argument_count(host)
+    io.format(out, "{} arguments\n", [any(addr count)]) else none
+    for index in 0..<count do
+        argument := io.argument_at(host, index) else (problem)
+            return
+        end
+        io.format(out, "{}: {}\n", [any(addr index), any(addr argument)])
+            else none
+    end for
+    path: []u8 = "settings.conf"
+    file := io.open_read(host, text.host_over(path)) else (problem)
+        reason: []u8 = failure.words(problem)
+        number: i32 = system.last_errno(host)
+        io.format(out, "{}: {} (errno {}), so the defaults apply\n",
+                  [any(addr path), any(addr reason), any(addr number)])
+            else none
+        code = 0
+        return
+    end
+    io.close(host, file) else none
+    io.format(out, "{}: opened\n", [any(addr path)]) else none
+    code = 0
+end main

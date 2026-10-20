@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: core/text's reference program builds each row of a price list in a builder over a caller's buffer, a name aligned left, a u64 count right-aligned with a space fill, and an f64 price written with two decimals by scaling it to whole hundredths through a truncating conversion, a negative price with its sign
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0520, 0670, 0700, 0710, 0940, 0960, 1030, 1100, 1150, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

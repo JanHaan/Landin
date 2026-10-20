@@ -7658,6 +7658,91 @@ def check_from_c_page(full_run):
     return out
 
 
+LIBRARY_PAGE = "docs/library.md"
+LINKED_FIXTURE = re.compile(r"\]\(\.\./(compiler/tests/fixtures/[^)\s]+\.ldn)\)")
+
+
+def library_block_faults(lines, read):
+    """Where a `landin` block of the library reference is no fixture's text.
+
+    `lines` are the page's lines and `read(path)` a linked source's text.
+    A block is a whole `.ldn` file of a fixture its own `##` section links,
+    or a run of whole lines of one, so that every program a reader copies
+    from the page is one the test program compiles and runs.  Answers
+    (line, message) pairs, one for each block that matches no linked file.
+    """
+    out = []
+    sections, start = [], 0
+    for at, line in enumerate(lines + ["## end"]):
+        if line.startswith("## ") and at > start:
+            sections.append((start, lines[start:at]))
+            start = at
+    for offset, section in sections:
+        linked = []
+        for line in section:
+            linked += LINKED_FIXTURE.findall(line)
+        n = 0
+        while n < len(section):
+            if section[n] != "```landin":
+                n += 1
+                continue
+            opened = n
+            n += 1
+            while n < len(section) and section[n] != "```":
+                n += 1
+            if n == len(section):
+                out.append((offset + opened + 1,
+                            "a landin block is never closed"))
+                break
+            block = "\n".join(section[opened + 1:n]) + "\n"
+            n += 1
+            if not linked:
+                out.append((offset + opened + 1,
+                            "this block's section links no fixture source"
+                            " the block could be held to"))
+                continue
+            found = False
+            for path in linked:
+                text = read(path)
+                if text is None:
+                    out.append((offset + opened + 1,
+                                "the section links %s, which is not there"
+                                % path))
+                    continue
+                if text == block or ("\n" + text).find("\n" + block) >= 0:
+                    found = True
+            if not found:
+                out.append((offset + opened + 1,
+                            "this block is not the text, or whole lines of"
+                            " the text, of %s; the page shows only what the"
+                            " test program compiles" % ", ".join(linked)))
+    return out
+
+
+def check_library_page(full_run):
+    """The library reference's programs are fixtures' sources.
+
+    See `library_block_faults`: each `landin` block on the page is a
+    fixture's source, or whole lines of one, that its section links.
+    """
+    if not full_run:
+        return []
+    page = os.path.join(ROOT, LIBRARY_PAGE)
+    missing = absent([page])
+    if missing:
+        return missing
+
+    def read(path):
+        full = os.path.join(ROOT, path)
+        if not os.path.isfile(full):
+            return None
+        with io.open(full, encoding="utf-8", newline="") as stream:
+            return stream.read()
+    lines = io.open(page, encoding="utf-8").read().split("\n")
+    return [(LIBRARY_PAGE, line, message)
+            for line, message in library_block_faults(lines, read)]
+
+
 def check_running_examples(full_run):
     """The examples page shows the runtime sources the gate actually runs.
 
@@ -9144,6 +9229,7 @@ def main(argv):
     extra += check_running_examples(full_run)
     extra += check_first_program(full_run)
     extra += check_from_c_page(full_run)
+    extra += check_library_page(full_run)
     extra += check_library_documentation(full_run)
     extra += check_core_module_places(full_run)
     extra += check_failure_words(full_run)

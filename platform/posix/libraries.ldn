@@ -53,6 +53,8 @@ public no_symbol: atom
 --  The longest symbol name `find_symbol` takes, with its NUL.
 symbol_room: type = [4096]u8
 
+--  An empty path is no library, though the loader would give the program
+--  itself for it: spec.md's D336.
 --- Load the shared object at `path`, or the one the system's search finds
 --- when `path` holds no slash, with its symbols visible as `scope` says.
 --- Every symbol the object needs is bound as it is loaded, POSIX's
@@ -61,7 +63,7 @@ symbol_room: type = [4096]u8
 --- is `einval` and one longer than the system takes `enametoolong`, as
 --- every path of this module is, and an empty path is `enoent`, as it is
 --- to every other call here: the loader would give the program itself
---- for it, which is no library this layer loads (D336).
+--- for it, which is no library this layer loads.
 public open_library:
     (path: text.host_string, scope: symbol_scope)
     -> (loaded: library) ! errno | no_library =

@@ -1,0 +1,42 @@
+--  Number the lines of the file named on the command line, as `cat -n`
+--  does, and say in words why when it cannot be read.
+import core/failure
+import core/io
+import core/text
+import hosted/system
+
+--- Write each line of the file at `path` to `out` after its number.
+numbered: (inout out: io.buffered_writer(system.host), host: system.host,
+           path: text.host_string) -> none ! ... =
+    file := try io.open_read(host, path)
+    defer io.close(host, file) else none
+    mut buffer: [4096]u8 = zeroed
+    mut lines := io.lines_over(host, file, buffer)
+    mut number: u64 = 0
+    loop do
+        item := try io.read_line(lines)
+        break when item.finished
+        inc number
+        try io.format(out, "{}: {}\n", [any(addr number), any(addr item.bytes)])
+    end loop
+end numbered
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    code = 1
+    path := io.argument_at(host, 0) else (problem)
+        io.write(host, io.err(host), "usage: number FILE\n") else none
+        return
+    end
+    numbered(out, host, path) else (problem)
+        io.write(host, io.err(host), text.host_bytes(path)) else none
+        io.write(host, io.err(host), ": ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
+    code = 0
+end main

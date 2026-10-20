@@ -1,0 +1,81 @@
+--  A price list in columns: each count right-aligned under its heading,
+--  and each price, a float, with two decimals.
+import core/io
+import core/text
+import hosted/system
+
+item: type = struct
+    name: utf8
+    count: u64
+    price: f64
+end item
+
+--- Append `value` to `line` in decimal, right-aligned in a field `width`
+--- bytes wide.
+append_right: (inout line: text.builder, value: u64, width: usize)
+              -> none ! text.no_space =
+    start: usize = text.length(line)
+    try text.append_u64(line, value)
+    try text.align_right(line, start, width, u8(' '))
+end append_right
+
+--- Append `value` with two decimals, rounded half away from zero.  Floats
+--- are not formattable, so this scales the value to whole hundredths and
+--- writes the integer part, a point and the two digits after it.
+append_hundredths: (inout line: text.builder, value: f64)
+                   -> none ! text.no_space =
+    mut magnitude: f64 = value
+    if value < 0.0 then
+        magnitude = -value
+    end if
+    --  The conversion truncates toward zero, so adding a half rounds.
+    hundredths: u64 = u64(magnitude * 100.0 + 0.5)
+    if value < 0.0 and hundredths > 0 then
+        try text.append_byte(line, u8('-'))
+    end if
+    try text.append_u64(line, hundredths / 100)
+    try text.append_byte(line, u8('.'))
+    start: usize = text.length(line)
+    try text.append_u64(line, hundredths % 100)
+    try text.align_right(line, start, 2, u8('0'))
+end append_hundredths
+
+--- Write `one` into `line` as a row: its name, then its count and its
+--- price right-aligned under their headings.
+write_row: (inout line: text.builder, one: item) -> none ! text.no_space =
+    text.clear(line)
+    try text.append_text(line, one.name)
+    try text.align_left(line, 0, 8, u8(' '))
+    try append_right(line, one.count, 6)
+    start: usize = text.length(line)
+    try append_hundredths(line, one.price)
+    try text.align_right(line, start, 8, u8(' '))
+    try text.append_byte(line, u8('\n'))
+end write_row
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    code = 1
+    items: [4]item = [(name: "bolts", count: 1200, price: 0.125),
+                      (name: "nuts", count: 950, price: 0.08),
+                      (name: "washers", count: 75, price: 0.0625),
+                      (name: "refund", count: 1, price: -2.5)]
+    io.put(out, "item     count   price\n") else none
+    mut buffer: [64]u8 = zeroed
+    mut line := text.over(buffer)
+    for one in items do
+        write_row(line, one) else (problem)
+            return
+        end
+        io.put(out, text.used(line)) else (problem)
+            return
+        end
+    end for
+    io.flush(out) else (problem)
+        return
+    end
+    code = 0
+end main

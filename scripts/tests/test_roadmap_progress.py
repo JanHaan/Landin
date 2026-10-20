@@ -310,11 +310,19 @@ Depends on: none
                                  RENDER.roadmap_progress(roadmap), program,
                                  set(), None, "")
 
+    def assertShowsItems(self, index, *titles):
+        """Each item by its title alone: a roadmap number means nothing to
+        a reader who has not opened the roadmap, so the page shows none."""
+        for title in titles:
+            self.assertIn("<span>" + title + "</span>", index)
+        for key in (FIRST, SECOND):
+            self.assertNotIn(key, index)
+
     def test_front_page_shows_the_planned_next_item(self):
         index = self.front_page(BETWEEN_ITEMS)
         self.assertIn("next planned item", index)
-        self.assertIn(SECOND, index)
-        self.assertIn(FIRST, index)
+        self.assertShowsItems(index, "Finish the baseline",
+                              "Start source debugging")
         self.assertNotIn('<div class="roadmap-now">', index)
         self.assertNotIn("roadmap endpoint", index)
 
@@ -322,14 +330,14 @@ Depends on: none
         index = self.front_page(ACTIVE_ITEM)
         self.assertIn('<div class="roadmap-now">', index)
         self.assertIn("up next", index)
-        self.assertIn(FIRST, index)
-        self.assertIn(SECOND, index)
+        self.assertShowsItems(index, "Finish the baseline",
+                              "Start source debugging")
         self.assertNotIn("next planned item", index)
 
     def test_front_page_shows_the_endpoint(self):
         index = self.front_page(ENDPOINT)
         self.assertIn("roadmap endpoint", index)
-        self.assertIn(SECOND, index)
+        self.assertShowsItems(index, "Start source debugging")
         self.assertNotIn("next planned item", index)
         self.assertNotIn('<div class="roadmap-now">', index)
 

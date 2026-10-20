@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: hosted/system's reference program prints its argument count and each argument after its index from system.new's provider, then fails to open a settings file that is not there and prints failure.words' phrase and system.last_errno's ENOENT beside it before going on and exiting 0
+program: main.ldn
+root: ../../../../..
+run_args: hello world
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0570, 0940, 0960, 1030, 1100, 1150, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

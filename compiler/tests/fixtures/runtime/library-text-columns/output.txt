@@ -1,0 +1,5 @@
+item     count   price
+bolts     1200    0.13
+nuts       950    0.08
+washers     75    0.06
+refund       1   -2.50

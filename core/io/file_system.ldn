@@ -75,10 +75,11 @@ public temporary: type = struct
     path: text.host_string
 end temporary
 
+--  One close for every file, whichever call opened it: spec.md's D357.
 --- The rest of the file system: a concept that refines `files`, so a
 --- provider of it opens with `open_read`, `open_write` and `open_file` and
---- closes every one of them with `files`' `close`, the one close a file has
---- (D357); it is outside `world`, beside `directories`.  A path is a host
+--- closes every one of them with `files`' `close`, the one close a file
+--- has; it is outside `world`, beside `directories`.  A path is a host
 --- string, as `files` takes one, and a file is a `file` of the provider,
 --- which `reader`, `writer` and `files` take too.
 public file_system: type = concept (provider: type) is files

@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: the library reference's common-tasks program named a file that is not there reports why on standard error in failure.words' phrase after the path, prints nothing on standard output and exits 1
+program: ../library-common-tasks/main.ldn
+run_args: missing.conf
+run_expect: output.txt
+status: 1
+constructs: 0940, 0960, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
