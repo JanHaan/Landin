@@ -2401,7 +2401,7 @@ suspended.
 
 ### R13.73 — Documentation that teaches
 
-Status: active
+Status: complete
 Depends on: R13.72
 
 The tour began as "Learn X in Y minutes" and drifted into a design
@@ -2437,6 +2437,25 @@ Exit: an outside reader with no project context writes a small hosted
 program from the tour and the examples alone, and what they met is in the
 register; `python3 check.py`, the script tests and the tour's layout case
 pass.
+
+Done: the tour is a learning tour again. It opens with a hello world, a
+formatted line and a complete program that reads a file, says how to read
+it and where the reference part begins, and teaches types before control
+flow; its entries have titles, examples that declare what they use and
+compile, short fine print and no decision numbers, and the generic types it
+teaches build no container it cannot build honestly. `docs/from-c.md` leads
+with what to write instead of C, and gained callbacks, the byte calls,
+reading a line, `assert`, allocators and `defer`; the README leads with
+installing, the first program and next steps; `examples.md` prints what
+each program computes, everyday tools first, and reports failures in words;
+the library reference reads in order as text, links its calls, shows each
+module's own runnable example and holds its code to fixtures; the
+prototypes and the specification say who they are for. Four rounds of
+outside readers wrote programs from the pages alone, and two rounds of
+design review shaped the site: headings above body size, a reading measure,
+quiet citations, one captioned code panel, wayfinding on phones and in the
+library, print and keyboard use. What they met is SR-285 to SR-308 and
+SR-310 in the register.
 
 ### R13 gate
 
@@ -2791,7 +2810,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-33 | Usability | A runtime fixture cannot report a status from inside a panic handler, so the trap dispatch fixture shows the handler saw the right kind and site only by re-entering it on a match and spinning otherwise, which a missing dispatch would also satisfy as a trap. | The next panic or trap fixture. | A portable way for a handler to report, on firmware too, used to pin dispatch exactly. | open |
 | SR-35 | Usability | The mutation campaign's one-report-on-the-line share is 90.5% against a 90% bar. The largest misses are reports one line from the mistake: a deleted `end` or value reported on the next line, and missing tokens the parser meets on the next line, some genuinely ambiguous. | A frontend change that moves the share, or the next work on the parser's recovery. | The share raised with margin, or the bar's meaning restated for the ambiguous cases. | watch |
 | SR-46 | Competitive optimization | An immutable module `bool` is loaded from memory rather than folded, so `return when baseline` kept a whole check routine in a baseline image until the check was split per level. An immutable module `usize` is reloaded the same way at `--optimize speed`: `word: usize = sizeof usize` in `core/mem` is read from memory in every loop, and `3 * word` becomes a run-time `mulq`. | A measured image or hot path holding a foldable module constant. | Immutable scalar module values folded at their uses, with an image comparison. | retired: R13.61 folds a read of an immutable module value, `bool` and `usize` among them, and the arithmetic and checks that become constant |
-| SR-51 | Usability | `examples.md` holds benchmark programs only: nothing shows a newcomer how to list a directory, read standard input or run a command, so a task is learnt from the library's source. Every hosted item's consumer is now published but R13.35's, which loads libraries a fixture builds: the outside-user lane links statically and assumes no C compiler, so it cannot run there honestly. | An outside-user lane that links with `--link=libc` and has a C compiler, or a published example of loading that needs neither. | Each hosted item's consumer published in `examples.md` and run by the outside-user lane. | scheduled R13.73 |
+| SR-51 | Usability | `examples.md` shows every hosted item's consumer, everyday tools first since R13.73, but R13.35's, which loads libraries a fixture builds: the outside-user lane links statically and assumes no C compiler, so it cannot run there honestly. | An outside-user lane that links with `--link=libc` and has a C compiler, or a published example of loading that needs neither. | Each hosted item's consumer published in `examples.md` and run by the outside-user lane. | open |
 | SR-79 | Usability | A gate's `darwin-host` build failed at the bind with gnatbind's "error: disk full" writing the binder's generated main on a macOS runner guest with 37 GiB free, after three passes of the same job there. GNAT reports any short write as "disk full", so the message sent the investigation to clean disks that were not full; the cause is unknown, and the root runner service's open-file limit of 256 is unconfirmed. `scripts/build.sh` now reports the free space and open-file limit beside the message. | The next "disk full" from a build, read with the space and limit it reports. | The cause named, and either removed from the runner or reported by the build in its own words. | open |
 | SR-82 | Broader standard library | `hosted/linux` gives every Linux system call by number with one raw call that takes and returns integers, and typed wrappers only for the calls the library itself uses; a program calling anything else converts its own pointers, flags and structures, and the checker sees none of them. | A consumer that needs an unwrapped call, or a proposal for a complete Linux binding. | A typed wrapper for each call, generated with the numbers or written, with its flags and structures and their layouts checked per architecture. | open |
 | SR-86 | Usability | A second `io.terminate_path` into the same scratch silently re-points a path still in use, because a fresh `[]mut` view of the scratch is not an `inout` use of it, so the checker does not see the first path's borrow end. | The next change to `core/io`'s paths or to the borrow rules for `[]mut` views. | Either the second terminate refused while the first path lives, or a path form that cannot alias. | retired: `io.terminate_path` no longer exists, since R13.18 made paths host strings (D299) |
@@ -2823,8 +2842,6 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-231 | Competitive optimization | An atom `match` re-tests its subject's set at every arm, so `failure.words`'s 32 arms cost about 6.3 KiB of Cortex-M0 code at size/auto, about 200 bytes an arm. R13.72 tests the subject once, through a sealed slot the backends do not revalidate, which took `failure.words` on Cortex-M0 at size/auto from 6,336 to 3,552 bytes; the arms remain a compare-and-jump chain of about 110 bytes each, because a table needs a multiway IR terminator. | The next Cortex-M code-size item. | A multiway IR terminator and an atom `match` lowered through it as a table or jump, with the image measured. | open |
 | SR-236 | Release readiness | `nix build .#refine`, the documented default, failed from 2026-10-08 until R13.71 with "build/nix/release/generated is not a valid directory", because nothing in CI builds the flake. | Nix CI, or the next flake change. | The flake's packages built by a job, or by the flake change's own check. | open |
 | SR-247 | Usability | In the language server, hover over an `offsetof` expression shows `usize` but hover over its field name shows nothing. | The next server item. | The field's hover and definition through `offsetof`. | open |
-| SR-250 | Usability | No published example turns a failure into words for a person: every example discards its failures, so the second outside reading found `core/failure.words` only by chance in the README. | The next change to `examples.md` or `core/failure`. | An example reporting a failure through `failure.words`, run by the outside-user lane. | scheduled R13.73 |
-| SR-251 | Usability | The library reference pages read badly as text: the second outside reader met hundreds of lines of style and script before the signatures, which then ran together, and read the shipped `.ldn` sources instead. | The next change to the reference generator. | A text form of the reference, or pages whose text reads in order. | scheduled R13.73 |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |
