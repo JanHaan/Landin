@@ -763,9 +763,11 @@ def toc_html(entries, label):
     return '\n'.join(out)
 
 
-TABLE = re.compile(r'<table>(.*?)</table>', re.S)
+#  The shared renderer marks a table it stacks on a phone with a class
+#  and its cells with labels; the library sets its own, so either form is read.
+TABLE = re.compile(r'<table(?:\s[^>]*)?>(.*?)</table>', re.S)
 ROW_HTML = re.compile(r'<tr>(.*?)</tr>', re.S)
-CELL_HTML = re.compile(r'<td>(.*?)</td>', re.S)
+CELL_HTML = re.compile(r'<td(?:\s[^>]*)?>(.*?)</td>', re.S)
 TAGS = re.compile(r'<[^>]+>')
 CODE_HTML = re.compile(r'<code>(.*?)</code>', re.S)
 LINKED_HTML = re.compile(r'(<a\b[^>]*>.*?</a>)', re.S)
