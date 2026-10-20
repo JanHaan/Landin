@@ -666,6 +666,19 @@ class CodeRules(unittest.TestCase):
         self.assertTrue(any("closes nothing" in why for _, why in problems))
         self.assertLess(banners.call_count, len(source.split("\n")) + 20)
 
+    def test_a_complete_program_is_a_module_of_its_own(self):
+        program = ("```landin\npublic main: () -> (code: i32) =\n"
+                   "    code = 0\nend main\n```\n")
+        shared = "```landin\nvalue: u8 = 1\n```\n"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "example.md"
+            path.write_text("# example\n\n" + program + program + shared)
+            self.assertFalse(any("declared" in why
+                                 for _, why in checker.check(path)))
+            path.write_text("# example\n\n" + program + shared + shared)
+            self.assertTrue(any("'value' declared 2 times" in why
+                                for _, why in checker.check(path)))
+
     def test_numbered_code_keeps_source_positions(self):
         problems = checker.check_numbered_code(
             [(42, "mut if: u8 = 3"), (70, "end absent")])
