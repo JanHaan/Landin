@@ -497,6 +497,11 @@ ul.api-index li{break-inside:avoid; border-bottom:1px solid var(--rule-soft)}
 ul.api-index a{display:block; padding:.3rem 0; text-decoration:none; font-size:.9rem}
 ul.api-index code{padding:0; background:none; font-size:.85rem; color:var(--accent)}
 ul.api-index a:hover code{text-decoration:underline}
+/*  A phone had one column of 127 names.  */
+@media (max-width:35rem){
+  ul.api-index{columns:2; column-gap:1rem}
+  ul.api-index code{font-size:.78rem; overflow-wrap:anywhere}
+}
 ul.api-modules-list{list-style:none; margin:0; padding:0; border-top:1px solid var(--rule)}
 ul.api-modules-list li{display:grid; grid-template-columns:12rem minmax(0,1fr); gap:1.25rem;
   padding:.55rem 0; border-bottom:1px solid var(--rule-soft); align-items:baseline}
@@ -509,44 +514,59 @@ ul.api-modules-list li > span{color:var(--ink-soft); font-size:.9rem; line-heigh
 }
 
 /* ---- one declaration: a heading row, the code, the prose ---- */
-section.api-item{padding:1.6rem 0 1rem; border-top:1px solid var(--rule);
-  scroll-margin-top:var(--bar)}
+/*  Clear of the bar, as the shared sheet will set every addressed
+    element in main; until then, here.  */
+section.api-item, .api-source-line, .api-table tr{scroll-margin-top:calc(var(--bar) + 1rem)}
+section.api-item{padding:1.6rem 0 1rem; border-top:1px solid var(--rule)}
 .api-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem .8rem;
   margin:0 0 .7rem}
-.api-head .grow{flex:1}
 h3.api-name{margin:0; font-size:1.1rem; line-height:1.3; font-weight:600;
   text-transform:none; letter-spacing:0}
 h3.api-name code{padding:0; background:none; font-size:1em; color:var(--ink);
   text-transform:none; letter-spacing:0}
-.api-kind{font-size:.66rem; font-weight:500; letter-spacing:.07em;
-  text-transform:uppercase; color:var(--ink-faint)}
-a.api-source, a.api-back{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint);
+/*  Where it is declared, then the way back, apart: run together at the
+    same faint size they read as one link.  */
+.api-where{display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem 1.5rem;
+  margin-left:auto}
+a.api-source, a.api-back{font-family:var(--mono); font-size:.75rem; color:var(--ink-faint);
   text-decoration:none; white-space:nowrap}
-a.api-source:hover, a.api-back:hover{color:var(--accent); text-decoration:underline}
+a.api-source:hover, a.api-back:hover, a.api-source:focus-visible, a.api-back:focus-visible{
+  color:var(--accent); text-decoration:underline}
+@media (max-width:35rem){
+  .api-where{flex-basis:100%; margin-left:0; justify-content:space-between}
+}
 .api-condition a.api-source{margin-left:.6rem}
 .api-item .api-prose p{max-width:42rem}
 
-/*  A declaration scrolls sideways line for line; its members' `---`
-    documentation wraps as prose between its lines, at their indentation.  */
+/*  A declaration is one region that scrolls sideways; its members' `---`
+    documentation is commentary between its lines, at their indentation.  */
 .api-decl{margin:.3rem 0 .9rem; background:var(--code-bg);
   border:1px solid var(--code-rule, var(--rule))}
-pre.api-signature{margin:0; overflow-x:auto; white-space:pre; font-size:.82rem; line-height:1.6;
-  tab-size:4}
-.api-decl > pre.api-signature{padding:.15rem 1rem}
-.api-decl > :first-child{padding-top:.75rem}
-.api-decl > :last-child{padding-bottom:.75rem}
+.api-decl > .scroller{margin:0; padding:.75rem 0}
+pre.api-signature{margin:0; white-space:pre; font-size:.82rem; line-height:1.6; tab-size:4}
+.api-decl pre.api-signature{padding:.15rem 1rem; overflow:visible}
 .api-signature code{padding:0; background:none; border:0; font-size:1em}
-.api-signature a{text-decoration:underline; text-decoration-style:dotted}
-.api-doc{padding:.1rem 1rem .3rem calc(1rem + var(--indent, 0) * 1ch);
-  font-family:var(--mono); font-size:.82rem}
-.api-doc p{margin:0 0 .2rem; max-width:40rem; font-family:var(--ui); font-size:1.04em;
-  line-height:1.5; color:var(--ink-soft)}
-.api-doc code{font-size:.92em}
+/*  A name the declaration uses, quiet like the site's other linked code:
+    its own colour with an accent underline, the accent only under the
+    pointer or the keyboard.  */
+.api-signature a{color:inherit; text-decoration:underline; text-decoration-style:dotted;
+  text-decoration-thickness:1px; text-underline-offset:.22em;
+  text-decoration-color:var(--accent-soft)}
+.api-signature a:is(:hover,:focus-visible), .api-signature a:is(:hover,:focus-visible) span{
+  color:var(--accent); text-decoration-style:solid; text-decoration-color:currentColor}
+/*  Clear of the fade at the region's right edge, which is for the code.  */
+.api-doc{max-width:42rem; margin:.35rem 2.75rem .6rem calc(1rem + var(--indent, 0) * 1ch);
+  padding:0 0 0 .75rem; border-left:2px solid var(--rule); white-space:normal}
+.api-doc p{margin:0 0 .3rem; max-width:40rem; font-family:var(--ui); font-size:.9375rem;
+  line-height:1.55; color:var(--ink-soft)}
+.api-doc p:last-child{margin-bottom:0}
+.api-doc code{font-size:.85em}
 /*  A source page's whole file.  */
-main > pre.api-signature{padding:1rem; background:var(--code-bg); border:1px solid var(--rule)}
+main > pre.api-signature{padding:1rem; overflow-x:auto; background:var(--code-bg);
+  border:1px solid var(--rule)}
 /*  Inline blocks, not blocks: the newline between two blocks in a <pre>
     is a line of its own, and every source page was double-spaced.  */
-.api-source-line{display:inline-block; min-width:100%; scroll-margin-top:calc(var(--bar) + 1rem)}
+.api-source-line{display:inline-block; min-width:100%}
 .api-source-line:target{background:var(--accent-bg)}
 .api-signature a.api-line-number{display:inline-block; min-width:4ch; margin-right:1.2em;
   color:var(--ink-faint); text-decoration:none; user-select:none}
@@ -559,26 +579,38 @@ main > pre.api-signature{padding:1rem; background:var(--code-bg); border:1px sol
   border-bottom:1px solid var(--rule-soft); padding:7px 10px 7px 0; vertical-align:top}
 .api-prose table.api-shaped tr:last-child th{border-bottom:0}
 .api-prose .guide td code, .api-prose .guide th code{white-space:normal; overflow-wrap:break-word}
-.api-prose td a code, .api-prose th a code{color:var(--accent)}
 @media (max-width:48rem){
   .api-prose .guide td code, .api-prose .guide th code{overflow-wrap:anywhere}
 }
-/*  A phone has room for one column: each row is a block, each cell under
-    its column's title.  */
+/*  A phone stacks only a table whose columns cannot share its width (the
+    generator marks it): each row a block, each cell, the first too,
+    under its column's title.  */
 @media (max-width:35rem){
-  .api-prose table.api-shaped, .api-prose table.api-shaped tbody,
-  .api-prose table.api-shaped tr, .api-prose table.api-shaped th[scope=row],
-  .api-prose table.api-shaped td{display:block; width:auto}
-  .api-prose table.api-shaped colgroup{display:none}
-  .api-prose table.api-shaped thead{position:absolute; width:1px; height:1px;
+  .api-prose table.api-stack, .api-prose table.api-stack tbody,
+  .api-prose table.api-stack tr, .api-prose table.api-stack th[scope=row],
+  .api-prose table.api-stack td{display:block; width:auto}
+  .api-prose table.api-stack colgroup{display:none}
+  .api-prose table.api-stack thead{position:absolute; width:1px; height:1px;
     overflow:hidden; clip-path:inset(50%)}
-  .api-prose table.api-shaped tr{padding:.55rem 0; border-bottom:1px solid var(--rule-soft)}
-  .api-prose table.api-shaped tr:last-child{border-bottom:0}
-  .api-prose table.api-shaped th[scope=row], .api-prose table.api-shaped td{
+  .api-prose table.api-stack tr{padding:.55rem 0; border-bottom:1px solid var(--rule-soft)}
+  .api-prose table.api-stack tr:last-child{border-bottom:0}
+  .api-prose table.api-stack th[scope=row], .api-prose table.api-stack td{
     border:0; padding:.05rem 0}
-  .api-prose table.api-shaped td::before{content:attr(data-label); display:block;
+  .api-prose table.api-stack :is(th[scope=row], td)[data-label]:not([data-label=""])::before{
+    content:attr(data-label); display:block;
     margin-top:.25rem; font-family:var(--mono); font-size:.68rem; font-weight:400;
     color:var(--ink-faint)}
+  .api-prose table.api-stack th[scope=row]::before{margin-top:0}
+  /*  A yes-or-no column is a small tag beside the row's name.  */
+  .api-prose table.api-stack tr:has(td.api-flag){display:flex; flex-wrap:wrap;
+    align-items:flex-end; column-gap:.6rem}
+  .api-prose table.api-stack tr:has(td.api-flag) > *{flex:1 0 100%; order:2}
+  .api-prose table.api-stack tr:has(td.api-flag) > th[scope=row]{flex:0 1 auto; order:0}
+  .api-prose table.api-stack tr:has(td.api-flag) > td.api-flag{flex:0 0 auto; order:1; padding:0 .35rem;
+    font-family:var(--mono); font-size:.7rem; color:var(--ink-soft);
+    border:1px solid var(--rule)}
+  .api-prose table.api-stack tr > td.api-flag[data-label]:not([data-label=""])::before{content:attr(data-label) ": ";
+    display:inline; margin:0; font-size:1em}
 }
 
 /* ---- the values-by-target table ---- */
@@ -587,7 +619,6 @@ main > pre.api-signature{padding:1rem; background:var(--code-bg); border:1px sol
   border-bottom:1px solid var(--rule); vertical-align:top}
 .api-table th[scope=row]{font-weight:600; font-family:var(--mono); font-size:.85rem}
 .api-table tr:target{background:var(--accent-bg)}
-.api-table tr{scroll-margin-top:calc(var(--bar) + 1rem)}
 .api-table td code, .api-table th code{white-space:nowrap}
 
 /* ---- the example: the site's program panel ---- */
@@ -965,6 +996,30 @@ CALLED = re.compile(r'(?:(?:mut\s+)?\w+\s*:=\s*)?(?:try\s+)?(\w+(?:\.\w+)?)(?:\(
 #  set at its own width.
 SHORT_TABLE = 50
 
+#  A phone stacks a table into records only when its columns cannot share
+#  the width: three or more of them, which leave about seven rem each and
+#  broke a header's code mid-word, or two with a code span this long.  A
+#  table of short cells, set at its own width, never stacks.  Stacked
+#  everywhere, a two-column table of short calls became twice as tall
+#  and no easier to read.
+STACK_COLUMNS = 3
+STACK_CODE = 32
+#  A column whose every cell is at most this long -- yes, no, a dash --
+#  is a tag beside the row's name when the row is stacked.
+FLAG = 3
+
+
+def plain(cell):
+    return ' '.join(html.unescape(TAGS.sub('', cell)).split())
+
+
+def stacks(head, rows):
+    """Does a table need its rows stacked on a phone?"""
+    if len(head) >= STACK_COLUMNS:
+        return True
+    return max((len(plain(code)) for row in rows for cell in row
+                for code in CODE_HTML.findall(cell)), default=0) >= STACK_CODE
+
 
 def column_widths(head, rows):
     """Each column's share of a table, from what its cells hold.
@@ -1006,6 +1061,11 @@ def shape_tables(text, link):
         else:
             shaped = 'api-shaped'
             cols = '<colgroup>' + ''.join(f'<col style="width:{w}%">' for w in widths) + '</colgroup>'
+        stacked = total >= SHORT_TABLE and stacks(head, rows)
+        if stacked:
+            shaped += ' api-stack'
+        flags = {i for i in range(1, len(head)) if stacked
+                 and all(i < len(r) and len(plain(r[i])) <= FLAG for r in rows)}
 
         def row(found):
             cells = CELL_HTML.findall(found[1])
@@ -1016,7 +1076,8 @@ def shape_tables(text, link):
                 if i == 0:
                     out.append(f'<th scope="row" data-label="{label}">{cell}</th>')
                 else:
-                    out.append(f'<td data-label="{label}">{cell}</td>')
+                    flag = ' class="api-flag"' if i in flags else ''
+                    out.append(f'<td{flag} data-label="{label}">{cell}</td>')
             return '<tr>' + '\t'.join(out) + '</tr>'
         head_part, _, body_part = inner.partition('<tbody>')
         return (f'<table class="{shaped}">{cols}'
@@ -1232,7 +1293,10 @@ def write(root, destination, render):
                     blocks[-1][1].append(''.join(spans))
                 else:
                     blocks.append(('code', [''.join(spans)]))
-            out = ['<div class="api-decl">']
+            # One region scrolls sideways, the declaration whole, and fades
+            # at its edge through the shared script's `.scroller`: as a
+            # region per run of code, one declaration was several.
+            out = ['<div class="api-decl"><div class="scroller">']
             for block in blocks:
                 if block[0] == 'code':
                     out.append('<pre class="api-signature"><code>' + '\n'.join(block[1])
@@ -1243,7 +1307,7 @@ def write(root, destination, render):
                         '<p>' + re.sub(r'`([^`]+)`', r'<code>\1</code>',
                                        html.escape(' '.join(p.split()), quote=False)) + '</p>'
                         for p in paragraphs if p.strip()) + '</div>')
-            return '\n'.join(out) + '\n</div>\n'
+            return '\n'.join(out) + '\n</div></div>\n'
         availability = ('Shared: available on every enabled target.' if module.startswith('core/')
                         else 'Hosted targets only.' if module.startswith('hosted/')
                         else 'Target scope is enforced by the module assertion below.')
@@ -1320,13 +1384,15 @@ def write(root, destination, render):
             only = variants[0] if len(variants) == 1 else None
             source = (f'<a class="api-source" href="{source_name(only.source)}#L{only.line}">'
                       f'{only.source}:{only.line}</a>\n') if only else ''
+            # The name and kind, then where it is declared and the way back:
+            # on a phone those two are a row of their own under the name.
             body += (f'<section class="api-item" id="{item.anchor}" data-title="{name}" '
                      f'data-kind="{item.kind}">\n<div class="api-head">\n'
                      f'<h3 class="api-name"><code>{name}</code></h3>\n'
                      f'<span class="api-kind">{item.kind}</span>\n'
-                     f'<span class="grow"></span>\n{source}'
+                     f'<span class="api-where">\n{source}'
                      f'<a class="api-back" href="#items-{item.kind}" '
-                     f'aria-label="back to the item index">items ↑</a>\n</div>\n')
+                     f'aria-label="back to the item index">↑ index</a>\n</span>\n</div>\n')
             for variant in variants:
                 if variant.condition:
                     body += ('<p class="api-condition">When <code>' + html.escape(variant.condition)
