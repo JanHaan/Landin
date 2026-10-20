@@ -1005,6 +1005,8 @@ GUIDE_CSS = """
 .guide li{margin:0 0 6px}
 .guide blockquote{margin:0 0 14px;padding:2px 0 2px 14px;
   border-left:2px solid var(--accent-soft);color:var(--ink-soft)}
+.guide blockquote p{margin:0 0 8px}
+.guide blockquote p:last-child{margin:0}
 /*  A table with a long path in a cell cannot fit a phone, and nothing
     scrolled: it simply overflowed the page.  */
 .scroller{overflow-x:auto; margin:0 0 16px}
@@ -1050,13 +1052,10 @@ GUIDE_CSS = """
 .roadmap-track > div:last-child{margin-bottom:0}
 .roadmap-label{display:block; margin-bottom:.3rem; font-family:var(--mono);
   font-size:.7rem; color:var(--ink-faint)}
-.roadmap-item{display:grid; grid-template-columns:3.2rem 1fr; gap:.5rem;
+.roadmap-item{display:block;
   padding:.15rem 0; color:var(--ink-soft); text-decoration:none;
   line-height:1.35; font-size:.82rem}
-.roadmap-item strong{font-family:var(--mono); font-weight:500;
-  font-size:.75rem; color:var(--ink-faint)}
 .roadmap-item:hover span{color:var(--accent)}
-.roadmap-now .roadmap-item strong{color:var(--accent)}
 .roadmap-now .roadmap-item span{color:var(--ink); font-weight:600}
 
 section.landing{padding-top:4rem}
@@ -1109,7 +1108,7 @@ figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
 .uses p{margin:.8rem 0 0; font-size:.8rem; color:var(--ink-faint); line-height:1.5}
 .uses p a{color:var(--ink-soft)}
 
-/*  Four ways in, as one block of four cells split by hairlines.  */
+/*  Six ways in, as one block of cells split by hairlines.  */
 .routes{display:grid; grid-template-columns:1fr 1fr; gap:1px;
   background:var(--rule); border:1px solid var(--rule)}
 .route{display:block; padding:1.1rem 1.25rem 1.2rem; background:var(--bg);
@@ -1383,7 +1382,16 @@ def parse_guide(text):
             while index < len(lines) and QUOTE.match(lines[index]):
                 quoted.append(QUOTE.match(lines[index]).group(1))
                 index += 1
-            block("quote", [" ".join(q for q in quoted if q)])
+            #  A `>` line with nothing after it ends a paragraph, as it
+            #  does in Markdown; the prototypes' banners have two.
+            paragraphs, run = [], []
+            for q in quoted + [""]:
+                if q:
+                    run.append(q)
+                elif run:
+                    paragraphs.append(" ".join(run))
+                    run = []
+            block("quote", paragraphs)
             continue
 
         if not line.strip():
@@ -1447,8 +1455,13 @@ def render_guide_blocks(blocks, links, targets, hl):
                 out.append(f'<h3 class="sub" id="{slug(payload)}">'
                            f"{inline(payload, links, targets)}</h3>")
         elif kind == "quote":
-            out.append(f"<blockquote>{inline(payload[0], links, targets)}"
-                       "</blockquote>")
+            if len(payload) == 1:
+                out.append(f"<blockquote>{inline(payload[0], links, targets)}"
+                           "</blockquote>")
+            else:
+                out.append("<blockquote>" + "".join(
+                    f"<p>{inline(one, links, targets)}</p>" for one in payload)
+                    + "</blockquote>")
         elif kind == "list":
             ordered, items = payload
             if ordered:
@@ -1783,6 +1796,9 @@ Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
 #  One whole program rather than three fragments: the fragments showed
 #  syntax, and a program shows how the pieces are meant to be used together.
 LANDING_PROGRAM = "compiler/tests/fixtures/runtime/example-sensors"
+#  And before it, the README's first program, with the command that builds
+#  it and what it prints, so a reader sees the whole loop before a showcase.
+HELLO_PROGRAM = "compiler/tests/fixtures/runtime/first-program"
 
 FENCE_OPEN = re.compile(r"^```landin\s*$")
 ROADMAP_ITEM = re.compile(
@@ -1893,6 +1909,15 @@ def landing_program(source, titles, construct_page):
     lines = (where / meta["program"]).read_text().rstrip("\n").split("\n")
     return (f"{LANDING_PROGRAM}/{meta['program']}", lines,
             fixture_uses(meta, titles, construct_page))
+
+
+def hello_program(source):
+    """The first program: its path, its lines and what it prints."""
+    where = source / HELLO_PROGRAM
+    meta = fixture_meta(where)
+    lines = (where / meta["program"]).read_text().rstrip("\n").split("\n")
+    printed = (where / meta["run_expect"]).read_text().rstrip("\n")
+    return f"{HELLO_PROGRAM}/{meta['program']}", lines, printed
 
 
 def fixture_meta(where):
@@ -2055,7 +2080,7 @@ INSTALL_ANCHOR = "installing"
 
 
 def index_page(docs, counts, intro, status, progress, program, symbols,
-               says, footnote):
+               says, footnote, hello=None):
     """The front door: what the language is, what it looks like, where to go.
 
     The contents remain, at the bottom, because a reader who came back for
@@ -2067,24 +2092,45 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
     #  of lines chosen to fit.  It is read from its fixture, so what is
     #  shown is what compiles; beside it, the constructs it leans on, each
     #  a link to where the language explains it.
+    #  It opens with the first program, the command and what it prints.
+    first = ""
+    if hello:
+        hello_path, hello_lines, printed = hello
+        hello_hl = Highlighter(*collect_symbols(hello_lines),
+                               links=lambda ref: None)
+        run = ("$ refine compile main.ldn -o hello &amp;&amp; ./hello\n"
+               + esc(printed))
+        first = (
+            '<p class="lead">A whole program that prints one line, saved as '
+            '<code>main.ldn</code>, compiled and run:</p>'
+            '<div class="program">'
+            '<figure class="panel">'
+            f'<figcaption><span class="dot"></span><span class="path">'
+            f'{esc(hello_path)}</span><span class="grow"></span>'
+            f'<span>{len(hello_lines)} lines</span></figcaption>'
+            f'{listing(hello_hl.block(hello_lines))}'
+            '<div class="foot"><span>in a terminal</span></div>'
+            f'{listing(run)}'
+            '</figure></div>')
     path, lines, uses = program
     hl = Highlighter(*collect_symbols(lines), links=lambda ref: None)
     used = uses_list(uses)
     body.append(
         '<section class="landing" id="what-it-looks-like">'
         '<h2>what it looks like</h2>'
-        '<p class="lead">Sensors of two kinds behind one concept, polled '
-        'through runtime dispatch. The poll is generic over its allocator, '
-        'which the caller lends as an arena over a stack buffer; each '
-        'failure is declared in a signature and either skipped or passed '
-        'on at the call. This is the whole file, as the Linux gate compiles '
-        'and runs it.</p>'
+        f'{first}'
+        '<p class="lead">A larger one: sensors of two kinds behind one '
+        'concept, polled through runtime dispatch. The poll is generic over '
+        'its allocator, which the caller lends as an arena over a stack '
+        'buffer; each failure is declared in a signature and either skipped '
+        'or passed on at the call. This is the whole file, as the Linux gate '
+        'compiles and runs it.</p>'
         '<div class="program">'
         '<figure class="panel">'
         f'<figcaption><span class="dot"></span><span class="path">{esc(path)}</span>'
         f'<span class="grow"></span><span>{len(lines)} lines</span></figcaption>'
         f'{listing(hl.block(lines))}'
-        '<div class="foot"><code>$ refine compile … -o sensors '
+        '<div class="foot"><code>$ refine compile main.ldn -o sensors '
         '&amp;&amp; ./sensors</code><span class="grow"></span>'
         '<a href="examples.html">more programs →</a></div>'
         '</figure>'
@@ -2095,12 +2141,23 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         '<a href="tour.html">tour</a> teaches the whole designed language.'
         '</p></aside></div></section>')
 
-    #  Four ways in, because the documents answer different questions and
-    #  a reader who starts in the wrong one finds it slow going.
+    #  Six ways in, because the documents answer different questions and
+    #  a reader who starts in the wrong one finds it slow going.  The four
+    #  that teach come first; the two that decide and explain come after.
     routes = [
         ("tour.html", "learn the language",
          "The tour teaches it in numbered constructs, from comments to "
          "runtime dispatch. Start at the top and read down."),
+        ("examples.html", "run real programs",
+         "Word count, a directory listing, a shell, a tree copy and an echo "
+         "server, then the sensors above and the classic exercises, each "
+         "printing what it computes: complete sources the gate runs."),
+        ("from-c.html", "come from C",
+         "The Landin form of each C habit: strings, structs, pointers, "
+         "errors and allocation, with examples the compiler accepts."),
+        ("library.html", "use the library",
+         "Every module's calls and signatures, with common tasks as one "
+         "complete program and each module's own example."),
         ("spec.html", "see what is decided",
          "The specification is normative: the grammar of the kernel the "
          "compiler accepts today, the rules the tour left unsaid, and why "
@@ -2108,13 +2165,9 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         ("handoff.html", "understand the design",
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
-        ("examples.html", "run real programs",
-         "Word count, a directory listing, a shell, a tree copy and an echo "
-         "server, then the sensors above and the classic exercises, each "
-         "printing what it computes: complete sources the gate runs."),
     ]
     cards = "".join(
-        f'<a class="route" href="{href}"><span class="label">{"abcd"[i]} · '
+        f'<a class="route" href="{href}"><span class="label">{"abcdef"[i]} · '
         f'{href}</span><strong>{esc(head)}</strong>'
         f'<span class="text">{esc(text)}</span></a>'
         for i, (href, head, text) in enumerate(routes))
@@ -2158,9 +2211,11 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         if progress:
             def progress_item(item):
                 heading = f'{item["key"]} — {item["title"]}'
+                #  The title alone: an item's number means nothing to a
+                #  reader who has not opened the roadmap, and the link
+                #  takes one who wants it there.
                 return (f'<a class="roadmap-item" '
                         f'href="roadmap.html#{slug(heading)}">'
-                        f'<strong>{esc(item["key"])}</strong>'
                         f'<span>{esc(item["title"])}</span></a>')
 
             recent = "".join(progress_item(item)
@@ -2576,6 +2631,7 @@ def main(argv):
         status = readme_status((source / "README.md").read_text())
         progress = roadmap_progress((source / "ROADMAP.md").read_text())
         program = landing_program(source, construct_title, construct_page)
+        hello = hello_program(source)
 
         #  Each reader must have found something.  Failing loudly here is
         #  the contract this renderer keeps everywhere else: refuse what
@@ -2600,7 +2656,7 @@ def main(argv):
 
         (SITE / "index.html").write_text(
             index_page(DOCS + GUIDES, counts, intro, status, progress, program,
-                       guide_symbols, says, footnote))
+                       guide_symbols, says, footnote, hello))
         print(f"{SITE.name}/index.html")
         library_pages = library.write(source, SITE, SimpleNamespace(
             DOCS=DOCS, GUIDES=GUIDES, WORD=WORD, page=page,
@@ -2622,6 +2678,8 @@ def main(argv):
                                                     progress["following"],
                                                     progress.get("endpoint"))
                                     if one])]
+                 + [("the first program", "\n".join(hello[1])),
+                    ("what it prints", hello[2])]
                  + [("the program", "\n".join(program[1]))]
                  + [(f"uses [{cid}]", label) for cid, label, _ in program[2]])
 

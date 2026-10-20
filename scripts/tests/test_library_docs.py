@@ -221,6 +221,53 @@ public real: atom
                                  + re.escape(item.name) + ':')
 
 
+class PagePrograms(unittest.TestCase):
+    """The reference's `landin` blocks are fixture sources (check.py).
+
+    The common-tasks recipes were once table cells that failed when pasted
+    into `main`; nothing compiled them.  A block is now a linked fixture's
+    whole text, or whole lines of it.
+    """
+    SOURCE = 'compiler/tests/fixtures/runtime/demo/main.ldn'
+    TEXT = 'a: i32 = 1\n\nb: i32 = 2\nc: i32 = 3\n'
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('landin_check', ROOT / 'check.py')
+        cls.check = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.check)
+
+    def faults(self, page):
+        texts = {self.SOURCE: self.TEXT}
+        return self.check.library_block_faults(page.split('\n'), texts.get)
+
+    def page(self, block, link=True):
+        cited = f'[Executable example](../{self.SOURCE})\n' if link else ''
+        return f'## core/demo\n\nWords.\n\n```landin\n{block}```\n\n{cited}'
+
+    def test_a_whole_file_or_whole_lines_of_one_pass(self):
+        self.assertEqual(self.faults(self.page(self.TEXT)), [])
+        self.assertEqual(self.faults(self.page('b: i32 = 2\nc: i32 = 3\n')), [])
+
+    def test_a_changed_or_partial_line_fails(self):
+        for block in ('a: i32 = 9\n', ': i32 = 2\n', 'b: i32 = 2\nc: i32 = \n'):
+            with self.subTest(block=block):
+                self.assertEqual(len(self.faults(self.page(block))), 1)
+
+    def test_a_block_whose_section_links_no_fixture_fails(self):
+        self.assertRegex(self.faults(self.page(self.TEXT, link=False))[0][1],
+                         'links no fixture')
+
+    def test_the_live_page_holds_its_programs(self):
+        lines = (ROOT / 'docs/library.md').read_text().split('\n')
+        self.assertIn('```landin', lines)
+        def read(path):
+            target = ROOT / path
+            return target.read_text() if target.is_file() else None
+        self.assertEqual(self.check.library_block_faults(lines, read), [])
+
+
 class ValueTables(unittest.TestCase):
     """A value declared once per target is one row, a column each."""
     SOURCE = '''fixed if compiler.arch == x86_64 then
@@ -407,7 +454,7 @@ class GeneratedReference(unittest.TestCase):
                     r'<section class="api-item".*?</section>'
                     r'|<section class="api-values".*?</section>'
                     r'|<pre class="api-signature">.*?</pre>'
-                    r'|<details id="example">.*?</details>', text, re.S))
+                    r'|<section class="api-example".*?</section>', text, re.S))
                 self.assertLess(len(text) - content, 96 * 1024)
         self.assertLess(max((self.destination / n).stat().st_size
                             for n in self.pages), 1024 * 1024)

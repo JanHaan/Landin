@@ -1,8 +1,5 @@
 # Landin prototype 3 — a generic container library
 
-Current with specification 0.2.7. Its own findings Z1-Z19 are all
-resolved below.
-
 > **Not learning material.** This is a design stress test: a generic
 > container library, written before the compiler existed to find where the
 > specification was silent, ambiguous or wrong. It is not a program you can
@@ -14,6 +11,13 @@ resolved below.
 > [`examples/derived_containers/`](examples/derived_containers/), with its
 > fixture `runtime/derived-containers`. To learn Landin, read [the
 > tour](tour.md).
+>
+> The sketch itself begins at its first module heading, `core/mem`. The
+> notes between this banner and that heading reconcile the sketch with the
+> specification, and a reader can skip them.
+
+Current with specification 0.2.7. Its own findings Z1-Z19 are all
+resolved below.
 
 This one was chosen because it presses on five things at once:
 parameterised types, concepts, allocator threading, escape rules and

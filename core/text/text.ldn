@@ -173,14 +173,17 @@ public valid: (source: []u8) -> (yes: bool) =
     yes = true
 end valid
 
+--  The checked adapters report foreign or file-data defects before the
+--  ordinary conversion establishes utf8's invariant.  Their result is a
+--  source-derived view; no allocation, copy or canonical empty carrier is
+--  introduced.
 --- Validate a byte slice and lend it as UTF-8 without allocation. Reports
 --- `invalid_text`; the caller keeps the bytes alive and valid while the view
 --- is used.
 ---
---- The checked adapters report foreign or file-data defects before the
---- ordinary conversion establishes utf8's invariant.  Their result is a
---- source-derived view; no allocation, copy or canonical empty carrier is
---- introduced.
+--- Where the `utf8(bytes)` conversion traps on malformed bytes, this
+--- reports them.  The result is a view of `source`: nothing is allocated
+--- or copied.
 public from_bytes: (source: []u8)
                    -> (result: utf8 from source) ! invalid_text =
     fail invalid_text when not valid(source)

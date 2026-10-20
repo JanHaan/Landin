@@ -1,8 +1,5 @@
 # Landin prototype 2 — a parser full of recoverable errors
 
-Current with specification 0.2.7. Its own findings Y1-Y7 are resolved
-below, except Y4, which stays an open watch in the roadmap's register.
-
 > **Not learning material.** This is a design stress test: a parser that
 > recovers from its errors, written before the compiler existed to find
 > where the specification was silent, ambiguous or wrong. It is not a
@@ -13,6 +10,13 @@ below, except Y4, which stays an open watch in the roadmap's register.
 > true. The program that actually runs is
 > [`examples/config_parser/`](examples/config_parser/), with its fixture
 > `runtime/derived-parser`. To learn Landin, read [the tour](tour.md).
+>
+> The sketch itself begins at its first module heading, `core/text`. The
+> notes between this banner and that heading reconcile the sketch with the
+> specification, and a reader can skip them.
+
+Current with specification 0.2.7. Its own findings Y1-Y7 are resolved
+below, except Y4, which stays an open watch in the roadmap's register.
 
 The point of this one is the word recoverable. A parser must not stop
 at the first mistake: it reports it, skips to somewhere it trusts, and

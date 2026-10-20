@@ -37,10 +37,11 @@ cursor_value: type = struct
     next_slot: usize
 end cursor_value
 
+--  A representation of the module's own: spec.md's D354.
 --- Insertion-ordered hash map over slot metadata and dense key/value
 --- prefixes. Providers are supplied per operation. Its representation is the
 --- module's own, so nothing outside `core/map` can break the invariants its
---- operations keep (D354).
+--- operations keep.
 public map: type (key: type is cmp.hashable, item: type) =
     map_value(key, item)
 

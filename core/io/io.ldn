@@ -47,6 +47,7 @@ public file: type = file_value
 --- positive progress for nonempty input, zero for empty input, and no
 --- progress on failure.
 ---
+--  An erased world is not an erased writer: spec.md's D268.
 --- The capability is four narrow concepts over one provider type, so a
 --- provider supplies only what it has: a UART is a writer, a read-only
 --- image is a reader; system and memory providers also supply files and
@@ -56,8 +57,8 @@ public file: type = file_value
 --- by value, that refers to its state, so a program and its logger share one
 --- without locking it.  An erased `any io.world` is built from the address of
 --- a handle binding and dispatches every entry, but it is not an
---- `any io.writer`: build that from the same handle where a writer is wanted
---- [D268].
+--- `any io.writer`: build that from the same handle where a writer is
+--- wanted.
 public writer: type = concept (provider: type)
     --- Write the entire byte slice or fail. Failure may follow partial
     --- output; do not blindly retry the whole slice.

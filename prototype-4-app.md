@@ -1,8 +1,5 @@
 # Landin prototype 4 — a hosted application
 
-Current with specification 0.2.7. Its own findings W1-W7 are all
-resolved below.
-
 > **Not learning material.** This is a design stress test: a hosted log
 > filter with runtime dispatch, written before the compiler existed to find
 > where the specification was silent, ambiguous or wrong. It is not a
@@ -14,6 +11,13 @@ resolved below.
 > [`examples/derived_hosted/`](examples/derived_hosted/), with its fixture
 > `runtime/derived-hosted-memory`. To learn Landin, read [the
 > tour](tour.md).
+>
+> The sketch itself begins at its first module heading, `core/mem`. The
+> notes between this banner and that heading reconcile the sketch with the
+> specification, and a reader can skip them.
+
+Current with specification 0.2.7. Its own findings W1-W7 are all
+resolved below.
 
 A log filter: read a file, run every line through a chain of filters
 picked on the command line, hand what survives to a destination picked
