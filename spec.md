@@ -1774,9 +1774,11 @@ arguments and the one named return `code` of type `i32`. Its
 declaration therefore starts
 `public main: () -> (code: i32) =`. The returned code is passed
 to the host as the program's status through the system C ABI
-[1650]. This is the first native slice's boundary, not a
-restriction on every hosted executable: [1650]'s C `argc` and
-`argv` form stays available. A freestanding program does not
+[1650]. Every hosted target takes this one shape, and L0502 refuses any
+other `main`: the arguments reach the program through its hosted world,
+not as parameters, and C's `argc` and `argv` are what
+`_landin_host_initialize_arguments` hands that world [1650]. A
+freestanding program does not
 use this rule; its build description names the entry [1650]. The first hosted
 entry is infallible: this boundary has no host mapping for a declared Landin
 error.

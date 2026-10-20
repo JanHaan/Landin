@@ -4077,8 +4077,9 @@ no LLVM and no C in between.
 
 - The output is deterministic: the same program gives the same bytes.
 - Every ordinary routine and every interrupt handler sets up the frame
-  pointer, so a debugger or a backtrace can always walk the stack. A naked
-  routine ([1570]) owns its frame instead.
+  pointer, so a debugger or a backtrace can always walk the stack. On
+  Cortex-M0 a routine with no calls, no assembly and no stack changes may
+  leave it alone ([1990]). A naked routine ([1570]) owns its frame instead.
 - The whole program is compiled together ([1480]). The compiler may keep
   private caches, but there is no stable separate-compilation interface.
 
