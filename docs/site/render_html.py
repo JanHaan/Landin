@@ -226,12 +226,14 @@ DARK = """
     --ink:oklch(0.93 0.006 250); --ink-soft:oklch(0.8 0.012 250);
     --ink-faint:oklch(0.68 0.014 250);
     --rule:oklch(0.31 0.014 255); --rule-soft:oklch(0.27 0.013 255);
+    --rule-strong:oklch(0.53 0.014 255);
     --accent:oklch(0.76 0.12 40); --accent-soft:oklch(0.6 0.1 40);
     --accent-bg:oklch(0.28 0.04 40);
     --code-bg:oklch(0.175 0.012 255);
     --k:oklch(0.8 0.09 350); --t:oklch(0.8 0.08 195); --f:oklch(0.8 0.08 255);
     --n:oklch(0.8 0.09 305); --q:oklch(0.8 0.09 135); --b:oklch(0.82 0.1 75);
     --cd:oklch(0.74 0.06 140);
+    --term-bg:oklch(0.16 0.012 255); --term-ink:oklch(0.88 0.01 250);
     --sh:0 8px 24px oklch(0 0 0 / .45);"""
 
 CSS = """
@@ -247,14 +249,20 @@ CSS = """
   --bg:oklch(0.975 0.006 85); --bg-soft:oklch(0.955 0.008 85);
   --panel:oklch(0.99 0.004 85); --panel-2:oklch(0.945 0.009 85);
   --ink:oklch(0.24 0.018 260); --ink-soft:oklch(0.45 0.02 255);
-  --ink-faint:oklch(0.53 0.015 250);
+  --ink-faint:oklch(0.515 0.015 250);
   --rule:oklch(0.88 0.012 85); --rule-soft:oklch(0.92 0.01 85);
+  /*  The boundary of a control -- a field, a button -- has to be seen
+      to be found: about 3:1 against the surface, where --rule's 1.35:1
+      is a hairline between two things that are not interactive.  */
+  --rule-strong:oklch(0.64 0.014 85);
   --accent:oklch(0.5 0.15 30); --accent-soft:oklch(0.66 0.1 30);
   --accent-bg:oklch(0.95 0.02 30);
   --code-bg:oklch(0.985 0.005 85); --code-rule:var(--rule);
   --k:oklch(0.48 0.1 350); --t:oklch(0.48 0.1 190); --f:oklch(0.48 0.1 260);
   --n:oklch(0.48 0.1 300); --q:oklch(0.48 0.1 130); --b:oklch(0.48 0.1 60);
   --cd:oklch(0.48 0.06 140);
+  /*  A terminal's output is a panel of its own, dark in both themes.  */
+  --term-bg:oklch(0.25 0.014 255); --term-ink:oklch(0.92 0.006 250);
   --d:var(--ink); --c:var(--ink-faint); --o:var(--ink-faint);
   --sh:0 8px 24px oklch(0.2 0.02 60 / .12);
   /*  The sticky bar's height, which every scroll target clears.  */
@@ -280,8 +288,11 @@ CSS = """
 }
 
 *{box-sizing:border-box}
+/*  No smooth scrolling here: a jump across a long document animated
+    for seconds, and the reduced-motion setting that switched it off was
+    overridden by the rule after it.  JS animates a short in-page jump,
+    and only for a reader who has not asked for less motion.  */
 @media (prefers-reduced-motion: reduce){
-  html{scroll-behavior:auto}
   *{transition-duration:.01ms !important; animation-duration:.01ms !important}
 }
 a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible{
@@ -293,22 +304,34 @@ a.skip{
   border:1px solid var(--accent); font-size:.85rem;
 }
 a.skip:focus{top:.5rem}
-html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
+html{-webkit-text-size-adjust:100%}
 body{
   margin:0; background:var(--bg); color:var(--ink);
   font-family:var(--ui); font-size:16px; line-height:1.6;
   font-feature-settings:"kern" 1,"liga" 1;
 }
-/*  The code face's four features: calt, liga and dlig draw `->`, `<>`
-    and `:=` as one shape each, and zero slashes the digit.  */
+/*  The code face's features: calt and liga draw `->`, `<>` and `:=` as
+    one shape each, and zero slashes the digit.  dlig is the code face's
+    own and is switched on only once that face is known to have loaded
+    (JS sets .mono-dlig): a fallback face's dlig draws a struck `st`.  */
 code,pre,.mono,.tag,.cite,.label{
   font-family:var(--mono);
+  font-feature-settings:"kern" 1,"calt" 1,"liga" 1,"zero" 1;
+}
+.mono-dlig :is(code,pre,.mono,.tag,.cite,.label){
   font-feature-settings:"kern" 1,"calt" 1,"liga" 1,"dlig" 1,"zero" 1;
 }
 code{
-  font-size:.85em; padding:.05rem .28rem; color:var(--ink);
+  font-size:.85em; padding:.05rem .18rem; color:var(--ink);
   background:var(--panel-2); border-radius:2px;
 }
+/*  A field the reader types in is a control and is seen as one.  */
+main input:not([type="checkbox"]):not([type="radio"]){border-color:var(--rule-strong)}
+/*  A long path in a sentence or a cell may break anywhere rather than
+    push the page wider than the phone.  An identifier keeps its case
+    wherever an uppercase transform reaches it.  */
+p code, li code, td code, th code, blockquote code{overflow-wrap:anywhere}
+:is(h1,h2,h3,h4,.where,summary) code{text-transform:none}
 a{
   color:var(--accent); text-underline-offset:.18em;
   text-decoration-thickness:1px;
@@ -352,7 +375,7 @@ header.bar .src, header.bar label{
   display:inline-flex; align-items:center; gap:.45rem;
   font-family:var(--mono); font-size:.72rem;
   color:var(--ink-soft); background:none; cursor:pointer;
-  text-decoration:none; border:1px solid var(--rule);
+  text-decoration:none; border:1px solid var(--rule-strong);
   padding:.32rem .6rem; white-space:nowrap;
 }
 header.bar .src:hover, header.bar label:hover,
@@ -373,13 +396,21 @@ input.theme-x, input.menu-x{
   position:absolute; width:1px; height:1px; margin:-1px; padding:0;
   border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
 }
-input.theme-x:focus-visible + label, input.menu-x:focus-visible + label{
+/*  `~`, not `+`: the theme box's script sits between it and its label,
+    so the adjacent-sibling form never matched and the switch showed no
+    focus at all.  */
+input.theme-x:focus-visible ~ label[for="theme"],
+input.menu-x:focus-visible + label{
   outline:2px solid var(--accent); outline-offset:2px;
 }
+/*  The menu box is an invisible tab stop where there is no menu.  */
+@media (width > 60rem){ input.menu-x{display:none} }
 @media (max-width:35rem){
   :root{--bar:3.75rem}
   header.bar{gap:.45rem; padding:0 .65rem}
-  header.bar .where{display:none}
+  /*  A phone keeps its place in the document, cut short.  */
+  header.bar .where{min-width:0; flex:0 1 auto; font-size:.7rem}
+  header.bar .grow{flex:1 0 0}
   header.bar .src, header.bar label{
     width:2.75rem; height:2.75rem; justify-content:center; gap:0; padding:0;
   }
@@ -428,12 +459,12 @@ nav.side summary:hover{color:var(--ink)}
 nav.side .toc{margin:.2rem 0 .55rem 1.35rem; border-left:1px solid var(--rule)}
 /*  The documents write their section titles in three cases -- THE
     GRAMMAR OF THE ENABLED KERNEL, chip/vendor/gpio, Canonical release --
-    so the list of them is set in one.  */
+    and the renderer sets the shouted ones in sentence case, so the list
+    reads as one without an uppercase transform flattening identifiers.  */
 nav.side a.sect{
-  padding:.2rem .75rem .2rem .8rem; margin-left:-1px;
+  padding:.22rem .75rem .22rem .8rem; margin-left:-1px;
   border-left:1px solid transparent;
-  font-size:.72rem; letter-spacing:.035em; text-transform:uppercase;
-  color:var(--ink-faint);
+  font-size:.8rem; line-height:1.4; color:var(--ink-soft);
 }
 nav.side a.sect:hover{color:var(--ink)}
 nav.side a.sect.here{color:var(--ink); border-left-color:var(--accent)}
@@ -470,10 +501,12 @@ main{padding:2.75rem 3rem 6rem; min-width:0; max-width:62rem}
 
 /* ---- sections ---- */
 section{padding-top:3rem; scroll-margin-top:var(--bar)}
+/*  A section heading outranks the text under it: larger than the body,
+    in sentence case, with the rule running out to the column's edge.  */
 section > h2{
-  margin:0 0 1.2rem; font-size:.9rem; font-weight:750;
-  letter-spacing:.08em; text-transform:uppercase; color:var(--ink);
-  display:flex; align-items:center; gap:.8rem;
+  margin:0 0 1.2rem; font-size:1.35rem; line-height:1.3; font-weight:700;
+  letter-spacing:-.01em; color:var(--ink); text-wrap:balance;
+  display:flex; align-items:baseline; gap:.9rem;
 }
 section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 
@@ -495,7 +528,7 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 .item p:last-child{margin-bottom:0}
 @media (min-width:70rem){
   .item{padding-left:4.2rem}
-  .item .tag{position:absolute; left:0; top:.3rem; margin:0}
+  .item .tag{position:absolute; left:0; top:.55rem; margin:0}
 }
 
 /* ---- code ---- */
@@ -506,7 +539,7 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
   font-size:.82rem; line-height:1.6; tab-size:4;
 }
 .listing .copy{
-  position:absolute; top:.45rem; right:.45rem; opacity:0;
+  position:absolute; top:.45rem; right:.45rem; opacity:.55;
   display:inline-flex; align-items:center; justify-content:center;
   min-width:2rem; min-height:2rem; padding:0;
   font:inherit; font-size:.8rem; line-height:1;
@@ -518,10 +551,22 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 .listing .copy .done{display:none}
 .listing .copy.done .i{display:none}
 .listing .copy.done .done{display:inline-block; color:var(--q)}
-.listing:hover .copy, .listing .copy:focus{opacity:1}
-@media (hover:none), (pointer:coarse){
-  .listing .copy{opacity:1}
-  .listing pre{padding-right:2.8rem}
+/*  No clipboard: the code is selected instead, and the button says so.  */
+.listing .copy.manual .i{display:none}
+.listing .copy.manual::after{content:"selected \2014  copy it"; padding:0 .55rem;
+  font-family:var(--mono); font-size:.72rem; color:var(--accent)}
+.listing:hover .copy, .listing .copy:focus, .listing .copy.manual{opacity:1}
+/*  On a phone, or wherever nothing hovers, the button gets a strip of
+    its own above the code instead of sitting on top of the first line.  */
+@media (max-width:48rem), (hover:none){
+  .listing{padding-top:2.25rem}
+  .listing .copy{top:0; right:0; opacity:1; min-height:2rem}
+}
+/*  A panel that scrolls sideways says so at its right edge (JS marks one
+    that overflows, and unmarks it at the end of its scroll).  */
+.overflows{
+  -webkit-mask-image:linear-gradient(to right, #000 calc(100% - 2.75rem), transparent);
+  mask-image:linear-gradient(to right, #000 calc(100% - 2.75rem), transparent);
 }
 pre.sample:not(.listing > pre){
   margin:.15rem 0 .85rem; padding:.55rem .85rem; overflow-x:auto;
@@ -544,19 +589,23 @@ a.cite:hover{background:var(--accent-bg)}
   border:1px solid var(--rule);
 }
 #pop .tag{font-size:.72rem; color:var(--accent); display:block; margin-bottom:.2rem}
+#pop .go{display:block; margin-top:.45rem; font-family:var(--mono); font-size:.75rem}
 
+/*  The footer's rule starts where main's content starts, not 3rem to the
+    left of it in the padding.  */
 footer{
   grid-column:2; justify-self:start;
-  margin:0 0 4rem; padding:1.25rem 3rem 0;
+  margin:0 3rem 4rem; padding:1.25rem 0 0;
   border-top:1px solid var(--rule);
   color:var(--ink-faint); font-size:.78rem; line-height:1.7; max-width:56rem;
 }
 footer code{font-size:.9em; color:var(--ink-soft)}
+footer .totop{float:right; margin-left:1rem}
 .anchor{position:absolute; scroll-margin-top:calc(var(--bar) + .6rem)}
 
 @media (max-width:60rem){
   .wrap{grid-template-columns:minmax(0,1fr)}
-  footer{grid-column:1; padding-left:1.15rem; padding-right:1.15rem}
+  footer{grid-column:1; margin-left:1.15rem; margin-right:1.15rem}
   nav.side{
     position:fixed; inset:var(--bar) 0 auto 0; height:auto; max-height:78vh;
     background:var(--bg); border-right:0; border-bottom:1px solid var(--rule);
@@ -568,12 +617,34 @@ footer code{font-size:.9em; color:var(--ink-soft)}
   header.bar label[for="menu"]{display:inline-flex}
   main{padding:1.75rem 1.15rem 5rem}
 }
+/*  Paper is light whatever the screen was: the dark values printed pale
+    ink on white.  */
 @media print{
-  header.bar, nav.side, .listing .copy{display:none}
+  :root, :root:has(#theme:checked), :root:not(:has(#theme:checked)){
+    color-scheme:light;
+    --bg:#fff; --bg-soft:#fff; --panel:#fff; --panel-2:oklch(0.96 0.005 85);
+    --ink:#000; --ink-soft:oklch(0.3 0.015 255); --ink-faint:oklch(0.42 0.015 250);
+    --rule:oklch(0.8 0.01 85); --rule-soft:oklch(0.88 0.01 85); --rule-strong:oklch(0.6 0.01 85);
+    --accent:oklch(0.45 0.15 30); --accent-soft:oklch(0.6 0.1 30); --accent-bg:#fff;
+    --code-bg:#fff; --term-bg:#fff; --term-ink:#000;
+    --k:oklch(0.42 0.1 350); --t:oklch(0.42 0.1 190); --f:oklch(0.42 0.1 260);
+    --n:oklch(0.42 0.1 300); --q:oklch(0.42 0.1 130); --b:oklch(0.42 0.1 60);
+    --cd:oklch(0.42 0.06 140); --d:#000; --c:oklch(0.42 0.015 250); --o:oklch(0.42 0.015 250);
+  }
+  @page{margin:18mm 16mm}
+  header.bar, nav.side, .listing .copy, footer .totop, nav.next, #pop{display:none}
+  body{background:#fff; color:#000}
   .wrap{display:block}
-  main{max-width:none; padding:0}
+  main{max-width:42rem; padding:0}
+  .listing{padding-top:0}
   .listing pre, pre.sample{white-space:pre-wrap}
+  .overflows{-webkit-mask-image:none; mask-image:none}
   a{color:inherit}
+  h1, h2, h3, .item > .tag{break-after:avoid}
+  .item > h3, .listing, figure.panel{break-inside:avoid}
+  .guide ul:not([class]){list-style:square; padding-left:1.2rem}
+  .guide ul:not([class]) > li::before{display:none}
+  footer{margin:2rem 0 0}
 }
 """
 CSS = CSS.replace("{DARK}", DARK)
@@ -611,7 +682,12 @@ THEME_JS = (
     "var d=matchMedia('(prefers-color-scheme: dark)').matches;"
     "try{var s=localStorage.getItem('landin-theme');"
     "if(s)b.checked=(s==='dark')!==d;}catch(e){}"
-    "b.addEventListener('change',function(){"
+    #  The switch is named by what it does next, not by what it is: a
+    #  screen reader heard "theme, checkbox, not checked", which says
+    #  neither which theme is showing nor which one a press gives.
+    "function say(){b.setAttribute('aria-label',(b.checked!==d)?"
+    "'switch to light theme':'switch to dark theme');}say();"
+    "b.addEventListener('change',function(){say();"
     "try{if(b.checked)localStorage.setItem('landin-theme',d?'light':'dark');"
     "else localStorage.removeItem('landin-theme');}catch(e){}});})();")
 
@@ -622,7 +698,8 @@ PREVIEW = 400
 
 JS = """
 (function(){
-  var PREVIEW=%d;
+  var PREVIEW=%d, MONO=%s;
+  var root=document.documentElement;
   var side=document.querySelector('nav.side');
   var menu=document.getElementById('menu');
   function closeMenu(focus){
@@ -637,15 +714,104 @@ JS = """
     if(e.key==='Escape') closeMenu(true);
   });
 
+  /* A short in-page jump glides; a long one, or any jump for a reader who
+     asked for less motion, lands at once.  The browser still follows the
+     link itself, so :target, the history and hashchange are what they
+     would be without this. */
+  var calm=matchMedia('(prefers-reduced-motion: no-preference)');
+  var glide=0;
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('a[href^="#"]');
+    if(!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey ||
+       e.shiftKey || e.altKey || !calm.matches) return;
+    var id; try{ id=decodeURIComponent(a.getAttribute('href').slice(1)); }catch(_){ return; }
+    var t=id && document.getElementById(id); if(!t) return;
+    if(Math.abs(t.getBoundingClientRect().top)>2*innerHeight) return;
+    root.style.scrollBehavior='smooth';
+    clearTimeout(glide);
+    glide=setTimeout(function(){ root.style.scrollBehavior=''; },900);
+  });
+
+  /* A deep link lands, and then the faces arrive and every line above it
+     reflows: on a cold cache it ended thousands of pixels away.  Once the
+     faces are in, land again -- unless the reader has already moved. */
+  (function(){
+    var fragment=location.hash; if(fragment.length<2) return;
+    if(document.fonts && document.fonts.status==='loaded') return;
+    var moved=false, events=['wheel','touchstart','pointerdown','keydown'];
+    function stop(){ moved=true; }
+    events.forEach(function(n){ addEventListener(n,stop,{passive:true}); });
+    var ready=document.fonts ? document.fonts.ready : Promise.resolve();
+    ready.then(function(){ requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      events.forEach(function(n){ removeEventListener(n,stop); });
+      if(moved || location.hash!==fragment) return;
+      var id; try{ id=decodeURIComponent(fragment.slice(1)); }catch(_){ return; }
+      var t=document.getElementById(id);
+      if(t) t.scrollIntoView({block:'start',behavior:'instant'});
+    }); }); });
+  })();
+
+  /* The code face's discretionary ligatures are its own; a fallback
+     face's draw a struck `st`.  They go on only once the face itself has
+     loaded. */
+  if(document.fonts && MONO){
+    var mono=function(){
+      var on=false;
+      document.fonts.forEach(function(f){
+        if(f.family.replace(/["']/g,'')===MONO && f.status==='loaded') on=true;
+      });
+      if(on) root.classList.add('mono-dlig');
+      return on;
+    };
+    if(!mono()){
+      document.fonts.addEventListener('loadingdone',function once(){
+        if(mono()) document.fonts.removeEventListener('loadingdone',once);
+      });
+    }
+  }
+
   /* copy a listing */
+  function selectCode(b,pre){
+    var r=document.createRange(); r.selectNodeContents(pre);
+    var s=getSelection(); s.removeAllRanges(); s.addRange(r);
+    var copied=false;
+    try{ copied=document.execCommand('copy'); }catch(_){}
+    if(copied){ done(b); return; }
+    b.classList.add('manual');
+    setTimeout(function(){ b.classList.remove('manual'); },4000);
+  }
+  function done(b){
+    b.classList.add('done');
+    setTimeout(function(){ b.classList.remove('done'); },1100);
+  }
   document.addEventListener('click',function(e){
     var b=e.target.closest('.copy'); if(!b) return;
-    var pre=b.parentNode.querySelector('pre');
-    navigator.clipboard.writeText(pre.innerText).then(function(){
-      b.classList.add('done');
-      setTimeout(function(){ b.classList.remove('done'); },1100);
-    });
+    var pre=b.parentNode.querySelector('pre'); if(!pre) return;
+    /* A page opened from disk or served over plain http has no
+       clipboard; the code is selected instead and the button says so. */
+    if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+      navigator.clipboard.writeText(pre.innerText).then(function(){ done(b); },
+        function(){ selectCode(b,pre); });
+    } else selectCode(b,pre);
   });
+
+  /* A panel that scrolls sideways fades at its right edge until its end
+     is in view. */
+  var wide=[].slice.call(document.querySelectorAll('.listing pre, pre.sample, .scroller'));
+  function edges(){
+    wide.forEach(function(n){
+      var more=n.scrollWidth>n.clientWidth+1 &&
+               n.scrollLeft+n.clientWidth<n.scrollWidth-2;
+      n.classList.toggle('overflows',more);
+    });
+  }
+  wide.forEach(function(n){ n.addEventListener('scroll',function(){
+    n.classList.toggle('overflows',
+      n.scrollLeft+n.clientWidth<n.scrollWidth-2);
+  },{passive:true}); });
+  edges();
+  addEventListener('resize',edges,{passive:true});
+  if(document.fonts) document.fonts.ready.then(edges);
 
   /* which section am I in */
   var where=document.getElementById('where');
@@ -661,7 +827,7 @@ JS = """
   if(sections.length){
     var bar=document.querySelector('header.bar');
     /*  The bar says which document you are reading until a titled section
-        takes over, so the top of the page keeps its label. */
+        reaches the line, so the top of the page keeps its label. */
     var kind=where?where.textContent:'';
     var last=0;
     function current(){
@@ -669,7 +835,7 @@ JS = """
           the line that decides which one you are in has to be a
           hair below that and not above it.  */
       var line=(bar?bar.getBoundingClientRect().bottom:48)+8;
-      var best=sections[0];
+      var best=null;
       sections.forEach(function(s){
         if(s.classList.contains('hide')) return;
         if(s.getBoundingClientRect().top<=line) best=s;
@@ -678,10 +844,9 @@ JS = """
     }
     function mark(){
       var now=current();
-      if(!now) return;
-      if(where) where.textContent=now.dataset.title||kind;
+      if(where) where.textContent=(now&&now.dataset.title)||kind;
       Object.keys(links).forEach(function(k){
-        var on=(k===now.id);
+        var on=!!now && (k===now.id);
         links[k].classList.toggle('here',on);
         if(on){ links[k].setAttribute('aria-current','true'); }
         else { links[k].removeAttribute('aria-current'); }
@@ -710,7 +875,19 @@ JS = """
 
   /* what a citation says, without leaving the line */
   var pop=document.getElementById('pop');
-  function hide(){ if(pop) pop.style.display='none'; }
+  var shown=null, closing=0, tapped=null;
+  var touch=matchMedia('(hover: none)');
+  function hide(){
+    clearTimeout(closing);
+    if(shown) shown.removeAttribute('aria-describedby');
+    shown=null; tapped=null;
+    if(pop) pop.style.display='none';
+  }
+  /* The preview stays while the pointer is on the citation or on the
+     preview itself, and closes a moment after it leaves both: it used to
+     close as the pointer crossed the gap into it. */
+  function later(){ clearTimeout(closing); closing=setTimeout(hide,150); }
+  function keep(){ clearTimeout(closing); }
   /* A citation of another page cannot read its paragraph out of this
      one, so the page carries what each of those says; before it did,
      only the specification's own citations of itself had a preview. */
@@ -718,7 +895,7 @@ JS = """
   function brief(text){
     if(text.length<=PREVIEW) return text;
     var cut=text.lastIndexOf(' ',PREVIEW);
-    return text.slice(0,cut>0?cut:PREVIEW)+'\u2026';
+    return text.slice(0,cut>0?cut:PREVIEW)+'\\u2026';
   }
   function said(id){
     if(says===null){
@@ -727,9 +904,18 @@ JS = """
     }
     return says[id];
   }
+  /* Which document a citation of another page leads into: the preview
+     says "spec [2000]", not a bare number that reads as this page's. */
+  function docName(href){
+    var file=href.split('#')[0].replace(/\\.html$/,'');
+    var m=/^prototype-(\\d)$/.exec(file);
+    return m ? 'prototype '+m[1] : file;
+  }
   function show(a){
     if(!a||!pop) return;
-    var href=a.getAttribute('href'), text;
+    keep();
+    if(shown===a) return;
+    var href=a.getAttribute('href'), text, at='';
     if(href.charAt(0)==='#'){
       var t=document.getElementById(href.slice(1)); if(!t) return;
       /* A construct whose body is only code has no paragraph -- [0010] is
@@ -741,9 +927,19 @@ JS = """
       text=brief(p.textContent);
     } else {
       text=said(a.dataset.cite); if(!text) return;
+      at=docName(href)+' ';
     }
-    pop.innerHTML='<span class="tag mono">['+a.dataset.cite+']</span>';
+    if(shown) shown.removeAttribute('aria-describedby');
+    shown=a;
+    var name=at+'['+a.dataset.cite+']';
+    pop.textContent='';
+    var tag=document.createElement('span');
+    tag.className='tag mono'; tag.textContent=name;
+    pop.appendChild(tag);
     pop.appendChild(document.createTextNode(text));
+    var go=document.createElement('a');
+    go.className='go'; go.href=href; go.textContent='go to '+name+' \\u2192';
+    pop.appendChild(go);
     pop.style.display='block';
     var r=a.getBoundingClientRect(), w=pop.offsetWidth, h=pop.offsetHeight;
     /* clientWidth, not innerWidth: the latter counts the scrollbar, and the
@@ -760,16 +956,41 @@ JS = """
      the only way to read what it says, which left the keyboard and every
      touch device out. */
   var CITED='a[data-cite]';
-  document.addEventListener('mouseover',function(e){ show(e.target.closest(CITED)); });
-  document.addEventListener('focusin',function(e){ show(e.target.closest(CITED)); });
-  function drop(e){
+  document.addEventListener('mouseover',function(e){
+    if(touch.matches) return;
     var a=e.target.closest(CITED);
-    if(a){ a.removeAttribute('aria-describedby'); hide(); }
-  }
-  document.addEventListener('mouseout',drop);
-  document.addEventListener('focusout',drop);
+    if(a) show(a);
+    else if(pop && pop.contains(e.target)) keep();
+  });
+  document.addEventListener('mouseout',function(e){
+    if(touch.matches || !shown) return;
+    var from=e.target, to=e.relatedTarget;
+    var inside=function(n){ return n && (shown.contains(n) || pop.contains(n)); };
+    if(inside(from) && !inside(to)) later();
+  });
+  document.addEventListener('focusin',function(e){
+    var a=e.target.closest(CITED);
+    if(a) show(a); else if(pop && pop.contains(e.target)) keep();
+  });
+  document.addEventListener('focusout',function(e){
+    if(shown && !(e.relatedTarget && (pop.contains(e.relatedTarget) ||
+                                      shown.contains(e.relatedTarget)))) later();
+  });
+  /* Where nothing hovers, the first tap on a citation shows what it says,
+     with a link to follow; a second tap on it follows.  A tap focuses the
+     link before it clicks it, so being shown is not the same as having
+     been tapped once. */
+  document.addEventListener('click',function(e){
+    if(!touch.matches) return;
+    var a=e.target.closest(CITED);
+    if(a && !pop.contains(a)){
+      if(tapped!==a){ e.preventDefault(); shown=null; show(a); tapped=a; }
+      return;
+    }
+    if(shown && !pop.contains(e.target)) hide();
+  });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') hide(); });
-  window.addEventListener('scroll',hide,{passive:true});
+  window.addEventListener('scroll',function(){ if(!touch.matches) hide(); },{passive:true});
 
   /* light up the construct a link arrives at */
   function lit(){
@@ -779,9 +1000,10 @@ JS = """
       if(t) t.classList.add('lit');
     }
   }
-  window.addEventListener('hashchange',lit); lit();
+  window.addEventListener('hashchange',function(){ hide(); lit(); }); lit();
 })();
-""" % PREVIEW
+""" % (PREVIEW, json.dumps("" if fonts.family("mono") in fonts.missing()
+                           else fonts.family("mono")))
 
 
 def esc(text):

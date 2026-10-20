@@ -203,6 +203,21 @@ def css(prefix: str = OUT_DIR + "/") -> str:
     return "\n".join(out) + "\n"
 
 
+def preload(role: str = "ui", char: str = "A") -> list[str]:
+    """The upright faces of a role that set `char`, as names beside the
+    pages: what a page asks for before its stylesheet has been read, so
+    the text does not reflow under a reader once the face arrives.
+
+    Only the upright subset that carries the Latin letters is worth it --
+    every page sets its prose in it -- and the rest are left for the
+    browser to fetch by `unicode-range` when a page needs them.
+    """
+    point = ord(char)
+    return [face.name for face in faces(role)
+            if face.decls.get("font-style", "normal") == "normal"
+            and any(low <= point <= high for low, high in face.ranges)]
+
+
 def stack(role: str) -> str:
     """What `--ui` or `--mono` holds: the family, then the fallbacks.
 
