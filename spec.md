@@ -1052,7 +1052,9 @@ u128 and i128 [0150] and f16 [0170] are not in this version: D237 transfers
 them to the Language evolution successor, and the checker refuses the three
 spellings by name. The packed widths are enabled only in D228's packed-field
 positions [0730]. They are representations within an image, not new ordinary
-scalar or ABI types.
+scalar or ABI types: reading such a field gives the smallest enabled unsigned
+scalar that holds its width, so a `u1` field reads as a `u8` of 0 or 1 and is
+not a `bool` (D228).
 An atom declaration introduces one value and its singleton type. An atom union
 is structural: aliases are flattened, order and repeated members do not change
 identity, and assignment or argument passing may widen a singleton or smaller
@@ -1193,7 +1195,7 @@ that scalar is evaluated once and broadcast, not implicitly converted.
 | `+` `-` `*` `/` | one integer or float type, and that type back [0290] |
 | `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
 | `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330]; or one distinct type whose base is an unsigned integer, and that distinct type back [0650], which no updating assignment writes |
-| `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
+| `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: an amount at or past it gives zero on every shift, a signed `>>` included, while inside the width a signed `>>` keeps the sign (D13). |
 | `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison. Two values of one distinct type whose base is a scalar [0650] have `==` and `<>`, and `<`, `<=`, `>` and `>=` in the base's order, IEEE's comparisons for a floating base with NaN unordered; never with the base or another type without a conversion |
 | `and` `or` `not` | bool, and a bool back [0340] |
 | unary `-` | one integer or float type, and that type back |

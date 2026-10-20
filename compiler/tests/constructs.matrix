@@ -70,9 +70,9 @@
 0460 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A pointer to a fixed address
 0470 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Converting between pointers and integers
 0480 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | There is no null
-0490 | tour | - | - | - | - | - | - | - | - | - | advisory | none | none | none | Pointers are a system tool
+0490 | tour | - | - | - | - | - | - | - | - | - | advisory | none | none | none | What to use instead of a pointer
 0500 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | No pointer arithmetic outside the library
-0510 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Storage that is not filled yet: `raw(t)`
+0510 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Storage that is not filled yet: `mem.storage(t)`
 0520 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | boundary | executed | all | none | none | Arrays are values
 0530 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Letting the literal set the length
 0540 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | boundary | executed | all | none | none | `zeroed`: the all-zero value
@@ -99,7 +99,7 @@
 0750 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Field order and layout
 0760 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Attributes
 0770 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A frame reference cannot leave its routine
-0780 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A routine may use a pointer, but keeping it is declared
+0780 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Keeping a pointer you were given: `escaping`
 0790 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A returned reference says where it came from: `from`
 0800 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A borrow through `from` lasts across the call
 0810 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A pointer made from an integer is not tracked
