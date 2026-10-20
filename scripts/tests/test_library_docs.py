@@ -13,6 +13,11 @@ import library
 import render_html
 
 
+def html_text(fragment):
+    import html
+    return html.unescape(re.sub(r'<[^>]*>', '', fragment))
+
+
 class Declarations(unittest.TestCase):
     def read(self, text):
         return library.read_items(text, 'core/demo/demo.ldn')
@@ -478,6 +483,56 @@ class GeneratedReference(unittest.TestCase):
         self.assertNotRegex(read, r'\)core/io/\w+\.ldn:\d+')
         self.assertNotRegex(read, r'\.ldn:\d+[^\d\s]')
         self.assertIn('\nreader, writer\tread, write, write_some\tyes\n', read)
+
+    def test_headings_descend_a_level_at_a_time(self):
+        """A module page went h1, nine h3, then an h2 per item."""
+        for name in ('library.html', 'library-core-io.html', 'library-core-text.html',
+                     library.page_name('platform/linux/numbers')):
+            text = (self.destination / name).read_text()
+            levels = [int(h) for h in re.findall(r'<h([1-6])\b', text)]
+            with self.subTest(page=name):
+                self.assertEqual(levels[0], 1)
+                self.assertEqual([(a, b) for a, b in zip(levels, levels[1:]) if b > a + 1], [])
+        text = (self.destination / 'library-core-io.html').read_text()
+        self.assertIn('<h2 class="api-h">Items</h2>', text)
+        self.assertIn('data-title="Providers"><h2>', text.replace('\n', ''))
+
+    def test_an_item_is_named_in_code_and_leads_back_to_the_index(self):
+        text = (self.destination / 'library-core-io.html').read_text()
+        item = text[text.index('<section class="api-item" id="item-open_read"'):]
+        item = item[:item.index('</section>')]
+        self.assertIn('data-title="open_read"', item)
+        self.assertIn('<h3 class="api-name"><code>open_read</code></h3>', item)
+        self.assertIn('href="#items-function"', item)
+        self.assertIn('id="items-function"', text)
+        self.assertRegex(item, r'<a class="api-source" href="[^"]+#L\d+">core/io/io\.ldn:\d+</a>')
+        # The sidebar holds the module's own contents under its link.
+        side = text[text.index('<nav class="side"'):]
+        self.assertLess(side.index('aria-current="page" href="library-core-io.html"'),
+                        side.index('id="api-toc"'))
+        self.assertIn('<a class="sect" href="#providers">', side)
+
+    def test_overview_tables_link_the_calls_they_name(self):
+        index = (self.destination / 'library.html').read_text()
+        self.assertIn('<a href="library-core-io.html#item-open_read">'
+                      '<code>io.open_read(host, path)</code></a>', index)
+        page = (self.destination / 'library-core-io.html').read_text()
+        self.assertIn('<a href="#item-open_read"><code>open_read</code></a>', page)
+
+    def test_member_documentation_is_prose_beside_the_code(self):
+        text = (self.destination / 'library-core-io.html').read_text()
+        item = text[text.index('<section class="api-item" id="item-writer"'):]
+        item = item[:item.index('</section>')]
+        self.assertIn('<div class="api-doc"', item)
+        for code in re.findall(r'<pre class="api-signature">(.*?)</pre>', item, re.S):
+            self.assertNotIn('---', html_text(code))
+
+    def test_the_example_is_a_program_panel(self):
+        text = (self.destination / 'library-core-text.html').read_text()
+        example = text[text.index('<section class="api-example"'):]
+        self.assertIn('<figure class="panel api-program">', example)
+        self.assertIn('<span>in a terminal</span>', example)
+        self.assertIn('$ refine compile main.ldn -o text-columns', example)
 
     def test_linux_numbers_are_one_row_per_name(self):
         """The page was 758 KB, every name repeated per architecture."""
