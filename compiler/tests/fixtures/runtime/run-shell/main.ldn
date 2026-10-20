@@ -2,6 +2,7 @@
 --  its output and its errors while it runs, time it, and report what it
 --  said, what it complained of, how it ended and how long it took.  The
 --  report goes through a buffered writer, flushed on every way out.
+import core/failure
 import core/io
 import core/text
 import core/time
@@ -93,6 +94,13 @@ search_path: (host: system.host) -> (path: text.host_string from host) =
         else text.host_over("/bin:/usr/bin")
 end search_path
 
+--- Say on standard error why the shell could not be run or reported.
+complain: (host: system.host, problem: failure.reason) -> none =
+    io.write(host, io.err(host), "run-shell: ") else none
+    io.write(host, io.err(host), failure.words(problem)) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
@@ -110,6 +118,7 @@ public main: () -> (code: i32) =
     started := io.spawn(host, text.host_over("/bin/sh"),
                         arguments, variables,
                         io.capturing) else (problem)
+        complain(host, problem)
         return
     end
     mut said: [512]u8 = zeroed
@@ -117,14 +126,17 @@ public main: () -> (code: i32) =
     mut output := text.over(said)
     mut errors := text.over(complained)
     ended: io.ending = capture(host, started, output, errors) else (problem)
+        complain(host, problem)
         return
     end
     took: time.duration = time.elapsed(began, time.now(host))
     report(out, text.used(output), text.used(errors), ended,
            took) else (problem)
+        complain(host, problem)
         return
     end
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     match ended.how

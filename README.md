@@ -7,20 +7,11 @@
 **Status: specification 0.2.7. Landin programs build and run on Linux,
 macOS and FreeBSD, and firmware builds for Cortex-M0.**
 
-The compiler can build and run Landin programs for Linux x86-64, Linux
-arm64, Linux RV64, FreeBSD x86-64 and arm64, and native macOS arm64, and
-builds firmware for Cortex-M0. It handles functions, user-defined data
-types, generic routines, pointers, errors, control flow, modules,
-evidence-table dispatch and `any`. Containers, allocators, text and I/O
-capabilities, a complete recovering configuration parser and a hosted log
-filter now run alongside the automatically tested sensor-polling,
-FizzBuzz, number-theory, searching and sorting programs, plus
-correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. A
-complete derived driver and application run on the pinned Cortex-M0
-emulators with compiler-owned startup, within the recorded 32 KiB capacity
-and source-debugging limits. The roadmap that built this closed with the
-slice feature-complete pre-v1; the next one takes it to an editor, more
-targets and the microcontrollers people buy.
+`refine`, Landin's compiler, builds and runs programs on Linux (x86-64,
+arm64 and RV64), FreeBSD (x86-64 and arm64) and macOS (arm64), and builds
+firmware for Cortex-M0. The language is pre-v1 and still growing, and
+[Current compiler capabilities](#current-compiler-capabilities) lists what
+works today.
 
 ## What Landin is
 
@@ -52,7 +43,7 @@ at the other. What it is like to write:
 
 `refine` is one executable, with its standard library in a directory
 beside it. Today there are two ways to get both: let nix build them, or
-build them yourself from a clone.
+build them yourself from a clone with the pinned Ada toolchain.
 
 With nix, this builds `refine` from source and puts it on your `PATH`:
 
@@ -60,69 +51,80 @@ With nix, this builds `refine` from source and puts it on your `PATH`:
 nix profile install github:JanHaan/Landin
 ```
 
+That needs nix's `nix-command` and `flakes` features. If you have not
+turned them on, add this line to `~/.config/nix/nix.conf` once:
+
+```text
+experimental-features = nix-command flakes
+```
+
+or name them on the command itself:
+
+```sh
+nix --extra-experimental-features 'nix-command flakes' \
+    profile install github:JanHaan/Landin
+```
+
 In a clone, `nix build .#refine`, the flake's default package, builds the
 same into `result/`, as `result/bin/refine` with its library under
 `result/lib/landin`. The first build also fetches the pinned toolchain,
 which takes a few minutes.
 
-Without nix, build it from a clone with the pinned toolchain that
-[Building](#building) names:
+Without nix, on Linux x86-64, fetch the pinned GNAT and GPRbuild and build
+from a clone. `environments/pins.sh` holds their versions, URLs and
+SHA-256 sums, and its `landin_install_toolchain` downloads both archives,
+checks each against its sum and unpacks them; it needs `curl`,
+`sha256sum` and `tar`, and the build needs `python3` and `git`:
 
 ```sh
 git clone https://github.com/JanHaan/Landin
 cd Landin
+. environments/pins.sh
+landin_install_toolchain "$HOME/landin-toolchain" x86_64-linux
+export LANDIN_GNAT_HOME="$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
+export LANDIN_GPRBUILD_HOME="$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
 ./scripts/build.sh --compiler-only
 ```
 
-The build ends by printing where it put `refine`, under
-`compiler/ada/build/`. That `refine` takes the clone's own `core`, `hosted`
-and `platform` as its library, so leave it where it is and put its
-directory on your `PATH`; `refine version` then prints the clone as its
-`library: `.
+The archives are about 500 MB together. The build ends by printing where
+it put `refine`: `compiler/ada/build/linux-amd64/debug/bin/refine`. That is
+the debug build, which keeps the compiler's own internal checks on;
+`LANDIN_BUILD_MODE=release ./scripts/build.sh --compiler-only` builds the
+faster release one under `release/bin/` beside it. Either `refine` takes the
+clone's own `core`, `hosted` and `platform` as its library, so leave it
+where it is and put its directory on your `PATH`.
+
+On Linux arm64 the same sequence takes `aarch64-linux`, and on a Mac
+`aarch64-darwin`, which also needs Xcode's command-line tools. Those three
+are the only hosts with a pinned toolchain; on any other, use nix or one of
+them. [Building](#building) has the developer commands.
+
+On Linux, linking an executable also needs a C compiler driver: the GCC
+your distribution installs, `x86_64-linux-gnu-gcc` on Debian and Ubuntu,
+`x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which `nix-shell -p gcc`
+provides on NixOS. Without one, `refine` says what to install.
+`refine check`, `refine fmt`, `refine lsp` and `refine compile --emit=asm`
+or `--emit=ir` need no driver. macOS links through the Xcode command-line
+tools.
+
+`refine version` names the compiler and the library it uses. One built
+from a clone says `refine dev (01234567)`, the commit it was built from,
+with `, dirty` after it when the clone was modified, and its `library: `
+line names the clone; [Using refine](#using-refine) says how that line is
+decided.
 
 > **Warning: the 0.2.7 release archives hold `refine` without its
 > library,** so the first program below fails at `import core/io`. So does
 > `nix profile install github:JanHaan/Landin#refine-bin`, which fetches
-> that archive. The archive route below works from the next release; until
-> then, use one of the routes above.
+> that archive. Until a release ships the library, use one of the routes
+> above.
 
-From the next release on, you can also take the archive for your platform
-from [the releases page](https://github.com/JanHaan/Landin/releases)
-instead. Each is named `landin-VERSION-PLATFORM.tar.gz`, for
-`x86_64-linux`, `aarch64-linux` or `aarch64-darwin`, with its SHA-256 sum
-beside it in a `.sha256` file. An archive has no top-level directory: it
-holds `bin/refine`, the library under `lib/landin` and the three licence
-files, and puts them in whichever directory you unpack it into, so make
-one for it and put its `bin` on your `PATH`:
-
-```sh
-mkdir -p ~/landin
-tar -xzf landin-VERSION-PLATFORM.tar.gz -C ~/landin
-export PATH="$HOME/landin/bin:$PATH"
-refine version
-```
-
-For a release, `refine version` prints the release's own version and the
-library it found beside itself:
-
-```text
-refine VERSION
-library: /home/you/landin/lib/landin
-```
-
-A compiler built from a checkout says `refine dev (01234567)` instead, the
-commit it was built from, with `, dirty` after it when the checkout was
-modified; [Using refine](#using-refine) says how that line is decided.
-
-On Linux, linking an executable also needs a C compiler driver: the `gcc`
-your distribution installs, or on NixOS `nix-shell -p gcc`. `refine check`,
-`refine fmt`, `refine lsp` and `refine compile --emit=asm` run without one,
-and a link that finds none says what to install. macOS links through the
-Xcode command-line tools.
-
-Every archive after 0.2.7 is laid out as above. The archives of 0.2.7 and
-earlier releases came before the library was shipped: they hold `refine`
-alone, and their `refine version` prints only the first line.
+From that release on, the archive for your platform on
+[the releases page](https://github.com/JanHaan/Landin/releases) holds
+`bin/refine` and the library under `lib/landin`, with no top-level
+directory: unpack it into a directory of its own and put its `bin` on your
+`PATH`, and `refine version` prints the release and `library: ` with that
+directory's `lib/landin`.
 
 ## Your first program
 
@@ -168,15 +170,11 @@ What else to know:
 
 - **The compile leaves only `hello`.** The assembly it links is removed;
   `--keep-asm` keeps it as `hello.s`.
-- **Linking needs a C driver.** On Linux that is the GCC your distribution
-  installs: `x86_64-linux-gnu-gcc` on Debian and Ubuntu,
-  `x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which `nix-shell -p gcc`
-  provides on NixOS. Without one, `refine` says what to install.
-  `refine check`, `refine fmt`, `refine lsp` and
-  `refine compile --emit=asm` or `--emit=ir` need no driver.
 - **A failed check stops the program with its place.** An index past the
   end of an array, for example, prints
-  `main.ldn:4:12: trap: out_of_range` before the system reports the trap.
+  `main.ldn:4:12: trap: out_of_range`. The shell then reports an illegal
+  instruction, or on some systems a trace trap, with a status above 128:
+  that is the check stopping the program, not the compiler crashing.
 - **The standard library comes with `refine`.** `core`, `hosted` and
   `platform` are found beside the executable, so importing them needs no
   option. `refine version` names the directory it uses; a copied `refine`
@@ -195,6 +193,40 @@ What else to know:
 All of them are also published as reading copies at
 <https://www.701.dev>; [Reading it online](#reading-it-online) says what
 else is there.
+
+## refine in brief
+
+| command | what it does |
+| --- | --- |
+| `refine check main.ldn` | check a whole program, writing nothing |
+| `refine compile main.ldn -o prog` | compile and link an executable |
+| `refine fmt main.ldn` | rewrite a source in the one layout; `--check` only reports |
+| `refine explain L0301` | explain a diagnostic code and what to change |
+| `refine compile --target=linux-arm64 ...` | compile for another target; `refine targets` lists them |
+| `refine version` | name the compiler and the library it uses |
+| `refine --help`, `refine compile --help` | every command, and one command's options |
+
+[Using refine](#using-refine) below has the rest.
+
+## Questions, bugs and ideas
+
+Ask questions, report bugs and friction, and propose ideas or changes to the
+language in [Discussions](https://github.com/JanHaan/Landin/discussions);
+each category's form says what a report needs. The repository has no issue
+tracker. Open work lives in `ROADMAP.md`, and a discussion that leads to
+some becomes an item or a register record there. Report a security
+vulnerability privately, through
+[GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new),
+and never in a discussion. Everyone taking part follows the
+[code of conduct](CODE_OF_CONDUCT.md).
+
+## For contributors
+
+The rest of this page is the detail: every part of `refine`'s interface,
+the full inventory of what the compiler does and what comes next, and, for
+people working on Landin itself, what the repository holds, how to build
+and check it, how the published site and the CI gate work, and where the
+design history is.
 
 ## Using refine
 
@@ -498,11 +530,19 @@ This is the maintained inventory of what the compiler does today:
   directory `refine version` names. Debug
   provenance stays independent of DWARF for a possible future PDB emitter; PDB
   is not implemented.
-- **Derived programs.** Prototypes 2, 3 and 4 run as the recovering
-  configuration parser, the container client and the log filter on Linux and
-  macOS, with native debugging coverage, and prototype 1 runs as the
+- **Derived programs.** Programs derived from prototypes 2, 3 and 4 run as
+  the recovering configuration parser, the container client and the log
+  filter on Linux and macOS, with native debugging coverage, and the one
+  derived from prototype 1 runs as the
   [derived driver](compiler/tests/driver/DERIVATION.md) on the Cortex-M0
-  emulators, each against a generated oracle.
+  emulators, each against a generated oracle. The driver and its
+  application run with compiler-owned startup within the recorded 32 KiB
+  capacity and source-debugging limits.
+- **Example programs.** Every program in [`examples.md`](examples.md) runs
+  on every hosted target against its recorded output: everyday tools, the
+  printing and failure lessons, the classic exercises from FizzBuzz to merge
+  sort, the sensor-polling program, and five Benchmark Game ports at
+  correctness scale.
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0. The recurring gate runs Linux and Darwin programs
@@ -514,7 +554,7 @@ suspended from the gate until further notice. The recorded boundaries stand as m
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
 shared-region placement limit observed on some hosts.
 
-`refine --debug=full --emit=exe program.ldn -o program` requests Linux source
+`refine compile --debug=full program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of
 the program's optimization and source build-mode settings. Add
 `--target=darwin-arm64` for native macOS output, then open `lldb ./program`.
@@ -561,29 +601,12 @@ emulator-first Cortex-M.
 
 The first roadmap closed there, with the slice feature-complete pre-v1.
 Feature-complete pre-v1 is a claim about coverage and nothing else. The
-current roadmap starts where it stopped; a build tool, package acquisition,
+current roadmap starts where it stopped, taking the compiler to an editor,
+more targets and the microcontrollers people buy; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
 **Current roadmap work: R13.73 — Documentation that teaches.**
-
-## Questions, bugs and ideas
-
-Ask questions, report bugs and friction, and propose ideas or changes to the
-language in [Discussions](https://github.com/JanHaan/Landin/discussions);
-each category's form says what a report needs. The repository has no issue
-tracker. Open work lives in `ROADMAP.md`, and a discussion that leads to
-some becomes an item or a register record there. Report a security
-vulnerability privately, through
-[GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new),
-and never in a discussion. Everyone taking part follows the
-[code of conduct](CODE_OF_CONDUCT.md).
-
-## For contributors
-
-The rest of this page is for people working on Landin itself: what the
-repository holds, how to build and check it, how the published site and
-the CI gate work, and where the design history is.
 
 ## What is here
 

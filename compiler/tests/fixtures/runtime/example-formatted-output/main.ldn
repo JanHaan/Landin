@@ -20,13 +20,24 @@ public main: () -> (code: i32) =
     people: [3]person = [(name: "Ada Lovelace", born: 1815, died: 1852),
                          (name: "Grace Hopper", born: 1906, died: 1992),
                          (name: "Peter Landin", born: 1930, died: 2009)]
+    mut lived: u32 = 0
     for someone in people do
         io.format(out, "{} was born in {} and died in {}.\n",
                   [any(addr someone.name), any(addr someone.born),
                    any(addr someone.died)]) else none
+        lived += someone.died - someone.born
     end for
 
     count: usize = lenof people
     io.format(out, "{} people in all.\n", [any(addr count)]) else none
+
+    --  A float has no `{}` of its own: scale it to a whole number of
+    --  tenths, rounding, and print the whole part and the tenth apart.
+    average: f64 = f64(lived) / f64(count)
+    tenths: u64 = u64(average * 10.0 + 0.5)
+    whole: u64 = tenths / 10
+    tenth: u64 = tenths % 10
+    io.format(out, "They lived {}.{} years on average.\n",
+              [any(addr whole), any(addr tenth)]) else none
     code = 0
 end main

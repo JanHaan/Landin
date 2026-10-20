@@ -3,6 +3,7 @@
 --  through a buffer of 32 bytes; one too long for it is numbered with a
 --  note in its place, and the lines after it are numbered as usual.  The
 --  output goes through a buffered writer, flushed on every way out.
+import core/failure
 import core/io
 import core/text
 import hosted/system
@@ -35,6 +36,13 @@ numbered: (provider: type is io.world, host: provider,
     end loop
 end numbered
 
+--- Say on standard error why the lines could not be numbered.
+complain: (host: system.host, problem: failure.reason) -> none =
+    io.write(host, io.err(host), "numbers: ") else none
+    io.write(host, io.err(host), failure.words(problem)) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
@@ -42,9 +50,11 @@ public main: () -> (code: i32) =
     defer io.flush(out) else none
     code = 1
     numbered(host, out) else (problem)
+        complain(host, problem)
         return
     end
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0

@@ -1,0 +1,11 @@
+class: runtime
+profiles: standard
+summary: the published line count opens the file its first argument names, reads it through core/io's line reader, counting a last line without its newline and a line too long for the buffer, prints the count through a buffered writer, and would say a failure in words through failure.words on standard error
+program: main.ldn
+root: ../../../../..
+run_files: input.txt
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0790, 0800, 0940, 0960, 1030, 1100, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -2,15 +2,18 @@ import core/io
 import core/text
 import hosted/system
 
---- Write a name and a count, the count right-aligned in five columns.
-report: (host: system.host, name: utf8, count: u32)
+--- Write a name and a count through the program's buffered writer.
+report: (inout out: io.buffered_writer(system.host), name: utf8, count: u32)
         -> none ! io.io_failed | text.no_space | text.invalid_format =
-    mut storage: [128]u8 = zeroed
-    mut line := text.over(storage)
-    try text.format(line, "{}: ", [any(addr name)])
-    start := text.length(line)
-    try text.append_u32(line, count)
-    try text.align_right(line, start, 5, u8(' '))
-    try text.append(line, " items\n")
-    try io.write(host, io.out(host), text.used(line))
+    try io.format(out, "{}: {} items\n", [any(addr name), any(addr count)])
 end report
+
+--- Make the writer once, pass it down, and flush it at the end.
+print_report: (host: system.host)
+              -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    try report(out, "apples", 12)
+    try io.flush(out)
+end print_report

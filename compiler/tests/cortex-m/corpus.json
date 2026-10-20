@@ -1481,6 +1481,13 @@
     "runtime/library-shared-vec": {
       "mode": "execute"
     },
+    "runtime/line-count": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no files to name: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/core-io-line-reader reads lines of core/io.memory's standard input here."
+    },
     "runtime/line-end-continues-expression": {
       "mode": "execute"
     },

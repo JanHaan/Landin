@@ -5,6 +5,7 @@
 --  escaped.  The code after the comment `Everything below` only builds a
 --  directory to list and checks the result.
 import core/cmp
+import core/failure
 import core/io
 import core/mem
 import core/sort
@@ -130,6 +131,30 @@ escaped: (name: []u8, inout into: text.builder) -> none ! text.no_space =
     end for
 end escaped
 
+--- List the directory the first argument names, up to 256 entries.
+list_named: (host: system.host, inout out: io.buffered_writer(system.host))
+            -> none ! ... =
+    path: []u8 = text.host_bytes(try io.argument_at(host, 0))
+    blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
+    mut entries: [256]kept = [256 of blank]
+    count: usize = try list(host, path, entries)
+    _ = try show(out, entries[0..<count])
+end list_named
+
+--- Say on standard error why the listing stopped.
+complain: (host: system.host,
+           problem: too_many | too_long | differs | failure.reason) -> none =
+    reason: []u8 = match problem
+        too_many: "more entries than the listing keeps"
+        too_long: "a name longer than the listing keeps"
+        differs: "the listing does not hold what was built"
+        _ (rest): failure.words(rest)
+    end match
+    io.write(host, io.err(host), "listing: ") else none
+    io.write(host, io.err(host), reason) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 --  Everything below only sets up the demonstration: it builds a small
 --  directory where the program runs, lists it, checks that the listing
 --  holds what it built, and removes the directory again.
@@ -243,10 +268,19 @@ public main: () -> (code: i32) =
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
-    demonstrate(host, out) else (problem)
-        return
-    end
+    if io.argument_count(host) > 0 then
+        list_named(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    else
+        demonstrate(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    end if
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0

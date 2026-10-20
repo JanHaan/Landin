@@ -1,0 +1,11 @@
+import core/mem
+
+--- The byte sum of `bytes` copied into a scratch block, which is freed on
+--- every way out, the failing ones included.
+scratch_sum: (provider: type is mem.allocator, memory: provider, bytes: []u8)
+             -> (sum: u8) ! mem.out_of_memory | mem.out_of_bounds =
+    mut block := try mem.new_bytes(memory, lenof bytes)
+    defer mem.delete_bytes(memory, block)
+    try mem.copy(mem.bytes(block), bytes)
+    sum = byte_sum(mem.bytes(block))
+end scratch_sum

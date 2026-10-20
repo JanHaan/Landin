@@ -116,6 +116,8 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/example-formatted-output/main.ldn"),
     ("Reporting a failure in words",
      "compiler/tests/fixtures/runtime/example-failure-words/main.ldn"),
+    ("Counting lines in a named file",
+     "compiler/tests/fixtures/runtime/line-count/main.ldn"),
     ("FizzBuzz",
      "compiler/tests/fixtures/runtime/example-fizzbuzz/main.ldn"),
     ("Greatest common divisor",

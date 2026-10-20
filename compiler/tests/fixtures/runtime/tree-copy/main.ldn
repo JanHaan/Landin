@@ -7,6 +7,7 @@
 --  routines after it first.  The code after the comment `Everything below`
 --  only builds a tree to copy, checks the copy and removes both.
 import core/cmp
+import core/failure
 import core/io
 import core/mem
 import core/sort
@@ -26,7 +27,7 @@ copy_directory: (host: system.host, from_path: []u8, to_path: []u8,
     io.make_directory(host, text.host_over(to_path)) else (problem)
         fail problem when problem <> io.already_exists
     end
-    mut entries: [16]kept = [16 of blank]
+    mut entries: [256]kept = [256 of blank]
     count: usize = try entries_of(host, from_path, entries)
     mut from_room: [256]u8 = zeroed
     mut from_child := text.over(from_room)
@@ -179,7 +180,7 @@ too_long: atom
 --- An entry kept past the read that gave it: a directory lends a name only
 --- until its next read.
 kept: type = struct
-    name: [64]u8
+    name: [255]u8
     length: usize
     kind: io.entry_kind
 end kept
@@ -192,7 +193,7 @@ end before
 
 kept is cmp.ordered (less: before)
 
-blank: kept = (name: [64 of 0], length: 0, kind: io.special)
+blank: kept = (name: [255 of 0], length: 0, kind: io.special)
 
 --- The entries of the directory `path`, sorted by name, into `into`;
 --- `count` is how many there are.
@@ -208,9 +209,9 @@ entries_of: (host: system.host, path: []u8, into: []mut kept)
         name: []u8 = text.host_bytes(item.name)
         break when lenof name == 0
         fail too_many when count == lenof into
-        fail too_long when lenof name > 64
+        fail too_long when lenof name > 255
         into[count] = blank
-        try mem.copy(into[count].name[0..<64], name)
+        try mem.copy(into[count].name[0..<255], name)
         into[count].length = lenof name
         into[count].kind = item.kind
         inc count
@@ -267,6 +268,37 @@ end present
 dropped: (host: system.host, path: text.host_string) -> none =
     io.remove_file(host, path) else none
 end dropped
+
+--- Copy the directory the first argument names to the path the second
+--- names, and say what the copy did.
+copy_named: (host: system.host, inout out: io.buffered_writer(system.host))
+            -> none ! ... =
+    from_path: []u8 = text.host_bytes(try io.argument_at(host, 0))
+    to_path: []u8 = text.host_bytes(try io.argument_at(host, 1))
+    mut done: tally = (files: 0, links: 0, directories: 0, skipped: 0,
+                       replaced: 0)
+    try copy_directory(host, from_path, to_path, done)
+    try io.format(out, "copied {} files, {} links, {} directories\n",
+                  [any(addr done.files), any(addr done.links),
+                   any(addr done.directories)])
+    try io.format(out, "skipped {} entries of other kinds\n",
+                  [any(addr done.skipped)])
+end copy_named
+
+--- Say on standard error why the copy stopped.  `core/failure` words the
+--- library's failures; `platform/posix`'s are not among them.
+complain: (host: system.host, problem: too_many | too_long | differs
+           | failure.reason | posix.errno) -> none =
+    reason: []u8 = match problem
+        too_many: "a directory holds more entries than the copy keeps"
+        too_long: "a name is longer than the copy keeps"
+        differs: "the copy differs from what was copied"
+        _: "a file or directory could not be read, made or changed"
+    end match
+    io.write(host, io.err(host), "tree-copy: ") else none
+    io.write(host, io.err(host), reason) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
 
 --  Everything below only sets up the demonstration: it builds a small tree
 --  where the program runs, copies it twice, checks the copy against it,
@@ -685,10 +717,19 @@ public main: () -> (code: i32) =
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
-    demonstrate(host, out) else (problem)
-        return
-    end
+    if io.argument_count(host) == 2 then
+        copy_named(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    else
+        demonstrate(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    end if
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0

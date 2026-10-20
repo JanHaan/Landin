@@ -551,7 +551,7 @@ not a verdict.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Twenty-one of them are collected in `examples.md`,
+single-construct probes. Twenty-two of them are collected in `examples.md`,
 which a reader copies from, so each prints what it computes and returns 0,
 and its `run_expect` holds that output. `check.py`'s `RUNNING_EXAMPLES`
 names them, and the page's listings are held to their sources byte for
@@ -559,7 +559,7 @@ byte.
 
 | group | fixtures |
 | --- | --- |
-| everyday tools | `word-count`, `line-numbers`, `directory-listing`, `run-shell`, `tree-copy`, `network-echo` |
+| everyday tools | `line-count`, `word-count`, `line-numbers`, `directory-listing`, `run-shell`, `tree-copy`, `network-echo` |
 | printing and failures | `example-formatted-output`, `example-failure-words` |
 | classic exercises | `example-fizzbuzz`, `example-greatest-common-divisor`, `example-insertion-sort`, `example-binary-search`, `example-sieve-of-eratosthenes`, `example-run-length-encoding`, `example-merge-sort`, `example-sensors` |
 | Benchmark Game ports | `benchmark-game-fannkuch-redux`, `benchmark-game-mandelbrot`, `benchmark-game-fasta`, `benchmark-game-reverse-complement`, `benchmark-game-binary-trees` |
@@ -595,7 +595,7 @@ refine --root=. --target=linux-x86-64 --emit=exe \
 test $? -eq 42
 ```
 
-`.github/workflows/gate.yml` compiles, runs and checks all twenty-one
+`.github/workflows/gate.yml` compiles, runs and checks all twenty-two
 examples on each full gate run. `AGENTS.md` describes the verified
 explanatory-only reuse exception.
 

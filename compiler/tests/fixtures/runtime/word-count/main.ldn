@@ -2,6 +2,7 @@
 --  is named no file.  The counting asks only for a reader, the narrowest
 --  capability it uses, so the same routine counts a pipe, a file or bytes in
 --  memory.
+import core/failure
 import core/io
 import hosted/system
 
@@ -42,6 +43,13 @@ count: (provider: type is io.reader, source: provider,
     end loop
 end count
 
+--- Say on standard error why the totals could not be written.
+complain: (host: system.host, problem: failure.reason) -> none =
+    io.write(host, io.err(host), "wc: ") else none
+    io.write(host, io.err(host), failure.words(problem)) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [64]u8 = zeroed
@@ -57,9 +65,11 @@ public main: () -> (code: i32) =
     io.format(out, "{} {} {}\n",
               [any(addr totals.lines), any(addr totals.words),
                any(addr totals.bytes)]) else (problem)
+        complain(host, problem)
         return
     end
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0
