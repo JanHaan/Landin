@@ -93,16 +93,21 @@ establishes it. Terabytes may vary.
 
 ## COMMENTS
 
-These three are shown by being written, so each is kept exactly as it
-appears in a program: the marker is the comment.
+Each example below is a comment exactly as it appears in a program: the
+marker is the comment.
 
-### [0010] Line comment, to end of line
+### [0010] Line comments
+
+`--` starts a comment that runs to the end of the line.
 
 ```landin
 -- [0010] Line comment, to end of line.
 ```
 
-### [0020] Block comment. Nests properly
+### [0020] Block comments, which nest
+
+`--(` opens a block comment and `)--` closes it. It may sit between two
+tokens on one line.
 
 ```landin
 --( [0020] Block comment. Nests properly.
@@ -110,45 +115,56 @@ appears in a program: the marker is the comment.
 )--
 ```
 
-### [0030] Doc comment. Attaches to the declaration that follows
+Because block comments nest, you can comment out a region that already
+contains one. A block comment that is never closed runs to the end of the
+file, and the compiler reports it there.
+
+### [0030] Doc comments
+
+`---` starts a doc comment, which documents the declaration on the next
+line.
 
 ```landin
 --- [0030] Doc comment. Attaches to the declaration that follows.
 ```
 
+A doc comment changes nothing about what the program means. Which lines
+count as a declaration's doc comment is in `spec.md` [2000].
+
 ## DECLARATIONS
 
-### [0040] Full form: name, type, value
+### [0040] Declaring a name
 
-Full form: name, type, value. Immutable by default.
+A declaration gives a name, a type and a value, in that order. It is
+immutable unless you say otherwise.
 
 ```landin
 greeting: utf8 = "hello"
 ```
 
-### [0050] Type inferred from the value
+### [0050] Letting the type come from the value
 
-Type inferred from the value.
+Leave out the type and write `:=`, and the name takes the type of its
+value.
 
 ```landin
 count := 7
 ```
 
-### [0060] Mutable binding
+### [0060] Mutable variables
 
-Mutable binding.
+`mut` makes a binding you can assign again.
 
 ```landin
 mut total: u32 = 0
 ```
 
-### [0070] Two questions about a reference
+### [0070] Two separate questions about a reference
 
-Two questions about a reference, and they are independent:
-may the name be pointed somewhere else, and may the thing it
-points at be written? mut on the binding answers the first.
-The type answers the second, with mut inside it, as the
-POINTERS section shows — and nothing else answers either.
+A reference raises two independent questions. May the name be pointed
+somewhere else? `mut` on the binding answers that. May the thing it points
+at be written? `mut` inside the type answers that ([0430]). Nothing else
+answers either.
 
 ```landin
 mut cursor: ptr u32 = addr first -- re-pointable, reads
@@ -156,45 +172,41 @@ knob: ptr mut u32 = addr setting -- fixed, writes
 gpioa: ptr mut u32 = ptr(0x4002_0000) -- fixed, writes
 ```
 
-### [0080] Declaration only
+### [0080] Declaring now, assigning later
 
-Declaration only. Must be assigned before use.
+A declaration may leave out the value. The name must then be assigned
+before anything reads it.
 
 ```landin
 mut result: u32
 ```
 
-### [0090] Exported from the module
+### [0090] Making a name public
 
-Exported from the module. Without it, module-internal.
+`public` exports a name to other modules. Without it, the name is private
+to its module.
 
 ```landin
 public version: u32 = 3
 ```
 
-`public` exports a name to other modules, not to the linker. A public
-routine or datum is a symbol local to the program's image under its own
-name, so no C library or linked object can collide with it; what C or a
-linker reaches is named for it, as [1600] and [1610] show and [1975]
-states.
+`public` is about modules, not the linker. A public routine or datum is
+still a local symbol inside the program's image, so no C library or linked
+object can collide with it. To give C or the linker a name, see [1600] and
+[1610]; `spec.md` [1975] states the rule.
 
-### [0100] Several names may share one declaration
+### [0100] Several names in one declaration
 
-Several names may share one declaration, which is the same
-form field lists already use.
+Several names may share one declaration, as fields in a struct already do.
 
 ```landin
 public red, green, blue: u8
 north, south, east, west: atom
 ```
 
-It means the declarations written one per name, in order: each name gets its
-own storage and everything written around the list — `mut`, `public`, a
-parameter convention, `at` or `from`. A shared initializer runs once, for the
-first name, and the others start as copies of it. A shared declaration needs a
-written type, because `low, high := bounds()` would read as a destructuring
-[1810]. Type declarations, functions, type and fixed formals, variant parts and
-condition bindings keep one name each (D233).
+It means the same declarations written one per name, in order. Each name
+gets its own storage and everything written around the list: `mut`,
+`public`, a parameter convention, `at` or `from`.
 
 ```landin
 mut low, high: u32 = next_seed() -- one call; high starts equal to low
@@ -211,26 +223,32 @@ clamp: (inout low, high: i32, value: i32) -> (result: i32) =
 end clamp
 ```
 
-### [0110] Left of ':' is always the name being introduced
+A shared value is computed once, for the first name, and the other names
+start as copies of it. The shared form needs a written type, because
+`low, high := bounds()` would read as destructuring ([1810]). Type
+declarations, functions, type and fixed formals, variant parts and
+condition bindings take one name each. The details are in `spec.md` (D233).
 
-Left of ':' is always the name being introduced.
-Right of ':' is what fills it: a type, or (with '=') a value.
+### [0110] The name is always on the left
 
-In a local declaration, both the written type and the initializer use the
-names visible before that declaration. If an enclosing `t` names a type,
-`mut t: t = value` uses that type and then introduces the local `t`; later
-statements see the local. Condition bindings follow the same rule [1070].
-Module declarations and routine signatures retain their collected scopes
-[0130] [1290].
+Left of `:` is always the name being introduced. Right of `:` is what
+fills it: a type, or, with `=`, a value.
 
-Control words are reserved in every name position [1760]. Names such as
-`begin`, `match`, `loop`, `break` and `unchecked` cannot be variables,
-parameters, fields or labels. `begin = 10` is invalid; use a name such as
-`begin_value` instead. Parentheses do not turn a keyword into a name.
+In a local declaration, the written type and the value both see only the
+names visible before the declaration. If an outer `t` names a type,
+`mut t: t = value` uses that type and then introduces the local `t`; the
+statements after it see the local. A binding in a condition follows the
+same rule ([1070]). Module declarations and routine signatures see all
+their names at once ([0130], [1290]).
 
-### [0120] Types are declared like any other value, with 'type'
+Control words are reserved everywhere a name could go ([1760]). `begin`,
+`match`, `loop`, `break` and `unchecked` cannot be variables, parameters,
+fields or labels, so `begin = 10` is an error; call it `begin_value`
+instead. Parentheses do not turn a keyword into a name.
 
-Types are declared like any other value, with 'type'.
+### [0120] Declaring a type
+
+A type is declared like any other name, with `type` as its type.
 
 ```landin
 point: type = struct
@@ -239,54 +257,82 @@ point: type = struct
 end point
 ```
 
-### [0130] Module names do not depend on declaration order
+### [0130] Order does not matter in a module
 
-Declaration order does not affect name lookup inside a module. Forward
-references are fine; the compiler collects names before resolving them.
-Active `linker.library` directives retain their source order for linking
-[1590].
+Inside a module, you may use a name above the line that declares it. The
+compiler collects every name before resolving any.
 
-### [0140] An inner scope may shadow an outer name
+```landin
+twice_answer: () -> (n: i32) =
+    n = 2 * answer_value -- answer_value is declared below
+end twice_answer
 
-An inner scope may shadow an outer name.
+answer_value: i32 = 21
+```
+
+The one exception is `linker.library` directives, which keep their source
+order for linking ([1590]).
+
+### [0140] Shadowing
+
+A name in an inner scope may hide the same name from an outer one.
+
+```landin
+step_limit: u32 = 100
+
+shadow_demo: (extra: u32) -> (result: u32) =
+    result = step_limit
+    begin
+        step_limit := extra -- a new local; the module's step_limit is untouched
+        result += step_limit
+    end
+end shadow_demo
+```
+
+Two declarations of one name in the same scope are an error ([1850]).
 
 ## NUMBERS AND LITERALS
 
-### [0150] Integers: u8 u16 u32 u64, i8 i16 i32 i64
+### [0150] Integer types
 
-Integers: u8 u16 u32 u64, i8 i16 i32 i64.
-u128 and i128 are not in this version. No derived program needed them, and
-no target here carries them natively: Cortex-M0 would hold one in four words
-with no runtime helper for its multiplication or division, and its C
-toolchain refuses the type outright. The Language evolution successor roadmap owns them, and a program
-that needs 128-bit arithmetic is what brings them back (D237).
-Any other width exists as well — u4, u12, u23 — for the
-packed fields of [0730], where the datasheet decides how
-many bits a thing gets. D228 admits u1 through u64 only in packed field
-positions; extracting one produces the next enabled machine width. A flag
-is spelt bool. A numeric one-bit field may be spelt u1 and produces u8
-values 0 or 1; it does not acquire implicit boolean conversions.
+The integer types are `u8`, `u16`, `u32` and `u64`, and the signed `i8`,
+`i16`, `i32` and `i64`.
 
-### [0160] Pointer-width integers: usize, isize
+There is no `u128` or `i128` in this version. No program has needed them
+yet, and none of the targets has them natively: on Cortex-M0 one would take
+four words with no runtime help for multiplying or dividing. They belong to
+the Language evolution roadmap, and a program that needs 128-bit arithmetic
+is what brings them back (D237).
 
-Pointer-width integers: usize, isize.
+Any other width, such as `u4`, `u12` or `u23`, exists only for the packed
+register fields of [0730], where the datasheet decides how many bits a
+thing gets. Widths `u1` through `u64` are allowed there and nowhere else
+(D228). Reading such a field gives you the next ordinary width up. A flag is
+spelt `bool`; a field spelt `u1` is a number, reads as a `u8` holding 0 or
+1, and does not convert to or from `bool` on its own.
 
-### [0170] Floating point: f32, f64
+### [0160] Pointer-sized integers
 
-Floating point: f32, f64. No f80.
-f16 is not in this version either. Neither baseline x86-64 nor Cortex-M0 has
-a binary16 instruction, and adding the width would turn converting an integer
-to a float from a conversion that cannot overflow into one that traps [0700].
-Language evolution owns it with the same kind of trigger (D237).
+`usize` and `isize` are as wide as a pointer on the target.
 
-### [0180] bool, with true and false
+### [0170] Floating point
 
-bool, with true and false.
+The float types are `f32` and `f64`. There is no `f80`.
 
-### [0190] Integer literals are untyped
+There is no `f16` in this version either. Neither baseline x86-64 nor
+Cortex-M0 has a half-precision instruction, and with `f16` converting an
+integer to a float could overflow and trap, where today it cannot ([0700]).
+Like the 128-bit integers, it belongs to Language evolution and comes back
+when a program needs it (D237).
 
-Integer literals are untyped. They take the type of their
-context, and are checked at that point.
+### [0180] Booleans
+
+`bool` holds `true` or `false`.
+
+### [0190] Integer literals take their type from where they are used
+
+An integer literal has no type of its own. It takes the type its context
+expects, and the compiler checks that it fits.
 
 ```landin
 tiny: u8 = 5
@@ -294,18 +340,20 @@ large: u64 = 5
 -- bad: u8 = 300      is a compile error
 ```
 
-### [0200] With no context, an integer literal defaults to i32
+`spec.md` [1880] says exactly what counts as a context.
 
-With no context, an integer literal defaults to i32.
+### [0200] With no context, an integer is an `i32`
+
+When nothing says what type an integer literal should be, it is an `i32`.
 
 ```landin
 plain := 5
 ```
 
-### [0210] Float literals are always recognisable as such
+### [0210] Float literals always have a point
 
-Float literals are always recognisable as such. There is no
-silent slide between the two classes.
+A float literal always looks like one, so an integer never quietly becomes
+a float or the other way round.
 
 ```landin
 ratio: f32 = 5.0
@@ -314,15 +362,10 @@ half := 1.0 / 2.0 -- 0.5
 zero := 1 / 2 -- 0, integer division
 ```
 
-### [0220] Bases, separators, exponents
+### [0220] Bases, separators and exponents
 
-Bases, separators, exponents. An integer starts and ends its digit run
-with a digit of that base. Underscores may repeat between digits, as in
-`1__000`; a base prefix alone and a trailing underscore are refused.
-Each float component follows that digit-run rule too: both sides of the dot
-and a written exponent need digits, with underscores only between digits.
-A number has no suffix: a letter directly after one is part of it, so
-`1u64` is refused and the type goes on the binding, as in `mask: u64 = 1`.
+Integers may be written in hex, binary or octal, and long numbers may use
+`_` to group digits.
 
 ```landin
 hex_value := 0xDEAD_BEEF
@@ -333,10 +376,20 @@ sci_value := 1.5e10
 neg_exp := 1.0e-6
 ```
 
-### [0230] Hex float literals express every representable value exactly
+The fine print:
 
-Hex float literals express every representable value exactly,
-including subnormals.
+- A digit run starts and ends with a digit of its base. Underscores go only
+  between digits, and may repeat, as in `1__000`.
+- A base prefix alone, such as `0x`, and a trailing underscore are errors.
+- In a float, both sides of the point and a written exponent need digits,
+  with the same underscore rule.
+- A number has no suffix. A letter directly after one is part of it, so
+  `1u64` is an error: put the type on the binding, as in `mask: u64 = 1`
+  (`spec.md` D245).
+
+### [0230] Hex floats, for exact values
+
+A hex float literal states a float's bits exactly, subnormals included.
 
 ```landin
 pi_exact: f64 = 0x1.921fb54442d18p+1
@@ -344,11 +397,10 @@ smallest_subnormal: f32 = 0x1.0p-149
 smallest_normal: f32 = 0x1.0p-126
 ```
 
-### [0240] IEEE special values
+### [0240] Infinity, NaN and negative zero
 
-IEEE special values. The sign of a literal is preserved by
-constant folding. The sign of a NaN produced by arithmetic
-is not specified.
+The IEEE special values are named values of the float types, and unary
+minus gives their negative forms.
 
 ```landin
 neg_zero: f64 = -0.0
@@ -358,47 +410,49 @@ quiet_nan: f64 = f64.nan
 neg_nan: f64 = -f64.nan
 ```
 
-### [0250] Character literal is a codepoint, typed u32
+Constant folding keeps a literal's sign. The sign of a NaN that arithmetic
+produces is not specified.
 
-Character literal is a codepoint, typed u32.
+### [0250] Character literals
+
+A character literal is one Unicode code point, and its type is `u32`.
 
 ```landin
 letter_a := 'a'
 ```
 
-### [0260] Text literals are untyped too
+### [0260] Text literals take their type from where they are used
 
-Text literals are untyped too. They take utf8, []u8, utf16
-or cstring from context; with no context, utf8.
-Every literal carries a trailing NUL that the length does
-not count, so passing one to C costs nothing.
+Like integers, a text literal takes its type from its context: `utf8`,
+`[]u8`, `utf16` or `cstring`. With no context, it is `utf8`.
 
 ```landin
 name: utf8 = "hello"
 cname: cstring = "hello"
 ```
 
-A literal lives in read-only storage, so a reference to one
-cannot be written through by [0070] however the binding is
-declared. Writable text is a copy into storage you asked
-for.
+Every text literal ends with a NUL byte that its length does not count, so
+passing one to C costs nothing.
+
+A literal lives in read-only storage, so you can never write through a
+reference to one, however the binding is declared ([0070]). For writable
+text, copy it into storage you asked for.
 
 ```landin
 -- greeting: []u8 = "abc"
 -- greeting[0] = 0x78          -- error, the literal is static
 ```
 
-### [0270] The escape set is closed and small
+### [0270] Escapes
 
-The escape set is closed and small:
-  \n \r \t \e      newline, return, tab, escape
-  \\ \" \'         the characters themselves
-  \xNN             one byte, exactly two hex digits
-  \u{...}          one codepoint, any number of digits
-There is no octal form and no \0; write \x00. An unknown
-escape is a compile error, never silently the character.
-\xNN is only valid where bytes are meant, \u{...} only where
-text is meant, so a literal can never be invalid UTF-8.
+A backslash starts an escape. The set is small and closed:
+
+| escape | means |
+|---|---|
+| `\n` `\r` `\t` `\e` | newline, carriage return, tab, escape |
+| `\\` `\"` `\'` | the character itself |
+| `\xNN` | one byte, exactly two hex digits |
+| `\u{...}` | one code point, any number of hex digits |
 
 ```landin
 line := "col\tsep\n"
@@ -406,17 +460,15 @@ smile := "\u{1F600}"
 byte: []u8 = "\xFF" -- byte escapes require []u8 context
 ```
 
-### [0280] Raw literals: N quotes on each side, N at least three
+There is no octal escape and no `\0`; write `\x00`. An unknown escape is a
+compile error, never silently the character. `\xNN` is allowed only where
+bytes are meant, in a `[]u8`, and `\u{...}` only where text is meant, so a
+text literal can never hold invalid UTF-8.
 
-Raw literals: N quotes on each side, N at least three.
-If the content contains three, use four. Nothing is escaped.
-The entire opening quote run chooses N. Six adjacent quotes are one opener
-of length six, not an empty literal with two delimiters. A later matching
-closer is required. Line endings inside remain content; write `""` for empty
-text.
-The indentation of the closing delimiter is stripped from
-every line, so a block can sit indented in the code and
-still start at the left margin.
+### [0280] Raw text literals
+
+A raw literal sits between runs of at least three quotes, and nothing in
+it is escaped. If the text itself contains three quotes in a row, use four.
 
 ```landin
 help := """
@@ -425,13 +477,16 @@ help := """
         """
 ```
 
-Every line end between the quotes is content, the one just after the opening
-quotes and the one before a closer on a line of its own among them, so `help`
-begins with a line end and ends with one:
-`"\nusage: tool [options]\n  -v    verbose\n"`. Text that should begin with
-its first line, as an expected output usually should, begins on the opener's
-line; nothing is stripped from that line, and the closer's indentation is
-still stripped from the lines after it.
+The closing quotes' indentation is stripped from every line, so the block
+can sit indented in your code and still start at the left margin.
+
+Every line end between the quotes is part of the text, including the one
+just after the opening quotes and the one before a closer on its own line.
+So `help` begins and ends with a line end:
+`"\nusage: tool [options]\n  -v    verbose\n"`. For text that should start
+with its first line, as expected output usually should, start it on the
+opener's line. Nothing is stripped from that line, and the closer's
+indentation is still stripped from the lines after it.
 
 ```landin
 expected := """usage: tool [options]
@@ -439,44 +494,43 @@ expected := """usage: tool [options]
             """
 ```
 
+The fine print:
+
+- The whole opening run of quotes sets the count. Six quotes in a row are
+  one opener of six, not an empty literal, and a matching closer must
+  follow later.
+- For empty text, write `""`.
+
 ## OPERATORS
 
 ### [0290] Arithmetic
 
-Arithmetic: + - * / %
-Integer division truncates toward zero; the remainder takes
-the sign of the dividend.
+The arithmetic operators are `+`, `-`, `*`, `/` and `%`. Integer division
+truncates toward zero, and the remainder takes the sign of the dividend, as
+in C.
 
 ```landin
 q := -7 / 2 -- -3
 r := -7 % 2 -- -1
 ```
 
-### [0300] Overflow traps
+### [0300] Overflow traps; wrapping is a separate operator
 
-Overflow traps. Wrapping is a separate operator: +% -% *%
+Integer overflow traps. When you want wrap-around, say so with `+%`, `-%`
+or `*%`.
 
-### [0310] No implicit conversion
+```landin
+wrap_demo: () -> (ticks: u8) =
+    ticks = 255
+    ticks +%= 1 -- wraps to 0
+end wrap_demo
+```
 
-No implicit conversion. Conversion is a type applied to a
-value. If the value is known at compile time, an impossible
-conversion is a compile error; otherwise it traps.
+### [0310] Conversions are written out
 
-The type may be written directly, so `[]u8(text)` gives a `utf8` value's
-immutable byte view without first declaring an alias for `[]u8`. The same
-conversions, identity checks and source origins apply with either spelling.
-A written type introduces no implicit conversion or additional conversion
-between representations.
-Type prefixes nest as they do in declarations: `[][2]u8(value)` applies a
-slice of two-byte arrays, and `tag(u32, 7)(value)` applies a fully specified
-parameterized type. The final parentheses hold one value. Bind the result
-before indexing, selecting a field or calling an extracted function, as with
-an ordinary call result.
-
-`ptr(address)` still takes its complete pointer type from context [0470].
-`ptr u8(value)` instead applies the written type `ptr u8`, as an alias for
-that type would; it can extract the exact pointer base of a distinct value
-[0650], but does not convert an integer to a pointer.
+Nothing converts implicitly. To convert, apply the type to the value, like
+a call. If the value is known at compile time, an impossible conversion is a
+compile error; otherwise it traps at run time.
 
 ```landin
 -- bad: u8 = u8(300)        compile error
@@ -484,28 +538,49 @@ runtime_narrow := u8(measured) -- traps if out of range
 text_bytes: []u8 = []u8(text) -- keeps text's storage and origin
 ```
 
-### [0320] Shifts fill with zeros beyond the width, for any amount
+You can write the type directly, as `[]u8(text)` does here, rather than
+declaring an alias for it first. Either spelling means the same conversion.
+Type prefixes nest as they do in declarations: `[][2]u8(value)` converts to
+a slice of two-byte arrays, and `tag(u32, 7)(value)` to a parameterized
+type with every parameter given. The last parentheses hold the one value.
+As with a call result, bind the result before you index it, select a field
+or call it.
 
-Shifts fill with zeros beyond the width, for any amount.
-Signed >> keeps the sign. One form only.
+`ptr(address)` still takes its pointer type from the declaration ([0460]).
+`ptr u8(value)` is different: it applies the type `ptr u8`, and can take
+the pointer out of a distinct type ([0650]), but it does not turn an
+integer into a pointer. The details are in `spec.md` (D266).
+
+### [0320] Shifts
+
+`<<` and `>>` shift, and any amount is allowed. Bits shifted out are gone
+and zeros come in. A signed `>>` keeps the sign while the amount is inside
+the width. At or past the width every shift gives zero, signed `>>`
+included, so the amount never wraps around (`spec.md` D13). There is one
+form of each.
 
 ```landin
 z: u32 = 1 << 40 -- 0 in a u32 context
 ```
 
-### [0330] Bitwise
+The amount has the same type as the value being shifted. A negative amount
+is refused when the compiler knows it and traps when it does not
+(`spec.md` D6, D9).
 
-Bitwise: & | ^ ~ << >>
-These bind TIGHTER than comparisons, unlike C.
+### [0330] Bitwise operators
+
+The bitwise operators are `&`, `|`, `^`, `~`, `<<` and `>>`. Unlike in C,
+they bind tighter than comparisons, so the usual mask test needs no
+parentheses.
 
 ```landin
 flag := status & 1 == 0 -- means (status & 1) == 0
 ```
 
-### [0340] Logical: and, or, not
+### [0340] Logical operators
 
-Logical: and, or, not. Words, so '!' stays free for the
-error channel.
+The logical operators are words: `and`, `or` and `not`. That leaves `!`
+free for errors.
 
 ```landin
 ok := a < b and not done
@@ -513,30 +588,32 @@ ok := a < b and not done
 
 ### [0350] Comparison
 
-Comparison: == <> < <= > >=
-Inequality is <>, not !=.
+The comparisons are `==`, `<>`, `<`, `<=`, `>` and `>=`. Inequality is
+`<>`, not `!=`. Comparisons do not chain ([1820]).
 
 ### [0360] Ranges
 
-Integer range traversal is written in a `for` header:
-`for i in 0..9 do` includes 9; `for i in 0..<10 do` excludes 10.
-The same bounds spellings select a slice, as in `items[0..<10]`.
-They do not construct a value: `0..<10` cannot be stored, passed, or
-returned on its own. Left-exclusive forms are gone; a library can supply
-custom stepping through an iterable value [1330].
+A range is written in a `for` header or a slice: `0..9` includes 9, and
+`0..<10` stops before 10.
 
-### [0370] sizeof, alignof and lenof
+```landin
+digit_sum: () -> (total: i32) =
+    total = 0
+    for i in 0..9 do
+        total += i
+    end for
+end digit_sum
+```
 
-sizeof, alignof and lenof.
-On an array the length is a compile-time value; on a slice
-it is a run-time value; on a literal it is compile-time.
-The expressions in a literal measured by lenof are checked for one
-scalar element type but are not evaluated or read.
-lenof measures a name, a field or element through it, or what a call
-returns. A call runs; an array a name or a path reaches is not read,
-because its type holds its length.
-offsetof measures where a field of a struct type begins, in bytes and
-through nested structs; like lenof, the word is a name everywhere else.
+The same bounds select part of a slice, as in `items[0..<10]`. A range is
+not a value: you cannot store, pass or return `0..<10` on its own. There is
+no form that excludes the left end. For custom stepping, a library supplies
+an iterable value ([1330]).
+
+### [0370] `sizeof`, `alignof`, `lenof` and `offsetof`
+
+These four measure things: the size of a type, its alignment, a length,
+and where a struct field begins.
 
 ```landin
 w1 := sizeof u32
@@ -548,21 +625,37 @@ n4 := lenof read_all(source) -- read_all is called
 o1 := offsetof packet.id -- 4: one byte of padding after kind
 ```
 
-### [0380] addr takes an address
+The fine print:
 
-addr takes an address, .val names the pointee — reading on
-the right of an assignment, written on the left.
+- `lenof` of an array or a literal is a compile-time value; of a slice it is
+  a run-time value.
+- `lenof` measures a name, a field or element reached through it, or what a
+  call returns. The call runs, but an array that a name or path reaches is
+  not read, because its type holds its length.
+- In a literal measured by `lenof`, the elements are checked to have one
+  scalar type, but they are not evaluated.
+- `offsetof` gives a field's offset from the start of its struct type in
+  bytes, through nested structs.
+- `lenof` and `offsetof` are not reserved: everywhere else, they are
+  ordinary names.
+
+### [0380] `addr` and `.val`
+
+`addr` takes an address, and `.val` is the thing a pointer points at:
+read on the right of an assignment, written on the left. [0430] shows
+both.
 
 ### [0390] Assignment is a statement
 
-Assignment is a statement, never an expression:
-=  +=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=
-and the wrapping forms  +%=  -%=  *%=
+Assignment is a statement, never an expression, so it cannot hide inside a
+condition. The assignment operators are `=`, `+=`, `-=`, `*=`, `/=`, `%=`,
+`&=`, `|=`, `^=`, `<<=` and `>>=`, plus the wrapping `+%=`, `-%=` and
+`*%=`.
 
 ### [0400] No `++` and no `--`
 
-No `++` and no `--`. There are inc and dec statements, though
-`x += 1` says the same thing.
+There is no `++` or `--`. The statements `inc` and `dec` do the job,
+though `x += 1` says the same thing.
 
 ```landin
 inc total
@@ -571,23 +664,2114 @@ dec total
 
 ### [0410] Evaluation order is fixed
 
-Evaluation order is fixed, because a language whose point
-is that costs are visible cannot leave where they happen to
-the compiler. Operands and call arguments evaluate left to
-right. Aggregate fields initialise in the order they are
-written, whatever order the layout puts them in. 'and' and
-'or' short-circuit, left to right. An assignment evaluates
-its destination place first, then the value.
-A deferred call is the one thing that does not evaluate
-where it is written, and [1100] says when it does instead.
+Landin fixes the order in which things are evaluated, so you can see where
+costs happen:
 
-### [0420] The dot is not only field access
+- operands and call arguments, left to right;
+- a struct's fields, in the order you write them, whatever order the layout
+  puts them in;
+- `and` and `or`, left to right, stopping as soon as the answer is known;
+- an assignment, its destination first, then the value.
 
-The dot is not only field access. All of these are member
-selection: p.val (pointer target), `t.less` (concept entry),
-http.get (module member), f64.nan (named value of a type).
-Separate tokens: .. (range), ... (inferred error set), and
-the decimal point.
+A deferred call is the one thing not evaluated where it is written; [1100]
+says when it runs.
+
+### [0420] What the dot means
+
+The dot always selects a member of something:
+
+| example | selects |
+|---|---|
+| `p.val` | what a pointer points at |
+| `t.less` | an entry of a concept |
+| `http.get` | a member of a module |
+| `f64.nan` | a named value of a type |
+
+The tokens `..` (a range), `...` (an inferred error set) and the decimal
+point are separate things.
+
+## FUNCTIONS
+
+### [0870] Declaring a function
+
+A function is a name bound to a value of a function type. There is no `fn`
+keyword: `=` opens the body and `end` closes it, always.
+
+```landin
+double: (x: i32) -> (r: i32) =
+    r = x * 2
+end double
+```
+
+Results have names, like parameters. The body sets `r` by assigning it, and
+whatever `r` holds when the body ends is what the caller gets.
+
+### [0880] One-line functions
+
+When the body is a single expression, write it after `=`. It still takes an
+`end`, and the expression fills the named result.
+
+```landin
+triple_it: (x: i32) -> (r: i32) = x * 3 end
+```
+
+### [0890] Returning nothing, and never returning
+
+`none` means the function returns normally with no value. `noreturn` means
+it never returns at all.
+
+```landin
+log_it: (m: utf8) -> none = end log_it
+halt_it: () -> noreturn = loop do end loop end halt_it
+```
+
+A `noreturn` body has to diverge on every reachable path: an unconditional
+`loop` with no exit, or a call to another `noreturn` function. A conditional
+loop does not count, even if you expect it to run forever. Because the call
+ends the path, a branch that calls `halt_it()` needs no value of its own.
+
+- `noreturn` is part of the function's type: a `() -> none` function cannot
+  stand in for a `() -> noreturn` one, or the other way round.
+- A `noreturn` function declares no errors ([0940]): failing would return
+  to the caller.
+- The call does not unwind `defer` ([1100]). A deferred `noreturn` call
+  stops the cleanup that would follow it, and the original exit.
+- C declarations may use it. Interrupt and naked handlers stay
+  `() -> none`. The full contract is `spec.md` (D231).
+
+### [0920] Several results
+
+A function can hand back several named results.
+
+```landin
+divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
+    quot = a / b
+    rem = a % b
+end divide
+```
+
+Two or more results travel together as one anonymous struct, laid out in the
+order you wrote them. A single result is just its own type, not wrapped.
+
+### [0930] Every result is assigned before returning
+
+Each named result must be assigned on every path that returns. The compiler
+checks this, so there is no "uninitialised return value". A path that fails
+([0940]) need not assign them, and the caller cannot read them then.
+
+### [0990] Using a multiple result
+
+The results of a call form an anonymous struct. Bind it whole and read its
+fields, or take it apart by name, never by position.
+
+```landin
+whole := divide(10, 3)
+sum := whole.quot + whole.rem
+(quot, rem) := divide(10, 3)
+(quot: q2) := divide(20, 3)
+(quot, _) := divide(30, 3)
+```
+
+The call runs once. You can pick names in any order, leave some out, or
+rename one after `:`; `_` says the rest is ignored on purpose. A whole result
+can also be the value of an `if`, `match` or block when every branch gives the
+same names and types.
+
+The names belong to the call, not to the function's type: two function types
+with the same result types in the same order agree whatever the results are
+called ([1000]).
+
+### [0900] Three parameter conventions
+
+A convention says what the function may do with the value you hand it. It is
+about the argument itself, never about what the argument points at: that is
+the pointer type's job ([0450]).
+
+| convention | what it promises |
+| --- | --- |
+| `in` | I will not change the value. The default, unmarked. |
+| `inout` | I may replace it, exclusively, and the change comes back. Implies mut. |
+| `sink` | consumed. The place the caller named is dead afterwards — see [0910], since a place is not always a binding. |
+
+```landin
+process: (source: []u8, inout target: []u8, sink owned: buffer)
+         -> (written: u32) =
+    written = 0
+end process
+```
+
+So a function that writes device registers through a pointer, but never
+re-points it, takes the pointer as `in`, and the `mut` lives in the pointer
+type ([0430]). There is no `out` convention: outputs are named results.
+
+`escaping` is a separate word that can go with any of the three. It says the
+function may keep what a pointer, slice or `any` refers to after the call
+returns, so the caller has to show it lives long enough ([0780]). It is the
+opposite of `sink`: `sink` ends the caller's duty, `escaping` extends it. On a
+generic parameter it says the right thing either way: for `t` = `u32` it asks
+nothing, since a value with no references is unconstrained ([0840]), and for
+`t` = `ptr node` it is exact.
+
+An `inout` argument need not be a binding: a pointer target such as
+`c.inner.val` is fine. One call may not pass the same binding-rooted place to
+two `inout` parameters. Two different pointer or computed-index paths may
+still alias; the compiler cannot see that, and does not promise to ([1720],
+`spec.md` (D149)).
+
+### [0910] `sink` consumes a place
+
+A `sink` argument is a place, and after the call that place is dead until you
+assign it again. A field of a binding is a place, so consuming a container's
+field needs no temporary.
+
+```landin
+consume: (t: type, sink items: []t) -> none = end consume
+
+reset: (t: type, inout l: list(t)) -> none =
+    consume(l.items) -- l.items is dead from here
+    l.items = [] -- and live again from here
+    l.len = 0
+end reset
+```
+
+Reading `l.items` between those two lines is an error. That closes the window
+between releasing storage and repointing the field, which a temporary binding
+would have left open.
+
+The place must be a path from a binding through fields and literal
+fixed-array indexes only:
+
+- `p.val.items` is refused: two pointers may name one place.
+- `xs[i].items` is refused: a computed index names no place in particular.
+- A slice index is refused even when it is a literal, because it reaches
+  through the slice's reference. The slice itself, as a whole, may be sunk.
+
+If you sink a field out of an `inout` parameter, assign it again before the
+function returns, failure paths included, or the caller would get its struct
+back with a dead field. A `defer` or `undo` may do the restoring.
+
+This is a use-after-consume check on one place, not ownership. The value is
+still copyable: a copy made before the sink stays live, and consuming through
+both is not caught.
+
+The fine print, in `spec.md` [1910] and (D223): all arguments are evaluated
+left to right first, and the places are consumed as the call begins. So
+`use(value, value.count)` is fine when `use` sinks its first parameter, and a
+call that never starts consumes nothing. Sinking the same place twice in one
+call, or sinking a place also passed `inout`, is refused. Reading a whole
+struct reads its sunk field too; assigning the whole struct makes the field
+live again.
+
+### [0980] Calling: positional, then named
+
+Arguments are positional first, then named. There are no default values:
+every parameter gets exactly one argument.
+
+```landin
+r1 := divide(10, 3)
+r2 := process(source: src, target: dst, owned: buf)
+```
+
+The positional arguments fill parameters in order; the named ones may come in
+any order after them. An unknown or repeated name is an error. Arguments run
+in the order you wrote them. Named arguments work in a call statement as well
+as in a call expression.
+
+- Calling through a stored function uses the parameter names of that value's
+  type. Those names are not part of function-type identity ([1000]).
+- A generic call may name its compile-time arguments in the same list:
+  `copy(t: u8, n: 4, source: bytes)`. Name one and you name them all
+  ([1290]).
+- A C variadic call adds an unnamed tail ([1580]); it does not add optional
+  parameters.
+
+### [1020] Throwing a result away
+
+Ignoring a result is never silent. Say so with `_ =`.
+
+```landin
+_ = double(5)
+```
+
+A call to a function that returns `none` has nothing to discard, so it is
+written on its own, and `_ =` in front of it is an error ([1930]).
+
+### [1040] Passing the call site: `caller`
+
+A `caller` parameter is filled in by the compiler with where the call was
+written, so assertions and logging need no macros. Its type is a struct of
+exactly these three `u32` fields, in this order:
+
+```landin
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
+assert: (cond: bool, caller where: site) -> none =
+    if not cond then
+        report_failure(where)
+    end if
+end assert
+```
+
+Used as: `assert(count > 0)`.
+
+The caller leaves the parameter out, and inside the function it is an
+ordinary immutable struct you can read, copy and store. It is 12 bytes on
+every target. Line and column count from one. The file number is only a
+number: the table mapping it to a filename is written beside the program and
+need not ship with it, which keeps names out of firmware ([1670]).
+
+A wrapper that wants to report its own caller's position passes its
+`caller` parameter on by name:
+
+```landin
+checked: (cond: bool, caller where: site) -> none =
+    assert(cond, where: where)
+end checked
+```
+
+Leave out `where:` there and the report points at the wrapper's own call
+instead. Only a `caller` parameter can fill a `caller` position: a copied or
+constructed `site` cannot. `spec.md` (D192) has the details.
+
+### [1000] Functions are values
+
+A function type is an ordinary type, written the way a signature is, and a
+function is a value of it: a code address. There is no separate
+function-pointer type, and you never write `addr` on a function.
+
+```landin
+handler: type = () -> none
+mut current: handler = default_handler
+```
+
+Two function types agree by their parameter and result types, in order. The
+names inside them only describe the positions. The comparison is recursive
+when a parameter or result is itself a function. Calling convention and
+variadicness count too: a C callback type is written
+`extern(c) (parameters) -> returns`, and a Landin function never matches it.
+
+A module binding set to a named or anonymous function is a fixed code
+address. A mutable binding may later take any function with the same complete
+signature. A `ptr` to a function type points at a cell holding the address,
+not at the code.
+
+Nothing is captured ([1010]), so a callback is a function and an explicit
+state pointer:
+
+```landin
+on_byte: type = struct
+    call: (state: ptr u8, b: u8) -> none
+    state: ptr u8
+end on_byte
+```
+
+Call it through the field: `callback.call(callback.state, byte)`. The field
+keeps its full signature through every copy, assignment, variant payload and
+array. Whether it may be replaced depends on the binding that holds the
+struct. The callee is evaluated before the arguments.
+
+### [1010] Anonymous functions
+
+An anonymous function is a signature and body without a name. It captures
+nothing: inside, it sees module declarations and its own parameters, results
+and locals, but none of the enclosing function's.
+
+```landin
+less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
+```
+
+Writing one makes a fixed code address; it does not run the body. State
+travels as an explicit parameter, as in [1000]'s callback.
+
+## CONTROL FLOW
+
+Every construct opens with its own word and closes with `end`, so you never
+count braces. The short snippets in this section are statements inside a
+routine with a parameter `x: i32`, a slice `items: []i32` and a result
+`out: i32`.
+
+### [1050] Branching with `if`
+
+`if` takes a condition of type `bool`, and `then` closes it. No integer or
+pointer stands in for a `bool`. `elsif` and `else` are optional, and
+`end if` closes the whole thing.
+
+```landin
+    if x > 0 then
+        out = 1
+    elsif x < 0 then
+        out = -1
+    else
+        out = 0
+    end if
+```
+
+### [1060] Every construct fits on one line
+
+No construct needs a newline: `end` is what closes it, so any of them can be
+written on one line.
+
+```landin
+    if x > 0 then out = 1 end if
+```
+
+`refine fmt` leaves a one-line form on one line; it never joins or breaks
+lines.
+
+### [1070] Declaring a name in a condition
+
+An `if`, `elsif` or `while` condition may declare a binding, inferred or
+with a written type. The binding's value is the condition, so it must be a
+`bool`; anything else is an ordinary type error.
+
+```landin
+    if ok := is_ready() then
+        out = 1
+    end if
+
+    while mut more: bool = has_more() do
+        consume_next()
+        more = false
+    end while
+```
+
+The name exists only in the body that condition guards: not in a later
+`elsif`, the `else`, a loop's `complete`, or after the construct. Its
+initializer runs before the name exists, so it cannot refer to itself, and
+a `while` runs the initializer again before every iteration (D185).
+
+### [1080] Blocks have values
+
+`if`, `match`, bare blocks and loops are expressions as well as statements.
+The value is the last expression of the block that ran.
+
+```landin
+    sign := if x > 0 then 1 else -1 end if
+
+    doubled := begin
+        a := expensive()
+        a * 2
+    end
+```
+
+Rust needs a semicolon to tell a block's value from a statement. Landin
+does not: throwing a value away is always written `_ =` ([1020]), so a bare
+expression at the end of a block can only be its value.
+
+- Every arm that falls through must end with a value of one complete type
+  and shape. An `if` used as a value therefore needs its `else`.
+- An arm that leaves by `return`, `fail`, `break` or `continue` supplies no
+  value and needs no placeholder.
+- Only arms that fall through count when the compiler decides whether a
+  name is assigned after the construct. An arm that has left proves
+  nothing for the others.
+- Statements and the final expression run in source order, after the `if`
+  condition or `match` subject, and only in the selected arm.
+- Used as a statement, an arm may not end with a value: nothing would take
+  it.
+
+`spec.md` (D124) has the details.
+
+### [1090] Bare blocks: `begin ... end`
+
+`begin ... end` opens a scope: names declared inside are gone after its
+`end`.
+
+```landin
+    begin
+        tmp := x * 2
+        out = out + tmp
+    end
+```
+
+With a label, `name: begin ... end name`, a `break name` can leave the block
+early, and its cleanups run as a loop's do ([1180]).
+
+### [0940] Errors: what can fail is in the signature
+
+A routine that can fail lists, after `!`, the atoms it can fail with, and
+`fail` leaves with one of them. An atom is a declared name that is its own
+value, such as `port_zero: atom` ([0630]). A caller cannot ignore a failure:
+every call to a failing routine is either passed on or handled.
+
+Here is all of it at once. `port_from` reads a port number with the
+library's `text.to_u32`, which fails on bad digits, and adds a failure of
+its own. Its callers then deal with the result in two different ways:
+
+```landin
+import core/text
+
+port_zero: atom
+
+port_from: (digits: utf8)
+           -> (port: u32)
+           ! text.invalid_number | text.number_overflow | port_zero =
+    port = try text.to_u32(digits)
+    fail port_zero when port == 0
+end port_from
+
+listen_port: (setting: utf8) -> (port: u32) =
+    port = port_from(setting) else 8080
+end listen_port
+
+port_or_complaint: (setting: utf8) -> (port: u32, complaint: utf8) =
+    complaint = ""
+    port = port_from(setting) else (problem)
+        match problem
+            port_zero: complaint = "port 0 is reserved"
+            _: complaint = "not a port number"
+        end match
+        8080
+    end
+end port_or_complaint
+```
+
+- `try` passes a failure on: if `text.to_u32` fails, `port_from` fails
+  with the same atom, which is why its `!` lists them ([0960]).
+- `listen_port` cannot fail. Whatever went wrong, 8080 stands in for the
+  result.
+- `port_or_complaint` binds the atom to `problem`, looks at it, and ends
+  the block with the value that stands in ([1030]).
+
+Those are the four ways to call something that can fail:
+
+| you write | when the call fails |
+|---|---|
+| `try f()` | your routine fails with the same atom |
+| `f() else value` | `value` stands in for the result |
+| `f() else (e) ... end` | the block runs with the atom bound to `e` |
+| `f() else none` | nothing; the next statement runs |
+
+A shorter declaration, which the next entries use:
+
+```landin
+open_file: (path: utf8) -> (handle: u32) ! not_found | no_access =
+    fail no_access when lenof path == 0
+    handle = 1
+end open_file
+```
+
+An error set is a set: aliases flatten, order does not matter, and a
+routine that fails with `a` passes where `a | b` is expected. The atoms
+carry no payload. They travel in a register of their own, so failing costs
+about what returning does ([1980] has the x86-64 convention).
+
+### [0960] Passing a failure on: `try`
+
+`try f()` calls `f`, and if it fails, your routine fails with the same
+atom after running its cleanups ([1100]). Every atom you might pass on must
+be in your own `!` set. The `try` sits at the call, so you can see in the
+source every place a routine may leave early.
+
+```landin
+read_config: (path: utf8) -> (data: []u8) ! ... =
+    h := try open_file(path)
+    data = []
+end read_config
+```
+
+`! ...` means "whatever my callees can fail with": the compiler works the
+set out from every `fail` and `try` in the body. It is a convenience inside
+a module, where the compiler sees every caller anyway. Anything public must
+write its set out, because a public signature is a promise, and a change
+three modules down must not rewrite it silently. So must function types,
+anonymous functions, concept entries ([1260]) and anything exported to C,
+because their complete signature is their type.
+
+An inferred set that comes out empty means the routine cannot fail.
+`spec.md` [1980] has the inference rules, including mutual recursion and
+generic routines (D215).
+
+`try for item in source do ... end for` passes on a failure from any
+traversal step ([1150]). The enclosing routine must declare or infer the
+atoms, and its caller handles them with the ordinary `else` on that call.
+
+### [1030] Handling a failure: `else`
+
+An `else` after a call handles its failure on the spot. The handler either
+supplies a value in place of the result, or leaves: `return`, `fail`,
+`break` or `continue`.
+
+```landin
+h1 := open_file(path) else 0
+h2 := open_file(path) else (e) fail e end
+h3 := open_file(path) else (e)
+    match e
+        not_found: create(path)
+        _: fail e
+    end match
+end
+```
+
+`try f()` is short for the second line. A handler that leaves needs no
+value, the same rule an arm of an `if` follows ([1080]), so nobody invents
+a placeholder to satisfy the type. The handler supplies the value; it does
+not assign the binding being initialized.
+
+- `else (e)` binds the atom. `e` has the call's whole error set and exists
+  only inside the block. A `match` on it must cover every atom, or end
+  with one `_` arm for the rest ([1210]).
+- A handler that runs statements must name the atom, `else (problem)`,
+  even if it never reads it.
+- On a call that returns nothing, there is no value to supply: the block
+  only handles the error, and the statement after the call runs next.
+- The result may have any shape, from a scalar to a struct or several
+  named results ([1980]).
+
+Inside an `if` arm, `else value` after a call is the `if`'s own `else`,
+which is how `if c then a() else b() end if` reads. To handle the call's
+failure there, parenthesize it, `(open_file(path) else 0)`, or bind the
+error: `else (e)` always belongs to the call, wherever it is written.
+
+Being an expression, a handled call also works as an argument:
+
+```landin
+use(read_config(path) else (e) default_config() end)
+```
+
+A failing call needs `try` or `else` even when you throw its result away.
+`else` handles only declared failure: a result that is a union, such as
+[0480]'s maybe-pointer, is taken apart with `match`.
+
+A call that returns nothing, and whose failure does not matter where it is
+made, says so in one word:
+
+```landin
+flush(out) else none
+```
+
+`else none` is the bound block with nothing in it, minus the name nobody
+would read: what the call did before it failed stays done, and the next
+statement runs. A call that returns a value takes it only when the call is
+all a discard throws away, because a failure is never ignored by leaving a
+result unset that something reads (D376, D406):
+
+```landin
+_ = parse_header(input) else none
+```
+
+Used any other way, that call needs `else value`, a block, or `try`.
+
+### [0970] Leaving early: `return` and `fail`
+
+`return` leaves the routine with its named results as they stand, and
+`fail` leaves with an error. Each takes an optional `when condition`.
+
+```landin
+clamp_low: (x: i32, floor: i32) -> (r: i32) =
+    r = floor
+    return when x < floor
+    r = x
+end clamp_low
+```
+
+Only exits take `when`: `return`, `fail`, `break` and `continue` ([1810]).
+
+### [0950] What deserves an error, and what does not
+
+Ask whether the problem can be determined from what you already hold. If it
+can, check for it, and where you can, work around it rather than reporting
+it. `fail` is for what cannot be foreseen, or cannot be dealt with where it
+happens.
+
+- A syntax mistake is entirely in the bytes the parser is looking at, so
+  the parser checks it, reports it and carries on. A parser that stops at
+  the first mistake hides the other twelve.
+- Out of memory, a missing file, an unplugged device: these depend on the
+  world, not on your data, and checking first would only be a race. That
+  is what `fail` is for.
+
+Reporting needs somewhere to report to, and that is an ordinary parameter.
+A diagnostics sink is a capability ([1680]): passing one makes the
+destination explicit. The parameter list alone does not prove that the
+routine cannot make another sink or reach the host.
+
+```landin
+parse: (src: utf8, inout d: diagnostics)
+       -> (tree: ptr node) ! out_of_memory | too_deep =
+    tree = try statements(src, d)
+end parse
+```
+
+The library's sink is `core/diag.log`, whose `note` entry takes a byte
+position, a severity and the message bytes, and declares `io_failed`.
+
+- A bounded logger never fails. When it is full it stops keeping entries,
+  counts them in `dropped`, and still records whether an error was
+  reported.
+- A streaming logger writes as it goes, and fails with `io_failed` when a
+  write does.
+- Both pass as `any diag.log`, so the producer does not know which policy
+  its caller chose.
+
+### [1100] Cleanup on the way out: `defer`
+
+`defer call` runs the call when its block is left: by falling off the end,
+`return`, `break`, `continue` or a failure. Entries run in reverse order,
+inner blocks before outer ones.
+
+```landin
+    defer cleanup()
+```
+
+There are no destructors, so this is how anything gets closed, flushed or
+freed.
+
+- A trap stops the program and runs no cleanup.
+- An entry counts only once control has reached it. A `return` above the
+  `defer` does not run it.
+- The call is evaluated when it runs, not when it was written: first the
+  callee, including a function field, then the arguments, reading the
+  places they name at that moment. So a `defer` that sinks something sinks
+  it at the end, and the thing stays usable in between. If a place was
+  re-pointed meanwhile, the `defer` sees what is there now.
+- The block's value, or its failure atom, is settled before the deferred
+  calls run.
+- Registering an entry evaluates nothing, costs nothing and reserves
+  nothing.
+
+`spec.md` (D129) has the details.
+
+### [1110] Cleanup only on failure: `undo`
+
+`undo call` is a `defer` that runs only when a declared failure leaves its
+block: a `fail`, a `try` that passes a failure on, or a failure arriving
+from a deeper call.
+
+```landin
+    undo release(handle)
+```
+
+- Falling off the end, a successful `return` and `break` skip it. So do a
+  trap and a panic: they stop and unwind nothing.
+- A caller's `else` that handles the failure does not leave the caller's
+  block, so the caller's `undo` entries do not run. The failing callee's
+  own entries have already run on the way out.
+- In one block, `defer` and `undo` entries share one order: on failure they
+  run interleaved, in reverse order of writing, inner blocks first.
+- Like `defer`, an `undo` evaluates its callee and arguments only when it
+  runs, and sees their values then.
+
+It is its own word, not a flavour of `defer`: to defer is to do it later,
+and this may never be done at all. It is a compensating action.
+
+### [1200] Cleaning up several acquisitions
+
+Because an entry exists only once control reaches it, a run of fallible
+acquisitions cleans up exactly what it got. If the first fails, nothing is
+freed; if the second fails, one is; if the third fails, two are.
+
+```landin
+new_buffers: (provider: type is mem.allocator,
+              memory: provider, count: usize)
+             -> (first: mem.byte_buffer, second: mem.byte_buffer,
+                 third: mem.byte_buffer) ! mem.out_of_memory =
+    first = try mem.new_bytes(memory: memory, count: count)
+    undo mem.delete_bytes(memory, first)
+
+    second = try mem.new_bytes(memory: memory, count: count)
+    undo mem.delete_bytes(memory, second)
+
+    third = try mem.new_bytes(memory: memory, count: count)
+    -- All three owners are published by the successful return.
+end new_buffers
+```
+
+`undo` cleans up what is still yours. Once you hand a resource on, its
+cleanup is somebody else's, but your entry is still registered, and there
+is deliberately no way to call one off. So acquire everything fallible
+first, commit afterwards, and let nothing fallible stand between the commit
+and the end of the block.
+
+The usual alternative is a flag and a conditional `defer`. Forget to set
+the flag and you free storage that is still in use, and under an arena,
+where freeing does nothing, the mistake stays silent until the same code
+runs on a real allocator.
+
+### [1130] Repeating: `loop`
+
+`loop do ... end loop` repeats until something leaves it: `break`,
+`return` or `fail`. A labelled loop closes with its label.
+
+```landin
+    counter: loop do
+        break when x == 0
+    end counter
+```
+
+### [1140] Repeating while a condition holds: `while`
+
+`while` tests its condition before every iteration. `continue` goes
+straight to the next test.
+
+```landin
+    mut i: u32 = 0
+    while i < 10 do
+        inc i
+        continue when i == 3
+    end while
+```
+
+### [1150] Walking a range or a collection: `for`
+
+`for` binds each item of its source in turn. An optional second name is a
+`usize` index counting from zero.
+
+```landin
+    for item in items do
+        out += item
+    end for
+
+    for item, idx in items do
+        item = item + i32(idx) -- items is []mut i32, so this writes
+    end for
+
+    for k in 0..<10 do
+        out += k
+    end for
+```
+
+| source | each item is |
+|---|---|
+| `a..<b`, `a..b` | an integer, ascending; `..<` leaves out `b`, `..` includes it |
+| a slice or fixed array | the element, in place ([1160]) |
+| `utf8`, `utf16`, `cstring` | a Unicode scalar, as a `u32` |
+| a struct or `any C` | what its conformance to `iterable` hands out ([1320]) |
+
+- A range's bounds are evaluated once, left to right. A typed bound gives
+  its type to an untyped one, and two untyped bounds are `i32`, so
+  `0..<lenof items` counts in `usize` with no conversion. A lower bound
+  above the upper one runs no iteration.
+- An element may itself be a fixed array, a slice or an `any C`; the
+  binding keeps its complete type.
+- A struct or `any C` source is evaluated once. Its `first` gives a cursor;
+  then each iteration calls `at_end`, then `item`, and after the body falls
+  through or `continue`s, `next`. The index advances with `next`.
+- Text yields decoded scalars, not encoded slices, from a private byte or
+  UTF-16 offset. A `cstring` ends at its first NUL, which is not an item.
+  Text from C is validated as [0600] says.
+
+`try for` walks a source whose steps can fail. It looks first for a
+`fallible_iterable` conformance ([1320]) and also accepts a plain
+`iterable`. A failure leaves the loop through the routine's error set
+([0960]), running `defer` and `undo` on the way. It skips `complete` and
+every later step. `break` and `continue` work as usual, and `next` runs
+only after the body falls through or `continue`s.
+
+`spec.md` (D159, D160, D180) has the details.
+
+### [1160] Writing through a loop binding
+
+A loop binding carries no marker, because the source's type already
+decides. Over a `[]mut t` the element is a writable place, and over a `[]t`
+it is not.
+
+```landin
+    xs := vec.used(l) -- []mut i32
+    for k in 0..<lenof xs do
+        xs[k] = xs[k] * 2
+    end for
+```
+
+Over anything else that satisfies `iterable`, the binding is a copy, since
+`item` ([1320]) hands out a value. Assigning to it is an error rather than
+a silent write to nothing. Text likewise yields a copied `u32` that cannot
+be written.
+
+- The cursor and item keep their exact declared types. An `any C` item
+  keeps C and its evidence, and an `any C` source stays an erased value
+  passed to the providers; neither is treated as a slice.
+- When the element is a fixed array, slice or `any C`, replacing the whole
+  element follows the same rule. Writing through an inner slice follows
+  that slice's own `mut`.
+
+### [1170] When a loop runs out: `complete`
+
+A `complete` block runs when the loop ends because its source or condition
+ran out, and not when a `break` left it.
+
+```landin
+    for item in items do
+        break when item == 42
+    complete
+        out = -1
+    end for
+```
+
+`loop do` has no natural end, so it takes no `complete`.
+
+### [1180] Labels
+
+A loop or a bare block may carry a label, written like any other name.
+`break` and `continue` may name one.
+
+```landin
+    outer: for a in items do
+        for b in items do
+            break outer when a == b
+        end for
+    end outer
+```
+
+A `break` naming a bare block leaves it, and whatever loops it crosses,
+running their cleanups on the way out. A bare block has no next iteration
+and yields no value, so `continue` and `break with` name only loops. An
+unlabelled `break` or `continue` means the innermost loop (D234).
+
+```landin
+    search: begin
+        for item in items do
+            break search when item == 0
+        end for
+        all_nonzero = true
+    end search
+```
+
+### [1190] A loop with a value: `break with`
+
+`break with value` leaves the loop and makes the value the loop's result.
+A search becomes an expression instead of a mutable variable and a flag.
+
+```landin
+    found := for item in items do
+        break with item when item > 40
+    complete
+        break with 0
+    end for
+    out += found
+```
+
+- Every `break` of a loop used as a value carries `with`, and all of them
+  yield the same type.
+- A loop that can run out needs a `complete` that supplies the value.
+  `loop do` needs none, having no other way out.
+- A loop whose value is unwanted is discarded explicitly ([1020]):
+  `_ = loop do break with 1 end loop`. A statement loop uses plain `break`
+  and cannot silently drop a `with` value.
+
+`with` is required because a bare name after `break` could be either a
+label or a value.
+
+### [1210] Pattern matching: `match`
+
+`match` picks the arm whose case or atom the subject holds. There is no
+fallthrough, and a missing case is a compile error.
+
+```landin
+area: (f: figure) -> (a: f32) =
+    a = 0.0
+    match f.kind
+        circle(radius):
+            a = 3.14159 * radius * radius
+        rectangle(width, height):
+            a = width * height
+    end match
+end area
+```
+
+- The subject is an atom set ([0640]), a variant part ([0680]) or a
+  pointer union ([0480]). An arm names an identity, and a case arm may
+  bind the payload, as `circle(radius)` does.
+- Several labels share one arm, `north, south:`, and each counts toward
+  covering every case. An arm that binds a payload names one case.
+- `_` is an arm of its own and covers whatever is left. On an atom set,
+  `_ (rest):` binds the remaining atoms as a set of their own, so they can
+  be passed on where only those are wanted.
+- A number has no identity to name, so it is compared with `if` and
+  `elsif`, not matched (D369).
+
+`spec.md` (D405) has the details.
+
+### [1220] Writing into a matched payload
+
+A pattern binding takes a parameter convention ([0900]). It is `in` by
+default; `inout` writes into the payload that was matched. On a pointer
+union's `ptr` arm, `ptr (sink p):` passes the pointer on to a `sink`
+parameter ([0910]), which consumes the matched place.
+
+```landin
+spill: (inout s: store, v: i32) -> none =
+    match s.kind
+        inline(inout buf): buf[0] = v
+        spilled(heap): use(heap)
+    end match
+end spill
+
+describe: (c: compass) -> (name: utf8) =
+    match c
+        north, south: name = "along"
+        _: name = "across"
+    end match
+end describe
+```
+
+Without `inout`, a `[capacity]t` payload would have to be copied to be
+read and could not be written at all.
+
+- Both plain and `inout` bindings alias the matched storage, scalars
+  included. So an arm may replace the variant, or an object containing it,
+  only after the aliases' last use ([0830]). Writing through an `inout`
+  alias is a use, as is reading an address derived from it or evaluating a
+  pending cleanup argument.
+- A scalar copied out of a binding keeps no borrow of the payload.
+- Matching a computed value matches a temporary copy, so replacing the
+  original does not change what the arm sees (D134).
+- Assigning a new case selects its tag before evaluating the new payload
+  (D76), so the payload's initializer cannot use an alias of the old one.
+  When constructing a whole containing value, save the scalars you need
+  first.
+
+### [1120] Switching checks off for a region: `unchecked`
+
+An `unchecked` region drops the run-time checks the compiler would emit
+inside it, and says so where you read it.
+
+```landin
+    unchecked begin
+        out = out + items[0]
+    end unchecked
+```
+
+The region is an ordinary block: it has its own scope, `defer` still runs
+on the way out, and nesting one inside another changes nothing.
+
+These checks go:
+
+- integer overflow;
+- an element index or a slice range;
+- the destination range of an integer conversion.
+
+What stays is everything the compiler decides at compile time (types,
+definite assignment, permissions, origins), and the checks whose absence
+would not mean the same thing on every machine: a zero divisor, a negative
+shift count, a conversion to `bool` or from a float, a text boundary, and a
+zero pointer made from an integer after conversion to the target's width.
+
+A region reaches only the code written inside it: a routine called from it
+is checked as that routine is written, and a deferred call is checked where
+you wrote it, not where the exit that runs it stands. `spec.md` (D187)
+decides each case.
+
+## ARRAYS, SLICES AND TEXT
+
+An array holds its elements inline and is copied like any other value. A
+slice is a view of someone else's elements: a pointer and a length. Text is
+a view with a promise about its encoding. Between them they do most of
+what other languages use pointers for.
+
+Storage that outlives a routine comes from an allocator you pass in.
+`mem.new(memory, value)` stores the complete initial value and then returns
+a `ptr mut t`; a value holding references must satisfy its `escaping`
+parameter. `mem.delete` consumes that one pointer binding and frees the
+original object through the allocator you supply. For bytes,
+`mem.new_bytes(memory, count)` returns a private `byte_buffer` whose bytes
+are all zero; `mem.bytes(owner)` borrows its writable slice, and
+`mem.delete_bytes(memory, owner)` frees the original allocation and clears
+the owner. A zero count allocates nothing. None of this is ownership: a
+copied view or owner is still yours to stop using in time (`spec.md`
+(D151)).
+
+### [0520] Arrays are values
+
+`[n]t` is `n` elements of type `t`, stored inline. Assignment copies the
+whole array, and the length is part of the type, so `[4]f32` and `[8]f32`
+are different types.
+
+```landin
+grid: [4]f32 = [1.0, 2.0, 3.0, 4.0]
+mut next: [4]f32
+next = [grid[0], grid[1], grid[2], grid[3]]
+```
+
+Assigning a literal to an existing array, as `next = [...]` does, fills it
+in place, in written order: each element is evaluated and stored before the
+next one starts. No hidden temporary the size of the array is made. So a
+later element can see an earlier write, and a failure part-way leaves the
+written prefix changed (D29). A typed local may end its literal with
+[0560]'s repeated suffix, and the same in-place order applies.
+
+The length between the brackets is a closed fixed expression: integer
+literals, fixed parameters and immutable module integers, combined with
+parentheses, unary `-` and non-wrapping `+`, `-`, `*`, `/` and `%`. It is
+substitution and arithmetic, never a call, and wrapping, bitwise and shift
+operations are not allowed. A module integer counts when its own value is
+such an expression, and it may read a compiler fact [1500]: with
+`path_max: usize = 4096`, `[path_max]u8` is the same type as `[4096]u8`. A
+`mut` module integer does not count, because the program may write it
+(D136, D438).
+
+A negative length is refused. Zero is fine: `[0]t`, or any bound that folds
+to zero, is a zero-length array. That adds no empty array literal, and
+repetition still cannot fill one.
+
+Fine print:
+
+- An index is a `usize`, and the array's byte size must fit the target's
+  `usize` (D18).
+- An array keeps its complete element type, permissions included, through
+  a pointer, a slice, a generic call or a stored field. An `any C` element
+  keeps its own data and its evidence for `C`.
+- A computed index is evaluated and bounds-checked once, before the element
+  is used. An element of aggregate type is the same value and place whether
+  its index is known or computed; indexing exposes no pointer and does not
+  change how arrays are copied.
+
+### [0530] Letting the literal set the length
+
+With `:=`, the literal supplies both the length and the element type.
+
+```landin
+triple := [1.0, 2.0, 3.0] -- [3]f32
+```
+
+The first element decides the element type, whether it is a number, a
+slice, a pointer or a struct, and every later element must have that type
+(D241).
+
+### [0560] Filling an array with one value
+
+`[n of v]` is an array of `n` copies of `v`. It suits fixed patterns, which
+an immutable module binding can keep in flash.
+
+```landin
+pattern: [256]u8 = [256 of 0xFF]
+filled: [256]u8 = [of 0xFF] -- length from the type
+
+read_header: () -> none =
+    header: [8]u8 = [0x7F, 0x45, of 0]
+end read_header
+```
+
+`v` is evaluated once, not once per element. The mixed form
+`[e1, ..., ek, of v]` writes a prefix and fills the rest with `v`.
+
+```landin
+flash: [4]u32 = [of 0xFFFF_FFFF]
+header_image: [8]u8 = [0x7F, 0x45, of 0]
+mut row: [4]u32 = [of next()]
+inferred := [4 of next()]
+row = [of next()] -- each call to next happens once
+row = [header(), of padding()] -- prefix first, then one padding call
+```
+
+| form | where the length comes from |
+|---|---|
+| `[n of v]` | the count `n`; it can also infer a local or module binding's type |
+| `[of v]` | the destination's written type |
+| `[e1, ..., ek, of v]` | the destination's written type, with `1 <= k < N` |
+
+The rules, in short:
+
+- The mixed form needs an explicitly typed local, an explicitly typed
+  module binding or an assignment to a mutable fixed array. A local or an
+  assignment stores the prefix left to right, then evaluates `v` once and
+  fills the rest.
+- At module level every element must be a compile-time known scalar
+  [1940].
+- An inferred `[n of v]` takes `v`'s scalar type, and an untyped integer
+  becomes `i32`. Its size must fit the target's `usize`.
+- An assignment to an existing fixed array may write the count or take it
+  from the destination.
+- Refused: `row := [of 0]`, which has no length to give; a zero count or a
+  zero-length destination; and a mixed form that is inferred, nested or
+  over general values.
+- `of` is a contextual word: if `of` names a binding, `[of, other, of]` and
+  `[of + 1]` are ordinary literals.
+
+How assignment reads its right-hand side, and the static image a module
+repetition gets, are in `spec.md` (D32 to D38).
+
+### [0540] `zeroed`: the all-zero value
+
+`zeroed` is the value of a type whose bits are all zero. Two separate
+questions decide where you may write it.
+
+```landin
+mut buffer: [256]u8 = zeroed
+buffer = zeroed -- clear the existing array as a whole
+irqs: irq_set = zeroed -- fine: a set is bools, see [0730]
+-- mode: clock_mode = zeroed    -- error, write 'internal'
+-- p:    ptr u32     = zeroed   -- error, no zero image
+```
+
+- **Does the type have a zero image?** It does when all-zero bits are a
+  valid value of it, which is what lets a surrounding struct or array be
+  zeroed. Pointers and `any` have none, because there is no null, and
+  neither does a function address. A struct or an active variant payload
+  that contains a function address must spell that field out instead of
+  using whole or trailing `zeroed`.
+- **Does the type accept the word?** Only when its zero has one obvious
+  reading. Numbers, `bool`, ranges that contain zero, and aggregates of
+  those accept it. Named value sets do not: write the name. A distinct type
+  [0650] has its base's zero image, so a record holding one zeroes fine,
+  but an identity has no obvious zero, so write `user_id(0)` rather than
+  `zeroed` for it.
+
+Where the destination gives the context, `zeroed` writes the complete zero
+image as one value, as the assignment to `buffer` does.
+
+A packed struct (D228) is a raw image: `zeroed` is allowed even when an
+encoded field's zero pattern has no name. Reading that field then traps;
+copying the image keeps its bits.
+
+Library code has a narrow cousin, `uninit`, which leaves a private array
+field unwritten. It is not another spelling of `zeroed` and cannot
+initialize a stand-alone array (D152).
+
+### [0550] Asking for a zero image: `zeroable`
+
+`zeroable` is the first of those two properties as a concept, so generic
+code can require it.
+
+```landin
+-- compiler-owned; a program does not repeat this declaration
+zeroable: type = concept (t: type)
+end zeroable
+```
+
+Only the compiler knows a type's bit patterns, so only the compiler
+supplies its conformances; it is the one concept like that, and a program
+cannot declare a conformance to it. The family holds:
+
+- the enabled scalars;
+- a fixed array exactly when its element is zeroable, even at length zero;
+- a struct exactly when its all-zero shape, recursively, has a zero image;
+- a distinct type exactly when its base is zeroable.
+
+Atoms, functions, pointers and slices are not in it. It is a closed list,
+not reflection over arbitrary types.
+
+This is how a container that needs a filler value for storage it has not
+used yet says so, instead of pretending: see `small` at [1350] and the
+reason at [0510].
+
+### [0570] Slices are views
+
+A slice `[]t` is a pointer and a length. It copies nothing. `mut` inside
+the type says its elements may be written.
+
+```landin
+mut cells: [4]f32 = [1.0, 2.0, 3.0, 4.0]
+view: []f32 = cells[0..<2] -- read-only elements
+edit: []mut f32 = cells[0..<2] -- writable, since cells is mut
+```
+
+You can pass an array straight to a slice parameter; it lends a slice of
+the whole array. A named array lends its own storage. An array literal is
+built in the caller's frame for the duration of the call, so a list of
+values needs no binding of its own.
+
+```landin
+added: (values: []f32) -> (sum: f32) =
+    sum = 0.0
+    for value in values do
+        sum += value
+    end for
+end added
+
+both := added(grid) + added([1.0, 2.0])
+```
+
+A literal lends read-only elements only, so it cannot go to a `[]mut t`
+parameter (D309).
+
+### [0580] The empty slice
+
+An empty slice is never null. Its base is the lowest positive address
+aligned for the element type: 1 for bytes, 4 for a `u32` (D141). Indexing
+checks the length before it computes an address, so the base is never
+dereferenced.
+
+### [0590] Arithmetic on whole arrays
+
+Fixed arrays are also Landin's vector type: arithmetic on numeric arrays
+works element by element. There is no second type with the same shape and
+different rules.
+
+```landin
+sum_four: (values: [4]f32) -> (sum: f32) =
+    sum = 0.0
+    for value in values do
+        sum += value
+    end for
+end sum_four
+
+array_example: () -> (sc: [4]f32, s: f32) =
+    va: [4]f32 = [1.0, 1.0, 1.0, 1.0]
+    vb := va * va
+    sc = va * 2.0 -- a scalar on either side is fine
+    s = sum_four(vb) -- ordinary function, not a reduction builtin
+end array_example
+```
+
+- `+`, `-`, `*`, `/` and unary `-` work on numeric arrays; `%`, `+%`, `-%`
+  and `*%` on integer arrays.
+- Two arrays must have the same element type and length. A scalar of the
+  element type is applied to every element; an array of another length is
+  not.
+- Each operand is evaluated once, left to right, as a complete value
+  before any element is computed. So `a += a` and other overlapping
+  assignments see the old values, not their own earlier writes.
+- Elements go in ascending index order under the ordinary scalar rules for
+  traps, wrapping and floating point. Nothing is reassociated, so
+  `sum_four` adds in order starting from positive zero.
+
+Arrays do not compare, not even with `==` or `<>`: whole-array equality
+and per-element masks are both plausible, so write the function you mean
+(D200).
+
+The compiler emits compact scalar loops; using vector instructions is a
+later optimisation and never needed for correct results. The cost is still
+real: `[4096]f32 + [4096]f32` needs a 16 KB result and may keep operand
+copies as well, and the type makes that visible.
+
+### [0600] Text: `utf8`, `utf16` and `cstring`
+
+Landin has no single string type. It has three distinct views over plain
+storage:
+
+| type | view over | holds |
+|---|---|---|
+| `utf8` | `[]u8` | validated shortest-form UTF-8 |
+| `utf16` | `[]u16` | UTF-16 code units |
+| `cstring` | `ptr u8` | bytes up to a NUL; no length |
+
+A quoted or raw literal can be any of the three, and is `utf8` when nothing
+says otherwise. `lenof` on `utf8` and `utf16` counts code units. Every
+literal has one trailing zero code unit, which slice lengths leave out, and
+equal literals of the same width may share one read-only copy. The three
+types stay distinct from each other and from their backing types through
+calls, structs and generics.
+
+A `cstring` literal is valid UTF-8. A `cstring` that comes from C promises
+only readable bytes up to its first NUL; its encoding has not been checked.
+
+Conversion between text and bytes is the ordinary explicit conversion, and
+these are all there are:
+
+| from | to | what it does |
+|---|---|---|
+| `[]u8` (read-only) | `utf8` | validates, and traps on invalid UTF-8 |
+| `utf8` | `[]u8` (read-only) | nothing: same base, same length |
+| `cstring` | `[]u8` (read-only) | scans to the first NUL |
+| `cstring` | `utf8` | scans to the first NUL and validates |
+
+There is no conversion from a pointer to `cstring`, none with a writable
+result, and none for `utf16`. An empty result keeps its source's base and
+origin. When invalid text is a condition to handle rather than a bug,
+`core/text.from_bytes` and `from_c` validate the same way and fail with
+`invalid_text` instead of trapping. `core/text` also has exact byte
+equality, substring search, decimal parsing and bounded writing into a
+buffer you supply, with no normalization, allocation or silent truncation.
+
+**Slicing.** `utf8` and `utf16` slice by range, as in `word[3..3]` in
+[0610]. The `usize` bounds count bytes or UTF-16 code units, and both must
+fall on a Unicode scalar boundary. A half-open range may end at the length;
+an inclusive one includes the whole scalar that starts at its upper bound.
+The result is the same text type, read-only, over the same storage. A bound
+that is out of range or splits an encoding traps. A `cstring` has no length
+and cannot be sliced.
+
+**Traversal.** `for c in text` yields each Unicode scalar as a `u32`
+[1320]; a `cstring` stops before its first NUL. Text from C is validated as
+it is decoded, and malformed encoding traps, even inside `unchecked`.
+Traversal declares no error; use `core/text.from_c` first when bad input
+must be recoverable.
+
+`core/text` also works on plain `[]u8`. Its positions are byte offsets of
+the opaque type `text.position`, with operations for first and end, byte,
+advance, ordinal and subslice. Reading a byte at the end fails with
+`past_end`, and a subslice keeps its source's origin.
+
+Indexing is [0610].
+
+### [0610] Indexing text by codepoint or by position
+
+Indexing a `utf8` gives the codepoint there as a `u32`, the type a
+character literal [0250] and a traversal [1320] already give it. The index
+type picks the operation:
+
+- a `usize` is a codepoint ordinal, found by scanning from the start;
+- a `core/text.position` is a byte offset, decoded directly in O(1).
+
+```landin
+word: utf8 = "\u{e9}t\u{e9}"
+last := word[2] -- 233, the u32 of é, found by scanning
+same := last == '\u{e9}' -- true
+bytes: utf8 = word[3..3] -- é again, at byte 3: two bytes, no copy
+```
+
+An ordinal past the end traps, and so does a position at the end or on a
+continuation byte. There is no implicit integer conversion between the two
+index types.
+
+The codepoint is decoded, so it is a value, not a place: `addr word[2]` and
+`word[2] = 'e'` are errors. To get its bytes, take a one-codepoint range
+from [0600]: its bounds count bytes, and the result is still `utf8`. A
+`utf8` converted to `[]u8` loses codepoint indexing and has the ordinary
+slice operations instead.
+
+### [0620] Storing a collection field by field (deferred)
+
+DEFERRED to a later version, and kept here as a design record. It touches
+aliasing, generics, slicing, `addr`, layout, debug information and the
+optimiser all at once, and no program has needed it yet. The successor
+roadmap Language evolution holds it, and a simulation that needs one field
+of a collection contiguous is what would bring it in.
+
+The idea: a collection may be stored transposed, one array per field
+instead of one array of structs. That is a property of the collection, not
+of the struct, so it is not a layout attribute.
+
+```landin
+world: type = struct
+    items: soa [4096]entity
+    count: usize
+end world
+
+advance: (inout w: world, dt: f32) -> none =
+    for i in 0..<w.count do
+        w.items[i].x += w.items[i].vx * dt
+    end for
+
+    xs: []f32 = w.items.x
+    shift_all(xs, dt)
+
+    first := w.items[0] -- a copy
+    --  p := addr w.items[0]     -- error: the fields are apart
+end advance
+```
+
+Indexing a field goes straight into that field's array, and `w.items.x` is
+that whole field as one contiguous slice, which is the point. Reading a
+whole element gathers a copy, and a whole element has no address. Only
+structs without a variant part qualify, and layout attributes do not apply,
+because there is no single element layout.
+
+## TYPES YOU DECLARE
+
+### [0630] Atoms
+
+An atom is a name that is its own value and its own type. Declaring one
+gives you both at once, because for an atom they are the same thing.
+
+```landin
+not_found: atom
+no_access: atom
+```
+
+Atoms compare with `==` and `<>`, and nothing else. Two atoms are equal
+when they are the same declaration, even when the values come from two
+different atom sets:
+
+```landin
+is_missing: (outcome: not_found | no_access) -> (missing: bool) =
+    missing = outcome == not_found
+end is_missing
+```
+
+An atom has no number behind it as far as your program can tell: it is not
+ordered and does not convert to or from an integer.
+
+### [0640] Enumerations are unions of atoms
+
+An enumeration is a union of atoms. `north`, `south`, `east` and `west`
+were declared at [0100].
+
+```landin
+compass: type = north | south | east | west
+```
+
+The union may be written in place as the type of a binding, a parameter,
+a return or a field, and it is the same type as the declared name:
+`facing: (way: north | south) -> (ahead: bool)` takes a `compass` value
+that is north or south. As the element of an array, a slice or a pointer
+the union needs its name.
+
+An atom set can be an array element, a struct field or a variant payload,
+and it stays that set there: a write needs one of its members, and reading
+it back gives you an atom, not an integer.
+
+### [0650] Distinct types
+
+`distinct` makes a new type with its base's representation and none of its
+operations.
+
+```landin
+meter: type = distinct f32
+second: type = distinct f32
+```
+
+You cannot add a `meter` to a `second`, and you cannot even add two
+`meter` values: `f32`'s arithmetic does not come along. To get a value in
+or out, apply the type, as for any conversion ([0700]):
+
+```landin
+length: meter = meter(2.5)
+raw: f32 = f32(length)
+```
+
+That is the whole point: a type the compiler keeps apart from its base and
+from every other distinct type, at no runtime cost. Generic deduction and
+conformances tell it apart too, and an alias of it keeps its identity.
+
+A few things do carry over, because they ask nothing of what the value
+means:
+
+- Equality. `==` and `<>` work when the base has them: a scalar, an atom
+  set, a pointer or a function value. A descriptor compares without taking
+  its number out.
+- Ordering, when the base is a scalar: `<`, `<=`, `>` and `>=` order as
+  the base does.
+- Flags, when the base is an unsigned integer: `&`, `^`, `|` and `~` give
+  the same distinct type, and `&=`, `^=` and `|=` update in place, so a set
+  of flags stays one.
+- The zero image. A record holding a distinct value may be `zeroed`
+  ([0540]), though `zeroed` written for the distinct type itself does not
+  construct it.
+
+```landin
+farther: (a: meter, b: meter) -> (yes: bool) =
+    yes = a > b
+end farther
+```
+
+Arithmetic and shifts stay with the base. A distinct value meets its base or
+any other type only through a conversion, and that includes comparing with
+it. A wrapped reference keeps its origin. The full rule is `spec.md` (D213).
+
+### [0660] Range subtypes
+
+A range subtype is an integer type limited to a run of its values. It is
+checked when a value goes in.
+
+```landin
+percent: type = u8 range 0..100
+```
+
+The check happens at a binding, a parameter, a named return and a
+conversion. A value outside the range is refused when the compiler knows
+it, and traps otherwise. Arithmetic on a `percent`
+gives a plain `u8`; the range is not part of the result.
+
+A range subtype is not allowed as a struct field, an array element, a
+pointer or slice target, a generic argument, or something `addr` can point
+at. In each of those, a write through the base type could reach the storage
+unchecked. To keep a checked value in storage, wrap it: a `distinct` type
+that only a checking function constructs carries the proof ([1730]).
+
+A guard on an ordinary integer does not make it a `percent`. If you reject
+bad input with a `fail` guard and then store the integer as `percent`, that
+store still has its trapping check. Once the value is in a `percent` place,
+passing it to another `percent` place needs no second check. The rules are
+`spec.md` (D188, D236).
+
+### [0670] Structs
+
+A struct is written either as a block or inline in parentheses. The two
+mean the same thing, and the inline form is also how parameter lists,
+return lists and payloads are written.
+
+```landin
+size2: type = (w: u32, h: u32)
+```
+
+A struct is nominal in either form: two separately declared structs with
+the same fields are different types. An alias keeps the original identity.
+
+Either form may take type and fixed parameters, and `layout` ([0750])
+applies to either. The parameters are compile-time names: they add no
+field and no hidden runtime argument. How instances are identified is in
+[0710].
+
+### [0680] Structs with a variant part
+
+A struct may end in a variant part: one of several cases, each with its
+own fields. The fields every case shares need no ceremony.
+
+```landin
+figure: type = struct
+    label: utf8
+    area: f32
+    kind: variant
+        circle: (radius: f32) |
+        rectangle: (width: f32, height: f32)
+    end kind
+end figure
+```
+
+### [0690] Cases with no payload
+
+A case with no fields is written bare. It is an atom, and [1700] holds
+wherever atoms appear, so a variant reads as the union it is.
+
+```landin
+node_kind: type = struct
+    kind: variant
+        leaf |
+        branch: (first: node_id, count: u32)
+    end kind
+end node_kind
+```
+
+You write a case where its variant part is the context: when you construct
+into that part, and when you name an arm of a match on it. A case is not a
+value apart from its part, and the part is not a value apart from its
+struct: copy the struct, or match it (D241).
+
+Selecting a bare case writes only its tag. Selecting a case with fields
+zeros that case's fields first, then writes the ones you gave. The bytes of
+the inactive cases and the padding are unspecified afterwards, though
+`zeroed` still writes the whole struct as zeros. Selecting a case therefore
+costs the size of that case, not the size of the largest one (D76).
+
+### [0700] Constructing values and converting them
+
+Construction and conversion look the same: a type applied to arguments.
+
+```landin
+origin := point(x: 0.0, y: 0.0)
+metres := meter(1.5)
+```
+
+A variant case is built the same way, with the case name applied to its
+fields. The tour has shown variants being matched; this is how you make
+one.
+
+```landin
+mut f: figure = (label: "disc", area: 0.0, kind: circle(radius: 2.0))
+f.kind = rectangle(width: 3.0, height: 4.0)
+```
+
+### [0710] Struct literals take their type from context
+
+A struct literal has no type of its own, like a number literal. It takes
+the type its context wants, named or anonymous.
+
+```landin
+here: point = (x: 1.0, y: 2.0)
+pair: (quot: i32, rem: i32) = divide(10, 3)
+-- named: point_pair = divide(10, 3)     -- no, that is named
+```
+
+What does not convert is a value that already has an anonymous struct type,
+such as a return list. Two anonymous types match when their field names,
+types and order all match, but an anonymous value never becomes a named
+type of the same shape.
+
+Each fully applied instance of a parameterized struct is its own nominal
+type. It is identified by the declaration and its complete list of
+arguments, including an argument the fields do not use. Aliases of the
+arguments do not make a new type. Changing an argument does, even when the
+fields and layout come out equal. Target widths, offsets and padding are
+layout, not identity.
+
+A struct may mention itself, or another struct that mentions it back, in a
+function parameter or result: a function field is one pointer, so the
+layout stays finite. The rules are `spec.md` (D137).
+
+At module scope, a struct literal becomes a static image built by the
+compiler, not a constructor run before the entry point ([1460]). Each
+nested struct in it has to come from a matching construction, `zeroed` or
+another module image of that type; a same-shaped different struct does not
+do. Module images may refer forward and through aliases, but a chain that
+returns to itself has no value. Widths, offsets and padding follow the
+selected target's layout ([0750]). The rules are `spec.md` (D60, D61,
+D81).
+
+### [0720] Filling the remaining fields with `of`
+
+`of` at the end of a struct literal fills every field the literal did not
+name. It is the same word in the same place as in array literals ([0560]).
+
+```landin
+cfg: control = (enable: true, mode: external, of zeroed)
+```
+
+The fill has to typecheck for each field it fills: `of false` works where
+the rest are `bool`, and `of zeroed` wherever the rest have a zero image.
+A fill other than `zeroed` needs at least one omitted field, and all of the
+omitted fields must have exactly the same type, array length and reference
+permission included. It is evaluated once, after the named values, and
+copied into each remaining field in declaration order. The details are in
+`spec.md` (D214).
+
+This is not a default value: declarations have none ([0980]), because a new
+parameter would then fit every existing call silently. Here whoever writes
+the literal makes the choice. The trade is theirs too: a literal with `of`
+picks up a field added later without a word, and one without it breaks
+loudly.
+
+### [0730] Register images: flags, selections and sets
+
+A hardware register mixes kinds of field, and confusing them is the classic
+driver bug. Landin describes a register as a packed struct whose fields sit
+at bit positions you write down.
+
+| kind | what it is | how you write it |
+|---|---|---|
+| flag | one bit | `bool` |
+| selection | one of several named values, encoded as the datasheet says | a union of atoms with encodings |
+| set | several independent flags at once | a packed struct of `bool` |
+| number | a plain number | an unsigned field such as `u12` |
+
+A set earns its place when its members mean something. A numbered bank of
+lines does not: sixteen output pins are `[16]bool` at `0..15`, not sixteen
+invented atoms.
+
+```landin
+irq_rx: atom
+irq_tx: atom
+irq_err: atom
+
+internal: atom
+external: atom
+pll: atom
+```
+
+A selection is a union that gives each atom its encoding. The encoding
+belongs to the union, not to the atom, so the same atom may be encoded
+differently in another register. The width is the smallest that holds the
+largest encoding, so you usually leave it out; write a base type only when
+the datasheet gives the field more room than it needs.
+
+```landin
+polarity: type = (active_low = 0 | active_high = 1) -- one bit
+clock_mode: type = (internal = 0 | external = 1 | pll = 4)
+divider_sel: type = u4 (by_1 = 0 | by_2 = 1) -- four bits, as given
+```
+
+A set is not a type of its own. It is a packed struct of `bool`, one field
+per member, each at the bit its member's encoding names. Membership is a
+field read, adding or removing a member is a field write, and building one
+is an ordinary struct literal with `of` ([0720]). There is no set literal,
+set operator or membership operator, because a struct needs none. Inside a
+larger image the same fields sit at the image's bits, offset by where the
+set begins.
+
+```landin
+irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)
+
+irq_set: type = layout(packed, u32) struct
+    irq_rx: bool at 0
+    irq_tx: bool at 1
+    irq_err: bool at 2
+end irq_set
+
+control: type = layout(packed) struct
+    enable: bool at 0
+    mode: clock_mode at 4..6
+    irq_rx: bool at 8 -- irq's encodings, from bit 8
+    irq_tx: bool at 9
+    irq_err: bool at 10
+    divider: u12 at 16..27
+end control
+```
+
+Bit positions are written, never implied by field order. In a packed struct
+every field carries a position, or none does. Any bit no field claims is
+reserved: you cannot name it, no completion list offers it, and a
+read-modify-write leaves it untouched.
+Because positions do not depend on order, reordering the fields of a
+published register is not a hidden breaking change.
+
+A generator reading a vendor's SVD file writes these fields out as it
+writes every other register declaration ([1540]); the checked-in vendor
+device fixtures are its output. General SVD generation belongs to the
+companion tool, and the language has no `set(X)` type former to do it
+instead (D238).
+
+A field may be an array, which is how a real peripheral packs sixteen
+two-bit pin settings into one word. The element width times the count must
+equal the range, and element zero takes the low bits.
+
+```landin
+moder: type = layout(packed) struct
+    pins: [16]pin_mode at 0..31
+end moder
+```
+
+Indexing such a field with a run-time value is ordinary code: a shift by a
+computed amount, with a bounds check that stays even in `unchecked`. Do it
+on an image in memory, never straight on the device; [0740] says why.
+
+```landin
+set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
+    m.pins[n] = mode
+end set_pin
+```
+
+A packed struct is a raw image, and every bit pattern is a valid image.
+Copying, passing and returning it keep all its bits. Reading an encoded
+field checks that the bits name a member and traps if they do not, so a
+`match` on the result can be exhaustive. Writing a field leaves every other
+bit alone, and a fresh literal starts from zero. A packed field has no
+address of its own: to update one, pass the whole image.
+
+`layout(packed, u32)` keeps a 32-bit carrier even when the highest position
+would fit a smaller one. Field widths run from `u1` to `u64` inside packed
+structs only; they add no arbitrary-width arithmetic or calling
+convention. The full rules are `spec.md` (D228).
+
+### [0740] Reading and writing a device register
+
+A device register is read and written by two operations, and how the
+register behaves is data you pass them, not a keyword:
+
+- `compiler.register_read(pointer, read_mode)`
+- `compiler.register_write(pointer, image, write_mode, reserved_policy,
+  named_mask)`
+
+The pointer is an ordinary one to `u8`, `u16`, `u32` or `u64`, and its
+width is the one transaction the device sees. Modes and policies are atoms,
+so a generator can describe write-one-to-clear, clear-on-read and whatever
+the next vendor invents without the language growing a word for each.
+
+```landin
+status_raw: (base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(base + 0x04)
+    raw = compiler.register_read(port, compiler.normal_read)
+end status_raw
+
+clear_events: (base: usize, events: u32) -> none =
+    port: ptr mut u32 = ptr(base + 0x08)
+    compiler.register_write(port, events, compiler.one_clears,
+                            compiler.write_zero, 0x0000_0007)
+end clear_events
+```
+
+You cannot write a single field of a device register. Read the whole image,
+change it locally, write it back whole: that is the shape of every driver.
+
+| argument | values |
+|---|---|
+| read mode | `compiler.normal_read`, `compiler.clear_on_read` |
+| write mode | `compiler.normal_write`, `compiler.one_clears` |
+| reserved policy | `compiler.preserve`, `compiler.write_zero`, `compiler.write_one` |
+
+A register that cannot be read has no read to perform, so
+`compiler.no_read` is an error rather than a mode, and so is
+`compiler.no_write`.
+
+A generator writes one small typed function per register over these two
+operations, with the image's decode and encode beside it.
+
+```landin
+reset_flags: (base: usize) -> none =
+    port: ptr mut u32 = ptr(base)
+    image: control = (enable: true, mode: external, irq_rx: true, of zeroed)
+    compiler.register_write(port, control_encode(image),
+                            compiler.normal_write, compiler.write_zero,
+                            control_named_mask)
+end reset_flags
+
+read_modify_write: (base: usize, n: u32) -> none =
+    port: ptr mut u32 = ptr(base)
+    mut image := control_decode(compiler.register_read(port,
+                                                       compiler.normal_read))
+    image.divider = n
+    compiler.register_write(port, control_encode(image),
+                            compiler.normal_write, compiler.preserve,
+                            control_named_mask)
+end read_modify_write
+```
+
+A fresh local literal knows nothing of what the hardware holds. To keep
+reserved bits as the device has them, read the image first, as
+`read_modify_write` does; `compiler.preserve` never reads behind your back.
+That read, change and write is not atomic. It also assumes normal reads and
+writes: it does not carry over to clear-on-read or one-clears registers.
+
+A register's reset value initializes nothing. It is what the datasheet says
+the register holds after a reset, generated as a constant so that tools and
+readers know where they start. The hardware puts it there, not the program.
+
+The operation, not the pointer's type, makes an access a device
+transaction: there is no `volatile ptr` and no `register(t, ...)` wrapper
+type (D238). Every mode and policy is in `spec.md` (D228).
+
+### [0750] Field order and layout
+
+Fields stay in the order you wrote them, with natural alignment and padding
+in between. A hexdump matches the source, and the layout does not shift
+under a new compiler or an optimization flag.
+
+```landin
+packet: type = layout(c) struct
+    kind: u8
+    length: u16 -- big-endian as the wire sent it
+    id: u32
+end packet
+
+from_big_u16: (wire: u16) -> (value: u16) =
+    value = (wire << 8) | (wire >> 8) -- on a little-endian target
+end from_big_u16
+```
+
+Other layouts are asked for by name:
+
+| layout | what it does |
+|---|---|
+| no `layout` | source order, natural alignment |
+| `layout(optimal)` | sorts fields by descending alignment, but only if that makes the struct strictly smaller |
+| `layout(c)` | the selected target's C rules ([1975]) |
+| `layout(c, packed)` | C's byte-packed record: every field at alignment one, no padding |
+| `layout(packed)` | a register image of bits ([0730]) |
+
+`layout(optimal)` keeps source order when sorting saves nothing, and moves
+nested structs, arrays and variant parts whole (D210). It never makes a
+struct fit for C.
+
+`layout(c)` does not choose a function's calling convention. A C record
+holds native-endian scalars, fixed arrays, nested nonempty C structs and
+callback fields declared with C's convention. The fields of a
+`layout(c, packed)` record are read and written by copy and have no address
+of their own (D410), and C takes such a record through a pointer (D414). A
+C record's last field may be `[0]T`, C's flexible array member, whose
+elements follow the record in memory (D413).
+
+Byte order is not a property of a field. A field holds the target's own
+order, which `compiler.byte_order` names ([1560]). When your program reads
+or writes another order, it converts where the bytes cross, with shifts
+([0320]) or an ordinary function, so the cost is visible where it is paid,
+as in `from_big_u16` above (D239).
+
+Every byte count comes from the selected target, 32-bit targets included.
+Initializers still run in the order you wrote them ([0410]).
+
+### [0760] Attributes
+
+Attributes are prefix words from a closed set. Their arguments are always
+in parentheses. Where an argument is one of a fixed set of values it is an
+atom; a linker name is a string.
+
+```text
+mut public layout(c|optimal|packed)
+```
+
+```text
+escaping caller fixed option
+link(section: "...", symbol: "...", align: 16, vector: 16, keep)
+extern(c|interrupt|naked|...)
+```
+
+| word | where it is described |
+|---|---|
+| `mut` | [0060] |
+| `public` | [0090] |
+| `layout` | [0730], [0750] |
+| `escaping` | [0780] |
+| `caller` | [1040] |
+| `fixed` | [1490]; `option` implies it ([1530]) |
+| `link` | [1640] |
+| `extern` | [1570] |
+
+`at` gives a field its bit position ([0730]). `at`, `of` and `align` are
+contextual: a field or an entry may still be called one of them, because
+nothing reads the word as an attribute there. Placement alignment is
+`link`'s `align` label ([1640]), not a word of its own. `from` and `with`
+are reserved and cannot name anything.
+
+There is no `volatile`: a device access is an operation ([0740]). There is
+no `big` or `little`: byte order is converted where bytes cross ([0750]).
+There is no `inline` or `noinline`: inlining is the optimizer's decision
+([1310]). And there is no `weak`: a whole program links one definition per
+name, and the compiler-owned vector image does what weak default handlers
+do in C ([1640]). `spec.md` records the withdrawals (D238, D239).
+
+## MODULES
+
+### [1410] A module is a directory
+
+Every `.ldn` file directly inside one directory belongs to one module, and
+those files see each other's declarations without importing anything.
+Everything is private to its module unless it is marked `public`. There is
+no separate interface file.
+
+```text
+geometry/area.ldn
+geometry/shapes.ldn
+geometry/solid/volume.ldn
+```
+
+Here `geometry` is one module of two files, and `geometry/solid` is a
+second module.
+
+Fine print:
+
+- The compiler reads a module's files in bytewise filename order. Other
+  files are ignored, and an empty directory is a legal empty module.
+- Declaration order never affects what is visible. File order does fix
+  identities, the order of diagnostics and the order of active
+  `linker.library` directives [1590].
+- An importer can name public functions, bindings, atoms, types and
+  concepts. A variant case is public when its type is.
+- A public declaration may mention a private one. The private identity
+  flows through the public surface, but an importer cannot name it.
+
+### [1420] Importing a module by its path
+
+`import net/http` finds a directory `net` holding a directory `http`, under
+the import roots the compiler was given, and binds the last segment, `http`,
+as a namespace in this file.
+
+```landin
+import net/http
+```
+
+The roots are searched in order, and the first that has the directory wins;
+a later root is not merged in. From that directory the compiler takes every
+source file, not recursively, and follows their imports. A subdirectory is
+a module of its own, reached by its own path. Each module is loaded once, so
+import cycles are legal.
+
+After the import, `http.get`, `http.response` and `http.drawable` name that
+module's public declarations. Qualification works wherever a value, type,
+type application, concept, conformance, error atom or match case is named.
+The first dot after the namespace selects a public declaration; later dots
+are ordinary value selections. The namespace itself is not a value, type or
+place.
+
+A path segment is a plain identifier: lowercase letters, digits and
+underscore, not starting with a digit. Lowercase, because a case-sensitive
+and a case-insensitive filesystem must agree on what a name is, and the
+directory entry must have exactly that spelling even on a case-insensitive
+host. An identifier, because the last segment becomes a name in your file,
+so a hyphen would need an alias every time. The separator is always `/` in
+source, on every host.
+
+The exact loading order is in `spec.md` (D150).
+
+### [1430] Renaming an import
+
+`as` gives the namespace another name, for when two imports collide.
+
+```landin
+import net/http as h
+```
+
+This binds `h` only, not `http`. `as` is a contextual word, so outside an
+import it is an ordinary identifier.
+
+### [1440] Importing selected names
+
+A parenthesized list brings named declarations into scope directly. There
+is no wildcard.
+
+```landin
+import net/http (get, post)
+```
+
+This binds `get` and `post` and not the `http` namespace. Every selected
+name must exist and be public, even if the file never uses it. Each keeps
+its original declaration's identity, type and mutability. The list is not
+empty and has no trailing comma or renaming, and a selection cannot be
+combined with an alias.
+
+### [1450] Imports belong to one file
+
+Each file has its own imports, so every file reads on its own.
+
+Imports come first, before every declaration. One file's imports are not
+visible in its siblings and are never re-exported. Binding one name twice
+in a file's imports is an error, whether it is the same import twice or a
+selection colliding with an alias.
+
+Shadowing goes like this:
+
+- A parameter or local may shadow an import.
+- A namespace import shadows a same-named module declaration only for
+  qualified lookup; the module's unqualified value stays visible.
+- A selected name shadows the module declaration in both.
+
+Selecting a private member is reported differently from selecting one that
+does not exist, and the report points at the private declaration.
+
+### [1460] Module-level values are known at compile time
+
+A value at module level must be known when the compiler reads it, because
+nothing runs before the entry point. Immutable values can stay in flash;
+mutable ones cost RAM, and the `mut` makes them conspicuous.
+
+```landin
+table: [4]u32 = [1, 2, 4, 8]
+mut call_count: u32 = 0
+```
+
+Integer arithmetic here folds in [1940]'s wider range and only the final
+value is checked against its type. So a module `value: u8 = 200 + 100 - 100`
+holds 200, while the same `u8` addition inside a function overflows and
+traps before the subtraction.
+
+A value another module exports is known in the same way, named through that
+module: `limit: u32 = sizes.page * 4`, `ready: flags.state = flags.idle`.
+Qualifying a name changes where it is found, not whether it is known.
+
+A function in a module struct value is known too: it is a static routine
+address, not a call. Such a field may name a declared function or an
+anonymous one that captures nothing. A module struct that holds one needs an
+explicit value, because no zero function address exists [0540].
+
+### [1470] Packages and versions
+
+A package is a named collection of modules with a version and an origin.
+Its name has two levels, owner and package, and a directory under a search
+root is the package it names.
+
+The rule is one version of each package name per program: duplicated code
+is untenable at 32 KB, types are nominal, and there is one conformance
+register. The future companion tool will solve versions and report a
+conflict as a hard error that asks for an upgrade.
+
+The current compiler reads no versions or origins. It takes the first
+matching module directory from the ordered roots [1420], even when a later
+root holds another version.
+
+### [1480] Where modules come from: the roots
+
+The compiler receives an ordered list of roots and nothing more. The
+intended order is the project, then the user's landin home, then the
+system-wide one, and vendoring is just putting a package in the first.
+Whether a path's leading segments mean an owner and a package is a
+convention for people and for the companion tool; the compiler sees
+directories under roots, as [1420] says.
+
+Fetching, version solving, lock files and naming authority belong to a
+companion tool that ships alongside but stays separable: a compiler you can
+read is worth more than one that can download things. Arranging the roots
+so that only one version of each package name is reachable is that tool's
+job; until it does, the compiler does not enforce [1470]'s one-version
+rule. Naming authority is deferred to the companion tool and the ecosystem
+successor in `ROADMAP.md`. Because the search is project-first, a project
+can override an ordinary module locally.
+
+Four source namespaces belong to the repository:
+
+| namespace | holds | available |
+|---|---|---|
+| `core` | the shared freestanding library: `core/mem`, `core/text`, `core/vec` | every module and interface on every target |
+| `hosted` | hosted providers such as `hosted/heap` and `hosted/system` | on hosted systems |
+| `platform` | scoped freestanding interfaces | `platform/c` with an enabled LP64 C ABI; `platform/cortex_m` on M-profile targets, higher feature levels included |
+| `landin` | the toolchain modules of [1560]: `landin/compiler`, `landin/assembler`, `landin/linker` | everywhere, without an import |
+
+An import outside its target's scope is refused by name at target checking
+(D267). The toolchain modules are always there, which is why the bare names
+`compiler`, `assembler` and `linker` cannot be declared or bound by an
+import, and an explicit `import landin/compiler` (or `assembler`, or
+`linker`) is refused by name before any root is searched. Otherwise the
+namespace names are ordinary identifiers.
+
+**Running the compiler.** `refine` takes repeated `--root=DIR` options and
+then the entry module's directory, or its source files, which then form one
+module (D383). With no `--root`, the named files form one synthetic module.
+The compiler adds one root of its own, the library it ships with, found
+beside its executable: `core`, `hosted` and `platform` always come from it,
+after every root you name (D275). It consults no home directory and inserts
+no other system root; among the roots you give, their order alone decides.
 
 ## POINTERS
 
@@ -760,874 +2944,36 @@ This keeps the empty slots out of reach. It does not make raw storage safe:
 the allocation you supply must be live, aligned and as large as you say
 ([1720]).
 
-## ARRAYS, SLICES AND TEXT
-
-The initialized allocation helper `mem.new(memory, value)` stores the complete
-initial value before returning `ptr mut t`; reference-containing values must
-satisfy its `escaping` parameter. `mem.delete` consumes one pointer binding
-and releases the original object extent through the supplied allocator.
-`mem.new_bytes(memory, count)` instead returns a private `byte_buffer` owner:
-every byte is initialized to zero, `mem.bytes(owner)` borrows its mutable
-slice, and `mem.delete_bytes(memory, owner)` releases the original allocation and
-clears the owner after the byte prefix is emptied. A zero count makes no
-allocation. A copied view or owner is
-still subject to manual lifetime discipline; consumption is not ownership.
-
-### [0520] Array: a value
-
-Array: a value. Assignment copies. Size is part of the type. Its bound is a
-closed fixed expression: integer literals, fixed parameters and immutable
-module integers combined with parentheses, unary `-`, and non-wrapping `+`,
-`-`, `*`, `/` and `%`. It is substitution and arithmetic, never a call or
-compile-time user execution; width-dependent wrapping, bitwise and shift
-operations are not bound forms. A module integer counts when its own image is
-such an expression, and may read a compiler fact [1500], so `path_max: usize
-= 4096` sizes `[path_max]u8`, the same type as `[4096]u8`; a `mut` one does
-not, since the program may write it (D438). A
-negative result is refused. A zero result is accepted: `[0]t` and an admitted
-fixed expression that folds to zero denote a zero-length array. This does not
-add an empty array literal or make zero-length repetition valid.
-An array retains its complete element type through a pointer, slice, generic
-call or stored field. Pointer and slice element permissions remain part of
-that identity, and an `any C` element retains its own data and evidence for C.
-A whole element of aggregate type is the same value and place whether its index
-is written as a known position or computed at run time. A computed index is
-evaluated and
-bounds-checked once before the element is used; this does not expose a pointer
-or change the array's by-value copies.
-An array literal assigned to existing storage is formed there in written order:
-each element is evaluated and written before the next one begins. A later
-element can therefore observe an earlier write, and a failure can leave the
-written prefix changed; no hidden array-sized temporary is implied. An explicitly
-typed local may finish a nonempty written prefix with [0560]'s repeated suffix;
-the same direct formation and ordering apply.
-
-```landin
-grid: [4]f32 = [1.0, 2.0, 3.0, 4.0]
-mut next: [4]f32
-next = [grid[0], grid[1], grid[2], grid[3]]
-```
-
-### [0530] The length may be inferred from the literal
-
-The length may be inferred from the literal.
-
-```landin
-triple := [1.0, 2.0, 3.0] -- [3]f32
-```
-
-The first element supplies the element type, whether it is a number, a slice,
-a pointer or a struct, and every later element must be of that type (D241).
-
-### [0540] zeroed is the all-bits-zero image of a type
-
-D152 also admits `uninit` as an explicit array-field initializer inside a
-private compact nominal construction. It leaves the field's bytes unspecified;
-the defining module must expose only items it has written. It is not an
-alternative spelling of `zeroed` and cannot initialize a stand-alone array.
-
-zeroed is the all-bits-zero image of a type. Two separate
-properties decide where it may appear. A type HAS a zero
-image when all-zero is a valid value for it; that is what
-lets a surrounding struct or array be zeroed. A function address has no zero
-image, so a struct or active variant payload containing one must supply it
-explicitly rather than using whole or trailing `zeroed`. A type ACCEPTS
-the word zeroed only when that image has one obvious
-reading. Numbers, bool, ranges containing zero and
-aggregates of those accept it. Named value sets do not:
-write the name. Nor does a distinct type [0650]: it has its base's image,
-but an identity has no obvious zero, so write `user_id(0)`, and zero a
-record holding one. Pointers and 'any' have no zero image at
-all, because there is no null. Where the destination supplies
-that context, assignment writes the complete zero image as one
-value rather than spelling its parts. D228's packed structs are raw images:
-`zeroed` is permitted even when an encoded field's zero pattern has no name.
-Reading that field then traps; copying the image preserves its bits.
-
-```landin
-mut buffer: [256]u8 = zeroed
-buffer = zeroed -- clear the existing array as a whole
-irqs: irq_set = zeroed -- fine: a set is bools, see [0730]
--- mode: clock_mode = zeroed    -- error, write 'internal'
--- p:    ptr u32     = zeroed   -- error, no zero image
-```
-
-### [0550] The first of those two properties is also a concept
-
-The first of those two properties is also a concept, so
-generic code can ask for it. `zeroable` is the one closed compiler concept:
-it needs no source declaration, and its conformances are supplied by the
-compiler rather than declared, which is the only kind of conformance that is.
-The compiler is the only thing that knows a type's bit patterns. Its conceptual
-signature is:
-
-```landin
--- compiler-owned; a program does not repeat this declaration
-zeroable: type = concept (t: type)
-end zeroable
-```
-
-A program cannot declare a `zeroable` conformance. The supplied family contains
-the enabled scalars, a fixed array exactly when its element is zeroable (also at
-length zero), an aggregate exactly when its recursively active all-zero
-shape has a zero image, and a distinct type exactly when its base is in it.
-Atoms, functions, pointers and slices are not in it.
-This is a closed named family, not reflection over arbitrary representations.
-
-Which is what lets a shape that needs a value for storage it
-has not filled yet say so, instead of pretending — see
-small at [1350] and the reason at [0510].
-
-### [0560] Repetition, for static patterns that live in flash
-
-Repetition, for static patterns that live in flash.
-
-```landin
-pattern: [256]u8 = [256 of 0xFF]
-filled: [256]u8 = [of 0xFF] -- length from the type
-
-read_header: () -> none =
-    header: [8]u8 = [0x7F, 0x45, of 0]
-end read_header
-```
-
-The repeated expression runs once, not once for every element. In the mixed form
-`[e1, ..., ek, of repeated]`, an explicitly typed local, explicitly typed module
-binding or assignment to a mutable fixed array requires `1 <= k < N`, where `N` is the destination length. A local or
-assignment evaluates and stores the prefix left to right, then evaluates
-`repeated` once and compactly fills the suffix. An assignment reaches its
-destination first; all right-hand reads use the incoming definite-assignment
-state, and successful completion assigns the whole array. A module initializer
-requires every prefix and suffix expression to be compile-time known [1940] and
-keeps a compact static image: the finite prefix plus one repeated suffix pattern.
-Inference, nesting and general-value mixed forms remain refused. `of` stays
-contextual: `[of, other, of]` and `[of + 1]` remain ordinary literals when `of`
-names a binding. A nonzero written fixed-array type accepts either full-array
-form for module state or a local; at module scope the expression must be a
-compile-time known scalar [1940]. A counted repetition
-may also supply an inferred local or module binding's length and scalar element
-type; an untyped integer element defaults to `i32`. Assignment to an existing
-fixed array accepts an explicit count or takes it from the destination:
-
-```landin
-flash: [4]u32 = [of 0xFFFF_FFFF]
-header_image: [8]u8 = [0x7F, 0x45, of 0]
-mut row: [4]u32 = [of next()]
-inferred := [4 of next()]
-row = [of next()] -- each call to next happens once
-row = [header(), of padding()] -- prefix first, then one padding call
-```
-
-A zero contextual length and a zero count in the inferred form remain refused:
-`[0]t` is a valid fixed-array type, but repetition still needs a nonzero
-contextual destination or a count that supplies an inferred element shape. A
-count-less inferred initializer, such as `row := [of 0]`, has no length to
-give and is refused; the other array value positions follow [0520] (D241).
-Every
-inferred extent must fit the target's `usize`. A module
-repetition uses [1940]'s target-aware fold and range rules; its compact repeated
-image survives direct-name chains, while a folded zero pattern has the same
-loader-zeroed image as omitted or `zeroed` state.
-
-### [0570] Slice: a view
-
-Slice: a view. Pointer plus length. Copies nothing. mut
-inside the type says the elements may be written.
-
-```landin
-view: []f32 = grid[0..<2] -- read-only elements
-edit: []mut f32 = grid[0..<2] -- writable, since grid is mut
-```
-
-An array passed where a slice parameter is wanted lends a slice of the whole
-array: a named array lends its own storage, and an array literal is made in
-the caller's frame for the call, so a list of values needs no binding of its
-own. A literal lends only read-only elements.
-
-```landin
-added: (values: []f32) -> (sum: f32) =
-    sum = 0.0
-    for value in values do
-        sum += value
-    end for
-end added
-
-both := added(grid) + added([1.0, 2.0])
-```
-
-### [0580] An empty slice still has a base
-
-An empty slice still has a base. It is the lowest positive address aligned for
-the element type — the numerical element alignment — and may not be
-dereferenced (D141). The proposed `base_of` convenience is omitted [0500];
-the representation rule does not depend on that API. Indexing checks the
-length before it computes an address, so an empty slice cannot produce one.
-
-### [0590] Fixed arrays are the vector type
-
-Fixed arrays are the vector type. Arithmetic on numeric elements is
-element-wise, so there is no second type with the same shape and different
-rules. The first backend lowers it to compact scalar loops; real vector
-instructions are a later optimisation, never required for source correctness.
-
-```landin
-sum_four: (values: [4]f32) -> (sum: f32) =
-    sum = 0.0
-    for value in values do
-        sum += value
-    end for
-end sum_four
-
-array_example: () -> (sc: [4]f32, s: f32) =
-    va: [4]f32 = [1.0, 1.0, 1.0, 1.0]
-    vb := va * va
-    sc = va * 2.0 -- a scalar on either side is fine
-    s = sum_four(vb) -- ordinary function, not a reduction builtin
-end array_example
-```
-
-D209 lifts `+`, `-`, `*`, `/` and unary `-` over numeric arrays, and `%`,
-`+%`, `-%`, `*%` over integer arrays. Arrays must have the same element type
-and length; a scalar of that element type broadcasts, not an array of another
-length. Each operand is evaluated once, left to right, and complete array
-values are retained before the element loop. Arithmetic assignment therefore
-survives overlap rather than reading back its own earlier destination writes.
-Elements are processed in ascending index order with the scalar trap, wrapping
-and floating-point rules. No reassociation changes `sum_four`'s ordered fold
-from positive zero.
-
-D200 refuses every array comparison, including `==` and `<>`; it does not
-silently choose whole-array equality or a mask. Named ordinary functions can
-state those algorithms explicitly. `[4096]f32 + [4096]f32` needs a 16 KB result
-and may retain operand snapshots as well. The type makes that cost visible;
-compact loop code does not make the storage free.
-
-### [0600] Text types are distinct views
-
-Text types are distinct views, not one string type:
-utf8    distinct []u8      text, validated shortest-form UTF-8
-utf16   distinct []u16
-cstring distinct ptr u8    no length, NUL terminated
-
-The parser-support `core/text` slice arrives before those full distinct text
-types. It accepts `[]u8`, gives byte offsets the opaque nominal name
-`text.position`, and supplies first/end, byte, advance, ordinal and subslice
-operations. A byte read at the end reports `past_end`; a returned subslice
-keeps its source origin.
-
-The hosted views themselves accept quoted and raw literals. `utf8` stores
-shortest-form UTF-8 bytes, `utf16` stores UTF-16 code units, and `cstring`
-stores encoded bytes behind a read-only pointer. A literal `cstring` contains
-valid UTF-8, but a value published by a foreign boundary promises only
-accessible backing through its first NUL byte; its encoding is not prevalidated.
-`lenof` on `utf8` and `utf16` counts their code units. Every literal datum has
-one trailing zero code unit; slice lengths exclude it, and `cstring` carries no
-length. Equal decoded content at the same element width may share its read-only
-static datum. The three view identities remain distinct from one another and
-from their backing pointer or slice types through calls, aggregates and
-generics.
-
-Ordinary explicit conversion admits the exact source-derived representation
-views needed at runtime: immutable `[]u8` to `utf8` validates and may trap;
-`utf8` to immutable `[]u8` preserves its base and length; and `cstring` to
-either form scans only to the first NUL, validating when the destination is
-`utf8`. Empty results keep the actual source carrier and origin. There is no
-pointer-to-`cstring` conversion, mutable result or `utf16` representation
-conversion. `core/text.from_bytes` and `from_c` perform the same validation in
-ordinary source and report `invalid_text`; its exact byte equality,
-byte-substring, decimal parsing and bounded caller-buffer writing helpers add
-no normalization, allocation or hidden truncation.
-
-Range slicing is an operation on `utf8` and `utf16`, not an exposure of their
-backing slices. Its exact `usize` bounds count the view's bytes or UTF-16 code
-units, and both endpoints must lie on Unicode-scalar boundaries. The half-open
-form may end at the view's length. The inclusive form includes the complete
-scalar beginning at its upper bound. Either form returns the same immutable,
-source-derived text identity; `cstring` has no length and cannot be sliced.
-An invalid bound or a bound that splits an encoding traps. Traversal remains a
-separate [1320] operation rather than inheriting either backing carrier. Each
-exact hosted view has its own intrinsic iterable conformance, yielding Unicode
-scalar values as copied `u32` items with a private `usize` code-unit cursor;
-`cstring` stops before its first NUL. Foreign C text is validated before each
-scalar is decoded; malformed encoding traps, including inside `unchecked`.
-Traversal declares no atom error. Use `core/text.from_c` when invalid encoding
-needs a recoverable `invalid_text` result.
-[0610] supplies indexing separately.
-
-### [0610] Indexing utf8 by an integer yields the codepoint there
-
-Indexing utf8 by a `usize` yields that codepoint as a `u32`, the type a
-character literal [0250] and a traversal of the text [1320] already give it,
-and is a linear scan by codepoint ordinal. Indexing by the opaque
-`core/text.position` byte offset decodes the codepoint beginning there in
-O(1). The position must be in bounds and at a codepoint boundary. An ordinal
-outside the text, or a position at the end or on a continuation byte, traps.
-Both conformances exist; the argument type decides without an implicit
-integer conversion.
-
-```landin
-word: utf8 = "\u{e9}t\u{e9}"
-last := word[2] -- 233, the u32 of é, found by scanning
-same := last == '\u{e9}' -- true
-bytes: utf8 = word[3..3] -- é again, at byte 3: two bytes, no copy
-```
-
-The codepoint is decoded, so it is a value and not a place: `addr word[2]`
-and `word[2] = 'e'` are errors. Its bytes are a one-codepoint range of
-[0600], whose bounds count bytes rather than codepoints and whose result is
-still `utf8`. Converting the complete `utf8` to its ordinary byte view does
-not inherit this codepoint-index operation; it has the ordinary slice
-operations.
-
-### [0620] DEFERRED to a later version, kept here as a design record
-
-DEFERRED to a later version, kept here as a design record.
-It touches aliasing, generics, slicing, addr, layout, debug
-information and the optimiser all at once, and no program
-has yet proved it necessary. The Language evolution successor
-roadmap holds it, and a simulation that needs one field of a
-collection contiguous is what would bring it in.
-A collection may be stored transposed: one array per field
-instead of one array of structs. That is a property of the
-collection, not of the struct, so it is not a layout
-attribute. Field access through an index goes straight into
-that field's array, reading a whole element gathers a copy,
-and the address of a whole element does not exist. The
-point of it is the last line: one field, contiguous.
-
-```landin
-world: type = struct
-    items: soa [4096]entity
-    count: usize
-end world
-
-advance: (inout w: world, dt: f32) -> none =
-    for i in 0..<w.count do
-        w.items[i].x += w.items[i].vx * dt
-    end for
-
-    xs: []f32 = w.items.x
-    shift_all(xs, dt)
-
-    first := w.items[0] -- a copy
-    --  p := addr w.items[0]     -- error: the fields are apart
-end advance
-```
-
-Only for structs without a variant part. Layout attributes
-do not apply, because there is no single element layout.
-
-## TYPES YOU DECLARE
-
-### [0630] Atoms: one declaration, one value, its own type
-
-Atoms: one declaration, one value, its own type. This is
-the one place where a declaration introduces a type and a
-value at once, because they coincide. Equality and inequality compare those
-declaration identities, including values drawn from disjoint or overlapping
-atom sets; no ordering or numeric conversion is implied.
-
-```landin
-not_found: atom
-no_access: atom
-```
-
-### [0640] An enumeration is a union of atoms
-
-An enumeration is a union of atoms.
-north, south, east and west were declared at [0100].
-An atom set can be an array element, a struct field or a variant payload.
-These retain the declared set: a write needs one of its members, and reading
-it back grants no integer operations or conversions.
-
-```landin
-compass: type = north | south | east | west
-```
-
-A binding, a parameter, a return or a field may write the union in place,
-and it is the same type as the declared name: `facing: (way: north | south)
--> (ahead: bool)` takes a `compass` value that is north or south. Inside an
-array, a slice or a pointer the union needs its name.
-
-### [0650] Distinct type
-
-Distinct type: same representation, different type, no
-operations inherited.
-
-```landin
-meter: type = distinct f32
-second: type = distinct f32
-```
-
-Neither `meter + second` nor adding two `meter` values inherits `f32`'s
-arithmetic. Two values of one distinct type whose base has equality, a
-scalar, an atom set, a pointer or a function value, do compare with `==` and
-`<>`: equality is identity, and asks nothing of what the base means, so a
-descriptor is compared without taking its number out. A scalar base's are
-ordered too, with `<`, `<=`, `>` and `>=` as the base orders them,
-so two `meter` values or two instants of a clock compare directly. Where
-the base is an unsigned integer, `&`, `^`, `|` and `~` combine values into
-that same type, and `&=`, `^=` and `|=` update one in place, which is how a
-set of flags stays one. Arithmetic and
-shifts stay the base's, and a distinct value meets its base or another
-type only through a conversion, its ordering included. A distinct type has
-its base's zero image, so a record holding one may be zeroed [0540], though
-`zeroed` does not construct the identity itself. Construct and extract
-explicitly:
-
-```landin
-length: meter = meter(2.5)
-raw: f32 = f32(length)
-```
-
-Aliases keep the identity; generic deduction and conformances distinguish it
-from its base and from every other distinct declaration. A distinct view keeps
-its backing origin when wrapped and extracted. D213 specifies these conversions
-and the unchanged target representation.
-
-### [0660] Range subtype: checked at assignment and conversion
-
-Range subtype: checked at assignment and conversion.
-
-```landin
-percent: type = u8 range 0..100
-```
-
-A range subtype constrains the places a value is checked on its way in: a
-binding, a parameter, a named return and a conversion. It is not a struct
-field, an array element, a pointer or slice target, a generic argument or
-something `addr` can point at. In each of those a write through the base type
-would reach constrained storage unchecked, and giving the constraint an
-identity of its own there would make a second nominal type with a second
-relaxation [0440]. To keep a checked value in storage, wrap it: a `distinct`
-type that only a checking function constructs is the proof carried [1730]
-(D236).
-
-A guard on an ordinary integer does not give it a range subtype. If invalid
-input is handled with a `fail` guard and the successful path then stores the
-integer as `percent`, that store still has a trapping check. Once the value is
-in a `percent` place, passing it to another `percent` place carries the proof
-without a second check (D188).
-
-### [0670] Struct, block form and inline form
-
-Struct, block form and inline form. Same thing. The inline
-form is also the parameter, return and payload list.
-
-```landin
-size2: type = (w: u32, h: u32)
-```
-
-Both declared forms may take type and fixed parameters. An inline body is
-nominal just like the block: two separately declared, equal field lists are
-different types, while an alias keeps the original identity. `layout` applies
-to either form. A fully applied instance
-substitutes them through scalar, fixed-array, nested ordinary-struct, function
-and existing variant payload fields. The formals remain compile-time names;
-they add no field or hidden runtime argument.
-
-### [0680] Struct with a variant part
-
-Struct with a variant part. Common fields need no ceremony.
-
-```landin
-figure: type = struct
-    label: utf8
-    area: f32
-    kind: variant
-        circle: (radius: f32) |
-        rectangle: (width: f32, height: f32)
-    end kind
-end figure
-```
-
-### [0690] A case with no payload is written bare
-
-A case with no payload is written bare. It is an atom,
-and [1700] holds wherever atoms appear, so a variant reads
-as the union it is.
-
-```landin
-node_kind: type = struct
-    kind: variant
-        leaf |
-        branch: (first: node_id, count: u32)
-    end kind
-end node_kind
-```
-
-A case is written where its variant part is the context: constructing into
-that part, and naming an arm of a match on it. It is not a value of its own
-apart from the part, and neither is the part apart from its struct: copy the
-struct, or match it (D241).
-Selecting a bare case writes only its tag. Selecting a case with a payload
-zeros that case's payload storage before writing its fields. The inactive
-case storage and layout padding have unspecified bytes after selection;
-`zeroed` still writes the complete all-zero image of the containing struct.
-The work of selection therefore follows the selected payload's size, while
-whole-struct zeroing and copying follow the struct's reserved size.
-
-### [0700] Construction and conversion use the same form
-
-Construction and conversion use the same form: a type
-applied to arguments.
-
-```landin
-origin := point(x: 0.0, y: 0.0)
-metres := meter(1.5)
-```
-
-A variant case is built the same way: the case name applied
-to its payload. The tour showed variants being matched long
-before it showed one being built.
-
-```landin
-mut f: figure = (label: "disc", area: 0.0, kind: circle(radius: 2.0))
-f.kind = rectangle(width: 3.0, height: 4.0)
-```
-
-### [0710] A struct literal is untyped
-
-A struct literal is untyped, the way a number literal is,
-and takes its type from the context — named or anonymous.
-What does not convert is a value already typed as an
-anonymous struct, a return list for instance: two anonymous
-types match when field names, types and order all match,
-and neither ever becomes a same-shaped named type.
-
-```landin
-here: point = (x: 1.0, y: 2.0)
-pair: (quot: i32, rem: i32) = divide(10, 3)
--- named: point_pair = divide(10, 3)     -- no, that is named
-```
-
-A named parameterized struct is nominal per fully applied instance. The
-identity is the source declaration plus its complete normalized positional
-actual tuple, including an actual the current field list does not use. Aliases
-of actuals do not create a second identity; changing an actual or the template
-does, even when the resulting fields and layout are equal. A mention in a
-function signature or as another template's type actual needs that identity but
-does not place its value inline. The same is true for an ordinary struct that
-names itself, an alias of itself, or another ordinary struct in a function
-parameter or result: each function field remains one pointer carrier, so even a
-mutual signature-only cycle has finite layout. A declared or anonymous
-routine materializes its direct multiple-result parts when it forms their
-caller-owned result aggregate, not by traversing a nested callback signature.
-If the receiving template later uses that actual as a field, payload or nominal
-array element, its layout is materialized
-there, recursively through nested nominal and nominal-array actuals. A
-zero-length array still validates that element edge. Target widths, offsets and
-padding are layout facts, not identity.
-
-At module scope that context forms a static image rather than running a
-constructor before the entry point [1460]. The image follows ordinary child
-fields and ordinary-struct variant payloads recursively. It still keeps every
-nominal boundary: a matching construction, `zeroed`, or a copied module image
-supplies the child, and a same-shaped different struct does not. Forward image
-references and aliases are allowed; a chain that returns to itself has no
-value. Widths, offsets and padding are not part of that folded source image —
-they follow the selected target's field layout [0750].
-
-### [0720] 'of' fills every field the literal did not name
-
-'of' fills every field the literal did not name, which is
-the same word and the same place array literals use it in
-at [0560]. It has to typecheck for each of them, so 'of
-false' works where the rest are bool and 'of zeroed' works
-wherever the rest have a zero image.
-A nonzero fill needs at least one omitted field. All omitted fields have the
-same complete type, including array length and reference permission. Its value
-is evaluated once after the named values and copied into each remaining field
-in declaration order. If an unpacked array repetition fills just one remaining
-field, its element is evaluated before the array is written and it can build
-directly in that field. A `zeroed` fill retains each field's own zero-image rule.
-This is not a default value: [0980] refused those on
-declarations, because a new parameter would then fit every
-existing call silently. Here the choice is made at each
-literal by whoever writes it. The trade is still real and
-belongs to that writer — a literal with 'of' picks up a
-field added later without a word, one without it breaks
-loudly.
-
-```landin
-cfg: control = (enable: true, mode: external, of zeroed)
-```
-
-### [0730] A register has three kinds of field
-
-A register has three kinds of field, and confusing them is
-the classic driver bug. A flag is one bit. A selection is a
-set of mutually exclusive named values, encoded as the
-datasheet says. A set is independent flags at once. And a
-plain number is a plain number.
-A set earns its place when its members mean something. A
-numbered bank of lines does not: sixteen output pins are
-[16]bool at 0..15, not sixteen invented atoms.
-
-```landin
-irq_rx: atom
-irq_tx: atom
-irq_err: atom
-
-internal: atom
-external: atom
-pll: atom
-```
-
-The encoding belongs to the union, not to the atom, so the
-same atom may be encoded differently in another register.
-The width is the smallest that holds the largest encoding,
-so it is usually left out; a base type is written only when
-the datasheet gives the field more room than it needs.
-
-```landin
-polarity: type = (active_low = 0 | active_high = 1) -- one bit
-clock_mode: type = (internal = 0 | external = 1 | pll = 4)
-divider_sel: type = u4 (by_1 = 0 | by_2 = 1) -- four bits, as given
-```
-
-A set is not a kind of its own. It is a packed struct of
-bool, one field per member, each sitting at the bit its
-member's encoding names — so membership is a field read,
-adding and removing a member is a field write, and building
-one is the ordinary struct literal with 'of' from [0720].
-There is no set literal, no set operator and no membership
-operator, because none of them is needed once it is a
-struct.
-The union's encodings are what place the bits, so the
-bit assignment never falls to declaration order, which is
-the hole this section closed. Inside a larger image the
-same fields sit at the image's bits, offset by where the
-set begins. A generator reading a vendor's SVD writes those
-fields out as it writes every other register declaration
-[1540]; the checked-in vendor device fixtures are that output.
-General SVD generation retains the companion-tool owner.
-The language adds no `set(X)` type former that would write
-them for it (D238), and the expansion does not change the
-raw-image or validation contract.
-
-```landin
-irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)
-
-irq_set: type = layout(packed, u32) struct
-    irq_rx: bool at 0
-    irq_tx: bool at 1
-    irq_err: bool at 2
-end irq_set
-
-control: type = layout(packed) struct
-    enable: bool at 0
-    mode: clock_mode at 4..6
-    irq_rx: bool at 8 -- irq's encodings, from bit 8
-    irq_tx: bool at 9
-    irq_err: bool at 10
-    divider: u12 at 16..27
-end control
-```
-
-Bit positions are written down rather than implied by the
-order of the fields. Every bit nobody claims is reserved by
-that fact alone: it cannot be named, it survives a
-read-modify-write untouched, and it appears in no
-completion list. That removes a field kind, removes the
-silent rule that the first field takes the low bits, and
-removes the dependence of the encoding on declaration
-order — which matters, because reordering fields of a
-published register would otherwise be a breaking change
-nobody sees.
-Within one packed struct it is all or nothing: if one field
-carries a position, all of them do.
-A field may be an array, which is how every real peripheral
-describes sixteen two-bit pin settings in one word. The
-element width times the count has to equal the range, and
-element zero takes the low bits.
-
-```landin
-moder: type = layout(packed) struct
-    pins: [16]pin_mode at 0..31
-end moder
-```
-
-Indexing such a field by a value known only at run time is
-ordinary code: it is a shift by a computed amount inside a
-register image, with a bounds check. D228 retains this bit-selection check
-in `unchecked`, because an invalid bit index has no computed byte address.
-On an image, that is — never straight through the device,
-for the reason [0740] gives.
-
-```landin
-set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
-    m.pins[n] = mode
-end set_pin
-```
-
-D228 makes the distinction precise: the packed struct is a raw image and
-accepts every carrier pattern. Copying it, passing it and returning it preserve
-all bits. Extracting an encoded field checks membership and traps on an unnamed
-pattern before producing a named value. Exhaustive matching applies to that
-validated value. An insertion preserves all other bits, and a fresh constructor
-starts with zero omitted bits. Packed fields have no independent byte address;
-pass the image for updates. `layout(packed, u32)` explicitly retains a 32-bit
-carrier when the highest named position would otherwise select a smaller one.
-The enabled representation widths are u1 through u64 within packed fields;
-they do not add arbitrary-width arithmetic or calling conventions.
-
-### [0740] Access behaviour is data, not keywords
-
-Access behaviour is data, not keywords. How a register
-reads, how it writes and what reserved bits it wants are
-atoms handed to the one operation that touches it, so an SVD
-generator can express write-one-to-clear, clear-on-read,
-write-once and whatever the next vendor invents without the
-language growing a word for each. There are two operations:
-`compiler.register_read(pointer, read_mode)` and
-`compiler.register_write(pointer, image, write_mode,
-reserved_policy, named_mask)`. The pointer is an ordinary
-one to u8, u16, u32 or u64, and its width is the one
-transaction the device sees. Writing a single field of a
-device register stays forbidden: build the whole value,
-write it once.
-
-```landin
-status_raw: (base: usize) -> (raw: u32) =
-    port: ptr u32 = ptr(base + 0x04)
-    raw = compiler.register_read(port, compiler.normal_read)
-end status_raw
-
-clear_events: (base: usize, events: u32) -> none =
-    port: ptr mut u32 = ptr(base + 0x08)
-    compiler.register_write(port, events, compiler.one_clears,
-                            compiler.write_zero, 0x0000_0007)
-end clear_events
-```
-
-The access behaviour is checked exactly there: a register
-whose read is 'none' has no read to perform, so
-`compiler.no_read` is an error rather than a mode, and so is
-`compiler.no_write`. Together with the rule above that gives
-the shape of every driver — read the whole image, change it
-locally, write it back whole.
-A fresh local constructor has no access to the previous hardware image.
-Preserving reserved hardware bits therefore requires an explicit image read
-before the local update; a whole-image write cannot hide that read. This
-read/modify/write sequence is not atomic, and its normal-read/normal-write
-premise does not extend to clear-on-read or one-clears behavior. Packed
-image source forms and every mode and policy are governed by D228.
-A generator writes one small typed function per register over these two
-operations, with the image's decode and encode beside it. D238 withdrew
-the `register(t, read:, write:, reset:)` wrapper type and the `volatile
-ptr` type the tour once used here: the operation, not the type, says that
-an access is a device transaction, and the complete prototype-1 driver
-needed nothing more.
-'reset' initialises nothing. It is what the datasheet says
-the register holds after a reset, generated as a constant so
-that tools and readers know what they are starting from. The
-hardware puts it there, not the program.
-
-```landin
-reset_flags: (base: usize) -> none =
-    port: ptr mut u32 = ptr(base)
-    image: control = (enable: true, mode: external, irq_rx: true, of zeroed)
-    compiler.register_write(port, control_encode(image),
-                            compiler.normal_write, compiler.write_zero,
-                            control_named_mask)
-end reset_flags
-
-read_modify_write: (base: usize, n: u32) -> none =
-    port: ptr mut u32 = ptr(base)
-    mut image := control_decode(compiler.register_read(port,
-                                                       compiler.normal_read))
-    image.divider = n
-    compiler.register_write(port, control_encode(image),
-                            compiler.normal_write, compiler.preserve,
-                            control_named_mask)
-end read_modify_write
-```
-
-### [0750] Fields keep the order you wrote them
-
-Fields keep the order you wrote them, with natural alignment
-and padding in between, so a hexdump matches the source and
-the layout does not shift under a new compiler.
-`layout(optimal)` explicitly permits D210's stable descending-alignment
-candidate, selected only when its final padded size is strictly smaller.
-Equal-sized candidates keep source order. Complete nested fields, arrays and
-variant parts stay indivisible; their internal rules do not change. The
-selected target supplies every byte count, including for 32-bit descriptions.
-Initializer evaluation still follows written order [0410]. Optimization flags
-never reorder an unannotated struct.
-`layout(c)` applies the selected C rules [1975]; it does not choose a function's
-calling convention. The enabled C subset uses native-endian scalar fields,
-fixed arrays, nested nonempty C structs and explicitly C-convention callback
-fields. Optimal layout does not qualify a record for C transport.
-`layout(c, packed)` is C's byte-packed record: every field at alignment one
-and no padding, as `__attribute__((packed))` lays one out. Its fields are read
-and written by copy and have no address of their own (D410), and C takes the
-record through a pointer (D414). A C record's last field may be `[0]T`, C's
-flexible array member, whose elements follow the record in memory (D413).
-Byte order is not a property of a field. A field holds the target's own order,
-which `compiler.byte_order` names [1560]; a program reading or writing another
-order converts where the bytes cross, with shifts [0320] or an ordinary
-function, so the conversion is visible where it costs. D239 withdrew the
-per-field `big` and `little` prefixes the tour once showed: they would make
-every load and store of that field a conversion, leave `addr` of it pointing at
-bytes an ordinary pointer reads wrongly, and need a debugger presentation the
-two native debuggers do not share.
-
-```landin
-packet: type = layout(c) struct
-    kind: u8
-    length: u16 -- big-endian as the wire sent it
-    id: u32
-end packet
-
-from_big_u16: (wire: u16) -> (value: u16) =
-    value = (wire << 8) | (wire >> 8) -- on a little-endian target
-end from_big_u16
-```
-
-### [0760] Attributes are prefix words, from a closed set
-
-Attributes are prefix words, from a closed set. Arguments
-are always parenthesised. Closed value sets are atoms;
-arbitrary linker names stay strings.
-
-```text
-mut public layout(c|optimal|packed)
-```
-
-and 'at' for a bit position. 'at', 'of' and 'align' are
-contextual: a field or an entry may still be called one of
-them, because nothing reads the word as an attribute there.
-Placement alignment is `link`'s 'align' label [1640], not a
-word of its own.
-'from' and 'with' are reserved and cannot name anything.
-
-```text
-escaping caller fixed option
-link(section: "...", symbol: "...", align: 16, vector: 16, keep)
-extern(c|interrupt|naked|...)
-```
-
-packed folded into layout, naked into extern, option implies
-fixed, and the five toolchain words became one attribute with
-named arguments. Register access is data now, not keywords.
-D238 withdrew `volatile` with the pointer type it qualified [0850],
-and D239 withdrew `big`, `little`, `weak`, `inline` and `noinline`:
-byte order is converted where bytes cross [0750], inlining is the
-optimizer's decision rather than the source's [1310], and a whole
-program links one definition per name, with the compiler-owned
-vector image doing what weak default handlers do in C [1640].
-
 ## LIFETIME AND ESCAPE
 
-### [0770] There is no borrow checker and there are no lifetime
+Landin has no borrow checker, no ownership and no lifetime annotations.
+What it has is smaller: inside each routine, the compiler knows where every
+pointer, slice and `any` points. That is the reference's *origin*, and
+there are three:
 
-There is no borrow checker and there are no lifetime
-annotations. Instead every pointer, slice and 'any' carries
-the origin of what it refers to: static, allocated, or
-frame. Frame-origin may not be returned, and may not be
-stored where something longer-lived keeps it.
+| origin | what it is | how long it lives |
+|---|---|---|
+| static | module storage and literals | the whole program |
+| allocated | what an allocator handed out | until you give it back |
+| frame | a routine's locals | until the routine returns |
+
+Everything in this section follows from a few rules:
+
+- A frame reference never leaves its routine ([0770]).
+- A routine does not keep a pointer it was given unless its signature says
+  `escaping` ([0780]).
+- While a view into a local is in use, the local cannot be grown or moved
+  ([0830]).
+- A returned reference says what it came from, with `from` ([0790]).
+
+Each rule is checked one routine at a time, against signatures, so a
+change in one body never changes what another may do. The price is that
+some mistakes go uncaught; [0860] lists them.
+
+### [0770] A frame reference cannot leave its routine
+
+A pointer to a local dies with the routine. Returning one, or storing it
+anywhere that outlives the routine, is an error.
 
 ```landin
 bad: () -> (p: ptr u32) =
@@ -1636,14 +2982,40 @@ bad: () -> (p: ptr u32) =
 end bad
 ```
 
-### [0780] Parameters are non-escaping by default
+A pointer to module storage is static, so the same shape is fine:
 
-Parameters are non-escaping by default, so a callee may use
-a pointer freely but not keep it. Keeping it is declared. This applies to
-stores through caller-owned pointers, slices and `inout` fields as well as
-module bindings. An update within the same origin is permitted; retaining a
-reference from another parameter requires `escaping`. In `push_front`, both
-`head` and `item` are retained in storage reached through the other argument.
+```landin
+mut tally: u32 = 0
+
+tally_cell: () -> (p: ptr mut u32) =
+    p = addr tally -- fine: module storage is static
+end tally_cell
+```
+
+The origin travels with the value: a slice of a local array, or an `any`
+built over a local ([1370]), is frame too.
+
+### [0780] A routine may use a pointer, but keeping it is declared
+
+A parameter is non-escaping by default. The callee may read and write
+through a pointer it was handed, but it may not keep it once it returns.
+
+```landin
+increment_cell: (cell: ptr mut u32) -> none =
+    cell.val += 1 -- using the pointer is fine; keeping it would not be
+end increment_cell
+
+caller_of_increment: () -> (n: u32) =
+    mut local: u32 = 1
+    increment_cell(addr local) -- fine: the callee does not keep it
+    n = local
+end caller_of_increment
+```
+
+So a pointer to a local can go into any call whose parameter does not say
+`escaping`. When a routine does keep a reference, it marks the parameter
+`escaping`, and then the caller may only pass something that lives long
+enough: allocated or static, never frame.
 
 ```landin
 push_front: (escaping inout head: ptr mut node, escaping item: ptr mut node)
@@ -1664,47 +3036,79 @@ build: (provider: type is mem.allocator, memory: provider,
 end build
 ```
 
-### [0790] The other direction
+`push_front` stores each argument where the other can reach it, so both are
+`escaping`.
 
-The other direction. What a returned reference was derived
-from is written down, because the caller cannot otherwise
-know that the thing it came from has to hold still now.
-Write permission remains the return type's business [0430]. A writable
-result also owes the destination contract below; `from` does not grant
-permission to write.
+"Keeping" means any store that outlives the call: into a module binding,
+or through a pointer, slice or `inout` field the caller owns. Storing a
+reference back into storage of the same origin is an update, not keeping,
+and needs no marker. Storing one parameter's reference into another
+parameter's storage needs `escaping` ([1910]).
+
+### [0830] A view into a local holds the local still
+
+A view taken from a local borrows it. While the view is still in use, the
+local cannot be passed as `inout` or `sink`, because that call could grow
+or move the storage under the view.
+
+```landin
+grow_and_use: (inout l: list, v: i32) -> none =
+    xs := l.items
+    push(l, v) -- error: l is borrowed by xs
+    use(xs)
+end grow_and_use
+```
+
+The fix is always nearby: take the view again after the call. The check
+looks at one routine body, so there is nothing to annotate.
+
+It only applies where the storage can actually move. An unchecked region
+([1120]) does not turn it off: origins and escape are among the checks that
+stay.
+
+### [0790] A returned reference says where it came from: `from`
+
+When a routine returns a reference derived from a parameter, its signature
+says so with `from`. The caller then knows that the thing it passed in has
+to hold still while it uses the result.
 
 ```landin
 used: (t: type, l: list(t)) -> (s: []mut t from l) = l.items[0..<l.len] end
 ```
 
-One accessor, not two. It hands out the widest permission
-the storage has, and a caller who wants less relaxes it by
-[0440] — `xs: []t = vec.used(l)`. The pair of accessors that
-every language with deep const ends up needing is not needed
-here.
-Named from several parameters at once it borrows all of
-them.
-With no from clause the result is independent: it borrows
-nothing. That is what an allocator returns, and it is why
-two live allocations out of one allocator are unremarkable.
-Both halves are checked where the function is written.
-Returning something derived from a parameter without saying
-so is an error, and naming a parameter it did not come from
-is an error too, so the clause cannot drift away from the
-body. Static storage is the one exception to the second half:
-a read-only result that reaches module storage, or storage a
-module binding points to, a literal or an allocation, outlives
-every parameter, so it satisfies a source it does not come
-from. That is what lets a concept entry written `from self`
-be implemented by a provider that lends storage the process
-keeps, the process's own arguments among them. A writable
-result has no such exception, as D222 below says. For [0480]'s optional pointer this exact comparison is made only on an
-edge that actually returns the pointer; an edge provably returning the empty
-atom has no reference origin at all.
-For a result that carries a writable reference, D222 also requires that its
-`from` clause conceal no known independent storage alternative. A helper
-cannot choose between its parameter and a module address while advertising
-only the parameter. Pass the fallback explicitly and name both sources:
+- `from` names where the reference came from; it says nothing about
+  writing. Write permission is the return type's business ([0430]).
+- `from a, b` borrows from both.
+- No `from` at all means the result is independent: it borrows nothing.
+  That is what an allocator returns, which is why two live allocations
+  from one allocator are unremarkable.
+
+One accessor is enough. `used` hands out the widest permission the storage
+has, and a caller who wants less relaxes it ([0440]):
+`xs: []t = vec.used(l)`. There is no const and non-const pair.
+
+The clause is checked against the body in both directions. Returning
+something derived from a parameter without naming it is an error, and so
+is naming a parameter the result did not come from. The clause cannot
+drift away from the body.
+
+`from` is the mirror of `escaping`. `escaping` says the callee keeps what
+the caller handed in; `from` says the caller keeps something of what the
+callee handed back. Both are written, not inferred, so a distant body can
+never change a signature, and function pointers, concept entries and the C
+boundary need no special rule.
+
+Static storage is the one exception to "named but not derived from". A
+read-only result that reaches module storage, a literal or an allocation
+outlives every parameter, so it satisfies a `from` that names a parameter
+it does not come from. It must still come from no parameter the clause
+leaves out. That lets a concept entry written `from self` be implemented
+by a provider that lends storage the process keeps, such as the program's
+arguments. A writable result gets no such exception.
+
+A writable result must also show every place it could point to. A helper
+may not choose between its parameter and a module address while naming
+only the parameter. Pass the fallback in and name both:
 
 ```landin
 choose: (source: ptr mut ptr i32, fallback: ptr mut ptr i32, flag: bool)
@@ -1713,45 +3117,24 @@ choose: (source: ptr mut ptr i32, fallback: ptr mut ptr i32, flag: bool)
 end choose
 ```
 
-Calling `choose(addr local_slot, addr module_slot, flag)` keeps both possible
-destinations visible. Storing a non-escaping caller reference through that
-result is refused; choosing between two views of the same caller origin
-still permits a same-origin update [1910]. Wrapping this call in a helper
-that hides `module_slot` and declares only `from source` is also refused.
-Ordinary container accessors remain valid, including heap-backed views:
-`from` does not require storage physically inside the argument object.
+`choose(addr local_slot, addr module_slot, flag)` keeps both destinations
+visible to the caller, so storing a non-escaping reference through the
+result is refused. A wrapper that hides `module_slot` and declares only
+`from source` is refused too. Ordinary container accessors are fine,
+including views of heap storage: `from` does not require the storage to
+sit physically inside the argument.
 
-This applies to writable references inside arrays, structs and variants,
-and behind read-only references: permission is not deep const. Erased state
-is checked conservatively because its hidden type may carry writable views.
-Origins within a reference-bearing aggregate join conservatively; a read-only
-field does not isolate its independent origin from a writable sibling.
-A result with no reachable writable reference keeps the dependency-only rule.
-An optional empty atom and an empty slice literal add no storage destination;
-constructors preserve that empty-storage fact, but the slice or aggregate
-still owes the ordinary exact `from` comparison. Independent results with no
-`from` remain valid. Explicit integer-to-pointer conversion
-keeps [0470]'s untracked boundary, but cannot erase a separately known module
-alternative. These are local checks of a written contract, not inferred
-interprocedural alias analysis.
+Fine print: the writable-result rule reaches through arrays, structs,
+variants, read-only references and erased values; empty atoms and empty
+slice literals add no destination; and [0480]'s optional pointer is
+compared only on the edges that return the pointer. All of it is in
+`spec.md` [1910] and (D222).
 
-In obligation it is the mirror of escaping. escaping says
-the callee keeps a reference to what the caller handed in;
-from says the caller keeps a reference to what the callee
-handed back.
-It is written rather than inferred, for the reason escaping
-is: inference across calls lets a distant body change a
-signature, and local compilation is worth more. Writing it
-also leaves nothing to carve out — function pointers,
-concept entries and the C boundary need no special rule
-here, because nothing was ever being inferred.
+### [0800] A borrow through `from` lasts across the call
 
-### [0800] The borrow of reaches across the call from there
-
-The borrow of [0830] reaches across the call from there,
-with the derivation supplied by the signature instead of
-being visible in one expression. No new checking, and the
-fix is the same one: take the view again afterwards.
+A result with `from` borrows its source just as a view does in [0830].
+The signature supplies the derivation instead of one expression showing
+it, and the fix is the same: take the view again afterwards.
 
 ```landin
 xs := vec.used(numbers)
@@ -1759,73 +3142,68 @@ try vec.push(numbers, a, 5) -- error: numbers is borrowed by xs
 use(xs)
 ```
 
-Nothing is written at the call. A convention is part of the
-declaration and appears nowhere else: the compiler has it,
-and a caller that misuses what it got is told so at the
-next use, so a marker would buy legibility rather than
-safety. That is an editor's job, the same way the resolved
-error set is. escaping already works this way — it puts an
-obligation on the caller and lives only in the signature.
+Nothing is written at the call. The convention lives in the declaration,
+and a caller that misuses the result is told at its next use. A marker at
+the call would add legibility, not safety, and showing it is an editor's
+job. `escaping` already works this way.
 
-### [0810] Integer-to-pointer conversion ends tracked derivation
+### [0840] Mixed origins count as the shortest-lived
 
-Integer-to-pointer conversion [0470] ends tracked derivation. An integer that
-used to be a pointer carries no origin, so a pointer formed from it borrows
-nothing. Allocator internals use that conversion explicitly to return blocks
-without borrowing their allocator. The conversion does not establish that the
-storage is live or large enough; those remain the library's unsafe backing
-obligations [1720]. No special compiler privilege belongs to `core`.
+When a value combines origins, it takes the most restrictive one. A struct
+holding one frame pointer is frame as a whole, and a value chosen between
+two branches takes the shorter-lived of the two.
+
+A value that holds no references has no origin and goes anywhere, which is
+one more reason the idiom is handles and indices. A number computed from a
+view keeps no borrow: saving `lenof xs` saves a number, usable after `xs`
+or its container changes.
+
+Taking an address or a range is different: that reference keeps the
+selected storage's origin ([0430], [0790]). Writing through a known
+address of a local updates the local's origins too. Mixing in a pointer
+made from an integer ([0810]) does not hide a tracked origin. The rest is
+in `spec.md` [1910].
+
+### [0810] A pointer made from an integer is not tracked
+
+Converting an integer to a pointer ([0470]) ends tracking. The integer has
+no origin, so the pointer borrows nothing, and the compiler says nothing
+more about its lifetime. It also does not check that the storage is live
+or large enough: that stays the library's unsafe obligation ([1720]).
 
 ```landin
 address: usize = usize(self.base) + offset
 block: ptr mut u8 = ptr(address) -- no tracked derivation survives
 ```
 
-This is the address conversion `core/arena`'s allocation uses after checking
-its arithmetic. [0500] records the omitted `offset` and `base_of` conveniences
-and the rejected `slice_from`; none supplies another derivation rule. The
-initialized-prefix state machine remains responsible for exposing only values
-that have actually been stored [0510].
+This is how `core/arena` returns a block without borrowing the arena,
+after checking its arithmetic. `core` gets no special privilege for it.
+[0500] says why there is no `offset` or `slice_from` to do this for you,
+and [0510] keeps uninitialized storage out of reach.
 
-An allocator's `resize` that returns the block it was given, unmoved, writes
-`moved = ptr(usize(block))`: the entry's result has no `from`, because an
-allocation borrows nothing, and returning `block` itself would derive from a
-parameter the clause does not name.
+An allocator's `resize` that returns the block it was given, unmoved,
+writes `moved = ptr(usize(block))`. The entry's result has no `from`,
+because an allocation borrows nothing, and returning `block` itself would
+derive from a parameter the clause does not name.
 
-What re-enters tracking after such a step is a signature. A routine that
-indexes a table C gave it, or passes storage to an assembly block [1630],
-writes the contract its callers keep: `from table` on the result, `ptr mut u8`
-on the storage. Callers are checked against it like any other; the routine's
-own body is not, since an integer-made pointer satisfies any `from`, so the
-contract is its author's claim and the routine is kept small (D440). A table
-whose length C also gives keeps its origin another way: typed `ptr [1]t`, its
-`p.val[0..<1]` is widened to that length inside `unchecked`, which is the
-program's claim about the extent over elements C already initialised.
+Tracking comes back through a signature. A routine that indexes a table C
+gave it, or hands storage to an assembly block ([1630]), writes the
+contract its callers keep: `from table` on the result, `ptr mut u8` on the
+storage. Callers are checked against it like any other signature. The
+routine's own body is not, since an integer-made pointer satisfies any
+`from`, so the contract is its author's claim and the routine is kept small
+(D440).
 
-### [0820] Arenas are ordinary allocators with explicit backing
+A table whose length C also gives can keep its origin instead: type it
+`ptr [1]t` and widen `p.val[0..<1]` to that length inside `unchecked`.
+The widening is the program's claim about elements C already initialised.
 
-An arena is an ordinary library value, not a builtin type or lexical region.
-Import `core/arena` and write `arena.arena`, or accept any provider satisfying
-`core/mem`'s `mem.allocator`. Both formerly promised forms, `arena name do` and the
-otherwise-undeclared builtin type `arena`, are withdrawn by D212. Their named
-diagnostics explain the change; a declared type or ordinary identifier named
-`arena` remains valid.
+### [0820] Arenas are ordinary allocators you give storage to
 
-`arena.over(state, base, size)` supplies the backing address and byte
-capacity explicitly, and the arena's state: an `arena.space` the caller
-declares `zeroed` beside the backing, which `over` fills before returning
-the arena's handle `from` it. Its `escaping base` parameter accepts backing
-that the caller may retain, including module storage and independently
-acquired storage; it rejects a frame array. The arena representation is
-private, so a struct literal cannot bypass that check. The handle retains the
-origins of its state and its base, and copies of it share one arena. Allocation aligns the
-absolute address and advances a monotonic offset; individual frees do nothing.
-A caller can supply a fixed array on a constrained target or explicitly
-acquired hosted storage, choosing the actual capacity rather than a hidden
-frame buffer. Overflow or an extent that does not fit reports
-`mem.out_of_memory` before changing the offset. `arena.used` reports the
-consumed bytes without exposing the private state, and `core/fault` wraps an
-arena, or any provider, with an explicit allocation budget [1360].
+An arena is a library value from `core/arena`: you hand it a block of
+bytes, it hands out pieces of it, and individual frees do nothing. It is
+not a builtin type or block. Code that takes any allocator accepts it as a
+`mem.allocator` provider.
 
 ```landin
 import core/arena
@@ -1848,1012 +3226,110 @@ report: () -> (code: i32) =
 end report
 ```
 
-For bulk hosted cleanup, `core/region.over(ledger, provider)` creates an
-ordinary allocator that records its acquired extents through that provider,
-in a `region.space` ledger the caller declares `zeroed`.
-An explicit `defer region.release(ledger, provider)` releases them together.
-The region's handle holds a copy of its provider's handle; its allocations are
-still independent, and its bookkeeping also consumes the supplied provider's
-capacity. A finite
-caller-backed provider therefore remains finite, with no hidden heap fallback.
-This library operation is not the withdrawn lexical escape guarantee. Region
-allocations must stop being used before `release`, regardless of the
-parent provider's backing lifetime. Likewise, `core/pool.over` retains the
-backing origin in its handle, but its allocation results are independent:
-callers must keep the backing live until every use of those results ends.
-The checked arena constructor does not extend these guarantees to other
-providers or prove allocation lifetimes generally.
+- `arena.over(state, base, size)` takes the backing address and its size
+  in bytes, and an `arena.space` you declare `zeroed` beside it. It fills
+  the space and returns the arena's handle `from` it.
+- The handle keeps the origins of its state and its backing, and copies of
+  it share one arena.
+- Allocation aligns the absolute address and advances an offset.
+  `arena.reset` gives everything back at once.
+- A request that overflows or does not fit fails with `mem.out_of_memory`
+  before changing anything.
+- `arena.used` reports the bytes consumed. `core/fault` wraps an arena, or
+  any provider, with an allocation budget ([1360]).
 
-The allocator's independent no-`from` result permits both live allocations
-and useful helper results. It does not acquire a lexical frame origin when
-called inside a block. In particular, a helper can store an allocated result
-in module storage without returning it through that block. A checked arena
-therefore cannot take frame backing.
-For a local buffer whose use the programmer can keep entirely within its
-frame, `arena.over_unchecked` makes the
-lifetime opt-out explicit at construction. Its allocation results remain
-independent, even through helpers; the caller must ensure every result stops
-being used before the buffer ends. A result borrowed from the arena's handle
-would not lock the arena, since a handle is passed `in`, but every container
-that keeps the block in its own storage would then retain the handle, and
-could not take one made from a frame-local state [0790].
+`over` takes its backing as `escaping base`, so it accepts module storage
+or storage acquired elsewhere and refuses a frame array. The reason is
+that allocations are independent, with no `from` ([0790]), so a helper can
+store one in module storage; an arena over frame storage would let that
+pointer outlive the frame. The arena's representation is private, so a
+struct literal cannot get around the check.
 
-The backing owner arranges its lifetime and explicit cleanup. A frame array
-used through an unchecked constructor ends with its frame; hosted allocations need explicit release, which `defer`
-can run on normal, failure, return and loop-transfer exits [1100]. Nested
-ordinary blocks and providers do not infer a shared region: disjoint backing
-has independent capacity, while overlapping backing and outstanding aliases
-remain the caller's responsibility. Do not use results after backing ends or
-is reused. Direct and helper-returned pointers, aggregates, slices, `any` and
-callback state all obey the ordinary origin rules; none gains an arena-specific
-escape check. The explicit integer-to-pointer conversion inside allocation is
-[0470]'s existing non-guarantee, not proof of a longer lifetime. The checked
-constructor prevents a tracked frame extent from reaching that conversion
-through the ordinary arena API. Tracked direct
-frame references and provider handles still cannot escape [0770] [0780].
+For a local buffer whose every use you keep inside the frame,
+`arena.over_unchecked` takes frame backing and says so at construction.
+Its results are still independent, even through helpers, and you must stop
+using every one before the buffer ends.
 
-### [0830] A view derived from a local borrows it
+Other providers build on the same idea:
 
-A view derived from a local borrows it. While the view is
-still in use, that local may not be handed on as inout or
-sink, which is what stops a container from moving under a
-slice into it. The check is local to one function body, so
-there is nothing to annotate and the fix is always nearby:
-take the view again afterwards. It only applies where the
-storage can actually move, and an unchecked region [1120]
-does not turn it off: origins and escape are among the
-checks that stay.
+| provider | what it does | what you must do |
+|---|---|---|
+| `core/region.over(ledger, provider)` | records every extent it takes from `provider` in a `region.space` ledger you declare `zeroed` | release all at once with `defer region.release(ledger, provider)`, and stop using its allocations before then |
+| `core/pool.over` | hands out pieces of backing whose origin its handle keeps | keep the backing live until every result is done with |
 
-```landin
-grow_and_use: (inout l: list, v: i32) -> none =
-    xs := l.items
-    push(l, v) -- error: l is borrowed by xs
-    use(xs)
-end grow_and_use
-```
+A region's handle holds a copy of its provider's handle. Its allocations
+are independent, its bookkeeping also uses the provider's capacity, and a
+finite provider stays finite: there is no hidden heap fallback.
 
-### [0840] Origins join to the shortest-lived part
+Fine print, all of it the caller's business:
 
-Origins join to the shortest-lived part. A struct holding
-one frame pointer is frame as a whole, and a value chosen
-between two branches takes the more restrictive of the two.
-Returns need no analysis across function boundaries at all:
-frame origin cannot leave a function, so whatever does
-leave is allocated or static by construction. A value that
-holds no references at all is unconstrained, which is
-another reason the idiom is handles and indices.
-A scalar computed from a view does not retain that view. In particular,
-saving `lenof xs` saves a number, not a borrow: the number may be used after
-`xs` or its container is changed. This does not exempt an operator's evaluated
-operands from their checks, or change [0370]'s unevaluated measurements.
-Taking an address or range is different: that reference still keeps the
-selected storage's origin [0430] [0790]. Writing through a known address of a
-local updates the local's tracked origins too. Joining an integer-created
-pointer with a tracked reference does not hide the tracked origin.
+- Whoever owns the backing arranges its lifetime and release; `defer` runs
+  on every exit ([1100]).
+- Nested blocks and providers share nothing implicitly. Disjoint backing
+  has independent capacity; overlapping backing and outstanding aliases are
+  your responsibility.
+- Do not use results after their backing ends or is reused.
+- Pointers, aggregates, slices, `any` and callback state from an arena obey
+  the ordinary origin rules ([0770], [0780]). There is no arena-specific
+  escape check, and the integer conversion inside allocation ([0470])
+  proves no longer lifetime.
+- The checked `arena.over` protects only the arena's own backing. It
+  proves nothing about other providers, or about how long you use an
+  allocation.
 
-### [0850] Volatile is exempt from the borrow rule and from every
+There is no `arena` type and no `arena name do` block; `arena` is an
+ordinary name you may declare (D212).
 
-Volatile is exempt from the borrow rule and from every
-aliasing assumption. A volatile access is an operation:
-`compiler.volatile_load` and `compiler.volatile_store` for a
-scalar, and D228's `compiler.register_read` and
-`compiler.register_write` for a register image [0740]. Each
-performs exactly one access of its width through an ordinary
-pointer, usually one built from an address [0460] and so
-outside the lifetime checks already [0470]. Hardware routinely
-needs several typed windows on one address — a byte view and a
-word view of the same register — and that is legal,
-deliberately. D227 says what each access orders and what it
-does not. D238 records why there is no `volatile ptr` type: a
-qualifier would be a second permission on every reference,
-relaxed and checked beside `mut` [0440], and the complete
-prototype-1 driver needed none.
+### [0850] Volatile access sits outside the borrow rules
+
+A volatile access is exempt from the borrow rule and from every aliasing
+assumption. It is an operation, not a pointer type:
+
+| operation | for |
+|---|---|
+| `compiler.volatile_load`, `compiler.volatile_store` | one scalar |
+| `compiler.register_read`, `compiler.register_write` | a register image ([0740]) |
+
+Each performs exactly one access of its width through an ordinary pointer,
+usually one built from an address ([0460]) and so already outside the
+lifetime checks ([0470]). Hardware often needs several typed windows on one
+address, a byte view and a word view of the same register, and that is
+legal on purpose.
+
+There is no `volatile ptr`, because a second permission on every reference
+would buy nothing the operations do not (D238). What each access orders is
+in (D227).
 
 The complete prototype-1 [driver derivation](compiler/tests/driver/DERIVATION.md)
-uses these ordinary slices with an explicit synthetic device completion
-contract. Its memory barrier follows acknowledged drain; neither an interrupt
-nor interrupt masking grants permission to reuse active DMA storage.
-The derived driver program in `compiler/tests/driver` owns that executable
-library protocol, not a new language lifetime guarantee.
+shows DMA with these ordinary slices. Its memory barrier follows the
+device's acknowledged drain, and neither an interrupt nor masking one makes
+active DMA storage reusable. That is the driver's own protocol, not a
+language lifetime guarantee.
 
 ### [0860] What this does not catch
 
-What this does not catch, said plainly: two different
-arenas are indistinguishable, pointers that travel through
-a struct field and are read back later, and anything across
-the C boundary. A view taken through an accessor used to
-be on this list; [0790] took it off. What is left would
-need regions or generation counters, and both are
-deliberately out.
-
-## FUNCTIONS
-
-### [0870] A function is a value of a function type
-
-A function is a value of a function type. No 'fn' keyword.
-'=' opens the body, 'end' closes it, always.
-
-```landin
-double: (x: i32) -> (r: i32) =
-    r = x * 2
-end double
-```
-
-### [0880] A single-expression body still takes an end
-
-A single-expression body still takes an end. The expression
-fills the named return.
-
-```landin
-triple_it: (x: i32) -> (r: i32) = x * 3 end
-```
-
-### [0890] Nothing returned
-
-Nothing returned, and never returns:
-
-```landin
-log_it: (m: utf8) -> none = end log_it
-halt_it: () -> noreturn = loop do end loop end halt_it
-```
-
-`none` returns normally without a value. `noreturn` never returns normally
-and has no checked error set. It is part of function-type identity: a
-`()->none` function cannot stand in for a `()->noreturn` function or vice
-versa. Calls end the continuation, so a branch that calls `halt_it()` needs
-no joined value. A body must diverge on every reachable path; a conditional
-loop is not enough merely because it is expected to run forever.
-
-A call does not unwind `defer`. A deferred nonreturning call, when its cleanup
-edge runs, stops later cleanup and the original transfer. Ordinary and C
-signatures may use this form within the target's supported surface; interrupt
-and naked signatures retain `()->none`. D231 specifies the detailed contract.
-
-### [1000] A function type is an ordinary type
-
-A function type is an ordinary type, and a function is an
-ordinary value of it, represented as a code address. There
-is no separate function-pointer type and addr is not used
-on functions: the type is written the way the signature is.
-
-```landin
-handler: type = () -> none
-mut current: handler = default_handler
-```
-
-The names written inside the signature describe its parameter and return
-positions; in a type they do not declare local names. Two function types agree
-by those positions' types, not by their labels. Function values may themselves
-be parameters and named returns, so that structural comparison is recursive.
-Convention and variadicness are part of that identity too: a C callback type
-writes `extern(c) (parameters) -> returns`, and an ordinary Landin function
-with the same visible arguments does not agree with it. A pointer to such a
-function type points to a cell holding the code address, not to C callback
-code itself.
-A module binding initialized by a named or anonymous function is a static code
-address; mutable local or module storage may later receive any address with the
-same complete signature.
-A callback is therefore a pair of that and a state pointer,
-written out because nothing is captured.
-
-```landin
-on_byte: type = struct
-    call: (state: ptr u8, b: u8) -> none
-    state: ptr u8
-end on_byte
-```
-
-A function-valued field is called through its ordinary selection:
-`callback.call(callback.state, byte)`. It keeps the complete structural
-signature of the field type through construction, assignment, aggregate copy,
-variant payloads, nesting and arrays of such structs. The root binding decides
-whether the field may be replaced; a call evaluates that selected code address
-before its arguments.
-
-### [1010] Anonymous functions
-
-Anonymous functions. No capture: their routine may use module declarations,
-its own parameters, named return and body locals, but no local, parameter or
-return from the expression's enclosing routine. State travels as an explicit
-parameter. Forming one produces a static code address; it does not execute the
-body.
-
-```landin
-less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
-```
-
-### [0900] Three parameter conventions
-
-Three parameter conventions, and they are about the value
-you were handed — never about what it points at, which the
-type says by [0450].
-
-| convention | what it promises |
-| --- | --- |
-| `in` | I will not change the value. The default, unmarked. |
-| `inout` | I may replace it, exclusively, and the change comes back. Implies mut. |
-| `sink` | consumed. The place the caller named is dead afterwards — see [0910], since a place is not always a binding. |
-
-So a function that writes registers through a pointer it
-will never re-point takes it as 'in' and the pointer type
-carries the mut. That reads as what it does, which the older
-rule could not say.
-Outputs are not a convention: returns are named.
-Orthogonal to all three, 'escaping' says the callee may
-keep what a pointer, slice or 'any' refers to beyond the
-call, so the caller must prove it lives long enough. In
-obligation it is the opposite of sink: sink ends the
-caller's duty, escaping extends it.
-On a generic parameter escaping says the right thing at
-both extremes with no special case. For `t` = u32 it is
-vacuous, since [0840] already leaves a value holding no
-references unconstrained; for `t` = ptr node it is exact.
-The origin travels with the type, so one word covers both.
-An inout argument need not be a binding. A pointer target,
-c.inner.val, is an ordinary one. The same provable
-binding-rooted place cannot fill two inout parameters of one
-call. Distinct pointer and computed-index paths may still alias;
-that is beyond the local analysis and is not an exclusivity
-guarantee [1720].
-
-```landin
-process: (source: []u8, inout target: []u8, sink owned: buffer)
-         -> (written: u32) =
-    written = 0
-end process
-```
-
-### [0910] sink takes a place
-
-sink takes a place, and a field of a binding is a place,
-so consuming a container's field needs no ceremony. The
-path has to be rooted in a binding and contain no
-dereference and no computed index, which is the line where
-the analysis is still provable: two pointers may name one
-place, so p.val.items is refused, and a computed index
-names none in particular, so xs[i].items is too.
-A literal fixed-array index stays within the binding's own storage. A slice
-index follows its backing reference, so it is refused even when its index is a
-literal. The slice descriptor itself, including one held in a field or fixed
-array element, is an ordinary place and may be consumed as a whole.
-Consumption happens when the call begins, after its callee and all arguments
-have evaluated left to right. Thus `use(value, value.count)` is allowed when
-`use` takes its first parameter by sink. If a later argument returns early,
-that call has not consumed `value`. Calls entered during argument evaluation
-still have their own effects. Each by-value argument keeps the value captured
-when it was evaluated; a later assignment does not change that captured value.
-At call entry each sink place must still be live. Repeated or provably
-overlapping sinks are refused, and no inout argument may then name a provably
-consumed place. [1910] and D223 give the exact entry rule.
-A place that was sunk is dead. Reading it before it is
-assigned again is an error, and that is what closes the
-window between releasing storage and repointing the field
-— the window a temporary binding would have left open.
-Reading the enclosing aggregate also reads that field. Assigning a replacement
-aggregate restores its fields; unrelated fields and array elements stay live.
-Say plainly what this is and is not. It is a
-use-after-consume check on one place. It is not ownership:
-the value is copyable, so a copy made before the sink is
-refused nothing, and consuming through both is not caught.
-Making it ownership means values that cannot be copied.
-Affine values remain parked with their resource-prototype
-trigger in ROADMAP.md's register.
-A place sunk out of an inout parameter must be assigned
-again before the function returns, or the caller would get
-its struct back with a dead field and nobody tracking it.
-This includes a failure the caller recovers from. Applicable cleanup runs
-before the check, so a `defer` or `undo` may restore the field. A failure needs
-no successful named result under [0930], but it still hands back `inout` storage.
-
-```landin
-consume: (t: type, sink items: []t) -> none = end consume
-
-reset: (t: type, inout l: list(t)) -> none =
-    consume(l.items) -- l.items is dead from here
-    l.items = [] -- and live again from here
-    l.len = 0
-end reset
-```
-
-### [1040] A caller parameter is filled in by the compiler with the call site
-
-A caller parameter is filled in by the compiler with the site of the call,
-so assertions and logging work without macros. Its type is an ordinary struct
-with exactly these three u32 fields, in this order:
-
-```landin
-site: type = struct
-    file_id: u32
-    line: u32
-    column: u32
-end site
-
-assert: (cond: bool, caller where: site) -> none =
-    if not cond then
-        report_failure(where)
-    end if
-end assert
-```
-
-Used as: `assert(count > 0)`.
-
-The value is 12 bytes on both 32-bit and 64-bit targets. The file number belongs
-to this compilation; the line and byte column are one-based. Filenames live in
-a separate table that need not ship with the program. Even without it, an
-assertion can report a file number, line and column. Resolving the filename
-requires the table from the matching build. This follows [1670]'s reason for
-keeping filenames out of the required runtime data; its compiler-check handler
-retains its own numbered-site interface.
-
-The parameter is immutable and omitted from an ordinary call. A wrapper
-preserves the original coordinates explicitly, by naming its own caller
-parameter as the complete argument:
-
-```landin
-checked: (cond: bool, caller where: site) -> none =
-    assert(cond, where: where)
-end checked
-```
-
-Omitting `where` in that inner call deliberately reports the wrapper's call.
-A copied or constructed value cannot be passed into a caller position. The
-coordinates may otherwise be read, copied and saved as an ordinary struct.
-
-### [0920] Multiple named returns
-
-Multiple named returns.
-
-```landin
-divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
-    quot = a / b
-    rem = a % b
-end divide
-```
-
-Two or more returns travel as one anonymous structural result aggregate. Their
-written order fixes its layout and transport; their names are its fields. A
-single return keeps its own type rather than being wrapped.
-
-### [0930] Every named return must be assigned before return
-
-Every named return must be assigned before return. On the
-fail path they need not be, and the caller may not read them.
-
-### [0990] A return list is an anonymous struct
-
-A return list is an anonymous struct, so a result can be
-bound whole and read by field, or destructured. Binding by
-name, never by position.
-
-```landin
-whole := divide(10, 3)
-sum := whole.quot + whole.rem
-(quot, rem) := divide(10, 3)
-(quot: q2) := divide(20, 3)
-(quot, _) := divide(30, 3)
-```
-
-The call is evaluated once. Names may be selected in any order, omitted, or
-renamed after `:`; `_` explicitly ignores what is not bound. A whole result can
-also cross an `if`, `match`, or bare-block value when every fallthrough edge has
-the same names and field types. Function types compare result types in order
-but not these labels, so a call through a stored function uses the labels of
-its static function type.
-
-### [0940] Errors: a declared set of atoms in one dedicated register
-
-Errors: a declared set of atoms in one dedicated register.
-
-```landin
-open_file: (path: utf8) -> (handle: u32) ! not_found | no_access =
-    fail no_access when lenof path == 0
-    handle = 1
-end open_file
-```
-
-Atom and error sets are structural declaration-identity sets: aliases flatten,
-source order does not matter, and a singleton may widen into a union containing
-it. In the first Linux x86-64 internal convention ordinary atom values use
-dense nonzero 32-bit codes, while `%r10d` carries the error outcome and zero
-means success. The ordinary result convention is unchanged.
-
-### [0950] Not everything that goes wrong belongs in that channel
-
-Not everything that goes wrong belongs in that channel,
-and the question to ask is whether it can be determined
-from what you already hold. A syntax mistake is entirely
-in the bytes the parser is looking at, so it is checked,
-reported and recovered from — a parser that stops at the
-first mistake hides the other twelve. Out of memory, a
-file that is not there, a device someone unplugged hang on
-the world instead of on your data, and checking first
-would only be a race, so those are what fail is for.
-Put briefly: check what you can foresee, and where you can
-foresee it, prefer working around it to reporting it.
-fail is for what cannot be foreseen or cannot be dealt
-with where it happens.
-Reporting needs somewhere to report to, and that is an
-ordinary parameter. A diagnostics sink is a capability by
-[1680]: passing one makes the chosen destination explicit.
-The parameter list alone does not prove that the function
-cannot construct another sink or acquire a host world.
-
-The parser-support library spells that capability `core/diag.log`. Its
-object-safe `note` entry accepts a byte position, severity and escaping byte
-slice, and declares `io_failed`: a bounded implementation never raises that
-outcome, while a streaming implementation must propagate a failed write.
-Bounded overflow is not failure. The logger stops retaining entries, increments
-its `dropped` count, and continues to observe whether an error was reported.
-Both implementations can be passed as `any diag.log`, so the producer does not
-know which retention or delivery policy its caller selected.
-
-```landin
-parse: (src: utf8, inout d: diagnostics)
-       -> (tree: ptr node) ! out_of_memory | too_deep =
-    tree = try statements(src, d)
-end parse
-```
-
-### [0960] Propagating: try, visible at the call or traversal site
-
-Propagating: try, visible at the call or traversal site.
-'...' means: plus whatever my callees can fail with. Not
-allowed where the set must be concrete: function pointers,
-concept entries [1260], anything exported to C — and
-anything public. A public signature is a promise, and one
-that a change three modules down can rewrite silently is
-not a promise. Inside a module, where the compiler sees
-every caller anyway, '...' is a convenience and stays. Mutually recursive
-private routines are inferred together at their least fixed point; an empty
-inferred set is infallible. A generic template has no error signature of its
-own: each concrete argument tuple joins that same fixed point as a separate
-routine, so equal tuples share one answer and unequal tuples can keep different
-answers. Recovery and propagation see the finalized set for the selected
-instance. Passing a recovered error, or a local alias of it, to a generic call
-waits for that complete set. A circular dependency between selecting the generic
-instance and inferring its own effects is refused (D215), without guessing a set;
-ordinary recursive error inference remains supported.
-Function types and anonymous functions write a concrete set because
-their complete signature is their type.
-
-```landin
-read_config: (path: utf8) -> (data: []u8) ! ... =
-    h := try open_file(path)
-    data = []
-end read_config
-```
-
-`try for item in source do ... end for` propagates a declared failure
-from any traversal step. The enclosing function must declare or infer the
-provider error atoms. A caller can recover them with the ordinary `else`
-clause on that function call.
-
-### [1030] Handling
-
-Handling, not just propagating: an else clause on the call,
-binding the error atom. It either yields a value or leaves
-the function. try is sugar for the second line.
-
-```landin
-h1 := open_file(path) else 0
-h2 := open_file(path) else (e) fail e end
-h3 := open_file(path) else (e)
-    match e
-        not_found: create(path)
-        _: fail e
-    end match
-end
-```
-
-The else clause yields a value, or transfers control out of
-the block that encloses it: return, fail, break, continue.
-On a call that returns nothing there is no value to yield, so
-the clause only handles the error, and the statement after the
-call runs next.
-That is the same rule an if-expression arm follows, so an
-arm that leaves needs no value and nobody has to invent a
-placeholder to satisfy the type.
-It does not assign to the binding it is initialising, which
-would need a rule about writing an immutable binding inside
-its own initialiser.
-The success and recovery paths may carry any enabled result shape: scalar,
-atom, function, fixed array, struct, or anonymous multiple-result aggregate
-through its ordinary caller-owned storage. A bound error name has the call's
-complete atom set and is visible
-only inside its recovery block. An exhaustive atom `match` may name every atom
-or end with one `_` arm for those left over.
-
-Inside an `if` arm, `else value` after a call is the `if`'s own `else`,
-which is how `if c then a() else b() end if` reads. A recovery there is
-parenthesised, `(open_file(path) else 0)`, or binds the error, which
-`else (e)` always does wherever it is written.
-
-Being an expression, it also works in argument position:
-
-```landin
-use(read_config(path) else (e) default_config() end)
-```
-
-A call that can fail and whose result is discarded is an
-error. Write 'try f()' or discard through an else.
-else is for the error channel only, not for unions.
-
-A call that returns nothing, and whose failure does not matter
-where it is made, says so in one word:
-
-```landin
-flush(out) else none
-```
-
-`else none` is the bound block with nothing in it, without the
-name nobody would read: what the call did before it failed
-stays done, and the next statement runs. A call that returns a
-value takes it only when the call is all a discard throws away,
-because a failure is never ignored by leaving a result unset
-that something reads (D376, D406):
-
-```landin
-_ = parse_header(input) else none
-```
-
-Used any other way, that call gets `else value`, a block, or
-`try`.
-
-### [0970] Early exit
-
-Early exit: return and fail, each with an optional
-`when condition`.
-
-### [0980] Calls: positional first, then named
-
-Calls: positional first, then named. No default values. The positional prefix
-fills parameters in order; the named suffix may reorder the rest. Every runtime
-parameter is filled exactly once, and an unknown or repeated label is an error.
-Arguments still run in written order before their checked values are passed in
-formal order. A generic direct call may put its compile-time actuals in this
-same named list: `copy(t: u8, n: 4, source: bytes)`. Once it names one static
-formal, it names every static formal; those entries neither evaluate nor fill a
-runtime position. A call through a stored or selected function uses the parameter
-labels of that value's static function type; changing those labels does not
-change function-type identity [1000].
-Named arguments work in a call statement as well as in a call expression.
-A C variadic call additionally supplies an unnamed tail under [1580]'s default
-promotions; this does not add optional or defaulted fixed parameters.
-
-```landin
-r1 := divide(10, 3)
-r2 := process(source: src, target: dst, owned: buf)
-```
-
-### [1020] Discarding a result must be explicit
-
-Discarding a result must be explicit.
-
-```landin
-_ = double(5)
-```
-
-## CONTROL FLOW
-
-```landin
-demo_flow: (x: i32, items: []i32) -> (out: i32) =
-    out = 0
-```
-
-### [1050] Branch
-
-Branch. 'then' closes the condition, which must be bool.
-
-```landin
-    if x > 0 then
-        out = 1
-    elsif x < 0 then
-        out = -1
-    else
-        out = 0
-    end if
-```
-
-### [1060] Every construct has a one-line form
-
-Every construct has a one-line form. No newline is ever
-required; 'end' closes.
-
-```landin
-    if x > 0 then out = 1 end if
-```
-
-### [1070] A declaration is allowed in a condition
-
-A declaration is allowed in a condition. It is a plain
-type error unless it is bool. The initialized forms of an inferred or typed
-binding may be used by `if`, `elsif`, and `while`; the binding is visible in
-the one body that condition guards and nowhere after it. Its initializer is
-evaluated before the name exists, and a `while` evaluates and initializes the
-binding again before every iteration.
-
-```landin
-    if ok := is_ready() then
-        out = 1
-    end if
-
-    while mut more: bool = has_more() do
-        consume_next()
-        more = false
-    end while
-```
-
-### [1080] A block has the value of its last expression
-
-A block has the value of its last expression, and that
-is the whole rule: if, match, else clauses, bare blocks
-and loops are expressions wherever one is wanted.
-Rust needs a semicolon to decide whether the last line
-is the value; here discarding is already explicit with
-'_ =', so a bare expression at the end is unambiguous.
-Every reachable edge that falls through supplies that last expression with one
-complete type and shape. An edge that leaves by return, fail, break or continue
-supplies no value and needs no placeholder. Only fallthrough edges join their
-definite-assignment facts; an edge that has already left cannot prove a read on
-a surviving sibling. Statements and the final expression run in source order,
-after an `if` condition or `match` subject and only in the selected arm.
-
-```landin
-    sign := if x > 0 then 1 else -1 end if
-
-    doubled := begin
-        a := expensive()
-        a * 2
-    end
-```
-
-### [1090] Bare block, for scoping
-
-Bare block, for scoping: `begin ... end`. A label turns it into something a
-`break` can leave early — `name: begin ... end name` — with its cleanups
-run as a loop's are [1180].
-
-```landin
-    begin
-        tmp := x * 2
-        out = out + tmp
-    end
-```
-
-### [1100] defer runs at the end of its block, in reverse order
-
-defer runs when its block is left, in reverse order. That includes ordinary
-fallthrough, a successful return, or declared failure through the block; a trap
-is a stop and does not unwind anything. A nested block runs its own entries
-before an outer block's, and an entry is active only after control has reached
-its statement. The complete call is evaluated where it runs, not where it was
-written: a direct or indirect callee, including a selected function field, and
-then its arguments. It names places, and reads them then. So a defer that sinks
-something sinks it at the end, which is why the thing stays usable in between —
-and if a named
-place has been re-pointed by then, the defer sees what is there now. The block's
-final value or failure atom is formed before these calls run. Registering one
-evaluates no callee or argument, costs nothing and reserves nothing.
-
-```landin
-    defer cleanup()
-```
-
-### [1110] undo is the same machinery under a condition
-
-undo is the same machinery under a condition. It is registered when control
-reaches it and runs only if declared failure leaves its block — a direct fail,
-a try that propagates, or failure arriving through a deeper call. Nested blocks
-run inner entries first. Within one block defer and undo share one registration
-order, so the applicable calls interleave in lexical reverse order rather than
-forming two batches. Like defer, an undo evaluates its callee and arguments
-only when it runs, in source order, and therefore sees their late values.
-
-Ordinary fallthrough and a successful return skip undo. A call-site else that
-recovers locally does not leave the caller's block and skips its undo entries;
-entries in the failing callee have already run before its failure arrives for
-recovery. Break does not select undo, and neither does a panic: panics stop and
-do not unwind anything.
-
-It is its own word rather than a flavour of defer, because it is not the same
-thing: to defer is to do it later, and this may never be done at all. English
-calls it a contingency, or a compensating action.
-
-```landin
-    undo release(handle)
-```
-
-### [1200] Because entries are registered where control reaches
-
-Because entries are registered where control reaches
-them, the triangular cleanup of several fallible
-acquisitions falls out of the order instead of being
-written: the first failing frees nothing, the second
-frees one, the third frees two.
-
-```landin
-new_buffers: (provider: type is mem.allocator,
-              memory: provider, count: usize)
-             -> (first: mem.byte_buffer, second: mem.byte_buffer,
-                 third: mem.byte_buffer) ! mem.out_of_memory =
-    first = try mem.new_bytes(memory: memory, count: count)
-    undo mem.delete_bytes(memory, first)
-
-    second = try mem.new_bytes(memory: memory, count: count)
-    undo mem.delete_bytes(memory, second)
-
-    third = try mem.new_bytes(memory: memory, count: count)
-    -- All three owners are published by the successful return.
-end new_buffers
-```
-
-And the discipline it asks for, which has to be said out
-loud: undo cleans up what is still yours. Once a resource
-has been handed on, its cleanup is somebody else's, but
-the entry is still registered. So acquire everything
-fallible first, commit afterwards, and let nothing
-fallible stand between the commit and the end of the
-block. Where that order cannot be had, the entry would
-have to be called off, and there is deliberately no way to
-do that — a construct for calling one off turned out to be
-bookkeeping for a question the block's exit already
-answers.
-The pattern this replaces is a flag and a conditional
-defer. That is linear rather than quadratic, so it was
-never about the number of lines. It is that forgetting to
-set a flag frees storage that is still in use, and under
-an arena, where free does nothing, the mistake is silent
-until somebody runs the same container on a real
-allocator.
-
-### [1120] Checks may be switched off for a region, visibly
-
-Checks may be switched off for a region, visibly.
-
-```landin
-    unchecked begin
-        out = out + items[0]
-    end unchecked
-```
-
-The region is a statement and an ordinary block: it has its own scope,
-`defer` still runs on the way out, and nesting one inside another says
-nothing new. What goes is the edges the compiler emits and nothing else —
-integer overflow, an element index or a slice range, and the destination
-range of an integer conversion. What stays is everything the compiler
-decides rather than emits — types, definite assignment, permissions,
-origins — and the edges whose absence is not one thing on every machine:
-a zero divisor, a negative shift count, a conversion to bool or from a
-float, a text boundary, and a zero integer-to-pointer result after target-width
-conversion. It reaches only the code written inside it,
-so a function called from a region is checked as that function is
-written, and a deferred call is checked where you wrote it rather than
-where the exit that runs it stands. That is what keeps the word honest
-where you read it. D187 is where each of those is decided.
-
-### [1130] Unconditional loop
-
-Unconditional loop.
-
-```landin
-    counter: loop do
-        break when x == 0
-    end counter
-```
-
-### [1140] Conditional loop
-
-Conditional loop.
-
-```landin
-    mut i: u32 = 0
-    while i < 10 do
-        inc i
-        continue when i == 3
-    end while
-```
-
-### [1150] Traversal
-
-Traversal. Bindings default to in; inout implies mut.
-An integer range is ascending. Either typed integer bound supplies the type
-of an untyped integer bound on the other side; two untyped bounds take i32.
-Thus `0..<lenof items` traverses usize values without a conversion. The bounds
-are evaluated once, left to right; `..<` excludes the upper bound and `..`
-includes it. The optional index is a
-`usize` beginning at zero. Collection traversal supplies the same binding
-shape, with writability decided by [1160]. A collection element may itself be
-a fixed array, slice or `any C`; the loop binding keeps the complete element
-shape or erased concept identity and evidence.
-For a struct or `any C` source, the loop selects one conformance to [1320]'s
-named `iterable` concept. The source expression runs once. `first` produces
-one cursor; `at_end`, `item`, and (after fallthrough or `continue`) `next`
-then drive each iteration in that order. The optional `usize` index still
-begins at zero and advances with `next`.
-For a source whose traversal can fail, write `try for`. It first selects
-[1320]'s `fallible_iterable` evidence; an ordinary `iterable` is also accepted.
-Each provider failure leaves the loop through the declared error channel,
-running active `defer` and `undo` cleanup. A failure does not enter `complete`
-or call any later provider. The loop body can use `break` or `continue` as
-usual; `next` runs only after body fallthrough or `continue`.
-The exact `utf8`, `utf16`, and `cstring` identities have distinct intrinsic
-conformances to that same four-operation contract. Their cursor is a private `usize` byte or
-UTF-16-code-unit offset and their item is the decoded Unicode scalar as `u32`,
-not an alias or encoded subview. `cstring`'s first NUL is the end and is not an
-item. Foreign C text follows [0600]'s validation and trap boundary. The source
-still runs once, and provider order, index advancement, cleanup and loop
-transfers are the same as for ordinary iterable evidence.
-
-```landin
-    for item in items do
-        out += item
-    end for
-
-    for item, idx in items do
-        item = item + i32(idx) -- items is []mut i32, so this writes
-    end for
-
-    for k in 0..<10 do
-        out += k
-    end for
-```
-
-### [1160] There is no marker on a loop binding
-
-There is no marker on a loop binding, because the type
-already decided: over a `[]mut t` an element is a writable
-place, over a `[]t` it is not. Over anything else that
-satisfies iterable the binding is a copy, since item at
-[1320] hands out a value — so assigning to it is an error
-rather than a silent write to nothing.
-The cursor and item keep their exact declared type identities. In particular,
-an `any C` item keeps C and its evidence, while an `any C` source remains an
-erased value passed to the providers; neither pair is interpreted as a slice.
-Text traversal likewise yields an immutable copied `u32`; binding mutability
-cannot make either the item or the hosted view writable.
-When `t` is a fixed array, slice or `any C`, replacing that whole element
-follows this same rule. Writing through a slice element still follows the
-`mut` permission carried by that inner slice. An `any C` element remains an
-erased value and evidence pair; it is not a slice.
-
-```landin
-    xs := vec.used(l) -- []mut i32
-    for k in 0..<lenof xs do
-        xs[k] = xs[k] * 2
-    end for
-```
-
-### [1170] complete runs when the loop finished without break
-
-complete runs when the loop finished without break.
-
-```landin
-    for item in items do
-        break when item == 42
-    complete
-        out = -1
-    end for
-```
-
-### [1180] Labels use the ordinary name form
-
-Labels use the ordinary name form, on loops and bare
-blocks only. break and continue take one.
-
-```landin
-    outer: for a in items do
-        for b in items do
-            break outer when a == b
-        end for
-    end outer
-```
-
-A `break` naming a bare block leaves it and whatever loops it crosses, running
-their cleanups on the way out. A bare block has no next iteration and yields no
-value, so `continue` and `break with` still name loops, and an unlabelled
-`break` or `continue` still means the innermost loop (D234).
-
-```landin
-    search: begin
-        for item in items do
-            break search when item == 0
-        end for
-        all_nonzero = true
-    end search
-```
-
-### [1190] break carries a value with 'with'
-
-break carries a value with 'with', which is what makes a
-search an expression instead of a mutable variable and a
-flag. Every break of a loop used as an expression must
-yield the same type, and complete supplies the value for
-running out; loop do needs none, having no other exit.
-A loop whose result is unwanted uses an explicit discard [1020],
-as in `_ = loop do break with 1 end loop`. A statement loop
-uses plain `break`; it cannot silently discard a `with` value.
-'with' is required because a bare identifier after break
-could otherwise be either a label or a value.
-
-```landin
-    found := for item in items do
-        break with item when item > 40
-    complete
-        break with 0
-    end for
-    out += found
-end demo_flow
-```
-
-### [1210] Pattern matching
-
-Pattern matching: constant patterns, case patterns with
-binding, and the wildcard. No fallthrough; list several
-labels instead. A missing case is a compile error.
-Several labels share one arm, `north, south:`, and each counts
-toward exhaustiveness; an arm that binds a payload names one
-case, and `_` is an arm of its own (D405).
-The constants a pattern names are atoms [0630]: a subject is an atom set, a
-variant part or a pointer union [0480], and an arm names an identity. On an
-atom set, the last arm `_ (rest):` binds the atoms no other arm named, as a
-set of their own, so they can be passed on where only those are wanted. A number
-has no identity to name, so it is compared with `if` and `elsif` rather than
-matched (D241).
-
-```landin
-area: (f: figure) -> (a: f32) =
-    a = 0.0
-    match f.kind
-        circle(radius):
-            a = 3.14159 * radius * radius
-        rectangle(width, height):
-            a = width * height
-    end match
-end area
-```
-
-### [1220] A pattern binding carries a parameter convention
-
-A pattern binding carries a parameter convention: in by
-default, inout to write into the payload that was matched, and sink on a
-pointer union's `ptr` arm, `ptr (sink p):`, to pass the pointer on to a
-`sink` parameter [0910], which consumes the place that was matched.
-Nothing new is needed, because the conventions of [0900] are
-already the mechanism — and without them a `[capacity]t` payload
-would be copied in order to be read and could not be
-written at all.
-Both plain and inout payload bindings alias the matched storage, including
-scalar payloads. By [0830], an arm may replace the variant or a containing
-object only after the aliases' last use. Writing through an inout alias is a
-use, as is reading an address derived from it or evaluating a pending cleanup
-argument. A separate scalar copy keeps no borrow of the payload. A computed-value
-match has D134's separate temporary;
-replacing the original does not replace that temporary's payload. A direct case
-assignment selects its new tag before evaluating payload initializers (D76), so
-an initializer cannot use an alias of the old payload. For a whole containing
-construction, save needed scalar values before starting the construction too.
-
-```landin
-spill: (inout s: store, v: i32) -> none =
-    match s.kind
-        inline(inout buf): buf[0] = v
-        spilled(heap): use(heap)
-    end match
-end spill
-
-describe: (c: compass) -> (name: utf8) =
-    match c
-        north, south: name = "along"
-        _: name = "across"
-    end match
-end describe
-```
+The checks are local, so some mistakes go through:
+
+- two different arenas look the same to the compiler;
+- a pointer stored in a struct field and read back later;
+- anything across the C boundary.
+
+Catching these would need regions or generation counters, and both are
+deliberately out. A view taken through an accessor used to be on this
+list; `from` ([0790]) took it off.
 
 ## CONCEPTS AND GENERIC CODE
 
-### [1230] A concept names a bundle of requirements on a type
+Generic code has three parts. A concept lists the operations a type must
+have. A conformance says which functions supply them for one type. A
+generic function takes the type as a parameter and calls the operations
+through it. There are no classes, no traits with default bodies and no
+structural matching: a type satisfies a concept because somebody said so.
 
-A concept names a bundle of requirements on a type.
+### [1230] Declaring a concept
+
+A concept names a bundle of operations, each a complete function
+signature written in terms of the concept's type parameter.
 
 ```landin
 ordered: type = concept (t: type)
@@ -2861,157 +3337,29 @@ ordered: type = concept (t: type)
 end ordered
 ```
 
-### [1240] A conformance registers one type against one concept
+A concept is an ordinary type declaration, so it lives in a module like
+any other name. It has no default bodies: every entry is supplied by
+each conformance.
 
-A conformance registers one type against one concept.
+### [1240] Making a type conform
+
+A conformance registers one type against one concept, naming the
+function that supplies each entry.
 
 ```landin
 i32 is ordered (less: less_i32)
 ```
 
-### [1250] A conformance for a parameterised type binds its variables
+`less_i32` is the anonymous function from [1010]. Each label is an entry
+of the concept, and each supplying function must have exactly the
+entry's signature with `t` replaced by `i32`. There is no implicit
+conformance: a type with a matching `less` is still not `ordered` until
+a line like this one says so.
 
-A conformance for a parameterised type binds its variables
-in front, because the conformance holds for every one of
-them. The binder is an ordinary parameter list — the same
-form functions take and the same form a parameterised type
-takes — so a variable may carry a constraint, and a fixed
-value parameter may appear among them.
+### [1290] Writing a generic function
 
-```landin
-(t: type) list(t) is iterable (cur: usize, item_type: t,
-                               first: list_first, at_end: list_at_end,
-                               item: list_item, next: list_next)
-
-(provider: type is allocator) counted(provider) is allocator
-    (alloc: counted_alloc, grow: counted_grow, resize: counted_resize,
-     free: counted_free)
-```
-
-The functions supplying the entries are generic themselves.
-Instantiating the conformance supplies their type argument
-and leaves a function of exactly the concept's shape, so
-nothing beyond the binder is needed.
-Free variables are never quantified by inference. A name
-that is not in scope is a misspelling, not a new variable,
-which is the rule build options already follow at [1530].
-Without this there is no generic container that can be
-traversed, sorted or handed to any other generic code.
-
-### [1260] A concept entry's error set has to be concrete
-
-A concept entry's error set has to be concrete. The entry
-is reached through a table, [0960] forbids an inferred set
-there, and so a concept fixes the error set once for every
-type that will ever satisfy it. That is right for
-allocation — out of memory is out of memory — but it is a
-constraint on how concepts are designed, not a detail.
-The same holds one level up, for what an implementation may
-ask for. A concept with no allocator among its parameters
-means no implementation of it can allocate, however much
-one of them would like to. Resist widening the concept
-until it fits the hungriest: that hands every
-implementation the sum of everyone's needs. Either the
-hungry one picks a shape that does not need it, or there
-are two concepts.
-
-### [1270] The register is keyed by (type
-
-The register is keyed by (type, concept, input types), so a
-type may satisfy the same concept more than once. Which
-concepts exist, and how finely they distinguish what an
-operation costs, is the standard library's business. The
-language checks nothing about cost and knows no vocabulary
-for it: a guarantee should not depend on how clever the
-compiler happens to be.
-
-```landin
-indexable: type = concept (t: type, idx: type, item_type: type)
-    get: (s: t, i: idx) -> (item: item_type)
-end indexable
-
-utf8 is indexable (idx: usize, item_type: u32, get: utf8_nth)
-utf8 is indexable (idx: position, item_type: u32, get: utf8_at_pos)
-```
-
-### [1280] Conformances may be declared anywhere
-
-Conformances may be declared anywhere, and two for the
-same key are simply an error. There is no precedence, no
-orphan rule and no override: until a rule turns up that is
-worth its weight, the compiler reports the collision and
-somebody sorts it out. A wrapper through distinct, or
-passing the functions explicitly at the call, both work
-without anyone changing anyone else's library.
-The alternative that was tried and dropped had libraries
-declare weak conformances and applications override them
-with strong ones. It worked, but it meant an application
-could quietly change the behaviour of generic code inside
-a library, which is a strange thing for a language whose
-whole point is that costs and effects are visible.
-
-The conformance register collects every source file before constrained
-instantiation. It matches labels to all input types and direct entries, checks
-concrete supplying functions against the substituted entry signature, requires
-separate conformances for every composed parent, and diagnoses an ordinary
-collision even across files. A parameterized conformance quantifies one
-complete nominal type family: the target applies the leading binder once, in
-the same positions and kinds as the nominal declaration. One such family owns
-the target-template/concept space, so another family or a concrete exception is
-a collision rather than specialization. Lookup binds that family and records
-one concrete key; the generic evidence schema then turns the retained generic
-supplying functions into physical evidence entries.
-
-In a program of modules, “every source file” means every module reachable from the entry
-directory after ordered-root selection, including unused conformances and
-excluding unreachable and later-root-shadowed directories. Conformances are
-registrations rather than imported names: every reached one enters the single
-program register without `public`, while `public` on a conformance is refused
-because it declares no module member.
-
-### [1290] A generic function takes the type as an ordinary parameter
-
-A generic function takes the type as an ordinary parameter,
-constrained by 'is'. Type and fixed parameters are
-compile-time, and their order in the list does not matter:
-a parameter may be used in the type of one that comes
-before it, exactly as declarations inside a module may.
-The compiler collects the names first and resolves the
-types afterwards, so
-`report: (inout d: sink(capacity), fixed capacity: u32, ...)`
-is as good as putting `capacity` first, and at the call site `capacity` is
-deduced from whatever argument pins it down.
-Concept entries are reached through the type parameter, so
-two constrained parameters never collide: `left_type.less`, `right_type.less`.
-
-The kernel admits the same collected signature scope with
-unconstrained type formals and fixed integer formals. A direct call either
-leaves every static formal for deduction, or names every one explicitly in its
-single call list; partial explicit/deduced tuples are refused. A direct call
-recursively matches each written runtime parameter type against the argument's
-independently synthesized normalized type. Direct type formals bind complete
-descriptors, including the exact concept of an `any` value. Pointer and slice
-patterns match permission and ordinary view exactly, then match their complete
-referents recursively; deduction does not perform reference relaxation.
-Fixed arrays match exact bounds and elements; a direct fixed bound
-binds its length, while a computed bound such as `capacity * 2` is never inverted and
-is checked only after another occurrence has bound `capacity`. Parameterized nominal
-patterns require the same source template and match their complete stored tuple,
-including phantom actuals. Parameterized aliases expand symbolically, and
-function patterns match parameter and result runs plus their error form while
-ignoring labels. Repeats must agree exactly. A saturated explicit static tuple
-bypasses deduction and validates the same patterns. No return context,
-conversion, constraint search or user code participates. The compile-time
-formals create no runtime parameters or ABI positions. A generic routine name
-is still template syntax rather than a standalone function value; a direct call
-is what selects an instance. Private `! ...` is inferred for that concrete
-instance before its body is lowered. Constraints and evidence use the
-completed whole-program conformance register described in [1230]–[1280].
-
-Inside a concrete routine instance, a fixed formal may also be used as an
-ordinary expression of its declared integer type. Each such use is replaced by
-the instance's compile-time value; it still creates no runtime argument or ABI
-position.
+A generic function takes the type as an ordinary parameter, constrained
+with `is`, and calls the concept's entries through that parameter.
 
 ```landin
 sort: (t: type is ordered, data: []mut t) -> none =
@@ -3027,13 +3375,34 @@ sort: (t: type is ordered, data: []mut t) -> none =
 end sort
 ```
 
-### [1300] At the call site the type is inferred from the arguments
+`t.less` is the `less` of whatever type `t` turns out to be. Because
+entries are reached through the type parameter, two constrained
+parameters never collide: `left_type.less` and `right_type.less` are
+different functions.
 
-At the call site the type is normally inferred from the arguments. It may also
-be named explicitly in the same uniformly named list as runtime arguments; an
-explicit static list is saturated, while the runtime positional prefix and
-named suffix keep [0980]'s matching rule. Positional-only calls remain the
-all-deduction form.
+Type and `fixed` parameters exist only at compile time; they add no
+runtime argument. Their order in the list does not matter, because the
+compiler collects the names before it resolves the types, so
+`report: (inout d: sink(capacity), fixed capacity: u32, ...)` is as good
+as putting `capacity` first. Inside the body, a `fixed` parameter may
+also be used as an ordinary integer value.
+
+A type parameter may also be unconstrained, for code that only moves
+values around. Fine print:
+
+- A name that is not in scope is a misspelling, not a new type
+  variable. Nothing is quantified by inference, the rule build options
+  follow at [1530].
+- A generic function is not a function value. Only a call picks a
+  concrete instance, so you cannot take `sort` itself and store it.
+- A private `! ...` error set is inferred separately for each concrete
+  instance.
+- The exact matching rules are in `spec.md` (D138).
+
+### [1300] Calling a generic function
+
+The type is normally deduced from the arguments. You may also name it,
+in the same named-argument list as the runtime arguments.
 
 ```landin
 sort_demo: (values: []mut i32) -> none =
@@ -3042,131 +3411,62 @@ sort_demo: (values: []mut i32) -> none =
 end sort_demo
 ```
 
-### [1310] Evidence is the foundation; specialization is optional
+It is all or nothing: either every type and `fixed` parameter is
+deduced, or the call names every one of them. Runtime arguments keep
+[0980]'s rule, positional first and then named.
 
-Evidence tables are the semantic foundation, not an optimisation fallback
-that source correctness may depend on. D211 distinguishes the concrete
-instances required to represent source types from optional specialization of
-their dispatch. The bootstrap retains concrete representation bodies; it does
-not promise one erased body for every possible by-value representation.
+Deduction matches each written parameter type against the argument's
+type, exactly. It never uses the return type, a conversion or a search
+of the conformances, and it runs no code. Two consequences:
 
-A static `T.entry` selection names one declaration across its concept and
-inherited constraints. A shared ancestor reached twice is still one concept;
-two different concepts declaring that name make the selection ambiguous.
-Reordering parents does not select an operation, and a direct child entry does
-not override an inherited one. An unused colliding name does not prevent the
-concept from being declared or conformed to; D221 records the exact boundary.
+- A writable `[]mut i32` argument still passes where `[]t` is written
+  ([0440]), but deeper inside a type, permission must match exactly.
+- A fixed bound written `capacity * 2` is never solved for `capacity`;
+  it is only checked once another argument has fixed `capacity`.
 
-`--optimize=none|size|speed` and `--specialize=off|auto|all` are independent
-axes, defaulting to `size` and `auto`, independent also of `--build-mode`.
-Specialization needs proof of actual incoming evidence, not merely the table
-expected for a semantic instance. Unknown incoming tables, address-exposed
-instances and heterogeneous `any` calls keep indirect dispatch. A single
-eligible normalized instance bypasses profitability, not proof; `all` does the
-same for every eligible instance. No call is specialized merely because its
-source type is known.
+`spec.md` (D138) has the complete matching rules, and D372, D419 and
+D420 say how literals, `[...]` lists and constructions take their type
+from a generic parameter.
 
-The deterministic policy counts proved entry-call sites and their source loop
-depth, represented target bytes and weighted IR growth. D211 states the caps,
-weights and thresholds: size raises the bar and speed lowers it, and at speed
-a rewrite inside an instance that exists anyway counts no growth. `none` turns
-off simplification and allocation, not independently requested specialization;
-its automatic specialization uses the size threshold. Identical emitted bodies
-may share only when their complete machine meaning and address identity permit
-it. A smaller body does not authorize changing a C or Landin convention.
+### [1310] How generic code runs: tables, and specialization as an option
 
-The evidence includes target size and alignment as well as functions. A
-checked concrete routine instance keeps hidden evidence positions only for
-tables read by direct constrained member selections in its body. An
-erased-only `any` construction uses a static table and needs no hidden evidence
-position. A proved direct entry call retains the positions selected by that
-body and any aggregate-result position; specialization does not erase a used
-ABI position. `--build-report=PATH` writes factual decisions, retained ABI/fallback,
-layout savings and frame/register/stack-traffic evidence separately from source
-diagnostics. It introduces no runtime report storage. Measured object bytes
-come from the Linux object-quality harness, not an IR cost estimate.
+A call to a generic function passes, invisibly, a table for each
+conformance the body uses: the type's size and alignment, then the
+concept's functions in the order the concept declares them. `t.less(...)`
+loads `less` from that table and calls it. The same tables carry
+`any C` values ([1370]), so static generics and runtime dispatch are one
+mechanism ([1690]).
 
-The bootstrap checks a constrained routine against its full direct and
-constraint/parent closure, but a concrete call passes only the table positions
-selected by direct constrained member calls in that instance's checked body.
-If two type formals use the same conformance, selecting one passes one hidden
-pointer; selecting both retains their separate positions. Those pointers
-follow depth-first concept declaration order within each formal, then
-generic-formal order. A body with no such selection has no hidden evidence
-arguments, even if it constructs `any` values. A table begins with the
-represented type's target `usize` size and alignment, then carries direct
-concept functions in concept declaration order. `t.entry(...)` loads that
-function word and uses the ordinary indirect-call and error conventions; the
-static type formal still occupies no source ABI position. Linux x86-64 emits
-pointer-width table cells, while the same semantic positions are laid out from
-the synthetic 32-bit target facts. The baseline backend folds two instance
-symbols onto one machine body only after a deliberately narrow IR comparison
-proves every retained operation has the same physical meaning; differing
-representations or signed operations remain separate concrete bodies rather
-than making sharing a correctness assumption. D211 adds optional proved
-entry-call specialization without weakening that foundation.
+The tables are the meaning of generic code. Specialization, replacing an
+indirect call with a direct one where the compiler can prove which table
+arrives, is an optimization that never changes what a program does.
+Two independent switches control code generation:
 
-### [1320] Traversal is a concept
+| option | values | default |
+|---|---|---|
+| `--optimize` | `none`, `size`, `speed` | `size` |
+| `--specialize` | `off`, `auto`, `all` | `auto` |
 
-Traversal is a concept. This is what 'for x in s' uses.
+Neither depends on `--build-mode`. A call is never specialized merely
+because its source type is known: the compiler needs proof of the table
+that actually arrives. Calls through `any`, through a table it cannot
+trace, or in an instance whose address is taken stay indirect.
+`--build-report=PATH` writes a report of what was specialized and what
+stayed indirect, and why. The cost model and its numbers are in
+`spec.md` (D211); the table layout and the hidden argument order are in
+D144.
 
-```landin
-iterable: type = concept (t: type, cur: type, item_type: type)
-    first: (s: ptr t) -> (c: cur)
-    at_end: (s: ptr t, c: cur) -> (yes: bool)
-    item: (s: ptr t, c: cur) -> (v: item_type)
-    next: (s: ptr t, c: cur) -> (c2: cur)
-end iterable
-```
+When a concept inherits entries from its parents ([1340]), `t.entry`
+must name exactly one declaration across all of them. A parent reached
+twice through a diamond is still one concept, but two different
+concepts that both declare `entry` make the selection ambiguous. Parent
+order never decides, and a child's own entry does not override an
+inherited one. An unused clash is not an error (D221).
 
-The conformance supplies `cur` and `item_type` as associated type inputs.
-Those identities and the four infallible signatures above are exact. Provider
-labels may be written in any order, but calls use concept declaration order.
+### [1340] Combining concepts
 
-A streaming source supplies an error atom type as a third associated input:
-
-```landin
-fallible_iterable: type = concept
-    (t: type, cur: type, item_type: type, errors: type)
-    first: (s: ptr t) -> (c: cur) ! errors
-    at_end: (s: ptr t, c: cur) -> (yes: bool) ! errors
-    item: (s: ptr t, c: cur) -> (v: item_type) ! errors
-    next: (s: ptr t, c: cur) -> (c2: cur) ! errors
-end fallible_iterable
-```
-
-The `errors` input is an atom set. All four signatures are exact and use
-that same set; a provider may declare an error it never raises. `try for`
-requires one unambiguous conformance. If both contracts are available, it
-selects `fallible_iterable`; plain `for` selects only `iterable`.
-The source expression is evaluated once and retained as a private value. Each
-provider receives a read-only pointer to that value, so a large struct is
-copied once for traversal rather than on every call. `item` returns a fresh
-loop binding value rather than an alias into it. A provider result declared
-`from s` does not match this source-free requirement. Containers that expose
-storage-derived references can instead return an initialized slice view and
-use the built-in slice traversal, as `for value in vec.used(list)` does.
-
-### [1330] Integer range traversal uses bounds
-
-In `for i in 0..<10 do`, the two integer bounds are evaluated once and
-the loop traverses them directly [1150]. Neither `0..<10` nor `0..9` is
-an expression or an ordinary value from `core`; the spellings also occur
-between slice bounds [0360]. The range header does not select [1320]'s
-`iterable` conformance.
-
-A type that needs custom stepping can expose an ordinary struct value
-with its own `iterable` conformance. A library could provide a `step`
-function returning such a value, then callers could write
-`for i in step(0, 10, 2) do ... end for`. This describes a possible
-library API; `core` does not currently provide `step` or `step_range`.
-
-### [1340] Concepts compose
-
-Concepts compose. A combined concept is named, so a table
-is generated per (type, concept) and the value stays two
-words. Conformance is declared explicitly, even when the
-body is empty.
+A concept may build on others by naming them after `is`. A type that
+satisfies the combined concept still conforms to each part separately.
 
 ```landin
 drawable: type = concept (t: type)
@@ -3186,15 +3486,19 @@ button is clickable (click: button_click)
 button is widget (focus: button_focus)
 ```
 
-All three, because the composed declaration supplies only
-what it adds. Nothing is inherited by having the parts.
+All three conformances are needed, because `widget`'s supplies only what
+`widget` adds. Having the parts does not make a type a `widget`, and
+being a `widget` does not make it `drawable`; conformance is always
+declared, even when its list is empty.
 
-### [1350] Types take parameters through a declaration form of their
+The combined concept has a name of its own, so an `any widget` value
+still carries one table and stays two words.
 
-Types take parameters through a declaration form of their
-own, not through a function that returns a type — that
-would be the compile-time evaluation this language does not
-have. Substitution, not execution.
+### [1350] Generic types
+
+A type takes parameters through its own declaration form. It is not a
+function that returns a type: that would be compile-time execution,
+which Landin does not have. Substitution, not execution.
 
 ```landin
 list: type (t: type) = struct
@@ -3203,23 +3507,9 @@ list: type (t: type) = struct
 end list
 ```
 
-An alias body may also unite atom sets after substitution. Declared atom names
-supply their singleton types, aliases flatten, and ordering or repeating members
-does not change the set. The same normalized result can name a function's error
-set or a generic actual. `missing | ptr t` retains the one-atom optional-pointer
-representation [0480]; substitution does not enable larger tagged unions.
-
-The enabled declaration form takes type parameters, each optionally carrying
-one direct concept constraint, and fixed integer parameters. Applications are
-fully applied and positional. A type actual may be any enabled concrete
-identity; whether it is legal as a field, array element or payload is checked
-after substitution. Fixed actuals are integer literals, or fixed formals
-forwarded by another template, and must fit their declared integer type. D142
-checks each constrained concrete application through the whole-program
-conformance register. D138 applies the same substitution model to direct
-generic routine calls through exact argument deduction or a saturated named
-static list, and D139 selects module declaration lists with a closed fixed
-condition; none of the three mechanisms executes user code.
+`list(i32)` and `list(u8)` are different types, and every use of
+`list(i32)` is the same type. A type parameter may carry one concept
+constraint, and a `fixed` parameter is an integer known at compile time:
 
 ```landin
 map: type (key_type: type is hashable, value_type: type) = struct
@@ -3234,29 +3524,168 @@ cleared: type (t: type is zeroable, fixed capacity: u32) = struct
 end cleared
 ```
 
-The two constrained examples above use D142's enabled direct constraints. The
-rest uses the same substitution model:
-no user routine runs, each canonical nominal instance gets the target layout of
-its substituted fields when a value site requires one, and neither the template
-nor its formals acquire per-instance runtime state. Repeating an application
-whose substituted layout fails repeats that application-local diagnostic; it
-does not create a second nominal identity. Before any application exists, the
-same walk keeps transient symbolic nominal obligations long enough to see a
-used formal pass one recursively by value through another template. A phantom
-formal or function-signature mention does not promote that obligation, and no
-symbolic walk guesses an actual or annotates the template.
-An alias application may also normalize to one of those nominal instances.
-The alias adds no identity of its own; `mem.storage(t)` can therefore publish a
-name for a private `raw(t)` identity while the private template still decides
-whether its fields are accessible.
+Applications are positional and complete: `map(u32, utf8)`, never
+`map(u32)`. A `fixed` argument is an integer literal, or a `fixed`
+parameter passed on by another generic declaration, and it must fit its
+declared type. Whether an argument type may go where the body puts it,
+as a field or an array element, is checked after substitution.
 
-### [1360] Allocation is an ordinary concept
+An alias may be generic too, including a union of atom sets, and an
+alias never makes a new type: `missing | ptr t` keeps the one-word
+optional pointer of [0480]. Fine print:
 
-Allocation is an ordinary concept, so the same container
-runs on the heap, in an arena, or on a fixed buffer with no
-dynamic allocation at all. A failing allocator makes the
-out-of-memory paths testable, which almost nobody bothers
-with in C because it is too awkward.
+- The template is checked even if nothing applies it, and an error that
+  depends on the argument is reported at each application.
+- An unused or phantom parameter still distinguishes instances.
+- A struct may not contain itself by value, even through another
+  template.
+- The rules are in `spec.md` (D135, D137, D142).
+
+### [1250] A conformance for a generic type
+
+A conformance for a generic type declares its type variables in front,
+because it holds for every one of them.
+
+```landin
+(t: type) list(t) is iterable (cur: usize, item_type: t,
+                               first: list_first, at_end: list_at_end,
+                               item: list_item, next: list_next)
+
+(provider: type is allocator) counted(provider) is allocator
+    (alloc: counted_alloc, grow: counted_grow, resize: counted_resize,
+     free: counted_free)
+```
+
+The binder is an ordinary parameter list, the same form functions and
+generic types take, so a variable may carry a constraint and a `fixed`
+parameter may appear among them. The supplying functions are generic
+themselves; instantiating the conformance gives them their type argument
+and leaves functions of exactly the concept's shape.
+
+The target must be the whole generic type applied to the binder in
+order, each variable used once: one conformance covers the whole family
+`list(t)`. Another family for the same template and concept, or a
+concrete exception such as `list(u8) is iterable`, is a collision
+([1280]). Without this form no generic container could be traversed,
+sorted or handed to other generic code.
+
+### [1270] One type, several conformances
+
+A conformance is keyed by the type, the concept and the concept's other
+input types, so one type may satisfy the same concept more than once.
+
+```landin
+indexable: type = concept (t: type, idx: type, item_type: type)
+    get: (s: t, i: idx) -> (item: item_type)
+end indexable
+
+utf8 is indexable (idx: usize, item_type: u32, get: utf8_nth)
+utf8 is indexable (idx: position, item_type: u32, get: utf8_at_pos)
+```
+
+The labels for the extra inputs, `idx` and `item_type`, are part of the
+key; the function labels are not.
+
+Which concepts exist, and how finely they distinguish what an operation
+costs, is the standard library's business. The language checks nothing
+about cost: a guarantee should not depend on how clever the compiler
+happens to be.
+
+### [1280] Where conformances live, and what collides
+
+A conformance may be declared in any module, and two for the same key
+are an error. There is no precedence, no orphan rule and no override:
+the compiler reports the collision and somebody sorts it out.
+
+When two libraries collide, you do not have to change either. Wrap the
+type in a `distinct` type of your own and conform that, or pass the
+functions explicitly instead of through a concept.
+
+Every conformance in every module the program reaches is collected
+before any generic call is checked, whether or not anything uses it. A
+conformance is a registration, not a name, so it needs no `public` and
+refuses one. Modules the program does not reach contribute nothing.
+
+### [1260] A concept fixes its error sets
+
+A concept entry's error set is written out or absent, never inferred
+with `! ...`. An entry is reached through a table, [0960] forbids an
+inferred set there, and so the concept fixes the error set once for
+every type that will ever satisfy it.
+
+That is right for allocation, where out of memory is out of memory, but
+it shapes how you design a concept. The same goes for what an
+implementation may ask for: a concept with no allocator among its
+parameters means no implementation of it can allocate.
+
+Resist widening a concept until it fits its hungriest implementation;
+that hands every implementation the sum of everyone's needs. Either the
+hungry one picks a shape that does not need it, or there are two
+concepts.
+
+### [1320] Traversal is a concept
+
+`for x in s` over your own type uses the `iterable` concept. Conform to
+it and your type works in a `for` loop.
+
+```landin
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first: (s: ptr t) -> (c: cur)
+    at_end: (s: ptr t, c: cur) -> (yes: bool)
+    item: (s: ptr t, c: cur) -> (v: item_type)
+    next: (s: ptr t, c: cur) -> (c2: cur)
+end iterable
+```
+
+The conformance supplies the cursor type `cur` and the `item_type`, as
+[1250]'s `list` does. The loop evaluates `s` once and keeps a private
+copy; each provider gets a read-only pointer to that copy, so a large
+struct is copied once, not on every call. The labels may come in any
+order. The four signatures are exact: no permission, error set or `from`
+clause is inferred or converted, so a provider whose result is declared
+`from s` does not match.
+
+`item` returns a fresh value for the loop binding, never an alias into
+the source. A container that wants to hand out references into its
+storage returns a slice view instead and uses the built-in slice
+traversal, as `for value in vec.used(list)` does.
+
+A source that can fail while streaming conforms to `fallible_iterable`,
+which adds an error set as a fourth input:
+
+```landin
+fallible_iterable: type = concept
+    (t: type, cur: type, item_type: type, errors: type)
+    first: (s: ptr t) -> (c: cur) ! errors
+    at_end: (s: ptr t, c: cur) -> (yes: bool) ! errors
+    item: (s: ptr t, c: cur) -> (v: item_type) ! errors
+    next: (s: ptr t, c: cur) -> (c2: cur) ! errors
+end fallible_iterable
+```
+
+`errors` is an atom set, and all four entries declare exactly that set;
+a provider may declare an error it never raises. Such a source is walked
+with `try for` ([0960]). `try for` needs one unambiguous conformance and
+prefers `fallible_iterable` when both exist; plain `for` only ever uses
+`iterable`. The full loop protocol is in `spec.md` (D180).
+
+### [1330] Integer ranges are not values
+
+In `for i in 0..<10 do`, the loop evaluates the two bounds once and
+counts between them directly ([1150]). `0..<10` and `0..9` are loop and
+slice syntax ([0360]), not expressions, and the header does not go
+through `iterable`.
+
+For other stepping, write a struct with its own `iterable` conformance.
+A library could then offer `for i in step(0, 10, 2) do ... end for`;
+`core` has no such `step` or `step_range` today.
+
+### [1360] Allocation is a concept
+
+An allocator is anything that conforms to `allocator`. The same
+container runs on the heap, in an arena or on a fixed buffer, and a
+deliberately failing allocator makes the out-of-memory paths testable,
+which almost nobody bothers with in C.
 
 ```landin
 allocator: type = concept (provider: type)
@@ -3280,186 +3709,103 @@ push: (t: type, provider: type is allocator, inout l: list(t), memory: provider,
 end push
 ```
 
-The list is edited, so it is passed `inout`; the allocator is a service, so
-it is a handle: a small copyable value passed `in` that refers to its
-provider's state. Its lifetime is checked once, where it is made from that
-state, and using it locks nothing, so several containers allocate from one
-handle and a region allocates from its parent while both are live.
+The list is changed, so it is passed `inout`. The allocator is a
+service, so it is a handle: a small copyable value, passed `in`, that
+refers to its provider's state. Its lifetime is checked once, where it
+is made from that state, and using it locks nothing, so several
+containers can allocate from one handle, and a region from its parent
+while both are live.
 
-The allocator is threaded, not stored in the container, and
-the reason is stronger than visibility: a stored allocator
-makes the type `list(t, provider)`, so a list in an arena and a list
-on the heap become different types and no function takes
-both. Threading keeps the type parameterised by `t` alone,
-and costs one argument at every call that can allocate.
-`grow` may extend the same block to a larger byte extent without moving it.
-A refusal returns `false` with the block and provider unchanged, so a container
-can try a fresh allocation. An arena can use this when the block is its latest
-allocation; providers without in-place growth return `false`.
-`resize` gives a block a new extent, larger or smaller, and may move it: the
-result keeps the bytes the two extents share, and a refusal reports
-`out_of_memory` with the block as it was. A concept entry has no default, so a
-provider that can only move a block calls `mem.relocate`, which allocates,
-copies and frees through it; a heap that can move a mapping's pages does
-better than that copy.
+The allocator is passed to each call, not stored in the container. A
+stored allocator would make the type `list(t, provider)`, so a list in
+an arena and a list on the heap would be different types and no
+function could take both. Passing it keeps the type `list(t)` and costs
+one argument at every call that can allocate.
 
-The parser-support modules use this exact interface. `core/arena`'s arena is
-a monotonic provider over an explicit extent. The separately imported
-`core/pool` provider divides caller backing into uniform aligned slots and
-uses a caller-supplied initialized metadata slice as its explicit finite
-bookkeeping capacity. Exact frees reclaim slots for lowest-index-first reuse;
-there is no hidden heap or fallback. A caller sizes the slots for its largest
-allocation and supplies enough metadata for its maximum simultaneous live
-set, including the six extents a transactional map rehash may need.
+The four entries:
 
-`core/fault.injector(provider)` retains a mutable pointer to any supplied allocator
-and gives it a deterministic allocation-attempt budget. Calls within the
-budget are delegated, including failures from the inner allocator; later
-calls report `out_of_memory` without delegation. Attempts, delegations,
-successes, both kinds of failure, frees and live allocations remain observable
-across a reset budget. Because `free` has no result, its live count is exact
-under valid-free use and cannot discover an inner provider's rejection of a
-malformed free.
+| entry | what it does |
+|---|---|
+| `alloc` | a new block, or `out_of_memory` |
+| `grow` | extend the block where it is; `false`, with nothing changed, if it cannot |
+| `resize` | a new extent, larger or smaller, moving the block if it must |
+| `free` | give the block back, with the size it was allocated with |
 
-The separately imported hosted `hosted/heap` provider keeps size classes over
-memory it maps through `platform/posix` on every hosted system; it returns
-independent aligned blocks and really releases each block. It accepts every
-`usize` alignment, treats zero and one as byte alignment, gives a successful
-zero-byte request a distinct non-null freeable token, and reports an unrepresentable request or host refusal
-as `out_of_memory`.
-`core/vec.list(t)` stores an
-honest `mem.storage(t)`: reserve copies its initialized prefix into a private
-replacement, rolls that replacement back on failure, drains and frees the old
-allocation only after the copy succeeds, and publishes last. `push`, `pop`,
-indexed `get`, length, capacity and release are the minimum parser slice. A
-non-zeroable pointer element is its executable case.
+`resize` keeps the bytes the old and new extents share, and a refusal
+reports `out_of_memory` with the block as it was. A concept entry has no
+default, so a provider that can only move a block calls `mem.relocate`,
+which allocates, copies and frees through it (D337).
 
-`core/map.map(key_type, value_type)` is the ordinary open-addressed map. `key_type is hashable` uses
-the separately declared `equatable` and composed `hashable` conformances;
-composition does not synthesize the parent conformance [1340]. Construction,
-insert, get, remove, length, capacity, entry enumeration and release are its
-public operations. `get`
-returns `value_type from map`, while retained pointer keys and values enter through
-`escaping` parameters. The implementation keeps fully initialized bucket
-records beside dense initialized key and value prefixes, so neither `key_type` nor
-`value_type` needs a zero image. A removed entry remains initialized storage until its
-tombstone is reused, rehashed away or the allocation is released; resource
-ownership of elements remains manual.
+The standard library's providers and containers:
 
-`entries()` creates an enumeration cursor. `next_entry` receives the map and
-an `inout` cursor and returns a key/value `entry(key_type, value_type) from map`, or reports
-`end_of_entries`. A complete walk follows only live bucket links in insertion
-order, so its work follows the number of live entries even after removals.
-References in a returned entry still derive from the map;
-scalar copies do not retain a view [0840]. The cursor is a manually managed
-position, not a checked map/generation identity: restart after any mutation,
-and do not resume a cursor on a different map. Local reference checks do not
-replace that protocol.
+| module | what it gives |
+|---|---|
+| `core/arena` | a bump allocator over storage you supply |
+| `core/pool` | uniform slots over storage you supply, freed slots reused |
+| `core/fault` | wraps any allocator and fails once a budget of attempts is spent |
+| `hosted/heap` | the operating system's memory, really freed, on every hosted system |
+| `core/vec` | a growable list |
+| `core/spill` | a list that keeps its first items inline and spills to an allocator |
+| `core/map` | an open-addressed hash map |
 
-`map` is a public struct composition, not an encapsulated or deep-safe object.
-Its bucket, key and value storages, counters and live head/tail are public
-fields. The private identity of the bucket record and the opaque representation
-of
-`mem.storage` do not make the map private: `mem` operations expose the typed
-initialized key/value prefixes, including removed dense entries, and inferred
-views can copy and overwrite whole bucket records. Code that composes below
-the map operations must manually preserve equal storage capacities, a fully
-initialized bucket array, paired key/value prefixes, exactly one used or dead
-bucket with a valid index for each dense position, counters equal to the
-numbers of used and dead records, and a linked walk through exactly the used
-buckets. The compiler does not enforce those
-container invariants.
+None of them has a hidden heap or a fallback. Every failure is
+`out_of_memory`, reported before anything changes: a container that
+cannot grow keeps its old storage and contents. Each provider's exact
+contract is in `spec.md`: the arena D193, the pool D197, the injector
+D197 and D288, the heap D195 and D300, the list D152 and D194, the map
+D198 and D274.
 
-The supplied equality must be an equivalence relation. Equal keys must produce
-the same hash, and equality and hash results for a stored key must remain
-stable for as long as it is in the map. That stability obligation includes
-state reached through a pointer or reference inside a key: mutating such a
-referent can invalidate lookup just as directly as overwriting the exposed key
-prefix. These are semantic caller obligations, not compiler proofs.
+A few rules matter when you use the containers directly:
 
-Every lookup, removal and insertion probe is bounded by capacity, including a
-full or all-tombstone table. Insertion first searches for an equal key and
-updates its dense value without consulting the allocator, even with a preceding
-tombstone. This same search remembers the first tombstone and free bucket;
-an absent key uses the remembered position without probing again unless growth
-rebuilds the table. Hashes are reduced modulo capacity as `u64` before
-conversion to `usize`, using an equivalent full-width mask for power-of-two
-capacities. Load pressure uses checked-equivalent arithmetic that cannot
-overflow. An absent key reuses an available dead or free bucket while
-tombstones remain, without allocation. A crowded tombstone-free table grows.
-Growth rehash preflights all byte extents, acquires
-bucket, key and value storage in that order, migrates only used records into a
-private replacement, and publishes only after every fallible step. Failure of
-acquisition one, two or three consequently releases zero, one or two
-replacement allocations while leaving the old map unchanged. Successful
-rehash retires all three old extents exactly once.
+- A map's key needs both an `equatable` and a `hashable` conformance;
+  the combined one does not supply its parent ([1340]). Equality must be
+  an equivalence, equal keys must hash alike, and neither may change
+  while the key is stored, including through a pointer inside the key.
+  The compiler does not check any of this.
+- A map's entry cursor is just a position. Start a new walk after any
+  change to the map, and never resume one on a different map.
+- A map's fields are public. Code that works below its operations must
+  keep the map's invariants itself; `spec.md` (D198) lists them.
+- A spill list's `spill.used` lends its initialized items `from` the
+  list, so the list cannot spill or be released while that view is
+  still used ([0830]). Its first spill doubles the inline capacity,
+  checking that the result fits `usize`, or takes eight if the inline
+  capacity is zero. If a spill or later growth fails, the list is
+  unchanged.
 
-Vector reserve checks that its capacity times the item size fits `usize`
-before calling the allocator, and push checks geometric capacity growth before
-doubling. An impossible request reports `out_of_memory` without changing the
-old list or calling the provider. Copy and drain use ordinary loops, so stack
-use does not grow with the initialized count. Zero-sized items keep logical
-length and capacity: each nonzero-capacity allocation is a zero-byte request
-paired with a zero-byte free. Releasing capacity zero, including repeated
-release, makes no allocator call. These rules preserve the raw initialized
-prefix and publication order rather than exposing spare capacity as a slice.
-
-`core/spill.list(t, capacity)` is the corresponding inline-capacity shape. It
-needs no zero image of `t`, so it stores a pointer item as `core/vec` does.
-Its public wrapper contains private storage:
-an `[capacity]t` array whose unused slots have no readable item image, a count
-for its initialized prefix, a separate `core/vec.list(t)` spill descriptor, and
-a `spilled` flag. A first spill reserves a fresh list, copies the used inline
-prefix through an `escaping inout` container parameter, admits the new value,
-then publishes the descriptor and flag. Later growth uses `core/vec` growth.
-Zero inline capacity uses eight as its first nonzero capacity; otherwise first
-spill doubles `capacity` after a checked `usize` bound. Failed first spill or
-later growth leaves the published storage, length, capacity and initialized
-values unchanged.
-
-`spill.used` takes the container `inout` and returns its initialized writable
-prefix `from` that place, whether storage is inline or spilled. The
-ordinary live-view rule [0830] consequently blocks spill and release until the
-view's last use. `pop` removes the tail without moving a spilled allocation;
-`release` frees an owned spilled extent exactly once and restores the empty
-inline state by resetting metadata, without clearing the array. This is still
-[0860]'s shallow local guarantee: storing references
-through some other alias would not establish whole-program escape safety.
-
-The `core/mem` arena aligns the absolute returned address, not merely the
-offset within its caller-supplied extent. An alignment of zero is the same
-request as byte alignment, and a size of zero is valid: it returns an aligned
-point and may consume the padding needed to reach that point, and under
-`core/fault` it spends one permit as any other call does. Exhaustion and an
-unrepresentable address, rounding step, or allocation end all report
-`out_of_memory` before changing the monotonic offset.
-These are provider contracts rather than stronger guarantees for the unsafe
-backing pointer and stated extent [1720].
+These are the providers' contracts. They do not make raw storage safe:
+storage you hand an arena or a pool must be live, aligned and as large
+as you say ([1720]).
 
 ## RUNTIME DISPATCH
 
-### [1370] 'any C' is a value of some type satisfying concept C
+Generics ([1290]) pick the type at compile time. When the type is only
+known at run time, such as a list of widgets of different kinds, use
+`any C`.
 
-'any C' is a value of some type satisfying concept C,
-decided at run time: a data pointer plus a concept table,
-two words. That pair is an ordinary copyable value and can
-sit in a variable, a field or a slice. What it points at is
-never copied, because its size is unknown; the pointee has
-to live somewhere the pair outlives, typically an arena.
-The pair needs no permission marker of its own: the
-concept's entries already carry it. An entry declared with
-`self: ptr mut t` can only be satisfied by a pointer that
-has the permission, so a stateful implementation behind
-runtime dispatch works and nothing had to be invented for
-it.
-What the pair does carry is the origin of the pointee for
-[0840], so an 'any' over something with frame origin cannot
-be put in a list that outlives the frame.
+### [1370] `any C`: a value of some type that satisfies C
 
-### [1380] Building one is explicit
+`any C` holds a value of some type that satisfies concept C, decided at
+run time. It is two words: a pointer to the data and a pointer to C's
+table of entries for that type.
 
-Building one is explicit. The concept comes from context
-where it can; otherwise name it.
+The pair is an ordinary copyable value. It can sit in a variable, a field
+or a slice. What it points at is never copied, because its size is
+unknown, so the pointee has to live somewhere the pair outlives, typically
+an arena ([0820]).
+
+The pair needs no permission of its own: the concept's entries carry it.
+An entry declared with `self: ptr mut t` can only be satisfied by a
+pointer that may write, so a stateful implementation behind `any` just
+works.
+
+The pair does carry its pointee's origin ([0770]), so an `any` over a
+local cannot go into a list that outlives the frame.
+
+### [1380] Building one with `any(...)`
+
+You build an `any` explicitly from a pointer. The concept comes from
+context where it can; otherwise name it.
 
 ```landin
 make_widget: (provider: type is mem.allocator, memory: provider)
@@ -3470,11 +3816,18 @@ make_widget: (provider: type is mem.allocator, memory: provider)
 end make_widget
 ```
 
+Here the result type supplies `widget`. Without a context, `any(pointer)`
+needs exactly one concept the pointee's type conforms to.
+
+A read-only pointer cannot build an `any` whose concept has an entry
+taking `self: ptr mut t`. Once built, binding mutability controls only
+replacing the pair, not the write authority its pointer already carries.
+
 ### [1390] Calls go through the table
 
-Calls go through the table, with the data pointer as the
-first argument. This is the only place that reads like a
-method call.
+A call on an `any` looks up the entry in the table and passes the data
+pointer as the first argument. This is the only place in Landin that reads
+like a method call.
 
 ```landin
 paint: (items: []any widget, target: ptr mut canvas) -> none =
@@ -3484,234 +3837,62 @@ paint: (items: []any widget, target: ptr mut canvas) -> none =
 end paint
 ```
 
-The enabled form reserves `any` and gives `any C` the identity of that
-direct concept, not of one hidden concrete type or one of C's parents.
-`any(pointer)` uses the contextual C; without one it requires exactly one
-collected exact conformance. Every erased entry has an object-safe first
-`self: ptr t` or `self: ptr mut t`, or `self: t` taken by value when `t` is a
-record, which dispatch copies from the data pointer: a provider handle is
-erased from the address of its binding. Hidden `t` appears nowhere else in the
-entry's runtime signature. Construction from a read-only pointer therefore
-cannot make a table that exposes mutable `self`. Once made, binding mutability
-controls replacing the two-word pair, not the authority already carried by its
-pointer.
+For an entry to be callable this way, its first parameter is `self` as
+`ptr t` or `ptr mut t`, or `self: t` taken by value when `t` is a record,
+and the hidden type `t` appears nowhere else in it. A by-value `self` is
+copied from the data pointer, so a provider handle is erased from the
+address of its binding: `any(addr host)` (D289).
 
-A call through `any C` is checked against C's entry whether or not the
-program has a conformance of C. With none, no `any C` can be made, so no
-value reaches the call, and it is a trap the program never meets (D377): a
-library routine that takes an erased capability builds in a program that
-supplies none.
+`any C` is exactly C: a concept's parent gives no conversion, and two
+`any` types never convert to each other. The implicit `self` takes part in
+the same `from`, `escaping` and origin checks as a written pointer
+argument.
 
-Composition keeps its separate conformances while the erased physical table
-flattens their object-safe function words in deterministic declaration order.
-The pair remains exactly data pointer then table pointer on every target. Its
-origin is the pointee's origin, including through copies, aggregate fields,
-arguments and results; the implicit `self` participates in the same `from`,
-`escaping` and local-origin checks as a written pointer argument (D145--D147).
+A call through `any C` is checked even if the program has no conformance
+of C. Then no `any C` can be made and no value reaches the call, so it
+compiles to a trap that never runs. A library that takes an erased
+capability therefore builds in a program that supplies none (D377).
 
-### [1400] This is what generics cannot do
+The table layout and the rest are in `spec.md` (D145, D146, D147).
 
-This is what generics cannot do: one array holding values
-of different types. `[]t` is always one `t`.
+### [1400] What `any` can do that generics cannot
 
-## MODULES
-
-### [1410] A module is a directory
-
-A module is a directory. Every file in it sees the others
-with no import. Two levels of visibility: module-internal
-(the default) and public. No separate interface file.
-
-The compiler reads every direct `.ldn` child in bytewise filename
-order. Other files are ignored and subdirectories are modules of their own.
-An empty directory is therefore a legal empty module. Declaration order does
-not affect visibility. Canonical file order fixes identities and diagnostics
-and determines the order of active `linker.library` directives [1590]. Public
-functions, bindings, atoms, types and concepts may be named through an import;
-a variant case inherits whether its containing type is
-public. A public declaration may mention a private declaration, whose identity
-can flow through that public surface but remains unnameable by an importer.
-
-### [1420] An import path is a directory path, and nothing cleverer
-
-An import path is a directory path, and nothing cleverer.
-'import net/http' looks for a directory net holding a
-directory http, under each of the import roots the compiler
-was given, in order, and takes the first that has it. From
-that directory it takes every source file — not
-recursively — and follows their imports in turn. A
-subdirectory is a module of its own, reached by its own
-path. What is bound is the last segment.
-Which is why a segment has to be a plain identifier:
-lowercase letters, digits and underscore, not starting with
-a digit. Lowercase because a case-sensitive and a
-case-insensitive filesystem must both agree on what a name
-is; an identifier because the last segment becomes a name
-in the importing file, so a hyphen would need an alias
-every time. Nothing else — no dots, no spaces, no case, no
-characters that some filesystem somewhere will not carry.
-The separator in source is always '/', on every host. The
-compiler turns it into whatever the filesystem wants.
-
-The module loader requires each directory entry to have the exact
-lowercase spelling in the import even on a case-insensitive host. It loads the
-entry module first, then its sorted files, follows imports in source order and
-loads newly reached modules first-in-first-out. A module is loaded once, so
-cycles are legal and terminate. A later root is not merged after an earlier
-one matches.
-
-A plain import binds only its final segment as a namespace in that source
-file. `import net/http` therefore makes `http.get`, `http.response` and
-`http.drawable` qualified declaration references. The same qualification is
-available wherever a value, type, type application, concept, conformance,
-error atom or match case is named. The first dot after an imported namespace
-selects a public declaration; later dots are ordinary value selections. The
-namespace itself is not a value, type, place or first-class object.
-
-```landin
-import net/http
-```
-
-### [1430] Alias, for collisions
-
-Alias, for collisions.
-
-```landin
-import net/http as h
-```
-
-The alias replaces the last segment as this file's namespace name: this
-import binds `h`, and does not also bind `http`. `as` is contextual, so it
-remains an ordinary identifier outside this suffix.
-
-### [1440] Pull selected names into scope, by name
-
-Pull selected names into scope, by name. No wildcard.
-
-```landin
-import net/http (get, post)
-```
-
-This import binds only `get` and `post`, not the `http` namespace. Every
-selected name must be public and must exist, even if the file never uses it.
-Each keeps its original declaration's identity, type and mutability. The list
-is nonempty, with no trailing comma, wildcard or renaming; selection and an
-alias are alternative import forms and cannot be combined.
-
-### [1450] Imports are per file, so every file reads on its own
-
-Imports are per file, so every file reads on its own.
-
-They form a prelude before every declaration. One file's imports are neither
-visible in a sibling nor re-exported. A repeated import name, including the
-same import twice or a collision between a selection and an alias, is an
-error in that file. A parameter or local may shadow
-an import; the import in turn shadows a same-named declaration from the shared
-module scope for qualified lookup. A namespace import leaves the module's
-unqualified value visible; a selected name shadows that value too.
-Selecting a private member is diagnosed
-separately from selecting a member that does not exist, and points back to the
-private declaration.
-
-### [1460] Values at module level must be known at compile time
-
-Values at module level must be known at compile time.
-Nothing runs before the entry point. Immutable ones can
-stay in flash; mutable ones cost RAM and are conspicuous.
-Ordinary integer arithmetic here folds in [1940]'s wider kernel range before
-checking the final image against its type. For example, a module
-`value: u8 = 200 + 100 - 100` holds 200. Inside a function the same u8
-addition overflows and traps before the subtraction.
-
-```landin
-table: [4]u32 = [1, 2, 4, 8]
-mut call_count: u32 = 0
-```
-
-A value another module exports is known in the same way, named through that
-module: `limit: u32 = sizes.page * 4`, `ready: flags.state = flags.idle`.
-Qualifying a name changes where it is found, not whether it is known.
-
-A function value in a module struct image is likewise known: it is a static
-routine address, not a call or compile-time execution. Such a field may name a
-declared or no-capture anonymous function, and a module struct containing one
-needs an explicit image because no zero function address exists [0540].
-
-### [1470] A package is a named collection of modules with a version
-
-A package is a named collection of modules with a version
-and an origin. Names have two levels, owner and package,
-and a directory under a search root is the package it names.
-The intended rule is one version of a package name per program:
-duplicated code is untenable at 32 KB, the types are
-nominal, and there is one conformance register. The current compiler
-does not read package versions or origins. It selects the first
-matching module directory from the ordered roots [1420], even if a
-later root contains another version. The future companion tool will
-solve versions and report a conflict as a hard error, requiring an
-upgrade.
-
-### [1480] The roots are the project
-
-The roots are the project, then the user's landin home,
-then the system-wide one, and vendoring is just the first
-of those. Whether the leading segments of a path mean an
-owner and a package is a convention for people and for the
-companion tool; the compiler sees directories under roots,
-as [1420] says, and nothing else.
-So it receives an ordered list of roots and no more than
-that. Fetching, version solving, lock files and naming
-authority all live in a companion tool that ships
-alongside but stays separable — a compiler you can read is
-worth more than one that can download things. Arranging
-the roots so that only one version of each package name is
-reachable is that tool's job. Until it does so, [1470]'s
-one-version rule is not enforced by the compiler.
-core, hosted, platform and landin are repository-owned source namespaces. The bare tool namespace
-names `compiler`, `assembler` and `linker` cannot be declared or bound by an
-import. Their built-in paths are implicitly available; an explicit import
-of `landin/compiler`, `landin/assembler` or `landin/linker` is refused by
-name before searching roots. core is
-the shared freestanding library: core/mem, core/text, core/vec. Every core
-module and its public interface is available on every target. hosted holds
-hosted providers such as hosted/heap and hosted/system. platform holds scoped
-freestanding interfaces: platform/c currently requires an enabled LP64 C ABI,
-and platform/cortex_m requires an M-profile target, including supported higher
-feature levels. Imports outside those scopes are refused by name at target
-checking (D267).
-These source namespace names remain ordinary identifiers. landin
-holds the toolchain modules of [1560] — landin/compiler,
-landin/assembler, landin/linker — which are available
-without an import, and that is why the bare names
-compiler, assembler and linker are taken.
-Naming authority remains deliberately deferred to the companion
-tool and ecosystem successor in ROADMAP.md. The search path is
-project-first, so ordinary source-module naming collisions can be overridden
-locally. The three compiler-owned modules retain their reserved identities.
-
-The bootstrap request spells that narrow seam as repeated `--root=DIR`
-options followed by one entry-module directory, or the entry module's own
-source files, which are then one module (D383). With no root option it retains
-the earlier explicit-file compatibility mode as one synthetic module. The
-compiler adds one root of its own, the library it ships with, found beside
-its executable: core, hosted and platform always resolve from it, after
-every root the request names (D275). Other root defaults and environment
-policy remain the companion tool's work. The compiler keeps that explicit
-contract: it neither consults a user's home nor inserts any other system
-root, and the supplied order alone decides precedence among the roots given.
+One slice can hold values of different types. A `[]t` is always one `t`;
+a `[]any widget` holds buttons, labels and anything else that is a
+widget.
 
 ## COMPILE TIME
 
-### [1490] 'fixed' marks what is known at compile time
+Landin has a little compile time and keeps it little. You can ask which
+target you are building for, choose declarations by the answer, check a
+layout, and declare build switches. You cannot run your own code while the
+program builds.
 
-'fixed' marks what is known at compile time.
+### [1490] The word `fixed`
 
-### [1500] Conditional compilation
+`fixed` marks something the compiler knows before the program runs. You
+meet it in three places: `fixed if`, which chooses declarations ([1500]);
+fixed parameters, which are compile-time values ([1520]); and the fixed
+expressions that conditions, assertions and option defaults are written in.
 
-Conditional compilation selects declarations in the module, not statements
-or a lexical block. Every arm is parsed, but only the selected arm contributes
-declarations to the one whole-program module scope; an inactive arm has no
-name, type, template, identity or IR effect. Arms may nest and may be empty.
+### [1520] A compile-time value parameter
+
+A `fixed` parameter is a value the caller supplies at compile time, so it
+can size an array in the signature.
+
+```landin
+make_buffer: (fixed capacity: u32, t: type is zeroable)
+             -> (b: [capacity]t) = zeroed end
+```
+
+Fixed parameters sit beside type parameters and work the same way: the
+call supplies or deduces them, and they have no storage at run time
+([1290]).
+
+### [1500] Choosing declarations by target
+
+`fixed if` picks which module-level declarations exist in this build. It
+works on declarations only, not on statements.
 
 ```landin
 fixed if compiler.arch == arm64 then
@@ -3721,30 +3902,39 @@ elsif compiler.arch == cortex_m0 then
 end if
 ```
 
-The compiler exposes `compiler.arch`, whose compiler-owned values are
-`x86_64`, `arm64`, `rv64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
-bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
-(`debug` or `release`), plus `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`,
-`compiler.c_aapcs64_lp64` and `compiler.c_riscv_lp64d`, bools identifying
-the selected C ABI rather
-than inferring it from pointer width or architecture: Linux and Apple
-arm64 share `compiler.arch == arm64` and answer differently here.
-`compiler.c_runtime` says whether C's runtime starts the program and its
-library is linked: always on Darwin and FreeBSD, on Linux only when the
-build asks with `--link=libc`, and never on firmware, so a library calls
-the C library only where it is there.
-`compiler.os` names the target's hosted system, `linux`, `darwin`, `freebsd`
-or `freestanding`, independently of its C calling convention. Linux and
-FreeBSD share a C transport on each architecture, but libc record layouts
-can differ, so a library binding can select those records by this fact.
-A build also assumes a CPU feature level of its target, selected with
-`--level=` and defaulting to the oldest processor of the architecture, and
-`compiler.feature.NAME` is a bool saying whether that level has the feature
-NAME, such as `bmi2` on x86-64, `lse` on arm64, `idiv` on the M profile or
-`xtheadba` on RV64. RV64 levels are ISA strings, default `rv64gc`; optional
-`zba` and `xtheadba` extensions combine independently, keeping LP64D.
-A feature of another architecture is false, so the test needs no
-`compiler.arch` before it:
+Every arm is parsed, so a syntax error in an arm you are not building is
+still an error. Only the selected arm's declarations join the module; the
+others have no names, no types and no effect. Arms may nest and may be
+empty, and an arm opens no scope.
+
+The compiler supplies these facts:
+
+| fact | what it says |
+|---|---|
+| `compiler.arch` | `x86_64`, `arm64`, `rv64`, `cortex_m0` or `synthetic_32` |
+| `compiler.os` | `linux`, `darwin`, `freebsd` or `freestanding` |
+| `compiler.word_size` | the width of `usize`, in bits |
+| `compiler.byte_order` | `little` or `big` |
+| `compiler.build_mode` | `debug`, the default, or `release` |
+| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d` | which C ABI the target uses, each true for its own ABI alone |
+| `compiler.c_runtime` | whether C's runtime starts the program and its library is linked |
+| `compiler.feature.NAME` | whether the selected CPU level has feature NAME |
+
+Ask the C ABI question directly rather than guessing it from the
+architecture: Linux and Apple arm64 share `compiler.arch == arm64` and
+answer differently here. `compiler.os` is separate from the C ABI because
+Linux and FreeBSD share a calling convention on each architecture but not
+every libc record layout.
+
+`compiler.c_runtime` is always true on Darwin and FreeBSD, true on Linux
+only when the build asks with `--link=libc`, and never true on firmware. A
+library calls the C library only where this says it is there.
+
+A build assumes a CPU feature level, chosen with `--level=` and defaulting
+to the oldest processor of the architecture. `compiler.feature.NAME` asks
+about one feature, such as `bmi2` on x86-64, `lse` on arm64, `idiv` on the
+M profile or `xtheadba` on RV64. A feature of another architecture is
+simply false, so you need no `compiler.arch` test first:
 
 ```landin
 fixed if compiler.feature.idiv then
@@ -3754,14 +3944,13 @@ else
 end if
 ```
 
-A level changes the instructions a build may use and never a layout or a
-calling convention, so code built at two levels links together.
+A level changes which instructions the build may use, never a layout or a
+calling convention, so code built at two levels links together. The levels
+and their features are in `spec.md` (D255).
 
-A module value may read a fact too, as the value this build has [1940], and a
-routine body branches on that value with an ordinary `if`. An integer fact
-takes its type from context, and `compiler.arch`, `compiler.os`,
-`compiler.byte_order` and `compiler.build_mode` are read compared with one
-of their atoms (D437):
+When only a value differs, you need no `fixed if` at all. A module value
+may read a fact [1940], and a routine branches on that value with an
+ordinary `if`:
 
 ```landin
 fast_count: bool = compiler.feature.popcnt
@@ -3769,137 +3958,150 @@ on_linux: bool = compiler.os == linux
 word_bytes: usize = compiler.word_size / 8
 ```
 
-A body itself reads no fact, and `fixed if` does not begin a statement: what
-differs only by a value branches on a module value like these, and what needs
-a call one system lacks is a routine declared in each arm of a module-level
-`fixed if`.
+An integer fact takes its type from context. The atom facts,
+`compiler.arch`, `compiler.os`, `compiler.byte_order` and
+`compiler.build_mode`, are read by comparing them with one of their atoms
+(D437).
 
-Build mode is an
-explicit request value, defaulting
-to debug; it does not change runtime checks or optimization policy.
-Conditions also see the program's declared options [1530]. They use a closed
-no-execution fold: literals, parentheses, unary `-`, mathematical integer
-`+ - * / %`, integer comparisons, equality, `not`, `and` and `or`, plus
-`sizeof` and `alignof` of the enabled scalar types. Measurements count target
-bytes; `compiler.word_size == 8 * sizeof usize` holds on both 32-bit and
-64-bit targets. User calls, runtime names, nominal-type measurements and
-aggregate operations remain outside it, including in a short-circuited
-operand. The selected target's
-constructor, not its label text, supplies the architecture. `public fixed if`,
-a trailing name and fixed conditionals in blocks, structs, signatures and
-templates are not forms of this construct.
+A routine body reads no fact directly, and `fixed if` cannot begin a
+statement. What differs by value branches on a module value like those
+above; what needs a call that one system lacks is a routine declared in
+each arm of a module-level `fixed if`.
 
-### [1510] Compile-time assertion
+Fine print:
 
-Compile-time assertion. Not a keyword: it is a builtin
-call like the rest of [1560], because the compiler is what
-has to know it, and that leaves the word 'assert' to the
-library function at [1040] where it belongs.
+- Build mode is a value you ask for. It does not change runtime checks or
+  optimization.
+- Conditions may also read your own options [1530].
+- A condition is a closed fold: literals, parentheses, unary `-`, integer
+  `+ - * / %` without overflow, integer comparisons, equality, `not`,
+  `and`, `or`, and `sizeof` and `alignof` of the built-in scalar types.
+  Sizes count target bytes, so `compiler.word_size == 8 * sizeof usize`
+  holds on 32-bit and 64-bit targets alike.
+- Calls, runtime names, measurements of your own types and aggregate
+  operations are refused, even in an operand that short-circuiting would
+  skip.
+- There is no `public fixed if`, no trailing name after `end if`, and no
+  `fixed if` inside a block, struct, signature or template. `spec.md`
+  (D139, D202) has the rest.
+
+### [1510] Checking a layout at compile time
+
+`compiler.assert` stops the build when a fixed condition is false.
 
 ```landin
 compiler.assert(sizeof usize == 8)
 ```
 
-An assertion is a module directive, also permitted in a selected `fixed if`
-arm. It uses the same closed fixed expressions as [1500], requires bool,
-and rejects false at the source site. Inactive assertions have no effect.
-An assertion may also measure a declared type and a field's offset,
-`compiler.assert(sizeof header == 8)`; it is then checked once the type is
+It is a module-level directive, allowed in a selected `fixed if` arm too,
+and an assertion in an inactive arm does nothing. The condition is the
+same closed fold as [1500] and must be a bool; a false one is reported at
+its own source. An assertion may also measure your own types, as in
+`compiler.assert(sizeof header == 8)`, and is then checked once the type is
 laid out (D412).
 
-### [1520] A compile-time value parameter
-
-A compile-time value parameter.
-
-```landin
-make_buffer: (fixed capacity: u32, t: type is zeroable)
-             -> (b: [capacity]t) = zeroed end
-```
+It is a builtin call rather than a keyword, like the rest of [1560]. That
+leaves the word `assert` free for the library's runtime check [1040].
 
 ### [1530] Your own build switches
 
-Your own build switches. Declared, typed, with a default,
-settable from the build description. A misspelt name is a
-compile error, never a silent false. Names are global, so
-each is declared exactly once.
+An `option` declares a typed build switch with a default, which the build
+can override. A misspelt switch is a compile error, never a silent false.
 
 ```landin
 option log_level: u32 = 0
 ```
 
-Options inhabit a program-wide configuration namespace, visible by bare name
-in fixed conditions, option defaults and compiler assertions. Their supported
-types are bool and the enabled integer scalars, with `usize` and `isize`
-bounded by the selected target. An option is declared unconditionally at
-module level; placing it in any fixed arm is refused because switch discovery
-precedes arm selection. Its name cannot collide with an active module
-declaration or import binding.
-The compiler-owned configuration atoms (`x86_64`, `arm64`, `cortex_m0`,
-`synthetic_32`, `little`, `big`, `debug` and `release`) also keep their names.
+Read it in a fixed condition, and set it on the command line with
+`--option=log_level=2`:
 
-All reached options are collected before defaults are evaluated. Defaults may
-refer forward to other options, whose effective overridden values are used;
-cycles are refused. An override still requires a valid declared default.
-The compiler accepts repeated `--option=NAME=VALUE` arguments, with `true` or
-`false` for bool and signed decimal integer text for integer options. Unknown
-or repeated names, malformed values and values outside the declared type are
-errors. `--build-mode=debug` or `--build-mode=release` supplies the separate
-built-in mode value.
+```landin
+fixed if log_level > 1 then
+    trace_enabled: bool = true
+else
+    trace_enabled: bool = false
+end if
+```
 
-### [1540] There are no compile-time loops and no compile-time
+What to know:
 
-There are no compile-time loops and no compile-time
-function calls. That line is deliberate.
-The builtin modules at [1560] look like an exception and are
-not one: their members are compiler-recognized operations,
-not user functions run during the build. Some inputs must be
-fixed, such as assertion conditions, library names and assembly
-text; atomic data and assembly input operands can be runtime
-values. Nobody can write another builtin module. Nothing of yours
-runs while the program is being built. What that costs is a generated
-table or an SoA layout, which comes from a program that
-writes source and is run by the build — twice so far, and a
-third would be worth taking seriously.
+- An option's type is `bool` or a built-in integer type; `usize` and
+  `isize` take the selected target's bounds.
+- Option names are global across the whole program, so each is declared
+  exactly once. An option may not share a name with an active module
+  declaration, an import or a compiler-owned atom such as `arm64` or
+  `release`.
+- Its name is visible only in fixed conditions, option defaults and
+  compiler assertions. It has no storage at run time.
+- An option is declared unconditionally at module level, never inside a
+  `fixed if` arm: the compiler collects every option before it chooses
+  arms.
+- A default may refer to another option, even one declared later, and sees
+  that option's overridden value. Cycles are refused, and every default
+  must be valid even when overridden.
+- `--option=NAME=VALUE` takes `true` or `false`, or signed decimal integer
+  text. Unknown or repeated names, malformed values and values out of range
+  are errors.
+- `--build-mode=debug` or `--build-mode=release` sets the separate
+  built-in build mode.
+
+### [1540] No compile-time execution
+
+There are no compile-time loops and no compile-time function calls.
+Nothing of yours runs while the program is being built.
+
+The builtin modules of [1560] look like an exception and are not one: their
+members are operations the compiler recognizes, not your functions run
+during the build, and nobody can add another. Some of their inputs must be
+fixed, such as assertion conditions, library names and assembly text;
+others, such as atomic data and assembly input operands, can be runtime
+values.
+
+When you need a generated table or a structure-of-arrays layout, write a
+program that writes the source, and have the build run it. That has been
+needed twice so far; a third case would be worth taking seriously.
 
 ## THE TOOLCHAIN, C, AND THE MACHINE
 
-### [1550] Landin has its own native backends
+This section is about the edges of a program: what the compiler produces,
+how Landin calls C and C calls Landin, how a program links, and how it
+reaches the processor with atomics, assembly and placement. It ends where
+a program begins: the entry point, the capabilities it hands out, and what
+happens when a check fails.
 
-Landin has its own native backends. A verified,
-target-neutral intermediate representation takes QBE's IL as a
-design influence without freezing one flat or serialised stage
-shape before implementation evidence exists. The compiler emits
-deterministic assembly text and relies on the assembler and
-linker of the platform. Linux x86-64 comes first, native macOS
-arm64 second, and emulator-first Cortex-M third. The frame
-pointer is always set up for ordinary routines and interrupt handlers.
-Explicit naked routines [1570] own their frame instead. The whole program is compiled together
-[1480], with optional private caches that do not create a stable
-separate-compilation interface.
-Not LLVM and not C: LLVM is a dependency larger than the
-language and C loses the calling convention, the traps and the
-debug information that the design spends its precision on. The
-cost is owned deliberately — every target is work that nobody
-else does.
+### [1550] What the compiler produces
 
-The `cortex_m0` backend emits ARMv6-M Thumb assembly at its default
-`armv6-m` level. Selecting `armv7-m` or `armv7e-m` lets it emit instructions
-from that higher M-profile level, which the processor must support. All three
-levels share the little-endian, soft-float target contract. The firmware
-request emits its own reset, vector image and constrained linker script,
-copies initialized RAM
-and RAM code, and clears BSS before entering source code. Its tests execute
-that path separately from the older external backend harness. Freestanding
-library delivery remains a separate roadmap item; [1990] specifies the exact
-firmware boundary.
+`refine` compiles the whole program at once into assembly text, and the
+platform's own assembler and linker turn that into an executable. There is
+no LLVM and no C in between.
 
-### [1560] Three builtin modules are the way to the tools
+- The output is deterministic: the same program gives the same bytes.
+- Every ordinary routine and every interrupt handler sets up the frame
+  pointer, so a debugger or a backtrace can always walk the stack. A naked
+  routine ([1570]) owns its frame instead.
+- The whole program is compiled together ([1480]). The compiler may keep
+  private caches, but there is no stable separate-compilation interface.
 
-Three builtin modules are the way to the tools. They are
-modules of the reserved landin package — landin/compiler
-and its siblings — and are in scope without an import,
-which is why their bare names are not available to anyone
-else.
+Why not LLVM or C? LLVM is a dependency larger than the language, and
+compiling through C would lose the calling convention, the traps and the
+debug information that Landin is precise about. The price is that every
+target is Landin's own work. Linux x86-64 came first, native macOS arm64
+second and Cortex-M, emulator first, third; the README lists every target
+today.
+
+On Cortex-M the `cortex_m0` backend emits ARMv6-M Thumb, the default
+`armv6-m` level. `--level=armv7-m` or `--level=armv7e-m` lets it use that
+level's instructions too, which the processor must then support. All three
+levels are little-endian and soft-float. A firmware request emits its own
+reset code, vector table and linker script: reset copies initialized data
+and RAM code out of flash and clears BSS before your code runs.
+`spec.md`'s [1990] is the exact firmware contract.
+
+### [1560] The `compiler`, `assembler` and `linker` modules
+
+Three builtin modules reach the toolchain. They belong to the reserved
+`landin` package (`landin/compiler` and its siblings) and are in scope
+without an import, which is why nobody else can use their bare names.
 
 | module | what it reaches |
 | --- | --- |
@@ -3907,70 +4109,38 @@ else.
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 
-Their members are builtin and cannot be written by hand. The
-required fixed inputs depend on the operation: `compiler.assert`
-takes a fixed condition, `linker.library` a fixed name, and
-`assembler.block` fixed instruction text. Atomic and volatile
-pointer and value operands, and assembly inputs, can be runtime
-values; atomic ordering operands remain fixed compiler atoms.
-The hosted slice enables the compiler facts and assertions above and
-`linker.library` below. Scalar atomics and barriers follow D227. Cortex-M0
-also enables declaration placement annotations and an explicit firmware-entry
-request, which hosted targets refuse. `assembler.block` is checked on every
-target [1630]. Other tool operations still receive named refusals.
-Where the line runs: something is builtin when the compiler
-has to know it. Atomics are, because opaque assembly in a
-hot loop wrecks the register allocation around it. Masking
-interrupts is not, because being opaque is exactly right
-there — a critical section wants nothing reordered across
-it. So cortex_m.disable_interrupts and its kin are an ordinary
-core module per target, written with assembler.block behind
-a fixed if and inlined, not a fourth builtin module whose
-contents would change with the target.
-If one of them later turns out to exist on every target
-and mean the same thing everywhere, the way the atomics do,
-it can be promoted into compiler then. The rule decides it,
-not a list. Vector operations are not on it: fixed arrays are
-the vector type and take element-wise operators [0590], so
-D240 withdrew the vector intrinsics this table once listed.
+Their members are built into the compiler; you cannot write one yourself.
+Some arguments must be fixed when the program is compiled:
+`compiler.assert` takes a fixed condition, `linker.library` a fixed name
+and `assembler.block` fixed instruction text. Atomic and volatile pointer
+and value operands, and assembly inputs, can be runtime values; an atomic's
+ordering is always a fixed `compiler` atom.
 
-### [1570] Calling conventions are a growing set of atoms behind one
+What works today:
 
-Calling conventions are a growing set of atoms behind one
-spelling rather than a keyword each: extern(c) today,
-extern(interrupt) for handlers whose entry, exit and vector
-placement differ, extern(naked) for no prologue at all, and
-room for extern(aapcs), extern(sysv), extern(win64) later.
-Fortran's numeric libraries and Swift's separate error channel make
-direct interop candidates. Neither convention is specified or scheduled;
-the Language evolution register in `ROADMAP.md` gives each a trigger.
-Zig, Odin, Rust and Python all speak C, so there is nothing to gain there.
+- Every hosted target has the compiler facts, `compiler.assert`,
+  `linker.library` ([1590]) and the scalar atomics and barriers (D227).
+- Cortex-M0 also has placement annotations ([1640]) and the firmware entry
+  request ([1650]), which hosted targets refuse.
+- `assembler.block` is checked on every target ([1630]).
+- Any other tool operation is refused by name.
 
-The enabled Cortex forms are distinct function types: both machine conventions
-require nongeneric `() -> none` definitions with no declared failures. Their
-values can be retained in data or named by a vector, but cannot be called or
-converted as ordinary/C routines. Interrupt handlers use an ordinary Landin
-frame on top of the hardware exception frame and return through EXC_RETURN.
-Naked bodies are one assembly block with no compiler prologue; the programmer
-owns stack, registers, calls and return instructions. Falling off that block
-traps. Neither convention implies `keep`. Naked routines are also admitted on
-hosted x86-64, arm64 and RV64, where `platform/linux`'s process entry is one.
+Why these and no more: something is builtin when the compiler has to
+understand it. Atomics are, because opaque assembly in a hot loop wrecks
+the register allocation around it. Masking interrupts is not: there,
+opacity is exactly right, since a critical section wants nothing moved
+across it. So `cortex_m.disable_interrupts` and its kin are an ordinary
+module per target, written with `assembler.block` behind a fixed `if` and
+inlined. If such an operation later turns out to exist and mean the same
+thing on every target, as the atomics do, it can move into `compiler`. The
+rule decides, not a list. There are no vector intrinsics: fixed arrays are
+the vector type and take element-wise operators ([0590], D240).
 
 ### [1580] Importing from C
 
-Importing from C. `refine` reads Landin, not headers. The bootstrap supplies a
-separate deterministic clang-AST generator for declarations and explicit C
-adapters, with policy for facts a header does not say: nullability, ownership,
-`from`, retention and incoming-varargs extraction. That policy is not a
-handwritten replacement signature. [1975] defines the selected boundaries,
-Linux x86-64 SysV AMD64 LP64, Apple's arm64 variant of AAPCS64 and Linux
-arm64's standard AAPCS64, shared with FreeBSD, and RV64 Linux LP64D; the
-normative rules alone are not treated as
-evidence that a boundary or its code generation is complete.
-
-A C pointer may be null and a Landin pointer may not. A foreign declaration
-that permits absence therefore names [0480]'s one-atom pointer union, which
-costs no extra bits. A small declaration illustrates the generated shape:
+A bodyless `extern(c)` declaration imports a C function. `refine` reads
+Landin, never C headers: a separate, deterministic binding generator reads
+headers and writes these declarations for you.
 
 ```landin
 none_returned: atom
@@ -3979,87 +4149,92 @@ extern(c) malloc: (n: usize) -> (p: allocation)
 extern(c) free: (p: ptr mut u8) -> none
 ```
 
-Match the result before using the pointer. `ptr(0)` is refused, including a
-closed folded expression or a value that becomes zero at target `usize`
-width. Dynamic construction checks the converted address and traps on zero,
-even in `unchecked`; losing origin is not permission to create null. Absent
-allocator backing uses a named union, not a fake `ptr(1)` allocation.
+A C pointer may be null and a Landin pointer may not. So a C result or
+parameter that may be null is [0480]'s one-atom pointer union, which costs
+no extra bits, and you `match` the result before using the pointer.
 
-A function found while the program runs, as a loaded library's symbol is, is
-an address until the program names its C type: `adder(address)`, with
-`adder: type = extern(c) (a: i32, b: i32) -> (r: i32)`, is a function value
-of the code there. Nothing can check the type, as nothing checks a C cast,
-and the value is the program's to call only while the library stays loaded.
+- `ptr(0)` is refused, and so is any fixed expression that folds to zero
+  at the target's `usize` width.
+- A pointer built from an integer at run time is checked, and zero traps,
+  even in `unchecked`. Losing the origin is not permission to make null.
+- Absent allocator backing is a named union too, never a fake `ptr(1)`.
 
-The ordinary `platform/c` aliases name C's signed and unsigned integer widths,
-`c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. Its assertion of
-`compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64
-or compiler.c_riscv_lp64d` admits the four explicitly supported hosted ABIs. Equal pointer widths alone
-do not admit another ABI. Plain `c_char` is the ABI's plain `char`, a numeric
-byte and not a Unicode scalar: `i8` under SysV and Apple's ABI, `u8` under
-standard AAPCS64 and RISC-V LP64D.
+A header does not say everything Landin wants to know: whether a pointer
+may be null, who owns it, what it is `from`, whether C retains it, how to
+read incoming varargs. The generator takes that from a written policy, not
+from a handwritten replacement signature.
 
-C-compatible values include integers, bool, pointers, f32/f64, C function
-values and recursive nonempty `layout(c)` structs, including nested struct,
-nonempty fixed-array and fixed C-callback fields. Variadic function values may
-be stored and called within Landin but do not fill a C callback field or
-signature position. Arrays themselves are not by-value C
-arguments or results. C enums retain their integer values; unions, bitfields,
-globals, TLS and nullable callbacks use explicit generated representations and
-adapters, not new native grammar or a pointer to a stored function value.
-Selected extended/x87 and 128-bit scalars, complex/vector/atomic/volatile types,
-old-style or non-C-convention functions, packed/overaligned/flexible/zero-size
-by-value records, anonymous unaliased declarations, unsupported arrays and
-`va_list` forwarding, and unsafe, stale or missing policy are refused explicitly
-rather than guessed. The required enum, union, bitfield, global/TLS,
-nullable-callback and incoming-schema categories cannot be refused wholesale as
-a shortcut.
-
-An outgoing variadic signature writes `, ...` after at least one fixed
-parameter. Both direct and indirect variadic calls are positional-only,
-including the fixed prefix. The unnamed tail admits scalars, pointers and fixed
-C callbacks, not structs, arrays, slices, atoms or `any`. C's default promotions
-make f32 into f64 and bool/narrow integers into C int; untyped literals take i32
-or f64. This is not an inferred error set. Native definitions receiving
-arbitrary varargs are
-refused; generated C entry adapters require an explicit extraction schema.
-
-### [1590] Linking a static library
-
-Linking a static library, next to the declarations that
-need it rather than in a separate build file.
+A function found while the program runs, such as a symbol of a loaded
+library, is just an address. Apply a C function type to it and you have a
+function value:
 
 ```landin
-linker.library("m")
+c_adder: type = extern(c) (a: i32, b: i32) -> (r: i32)
+
+add_at: (address: usize) -> (sum: i32) =
+    add := c_adder(address)
+    sum = add(2, 3)
+end add_at
 ```
 
-The module directive takes a fixed text literal naming an archive. Names use
-ASCII letters, digits, underscore, hyphen and dot, are nonempty, do not begin
-with a hyphen, and cannot consist only of dots. Active directives reach the
-platform driver after the program assembly in canonical source/declaration
-order, including repetitions. The Linux adapter selects archives for these
-libraries while leaving the hosted runtime's linkage to the driver; an archive
-links beside the C library, so a Linux build asking for one links with
-`--link=libc`, and the default static link [1650] refuses it. Darwin
-asks the selected driver to resolve `libNAME.a` and passes that existing file;
-a missing archive fails even when a dylib exists. With Apple's default driver,
-a returned bare filename must exist in the invocation directory. An inactive
-directive adds nothing. Moving an active directive among module declarations
-can therefore change archive resolution.
+Nothing can check that code of that type is there, as nothing checks a C
+cast, and the value is yours to call only while the library stays loaded.
+
+Four C ABIs are supported: SysV AMD64 LP64 on Linux and FreeBSD x86-64,
+Apple's arm64 variant of AAPCS64 on macOS, the standard AAPCS64 on Linux
+and FreeBSD arm64, and RV64 LP64D on Linux RV64. `spec.md`'s [1975] gives
+each one's rules.
+
+`platform/c` names C's types: the signed and unsigned integer widths,
+`c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. It asserts
+`compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64
+or compiler.c_riscv_lp64d`, so it admits exactly those four ABIs; another
+target with the same pointer width is not admitted. Plain `c_char` is the
+ABI's plain `char`, a number and not a Unicode scalar: `i8` under SysV and
+Apple's ABI, `u8` under the standard AAPCS64 and RV64.
+
+What crosses the boundary:
+
+| kind | how it crosses |
+| --- | --- |
+| integers, `bool`, pointers, `f32`, `f64`, C function values | by value |
+| nonempty `layout(c)` structs, with nested structs, nonempty fixed arrays and fixed C callbacks as fields | by value |
+| packed records and records with a flexible array member | by pointer only (D414) |
+| fixed arrays | as fields or pointees, never as a by-value argument or result |
+| C enums | as their integer values |
+| unions, bitfields, globals, thread-locals, nullable callbacks | through the generator's representations and adapters |
+
+Anything else a header can say, such as `long double`, 128-bit integers,
+complex or vector types, or forwarding a `va_list`, is refused by name
+rather than guessed. [1975] has the full list.
+
+A variadic C function writes `, ...` after at least one fixed parameter:
+
+```landin
+extern(c) printf: (format: ptr u8, ...) -> (written: i32)
+
+say_count: (format: ptr u8, count: i32) -> none =
+    _ = printf(format, count, 1.5)
+end say_count
+```
+
+- Calls, direct or through a function value, are positional only,
+  including the fixed parameters.
+- The variadic tail takes scalars, pointers and fixed C callbacks, not
+  structs, arrays, slices, atoms or `any`.
+- C's promotions apply: `f32` becomes `f64`, and `bool` and narrow integers
+  become C `int`. An untyped literal is `i32` or `f64`.
+- A variadic function value may be stored and called in Landin, but it
+  cannot fill a C callback field or parameter.
+- A Landin definition cannot receive varargs; the generator writes a C
+  adapter from an explicit extraction schema instead.
+
+The `...` here is C's variadic tail, unrelated to [0960]'s `! ...`.
 
 ### [1600] Exporting to C
 
-Exporting to C. `extern(c)` chooses the convention; it does not mean
-bodyless, public or imported. A bodyless declaration imports a C routine. A
-Landin body defines one, and may remain private when only its callback address
-is needed. `public` separately exposes a definition, and on a C definition
-also makes its declared name a global symbol C can call. Conversely, [1610]'s
-standalone `link(symbol: text)` leaves an ordinary definition on the native
-Landin convention; linkage never selects C. C signatures are nongeneric, use
-`in` parameters and at most one return. No declared or inferred
-Landin error channel crosses the boundary; recover inside the body and return
-the explicit C status/value promised by the interface. Neither foreign
-exception unwinding nor `longjmp` across Landin frames is promised.
+Give an `extern(c)` declaration a body and you have defined a C function
+in Landin. Make it `public` and C code can call it by its name.
 
 ```landin
 public extern(c) my_add: (a: i32, b: i32) -> (r: i32) =
@@ -4067,11 +4242,26 @@ public extern(c) my_add: (a: i32, b: i32) -> (r: i32) =
 end my_add
 ```
 
-### [1610] A symbol name the language's identifiers cannot spell
+`extern(c)` chooses the calling convention and nothing else. Without a body
+it imports; with a body it defines; `public` is what exports, making the
+declared name a global symbol. A private C definition is still useful: its
+address can be handed to C as a callback.
 
-A linker spelling independent of the Landin name and function convention. It
-may stand alone before a native function name, or follow `extern(c)` for a C
-import or definition:
+- A C signature is not generic, takes only `in` parameters and returns at
+  most one value.
+- Landin's declared failures do not cross. Recover inside the body and
+  return the status or value the C interface promises.
+- Nothing is promised if a foreign exception or a `longjmp` crosses
+  Landin frames.
+- Cortex-M has no C signatures yet. Its link names and placement are
+  enabled separately ([1610], [1640]).
+
+### [1610] Choosing a symbol's linker name
+
+`link(symbol: "...")` gives a declaration a linker name its Landin name
+cannot spell, or does not want. It follows `extern(c)` for a C import or
+definition, or stands alone before a native Landin function or a module
+datum.
 
 ```landin
 link(symbol: "native_identity") identity: (value: i32) -> (result: i32) =
@@ -4081,42 +4271,99 @@ end identity
 extern(c) link(symbol: "foreign_add") add: (a: i32, b: i32) -> (r: i32)
 ```
 
-The standalone form still requires the ordinary `= body end` and keeps the
-native Landin convention: `link` never implies C or bodylessness. It does
-export: the link name is a global symbol whether or not the declaration is
-public, and a module datum may take one too, so data is exported
-deliberately [1975]. In either form it changes neither lookup nor signature
-nor Landin visibility. The decoded
-link name has the precise safe ASCII shape `[A-Za-z_.$][A-Za-z0-9_.$]*`: its
-first byte is a letter, underscore, dot or dollar, and only a later byte may
-additionally be a digit. It is the logical external name before the platform's
-prefix, not assembler operand text. ELF keeps it unchanged; Darwin prepends
-one underscore, so `foreign_add` becomes `_foreign_add` and `_entry` becomes
-`__entry`. The same rule applies to native and C link names [1975]. Whitespace, `@` suffixes and arbitrary assembler expressions are
-excluded. The backend quotes the identity where target assembly syntax requires
-it after applying that prefix. Compatible bodyless C declarations may share
-one spelling and one definition, but incompatible signatures and multiple
-definitions are refused. `escaping` is part of that compatibility although C
-has no such word: a Landin caller of an import is checked against what the
-import says, so an import of a definition that keeps its pointer repeats the
-definition's `escaping` (D441).
-C imports and public C definitions default to their declared name. A private C
-definition without an override is, like every other unexported routine and
-datum, a local symbol, renamed only where the program holds its name twice
-[1975]. This C
-boundary does not enable Cortex C signatures. D229 separately enables Cortex
-module-data symbols, machine conventions and the placement in [1640].
+Landin code still calls these `identity` and `add`: `link` changes neither
+lookup nor signature nor Landin visibility. The standalone form keeps the
+native Landin convention and still needs `= body end`; `link` never means
+C and never means bodyless.
 
-### [1620] Atomics are builtins
+It does export. A link name is a global symbol whether or not the
+declaration is `public`, and that is how you export a module datum
+deliberately ([1975]).
 
-Atomics are builtins, not assembly, so the compiler knows
-which memory they touch and can still allocate registers
-around them. The ordering is a compile-time atom. A pleasant
-type wrapping them belongs to the Broader standard library
-successor roadmap rather than to `core`: Cortex-M0 has no
-read-modify-write atomics at all, so what a portable wrapper
-offers is a library design question, answered when a program
-needs one (D240).
+- A link name matches `[A-Za-z_.$][A-Za-z0-9_.$]*`: no whitespace, no `@`
+  suffix, no assembler expression.
+- It is the name before the platform's prefix. ELF uses it unchanged;
+  Darwin adds one underscore, so `foreign_add` becomes `_foreign_add` and
+  `_entry` becomes `__entry`. The backend quotes it where the assembler
+  needs that. Native and C link names follow the same rule.
+- Bodyless C declarations may share a symbol with each other and with one
+  definition if their signatures agree. Disagreeing signatures and a
+  second definition are refused. `escaping` counts, although C has no such
+  word: an import of a C function that keeps its pointer must say so, as
+  the definition does (D441).
+
+Without `link`, C imports and public C definitions use their declared
+name. Every other routine and datum, public or private, is a local symbol
+under its own name, so no C library can collide with it. It is renamed,
+with its module path, only when the program holds that name twice
+(D415, D417).
+
+### [1590] Linking a static library
+
+`linker.library` asks the linker for a static archive. Write it next to the
+declarations that need it, not in a separate build file.
+
+```landin
+linker.library("m")
+```
+
+This links `libm.a`.
+
+- The name is a fixed text literal of ASCII letters, digits, `_`, `-` and
+  `.`. It is nonempty, does not begin with `-` and is not only dots.
+- Active directives reach the linker after the program, in source order,
+  repeats included. So moving one among the module's declarations can
+  change how archives resolve. This is the one place where declaration
+  order matters (D202).
+- A directive in an inactive arm of a module-level `if` ([1500]) adds
+  nothing.
+- On Linux an archive links beside the C library, so a build that asks for
+  one needs `--link=libc`; the default static link ([1650]) refuses it.
+- On Darwin the driver resolves `libNAME.a` and passes that file. A missing
+  archive fails even when a dylib of the name exists. With Apple's default
+  driver, a bare filename it returns must exist in the directory the build
+  runs in.
+- Cortex-M firmware refuses `linker.library`.
+
+### [1570] Calling conventions
+
+A function's calling convention is written `extern(...)` before its name.
+Without one, a function uses Landin's own convention.
+
+| convention | for |
+| --- | --- |
+| `extern(c)` | the target's C ABI ([1580], [1600]) |
+| `extern(interrupt)` | an interrupt handler, whose entry, exit and vector placement differ from a call ([1640]) |
+| `extern(naked)` | no prologue at all: the body is one assembly block ([1630]) |
+
+The convention is an atom, not a keyword, so the set can grow:
+`extern(aapcs)`, `extern(sysv)` and `extern(win64)` have room. Fortran's
+numeric libraries and Swift's separate error channel make direct interop
+candidates. Neither convention is specified or scheduled; the Language
+evolution register in `ROADMAP.md` gives each a trigger. Zig, Odin, Rust
+and Python all speak C, so there is nothing to gain there.
+
+The two machine conventions are their own function types:
+
+- A definition is nongeneric, exactly `() -> none`, and declares no
+  failures.
+- Its function value can be stored or named by a vector, but not called
+  or converted to an ordinary or C function.
+- An interrupt handler runs an ordinary Landin frame on top of the
+  hardware's exception frame and returns through EXC_RETURN.
+- A naked body is one assembly block with no compiler prologue. The stack,
+  registers, calls and return instruction are yours, and falling off the
+  end traps.
+- Neither convention keeps a routine from section garbage collection
+  ([1640]).
+- Naked routines also work on hosted x86-64, arm64 and RV64;
+  `platform/linux`'s process entry is one.
+
+### [1620] Atomics
+
+Atomic operations are `compiler` builtins, not assembly, so the compiler
+knows which memory they touch and can still allocate registers around them.
+The ordering is a fixed atom.
 
 ```landin
 bump: (p: ptr mut u32) -> none =
@@ -4124,20 +4371,33 @@ bump: (p: ptr mut u32) -> none =
 end bump
 ```
 
-D227 in `spec.md` defines the supported scalar operations, exact orderings,
-alignment traps, happens-before and race limits. Atomics synchronize coherent
-CPU memory; volatile accesses preserve individual accesses but do not synchronize
-threads. Compiler barriers invalidate memory knowledge without ordering hardware.
-Device ordering and completion require the target's barriers and the device's
-own protocol. Ordinary DMA slices stay ordinary: after certified completion,
-the driver establishes hardware/cache visibility and a compiler memory boundary
-before reading them. Interrupt masking alone does not stop DMA.
+There is no atomic wrapper type in `core`. Cortex-M0 has no
+read-modify-write atomics at all, so what a portable wrapper should offer
+is a library design question. The Broader standard library successor
+roadmap owns it, to be answered when a program needs one (D240).
+
+Each tool for shared memory does one thing:
+
+| tool | what it gives |
+| --- | --- |
+| atomics | synchronization of coherent CPU memory between threads |
+| volatile accesses ([0850]) | every access happens, as written; no synchronization between threads |
+| compiler barrier | the compiler forgets what it knew about memory; no hardware ordering |
+| the target's device and completion barriers | hardware ordering and completion of the accesses before them |
+
+A DMA buffer stays an ordinary slice. When the device has finished, by its
+own protocol and not merely because an interrupt arrived, make its writes
+visible with the target's barriers or cache maintenance and a compiler
+barrier, then read the buffer. Masking interrupts does not stop DMA.
+
+D227 in `spec.md` defines the supported operations, the exact orderings,
+alignment traps, happens-before and what a race may do.
 
 ### [1630] Inline assembly, for what has no builtin
 
-`assembler.block` takes fixed quoted or raw text in a routine body, and after
-it the operands that carry values in and out. An operand names its direction,
-its name, its type and the register it is placed `at`:
+`assembler.block` takes fixed quoted or raw text in a routine body, and
+after it the operands that carry values in and out. An operand names its
+direction, its name, its type and the register it is placed `at`:
 
 ```landin
 disable_interrupts: () -> (previous: u32) =
@@ -4152,51 +4412,65 @@ end restore_interrupts
 ```
 
 A register is a name the target answers for, never text. `general` asks the
-compiler to choose one, and `{mask}` in the text is where the chosen register
-goes, spelled at the width the operand's type selects. A fixed register is the
-architecture's own full-width name, and the text may use it directly. `in`
-carries a value in, `out` carries one out, and `inout` does both through one
-register. The outputs are the block's value, as a function's named returns are
-its: one is a scalar, several are an anonymous result you destructure.
+compiler to choose one, and `{mask}` in the text is where the chosen
+register goes, spelled at the width the operand's type selects. A fixed
+register is the architecture's own full-width name, and the text may use it
+directly. `in` carries a value in, `out` carries one out, and `inout` does
+both through one register. The outputs are the block's value, as a
+function's named returns are its: one is a scalar, several are an anonymous
+result you destructure.
 
 ```landin
 (low, high) := assembler.block("rdtsc", out low: u32 at rax,
                                out high: u32 at rdx)
 ```
 
-An operand is an integer scalar that fits one register. A pointer crosses as
-`usize(p)` and comes back through `ptr(u)`, whose zero check is then written
-where it happens; a flag comes back as `x <> 0`. Inputs are evaluated once,
-left to right, before the block runs. The integer keeps no permission, so a
-routine around a block that writes storage takes it as `ptr mut u8` or
-`[]mut u8`: its callers are checked against that parameter, and an immutable
-buffer is refused there rather than handed to the system (D440).
+What an operand can be:
 
-Every block may overwrite the registers a call may, and the flags. A register
-a call must preserve is declared, as an operand or as a discarded output
-`out _ at rbx`, and that is what makes the routine save it. The frame, stack
-and link registers are never named, so a block cannot break a backtrace, and
-the language reserves no register of its own. Every block is opaque to the
-compiler: memory knowledge is invalidated and memory accesses cannot be
-reordered across it, which is exactly what a critical section wants. It is not
-itself a hardware barrier. An ordinary block is straight-line code with no
-labels or calls; a system call returns to the next instruction, so it is
-straight-line too. [1990] gives each target's registers, the text rules and the
-programmer's obligations; D248 records the design.
+- An integer scalar that fits one register. A float operand is refused by
+  name; Language evolution owns it (D248).
+- A pointer crosses as `usize(p)` and comes back through `ptr(u)`, whose
+  zero check then happens there. A flag comes back as `x <> 0`.
+- Inputs are evaluated once, left to right, before the block runs.
+- The integer keeps no permission. So a routine around a block that writes
+  storage takes it as `ptr mut u8` or `[]mut u8`: its callers are checked
+  against that parameter, and an immutable buffer is refused there rather
+  than handed to the system (D440).
 
-The earlier Cortex-M0 form stays as a shorthand: `assembler.block(text, value)`
-passes one `u32` in and out of r0, and the text names r0 itself.
+What a block may touch:
 
-`platform/cortex_m.disable_interrupts()` returns the prior PRIMASK value;
-`restore_interrupts(previous)` restores it, so nested critical sections do not
-enable interrupts prematurely. These functions can run in thread or handler
-mode. They do not stop DMA or mask NMI/HardFault. `wait_for_interrupt()` issues
-DSB then WFI; waking is a reason to check the device condition again, not proof
-of completion. `compiler_barrier`, `device_barrier` and `completion_barrier`
-expose the existing distinct boundaries without a cache or scheduler API.
+- Every block may overwrite the registers a call may, and the flags.
+- A register a call must preserve is declared, as an operand or as a
+  discarded output `out _ at rbx`, and that is what makes the routine save
+  it.
+- The frame, stack and link registers are never named, so a block cannot
+  break a backtrace. The language reserves no register of its own.
 
-A naked body owns its control flow. For example, this selected entry runs
-after compiler reset has initialized data and stacks:
+Every block is opaque to the compiler: memory knowledge is invalidated and
+memory accesses cannot be moved across it, which is exactly what a critical
+section wants. It is not itself a hardware barrier. An ordinary block is
+straight-line code, with no labels or calls; a system call returns to the
+next instruction, so it is straight-line too. `spec.md`'s [1990] gives each
+target's registers, the text rules and your obligations.
+
+The older Cortex-M0 form stays as a shorthand:
+`assembler.block(text, value)` passes one `u32` in and out of r0, and the
+text names r0 itself (D230).
+
+`platform/cortex_m` wraps the common blocks:
+
+- `disable_interrupts()` returns the prior PRIMASK, and
+  `restore_interrupts(previous)` puts it back, so nested critical sections
+  do not enable interrupts too early. Both work in thread and handler mode.
+  They do not stop DMA or mask NMI or HardFault.
+- `wait_for_interrupt()` issues DSB, then WFI. Waking up is a reason to
+  check the device again, not proof that it finished.
+- `compiler_barrier`, `device_barrier` and `completion_barrier` are the
+  three distinct boundaries of [1620]. There is no cache or scheduler API.
+
+A naked body ([1570]) owns its control flow, so its block may use labels
+and branches. This entry runs after the compiler's reset has initialized
+data and stacks:
 
 ```landin
 extern(naked) start: () -> none =
@@ -4208,19 +4482,21 @@ extern(naked) start: () -> none =
 end start
 ```
 
-The request `--target=cortex-m0 --firmware-entry=start --emit=exe` names the
-source entry. A naked entry can set up PSP or call explicitly linked ordinary
-code, but must meet that code's eight-byte stack alignment, r9 and frame
-obligations. `none` is not a promise never to return. The compiler traps on
-entry return or naked fallthrough; it does not invent a hosted caller.
+```sh
+refine compile main.ldn --target=cortex-m0 --firmware-entry=start --emit=exe
+```
 
-### [1640] Kept against section garbage collection, and placed
+The request names the source entry. A naked entry may set up PSP or call
+explicitly linked ordinary code, but it must then meet that code's
+eight-byte stack alignment, r9 and frame obligations. `none` is not a
+promise never to return: the compiler traps if the entry returns or the
+naked block falls through. There is no hosted caller to return to.
 
-Calling convention, symbol spelling, placement and retention are independent.
-The selected firmware compiler owns the fixed vector image: its first word
-is the initial SP, its second is compiler reset, reserved slots are zero, and
-source annotations supply typed handler relocations. This avoids treating
-stack addresses, reserved words and machine function types as interchangeable.
+### [1640] Placing code and data on a microcontroller
+
+On Cortex-M, a `link(...)` annotation also places a declaration: in a
+section, at an alignment, in an interrupt vector slot, and kept against the
+linker's section garbage collection.
 
 ```landin
 link(vector: 16)
@@ -4232,62 +4508,107 @@ link(section: ".rodata.firmware_mark", align: 16, keep)
 firmware_mark: [4]u8 = [55, 48, 49, 0]
 ```
 
-Slot 16 is IRQ0 in the selected profile; it is not a portable peripheral name.
-Alignment and vector indexes are decimal integer literals; ordinary digit
-separators are allowed, while nondecimal prefixes and expressions refuse.
-A vector annotation requires a firmware-entry request. The kept vector image
-references the handler, so section garbage collection retains it. An interrupt
-routine with no reference or keep can still disappear. `keep` retains its
-containing section; multiple objects deliberately placed in one section share
-that retention. Linkage alone does not retain anything.
+Slot 16 is IRQ0 in the selected profile: a vector number is the absolute
+slot in the table, not an IRQ number or a peripheral's name.
 
-Functions can select `.text.*` in flash or `.ramtext.*` copied to RAM at reset.
-Immutable data selects `.rodata.*`; mutable data selects `.data.*` or zeroed
-`.bss.*`. Placement alignment is a power of two through 256 and does not change
-type layout. The 32 KiB flash/16 KiB RAM image reserves the top 4 KiB of RAM for
-stacks. The linker checks bounds and overlap; the compiler rejects reserved
-vectors, mismatched sections, duplicate attributes and symbol collisions.
-There is no user-code module initialization [1460].
+The compiler owns the vector table. Its first word is the initial stack
+pointer, its second the compiler's reset, reserved slots are zero, and
+`vector` annotations fill in handlers with their types checked. So a stack
+address, a reserved word and a handler can never be mixed up. A vector
+annotation needs a firmware-entry request ([1650]).
 
-### [1650] Entry point
+What survives the link:
 
-Entry point. Hosted, `main` follows the system C ABI at the machine boundary.
-The no-argument Landin form is the ordinary one, because `argc` and `argv` in
-the C shape cannot be indexed without `slice_from`, which is not enabled — so
-the hosted world retains the argument table and lends each argument as a
-host string instead. When the program imports `hosted/system`, and so
-`platform/posix`, the hosted entry calls the latter's C-callable
-`void _landin_host_initialize_arguments(int argc, char **argv, char **envp);`
-with the real incoming carriers before that no-argument source body begins,
-so the environment is retained beside the arguments and lent the same way. A Linux
-executable needs no C library: it starts at `platform/linux`'s `_landin_start`,
-which calls `main` with the process's arguments, and `--link=libc` links the
-C runtime instead.
+- The table is kept and refers to each handler in it, so those handlers
+  survive.
+- An interrupt routine nothing refers to and nothing keeps can disappear.
+- `keep` retains the section that holds the declaration. Several objects
+  placed in one section share that retention.
+- A link name alone retains nothing.
 
-A C-owned `main` that drives exported Landin routines calls the same entry
-explicitly, with its own `envp` or C's `environ`, before `system.new()`
-acquires an argument capability and before starting a thread that may acquire
-one. It need not do so for file, stream and heap
-work, which needs no argument root, merely because `core/io` is linked, and no ordinary export or callback
-initializes or resets the root. Those views derive from the resulting world; a
-caller that must mutate the same backing-aware provider while retaining one
-first copies what it needs into its own storage. Freestanding there is no
-`main`; the explicit compiler request names an infallible ordinary
-`() -> none` or `() -> noreturn` definition, or a naked `() -> none`
-definition, in the entry module. Compiler reset initializes
-RAM before calling it. Both normal return and failed checks trap without a
-hosted exit service. [1990] defines this constrained firmware path; general
-build/package orchestration is outside it.
+Where things go:
 
-### [1660] And this is where capabilities come from
+| what | sections |
+| --- | --- |
+| functions | `.text.*` in flash, or `.ramtext.*`, copied to RAM at reset |
+| immutable data | `.rodata.*` |
+| mutable data | `.data.*`, or `.bss.*` when zeroed |
 
-The entry point is a usual place to mint roots and pass
-them down — an allocator, an Io, a diagnostics log. The
-language does not reserve host constructors for the entry
-point: another routine can call them too [1680]. The hosted
-root imports `hosted/system`; a caller-backed root needs only
-`core/io`. The derived hosted example's `main` delegates to
-`app.entry`, whose essential flow is:
+- `align` is a power of two up to 256. It places the object and does not
+  change its type's layout.
+- `align` and `vector` take decimal literals; digit separators are fine,
+  hex and expressions are refused.
+- The image is 32 KiB of flash and 16 KiB of RAM, whose top 4 KiB is
+  reserved for stacks. The linker checks bounds and overlap.
+- The compiler refuses reserved vectors, a section that does not match the
+  declaration, duplicate attributes and symbol collisions.
+- There is no module initialization in user code ([1460]).
+
+Calling convention, symbol name, placement and retention are four
+independent choices; none implies another.
+
+### [1650] Where a program starts
+
+A hosted program starts at `public main: () -> (code: i32)` in the entry
+module, and `code` is the exit status, passed through the system's C ABI.
+The arguments are not parameters: the hosted world keeps the argument table
+and lends each argument as a host string ([1660]). C's `argc` and `argv`
+shape could not be indexed in Landin without turning a pointer into a
+slice, which Landin does not do ([0500]).
+
+A Linux executable needs no C library. It starts at `platform/linux`'s
+`_landin_start`, which calls `main` with the process's arguments;
+`--link=libc` links the C runtime instead. Darwin and FreeBSD always link
+their C library (D280).
+
+When the program imports `hosted/system`, and so `platform/posix`, the
+entry first calls this C-callable routine with the real values:
+
+```text
+void _landin_host_initialize_arguments(int argc, char **argv, char **envp);
+```
+
+It runs before the body of `main` begins, so the environment is kept
+beside the arguments and lent the same way.
+
+When C owns `main` and calls exported Landin routines, it calls that
+routine itself, with its own `envp` or C's `environ`. It must do so before
+`system.new()` acquires an argument capability, and before starting any
+thread that may acquire one.
+
+- File, stream and heap work needs no argument root, so linking `core/io`
+  alone does not require the call.
+- No ordinary export or callback initializes or resets the root.
+- The first call with a nonnegative count and a non-null table sets the
+  one root; a null environment is an empty one. Repeating exactly the same
+  three values is harmless. Using the argument services before the call,
+  or calling with different values, traps.
+- Nothing is copied. The C owner keeps the tables and the strings they
+  name readable as long as any world, view or callback derived from them
+  can use them.
+- The arguments start at `argv[1]`, so a C program run with only its own
+  name gives Landin no arguments.
+- Argument views borrow from the world they came from. To keep one while
+  changing that provider, copy it into your own storage first.
+
+[1975] in `spec.md` states the whole startup contract.
+
+Freestanding, there is no `main`. The compiler request names the entry: an
+infallible ordinary `() -> none` or `() -> noreturn` routine, or a naked
+`() -> none` one, in the entry module ([1630] shows the request). The
+compiler's reset initializes RAM before calling it. Returning from it, or a
+failed check, traps, since there is no hosted exit to go to. [1990] in
+`spec.md` defines the firmware path; general build and package
+orchestration are outside it.
+
+### [1660] Where capabilities come from
+
+The entry point is the usual place to make the program's roots — the host,
+an allocator, a diagnostics log — and pass them down as ordinary arguments.
+The language does not reserve that to the entry point: any routine can call
+the constructors ([1680]). A hosted root imports `hosted/system`; a
+caller-backed one needs only `core/io`. The derived hosted example's `main`
+delegates to `app.entry`, whose essential flow is:
 
 ```landin
 public entry: () -> (code: i32) =
@@ -4310,37 +4631,30 @@ public entry: () -> (code: i32) =
 end entry
 ```
 
-The actual entry also reports `kept` and write failures before choosing its
-status. `build_logged`, called by `run_logged`, copies the world's arguments
-into the supplied program allocator before retaining configuration.
+The complete program is `examples/derived_hosted`. Its real entry also
+reports `kept` and write failures before choosing its status, and
+`build_logged`, under `run_logged`, copies the world's arguments into the
+program allocator before keeping its configuration.
 
-Each root here is a handle: a small copyable value, passed by value, that
-refers to its state. `system.new()` and `heap.new()` make handles that borrow
-nothing, because what they refer to, the argument root, the descriptors, the
-last errno and the heap, belongs to the process. A caller-owned provider is
-made from state the caller declares, as the region is from `ledger`; the
-handle cannot outlive that state, and the state cannot be released while the
-handle is still used. An erased capability is built from the address of a
-handle binding, and its dispatch copies the handle from there, so `world`,
-`writer` and `host` itself are used side by side: a write through `host`, an
-argument lent from it and a note through the logger lock nothing.
+Each root is a handle: a small value, copied and passed by value, that
+refers to its state.
 
-`system.new()` acquires the real argument-table capability; it does not create or
-copy that storage. The first nonnegative-count, non-null-table startup call
-establishes one exact `(argc, argv, envp)` root, a null environment being an
-empty one. Repeating that exact triple is harmless;
-using the argument services before initialization or trying to replace any
-carrier traps. The C owner therefore keeps the tables and the strings they name
-readable for as long as a derived world, view or callback can use them. The
-published sequence starts at `argv[1]`; an ordinary C invocation with only its
-program name consequently gives Landin an empty user-argument sequence.
+- `system.new()` and `heap.new()` borrow nothing, because what they refer
+  to belongs to the process: the argument root, the descriptors, the last
+  errno and the heap.
+- A caller-owned provider is made from state the caller declares, as the
+  region is made from `ledger`. The handle cannot outlive that state, and
+  the state cannot be released while the handle is still used.
+- An erased capability is built from the address of a handle binding, and
+  its dispatch copies the handle from there. So `world`, `writer` and
+  `host` itself can be used side by side, and nothing is locked.
 
-Which is what makes the same run testable and portable
-without it knowing: hand it a different world and it does
-not learn the difference. The memory provider takes caller-owned file,
-argument, standard-input, output and error storage, here an empty standard
-input; the test must supply an input path in its argument table for the
-application's configuration.
+`system.new()` acquires the real argument table; it does not create or
+copy it ([1650]).
+
+Because the code below the root only sees what it is handed, you can hand
+it something else. A test gives the same run an in-memory world, and the
+run cannot tell:
 
 ```landin
 test_drops_debug: () -> (ok: bool) =
@@ -4374,103 +4688,91 @@ test_drops_debug: () -> (ok: bool) =
 end test_drops_debug
 ```
 
-For that to work at all, Io has to be a concept and not a
-type, so something else can satisfy it. It travels as
-'any io' rather than as a type parameter: an indirect call
-in front of a system call costs nothing, where an allocator
-is threaded generically because it sits in hot loops. Same
-machinery, [1690], chosen per case.
+The memory provider takes caller-owned files, arguments, standard input,
+output and error storage; here standard input is empty, and the argument
+table names the input file the application reads.
 
-It is four concepts, not one, because a provider should
-supply only what it has [1260]: `io.writer` is `write` and
-`write_some`, `io.reader` is `read`, `io.files` is open,
-close and `same_file`, and `io.process` is the three standard
-streams and the argument table. `io.world` composes all
-four for a root that has everything, and `world.write` on
-an erased world reaches the writer entry through the
-composed table. A UART implements `writer` and nothing
-else, and a diagnostics log asks for `any io.writer`, which
-is why `entry` builds one from the same `host`: an erased
-world is not an erased writer, the two do not convert. A
-routine holding only the world lends its writer with
-`io.writer_of(world)` (D268).
+For that to work, I/O is a concept, not a type, so another provider can
+satisfy it. It travels as `any`, not as a type parameter: an indirect call
+in front of a system call costs nothing, whereas an allocator sits in hot
+loops and is threaded generically. Same machinery, chosen per case
+([1690]).
 
-The system provider captures the errno of a failing call immediately, as
-minus a Linux system call's result, or as C's errno through `platform/libc`,
-which names each system's accessor, on Darwin and FreeBSD; `platform/posix`
-hands it on as an atom whose number it keeps, and the provider keeps that
-exact terminal value in the handle's last-error cell, available through
-`system.last_errno`. A handle from `system.new()` shares the process's
-cell; one from `system.over(space)` keeps it in a `system.space` the caller
-declares, which is how two C threads calling into Landin keep theirs apart.
-Success clears it; a local refusal fabricates no host errno. Open/read/write
-retry EINTR only when the selected host guarantees that attempt made no
-progress. `world.write` completes the whole slice, continuing from each
-positive partial transfer; if a later attempt fails, the completed prefix
-remains. `world.write_some` reports a positive accepted count for a nonempty
-attempt, including a short success, and leaves suffix delivery to its caller.
-A failed `write_some` attempt transfers no bytes. An empty slice succeeds
-without a host call, and `write_some` returns zero. Close consumes the handle
-once even on failure, and never blindly retries EINTR. The public failure atoms remain payload-free; detailed
-diagnostics use ordinary state rather than a new exception mechanism.
+It is four concepts, because a provider should supply only what it has
+([1260]):
 
-`world.same_file(left, right)` checks whether two paths identify the same
-file, following symbolic links and recognizing hard links. The left path
-must exist; failure to inspect it is an error. An absent right path returns
-false, but other lookup failures are errors. The log filter checks this
-before truncating an output. Names must remain stable during the check and
-open: this is not an atomic operation. A `files` provider implements
-`same_file` and a `writer` implements `write_some`; neither is optional.
+| concept | entries |
+| --- | --- |
+| `io.writer` | `write`, `write_some` |
+| `io.reader` | `read` |
+| `io.files` | open, close, `same_file` |
+| `io.process` | the three standard streams, the argument table |
 
-The bounded library provider is `core/io.memory`, a handle made with
-`memory_over(state, files, arguments, input, output, errors)` over a
-`memory_space` its caller declares `zeroed`. Its caller supplies
-every file name, content buffer, descriptor, each argument's bytes, which the
-world lends back as host strings, the bytes standard input reads and output
-extent, and reads and sets the limits and counters in that state
-while the handle is used. Files must already
-exist in the table; opening for writing truncates after checks. Reads stop at
-the initialized length. Memory `write` completes the slice or reports failure
-while preserving a completed prefix; memory `write_some` returns a positive
-count on a nonempty success, possibly short, and transfers nothing on failure.
-An empty `write_some` returns zero without a write attempt or counter increment.
+`io.world` composes all four for a root that has everything, and
+`world.write` on an erased world reaches the writer's entry. A UART
+implements `writer` and nothing else. A diagnostics log asks for
+`any io.writer`, which is why `entry` builds one from the same `host`: an
+erased world is not an erased writer, and the two do not convert. A routine
+holding only the world lends its writer with `io.writer_of(world)` (D268).
+
+The system provider's contract, in brief:
+
+- It captures errno immediately after a failing call: as minus a Linux
+  system call's result, or as C's errno through `platform/libc` on Darwin
+  and FreeBSD. It keeps it as an atom with its number in the handle's
+  last-error cell, read with `system.last_errno`. Success clears it, and a
+  local refusal invents none.
+- Handles from `system.new()` share the process's cell. One from
+  `system.over(space)` keeps it in a `system.space` you declare, which is
+  how two C threads calling into Landin keep their errors apart.
+- `world.write` completes the whole slice or fails, leaving any completed
+  prefix written. `world.write_some` makes one attempt and reports a
+  positive count, possibly short; a failed attempt transfers nothing. An
+  empty slice makes no host call, and `write_some` returns zero for it.
+- Interrupted open, read and write are retried only when the host
+  guarantees the attempt made no progress. Close consumes the handle once,
+  even on failure, and is never blindly retried.
+- `world.same_file(left, right)` follows symbolic links and recognizes hard
+  links. The left path must exist; an absent right path gives false. It is
+  not atomic: the names must not change between the check and the open.
+- Every provider implements `same_file` and `write_some`; neither is
+  optional.
+- The failure atoms carry no payload; detail is ordinary state.
+
+[1975], D153 and D207 in `spec.md` hold the full contracts.
+
+The bounded provider is `core/io.memory`, made with
+`io.memory_over(state, files, arguments, input, output, errors)` over an
+`io.memory_space` the caller declares `zeroed`. It allocates nothing and
+makes no host call. Files must already be in the table; opening for
+writing truncates, and reads stop at a file's initialized length.
 Configurable chunk limits and one-based failure counts make short reads,
-partial writes and cleanup reproducible.
-A zero read limit with unread data reports an error; it does not signal EOF.
-Empty transfers are no-ops. A close error still leaves a valid handle closed.
+partial writes and failed closes reproducible, and `written` and
+`written_errors` return what was written. The caller keeps all of the
+supplied storage valid; D153 lists those obligations.
 
-The argument table omits the executable name. `written` and `written_errors`
-return source-derived views of the two output prefixes. The provider retains
-its supplied slices and performs no allocation or host call. Its public
-state and copied file handles remain subject to manual invariants:
-backing must remain valid, transfer ranges must not overlap, counters need
-headroom, and stale handles can address a reopened slot. D153 records these
-bounds. The complete derived hosted application, `examples/derived_hosted`,
-uses this same world interface, copies retained arguments, assembles complete
-kept lines and selects heterogeneous filters and destinations at runtime. A
-leading level filter discards rejected lines from a bounded prefix. Its derivation
-manifest records exact argument, buffering, retry and cleanup policies.
+Both providers lend each argument as a `text.host_string`: the bytes the
+system gave, unconverted and uncopied. A path is one too, so an argument
+passed on as a path reaches the system unchanged, whether or not it is
+UTF-8.
 
-Both providers lend each user argument as a host string, `text.host_string`:
-the bytes the system gave, in the system's representation, never a guessed C
-string and never copied. A path is one too, so an argument passed on as a
-path reaches the system unconverted, whether or not it is UTF-8.
-`text.from_host` is the checked route from an argument to UTF-8, refusing
-bytes that are not with `text.invalid_text`; `text.host_bytes` lends the
-bytes and `text.host_equal` compares one with a literal. A path the caller
-builds is made over its own bytes with `text.host_over`, and the NUL a C
-call needs is added beneath the provider, by `platform/posix`. The system
-and memory sequences both begin at the first user argument; neither
-contains `argv[0]`.
+- `text.from_host` converts to `utf8`, failing with `text.invalid_text`.
+- `text.host_bytes` lends the bytes, and `text.host_equal` compares one
+  with a literal.
+- `text.host_over` makes one over your own bytes. The NUL a C call needs is
+  added beneath the provider, by `platform/posix`.
+- Neither provider's arguments include `argv[0]`.
 
-### [1670] A failed check calls a fixed, never-returning symbol
+### [1670] When a check fails
 
-A failed check calls a fixed, never-returning symbol.
-Two scalars, no strings: 'site' is a number the compiler
-assigns to the source operation and check family. The file
-and line live in an optional off-target table; constrained
-builds need no filenames or reporting storage. D232 fixes
-selection and numbering for every implemented target.
+When a check fails — an index out of range, an overflow, a bad conversion,
+an `unreachable` — the program calls a fixed handler that never returns.
+With none of your own, a hosted program writes one line,
+`FILE:LINE:COLUMN: trap: KIND`, to standard error and stops; firmware just
+stops (D361).
+
+To replace the default, declare a public `panic_handler` of exactly this
+shape in the entry module:
 
 ```landin
 import core/panic
@@ -4481,76 +4783,63 @@ public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
 end panic_handler
 ```
 
-The entry module's public ordinary `panic_handler` replaces the compiler's
-terminal default. It must have this exact infallible return form and canonical
-atom domain; a same-spelled linker symbol is not replacement. Checks do not
-unwind the failed computation's cleanup. A second handler entry traps, including
-a check inside the handler. `--panic-map` emits a build-bound source map;
-`source-location.py --panic-site` requires matching artifact identity. Caller
-coordinates remain a separate value. Hardware faults and naked assembly retain
-their machine obligations. With no handler, a hosted program's default writes
-one line naming the failed check's file, line, column and kind to standard
-error before its terminal instruction, and firmware's default is the bare
-instruction (D361).
+It gets two scalars and no strings. `kind` is one of `core/panic`'s
+`out_of_range`, `overflow`, `bad_conversion` and `unreachable`; `site` is
+a number the compiler gives the failing operation and its check family.
+File and line live in an optional table outside the target, so a small
+firmware image carries no file names. `--panic-map` writes that table, and
+`source-location.py --panic-site` resolves a site, only against the build
+that made it.
+
+- The handler must have exactly this infallible form and atom domain. A
+  linker symbol of the same spelling does not replace it.
+- A failed check does not unwind: the failed computation's `defer` and
+  cleanup do not run.
+- Entering the handler a second time traps, including a check that fails
+  inside it.
+- Caller coordinates are a separate value (D192).
+- Hardware faults and naked assembly keep their machine obligations.
+
+D232 in `spec.md` fixes how sites are chosen and numbered on every target.
 
 ## THE PRINCIPLES BEHIND THE DECISIONS
 
-### [1680] Require a capability, do not track an effect
+A few rules explain most of Landin's choices. When something in the tour
+surprises you, one of these is usually why.
 
-Require a capability, do not track an effect.
-Where another language would record in a type that a
-function performs input and output, allocates, or reads the
-clock, Landin interfaces normally pass the thing: an
-allocator, an Io, a peripheral handle, a random source.
-There is no effect system.
-The argument list identifies the capabilities a caller
-supplies. It does not bound the effects of the call tree:
-the public, zero-argument host I/O and heap constructors
-can be called by any ordinary hosted routine, including
-one given a different world or allocator. A driver can also
-form a peripheral pointer from an address literal [0460].
-Passing roots from the entry point [1660] is a convention,
-not a restriction checked by the language. Substituting an
-in-memory world or bounded allocator therefore does not by
-itself exclude host I/O or heap allocation below the call.
-Restricting host minting to the entry module remains a
-possible later tightening; it would not close the address
-literal route needed by drivers.
-The chosen boundary is deliberate: provider parameters let
-callers substitute an in-memory world or bounded allocator
-for code that uses those parameters. They do not certify a
-whole call tree. Establishing that stronger claim requires
-inspection of its calls and imports. A checked exclusion rule
-would add privileged-module or call-graph machinery, while an
-entry-module rule alone would leave foreign calls and address
-literals. When trusted code needs a static isolation guarantee,
-or when untrusted code must run, the roadmap reconsiders that cost and
-the full set of authority paths. D258 records this choice.
+### [1680] Pass the capability, don't track the effect
 
-### [1690] One mechanism, two readings, is better than two mechanisms
+Landin has no effect system. A routine that does I/O, allocates or reads
+the clock takes the thing that does it as a parameter: an allocator, an
+`io` writer, a peripheral handle, a random source. A caller can then hand
+it an in-memory world or a bounded allocator.
 
-One mechanism, two readings, is better than two mechanisms.
-Concept-constrained generic code is checked against evidence that its type
-satisfies a concept. A concrete instance carries hidden table arguments only
-for direct constrained member selections in its checked body; an erased-only
-`any` construction uses a static table and can need none. When the compiler
-proves the concrete incoming evidence it can specialize dispatch, retaining
-those selected hidden ABI positions. Otherwise dispatch remains indirect; an
-`any C` value carries evidence with its erased type. Static generics and
-runtime dispatch share a foundation, not two unrelated features.
+The parameter list says what a caller supplies, not everything the call
+can reach. Any hosted routine may call the public host and heap
+constructors itself, and a driver may make a pointer from an address
+[0460]. Creating the roots in `main` [1660] is a convention the compiler
+does not check. If you need to know that a call tree does no host I/O, read
+its calls and imports. `spec.md` (D258) says why there is no checked rule,
+and what would reopen the question.
+
+### [1690] One mechanism, read two ways
+
+Generic code and `any` share one foundation: evidence that a type satisfies
+a concept. When the compiler knows the concrete evidence it may specialize
+the call; otherwise the call goes through a table, and an `any C` value
+carries that table with it. Static generics and runtime dispatch are two
+readings of one feature, not two features ([1310], [1370]).
 
 ### [1700] Atoms are the same idea wherever they appear
 
-Atoms are the same idea wherever they appear: identity
-without payload. Enumerations, error sets, variant tags,
-register encodings and panic kinds are uses of atoms, not
-separate categories. There is no 'enum' in the language
-because there is nothing left for it to be.
+An atom is identity without payload. Enumerations, error sets, variant
+tags, register encodings and panic kinds are all uses of atoms, not
+separate categories. There is no `enum` in the language because there is
+nothing left for it to be.
 
 ### [1710] How a new feature earns its place
 
-How a new feature earns its place. When a program cannot
-be written cleanly, in order:
+When a program cannot be written cleanly, ask in this order:
 
 | ask, in order | then |
 | --- | --- |
@@ -4561,93 +4850,77 @@ be written cleanly, in order:
 
 A new mechanism should let two old ones leave the building.
 
-### [1720] What the language claims, at this version, plainly
+### [1720] What Landin promises, plainly
 
-What the language claims, at this version, plainly. It
-performs local checks: origins and escape, consumption
-[0910], reference permission [0430], bounds, conversions and
-arithmetic. It is not a memory-safe language and not a
-resource-safe one. Pointer-to-integer conversion and the C
-boundary leave the checked model altogether [0470], a copy
-taken before a sink is refused nothing [0910], distinct pointer
-or computed-index paths may alias across `inout` [0900], and two
-arenas are indistinguishable [0860].
-That is a smaller claim than 'safe' and a larger one than
-C's. D148's guarantee register now puts every implemented
-observable failure boundary in one of four columns and links it
-to executable evidence. New operations have to enter that
-register as they are implemented, and the registers were closed
-over the final feature-complete matrix. Read the claim as: deliberately unsafe,
-with static help that is worth having.
-Checks stay on by default. unchecked [1120] removes the
-edges D187 names, in the region where it is written, and
-grants an optimiser nothing at all: it emits fewer checks
-and makes no fact available to a later pass. D211 retains that rule under
-optimization: no new undefined behavior, no-alias, overflow or floating-point
-assumption follows from `unchecked`. Existing scalar outcomes and observable
-side-effect and trap order remain the contract.
+Landin makes local checks: origins and escape, consumption [0910],
+reference permission [0430], bounds, conversions and arithmetic. It is not
+a memory-safe language and not a resource-safe one.
+
+What the checks do not cover:
+
+- Pointer-to-integer conversion and the C boundary leave the checked model
+  altogether [0470].
+- A copy taken before a `sink` is not refused [0910].
+- Distinct pointer or computed-index paths may alias across `inout`
+  [0900].
+- Two arenas look the same to the compiler [0860].
+
+That is a smaller claim than "safe" and a larger one than C's: deliberately
+unsafe, with static help worth having. Every observable failure boundary
+the compiler implements is classified, with its evidence, in `spec.md`'s
+guarantee register (D148), and each new operation joins it.
+
+Checks are on by default. `unchecked` [1120] removes only the checks
+`spec.md` (D187) names, only in the region where it is written, and tells
+the optimizer nothing: it emits fewer checks and gives no later pass a
+fact to assume. Optimization adds no undefined behavior, no-alias,
+overflow or floating-point assumption because of it, and keeps scalar
+results and the order of side effects and traps (D211).
 
 ### [1730] Check once, then carry the proof
 
-Check once, then carry the proof. A successful test yields
-a value that stands for what was checked — a buffer that
-passed the alignment test becomes a dma_buffer, and the
-DMA interface asks for nothing else. distinct types, range
-subtypes and error sets are enough to do this; it needs no
-feature of its own, only the habit.
-For a range subtype, the proof starts with a checked subtype value, not with
-a guard on an ordinary integer (D188).
+A successful check can produce a value that stands for what was checked. A
+buffer that passed the alignment test becomes a `dma_buffer`, and the DMA
+interface asks for nothing else. Distinct types, range subtypes and error
+sets are enough for this; it needs no feature of its own, only the habit.
+
+For a range subtype, the proof starts with a checked subtype value, not
+with a guard on an ordinary integer (D188).
 
 ## WHAT LANDIN DELIBERATELY DOES NOT HAVE
 
-no classes, inheritance, methods or runtime type information
-no exceptions, no stack unwinding, no catchable panics
-no garbage collection and no reference counting
-no destructors
-no closures that capture
-no implicit conversions
-no null
-no positional tuples: anonymous records with named fields exist
-no function name overloading and no multiple dispatch
-no user-defined operators and no macros
-no compile-time execution
-no separate interface files
-no header parsing inside refine (the separate binding generator reads headers)
+- no classes, inheritance, methods or runtime type information
+- no exceptions, no stack unwinding, no catchable panics
+- no garbage collection and no reference counting
+- no destructors
+- no closures that capture
+- no implicit conversions
+- no null
+- no positional tuples: anonymous records with named fields exist
+- no function name overloading and no multiple dispatch
+- no user-defined operators and no macros
+- no compile-time execution
+- no separate interface files
+- no header parsing inside `refine` (the separate binding generator reads
+  headers)
 
 ## WHAT IS STILL OPEN
 
-ROADMAP.md, and not a second list here. `spec.md` is the normative
-authority for language semantics and this file explains them; ROADMAP.md
-is the sole durable
-authority for open work, implementation dependencies, phase gates and the
-register of work that waits for a trigger. Every item the bootstrap
-inherited was traced to the construct, prototype finding or archived
-review section it came from, and each was given a terminal disposition:
-implemented, rejected with evidence, or transferred to one named successor
-family with what would bring it back. What this file keeps parked or
-deferred, structure-of-arrays [0620], affine values [0910], restricting
-where roots are minted [1680] and a third generated-source case [1540], is
-held by the Language evolution successor.
+Open work lives in [ROADMAP.md](ROADMAP.md), not in a second list here: its
+phases, and the register of work that waits for a trigger. What this tour
+leaves parked, such as structure-of-arrays [0620], affine values [0910],
+restricting where capability roots are created [1680] and a third
+generated-source case [1540], is held there too.
 
-The bootstrap compiler now exists: `refine` checks and lowers a program,
-emits Linux x86-64, Darwin arm64 and Cortex-M0 assembly, links hosted
-executables and compiler-owned firmware, and runs all four complete derived
-programs, the parser, containers and hosted application on the hosts and
-the driver on Cortex-M. Every construct was audited and every inherited
-item dispositioned before the first roadmap closed.
+The bootstrap compiler, `refine`, is feature-complete for this pre-v1
+language. Production status, release versioning, package acquisition and
+self-hosting are outside the current roadmap. What the compiler does today
+is in [the README](README.md#current-compiler-capabilities).
 
-Warnings are the compiler's observations about legal source, not additional
-language rules (D251). An exact repair is offered when a safe edit exists;
-an advisory can stand without one. Compilation requests can select, suppress
-or deny warnings by code. Denial fails that invocation before emission while
-the program remains legal Landin. Shadowing is still permitted without a
-warning.
-
-That compiler is feature-complete pre-v1. Production status, release
-versioning, package acquisition, competitive optimization and
-self-hosting are outside the current roadmap. A future roadmap may replace
-tested Ada stages incrementally; no self-hosting work or serialized
-cross-language stage protocol is scheduled now.
+Warnings are the compiler's observations about legal source, never extra
+language rules: you can select, suppress or deny them by code, and a denied
+warning fails that compilation while the program stays legal Landin.
+Shadowing is never warned about (D251).
 
 ## WHAT WAS TRIED AND DROPPED
 
