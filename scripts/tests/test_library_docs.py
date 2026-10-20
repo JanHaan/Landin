@@ -512,6 +512,60 @@ class GeneratedReference(unittest.TestCase):
                         side.index('id="api-toc"'))
         self.assertIn('<a class="sect" href="#providers">', side)
 
+    def test_the_sidebar_reaches_the_site_and_the_items(self):
+        """From a module page the tour and the examples were out of reach,
+        and halfway down it the sidebar named the kinds but not the items."""
+        text = (self.destination / 'library-core-io.html').read_text()
+        side = text[text.index('<nav class="side"'):text.index('</nav>', text.index('<nav class="side"'))]
+        for _, name, members in render_html.nav_groups(render_html.DOCS + render_html.GUIDES):
+            with self.subTest(group=name):
+                self.assertIn(f'{name}<span class="count">{len(members)}</span>', side)
+        self.assertIn('href="tour.html"', side)
+        self.assertNotIn('<details class="api-docs" open', side)
+        group = re.search(r'<details class="api-toc-group" data-kind="function">(.*?)</details>', side, re.S)
+        self.assertIsNotNone(group)
+        self.assertIn('<a class="api-toc-item" href="#item-open_read">open_read</a>', group[1])
+        self.assertNotRegex(side, r'<details class="api-toc-group"[^>]* open')
+
+    def test_controls_are_buttons_a_keyboard_reaches(self):
+        text = (self.destination / 'library-core-io.html').read_text()
+        self.assertIn('<button type="button" class="api-onpage" id="api-onpage" '
+                      'aria-controls="side" aria-expanded="false">', text)
+        self.assertIn('href="#side">skip to the library navigation</a>', text)
+        self.assertRegex(text, r'<input type="search" id="api-search"[^>]*aria-expanded="false"')
+        self.assertIn('<label for="api-search">search all library APIs</label>', text)
+        # The compact field follows the module's opening paragraph.
+        self.assertLess(text.index('Reader, writer, file and process capabilities'),
+                        text.index('id="api-search"'))
+        # Without a script the field and the button are hidden.
+        theme = (self.destination / 'library-theme.js').read_text()
+        self.assertIn(library.SCRIPTED, theme)
+        self.assertIn(":root:not(.api-js) .api-tools input", library.CSS)
+
+    def test_an_item_heading_separates_its_source_and_the_way_back(self):
+        text = (self.destination / 'library-core-io.html').read_text()
+        item = text[text.index('<section class="api-item" id="item-open_read"'):]
+        item = item[:item.index('</section>')]
+        self.assertRegex(item, r'<span class="api-where">\n<a class="api-source"[^>]*>[^<]+</a>\n'
+                               r'<a class="api-back" href="#items-function" '
+                               r'aria-label="back to the item index">↑ index</a>')
+        # One region scrolls per declaration, the shared fade's own class.
+        self.assertIn('<div class="api-decl"><div class="scroller">', item)
+
+    def test_search_ranks_names_before_summaries(self):
+        for said in ('function tier(e,t)', "e.leaf.startsWith(t)", 'ArrowDown', 'ArrowUp',
+                     "setAttribute('aria-expanded'"):
+            self.assertIn(said, library.SEARCH)
+
+    def test_only_tables_that_cannot_share_a_phone_stack(self):
+        io = (self.destination / 'library-core-io.html').read_text()
+        tables = re.findall(r'<table class="([^"]*)">.*?<th scope="col">(.*?)</th>', io, re.S)
+        classes = {head: cls for cls, head in tables}
+        self.assertIn('api-stack', classes['Task'])        # long calls
+        self.assertIn('api-stack', classes['Concept'])     # three columns
+        self.assertNotIn('api-stack', classes['Call'])     # two, short calls
+        self.assertIn('<td class="api-flag" data-label="Part of world">yes</td>', io)
+
     def test_overview_tables_link_the_calls_they_name(self):
         index = (self.destination / 'library.html').read_text()
         self.assertIn('<a href="library-core-io.html#item-open_read">'

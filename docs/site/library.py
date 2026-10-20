@@ -387,30 +387,45 @@ def merged_documentation(texts):
 #  guide's sections, prose, listings and program panels, and these only
 #  what a reference has and a guide does not.
 CSS = '''
-/* ---- search: full on the index, a small field under a module's title ---- */
-.api-tools{margin:1.5rem 0 0}
+/* ---- without a script: no field to type into, no button that waits for one ---- */
+:root:not(.api-js) .api-tools label, :root:not(.api-js) .api-tools input,
+:root:not(.api-js) button.api-onpage, :root.api-js label.api-onpage-plain{display:none !important}
+/*  The sidebar is on the left but after the page in the source; the
+    shared skip link's style, and only where there is a sidebar to reach.  */
+@media (max-width:60rem){ a.api-skip-nav{display:none} }
+
+/* ---- search: full on the index, a small field after a module's opening ---- */
+.api-tools{position:relative; margin:1.5rem 0 0}
 .api-tools label{display:block; margin:0 0 .35rem; font-size:.85rem; color:var(--ink-soft)}
 .api-tools input{width:100%; padding:.65rem .8rem; font:inherit; color:var(--ink);
-  background:var(--panel); border-radius:0;
+  background:var(--panel); border-radius:0; -webkit-appearance:none; appearance:none;
   border:1px solid var(--rule-strong, color-mix(in oklch, var(--ink-faint) 80%, var(--bg)))}
+/*  The browser's own clear button was a blue disc; Escape clears.  */
+.api-tools input::-webkit-search-cancel-button{-webkit-appearance:none; appearance:none; display:none}
 /*  The browser's own placeholder is the ink at reduced opacity, about 4:1.  */
 .api-tools input::placeholder{color:var(--ink-faint); opacity:1}
-.api-tools.compact{margin:.9rem 0 0}
-.api-tools.compact label{position:absolute; width:1px; height:1px; margin:-1px;
-  overflow:hidden; clip-path:inset(50%); white-space:nowrap}
-.api-tools.compact input{max-width:22rem; padding:.38rem .6rem; font-size:.85rem}
-.api-results{margin-top:.75rem; border-top:1px solid var(--rule)}
-/*  Under the title, the hero's own paragraph rules would set these as
-    its lead.  */
-main .hero .api-results p{margin:.5rem 0; max-width:none; font-size:.85rem; line-height:1.5;
+.api-tools.compact{margin:.25rem 0 1.25rem; max-width:22rem}
+.api-tools.compact label{margin:0 0 .25rem; font-family:var(--mono); font-size:.72rem;
+  color:var(--ink-faint)}
+.api-tools.compact input{padding:.38rem .6rem; font-size:.85rem}
+/*  A panel over the page under the field: in the flow, the results
+    pushed the page down under the reader.  */
+.api-results{position:absolute; z-index:30; top:calc(100% + .25rem); left:0;
+  width:min(100%, 40rem); max-height:min(65vh, 34rem); overflow:auto;
+  overscroll-behavior:contain; padding:0 .9rem;
+  background:var(--panel); border:1px solid var(--rule); box-shadow:var(--sh)}
+.api-tools.compact .api-results{width:min(calc(100vw - 2.3rem), 34rem)}
+.api-results p{margin:.5rem 0; max-width:none; font-size:.85rem; line-height:1.5;
   color:var(--ink-soft)}
-main .hero .api-results p.api-count{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint)}
+.api-results p.api-count{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint)}
 .api-results a.api-hit{display:block; padding:.45rem 0 .5rem; text-decoration:none;
-  border-bottom:1px solid var(--rule-soft)}
+  border-top:1px solid var(--rule-soft)}
+.api-results a.api-hit:focus-visible{outline-offset:-2px; background:var(--accent-bg)}
 .api-hit-name{font-family:var(--mono); font-size:.85rem; color:var(--accent)}
 .api-hit-module{color:var(--ink-faint)}
-.api-hit-kind{margin-left:.6rem; font-size:.66rem; letter-spacing:.07em;
-  text-transform:uppercase; color:var(--ink-faint)}
+.api-hit-kind, .api-kind{font-family:var(--mono); font-size:.72rem; font-weight:400;
+  text-transform:none; letter-spacing:0; color:var(--ink-faint)}
+.api-hit-kind{margin-left:.6rem}
 .api-hit-summary{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
   line-clamp:2; overflow:hidden; margin-top:.1rem; font-size:.86rem; line-height:1.45;
   color:var(--ink-soft)}
@@ -419,25 +434,52 @@ main .hero .api-results p.api-count{font-family:var(--mono); font-size:.72rem; c
 /* ---- the page's own contents, in the sidebar and the phone's drawer ---- */
 nav.side .api-toc-label{display:block; padding:.3rem .75rem .25rem .8rem;
   font-family:var(--mono); font-size:.68rem; color:var(--ink-faint)}
-nav.side a.api-toc-kind{padding:.14rem .75rem .14rem 1.6rem; margin-left:-1px;
-  border-left:1px solid transparent; font-size:.8rem; color:var(--ink-faint)}
+nav.side a.api-toc-kind, nav.side .api-toc-group > summary{
+  padding:.14rem .75rem .14rem 1.6rem; margin-left:-1px;
+  border-left:1px solid transparent; font-family:var(--ui); font-size:.8rem;
+  line-height:1.35; color:var(--ink-faint)}
 nav.side a.api-toc-kind:hover{color:var(--ink)}
-nav.side a.api-toc-kind.here{color:var(--ink); border-left-color:var(--accent)}
+nav.side a.api-toc-kind.here, nav.side .api-toc-group > summary.here{
+  color:var(--ink); border-left-color:var(--accent)}
 nav.side .api-toc .count{margin-left:.3rem; font-family:var(--mono); font-size:.66rem;
   color:var(--ink-faint)}
+/*  A kind folds its names: the shared summary's chevron and hidden count
+    are for the document groups; a kind keeps its count beside its name.  */
+nav.side details.api-toc-group{margin:0}
+nav.side .api-toc-group > summary{justify-content:flex-start; gap:0}
+nav.side .api-toc-group > summary::after{margin-left:.5rem}
+nav.side .api-toc-group[open] > summary .count{visibility:visible}
+nav.side a.api-toc-item{padding:.1rem .75rem .1rem 2.35rem; margin-left:-1px;
+  border-left:1px solid transparent; font-family:var(--mono); font-size:.72rem;
+  color:var(--ink-faint); overflow-wrap:anywhere}
+nav.side a.api-toc-item:hover{color:var(--ink)}
+nav.side a.api-toc-item.here{color:var(--ink); border-left-color:var(--accent-soft)}
+@media (max-width:60rem){
+  nav.side a.api-toc-kind, nav.side .api-toc-group > summary,
+  nav.side a.api-toc-item{padding-block:.45rem; min-height:24px}
+}
 .api-onpage{display:none}
 @media (max-width:60rem){
   .api-onpage{display:inline-flex; align-items:center; margin:0 0 1rem;
     padding:.4rem .75rem; min-height:2.5rem; cursor:pointer;
-    font-family:var(--mono); font-size:.75rem; color:var(--ink-soft);
+    font:inherit; font-family:var(--mono); font-size:.75rem; color:var(--ink-soft);
+    background:none; border-radius:0;
     border:1px solid var(--rule-strong, color-mix(in oklch, var(--ink-faint) 80%, var(--bg)))}
-  .api-onpage:hover{color:var(--accent)}
+  .api-onpage:hover, .api-onpage[aria-expanded="true"]{color:var(--accent);
+    border-color:var(--accent-soft)}
 }
 
 /* ---- headings: the overview's sections, the items, the example ---- */
+/*  A module's title has nothing under it but the skip link: no rule and
+    no band between it and the opening.  */
+.hero:not(:has(.api-tools)){border-bottom:0; padding-bottom:0; margin-bottom:0}
+.hero:not(:has(.api-tools)) h1{margin-bottom:.75rem}
 .api-opening{padding-top:0}
 .api-prose section.guide{margin:0; border:0}
 .api-prose div.guide{margin:0; padding:0}
+/*  The opening paragraph is the guide's lead, outside its .guide, and ran
+    the page's whole width: about 120 characters a line.  */
+.api-prose > p{max-width:42rem}
 section > h2.api-h, .api-prose section.api-section > h2, .api-modules > h2{
   font-size:1.35rem; font-weight:650; line-height:1.3; letter-spacing:-.01em;
   text-transform:none}
@@ -455,6 +497,11 @@ ul.api-index li{break-inside:avoid; border-bottom:1px solid var(--rule-soft)}
 ul.api-index a{display:block; padding:.3rem 0; text-decoration:none; font-size:.9rem}
 ul.api-index code{padding:0; background:none; font-size:.85rem; color:var(--accent)}
 ul.api-index a:hover code{text-decoration:underline}
+/*  A phone had one column of 127 names.  */
+@media (max-width:35rem){
+  ul.api-index{columns:2; column-gap:1rem}
+  ul.api-index code{font-size:.78rem; overflow-wrap:anywhere}
+}
 ul.api-modules-list{list-style:none; margin:0; padding:0; border-top:1px solid var(--rule)}
 ul.api-modules-list li{display:grid; grid-template-columns:12rem minmax(0,1fr); gap:1.25rem;
   padding:.55rem 0; border-bottom:1px solid var(--rule-soft); align-items:baseline}
@@ -467,44 +514,59 @@ ul.api-modules-list li > span{color:var(--ink-soft); font-size:.9rem; line-heigh
 }
 
 /* ---- one declaration: a heading row, the code, the prose ---- */
-section.api-item{padding:1.6rem 0 1rem; border-top:1px solid var(--rule);
-  scroll-margin-top:var(--bar)}
+/*  Clear of the bar, as the shared sheet will set every addressed
+    element in main; until then, here.  */
+section.api-item, .api-source-line, .api-table tr{scroll-margin-top:calc(var(--bar) + 1rem)}
+section.api-item{padding:1.6rem 0 1rem; border-top:1px solid var(--rule)}
 .api-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem .8rem;
   margin:0 0 .7rem}
-.api-head .grow{flex:1}
 h3.api-name{margin:0; font-size:1.1rem; line-height:1.3; font-weight:600;
   text-transform:none; letter-spacing:0}
 h3.api-name code{padding:0; background:none; font-size:1em; color:var(--ink);
   text-transform:none; letter-spacing:0}
-.api-kind{font-size:.66rem; font-weight:500; letter-spacing:.07em;
-  text-transform:uppercase; color:var(--ink-faint)}
-a.api-source, a.api-back{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint);
+/*  Where it is declared, then the way back, apart: run together at the
+    same faint size they read as one link.  */
+.api-where{display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem 1.5rem;
+  margin-left:auto}
+a.api-source, a.api-back{font-family:var(--mono); font-size:.75rem; color:var(--ink-faint);
   text-decoration:none; white-space:nowrap}
-a.api-source:hover, a.api-back:hover{color:var(--accent); text-decoration:underline}
+a.api-source:hover, a.api-back:hover, a.api-source:focus-visible, a.api-back:focus-visible{
+  color:var(--accent); text-decoration:underline}
+@media (max-width:35rem){
+  .api-where{flex-basis:100%; margin-left:0; justify-content:space-between}
+}
 .api-condition a.api-source{margin-left:.6rem}
 .api-item .api-prose p{max-width:42rem}
 
-/*  A declaration scrolls sideways line for line; its members' `---`
-    documentation wraps as prose between its lines, at their indentation.  */
+/*  A declaration is one region that scrolls sideways; its members' `---`
+    documentation is commentary between its lines, at their indentation.  */
 .api-decl{margin:.3rem 0 .9rem; background:var(--code-bg);
   border:1px solid var(--code-rule, var(--rule))}
-pre.api-signature{margin:0; overflow-x:auto; white-space:pre; font-size:.82rem; line-height:1.6;
-  tab-size:4}
-.api-decl > pre.api-signature{padding:.15rem 1rem}
-.api-decl > :first-child{padding-top:.75rem}
-.api-decl > :last-child{padding-bottom:.75rem}
+.api-decl > .scroller{margin:0; padding:.75rem 0}
+pre.api-signature{margin:0; white-space:pre; font-size:.82rem; line-height:1.6; tab-size:4}
+.api-decl pre.api-signature{padding:.15rem 1rem; overflow:visible}
 .api-signature code{padding:0; background:none; border:0; font-size:1em}
-.api-signature a{text-decoration:underline; text-decoration-style:dotted}
-.api-doc{padding:.1rem 1rem .3rem calc(1rem + var(--indent, 0) * 1ch);
-  font-family:var(--mono); font-size:.82rem}
-.api-doc p{margin:0 0 .2rem; max-width:40rem; font-family:var(--ui); font-size:1.04em;
-  line-height:1.5; color:var(--ink-soft)}
-.api-doc code{font-size:.92em}
+/*  A name the declaration uses, quiet like the site's other linked code:
+    its own colour with an accent underline, the accent only under the
+    pointer or the keyboard.  */
+.api-signature a{color:inherit; text-decoration:underline; text-decoration-style:dotted;
+  text-decoration-thickness:1px; text-underline-offset:.22em;
+  text-decoration-color:var(--accent-soft)}
+.api-signature a:is(:hover,:focus-visible), .api-signature a:is(:hover,:focus-visible) span{
+  color:var(--accent); text-decoration-style:solid; text-decoration-color:currentColor}
+/*  Clear of the fade at the region's right edge, which is for the code.  */
+.api-doc{max-width:42rem; margin:.35rem 2.75rem .6rem calc(1rem + var(--indent, 0) * 1ch);
+  padding:0 0 0 .75rem; border-left:2px solid var(--rule); white-space:normal}
+.api-doc p{margin:0 0 .3rem; max-width:40rem; font-family:var(--ui); font-size:.9375rem;
+  line-height:1.55; color:var(--ink-soft)}
+.api-doc p:last-child{margin-bottom:0}
+.api-doc code{font-size:.85em}
 /*  A source page's whole file.  */
-main > pre.api-signature{padding:1rem; background:var(--code-bg); border:1px solid var(--rule)}
+main > pre.api-signature{padding:1rem; overflow-x:auto; background:var(--code-bg);
+  border:1px solid var(--rule)}
 /*  Inline blocks, not blocks: the newline between two blocks in a <pre>
     is a line of its own, and every source page was double-spaced.  */
-.api-source-line{display:inline-block; min-width:100%; scroll-margin-top:calc(var(--bar) + 1rem)}
+.api-source-line{display:inline-block; min-width:100%}
 .api-source-line:target{background:var(--accent-bg)}
 .api-signature a.api-line-number{display:inline-block; min-width:4ch; margin-right:1.2em;
   color:var(--ink-faint); text-decoration:none; user-select:none}
@@ -517,26 +579,38 @@ main > pre.api-signature{padding:1rem; background:var(--code-bg); border:1px sol
   border-bottom:1px solid var(--rule-soft); padding:7px 10px 7px 0; vertical-align:top}
 .api-prose table.api-shaped tr:last-child th{border-bottom:0}
 .api-prose .guide td code, .api-prose .guide th code{white-space:normal; overflow-wrap:break-word}
-.api-prose td a code, .api-prose th a code{color:var(--accent)}
 @media (max-width:48rem){
   .api-prose .guide td code, .api-prose .guide th code{overflow-wrap:anywhere}
 }
-/*  A phone has room for one column: each row is a block, each cell under
-    its column's title.  */
+/*  A phone stacks only a table whose columns cannot share its width (the
+    generator marks it): each row a block, each cell, the first too,
+    under its column's title.  */
 @media (max-width:35rem){
-  .api-prose table.api-shaped, .api-prose table.api-shaped tbody,
-  .api-prose table.api-shaped tr, .api-prose table.api-shaped th[scope=row],
-  .api-prose table.api-shaped td{display:block; width:auto}
-  .api-prose table.api-shaped colgroup{display:none}
-  .api-prose table.api-shaped thead{position:absolute; width:1px; height:1px;
+  .api-prose table.api-stack, .api-prose table.api-stack tbody,
+  .api-prose table.api-stack tr, .api-prose table.api-stack th[scope=row],
+  .api-prose table.api-stack td{display:block; width:auto}
+  .api-prose table.api-stack colgroup{display:none}
+  .api-prose table.api-stack thead{position:absolute; width:1px; height:1px;
     overflow:hidden; clip-path:inset(50%)}
-  .api-prose table.api-shaped tr{padding:.55rem 0; border-bottom:1px solid var(--rule-soft)}
-  .api-prose table.api-shaped tr:last-child{border-bottom:0}
-  .api-prose table.api-shaped th[scope=row], .api-prose table.api-shaped td{
+  .api-prose table.api-stack tr{padding:.55rem 0; border-bottom:1px solid var(--rule-soft)}
+  .api-prose table.api-stack tr:last-child{border-bottom:0}
+  .api-prose table.api-stack th[scope=row], .api-prose table.api-stack td{
     border:0; padding:.05rem 0}
-  .api-prose table.api-shaped td::before{content:attr(data-label); display:block;
+  .api-prose table.api-stack :is(th[scope=row], td)[data-label]:not([data-label=""])::before{
+    content:attr(data-label); display:block;
     margin-top:.25rem; font-family:var(--mono); font-size:.68rem; font-weight:400;
     color:var(--ink-faint)}
+  .api-prose table.api-stack th[scope=row]::before{margin-top:0}
+  /*  A yes-or-no column is a small tag beside the row's name.  */
+  .api-prose table.api-stack tr:has(td.api-flag){display:flex; flex-wrap:wrap;
+    align-items:flex-end; column-gap:.6rem}
+  .api-prose table.api-stack tr:has(td.api-flag) > *{flex:1 0 100%; order:2}
+  .api-prose table.api-stack tr:has(td.api-flag) > th[scope=row]{flex:0 1 auto; order:0}
+  .api-prose table.api-stack tr:has(td.api-flag) > td.api-flag{flex:0 0 auto; order:1; padding:0 .35rem;
+    font-family:var(--mono); font-size:.7rem; color:var(--ink-soft);
+    border:1px solid var(--rule)}
+  .api-prose table.api-stack tr > td.api-flag[data-label]:not([data-label=""])::before{content:attr(data-label) ": ";
+    display:inline; margin:0; font-size:1em}
 }
 
 /* ---- the values-by-target table ---- */
@@ -545,7 +619,6 @@ main > pre.api-signature{padding:1rem; background:var(--code-bg); border:1px sol
   border-bottom:1px solid var(--rule); vertical-align:top}
 .api-table th[scope=row]{font-weight:600; font-family:var(--mono); font-size:.85rem}
 .api-table tr:target{background:var(--accent-bg)}
-.api-table tr{scroll-margin-top:calc(var(--bar) + 1rem)}
 .api-table td code, .api-table th code{white-space:nowrap}
 
 /* ---- the example: the site's program panel ---- */
@@ -553,6 +626,11 @@ figure.panel.api-program{margin:1rem 0 0}
 '''
 
 SEARCH_SCRIPT = 'library-search.js'
+
+#  Marks the page as one whose scripts run: without them the search field
+#  and the "On this page" button are hidden, and the plain label and the
+#  noscript line stand in.
+SCRIPTED = "document.documentElement.classList.add('api-js');\n"
 
 # The stylesheet and scripts every library page links rather than carries:
 # LINKED.css, LINKED-theme.js and LINKED.js.  Inline, they were the first
@@ -567,28 +645,57 @@ LINKED = 'library'
 SEARCH = '''
 (() => {
  const field=document.getElementById('api-search');
+ if(!field)return;
+ const tools=field.closest('.api-tools');
  const results=document.getElementById('api-results');
  let items=null, loading=false;
  const normalize=s=>s.toLowerCase().replaceAll('::','.');
+ function entry(item){
+  const name=normalize(item.name), cut=name.lastIndexOf('.');
+  return {item,name,leaf:name.slice(cut+1),rest:normalize(item.summary+' '+item.kind)};
+ }
  function load(){
   if(items||loading)return;
   loading=true;
   const script=document.createElement('script');
   script.src=field.dataset.index;
-  script.onload=()=>{items=window.landinLibraryIndex||[];show();};
-  script.onerror=()=>{loading=false;results.hidden=false;
+  script.onload=()=>{items=(window.landinLibraryIndex||[]).map(entry);show();};
+  script.onerror=()=>{loading=false;open(true);
    results.textContent='The search index could not be loaded; browse the module and item indexes below.';};
   document.head.append(script);
  }
  function span(cls,text){const s=document.createElement('span');s.className=cls;s.textContent=text;return s;}
+ /* How well a term names an entry, best first: the name itself, the
+    start of the name, inside the name, the module, then the summary.
+    By the summary alone, "read" led with every function whose summary
+    says "reads". */
+ function tier(e,t){
+  if(e.leaf===t||e.name===t||e.name.endsWith('/'+t))return 0;
+  if(e.leaf.startsWith(t))return 1;
+  if(e.leaf.includes(t))return 2;
+  if(e.name.includes(t))return 3;
+  if(e.rest.includes(t))return 4;
+  return -1;
+ }
+ function open(on){
+  results.hidden=!on;
+  field.setAttribute('aria-expanded',on?'true':'false');
+ }
  function show(){
   const query=field.value.trim();
   const terms=normalize(query).split(/\\s+/).filter(Boolean);
   results.replaceChildren();
-  if(!terms.length){results.hidden=true;return;}
+  if(!terms.length){open(false);return;}
   if(!items){load();return;}
-  const matches=items.filter(i=>terms.every(t=>normalize(i.name+' '+i.summary+' '+i.kind).includes(t)));
-  results.hidden=false;
+  const ranked=[];
+  for(const e of items){
+   let score=0;
+   for(const t of terms){const r=tier(e,t);if(r<0){score=-1;break;}score+=r;}
+   if(score>=0)ranked.push([score,e]);
+  }
+  ranked.sort((a,b)=>a[0]-b[0]||a[1].leaf.length-b[1].leaf.length||(a[1].name<b[1].name?-1:1));
+  const matches=ranked.map(r=>r[1].item);
+  open(true);
   if(!matches.length){
    /* Nothing found says what to try next, not only that nothing was. */
    const p=document.createElement('p');
@@ -610,6 +717,28 @@ SEARCH = '''
   }
   if(matches.length>80){const p=document.createElement('p');p.textContent='Showing the first 80; refine your search.';results.append(p);}
  }
+ /* The keys a list of results answers: down and up move through them,
+    up from the first and Escape go back to the field, and Escape in the
+    field closes the panel before it clears the text. */
+ const hits=()=>[].slice.call(results.querySelectorAll('a.api-hit'));
+ field.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){
+   const h=hits();
+   if(h.length){e.preventDefault();open(true);h[0].focus();}
+  }else if(e.key==='Escape'&&!results.hidden){e.preventDefault();e.stopPropagation();open(false);}
+ });
+ results.addEventListener('keydown',e=>{
+  const h=hits(), at=h.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'){e.preventDefault();if(at>=0&&at<h.length-1)h[at+1].focus();}
+  else if(e.key==='ArrowUp'){e.preventDefault();if(at>0)h[at-1].focus();else field.focus();}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();field.focus();}
+ });
+ /* The panel lies over the page, so it goes when the reader leaves it:
+    by a result followed, a click elsewhere or focus moved on. */
+ results.addEventListener('click',e=>{if(e.target.closest('a'))open(false);});
+ results.addEventListener('mousedown',e=>{if(e.target===results)e.preventDefault();});
+ tools.addEventListener('focusout',e=>{if(!tools.contains(e.relatedTarget))open(false);});
+ field.addEventListener('focus',()=>{if(results.childElementCount&&field.value.trim())open(true);});
  field.addEventListener('focus',load,{once:true});
  field.addEventListener('input',show);
 })();
@@ -619,43 +748,115 @@ SEARCH = '''
 #  The sidebar keeps the page's own contents in view: on a desktop, the
 #  current module's entry scrolled up to where it can be seen, and in the
 #  phone's drawer the same, each time it opens.  While an item is read,
-#  the entry for its kind is lit -- the shared bar lights only sections
-#  the sidebar names, and the items are too many to name there.
+#  its kind's list of names is open and its own name lit -- the shared bar
+#  lights only sections the sidebar names, and the items are too many to
+#  name there unfolded.  On a phone, "On this page" opens the drawer at
+#  those contents, and focus goes with it: it never stays behind the
+#  drawer, which closes when focus leaves it.
 CONTENTS = """
 (() => {
  const side=document.querySelector('nav.side');
  const toc=document.getElementById('api-toc');
+ /* The skip link lands on the page's own entry, so the next Tab is its
+    contents; followed as a plain fragment, focus stayed in the page. */
+ const skip=document.querySelector('a.api-skip-nav');
+ if(skip&&side)skip.addEventListener('click',e=>{
+  const here=side.querySelector('a[aria-current]')||side.querySelector('a');
+  if(here){e.preventDefault();here.focus();}
+ });
  if(!side||!toc)return;
  const own=toc.previousElementSibling;
+ let timer=0, lit=null, opened=null;
+ /* The drawer opens at the name being read, or at the module's entry. */
  function reveal(always){
-  const box=side.getBoundingClientRect(), at=(own||toc).getBoundingClientRect();
+  const box=side.getBoundingClientRect(), at=(lit||own||toc).getBoundingClientRect();
   if(!always && at.top>=box.top && at.bottom<=box.top+box.height*0.6)return;
-  side.scrollTop+=at.top-box.top-12;
+  side.scrollTop+=at.top-box.top-(lit?box.height/3:12);
  }
  if(getComputedStyle(side).position==='sticky')reveal(false);
  const menu=document.getElementById('menu');
- if(menu)menu.addEventListener('change',()=>{
-  if(menu.checked)requestAnimationFrame(()=>reveal(true));
+ const bar=document.querySelector('header.bar');
+ const onpage=document.getElementById('api-onpage');
+ const drawer=()=>menu&&menu.checked&&getComputedStyle(side).position==='fixed';
+ function sync(){if(onpage)onpage.setAttribute('aria-expanded',menu&&menu.checked?'true':'false');}
+ function setMenu(on){
+  if(!menu||menu.checked===on)return;
+  menu.checked=on;menu.dispatchEvent(new Event('change'));
+ }
+ if(menu){
+  menu.addEventListener('change',()=>{
+   sync();
+   if(menu.checked)requestAnimationFrame(()=>reveal(true));
+  });
+  /* The shared script closes the drawer on a followed link and on
+     Escape without a change event; the button's state follows. */
+  document.addEventListener('click',()=>setTimeout(sync,0));
+ }
+ let fromButton=false;
+ if(onpage&&menu){
+  onpage.addEventListener('click',()=>{
+   const opening=!menu.checked;
+   setMenu(opening);
+   fromButton=opening;
+   if(opening){
+    const first=toc.querySelector('a.api-toc-item.here')||toc.querySelector('.here')
+     ||toc.querySelector('a, summary');
+    if(first)first.focus({preventScroll:true});
+   }
+  });
+  document.addEventListener('keydown',e=>{
+   if(e.key==='Escape'&&menu.checked&&fromButton)
+    setTimeout(()=>{sync();onpage.focus();fromButton=false;},0);
+  });
+ }
+ if(menu)document.addEventListener('focusin',e=>{
+  if(!drawer())return;
+  const t=e.target;
+  if(side.contains(t)||t===menu||t===onpage||(bar&&bar.contains(t)))return;
+  setMenu(false);fromButton=false;
  });
- const kinds={};
+ const kinds={}, groups={}, names={};
  toc.querySelectorAll('a.api-toc-kind[href^="#items-"]').forEach(a=>{
   kinds[a.getAttribute('href').slice(7)]=a;
  });
+ toc.querySelectorAll('details.api-toc-group').forEach(d=>{
+  groups[d.dataset.kind]=d;
+  /* A list the reader opened or closed is the reader's from then on. */
+  d.querySelector('summary').addEventListener('click',()=>{d.dataset.held='1';});
+ });
+ toc.querySelectorAll('a.api-toc-item').forEach(a=>{names[a.getAttribute('href').slice(1)]=a;});
  const items=[].slice.call(document.querySelectorAll('main section.api-item'));
  if(!items.length)return;
- const bar=document.querySelector('header.bar');
- let timer=0;
  function mark(){
-  const line=(bar?bar.getBoundingClientRect().bottom:48)+8;
+  /* Past the 1rem an item lands below the bar. */
+  const line=(bar?bar.getBoundingClientRect().bottom:48)+24;
   let low=0, high=items.length-1, best=-1;
   while(low<=high){
    const middle=(low+high)>>1;
    if(items[middle].getBoundingClientRect().top<=line){best=middle;low=middle+1;}
    else high=middle-1;
   }
-  const now=best>=0 && items[best].getBoundingClientRect().bottom>line
-   ? items[best].dataset.kind : null;
+  const item=best>=0 && items[best].getBoundingClientRect().bottom>line ? items[best] : null;
+  const now=item ? item.dataset.kind : null;
   for(const kind in kinds)kinds[kind].classList.toggle('here',kind===now);
+  for(const kind in groups)groups[kind].querySelector('summary').classList.toggle('here',kind===now);
+  const group=now&&groups[now];
+  if(opened&&opened!==group&&!opened.dataset.held){opened.open=false;opened=null;}
+  if(group&&!group.open&&!group.dataset.held){group.open=true;opened=group;}
+  const name=item&&names[item.id];
+  if(lit!==name){
+   if(lit)lit.classList.remove('here');
+   lit=name||null;
+   if(lit){
+    lit.classList.add('here');
+    /* The lit name stays in the sidebar's view, unless the reader is
+       using the sidebar. */
+    if(!side.matches(':hover, :focus-within')){
+     const box=side.getBoundingClientRect(), at=lit.getBoundingClientRect();
+     if(at.top<box.top+24||at.bottom>box.bottom-24)side.scrollTop+=at.top-box.top-box.height/3;
+    }
+   }
+  }
  }
  addEventListener('scroll',()=>{clearTimeout(timer);timer=setTimeout(mark,60);},{passive:true});
  addEventListener('hashchange',mark);
@@ -705,13 +906,17 @@ def search_box(compact=False):
     """The search field; its script is in the linked library.js.
 
     Full width on the index, where finding a name is what the page is
-    for; a small field under a module's title, where the module is.
+    for; a small field under a module's opening paragraph, where the
+    module is, with a short label that says it searches every module.
+    The results are a panel over the page under the field, not a block
+    that pushed the page down.
     """
     cls = 'api-tools compact' if compact else 'api-tools'
-    return (f'<div class="{cls}">\n<label for="api-search">Search library APIs</label>\n'
+    label = 'search all library APIs' if compact else 'Search library APIs'
+    return (f'<div class="{cls}">\n<label for="api-search">{label}</label>\n'
             '<input type="search" id="api-search" placeholder="Name, module or purpose" '
             f'data-index="{SEARCH_SCRIPT}" '
-            'aria-controls="api-results" autocomplete="off">\n'
+            'aria-controls="api-results" aria-expanded="false" autocomplete="off">\n'
             '<div id="api-results" class="api-results" aria-live="polite" hidden></div>\n'
             '<noscript>Browse the module and item indexes below; search needs JavaScript.</noscript>\n'
             '</div>\n')
@@ -750,15 +955,25 @@ def untitled_lead(body):
 def toc_html(entries, label):
     """The page's own sections, nested under its link in the sidebar.
 
-    `entries` are (href, title, cls): `sect` links are the shared bar's,
-    which follow the section being read; `api-toc-kind` ones are this
-    page's script's, which follow the kind of the item being read.
+    `entries` are (href, title, cls) or (href, title, cls, names):
+    `sect` links are the shared bar's, which follow the section being
+    read; `api-toc-kind` ones are this page's script's, which follow the
+    kind of the item being read.  An entry with names is a kind whose
+    items the sidebar lists, folded: a reader halfway down a module could
+    find the kinds there but not one of their names.
     """
     if not entries:
         return ''
     out = [f'<div class="toc api-toc" id="api-toc"><span class="api-toc-label">{label}</span>']
-    for href, title, cls in entries:
-        out.append(f'<a class="{cls}" href="{href}">{title}</a>')
+    for href, title, cls, *names in entries:
+        if names:
+            out.append(f'<details class="api-toc-group" data-kind="{href.removeprefix("#items-")}">'
+                       f'<summary class="{cls}">{title}</summary>'
+                       + ''.join(f'<a class="api-toc-item" href="#item-{name}">{name}</a>'
+                                 for name in names[0])
+                       + '</details>')
+        else:
+            out.append(f'<a class="{cls}" href="{href}">{title}</a>')
     out.append('</div>')
     return '\n'.join(out)
 
@@ -780,6 +995,30 @@ CALLED = re.compile(r'(?:(?:mut\s+)?\w+\s*:=\s*)?(?:try\s+)?(\w+(?:\.\w+)?)(?:\(
 #  Below this many characters across its columns' typical cells, a table is
 #  set at its own width.
 SHORT_TABLE = 50
+
+#  A phone stacks a table into records only when its columns cannot share
+#  the width: three or more of them, which leave about seven rem each and
+#  broke a header's code mid-word, or two with a code span this long.  A
+#  table of short cells, set at its own width, never stacks.  Stacked
+#  everywhere, a two-column table of short calls became twice as tall
+#  and no easier to read.
+STACK_COLUMNS = 3
+STACK_CODE = 32
+#  A column whose every cell is at most this long -- yes, no, a dash --
+#  is a tag beside the row's name when the row is stacked.
+FLAG = 3
+
+
+def plain(cell):
+    return ' '.join(html.unescape(TAGS.sub('', cell)).split())
+
+
+def stacks(head, rows):
+    """Does a table need its rows stacked on a phone?"""
+    if len(head) >= STACK_COLUMNS:
+        return True
+    return max((len(plain(code)) for row in rows for cell in row
+                for code in CODE_HTML.findall(cell)), default=0) >= STACK_CODE
 
 
 def column_widths(head, rows):
@@ -822,6 +1061,11 @@ def shape_tables(text, link):
         else:
             shaped = 'api-shaped'
             cols = '<colgroup>' + ''.join(f'<col style="width:{w}%">' for w in widths) + '</colgroup>'
+        stacked = total >= SHORT_TABLE and stacks(head, rows)
+        if stacked:
+            shaped += ' api-stack'
+        flags = {i for i in range(1, len(head)) if stacked
+                 and all(i < len(r) and len(plain(r[i])) <= FLAG for r in rows)}
 
         def row(found):
             cells = CELL_HTML.findall(found[1])
@@ -832,7 +1076,8 @@ def shape_tables(text, link):
                 if i == 0:
                     out.append(f'<th scope="row" data-label="{label}">{cell}</th>')
                 else:
-                    out.append(f'<td data-label="{label}">{cell}</td>')
+                    flag = ' class="api-flag"' if i in flags else ''
+                    out.append(f'<td{flag} data-label="{label}">{cell}</td>')
             return '<tr>' + '\t'.join(out) + '</tr>'
         head_part, _, body_part = inner.partition('<tbody>')
         return (f'<table class="{shaped}">{cols}'
@@ -874,6 +1119,9 @@ def write(root, destination, render):
                               url=page_name(module) + '#' + item.anchor))
     index.sort(key=lambda i: i['name'])
     pages = []
+    # The shared renderer's module, whose document groups the sidebar
+    # lists after the modules rather than a copy of them.
+    renderer = sys.modules[render.page.__module__]
 
     def resolver(current, aliases=None):
         """Where a name written in `current`'s prose is declared, or None."""
@@ -908,24 +1156,40 @@ def write(root, destination, render):
                     if here:
                         out.append(toc)
             out.append('</details>')
+        # The site's own documents, in the shared renderer's groups and
+        # order, folded below the modules: from a module page the tour
+        # and the examples were out of reach.
+        for num, name, members in renderer.nav_groups(render.DOCS + render.GUIDES):
+            out.append(f'<details class="api-docs"><summary>{num} · {html.escape(name)}'
+                       f'<span class="count">{len(members)}</span></summary>')
+            for d in members:
+                cls = 'doc retired' if d['key'] in renderer.RETIRED else 'doc'
+                out.append(f'<a class="{cls}" href="{d["out"]}">{html.escape(d["nav"])}</a>')
+            out.append('</details>')
         return '\n'.join(part for part in out if part)
 
-    def prose(text, source='docs/library.md', link=None):
+    def prose(text, source='docs/library.md', link=None, after_lead=''):
         # A link to a module's directory, `[core/io](../core/io)`, is its
         # page here, and the directory itself where the source is read.
         targets = render.guide_targets(render.DOCS + render.GUIDES, source)
         targets.pages.update({module: page_name(module) for module in modules})
         _, hero, body, _ = render.render_guide(text, lambda ref: anchors.get(ref),
                     targets, render.Highlighter())
-        out = hero + untitled_lead(body)
+        out = hero + after_lead + untitled_lead(body)
         if link is not None:
             out = shape_tables(out, link)
         return '<div class="api-prose">\n' + out + '</div>\n'
 
     def emit(filename, title, body, source, current='', description='',
-             toc='', compact=True):
+             toc='', search=False):
+        # The sidebar follows the page in the source, so a page read as
+        # text opens with the module rather than with every module's name;
+        # a keyboard reader skips to it from here rather than tabbing
+        # through every link of the page first.
+        hero = ('<a class="skip api-skip-nav" href="#side">skip to the library navigation</a>\n'
+                + (search_box() if search else ''))
         out = render.page(title + ' — Landin', 'library reference', title,
-                          search_box(compact), body, nav(current, toc), source,
+                          hero, body, nav(current, toc), source,
                           out=filename, description=description, linked=LINKED,
                           source_note='API reference derived from library sources. The specification defines language rules.')
         (destination / filename).write_text(out)
@@ -933,11 +1197,18 @@ def write(root, destination, render):
 
     def on_this_page():
         # The drawer holds the module's own contents; on a phone this
-        # opens it there rather than at the top of the module list.
-        return ('<label for="menu" class="api-onpage" id="api-onpage">'
-                'On this page</label>\n')
+        # opens it there rather than at the top of the module list, and
+        # takes focus into it.  A button, so a keyboard reaches it; without
+        # a script the drawer's own box is what opens it.
+        return ('<button type="button" class="api-onpage" id="api-onpage" '
+                'aria-controls="side" aria-expanded="false">On this page</button>\n'
+                '<label for="menu" class="api-onpage api-onpage-plain">On this page</label>\n')
 
     for name, text in render.linked_assets(LINKED, CSS, SEARCH + CONTENTS).items():
+        if name == LINKED + '-theme.js':
+            # Run in the head, so the controls only a script can work are
+            # shown or hidden before the first paint, not after the page.
+            text += SCRIPTED
         (destination / name).write_text(text)
     body = prose(intro.replace('# Library reference', '', 1), link=resolver(''))
     body = '<section class="api-opening">\n' + body + '</section>\n'
@@ -964,7 +1235,7 @@ def write(root, destination, render):
     body += '</section>\n'
     emit('library.html', 'Library reference', body,
          'docs/library.md and core, hosted, platform sources', 'library.html',
-         toc=toc_html(toc, 'On this page'), compact=False)
+         toc=toc_html(toc, 'On this page'), search=True)
     for module, items in modules.items():
         overview, example_path, example_prose = descriptions[module]
         aliases = {}
@@ -1022,7 +1293,10 @@ def write(root, destination, render):
                     blocks[-1][1].append(''.join(spans))
                 else:
                     blocks.append(('code', [''.join(spans)]))
-            out = ['<div class="api-decl">']
+            # One region scrolls sideways, the declaration whole, and fades
+            # at its edge through the shared script's `.scroller`: as a
+            # region per run of code, one declaration was several.
+            out = ['<div class="api-decl"><div class="scroller">']
             for block in blocks:
                 if block[0] == 'code':
                     out.append('<pre class="api-signature"><code>' + '\n'.join(block[1])
@@ -1033,7 +1307,7 @@ def write(root, destination, render):
                         '<p>' + re.sub(r'`([^`]+)`', r'<code>\1</code>',
                                        html.escape(' '.join(p.split()), quote=False)) + '</p>'
                         for p in paragraphs if p.strip()) + '</div>')
-            return '\n'.join(out) + '\n</div>\n'
+            return '\n'.join(out) + '\n</div></div>\n'
         availability = ('Shared: available on every enabled target.' if module.startswith('core/')
                         else 'Hosted targets only.' if module.startswith('hosted/')
                         else 'Target scope is enforced by the module assertion below.')
@@ -1057,8 +1331,10 @@ def write(root, destination, render):
         body += '</section>\n'
         # A `###` of the overview is a section of the page, beside the
         # items and the example: under the h1 it was an h3 with no h2.
+        # The compact search follows the module's opening paragraph: between
+        # the title and the description it came before what the page is.
         written = prose(re.sub(r'^### ', '## ', overview, flags=re.M),
-                        link=resolver(module, aliases))
+                        link=resolver(module, aliases), after_lead=search_box(True))
         written = written.replace('<section class="guide" id=',
                                   '<section class="guide api-section" id=')
         body += written
@@ -1088,7 +1364,7 @@ def write(root, destination, render):
                             for name in names)
             body += '</ul></div>\n'
             toc.append((f'#items-{kind}', f'{title} <span class="count">{len(names)}</span>',
-                        'api-toc-kind'))
+                        'api-toc-kind', names))
         body += ('<div class="api-group" id="items-other">'
                  '<h3 class="api-group-title">Also on this page</h3>\n<ul class="api-index">\n')
         if table:
@@ -1108,13 +1384,15 @@ def write(root, destination, render):
             only = variants[0] if len(variants) == 1 else None
             source = (f'<a class="api-source" href="{source_name(only.source)}#L{only.line}">'
                       f'{only.source}:{only.line}</a>\n') if only else ''
+            # The name and kind, then where it is declared and the way back:
+            # on a phone those two are a row of their own under the name.
             body += (f'<section class="api-item" id="{item.anchor}" data-title="{name}" '
                      f'data-kind="{item.kind}">\n<div class="api-head">\n'
                      f'<h3 class="api-name"><code>{name}</code></h3>\n'
                      f'<span class="api-kind">{item.kind}</span>\n'
-                     f'<span class="grow"></span>\n{source}'
+                     f'<span class="api-where">\n{source}'
                      f'<a class="api-back" href="#items-{item.kind}" '
-                     f'aria-label="back to the item index">items ↑</a>\n</div>\n')
+                     f'aria-label="back to the item index">↑ index</a>\n</span>\n</div>\n')
             for variant in variants:
                 if variant.condition:
                     body += ('<p class="api-condition">When <code>' + html.escape(variant.condition)
