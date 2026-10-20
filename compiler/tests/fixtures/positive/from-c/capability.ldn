@@ -1,0 +1,15 @@
+import core/io
+
+--- Count the lines a reader gives: a file, a pipe or a test's fake.
+count_lines: (provider: type is io.reader, host: provider, source: io.file)
+             -> (lines: usize) ! io.io_failed =
+    lines = 0
+    mut block: [512]u8 = zeroed
+    loop do
+        count := try io.read(host, source, block)
+        break when count == 0
+        for byte in block[0..<count] do
+            if byte == u8('\n') then lines += 1 end if
+        end for
+    end loop
+end count_lines

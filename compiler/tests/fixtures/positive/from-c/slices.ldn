@@ -1,0 +1,11 @@
+--- The byte sum of a block, wrapping on purpose.
+byte_sum: (bytes: []u8) -> (sum: u8) =
+    sum = 0
+    for byte in bytes do
+        sum +%= byte
+    end for
+end byte_sum
+
+header_sum: (packet: []u8) -> (sum: u8) =
+    sum = byte_sum(packet[0..<4]) -- traps if the packet is shorter
+end header_sum

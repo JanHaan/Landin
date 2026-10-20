@@ -1,0 +1,10 @@
+--- A duration split into minutes and the seconds left over.
+split_seconds: (total: u32) -> (minutes: u32, seconds: u32) =
+    minutes = total / 60
+    seconds = total % 60
+end split_seconds
+
+minutes_only: (total: u32) -> (whole_minutes: u32) =
+    (minutes, _) := split_seconds(total)
+    whole_minutes = minutes
+end minutes_only

@@ -1,0 +1,13 @@
+not_present: atom
+
+--- Where `wanted` first appears in `items`.
+index_of: (items: []u32, wanted: u32) -> (index: usize) ! not_present =
+    for item, position in items do
+        if item == wanted then
+            index = position
+            return
+        end if
+    complete
+        fail not_present
+    end for
+end index_of

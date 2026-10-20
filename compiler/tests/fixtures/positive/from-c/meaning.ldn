@@ -1,0 +1,12 @@
+celsius: type = distinct i32
+fahrenheit: type = distinct i32
+fill_level: type = u8 range 0..100
+
+to_fahrenheit: (c: celsius) -> (f: fahrenheit) =
+    f = fahrenheit(i32(c) * 9 / 5 + 32)
+end to_fahrenheit
+
+--- How full a tank is, refused or trapped outside 0 to 100.
+tank_level: (litres: u32, capacity: u32) -> (level: fill_level) =
+    level = u8(litres * 100 / capacity)
+end tank_level

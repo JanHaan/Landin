@@ -531,8 +531,9 @@ end digit_name
 
 A `match` names atoms or variant cases, has no fallthrough and no `break`,
 and a case left out is a compile error [1210]. A number has no case to name,
-so a `switch` over an integer is an `if` chain (D369). An arm names one
-case: give each case its own arm, or use `_` for the rest.
+so a `switch` over an integer is an `if` chain (D369). Several labels may
+share one arm, `north, south:`, which is what C's stacked `case` labels
+are, and `_` covers the rest.
 
 ### `goto` cleanup
 
@@ -776,12 +777,199 @@ exactly the same types. A pointer C may return as null is a pointer union,
 and a function exported to C returns a status, since no Landin failure
 crosses the boundary [1600].
 
+## Write Landin, not C in Landin
+
+Every entry above translates a C habit. The habits themselves are worth
+dropping too. C makes you encode things the compiler cannot see: an out
+pointer for a second result, `-1` for "not found", a `typedef` that mixes
+freely with its base, a flag variable to escape two loops. Landin has a
+direct form for each, and the compiler checks it. Here are six, each with a
+pointer to the tour entry that explains it. [The tour](../tour.md) is where
+the rest of them are.
+
+### Several results, not out parameters
+
+```c
+void split_seconds(unsigned total, unsigned *minutes, unsigned *seconds);
+```
+
+```landin
+--- A duration split into minutes and the seconds left over.
+split_seconds: (total: u32) -> (minutes: u32, seconds: u32) =
+    minutes = total / 60
+    seconds = total % 60
+end split_seconds
+
+minutes_only: (total: u32) -> (whole_minutes: u32) =
+    (minutes, _) := split_seconds(total)
+    whole_minutes = minutes
+end minutes_only
+```
+
+A routine returns as many named results as it needs, and the compiler checks
+that each is set on every path [0920] [0930]. The caller takes them apart by
+name and ignores the rest with `_` [0990]. Nothing is passed by address, so
+nothing can be left unwritten.
+
+### Failures, not sentinel values
+
+```c
+int index_of(const unsigned *items, size_t n, unsigned wanted); /* -1: absent */
+```
+
+```landin
+not_present: atom
+
+--- Where `wanted` first appears in `items`.
+index_of: (items: []u32, wanted: u32) -> (index: usize) ! not_present =
+    for item, position in items do
+        if item == wanted then
+            index = position
+            return
+        end if
+    complete
+        fail not_present
+    end for
+end index_of
+```
+
+"Not found" is a failure the signature declares, `! not_present`, not a
+value of the result's own type that a caller can forget to test [0940]. A
+`for` loop's `complete` block runs only when the loop ran out without a
+`break` or `return` [1170]. The caller writes `try`, a fallback such as
+`else 0`, or a handler; ignoring it is an error.
+
+### Slices, not a pointer and a length
+
+```c
+uint8_t byte_sum(const uint8_t *bytes, size_t n);
+```
+
+```landin
+--- The byte sum of a block, wrapping on purpose.
+byte_sum: (bytes: []u8) -> (sum: u8) =
+    sum = 0
+    for byte in bytes do
+        sum +%= byte
+    end for
+end byte_sum
+
+header_sum: (packet: []u8) -> (sum: u8) =
+    sum = byte_sum(packet[0..<4]) -- traps if the packet is shorter
+end header_sum
+```
+
+A slice is a pointer and its length in one value, and every index is
+checked against it [0570]. `packet[0..<4]` is a view of the first four bytes,
+not a copy. Overflow traps unless you ask for wrapping with `+%` [0300], so
+a checksum says that it wraps and a counter that overflows is caught.
+
+### Types that mean something, not `typedef`
+
+```c
+typedef int32_t celsius;      /* any int32_t fits, any int32_t mixes */
+typedef uint8_t fill_level;   /* 0 to 100, by convention */
+```
+
+```landin
+celsius: type = distinct i32
+fahrenheit: type = distinct i32
+fill_level: type = u8 range 0..100
+
+to_fahrenheit: (c: celsius) -> (f: fahrenheit) =
+    f = fahrenheit(i32(c) * 9 / 5 + 32)
+end to_fahrenheit
+
+--- How full a tank is, refused or trapped outside 0 to 100.
+tank_level: (litres: u32, capacity: u32) -> (level: fill_level) =
+    level = u8(litres * 100 / capacity)
+end tank_level
+```
+
+A `distinct` type has its base's representation and none of its
+operations, so a `celsius` never meets a `fahrenheit` or a bare `i32`
+without a conversion you can see [0650]. A range subtype checks its values
+where they enter: a value outside 0 to 100 is refused when the compiler
+knows it and traps when it does not [0660]. Neither costs anything at run
+time beyond that check.
+
+### Labelled loops, not flags and `goto`
+
+```c
+int found = 0;
+for (int r = 0; r < 4 && !found; r++)
+    for (int c = 0; c < 4; c++)
+        if (grid[r][c] == 0) { found = 1; break; }
+```
+
+```landin
+--- Whether any row of the grid holds a zero.
+has_zero: (grid: [4][4]u8) -> (found: bool) =
+    found = false
+    rows: for row in grid do
+        for cell in row do
+            if cell == 0 then
+                found = true
+                break rows
+            end if
+        end for
+    end rows
+end has_zero
+```
+
+A loop can carry a label, and `break` and `continue` name the loop they
+leave [1180]. A `for` walks an array, a slice or a range directly, and
+gives the position as well when you ask, `for item, position in items`
+[1150].
+
+### Passed capabilities, not global I/O
+
+```c
+size_t count_lines(FILE *source);   /* and anything else can call fopen */
+```
+
+```landin
+import core/io
+
+--- Count the lines a reader gives: a file, a pipe or a test's fake.
+count_lines: (provider: type is io.reader, host: provider, source: io.file)
+             -> (lines: usize) ! io.io_failed =
+    lines = 0
+    mut block: [512]u8 = zeroed
+    loop do
+        count := try io.read(host, source, block)
+        break when count == 0
+        for byte in block[0..<count] do
+            if byte == u8('\n') then lines += 1 end if
+        end for
+    end loop
+end count_lines
+```
+
+Nothing in Landin reaches files, the terminal or the network without a
+provider handed to it. A routine with no provider parameter cannot do I/O
+at all, which you can see from its signature [1680]. The same `count_lines`
+reads a file, standard input, a pipe, or the in-memory fake `core/io/fake`
+in a test, with no mocking framework [1660].
+
+### Where to go next
+
+Read [the tour](../tour.md) from the top: it starts with a hello world and
+takes an hour or two. These parts have the least in common with C:
+
+| tour section | what it gives you |
+| --- | --- |
+| [Control flow](../tour.md#control-flow) | errors with `fail`, `try` and `else`, `defer` and `undo`, `match` |
+| [Types you declare](../tour.md#types-you-declare) | atoms, variants, distinct and range types, register layouts |
+| [Lifetime and escape](../tour.md#lifetime-and-escape) | how the compiler catches a pointer to a dead frame, without a borrow checker |
+| [Concepts and generic code](../tour.md#concepts-and-generic-code) | one routine for every type, without `void *` or macros |
+| [The toolchain, C, and the machine](../tour.md#the-toolchain-c-and-the-machine) | linking, C calls both ways, assembly and placement |
+
 ## What has no answer yet
 
 | C habit | what to write today |
 | --- | --- |
 | pointer arithmetic that keeps the base's origin | the address as an integer; the result borrows nothing |
-| several `case` labels on one arm | one arm for each case, or `_` for the rest |
 
 Open work belongs to `ROADMAP.md`, whose register says for each gap what
 would close it and when it will be taken up.

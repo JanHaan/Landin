@@ -1,0 +1,12 @@
+--- Whether any row of the grid holds a zero.
+has_zero: (grid: [4][4]u8) -> (found: bool) =
+    found = false
+    rows: for row in grid do
+        for cell in row do
+            if cell == 0 then
+                found = true
+                break rows
+            end if
+        end for
+    end rows
+end has_zero
