@@ -25,7 +25,8 @@ What it presses on, none of which the first three prototypes touched:
 - `any` — real heterogeneous dispatch. The chain is built from argv, so its
   shape is unknown until run time and no generic can express it
 - arenas — explicit program and scratch providers, with caller-owned lifetimes
-- `Io` — which the tour has never specified at all
+- `Io` — which the tour had not specified when this was written; [1660]
+  now does
 - the root — where a capability comes from when nobody handed you one
 - entry — argc and argv, and what a hosted program is handed
 - callbacks — a function and a state pointer, since nothing captures

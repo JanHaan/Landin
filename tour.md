@@ -12,7 +12,8 @@ Version 0.2.7 — what each version changed is in
 
 ## Hello, world
 
-Save this as `hello/main.ldn`:
+Make a directory, `mkdir hello && cd hello`, and save this in it as
+`main.ldn`:
 
 ```landin
 import core/io
@@ -38,36 +39,92 @@ Line by line:
   `hosted/system` the operating system that provides them.
 - `main` takes nothing and returns one named result, `code`, which becomes
   the exit status. A routine sets its results by assigning them.
-- `system.new()` is the program's handle on the operating system. Nothing
-  in Landin touches files, the terminal or the network without one, so a
-  routine's parameters tell you what it can reach ([1660]).
+- `system.new()` is the program's handle on the operating system. Files,
+  the terminal and the network are all reached through it. Pass it to the
+  routines that need it rather than making one in each, and a routine's
+  parameters say what it touches ([1660]). That is a convention: the
+  compiler does not stop a routine from calling `system.new()` itself
+  ([1680]).
 - `io.write` can fail, and Landin will not let a failure pass unnoticed.
   `else none` says that here it does not matter ([1030]).
 
-To print values, use `format`. Each `{}` takes the next value from the
-list:
+To print values, use `format` through a buffered writer. Each `{}` takes
+the next value from the list:
 
 ```landin
-say_born: (host: system.host, name: utf8, year: u32) -> none =
-    mut buffer: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), buffer)
-    defer io.flush(out) else none
+print_born: (inout out: io.buffered_writer(system.host), name: utf8,
+             year: u32) -> none =
     io.format(out, "{} was born in {}.\n", [any(addr name), any(addr year)]) else none
-end say_born
+end print_born
 ```
 
-`say_born(host, "Ada", 1815)` prints `Ada was born in 1815.`
+`main` makes the writer once and hands it to whatever prints:
+
+```landin
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    print_born(out, "Ada", 1815) -- Ada was born in 1815.
+```
 
 - `buffered_over` collects output in a buffer you supply, here on the
-  stack, so printing allocates nothing.
+  stack, so printing allocates nothing. A line larger than the whole
+  buffer fails with `text.no_space`.
 - `defer` runs `flush` when the routine ends, however it ends. There are
   no destructors, so nothing flushes for you ([1100]).
-- `any(addr name)` hands `format` a value it can turn into text ([1370]).
-  Integers, `bool`, `utf8` and byte strings are formattable; a type of
-  your own becomes so by declaring a conformance ([1240]).
+- `any(addr name)` hands `format` the address of a value it can turn into
+  text ([1370]). Integers, `bool`, `utf8` and byte strings are formattable;
+  floats are not yet. A type of your own becomes formattable by declaring
+  a conformance ([1240]).
 
-[`examples.md`](examples.md) has complete programs that read files, list
-directories and talk over sockets.
+## Reading a file
+
+This routine counts the lines of the file named by the program's first
+argument:
+
+```landin
+--- How many lines the file named by the first argument has.
+count_file_lines: (host: system.host) -> (lines: usize)
+                  ! io.no_argument | io.not_found | io.no_access | io.io_failed
+                  | io.line_too_long =
+    path := try io.argument_at(host, 0)
+    source := try io.open_read(host, path)
+    defer io.close(host, source) else none
+    mut buffer: [4096]u8 = zeroed
+    mut reader := io.lines_over(host, source, buffer)
+    lines = 0
+    loop do
+        line := try io.read_line(reader)
+        break when line.finished
+        inc lines
+    end loop
+end count_file_lines
+```
+
+- The `!` list after the result says every way it can fail. `try` passes a
+  failure straight on to the caller ([0960]).
+- `io.argument_at(host, 0)` is the first argument after the program's own
+  name.
+- `io.lines_over` reads through a buffer you supply and hands out one line
+  at a time ([1130] for `loop`, [0400] for `inc`).
+
+The caller decides what a failure means. `core/failure` has words for
+every library failure:
+
+```landin
+    lines := count_file_lines(host) else (problem)
+        words: []u8 = failure.words(problem)
+        io.format(out, "error: {}\n", [any(addr words)]) else none
+        code = 1
+        return
+    end
+    io.format(out, "{} lines\n", [any(addr lines)]) else none
+```
+
+Run on a missing file, it prints `error: not found`. `else (problem)`
+handles the failure in place ([1030]); the tour explains each piece in
+order, starting below. [`examples.md`](examples.md) has complete programs
+that list directories, run commands and talk over sockets.
 
 ## How to read this tour
 
@@ -368,7 +425,7 @@ Integers may be written in hex, binary or octal, and long numbers may use
 `_` to group digits.
 
 ```landin
-hex_value := 0xDEAD_BEEF
+hex_value: u32 = 0xDEAD_BEEF -- too big for the default i32
 bin_value := 0b1010_0101
 oct_value := 0o755
 big_value := 1_000_000
@@ -419,6 +476,14 @@ A character literal is one Unicode code point, and its type is `u32`.
 
 ```landin
 letter_a := 'a'
+```
+
+A byte is a `u8`, so comparing one with a character takes a conversion:
+
+```landin
+is_newline: (byte: u8) -> (yes: bool) =
+    yes = byte == u8('\n')
+end is_newline
 ```
 
 ### [0260] Text literals take their type from where they are used
@@ -806,8 +871,10 @@ type ([0430]). There is no `out` convention: outputs are named results.
 
 `escaping` is a separate word that can go with any of the three. It says the
 function may keep what a pointer, slice or `any` refers to after the call
-returns, so the caller has to show it lives long enough ([0780]). It is the
-opposite of `sink`: `sink` ends the caller's duty, `escaping` extends it. On a
+returns, so the caller has to show it lives long enough ([0780]). It answers
+a different question from `sink`, and the two can go together: `sink` makes
+the caller's place unusable afterwards, `escaping` lets the callee keep a
+reference after the call. On a
 generic parameter it says the right thing either way: for `t` = `u32` it asks
 nothing, since a value with no references is unconstrained ([0840]), and for
 `t` = `ptr node` it is exact.
@@ -987,12 +1054,360 @@ less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
 Writing one makes a fixed code address; it does not run the body. State
 travels as an explicit parameter, as in [1000]'s callback.
 
+## TYPES YOU DECLARE
+
+Atoms, structs, variants, and types made from other types. Device register
+images, which are also types you declare, are with the machine-level
+material at [0730] and [0740].
+
+### [0630] Atoms
+
+An atom is a name that is its own value and its own type. Declaring one
+gives you both at once, because for an atom they are the same thing.
+
+```landin
+not_found: atom
+no_access: atom
+```
+
+Atoms compare with `==` and `<>`, and nothing else. Two atoms are equal
+when they are the same declaration, even when the values come from two
+different atom sets:
+
+```landin
+is_missing: (outcome: not_found | no_access) -> (missing: bool) =
+    missing = outcome == not_found
+end is_missing
+```
+
+An atom has no number behind it as far as your program can tell: it is not
+ordered and does not convert to or from an integer.
+
+### [0640] Enumerations are unions of atoms
+
+An enumeration is a union of atoms. `north`, `south`, `east` and `west`
+were declared at [0100].
+
+```landin
+compass: type = north | south | east | west
+```
+
+The union may be written in place as the type of a binding, a parameter,
+a return or a field, and it is the same type as the declared name:
+`facing: (way: north | south) -> (ahead: bool)` takes a `compass` value
+that is north or south. As the element of an array, a slice or a pointer
+the union needs its name.
+
+An atom set can be an array element, a struct field or a variant payload,
+and it stays that set there: a write needs one of its members, and reading
+it back gives you an atom, not an integer.
+
+### [0650] Distinct types
+
+`distinct` makes a new type with its base's representation that never
+mixes with its base or any other type. Arithmetic does not come along;
+comparison, and the bit operations of an unsigned base, do.
+
+```landin
+meter: type = distinct f32
+second: type = distinct f32
+```
+
+You cannot add a `meter` to a `second`, and you cannot even add two
+`meter` values: `f32`'s arithmetic does not come along. To get a value in
+or out, apply the type, as for any conversion ([0700]):
+
+```landin
+length: meter = meter(2.5)
+raw: f32 = f32(length)
+```
+
+That is the whole point: a type the compiler keeps apart from its base and
+from every other distinct type, at no runtime cost. Generic deduction and
+conformances tell it apart too, and an alias of it keeps its identity.
+
+A few things do carry over, because they ask nothing of what the value
+means:
+
+- Equality. `==` and `<>` work when the base has them: a scalar, an atom
+  set, a pointer or a function value. A descriptor compares without taking
+  its number out.
+- Ordering, when the base is a scalar: `<`, `<=`, `>` and `>=` order as
+  the base does.
+- Flags, when the base is an unsigned integer: `&`, `^`, `|` and `~` give
+  the same distinct type, and `&=`, `^=` and `|=` update in place, so a set
+  of flags stays one.
+- The zero image. A record holding a distinct value may be `zeroed`
+  ([0540]), though `zeroed` written for the distinct type itself does not
+  construct it.
+
+```landin
+farther: (a: meter, b: meter) -> (yes: bool) =
+    yes = a > b
+end farther
+```
+
+Arithmetic and shifts stay with the base. A distinct value meets its base or
+any other type only through a conversion, and that includes comparing with
+it. A wrapped reference keeps its origin. The full rule is `spec.md` (D213).
+
+### [0660] Range subtypes
+
+A range subtype is an integer type limited to a run of its values. It is
+checked when a value goes in.
+
+```landin
+percent: type = u8 range 0..100
+```
+
+The check happens at a binding, a parameter, a named return and a
+conversion. A value outside the range is refused when the compiler knows
+it, and traps otherwise. Arithmetic on a `percent`
+gives a plain `u8`; the range is not part of the result.
+
+A range subtype is not allowed as a struct field, an array element, a
+pointer or slice target, a generic argument, or something `addr` can point
+at. In each of those, a write through the base type could reach the storage
+unchecked. To keep a checked value in storage, wrap it: a `distinct` type
+that only a checking function constructs carries the proof ([1730]).
+
+A guard on an ordinary integer does not make it a `percent`. If you reject
+bad input with a `fail` guard and then store the integer as `percent`, that
+store still has its trapping check. Once the value is in a `percent` place,
+passing it to another `percent` place needs no second check. The rules are
+`spec.md` (D188, D236).
+
+### [0670] Structs
+
+A struct is written either as a block or inline in parentheses. The two
+mean the same thing, and the inline form is also how parameter lists,
+return lists and payloads are written.
+
+```landin
+size2: type = (w: u32, h: u32)
+```
+
+A struct is nominal in either form: two separately declared structs with
+the same fields are different types. An alias keeps the original identity.
+
+Either form may take type and fixed parameters, and `layout` ([0750])
+applies to either. The parameters are compile-time names: they add no
+field and no hidden runtime argument. How instances are identified is in
+[0710].
+
+### [0680] Structs with a variant part
+
+A struct may end in a variant part: one of several cases, each with its
+own fields. The fields every case shares need no ceremony.
+
+```landin
+figure: type = struct
+    label: utf8
+    area: f32
+    kind: variant
+        circle: (radius: f32) |
+        rectangle: (width: f32, height: f32)
+    end kind
+end figure
+```
+
+### [0690] Cases with no payload
+
+A case with no fields is written bare. It is an atom, and [1700] holds
+wherever atoms appear, so a variant reads as the union it is.
+
+```landin
+node_kind: type = struct
+    kind: variant
+        leaf |
+        branch: (first: node_id, count: u32)
+    end kind
+end node_kind
+```
+
+You write a case where its variant part is the context: when you construct
+into that part, and when you name an arm of a match on it. A case is not a
+value apart from its part, and the part is not a value apart from its
+struct: copy the struct, or match it (D241).
+
+Selecting a bare case writes only its tag. Selecting a case with fields
+zeros that case's fields first, then writes the ones you gave. The bytes of
+the inactive cases and the padding are unspecified afterwards, though
+`zeroed` still writes the whole struct as zeros. Selecting a case therefore
+costs the size of that case, not the size of the largest one (D76).
+
+### [0700] Constructing values and converting them
+
+Construction and conversion look the same: a type applied to arguments.
+
+```landin
+origin := point(x: 0.0, y: 0.0)
+metres := meter(1.5)
+```
+
+A variant case is built the same way, with the case name applied to its
+fields. The tour has shown variants being matched; this is how you make
+one.
+
+```landin
+mut f: figure = (label: "disc", area: 0.0, kind: circle(radius: 2.0))
+f.kind = rectangle(width: 3.0, height: 4.0)
+```
+
+### [0710] Struct literals take their type from context
+
+A struct literal has no type of its own, like a number literal. It takes
+the type its context wants, named or anonymous.
+
+```landin
+here: point = (x: 1.0, y: 2.0)
+pair: (quot: i32, rem: i32) = divide(10, 3)
+-- named: point_pair = divide(10, 3)     -- no, that is named
+```
+
+What does not convert is a value that already has an anonymous struct type,
+such as a return list. Two anonymous types match when their field names,
+types and order all match, but an anonymous value never becomes a named
+type of the same shape.
+
+Each fully applied instance of a parameterized struct is its own nominal
+type. It is identified by the declaration and its complete list of
+arguments, including an argument the fields do not use. Aliases of the
+arguments do not make a new type. Changing an argument does, even when the
+fields and layout come out equal. Target widths, offsets and padding are
+layout, not identity.
+
+A struct may mention itself, or another struct that mentions it back, in a
+function parameter or result: a function field is one pointer, so the
+layout stays finite. The rules are `spec.md` (D137).
+
+At module scope, a struct literal becomes a static image built by the
+compiler, not a constructor run before the entry point ([1460]). Each
+nested struct in it has to come from a matching construction, `zeroed` or
+another module image of that type; a same-shaped different struct does not
+do. Module images may refer forward and through aliases, but a chain that
+returns to itself has no value. Widths, offsets and padding follow the
+selected target's layout ([0750]). The rules are `spec.md` (D60, D61,
+D81).
+
+### [0720] Filling the remaining fields with `of`
+
+`of` at the end of a struct literal fills every field the literal did not
+name. It is the same word in the same place as in array literals ([0560]).
+
+```landin
+cfg: control = (enable: true, mode: external, of zeroed)
+```
+
+The fill has to typecheck for each field it fills: `of false` works where
+the rest are `bool`, and `of zeroed` wherever the rest have a zero image.
+A fill other than `zeroed` needs at least one omitted field, and all of the
+omitted fields must have exactly the same type, array length and reference
+permission included. It is evaluated once, after the named values, and
+copied into each remaining field in declaration order. The details are in
+`spec.md` (D214).
+
+This is not a default value: declarations have none ([0980]), because a new
+parameter would then fit every existing call silently. Here whoever writes
+the literal makes the choice. The trade is theirs too: a literal with `of`
+picks up a field added later without a word, and one without it breaks
+loudly.
+
+### [0750] Field order and layout
+
+Fields stay in the order you wrote them, with natural alignment and padding
+in between. A hexdump matches the source, and the layout does not shift
+under a new compiler or an optimization flag.
+
+```landin
+packet: type = layout(c) struct
+    kind: u8
+    length: u16 -- big-endian as the wire sent it
+    id: u32
+end packet
+
+from_big_u16: (wire: u16) -> (value: u16) =
+    value = (wire << 8) | (wire >> 8) -- on a little-endian target
+end from_big_u16
+```
+
+Other layouts are asked for by name:
+
+| layout | what it does |
+|---|---|
+| no `layout` | source order, natural alignment |
+| `layout(optimal)` | sorts fields by descending alignment, but only if that makes the struct strictly smaller |
+| `layout(c)` | the selected target's C rules ([1975]) |
+| `layout(c, packed)` | C's byte-packed record: every field at alignment one, no padding |
+| `layout(packed)` | a register image of bits ([0730]) |
+
+`layout(optimal)` keeps source order when sorting saves nothing, and moves
+nested structs, arrays and variant parts whole (D210). It never makes a
+struct fit for C.
+
+`layout(c)` does not choose a function's calling convention. A C record
+holds native-endian scalars, fixed arrays, nested nonempty C structs and
+callback fields declared with C's convention. The fields of a
+`layout(c, packed)` record are read and written by copy and have no address
+of their own (D410), and C takes such a record through a pointer (D414). A
+C record's last field may be `[0]T`, C's flexible array member, whose
+elements follow the record in memory (D413).
+
+Byte order is not a property of a field. A field holds the target's own
+order, which `compiler.byte_order` names ([1560]). When your program reads
+or writes another order, it converts where the bytes cross, with shifts
+([0320]) or an ordinary function, so the cost is visible where it is paid,
+as in `from_big_u16` above (D239).
+
+Every byte count comes from the selected target, 32-bit targets included.
+Initializers still run in the order you wrote them ([0410]).
+
+### [0760] Attributes
+
+Attributes are prefix words from a closed set. Their arguments are always
+in parentheses. Where an argument is one of a fixed set of values it is an
+atom; a linker name is a string.
+
+```text
+mut public layout(c|optimal|packed)
+```
+
+```text
+escaping caller fixed option
+link(section: "...", symbol: "...", align: 16, vector: 16, keep)
+extern(c|interrupt|naked|...)
+```
+
+| word | where it is described |
+|---|---|
+| `mut` | [0060] |
+| `public` | [0090] |
+| `layout` | [0730], [0750] |
+| `escaping` | [0780] |
+| `caller` | [1040] |
+| `fixed` | [1490]; `option` implies it ([1530]) |
+| `link` | [1640] |
+| `extern` | [1570] |
+
+`at` gives a field its bit position ([0730]). `at`, `of` and `align` are
+contextual: a field or an entry may still be called one of them, because
+nothing reads the word as an attribute there. Placement alignment is
+`link`'s `align` label ([1640]), not a word of its own. `from` and `with`
+are reserved and cannot name anything.
+
+There is no `volatile`: a device access is an operation ([0740]). There is
+no `big` or `little`: byte order is converted where bytes cross ([0750]).
+There is no `inline` or `noinline`: inlining is the optimizer's decision
+([1310]). And there is no `weak`: a whole program links one definition per
+name, and the compiler-owned vector image does what weak default handlers
+do in C ([1640]). `spec.md` records the withdrawals (D238, D239).
+
 ## CONTROL FLOW
 
 Every construct opens with its own word and closes with `end`, so you never
 count braces. The short snippets in this section are statements inside a
-routine with a parameter `x: i32`, a slice `items: []i32` and a result
-`out: i32`.
+routine with a parameter `x: i32`, a writable slice `items: []mut i32`
+and a result `out: i32`.
 
 ### [1050] Branching with `if`
 
@@ -1246,9 +1661,9 @@ flush(out) else none
 
 `else none` is the bound block with nothing in it, minus the name nobody
 would read: what the call did before it failed stays done, and the next
-statement runs. A call that returns a value takes it only when the call is
-all a discard throws away, because a failure is never ignored by leaving a
-result unset that something reads (D376, D406):
+statement runs. On a call that returns a value, `else none` is allowed
+only when the whole call is discarded with `_ =`; anywhere else a failure
+would leave a result unset that something reads:
 
 ```landin
 _ = parse_header(input) else none
@@ -1427,7 +1842,7 @@ straight to the next test.
     end for
 
     for item, idx in items do
-        item = item + i32(idx) -- items is []mut i32, so this writes
+        item = item + i32(idx) -- items is writable, so this writes
     end for
 
     for k in 0..<10 do
@@ -1471,10 +1886,11 @@ decides. Over a `[]mut t` the element is a writable place, and over a `[]t`
 it is not.
 
 ```landin
-    xs := vec.used(l) -- []mut i32
-    for k in 0..<lenof xs do
-        xs[k] = xs[k] * 2
+double_all: (xs: []mut i32) -> none =
+    for x in xs do
+        x = x * 2
     end for
+end double_all
 ```
 
 Over anything else that satisfies `iterable`, the binding is a copy, since
@@ -1609,8 +2025,8 @@ describe: (c: compass) -> (name: utf8) =
 end describe
 ```
 
-Without `inout`, a `[capacity]t` payload would have to be copied to be
-read and could not be written at all.
+A plain binding reads the payload in place, without copying it; `inout`
+adds permission to write it.
 
 - Both plain and `inout` bindings alias the matched storage, scalars
   included. So an arm may replace the variant, or an object containing it,
@@ -1881,10 +2297,10 @@ parameter (D309).
 
 ### [0580] The empty slice
 
-An empty slice is never null. Its base is the lowest positive address
-aligned for the element type: 1 for bytes, 4 for a `u32` (D141). Indexing
-checks the length before it computes an address, so the base is never
-dereferenced.
+`[]` is the empty slice: length zero, and a `for` over it runs no
+iteration. It is never null. Its base is the lowest positive address
+aligned for the element type, 1 for bytes and 4 for a `u32`, and since
+indexing checks the length first, that base is never dereferenced.
 
 ### [0590] Arithmetic on whole arrays
 
@@ -2014,574 +2430,6 @@ The codepoint is decoded, so it is a value, not a place: `addr word[2]` and
 from [0600]: its bounds count bytes, and the result is still `utf8`. A
 `utf8` converted to `[]u8` loses codepoint indexing and has the ordinary
 slice operations instead.
-
-### [0620] Storing a collection field by field (deferred)
-
-DEFERRED to a later version, and kept here as a design record. It touches
-aliasing, generics, slicing, `addr`, layout, debug information and the
-optimiser all at once, and no program has needed it yet. The successor
-roadmap Language evolution holds it, and a simulation that needs one field
-of a collection contiguous is what would bring it in.
-
-The idea: a collection may be stored transposed, one array per field
-instead of one array of structs. That is a property of the collection, not
-of the struct, so it is not a layout attribute.
-
-```landin
-world: type = struct
-    items: soa [4096]entity
-    count: usize
-end world
-
-advance: (inout w: world, dt: f32) -> none =
-    for i in 0..<w.count do
-        w.items[i].x += w.items[i].vx * dt
-    end for
-
-    xs: []f32 = w.items.x
-    shift_all(xs, dt)
-
-    first := w.items[0] -- a copy
-    --  p := addr w.items[0]     -- error: the fields are apart
-end advance
-```
-
-Indexing a field goes straight into that field's array, and `w.items.x` is
-that whole field as one contiguous slice, which is the point. Reading a
-whole element gathers a copy, and a whole element has no address. Only
-structs without a variant part qualify, and layout attributes do not apply,
-because there is no single element layout.
-
-## TYPES YOU DECLARE
-
-### [0630] Atoms
-
-An atom is a name that is its own value and its own type. Declaring one
-gives you both at once, because for an atom they are the same thing.
-
-```landin
-not_found: atom
-no_access: atom
-```
-
-Atoms compare with `==` and `<>`, and nothing else. Two atoms are equal
-when they are the same declaration, even when the values come from two
-different atom sets:
-
-```landin
-is_missing: (outcome: not_found | no_access) -> (missing: bool) =
-    missing = outcome == not_found
-end is_missing
-```
-
-An atom has no number behind it as far as your program can tell: it is not
-ordered and does not convert to or from an integer.
-
-### [0640] Enumerations are unions of atoms
-
-An enumeration is a union of atoms. `north`, `south`, `east` and `west`
-were declared at [0100].
-
-```landin
-compass: type = north | south | east | west
-```
-
-The union may be written in place as the type of a binding, a parameter,
-a return or a field, and it is the same type as the declared name:
-`facing: (way: north | south) -> (ahead: bool)` takes a `compass` value
-that is north or south. As the element of an array, a slice or a pointer
-the union needs its name.
-
-An atom set can be an array element, a struct field or a variant payload,
-and it stays that set there: a write needs one of its members, and reading
-it back gives you an atom, not an integer.
-
-### [0650] Distinct types
-
-`distinct` makes a new type with its base's representation and none of its
-operations.
-
-```landin
-meter: type = distinct f32
-second: type = distinct f32
-```
-
-You cannot add a `meter` to a `second`, and you cannot even add two
-`meter` values: `f32`'s arithmetic does not come along. To get a value in
-or out, apply the type, as for any conversion ([0700]):
-
-```landin
-length: meter = meter(2.5)
-raw: f32 = f32(length)
-```
-
-That is the whole point: a type the compiler keeps apart from its base and
-from every other distinct type, at no runtime cost. Generic deduction and
-conformances tell it apart too, and an alias of it keeps its identity.
-
-A few things do carry over, because they ask nothing of what the value
-means:
-
-- Equality. `==` and `<>` work when the base has them: a scalar, an atom
-  set, a pointer or a function value. A descriptor compares without taking
-  its number out.
-- Ordering, when the base is a scalar: `<`, `<=`, `>` and `>=` order as
-  the base does.
-- Flags, when the base is an unsigned integer: `&`, `^`, `|` and `~` give
-  the same distinct type, and `&=`, `^=` and `|=` update in place, so a set
-  of flags stays one.
-- The zero image. A record holding a distinct value may be `zeroed`
-  ([0540]), though `zeroed` written for the distinct type itself does not
-  construct it.
-
-```landin
-farther: (a: meter, b: meter) -> (yes: bool) =
-    yes = a > b
-end farther
-```
-
-Arithmetic and shifts stay with the base. A distinct value meets its base or
-any other type only through a conversion, and that includes comparing with
-it. A wrapped reference keeps its origin. The full rule is `spec.md` (D213).
-
-### [0660] Range subtypes
-
-A range subtype is an integer type limited to a run of its values. It is
-checked when a value goes in.
-
-```landin
-percent: type = u8 range 0..100
-```
-
-The check happens at a binding, a parameter, a named return and a
-conversion. A value outside the range is refused when the compiler knows
-it, and traps otherwise. Arithmetic on a `percent`
-gives a plain `u8`; the range is not part of the result.
-
-A range subtype is not allowed as a struct field, an array element, a
-pointer or slice target, a generic argument, or something `addr` can point
-at. In each of those, a write through the base type could reach the storage
-unchecked. To keep a checked value in storage, wrap it: a `distinct` type
-that only a checking function constructs carries the proof ([1730]).
-
-A guard on an ordinary integer does not make it a `percent`. If you reject
-bad input with a `fail` guard and then store the integer as `percent`, that
-store still has its trapping check. Once the value is in a `percent` place,
-passing it to another `percent` place needs no second check. The rules are
-`spec.md` (D188, D236).
-
-### [0670] Structs
-
-A struct is written either as a block or inline in parentheses. The two
-mean the same thing, and the inline form is also how parameter lists,
-return lists and payloads are written.
-
-```landin
-size2: type = (w: u32, h: u32)
-```
-
-A struct is nominal in either form: two separately declared structs with
-the same fields are different types. An alias keeps the original identity.
-
-Either form may take type and fixed parameters, and `layout` ([0750])
-applies to either. The parameters are compile-time names: they add no
-field and no hidden runtime argument. How instances are identified is in
-[0710].
-
-### [0680] Structs with a variant part
-
-A struct may end in a variant part: one of several cases, each with its
-own fields. The fields every case shares need no ceremony.
-
-```landin
-figure: type = struct
-    label: utf8
-    area: f32
-    kind: variant
-        circle: (radius: f32) |
-        rectangle: (width: f32, height: f32)
-    end kind
-end figure
-```
-
-### [0690] Cases with no payload
-
-A case with no fields is written bare. It is an atom, and [1700] holds
-wherever atoms appear, so a variant reads as the union it is.
-
-```landin
-node_kind: type = struct
-    kind: variant
-        leaf |
-        branch: (first: node_id, count: u32)
-    end kind
-end node_kind
-```
-
-You write a case where its variant part is the context: when you construct
-into that part, and when you name an arm of a match on it. A case is not a
-value apart from its part, and the part is not a value apart from its
-struct: copy the struct, or match it (D241).
-
-Selecting a bare case writes only its tag. Selecting a case with fields
-zeros that case's fields first, then writes the ones you gave. The bytes of
-the inactive cases and the padding are unspecified afterwards, though
-`zeroed` still writes the whole struct as zeros. Selecting a case therefore
-costs the size of that case, not the size of the largest one (D76).
-
-### [0700] Constructing values and converting them
-
-Construction and conversion look the same: a type applied to arguments.
-
-```landin
-origin := point(x: 0.0, y: 0.0)
-metres := meter(1.5)
-```
-
-A variant case is built the same way, with the case name applied to its
-fields. The tour has shown variants being matched; this is how you make
-one.
-
-```landin
-mut f: figure = (label: "disc", area: 0.0, kind: circle(radius: 2.0))
-f.kind = rectangle(width: 3.0, height: 4.0)
-```
-
-### [0710] Struct literals take their type from context
-
-A struct literal has no type of its own, like a number literal. It takes
-the type its context wants, named or anonymous.
-
-```landin
-here: point = (x: 1.0, y: 2.0)
-pair: (quot: i32, rem: i32) = divide(10, 3)
--- named: point_pair = divide(10, 3)     -- no, that is named
-```
-
-What does not convert is a value that already has an anonymous struct type,
-such as a return list. Two anonymous types match when their field names,
-types and order all match, but an anonymous value never becomes a named
-type of the same shape.
-
-Each fully applied instance of a parameterized struct is its own nominal
-type. It is identified by the declaration and its complete list of
-arguments, including an argument the fields do not use. Aliases of the
-arguments do not make a new type. Changing an argument does, even when the
-fields and layout come out equal. Target widths, offsets and padding are
-layout, not identity.
-
-A struct may mention itself, or another struct that mentions it back, in a
-function parameter or result: a function field is one pointer, so the
-layout stays finite. The rules are `spec.md` (D137).
-
-At module scope, a struct literal becomes a static image built by the
-compiler, not a constructor run before the entry point ([1460]). Each
-nested struct in it has to come from a matching construction, `zeroed` or
-another module image of that type; a same-shaped different struct does not
-do. Module images may refer forward and through aliases, but a chain that
-returns to itself has no value. Widths, offsets and padding follow the
-selected target's layout ([0750]). The rules are `spec.md` (D60, D61,
-D81).
-
-### [0720] Filling the remaining fields with `of`
-
-`of` at the end of a struct literal fills every field the literal did not
-name. It is the same word in the same place as in array literals ([0560]).
-
-```landin
-cfg: control = (enable: true, mode: external, of zeroed)
-```
-
-The fill has to typecheck for each field it fills: `of false` works where
-the rest are `bool`, and `of zeroed` wherever the rest have a zero image.
-A fill other than `zeroed` needs at least one omitted field, and all of the
-omitted fields must have exactly the same type, array length and reference
-permission included. It is evaluated once, after the named values, and
-copied into each remaining field in declaration order. The details are in
-`spec.md` (D214).
-
-This is not a default value: declarations have none ([0980]), because a new
-parameter would then fit every existing call silently. Here whoever writes
-the literal makes the choice. The trade is theirs too: a literal with `of`
-picks up a field added later without a word, and one without it breaks
-loudly.
-
-### [0730] Register images: flags, selections and sets
-
-A hardware register mixes kinds of field, and confusing them is the classic
-driver bug. Landin describes a register as a packed struct whose fields sit
-at bit positions you write down.
-
-| kind | what it is | how you write it |
-|---|---|---|
-| flag | one bit | `bool` |
-| selection | one of several named values, encoded as the datasheet says | a union of atoms with encodings |
-| set | several independent flags at once | a packed struct of `bool` |
-| number | a plain number | an unsigned field such as `u12` |
-
-A set earns its place when its members mean something. A numbered bank of
-lines does not: sixteen output pins are `[16]bool` at `0..15`, not sixteen
-invented atoms.
-
-```landin
-irq_rx: atom
-irq_tx: atom
-irq_err: atom
-
-internal: atom
-external: atom
-pll: atom
-```
-
-A selection is a union that gives each atom its encoding. The encoding
-belongs to the union, not to the atom, so the same atom may be encoded
-differently in another register. The width is the smallest that holds the
-largest encoding, so you usually leave it out; write a base type only when
-the datasheet gives the field more room than it needs.
-
-```landin
-polarity: type = (active_low = 0 | active_high = 1) -- one bit
-clock_mode: type = (internal = 0 | external = 1 | pll = 4)
-divider_sel: type = u4 (by_1 = 0 | by_2 = 1) -- four bits, as given
-```
-
-A set is not a type of its own. It is a packed struct of `bool`, one field
-per member, each at the bit its member's encoding names. Membership is a
-field read, adding or removing a member is a field write, and building one
-is an ordinary struct literal with `of` ([0720]). There is no set literal,
-set operator or membership operator, because a struct needs none. Inside a
-larger image the same fields sit at the image's bits, offset by where the
-set begins.
-
-```landin
-irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)
-
-irq_set: type = layout(packed, u32) struct
-    irq_rx: bool at 0
-    irq_tx: bool at 1
-    irq_err: bool at 2
-end irq_set
-
-control: type = layout(packed) struct
-    enable: bool at 0
-    mode: clock_mode at 4..6
-    irq_rx: bool at 8 -- irq's encodings, from bit 8
-    irq_tx: bool at 9
-    irq_err: bool at 10
-    divider: u12 at 16..27
-end control
-```
-
-Bit positions are written, never implied by field order. In a packed struct
-every field carries a position, or none does. Any bit no field claims is
-reserved: you cannot name it, no completion list offers it, and a
-read-modify-write leaves it untouched.
-Because positions do not depend on order, reordering the fields of a
-published register is not a hidden breaking change.
-
-A generator reading a vendor's SVD file writes these fields out as it
-writes every other register declaration ([1540]); the checked-in vendor
-device fixtures are its output. General SVD generation belongs to the
-companion tool, and the language has no `set(X)` type former to do it
-instead (D238).
-
-A field may be an array, which is how a real peripheral packs sixteen
-two-bit pin settings into one word. The element width times the count must
-equal the range, and element zero takes the low bits.
-
-```landin
-moder: type = layout(packed) struct
-    pins: [16]pin_mode at 0..31
-end moder
-```
-
-Indexing such a field with a run-time value is ordinary code: a shift by a
-computed amount, with a bounds check that stays even in `unchecked`. Do it
-on an image in memory, never straight on the device; [0740] says why.
-
-```landin
-set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
-    m.pins[n] = mode
-end set_pin
-```
-
-A packed struct is a raw image, and every bit pattern is a valid image.
-Copying, passing and returning it keep all its bits. Reading an encoded
-field checks that the bits name a member and traps if they do not, so a
-`match` on the result can be exhaustive. Writing a field leaves every other
-bit alone, and a fresh literal starts from zero. A packed field has no
-address of its own: to update one, pass the whole image.
-
-`layout(packed, u32)` keeps a 32-bit carrier even when the highest position
-would fit a smaller one. Field widths run from `u1` to `u64` inside packed
-structs only; they add no arbitrary-width arithmetic or calling
-convention. The full rules are `spec.md` (D228).
-
-### [0740] Reading and writing a device register
-
-A device register is read and written by two operations, and how the
-register behaves is data you pass them, not a keyword:
-
-- `compiler.register_read(pointer, read_mode)`
-- `compiler.register_write(pointer, image, write_mode, reserved_policy,
-  named_mask)`
-
-The pointer is an ordinary one to `u8`, `u16`, `u32` or `u64`, and its
-width is the one transaction the device sees. Modes and policies are atoms,
-so a generator can describe write-one-to-clear, clear-on-read and whatever
-the next vendor invents without the language growing a word for each.
-
-```landin
-status_raw: (base: usize) -> (raw: u32) =
-    port: ptr u32 = ptr(base + 0x04)
-    raw = compiler.register_read(port, compiler.normal_read)
-end status_raw
-
-clear_events: (base: usize, events: u32) -> none =
-    port: ptr mut u32 = ptr(base + 0x08)
-    compiler.register_write(port, events, compiler.one_clears,
-                            compiler.write_zero, 0x0000_0007)
-end clear_events
-```
-
-You cannot write a single field of a device register. Read the whole image,
-change it locally, write it back whole: that is the shape of every driver.
-
-| argument | values |
-|---|---|
-| read mode | `compiler.normal_read`, `compiler.clear_on_read` |
-| write mode | `compiler.normal_write`, `compiler.one_clears` |
-| reserved policy | `compiler.preserve`, `compiler.write_zero`, `compiler.write_one` |
-
-A register that cannot be read has no read to perform, so
-`compiler.no_read` is an error rather than a mode, and so is
-`compiler.no_write`.
-
-A generator writes one small typed function per register over these two
-operations, with the image's decode and encode beside it.
-
-```landin
-reset_flags: (base: usize) -> none =
-    port: ptr mut u32 = ptr(base)
-    image: control = (enable: true, mode: external, irq_rx: true, of zeroed)
-    compiler.register_write(port, control_encode(image),
-                            compiler.normal_write, compiler.write_zero,
-                            control_named_mask)
-end reset_flags
-
-read_modify_write: (base: usize, n: u32) -> none =
-    port: ptr mut u32 = ptr(base)
-    mut image := control_decode(compiler.register_read(port,
-                                                       compiler.normal_read))
-    image.divider = n
-    compiler.register_write(port, control_encode(image),
-                            compiler.normal_write, compiler.preserve,
-                            control_named_mask)
-end read_modify_write
-```
-
-A fresh local literal knows nothing of what the hardware holds. To keep
-reserved bits as the device has them, read the image first, as
-`read_modify_write` does; `compiler.preserve` never reads behind your back.
-That read, change and write is not atomic. It also assumes normal reads and
-writes: it does not carry over to clear-on-read or one-clears registers.
-
-A register's reset value initializes nothing. It is what the datasheet says
-the register holds after a reset, generated as a constant so that tools and
-readers know where they start. The hardware puts it there, not the program.
-
-The operation, not the pointer's type, makes an access a device
-transaction: there is no `volatile ptr` and no `register(t, ...)` wrapper
-type (D238). Every mode and policy is in `spec.md` (D228).
-
-### [0750] Field order and layout
-
-Fields stay in the order you wrote them, with natural alignment and padding
-in between. A hexdump matches the source, and the layout does not shift
-under a new compiler or an optimization flag.
-
-```landin
-packet: type = layout(c) struct
-    kind: u8
-    length: u16 -- big-endian as the wire sent it
-    id: u32
-end packet
-
-from_big_u16: (wire: u16) -> (value: u16) =
-    value = (wire << 8) | (wire >> 8) -- on a little-endian target
-end from_big_u16
-```
-
-Other layouts are asked for by name:
-
-| layout | what it does |
-|---|---|
-| no `layout` | source order, natural alignment |
-| `layout(optimal)` | sorts fields by descending alignment, but only if that makes the struct strictly smaller |
-| `layout(c)` | the selected target's C rules ([1975]) |
-| `layout(c, packed)` | C's byte-packed record: every field at alignment one, no padding |
-| `layout(packed)` | a register image of bits ([0730]) |
-
-`layout(optimal)` keeps source order when sorting saves nothing, and moves
-nested structs, arrays and variant parts whole (D210). It never makes a
-struct fit for C.
-
-`layout(c)` does not choose a function's calling convention. A C record
-holds native-endian scalars, fixed arrays, nested nonempty C structs and
-callback fields declared with C's convention. The fields of a
-`layout(c, packed)` record are read and written by copy and have no address
-of their own (D410), and C takes such a record through a pointer (D414). A
-C record's last field may be `[0]T`, C's flexible array member, whose
-elements follow the record in memory (D413).
-
-Byte order is not a property of a field. A field holds the target's own
-order, which `compiler.byte_order` names ([1560]). When your program reads
-or writes another order, it converts where the bytes cross, with shifts
-([0320]) or an ordinary function, so the cost is visible where it is paid,
-as in `from_big_u16` above (D239).
-
-Every byte count comes from the selected target, 32-bit targets included.
-Initializers still run in the order you wrote them ([0410]).
-
-### [0760] Attributes
-
-Attributes are prefix words from a closed set. Their arguments are always
-in parentheses. Where an argument is one of a fixed set of values it is an
-atom; a linker name is a string.
-
-```text
-mut public layout(c|optimal|packed)
-```
-
-```text
-escaping caller fixed option
-link(section: "...", symbol: "...", align: 16, vector: 16, keep)
-extern(c|interrupt|naked|...)
-```
-
-| word | where it is described |
-|---|---|
-| `mut` | [0060] |
-| `public` | [0090] |
-| `layout` | [0730], [0750] |
-| `escaping` | [0780] |
-| `caller` | [1040] |
-| `fixed` | [1490]; `option` implies it ([1530]) |
-| `link` | [1640] |
-| `extern` | [1570] |
-
-`at` gives a field its bit position ([0730]). `at`, `of` and `align` are
-contextual: a field or an entry may still be called one of them, because
-nothing reads the word as an attribute there. Placement alignment is
-`link`'s `align` label ([1640]), not a word of its own. `from` and `with`
-are reserved and cannot name anything.
-
-There is no `volatile`: a device access is an operation ([0740]). There is
-no `big` or `little`: byte order is converted where bytes cross ([0750]).
-There is no `inline` or `noinline`: inlining is the optimizer's decision
-([1310]). And there is no `weak`: a whole program links one definition per
-name, and the compiler-owned vector image does what weak default handlers
-do in C ([1640]). `spec.md` records the withdrawals (D238, D239).
 
 ## MODULES
 
@@ -2977,7 +2825,7 @@ anywhere that outlives the routine, is an error.
 
 ```landin
 bad: () -> (p: ptr u32) =
-    x := 42
+    x: u32 = 42
     p = addr x -- error: a frame origin escapes
 end bad
 ```
@@ -3791,8 +3639,8 @@ table of entries for that type.
 
 The pair is an ordinary copyable value. It can sit in a variable, a field
 or a slice. What it points at is never copied, because its size is
-unknown, so the pointee has to live somewhere the pair outlives, typically
-an arena ([0820]).
+unknown, so the pointee must stay alive as long as any copy of the pair
+can use it. An arena ([0820]) is the usual place for it.
 
 The pair needs no permission of its own: the concept's entries carry it.
 An entry declared with `self: ptr mut t` can only be satisfied by a
@@ -4548,6 +4396,194 @@ Where things go:
 Calling convention, symbol name, placement and retention are four
 independent choices; none implies another.
 
+### [0730] Register images: flags, selections and sets
+
+A hardware register mixes kinds of field, and confusing them is the classic
+driver bug. Landin describes a register as a packed struct whose fields sit
+at bit positions you write down.
+
+| kind | what it is | how you write it |
+|---|---|---|
+| flag | one bit | `bool` |
+| selection | one of several named values, encoded as the datasheet says | a union of atoms with encodings |
+| set | several independent flags at once | a packed struct of `bool` |
+| number | a plain number | an unsigned field such as `u12` |
+
+A set earns its place when its members mean something. A numbered bank of
+lines does not: sixteen output pins are `[16]bool` at `0..15`, not sixteen
+invented atoms.
+
+```landin
+irq_rx: atom
+irq_tx: atom
+irq_err: atom
+
+internal: atom
+external: atom
+pll: atom
+```
+
+A selection is a union that gives each atom its encoding. The encoding
+belongs to the union, not to the atom, so the same atom may be encoded
+differently in another register. The width is the smallest that holds the
+largest encoding, so you usually leave it out; write a base type only when
+the datasheet gives the field more room than it needs.
+
+```landin
+polarity: type = (active_low = 0 | active_high = 1) -- one bit
+clock_mode: type = (internal = 0 | external = 1 | pll = 4)
+divider_sel: type = u4 (by_1 = 0 | by_2 = 1) -- four bits, as given
+```
+
+A set is not a type of its own. It is a packed struct of `bool`, one field
+per member, each at the bit its member's encoding names. Membership is a
+field read, adding or removing a member is a field write, and building one
+is an ordinary struct literal with `of` ([0720]). There is no set literal,
+set operator or membership operator, because a struct needs none. Inside a
+larger image the same fields sit at the image's bits, offset by where the
+set begins.
+
+```landin
+irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)
+
+irq_set: type = layout(packed, u32) struct
+    irq_rx: bool at 0
+    irq_tx: bool at 1
+    irq_err: bool at 2
+end irq_set
+
+control: type = layout(packed) struct
+    enable: bool at 0
+    mode: clock_mode at 4..6
+    irq_rx: bool at 8 -- irq's encodings, from bit 8
+    irq_tx: bool at 9
+    irq_err: bool at 10
+    divider: u12 at 16..27
+end control
+```
+
+Bit positions are written, never implied by field order. In a packed struct
+every field carries a position, or none does. Any bit no field claims is
+reserved: you cannot name it, no completion list offers it, and a
+read-modify-write leaves it untouched.
+Because positions do not depend on order, reordering the fields of a
+published register is not a hidden breaking change.
+
+A generator reading a vendor's SVD file writes these fields out as it
+writes every other register declaration ([1540]); the checked-in vendor
+device fixtures are its output. General SVD generation belongs to the
+companion tool, and the language has no `set(X)` type former to do it
+instead (D238).
+
+A field may be an array, which is how a real peripheral packs sixteen
+two-bit pin settings into one word. The element width times the count must
+equal the range, and element zero takes the low bits.
+
+```landin
+moder: type = layout(packed) struct
+    pins: [16]pin_mode at 0..31
+end moder
+```
+
+Indexing such a field with a run-time value is ordinary code: a shift by a
+computed amount, with a bounds check that stays even in `unchecked`. Do it
+on an image in memory, never straight on the device; [0740] says why.
+
+```landin
+set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
+    m.pins[n] = mode
+end set_pin
+```
+
+A packed struct is a raw image, and every bit pattern is a valid image.
+Copying, passing and returning it keep all its bits. Reading an encoded
+field checks that the bits name a member and traps if they do not, so a
+`match` on the result can be exhaustive. Writing a field leaves every other
+bit alone, and a fresh literal starts from zero. A packed field has no
+address of its own: to update one, pass the whole image.
+
+`layout(packed, u32)` keeps a 32-bit carrier even when the highest position
+would fit a smaller one. Field widths run from `u1` to `u64` inside packed
+structs only; they add no arbitrary-width arithmetic or calling
+convention. The full rules are `spec.md` (D228).
+
+### [0740] Reading and writing a device register
+
+A device register is read and written by two operations, and how the
+register behaves is data you pass them, not a keyword:
+
+- `compiler.register_read(pointer, read_mode)`
+- `compiler.register_write(pointer, image, write_mode, reserved_policy,
+  named_mask)`
+
+The pointer is an ordinary one to `u8`, `u16`, `u32` or `u64`, and its
+width is the one transaction the device sees. Modes and policies are atoms,
+so a generator can describe write-one-to-clear, clear-on-read and whatever
+the next vendor invents without the language growing a word for each.
+
+```landin
+status_raw: (base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(base + 0x04)
+    raw = compiler.register_read(port, compiler.normal_read)
+end status_raw
+
+clear_events: (base: usize, events: u32) -> none =
+    port: ptr mut u32 = ptr(base + 0x08)
+    compiler.register_write(port, events, compiler.one_clears,
+                            compiler.write_zero, 0x0000_0007)
+end clear_events
+```
+
+You cannot write a single field of a device register. Read the whole image,
+change it locally, write it back whole: that is the shape of every driver.
+
+| argument | values |
+|---|---|
+| read mode | `compiler.normal_read`, `compiler.clear_on_read` |
+| write mode | `compiler.normal_write`, `compiler.one_clears` |
+| reserved policy | `compiler.preserve`, `compiler.write_zero`, `compiler.write_one` |
+
+A register that cannot be read has no read to perform, so
+`compiler.no_read` is an error rather than a mode, and so is
+`compiler.no_write`.
+
+A generator writes one small typed function per register over these two
+operations, with the image's decode and encode beside it.
+
+```landin
+reset_flags: (base: usize) -> none =
+    port: ptr mut u32 = ptr(base)
+    image: control = (enable: true, mode: external, irq_rx: true, of zeroed)
+    compiler.register_write(port, control_encode(image),
+                            compiler.normal_write, compiler.write_zero,
+                            control_named_mask)
+end reset_flags
+
+read_modify_write: (base: usize, n: u32) -> none =
+    port: ptr mut u32 = ptr(base)
+    mut image := control_decode(compiler.register_read(port,
+                                                       compiler.normal_read))
+    image.divider = n
+    compiler.register_write(port, control_encode(image),
+                            compiler.normal_write, compiler.preserve,
+                            control_named_mask)
+end read_modify_write
+```
+
+A fresh local literal knows nothing of what the hardware holds. To keep
+reserved bits as the device has them, read the image first, as
+`read_modify_write` does; `compiler.preserve` never reads behind your back.
+That read, change and write is not atomic. It also assumes normal reads and
+writes: it does not carry over to clear-on-read or one-clears registers.
+
+A register's reset value initializes nothing. It is what the datasheet says
+the register holds after a reset, generated as a constant so that tools and
+readers know where they start. The hardware puts it there, not the program.
+
+The operation, not the pointer's type, makes an access a device
+transaction: there is no `volatile ptr` and no `register(t, ...)` wrapper
+type (D238). Every mode and policy is in `spec.md` (D228).
+
 ### [1650] Where a program starts
 
 A hosted program starts at `public main: () -> (code: i32)` in the entry
@@ -4923,7 +4959,49 @@ language rules: you can select, suppress or deny them by code, and a denied
 warning fails that compilation while the program stays legal Landin.
 Shadowing is never warned about (D251).
 
+### [0620] Storing a collection field by field (deferred)
+
+DEFERRED to a later version, and kept here as a design record. It touches
+aliasing, generics, slicing, `addr`, layout, debug information and the
+optimiser all at once, and no program has needed it yet. The successor
+roadmap Language evolution holds it, and a simulation that needs one field
+of a collection contiguous is what would bring it in.
+
+The idea: a collection may be stored transposed, one array per field
+instead of one array of structs. That is a property of the collection, not
+of the struct, so it is not a layout attribute.
+
+```landin
+world: type = struct
+    items: soa [4096]entity
+    count: usize
+end world
+
+advance: (inout w: world, dt: f32) -> none =
+    for i in 0..<w.count do
+        w.items[i].x += w.items[i].vx * dt
+    end for
+
+    xs: []f32 = w.items.x
+    shift_all(xs, dt)
+
+    first := w.items[0] -- a copy
+    --  p := addr w.items[0]     -- error: the fields are apart
+end advance
+```
+
+Indexing a field goes straight into that field's array, and `w.items.x` is
+that whole field as one contiguous slice, which is the point. Reading a
+whole element gathers a copy, and a whole element has no address. Only
+structs without a variant part qualify, and layout attributes do not apply,
+because there is no single element layout.
+
 ## WHAT WAS TRIED AND DROPPED
+
+This appendix is design history. You do not need it to learn or use
+Landin; it is here for anyone about to propose one of these ideas again.
+Its examples keep the spelling of their time, so some of them are not
+Landin as it is now.
 
 The revision log this replaces recorded every change across a long
 sequence of versions. Most of it was arrival. What is worth carrying
