@@ -93,7 +93,7 @@
           #  README first, and a tagged tree cannot hold the hashes of assets
           #  built from itself, so the two move in the commit that records
           #  the new hashes and never before.
-          releaseVersion = "0.2.7";
+          releaseVersion = "0.2.8";
 
           #  The triplet the pinned archive installs its driver under on
           #  each Linux system, which is the name refine asks for.
@@ -106,11 +106,11 @@
 
           releaseHashes = {
             x86_64-linux =
-              "db033535e3869862a3820d8519482760fce7d5ed203f8cfb4f629f041bcdfe70";
+              "42bda9f0c736e88699f1f737fdd129672b77f849faefa3e1d8fea095a2d9a012";
             aarch64-linux =
-              "e5ab3d2169c447b43e4ee27f3ee385913e655401608edf3d2fa6d68618c0002d";
+              "7a8fa364ea1af7b9138fafaf0151478729d8bbe43c500fc2f6cd372d3d6a9583";
             aarch64-darwin =
-              "4adaa1723ac70e88764cda56baa6b625075a130d58f25e29de36bfa1fdaac850";
+              "3212ad9239a9f8a509dae087b6ce1776a73fd6f238dedb923d618ab2d9d3928a";
           };
 
           releases = pin "LANDIN_RELEASES";
