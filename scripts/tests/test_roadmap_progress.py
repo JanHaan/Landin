@@ -57,7 +57,8 @@ HOSTED = ("Standard input, files and directories",
           "The rest of the file system", "The recurring parser frictions",
           "Closing the gap the measurements found", "Dynamic loading",
           "The newcomer's path",
-          "What the newcomer's path met", "What the register holds now")
+          "What the newcomer's path met", "What the register holds now",
+          "Documentation that teaches")
 CONCURRENCY = ("Prototype 5", "Stackful fibres", "A second Io",
                "Threads and the atomic wrapper")
 
