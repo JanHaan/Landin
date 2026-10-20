@@ -1060,6 +1060,7 @@ GUIDE_CSS = """
 
 section.landing{padding-top:4rem}
 section.landing > p.lead{max-width:42rem; color:var(--ink-soft); margin:-.2rem 0 1.4rem}
+section.landing > .program + p.lead{margin-top:2.6rem}
 /*  The pitch's asterisk, and where it sends the reader.  */
 .hero a.asterisk{text-decoration:none; color:var(--accent)}
 p.fine-print{margin:4rem 0 0; max-width:42rem; color:var(--ink-faint);
@@ -1120,7 +1121,7 @@ figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
 .route:hover strong{color:var(--accent)}
 
 /*  Every document, as rows under the sidebar's own groups.  */
-.shelf{border-top:1px solid var(--ink)}
+.shelf{border-top:1px solid var(--rule)}
 .shelf .group{display:grid; grid-template-columns:10.5rem minmax(0,1fr);
   border-bottom:1px solid var(--rule)}
 .shelf .group > h3{margin:0; padding:.8rem 1rem .8rem 0; font-family:var(--mono);
@@ -2012,6 +2013,11 @@ def write_resources(docs, extra_pages=()):
             "%s/ (%d faces)" % (fonts.OUT_DIR, len(fonts.files()))]
 
 
+def shelf_blurb(text):
+    """A document's blurb on the shelf, its backticked words set as code."""
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", esc(text))
+
+
 def shelf_count(constructs, findings, sections):
     """What a contents card says a document holds.
 
@@ -2123,8 +2129,8 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         'concept, polled through runtime dispatch. The poll is generic over '
         'its allocator, which the caller lends as an arena over a stack '
         'buffer; each failure is declared in a signature and either skipped '
-        'or passed on at the call. This is the whole file, as the Linux gate '
-        'compiles and runs it.</p>'
+        'or passed on at the call. This is the whole file; it compiles and '
+        'runs as shown.</p>'
         '<div class="program">'
         '<figure class="panel">'
         f'<figcaption><span class="dot"></span><span class="path">{esc(path)}</span>'
@@ -2137,8 +2143,8 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         '<aside class="uses" aria-label="Constructs the program uses">'
         '<span class="label">what it uses</span>'
         f'<ul>{used}</ul>'
-        '<p>The source above is what refine accepts today. The '
-        '<a href="tour.html">tour</a> teaches the whole designed language.'
+        '<p>Both programs compile with today\'s refine. The '
+        '<a href="tour.html">tour</a> explains each construct they use.'
         '</p></aside></div></section>')
 
     #  Six ways in, because the documents answer different questions and
@@ -2149,9 +2155,9 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
          "The tour teaches it in numbered constructs, from comments to "
          "runtime dispatch. Start at the top and read down."),
         ("examples.html", "run real programs",
-         "Word count, a directory listing, a shell, a tree copy and an echo "
-         "server, then the sensors above and the classic exercises, each "
-         "printing what it computes: complete sources the gate runs."),
+         "Printing, reporting failures and the classic exercises, then "
+         "everyday tools: counting lines, a directory listing, a shell, an "
+         "echo server and a tree copy, each printing what it computes."),
         ("from-c.html", "come from C",
          "The Landin form of each C habit: strings, structs, pointers, "
          "errors and allocation, with examples the compiler accepts."),
@@ -2185,7 +2191,7 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
             rows.append(
                 f'<a class="card{retired}" href="{d["out"]}">'
                 f'<strong>{esc(d["nav"])}</strong>'
-                f'<span>{esc(d["blurb"])}</span><em>{esc(n)}</em></a>')
+                f'<span>{shelf_blurb(d["blurb"])}</span><em>{esc(n)}</em></a>')
         rows.append("</div></div>")
     body.append('<section class="landing" id="every-document">'
                 '<h2>every document</h2>'
