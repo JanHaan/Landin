@@ -3,6 +3,18 @@
 Current with specification 0.2.7. Its own findings W1-W7 are all
 resolved below.
 
+> **Not learning material.** This is a design stress test: a hosted log
+> filter with runtime dispatch, written before the compiler existed to find
+> where the specification was silent, ambiguous or wrong. It is not a
+> program you can compile: it leaves bodies out with `...` and may use
+> constructs the compiler does not enable yet. Its findings at the end, with
+> the wording that turned out wrong kept beside each resolution, are the
+> point. It is kept in step with the specification so the findings stay
+> true. The program that actually runs is
+> [`examples/derived_hosted/`](examples/derived_hosted/), with its fixture
+> `runtime/derived-hosted-memory`. To learn Landin, read [the
+> tour](tour.md).
+
 A log filter: read a file, run every line through a chain of filters
 picked on the command line, hand what survives to a destination picked
 the same way, print a summary. Deliberately ordinary, because the

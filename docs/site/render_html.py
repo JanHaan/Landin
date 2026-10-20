@@ -67,22 +67,26 @@ DOCS = [
          nav="the tour", group="the specification",
          blurb="The language explained, construct by numbered construct. "
                "It teaches; the specification decides."),
-    dict(key="p1", group="the prototypes", src="prototype-1-driver.md", out="prototype-1.html", kind="document",
+    dict(key="p1", group="design stress tests", src="prototype-1-driver.md", out="prototype-1.html", kind="document",
          nav="prototype 1 — driver",
-         blurb="A driver from an ugly vendor SVD: GPIO, an interrupt-driven "
-               "DMA UART, a vector table, and not one hand-written bitmask."),
-    dict(key="p2", group="the prototypes", src="prototype-2-parser.md", out="prototype-2.html", kind="document",
+         blurb="Not learning material: a Cortex-M driver sketch, written "
+               "before the compiler to find where the specification was "
+               "silent. Its findings are the point."),
+    dict(key="p2", group="design stress tests", src="prototype-2-parser.md", out="prototype-2.html", kind="document",
          nav="prototype 2 — parser",
-         blurb="A parser that recovers, because a real one must not stop at "
-               "the first mistake."),
-    dict(key="p3", group="the prototypes", src="prototype-3-containers.md", out="prototype-3.html", kind="document",
+         blurb="Not learning material: a recovering parser sketch, written "
+               "before the compiler to find where the specification was "
+               "silent. Its findings are the point."),
+    dict(key="p3", group="design stress tests", src="prototype-3-containers.md", out="prototype-3.html", kind="document",
          nav="prototype 3 — containers",
-         blurb="A generic container library: growing array, small vector, "
-               "hash map, arena-backed tree."),
-    dict(key="p4", group="the prototypes", src="prototype-4-app.md", out="prototype-4.html", kind="document",
+         blurb="Not learning material: a generic container library sketch, "
+               "written before the compiler to find where the specification "
+               "was silent. Its findings are the point."),
+    dict(key="p4", group="design stress tests", src="prototype-4-app.md", out="prototype-4.html", kind="document",
          nav="prototype 4 — application",
-         blurb="A hosted application whose shape is decided by its command "
-               "line, so it cannot be written without runtime dispatch."),
+         blurb="Not learning material: a hosted application sketch, written "
+               "before the compiler to find where the specification was "
+               "silent. Its findings are the point."),
 ]
 
 # --------------------------------------------------------------------------
@@ -893,9 +897,9 @@ GUIDES = [
                "and is not evidence of."),
     dict(key="examples", src="examples.md", out="examples.html",
          nav="running examples", group="the language",
-         blurb="Eleven complete programs the compiler emits and the Linux "
-               "gate runs, from a sensor poll and Euclid to three Benchmark "
-               "Game correctness workloads."),
+         blurb="Complete programs to copy and run, each printing what it "
+               "computes: everyday tools, printing and failures, the classic "
+               "exercises and the Benchmark Game ports."),
     dict(key="from-c", src="docs/from-c.md", out="from-c.html",
          nav="for C programmers", group="the language",
          blurb="Each habit a C programmer brings, from `#include` to "
@@ -1526,13 +1530,13 @@ def render_guide(text, links, targets, hl):
 #  the two cannot disagree about where a document lives.
 NAV_GROUPS = [
     ("the language", ["tour", "spec", "examples", "from-c", "documents"]),
-    ("the prototypes", ["p1", "p2", "p3", "p4"]),
     ("the project", ["readme", "roadmap", "handoff"]),
     ("the compiler", ["compiler", "ir", "diagnostics", "format", "server",
                       "targets", "core", "toolchain", "editors"]),
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
                             "environments", "devices", "driver",
                             "cortex-m", "native-ci"]),
+    ("design stress tests", ["p1", "p2", "p3", "p4"]),
 ]
 RETIRED = {"native-ci"}
 

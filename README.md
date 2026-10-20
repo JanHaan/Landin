@@ -57,16 +57,31 @@ targets and the microcontrollers people buy.**
 | `docs/` | the environments that produce evidence, the agent-facing notes, and the site generator. |
 | [`bindings/`](bindings/README.md) | the C binding generator: asks an external Clang for a header's AST and writes Landin bindings, so `refine` never parses C. |
 | `highlight/` | the shared lexical scanner and installable Pygments, TextMate, tree-sitter and packages for the major editor families, from VS Code and JetBrains IDEs through Vim, Emacs and Notepad++. |
-| `prototype-1-driver.md` | a driver written from an ugly vendor SVD: GPIO, an interrupt-driven DMA UART, a vector table, and not one hand-written bitmask. |
-| `prototype-2-parser.md` | a parser that recovers, because a real one must not stop at the first mistake. |
-| `prototype-3-containers.md` | a generic container library: growing array, small vector, hash map, arena-backed tree. |
-| `prototype-4-app.md` | a hosted application whose shape is decided by its command line, so it cannot be written without runtime dispatch. |
+| `prototype-*.md` | the four design stress tests; see below. Not learning material. |
 
-The prototypes are not illustrations. They are the test suite: each was
-written to make the specification fail, each ends with the list of
-places where it did, and each keeps the wording that turned out wrong
-beside its resolution. Between them they have recorded forty-two
-findings, including several that reversed a decision.
+### The prototypes: design stress tests
+
+The four `prototype-*.md` files are not tutorials and not example
+programs. Each was written before the compiler existed, to make the
+specification fail: a program that needs a feature presses on the rules
+for it until they turn out silent, ambiguous or wrong. Each ends with its
+findings, and keeps the wording that turned out wrong beside its
+resolution. Between them they recorded forty-two findings, several of
+which reversed a decision.
+
+They are sketches: they leave bodies out with `...` and are not programs
+you can compile. They are kept in step with the specification so their
+findings stay true. What runs is derived from them:
+
+| prototype | what it presses on | what runs |
+| --- | --- | --- |
+| `prototype-1-driver.md` | a Cortex-M driver from a vendor SVD: registers, DMA, interrupts, a vector table | [the derived driver](compiler/tests/driver/DERIVATION.md) |
+| `prototype-2-parser.md` | a parser that recovers from errors rather than stopping at the first | `examples/config_parser/` |
+| `prototype-3-containers.md` | generic containers, allocators, escape rules | the `core` containers and `examples/derived_containers/` |
+| `prototype-4-app.md` | a hosted application chosen by its command line: runtime dispatch | `examples/derived_hosted/` |
+
+To learn the language, read [the tour](tour.md) and
+[the examples](examples.md) instead.
 
 ## Reading it online
 

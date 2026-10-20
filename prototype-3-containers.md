@@ -3,6 +3,18 @@
 Current with specification 0.2.7. Its own findings Z1-Z19 are all
 resolved below.
 
+> **Not learning material.** This is a design stress test: a generic
+> container library, written before the compiler existed to find where the
+> specification was silent, ambiguous or wrong. It is not a program you can
+> compile: it leaves bodies out with `...` and may use constructs the
+> compiler does not enable yet. Its findings at the end, with the wording
+> that turned out wrong kept beside each resolution, are the point. It is
+> kept in step with the specification so the findings stay true. What
+> actually runs is the standard library's own `core` containers and
+> [`examples/derived_containers/`](examples/derived_containers/), with its
+> fixture `runtime/derived-containers`. To learn Landin, read [the
+> tour](tour.md).
+
 This one was chosen because it presses on five things at once:
 parameterised types, concepts, allocator threading, escape rules and
 specialisation. A driver never instantiates anything and a parser

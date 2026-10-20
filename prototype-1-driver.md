@@ -7,6 +7,17 @@ test: every line is meant to follow a rule that is written down, and every
 place where the tour was silent is recorded at the end, under WHERE THE
 SPECIFICATION WAS SILENT.
 
+> **Not learning material.** This is a design stress test: a Cortex-M0
+> driver written from a vendor SVD, written before the compiler existed to
+> find where the specification was silent, ambiguous or wrong. It is not a
+> program you can compile: it leaves bodies out with `...` and may use
+> constructs the compiler does not enable yet. Its findings at the end, with
+> the wording that turned out wrong kept beside each resolution, are the
+> point. It is kept in step with the specification so the findings stay
+> true. The program that actually runs is [the derived
+> driver](compiler/tests/driver/DERIVATION.md), on the pinned Cortex-M0
+> emulator. To learn Landin, read [the tour](tour.md).
+
 The target is a Cortex-M0 class part. GPIO, a timer, and a UART that
 receives by DMA and signals completion from an interrupt handler.
 

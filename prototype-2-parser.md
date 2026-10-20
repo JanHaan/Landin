@@ -3,6 +3,17 @@
 Current with specification 0.2.7. Its own findings Y1-Y7 are resolved
 below, except Y4, which stays an open watch in the roadmap's register.
 
+> **Not learning material.** This is a design stress test: a parser that
+> recovers from its errors, written before the compiler existed to find
+> where the specification was silent, ambiguous or wrong. It is not a
+> program you can compile: it leaves bodies out with `...` and may use
+> constructs the compiler does not enable yet. Its findings at the end, with
+> the wording that turned out wrong kept beside each resolution, are the
+> point. It is kept in step with the specification so the findings stay
+> true. The program that actually runs is
+> [`examples/config_parser/`](examples/config_parser/), with its fixture
+> `runtime/derived-parser`. To learn Landin, read [the tour](tour.md).
+
 The point of this one is the word recoverable. A parser must not stop
 at the first mistake: it reports it, skips to somewhere it trusts, and
 carries on, so that one missing brace does not hide the other twelve
