@@ -664,34 +664,6 @@ CONTENTS = """
 """
 
 
-# Font swapping can move a deep source line after the browser's first hash
-# scroll. Align again after layout settles, unless the reader has interacted.
-ANCHORS = """
-(() => {
- let latest=0;
- function settle(){
-  const fragment=location.hash, attempt=++latest;
-  if(!fragment)return;
-  let cancelled=false;
-  const cancel=()=>{cancelled=true;};
-  const events=['wheel','touchstart','pointerdown','keydown'];
-  events.forEach(name=>addEventListener(name,cancel,{passive:true}));
-  const ready=document.fonts ? document.fonts.ready : Promise.resolve();
-  ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
-   events.forEach(name=>removeEventListener(name,cancel));
-   if(cancelled || latest!==attempt || location.hash!==fragment)return;
-   let id;try{id=decodeURIComponent(fragment.slice(1));}catch{return;}
-   const target=document.getElementById(id);
-   if(target)target.scrollIntoView({block:'start',behavior:'instant'});
-  })));
- }
- if(document.readyState==='loading')addEventListener('DOMContentLoaded',settle,{once:true});
- else settle();
- addEventListener('hashchange',settle);
-})();
-"""
-
-
 def value_section(table, module, source_name, reference, render, links):
     """The table: a row per name, a column per target condition."""
     out = ['<section class="api-values" id="values" data-title="Values by target">'
@@ -963,7 +935,7 @@ def write(root, destination, render):
         return ('<label for="menu" class="api-onpage" id="api-onpage">'
                 'On this page</label>\n')
 
-    for name, text in render.linked_assets(LINKED, CSS, SEARCH + ANCHORS + CONTENTS).items():
+    for name, text in render.linked_assets(LINKED, CSS, SEARCH + CONTENTS).items():
         (destination / name).write_text(text)
     body = prose(intro.replace('# Library reference', '', 1), link=resolver(''))
     body = '<section class="api-opening">\n' + body + '</section>\n'
