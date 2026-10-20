@@ -518,9 +518,11 @@ class GeneratedReference(unittest.TestCase):
         text = (self.destination / 'library-core-io.html').read_text()
         side = text[text.index('<nav class="side"'):text.index('</nav>', text.index('<nav class="side"'))]
         for _, name, members in render_html.nav_groups(render_html.DOCS + render_html.GUIDES):
+            members = [d for d in members if d['out'] != 'library.html']
             with self.subTest(group=name):
                 self.assertIn(f'{name}<span class="count">{len(members)}</span>', side)
         self.assertIn('href="tour.html"', side)
+        self.assertEqual(side.count('href="library.html"'), 1)
         self.assertNotIn('<details class="api-docs" open', side)
         group = re.search(r'<details class="api-toc-group" data-kind="function">(.*?)</details>', side, re.S)
         self.assertIsNotNone(group)
