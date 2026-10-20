@@ -129,7 +129,8 @@ see.
 ## What a page carries, and what it fetches
 
 The stylesheet, the script, the highlighting and the favicon are inlined, so
-a page still reads when it is opened from disk or mailed. Four kinds of
+a page still reads when it is opened from disk or mailed. The library's
+pages are the exception, described with the library reference below. Four kinds of
 resource sit beside the pages instead: three because they are read by
 something other than the browser showing the document, and the faces
 because of what they weigh.
@@ -226,6 +227,20 @@ API names, module paths, kinds and summaries. A declaration's own name in its
 signature is not a link to itself; every other exported name there is. With
 the index gone, a page is its shell and its declarations: the median page is
 about 80 KB.
+
+The library's pages, its module pages, `library.html` and the source
+listings, link their stylesheet and scripts rather than carry them:
+`library.css`, `library-theme.js` and `library.js`, written beside them.
+Read as text, by a fetch tool, a text browser or `curl | sed`, an inline
+page opened with 28 KB of `@font-face` rules and two scripts, then every
+module's name, before the module's first word, and its signatures, source
+lines and table cells ran together. An outside reader gave up and read the
+shipped `.ldn` sources instead. A library page now puts its content before
+its navigation, which the grid sets back in its column, and the generated
+markup puts a signature, its source line, each table row and each list
+item on a line of its own, a tab between a row's cells. The renderer's
+tables and lists do the same on every page. A library page still opens
+from disk, with its three files beside it.
 
 A module that declares the same plain values once per target, as
 `platform/linux/numbers` does for three architectures and `platform/libc`

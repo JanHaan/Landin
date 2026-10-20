@@ -404,6 +404,11 @@ border-bottom:1px solid var(--rule); vertical-align:top}
 
 SEARCH_SCRIPT = 'library-search.js'
 
+# The stylesheet and scripts every library page links rather than carries:
+# LINKED.css, LINKED-theme.js and LINKED.js.  Inline, they were the first
+# 28 KB a reader of a page as text met, before the module's first word.
+LINKED = 'library'
+
 # The index is one file beside the pages rather than a copy inside each: as
 # a copy it was 400 KB of every one of 124 pages, most of what a reader of a
 # small module downloaded. A classic script element, not fetch(), loads it,
@@ -505,17 +510,19 @@ def value_section(table, module, source_name, reference, render, links):
             render.guide_targets(render.DOCS + render.GUIDES, first.source))
             + '</td></tr>')
     out.append('</tbody></table></div></section>')
-    return ''.join(out)
+    # A line each, so the cells do not run together when read as text.
+    return '\n'.join(out) + '\n'
 
 
 def search_box():
-    return ('<div class="api-tools"><label for="api-search">Search library APIs</label>'
+    """The search field; its script is in the linked library.js."""
+    return ('<div class="api-tools">\n<label for="api-search">Search library APIs</label>\n'
             '<input type="search" id="api-search" placeholder="Name, module or purpose" '
             f'data-index="{SEARCH_SCRIPT}" '
-            'aria-controls="api-results" autocomplete="off">'
-            '<div id="api-results" class="api-results" aria-live="polite" hidden></div>'
-            '<noscript>Browse the module and item indexes below; search needs JavaScript.</noscript>'
-            f'</div><script>{SEARCH}{ANCHORS}</script>')
+            'aria-controls="api-results" autocomplete="off">\n'
+            '<div id="api-results" class="api-results" aria-live="polite" hidden></div>\n'
+            '<noscript>Browse the module and item indexes below; search needs JavaScript.</noscript>\n'
+            '</div>\n')
 
 
 def search_index(index):
@@ -560,22 +567,24 @@ def write(root, destination, render):
     def prose(text, source='docs/library.md'):
         _, hero, body, _ = render.render_guide(text, lambda ref: anchors.get(ref),
                     render.guide_targets(render.DOCS + render.GUIDES, source), render.Highlighter())
-        return '<div class="api-prose">' + (hero + body).replace(' id="top"', '') + '</div>'
+        return '<div class="api-prose">\n' + (hero + body).replace(' id="top"', '') + '</div>\n'
     def emit(filename, title, body, source, current='', description=''):
         out = render.page(title + ' — Landin', 'library reference', title, search,
                           body, nav(current), source, out=filename,
-                          description=description, extra='<style>' + CSS + '</style>',
+                          description=description, linked=LINKED,
                           source_note='API reference derived from library sources. The specification defines language rules.')
         (destination / filename).write_text(out)
         pages.append(filename)
+    for name, text in render.linked_assets(LINKED, CSS, SEARCH + ANCHORS).items():
+        (destination / name).write_text(text)
     body = prose(intro.replace('# Library reference', '', 1))
     for base in ROOTS:
-        body += f'<h2>{base}</h2><ul>'
+        body += f'<h2>{base}</h2>\n<ul>\n'
         for module in modules:
             if module.startswith(base + '/'):
                 summary = descriptions[module][0].split('\n\n')[0]
-                body += f'<li id="{module.replace("/", "-")}"><a href="{page_name(module)}"><code>{module}</code></a> — {html.escape(" ".join(summary.split()))}</li>'
-        body += '</ul>'
+                body += f'<li id="{module.replace("/", "-")}"><a href="{page_name(module)}"><code>{module}</code></a> — {html.escape(" ".join(summary.split()))}</li>\n'
+        body += '</ul>\n'
     emit('library.html', 'Library reference', body, 'docs/library.md and core, hosted, platform sources')
     for module, items in modules.items():
         overview, example_path = descriptions[module]
@@ -618,11 +627,11 @@ def write(root, destination, render):
                     spans.append(f'<a href="{target}">{marked}</a>' if target else marked)
                     at += 1
                 rows.append(''.join(spans))
-            return '<pre class="api-signature"><code>' + '\n'.join(rows) + '</code></pre>'
+            return '<pre class="api-signature"><code>' + '\n'.join(rows) + '</code></pre>\n'
         availability = ('Shared: available on every enabled target.' if module.startswith('core/')
                         else 'Hosted targets only.' if module.startswith('hosted/')
                         else 'Target scope is enforced by the module assertion below.')
-        body = '<p class="api-condition">' + availability + '</p>' + prose(overview)
+        body = '<p class="api-condition">' + availability + '</p>\n' + prose(overview)
         if module.startswith('platform/'):
             # A module declares its scope once, in one of its files; a
             # generated file or one implementing a single system need not
@@ -635,7 +644,7 @@ def write(root, destination, render):
             if not assertions:
                 raise ValueError(f'{module}: no target assertion')
             body += signature(assertions[0])
-        body += '<h2>Items</h2><ul class="api-index">'
+        body += '<h2>Items</h2>\n<ul class="api-index">\n'
         grouped = {}
         for item in items:
             grouped.setdefault(item.name, []).append(item)
@@ -647,15 +656,16 @@ def write(root, destination, render):
         for kind in kinds:
             for name, variants in grouped.items():
                 if variants[0].kind == kind and name not in tabled:
-                    body += f'<li><a href="#item-{name}">{name}</a> <span class="api-kind">{kind}</span></li>'
+                    body += f'<li><a href="#item-{name}">{name}</a> <span class="api-kind">{kind}</span></li>\n'
         if table:
             body += (f'<li><a href="#values">{len(tabled)} values by target</a> '
-                     '<span class="api-kind">table</span></li>')
-        body += '</ul><details id="example"><summary>Executable example</summary><p>This complete program is maintained in the repository runtime tests. '
-        body += f'<a href="{source_name(example_path)}#L1">View source</a>.</p>'
+                     '<span class="api-kind">table</span></li>\n')
+        body += ('</ul>\n<details id="example"><summary>Executable example</summary>\n'
+                 '<p>This complete program is maintained in the repository runtime tests. ')
+        body += f'<a href="{source_name(example_path)}#L1">View source</a>.</p>\n'
         example = (root / example_path).read_text()
         sources[example_path] = example
-        body += render.listing_of(render.render_landin(example.splitlines(), render.Highlighter())) + '</details>'
+        body += render.listing_of(render.render_landin(example.splitlines(), render.Highlighter())) + '</details>\n'
         if table:
             body += value_section(table, module, source_name, reference, render,
                                   lambda ref: anchors.get(ref))
@@ -663,14 +673,14 @@ def write(root, destination, render):
             if name in tabled:
                 continue
             item = variants[0]
-            body += f'<section class="api-item" id="{item.anchor}"><h2>{name} <span class="api-kind">{item.kind}</span></h2>'
+            body += f'<section class="api-item" id="{item.anchor}">\n<h2>{name} <span class="api-kind">{item.kind}</span></h2>\n'
             for variant in variants:
                 if variant.condition:
-                    body += '<p class="api-condition">When <code>' + html.escape(variant.condition) + '</code></p>'
+                    body += '<p class="api-condition">When <code>' + html.escape(variant.condition) + '</code></p>\n'
                 body += signature(variant.signature, '#' + item.anchor)
-                body += f'<p class="api-source"><a href="{source_name(variant.source)}#L{variant.line}">{variant.source}:{variant.line}</a></p>'
+                body += f'<p class="api-source"><a href="{source_name(variant.source)}#L{variant.line}">{variant.source}:{variant.line}</a></p>\n'
                 body += prose(variant.documentation, variant.source)
-            body += '</section>'
+            body += '</section>\n'
         emit(page_name(module), module, body, module + '/*.ldn', module, overview.split('\n\n')[0])
     for path, text in sources.items():
         hl = render.Highlighter()
@@ -680,7 +690,8 @@ def write(root, destination, render):
         emit(source_name(path), path, body, path, str(Path(path).parent))
     (destination / 'library-index.json').write_text(json.dumps(index, indent=2) + '\n')
     (destination / SEARCH_SCRIPT).write_text(search_index(index))
-    verify(destination, pages, modules, render, sources)
+    verify(destination, pages, modules, render, sources,
+           {module: text for module, (text, _) in descriptions.items()})
     return pages
 
 
@@ -717,8 +728,14 @@ def verify_table(module, page, table, render):
                                  f'{sorted(missing)}')
 
 
-def verify(destination, pages, modules, render, sources=None):
-    """Check every local destination and each item's own visible content."""
+def verify(destination, pages, modules, render, sources=None, overviews=None):
+    """Check every local destination and each item's own visible content.
+
+    With `overviews`, each module's prose from docs/library.md as well:
+    every word of it must be in the page's overview, between the target
+    line and the item index, so a table row or a paragraph the renderer
+    dropped is caught here rather than by a reader.
+    """
     from collections import Counter
     from html.parser import HTMLParser
     from urllib.parse import unquote, urlsplit
@@ -769,6 +786,10 @@ def verify(destination, pages, modules, render, sources=None):
                 self.ids.add(attrs['id'])
             if tag == 'a' and 'href' in attrs:
                 self.links.append(attrs['href'])
+            if tag == 'link' and attrs.get('rel') == 'stylesheet':
+                self.links.append(attrs['href'])
+            if tag == 'script' and 'src' in attrs:
+                self.links.append(attrs['src'])
             if tag == 'input' and 'data-index' in attrs:
                 # The search index the page loads is a local link too.
                 self.links.append(attrs['data-index'])
@@ -836,6 +857,16 @@ def verify(destination, pages, modules, render, sources=None):
                     parsed[target_name] = other
                 if unquote(url.fragment) not in other.ids:
                     raise ValueError(f'{name}: missing link anchor {href}')
+    for module, text in (overviews or {}).items():
+        written = (destination / page_name(module)).read_text()
+        start = written.index('<p class="api-condition">')
+        region = written[start:written.index('<h2>Items</h2>', start)]
+        got = Counter(render.WORD.findall(html.unescape(re.sub(r'<[^>]+>', ' ', region))))
+        want = Counter(render.WORD.findall(
+            re.sub(r'\]\([^)]+\)', ']', text.replace('\\|', '|'))))
+        missing = want - got
+        if missing:
+            raise ValueError(f'{module}: overview lost words: {sorted(missing)}')
     for module, items in modules.items():
         page = parsed[page_name(module)]
         grouped = {}

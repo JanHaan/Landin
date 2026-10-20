@@ -1227,11 +1227,15 @@ def cells(line):
 
 
 def guide_table(rows, links, targets):
+    """A table whose source puts a row on a line and a tab between cells,
+    which the browser ignores and a reader of the page as text needs: run
+    together, "Concept", "What it gives" and "Part of world" read as one
+    word."""
     head = cells(rows[0])
     out = ['<div class="scroller">', "<table>", "<thead><tr>"]
-    for cell in head:
-        out.append(f'<th scope="col">{inline(cell, links, targets)}</th>')
-    out.append("</tr></thead><tbody>")
+    out.append("\t".join(f'<th scope="col">{inline(cell, links, targets)}</th>'
+                          for cell in head))
+    out.append("</tr></thead>\n<tbody>")
     for row in rows[2:]:
         got = cells(row)
         if len(got) != len(head):
@@ -1241,11 +1245,11 @@ def guide_table(rows, links, targets):
             raise SystemExit(
                 "render_html: a table row has %d cells and its header %d:\n  %s"
                 % (len(got), len(head), row.strip()))
-        out.append("<tr>")
-        for cell in got:
-            out.append(f"<td>{inline(cell, links, targets)}</td>")
+        out.append("\n<tr>")
+        out.append("\t".join(f"<td>{inline(cell, links, targets)}</td>"
+                              for cell in got))
         out.append("</tr>")
-    out.append("</tbody></table></div>")
+    out.append("\n</tbody></table></div>")
     return "".join(out)
 
 
@@ -1455,9 +1459,11 @@ def render_guide_blocks(blocks, links, targets, hl):
                     rendered.append(
                         f"<li{value}>{inline(item, links, targets)}</li>")
                     expected = marker + 1
-                out.append(f"<ol{start}>{''.join(rendered)}</ol>")
+                body = "\n".join(rendered)
+                out.append(f"<ol{start}>{body}</ol>")
             else:
-                body = "".join(
+                #  An item a line, so a list read as text is not one run.
+                body = "\n".join(
                     f"<li>{inline(item, links, targets)}</li>"
                     for _, item in items)
                 out.append(f"<ul>{body}</ul>")
@@ -1670,9 +1676,45 @@ def says_json(region, says):
             + data.replace("</", "<\\/") + "</script>")
 
 
+#  A page can link its style and scripts rather than carry them.  Read as
+#  text -- by a fetch tool, a screen reader's text mode or `curl | sed` --
+#  an inline page opens with 28 KB of @font-face rules and two scripts, and
+#  a library page then lists every module's name before the module.  A
+#  linked page names its files in the head, loads the theme from a file
+#  where the inline script stood, so the box is still set before the first
+#  paint, and puts its content before its navigation; the grid puts the
+#  navigation back in its column.
+LINKED_CSS = """
+.wrap > nav.side{grid-column:1; grid-row:1}
+.wrap > main{grid-column:2; grid-row:1}
+@media (max-width:60rem){ .wrap > main{grid-column:1} }
+"""
+
+
+def linked_assets(prefix, css="", js=""):
+    """The files the pages linked under `prefix` load: {name: text}."""
+    return {prefix + ".css": FONT_CSS + CSS + GUIDE_CSS + LINKED_CSS + css,
+            prefix + "-theme.js": THEME_JS + "\n",
+            prefix + ".js": js + JS}
+
+
 def page(title, kind, heading, hero, body, nav, docname, logo=False,
          out="index.html", description="", extra="", says=None,
-         source_note="The text file is the specification; this page is a reading of it."):
+         source_note="The text file is the specification; this page is a reading of it.",
+         linked=None):
+    if linked:
+        style = f'<link rel="stylesheet" href="{linked}.css">'
+        theme = f'<script src="{linked}-theme.js"></script>'
+        script = f'<script src="{linked}.js"></script>'
+    else:
+        style = f"<style>{FONT_CSS}{CSS}{GUIDE_CSS}</style>"
+        theme = f"<script>{THEME_JS}</script>"
+        script = f"<script>{JS}</script>"
+    side = f"""<nav class="side" id="side" aria-label="documents and sections">
+{nav}
+</nav>
+"""
+    lead, trail = ("", side) if linked else (side, "")
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1683,7 +1725,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 {social(title, description, out)}
 {extra}
 {ICON_LINKS}
-<style>{FONT_CSS}{CSS}{GUIDE_CSS}</style>
+{style}
 </head>
 <body>
 {icons.symbols()}
@@ -1698,14 +1740,11 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
          aria-label="documents and sections" aria-controls="side">
   <label for="menu">{icons.use("menu")}<span>menu</span></label>
   <input class="theme-x" id="theme" type="checkbox">
-  <script>{THEME_JS}</script>
+  {theme}
   <label for="theme">{icons.use("moon", "i light-only")}{icons.use("sun", "i dark-only")}<span>theme</span></label>
 </header>
 <div class="wrap">
-<nav class="side" id="side" aria-label="documents and sections">
-{nav}
-</nav>
-<main id="document">
+{lead}<main id="document">
 <div class="hero{' wide' if logo else ''}" id="{slug(heading)}">
   {landin_icon.inline("light", classes="logo") if logo else ''}
   <h1>{esc(heading)}</h1>
@@ -1713,7 +1752,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 </div>
 {body}
 </main>
-<footer>
+{trail}<footer>
 Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
 {esc(source_note)}
 The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>;
@@ -1725,7 +1764,7 @@ Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
 </div>
 <div id="pop"></div>
 {says_json(hero + body, says or {})}
-<script>{JS}</script>
+{script}
 </body>
 </html>
 """
@@ -2564,7 +2603,7 @@ def main(argv):
             render_guide=render_guide, guide_targets=guide_targets,
             inline=inline,
             Highlighter=Highlighter, listing_of=listing_of,
-            render_landin=render_landin))
+            render_landin=render_landin, linked_assets=linked_assets))
         print(f"{SITE.name}/library.html  {len(library_pages)} reference and source pages")
         for name in write_resources(DOCS + GUIDES, library_pages):
             print(f"{SITE.name}/{name}")

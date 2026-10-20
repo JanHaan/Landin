@@ -371,6 +371,26 @@ class GeneratedReference(unittest.TestCase):
         self.assertLess(max((self.destination / n).stat().st_size
                             for n in self.pages), 1024 * 1024)
 
+    def test_a_page_read_as_text_reads_in_order(self):
+        """An outside reader fetched a module page as text and met 28 KB of
+        style and script, then every module's name, before the module; its
+        signatures, source lines and table cells then ran together."""
+        import html
+        text = (self.destination / 'library-core-io.html').read_text()
+        self.assertNotIn('<style', text)
+        self.assertIsNone(re.search(r'<script(?![^>]*\b(?:src|type)=)[^>]*>', text))
+        for name in ('library.css', 'library-theme.js', 'library.js'):
+            self.assertTrue((self.destination / name).is_file(), name)
+        read = html.unescape(re.sub(r'<[^>]*>', '', text))
+        summary = read.index('Reader, writer, file and process capabilities')
+        self.assertLess(summary, 2048)
+        self.assertLess(summary, read.index('platform/linux/numbers'))
+        # A signature, its source line and its documentation are lines of
+        # their own, as are a table's rows and a list's items.
+        self.assertNotRegex(read, r'\)core/io/\w+\.ldn:\d+')
+        self.assertNotRegex(read, r'\.ldn:\d+[^\d\s]')
+        self.assertIn('\nreader, writer\tread, write, write_some\tyes\n', read)
+
     def test_linux_numbers_are_one_row_per_name(self):
         """The page was 758 KB, every name repeated per architecture."""
         module = 'platform/linux/numbers'
