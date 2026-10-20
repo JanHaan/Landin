@@ -386,7 +386,7 @@ class GeneratedReference(unittest.TestCase):
         target = self.destination / 'library-core-vec.html'
         original = target.read_text()
         # The search index also holds the summary: remove only the visible text.
-        start = original.index('<section class="api-item" id="item-new">')
+        start = original.index('<section class="api-item" id="item-new"')
         changed = original[:start] + original[start:].replace('Create an empty list without allocating.', 'Omitted.', 1)
         self.assertNotEqual(original, changed)
         try:
