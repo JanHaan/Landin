@@ -508,7 +508,11 @@ section > h2{
   letter-spacing:-.01em; color:var(--ink); text-wrap:balance;
   display:flex; align-items:baseline; gap:.9rem;
 }
-section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
+section > h2::after{content:""; flex:1 0 2rem; height:1px; background:var(--rule);
+  align-self:center}
+/*  Prose keeps a reading measure; only listings, tables, panels and
+    figures take the wider column.  */
+section > p{max-width:42rem}
 
 /* ---- one construct ---- */
 .item{position:relative; padding:0 0 1.6rem 0;
@@ -616,6 +620,8 @@ footer .totop{float:right; margin-left:1rem}
   :root:has(#menu:checked) nav.side{display:block}
   header.bar label[for="menu"]{display:inline-flex}
   main{padding:1.75rem 1.15rem 5rem}
+  /*  A finger needs a target: at least 24px a link in the drawer.  */
+  nav.side a.doc, nav.side a.sect{padding-block:.5rem; min-height:24px}
 }
 /*  Paper is light whatever the screen was: the dark values printed pale
     ink on white.  */
@@ -1123,7 +1129,7 @@ GUIDES = [
                "computes: everyday tools, printing and failures, the classic "
                "exercises and the Benchmark Game ports."),
     dict(key="from-c", src="docs/from-c.md", out="from-c.html",
-         nav="for C programmers", group="the language",
+         nav="for C programmers", group="the language", captions=True,
          blurb="Each habit a C programmer brings, from `#include` to "
                "`exit`, in its Landin form, and the habits with no answer "
                "yet."),
@@ -1221,20 +1227,46 @@ GUIDES = [
 ]
 
 GUIDE_CSS = """
-.guide h3.sub{font:600 15px/1.4 var(--ui);color:var(--ink);margin:26px 0 10px}
+/*  An entry's heading outranks its text, as a section's outranks it.  */
+.guide h3.sub{font:650 1.15rem/1.4 var(--ui);color:var(--ink);margin:2.2rem 0 .6rem;
+  letter-spacing:-.005em}
+.item > h3.sub{margin-top:0}
+.item{margin-top:1.2rem}
 .guide p{margin:0 0 12px}
 .guide ul,.guide ol{margin:0 0 14px;padding-left:22px}
 .guide li{margin:0 0 6px}
+/*  The reading measure: prose, lists and quotes stop at 42rem.  */
+.guide p, .guide ul:not([class]), .guide ol, .guide blockquote{max-width:42rem}
 /*  A bullet is the small square the panels' captions carry, not the
-    browser's disc, which sat heavy beside the mono code it introduces.  */
-.guide ul{list-style:none;padding-left:20px}
-.guide ul > li{position:relative}
-.guide ul > li::before{content:"";position:absolute;left:-15px;top:.66em;
+    browser's disc, which sat heavy beside the mono code it introduces.
+    Only a plain list: a list with a class of its own -- what a program
+    uses, a library's columns -- draws its own rows.  */
+.guide ul:not([class]){list-style:none;padding-left:20px}
+.guide ul:not([class]) > li{position:relative}
+.guide ul:not([class]) > li::before{content:"";position:absolute;left:-15px;top:.66em;
   width:5px;height:5px;background:var(--accent)}
 .guide blockquote{margin:0 0 14px;padding:2px 0 2px 14px;
   border-left:2px solid var(--accent-soft);color:var(--ink-soft)}
 .guide blockquote p{margin:0 0 8px}
 .guide blockquote p:last-child{margin:0}
+/*  A page's banner -- "You probably do not want to read this", "Not
+    learning material" -- is the first thing it says and must not read
+    as the faintest.  */
+.guide#top > blockquote:first-child{
+  color:var(--ink); background:var(--panel-2); border:1px solid var(--rule);
+  border-left:3px solid var(--accent); padding:.85rem 1.1rem; margin-bottom:1.6rem;
+}
+/*  The fine print under an entry: the tour's "The fine print:" and its
+    list, set smaller and to one side of the teaching.  */
+.guide aside.fine{margin:.2rem 0 1rem; padding:.15rem 0 .15rem 1rem;
+  border-left:2px solid var(--rule-strong); color:var(--ink-soft);
+  font-size:.9rem; max-width:42rem}
+.guide aside.fine p.fine-head{margin:0 0 .35rem; font-weight:650; color:var(--ink-soft)}
+.guide aside.fine ul:not([class]){margin-bottom:.2rem}
+.guide aside.fine ul:not([class]) > li::before{background:var(--ink-faint)}
+.guide p.exact{font-family:var(--mono); font-size:.75rem; color:var(--ink-faint);
+  margin:.4rem 0 .9rem}
+.guide p.exact a.cite{font-size:1em}
 /*  A table with a long path in a cell cannot fit a phone, and nothing
     scrolled: it simply overflowed the page.  */
 .scroller{overflow-x:auto; margin:0 0 16px}
@@ -1247,6 +1279,48 @@ GUIDE_CSS = """
   vertical-align:top}
 .guide tr:last-child td{border-bottom:0}
 .guide td code,.guide th code{white-space:nowrap}
+@media (max-width:48rem){
+  .guide td code{white-space:normal}
+  /*  A table whose cells hold code is a list of records on a phone:
+      each row a block, each cell under its column's name.  */
+  .guide table.stack, .guide table.stack tbody, .guide table.stack tr,
+  .guide table.stack td{display:block; width:auto}
+  .guide table.stack thead{position:absolute; width:1px; height:1px;
+    overflow:hidden; clip-path:inset(50%); white-space:nowrap}
+  .guide table.stack tr{padding:.55rem 0; border-bottom:1px solid var(--rule)}
+  .guide table.stack tr:last-child{border-bottom:0}
+  .guide table.stack td{border:0; padding:.12rem 0}
+  .guide table.stack td[data-label]::before{content:attr(data-label); display:block;
+    font-family:var(--mono); font-size:.68rem; color:var(--ink-faint)}
+}
+
+/* ---- listings with a caption: the front page's panel, on every page ---- */
+.guide figure.panel{margin:.4rem 0 1.1rem; max-width:100%}
+.guide figure.panel figcaption > .source{min-width:0; overflow-wrap:anywhere; white-space:normal}
+.guide figure.panel .source code{background:none; padding:0; font-size:1em;
+  color:var(--ink-soft)}
+figure.panel figcaption .lang{color:var(--ink-soft)}
+/*  C beside Landin on the page for C programmers: the same panel, quieter,
+    so the eye goes to the Landin.  */
+figure.panel.lang-c{background:var(--panel-2); border-style:dashed}
+figure.panel.lang-c figcaption .dot{background:var(--ink-faint)}
+figure.panel.lang-c .listing pre{color:var(--ink-soft)}
+/*  What a program prints: a terminal, under the listing or on its own.  */
+figure.panel .foot.prints{font-family:var(--mono)}
+figure.panel .out pre, figure.panel.output .listing pre{
+  background:var(--term-bg); color:var(--term-ink)}
+figure.panel .out .listing, figure.panel.output{background:var(--term-bg)}
+figure.panel .out .copy, figure.panel.output .copy{background:var(--term-bg);
+  color:var(--term-ink)}
+
+/*  The way on, at the end of a long guide.  */
+nav.next{margin:3.5rem 0 0; max-width:42rem}
+nav.next a{display:block; padding:1rem 1.2rem; border:1px solid var(--rule-strong);
+  text-decoration:none; color:var(--ink-soft)}
+nav.next a:hover{border-color:var(--accent)}
+nav.next .label{display:block; margin-bottom:.25rem}
+nav.next strong{display:block; color:var(--ink); font-size:1.05rem; margin-bottom:.2rem}
+nav.next a:hover strong{color:var(--accent)}
 
 /* ---- the front page ---- */
 .hero.wide h1{font-size:clamp(2rem, 1.4rem + 2.4vw, 3rem)}
@@ -1410,6 +1484,13 @@ QUOTE = re.compile(r"^>\s?(.*)$")
 RULE_LINE = re.compile(r"^-{3,}\s*$")
 CODE_SPAN = re.compile(r"`([^`]+)`")
 BOLD = re.compile(r"\*\*([^*]+)\*\*")
+#  Single-asterisk emphasis: an opening asterisk not after a word
+#  character, text that neither starts nor ends with a space, and a
+#  closing asterisk not before one -- so `32 TB*` and `a * b` stay as
+#  written.
+EMPHASIS = re.compile(r"(?<![\w*])\*(?=[^\s*])([^*]*?[^\s*])\*(?![\w*])")
+#  What emphasis must not reach into: code, and the inside of a tag.
+CODE_OR_TAG = re.compile(r"(<code>.*?</code>|<[^>]+>)", re.S)
 MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
@@ -1453,6 +1534,10 @@ def inline(text, links, targets):
     out = MD_LINK.sub(lambda m: rewrite_link(m, targets), out)
     out = BOLD.sub(r"<strong>\1</strong>", out)
     out = CODE_SPAN.sub(r"<code>\1</code>", out)
+    #  README wrote *syntactic sugar* and the page showed the asterisks.
+    out = "".join(part if CODE_OR_TAG.fullmatch(part)
+                  else EMPHASIS.sub(r"<em>\1</em>", part)
+                  for part in CODE_OR_TAG.split(out))
     return cite_links(out, links)
 
 
@@ -1474,7 +1559,13 @@ def guide_table(rows, links, targets):
     together, "Concept", "What it gives" and "Part of world" read as one
     word."""
     head = cells(rows[0])
-    out = ['<div class="scroller">', "<table>", "<thead><tr>"]
+    #  A table whose cells hold code stacks into records on a phone, each
+    #  cell under its column's name, rather than running off the side.
+    stack = any("`" in row for row in rows[2:])
+    labels = [attr(html.unescape(TAG.sub(
+        "", inline(cell, lambda ref: None, targets)))) for cell in head]
+    out = ['<div class="scroller">',
+           '<table class="stack">' if stack else "<table>", "<thead><tr>"]
     out.append("\t".join(f'<th scope="col">{inline(cell, links, targets)}</th>'
                           for cell in head))
     out.append("</tr></thead>\n<tbody>")
@@ -1488,8 +1579,10 @@ def guide_table(rows, links, targets):
                 "render_html: a table row has %d cells and its header %d:\n  %s"
                 % (len(got), len(head), row.strip()))
         out.append("\n<tr>")
-        out.append("\t".join(f"<td>{inline(cell, links, targets)}</td>"
-                              for cell in got))
+        out.append("\t".join(
+            (f'<td data-label="{label}">' if stack and label else "<td>")
+            + f"{inline(cell, links, targets)}</td>"
+            for label, cell in zip(labels, got)))
         out.append("</tr>")
     out.append("\n</tbody></table></div>")
     return "".join(out)
@@ -1652,20 +1745,103 @@ def parse_guide(text):
     return title, lead, sections
 
 
-def render_guide_blocks(blocks, links, targets, hl):
+#  The tour's fine print: a paragraph that says only this, and the list
+#  under it.  And the line it ends an entry with, naming the paragraphs of
+#  the specification that settle it.
+FINE_HEAD = re.compile(r"^(?:The fine print|Fine print):$")
+EXACT = re.compile(r"^Exact rules: [^.]{0,80}\.?$")
+#  A running example's own line naming its fixture, which check.py and
+#  scripts/outside_user.py read in the Markdown; rendered, it captions the
+#  listing it introduces.
+FIXTURE_LINE = re.compile(r"^Fixture source: `([^`]+)`\.$")
+#  What a program prints, introduced by a short paragraph of its own.
+PRINTS_LINE = re.compile(r"^It prints\b[^.]{0,60}$")
+#  The name a fence's tag is captioned with, where a page asks for that.
+FENCE_NAMES = {"c": "C", "landin": "Landin", "ldn": "Landin"}
+
+
+def panel(caption, inner, classes="", foot=""):
+    """A listing in the front page's frame: a caption row, the code, and
+    what follows it.  One design for every captioned listing."""
+    cls = "panel" + (f" {classes}" if classes else "")
+    return (f'<figure class="{cls}"><figcaption>{caption}</figcaption>'
+            f"{inner}{foot}</figure>")
+
+
+def render_guide_blocks(blocks, links, targets, hl, captions=False):
     out = []
     open_item = False
     inside = ""
-    for kind, payload in blocks:
+
+    def code_html(payload):
+        language, body = payload
+        if language in ("ldn", "landin"):
+            return listing_of(render_landin(body, hl), inside)
+        #  A shell or text block is a listing too, and used to be built by
+        #  hand here -- which is why it was the one kind of block with no
+        #  copy button.
+        return listing(esc("\n".join(body)), inside)
+
+    def is_code(at, *languages):
+        return (at < len(blocks) and blocks[at][0] == "code"
+                and (not languages or blocks[at][1][0] in languages))
+
+    def prints_at(at):
+        """Whether `It prints` and its text block start at `at`."""
+        return (at + 1 < len(blocks) and blocks[at][0] == "para"
+                and PRINTS_LINE.match(blocks[at][1][0])
+                and is_code(at + 1, "text", ""))
+
+    def output(at):
+        said = inline(blocks[at][1][0], links, targets)
+        return said, listing(esc("\n".join(blocks[at + 1][1][1])), inside)
+
+    at = 0
+    while at < len(blocks):
+        kind, payload = blocks[at]
+        at += 1
         if kind == "para":
+            text = payload[0]
+            fixture = FIXTURE_LINE.match(text)
+            if fixture and is_code(at):
+                #  The line stays word for word; it becomes the caption of
+                #  the listing it names, with what the program prints as
+                #  the panel's terminal when the page says so next.
+                caption = ('<span class="dot"></span><span class="source">'
+                           f"{inline(text, links, targets)}</span>")
+                inner = code_html(blocks[at][1])
+                at += 1
+                foot = ""
+                if prints_at(at):
+                    said, shown = output(at)
+                    foot = (f'<div class="foot prints"><span>{said}</span></div>'
+                            f'<div class="out">{shown}</div>')
+                    at += 2
+                out.append(panel(caption, inner, foot=foot))
+                continue
+            if PRINTS_LINE.match(text) and is_code(at, "text", ""):
+                said, shown = output(at - 1)
+                out.append(panel(f"<span>{said}</span>", shown, "output"))
+                at += 1
+                continue
+            if FINE_HEAD.match(text) and at < len(blocks) \
+                    and blocks[at][0] == "list":
+                held = render_guide_blocks([blocks[at]], links, targets, hl)
+                out.append(f'<aside class="fine"><p class="fine-head">'
+                           f'{inline(text, links, targets)}</p>{held}</aside>')
+                at += 1
+                continue
+            if EXACT.match(text):
+                out.append(f'<p class="exact">{inline(text, links, targets)}</p>')
+                continue
             #  A finding opens a paragraph flush left -- "Z7  A pattern
             #  binding needs..." -- and 26 citations across the prototypes
             #  link to it.  Nothing emitted the anchor, so every one of
             #  those links went nowhere.
-            found = FINDING.match(payload[0])
+            found = FINDING.match(text)
             anchor = (f'<span class="anchor" id="{found.group(1)}"></span>'
                       if found else "")
-            out.append(f"<p>{anchor}{inline(payload[0], links, targets)}</p>")
+            out.append(f"<p>{anchor}{inline(text, links, targets)}</p>")
         elif kind == "sub":
             #  A construct heading is `[NNNN] title`, and its anchor is the
             #  id alone: 872 citations outside the documents link to
@@ -1726,14 +1902,17 @@ def render_guide_blocks(blocks, links, targets, hl):
         elif kind == "table":
             out.append(guide_table(payload, links, targets))
         elif kind == "code":
-            language, body = payload
-            if language in ("ldn", "landin"):
-                out.append(listing_of(render_landin(body, hl), inside))
+            language = payload[0]
+            name = FENCE_NAMES.get(language) if captions else None
+            if name:
+                #  C beside Landin: each says which it is, and the C is the
+                #  quieter of the two.
+                quiet = " lang-c" if language == "c" else ""
+                out.append(panel(
+                    f'<span class="dot"></span><span class="lang">{name}</span>',
+                    code_html(payload), quiet.strip()))
             else:
-                #  A shell or text block is a listing too, and used to be
-                #  built by hand here -- which is why it was the one kind
-                #  of block with no copy button.
-                out.append(listing(esc("\n".join(body)), inside))
+                out.append(code_html(payload))
         else:
             raise SystemExit(f"render_html: unknown guide block {kind!r}")
     if open_item:
@@ -1741,7 +1920,39 @@ def render_guide_blocks(blocks, links, targets, hl):
     return "\n".join(out)
 
 
-def render_guide(text, links, targets, hl):
+#  A title the source shouts -- COMMENTS, THE GRAMMAR OF THE ENABLED
+#  KERNEL -- is set in sentence case, as every other heading is written.
+#  The names in it keep their capitals.
+PROPER_WORDS = {"c": "C", "landin": "Landin"}
+
+
+def sentence_case(title):
+    if re.search(r"[a-z]", title) or not re.search(r"[A-Z]", title):
+        return title
+    words = re.split(r"(\W+)", title.lower())
+    text = "".join(PROPER_WORDS.get(word, word) for word in words)
+    text = re.sub(r"^(\W*)(\w)", lambda m: m.group(1) + m.group(2).upper(), text)
+    return re.sub(r"(:\s+)(\w)", lambda m: m.group(1) + m.group(2).upper(), text)
+
+
+def section_heading(title, links, targets):
+    """A section's <h2>, in sentence case.  The words the source spells
+    differently are kept in an attribute, so the check that every word
+    reached the page still reads the source's own spelling, as it reads
+    a rewritten link's original target."""
+    shown = sentence_case(title)
+    if shown == title:
+        return f"<h2>{inline(title, links, targets)}</h2>"
+    return (f'<h2 data-source-text="{attr(title)}">'
+            f"{inline(shown, links, targets)}</h2>")
+
+
+def plain_title(title):
+    """A title as the bar and the sidebar say it: no backticks, no shout."""
+    return sentence_case(title).replace("`", "")
+
+
+def render_guide(text, links, targets, hl, captions=False):
     title, lead, sections = parse_guide(text)
 
     #  The hero carries the opening paragraph and nothing else.  Anything
@@ -1751,13 +1962,14 @@ def render_guide(text, links, targets, hl):
     opening = lead[:1] if lead and lead[0][0] == "para" else []
     remainder = lead[len(opening):]
 
-    hero = render_guide_blocks(opening, links, targets, hl)
+    hero = render_guide_blocks(opening, links, targets, hl, captions)
     body = []
     nav_sections = []
 
     if remainder:
         body.append('<section class="guide" id="top">\n'
-                    + render_guide_blocks(remainder, links, targets, hl)
+                    + render_guide_blocks(remainder, links, targets, hl,
+                                          captions)
                     + "\n</section>")
 
     for sec in sections:
@@ -1766,9 +1978,9 @@ def render_guide(text, links, targets, hl):
         nav_sections.append((sid, sec["title"], subs))
         body.append(
             f'<section class="guide" id="{sid}" '
-            f'data-title="{attr(sec["title"])}">\n'
-            f'<h2>{inline(sec["title"], links, targets)}</h2>\n'
-            + render_guide_blocks(sec["blocks"], links, targets, hl)
+            f'data-title="{attr(plain_title(sec["title"]))}">\n'
+            f'{section_heading(sec["title"], links, targets)}\n'
+            + render_guide_blocks(sec["blocks"], links, targets, hl, captions)
             + "\n</section>")
 
     return title, hero, "\n".join(body), nav_sections
@@ -1818,7 +2030,7 @@ def nav_html(docs, current, sections):
         out = ['<div class="toc">']
         for sid, title, _ in sections:
             short = title.split("  —  ")[0]
-            label = esc(title if short in repeats else short)
+            label = esc(plain_title(title if short in repeats else short))
             out.append(f'<a class="sect" href="#{sid}">{label}</a>')
         out.append("</div>")
         return "".join(out)
@@ -1954,10 +2166,39 @@ def linked_assets(prefix, css="", js=""):
             prefix + ".js": js + JS}
 
 
+#  The Latin upright of the prose face, asked for before the stylesheet is
+#  read: a page whose text reflowed when it arrived moved a deep link's
+#  target out from under the reader.
+PRELOAD = "\n".join(
+    f'<link rel="preload" href="{fonts.OUT_DIR}/{name}" as="font" '
+    'type="font/woff2" crossorigin>' for name in fonts.preload("ui"))
+
+
+def footer_note(docname):
+    """What the footer says a page is a reading of.  It used to say "the
+    text file is the specification" on every page, the README's and the
+    IR guide's included."""
+    src = f"<code>{esc(docname)}</code>"
+    if docname == "spec.md":
+        return (f"Generated from {src}, which is the specification; this "
+                "page is a reading of it.")
+    if docname == "tour.md":
+        return (f"Generated from {src}, which explains the language; where "
+                'the two differ, <a href="spec.html">the specification</a> '
+                "decides.")
+    if docname.startswith("prototype-"):
+        return (f"Generated from {src}, a design stress test kept in step "
+                "with the specification; this page is a reading of it.")
+    if docname.endswith(".md"):
+        return (f"Generated from {src}; the file is the source and this "
+                "page is a reading of it.")
+    return (f"Generated from {esc(docname)}; each page names the file it is "
+            "a reading of.")
+
+
 def page(title, kind, heading, hero, body, nav, docname, logo=False,
          out="index.html", description="", extra="", says=None,
-         source_note="The text file is the specification; this page is a reading of it.",
-         linked=None):
+         source_note=None, linked=None):
     if linked:
         style = f'<link rel="stylesheet" href="{linked}.css">'
         theme = f'<script src="{linked}-theme.js"></script>'
@@ -1971,6 +2212,9 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 </nav>
 """
     lead, trail = ("", side) if linked else (side, "")
+    note = (footer_note(docname) if source_note is None else
+            f"Generated from <code>{esc(docname)}</code> by "
+            f"<code>render_html.py</code>. {esc(source_note)}")
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1981,6 +2225,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 {social(title, description, out)}
 {extra}
 {ICON_LINKS}
+{PRELOAD}
 {style}
 </head>
 <body>
@@ -2009,8 +2254,8 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 {body}
 </main>
 {trail}<footer>
-Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
-{esc(source_note)}
+<a class="totop" href="#">↑ top</a>
+{note}
 The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>;
 questions, bugs and ideas go to <a href="{REPO}/discussions">its discussions</a>.
 <br>Copyright &#169; 2026 Jan Haan.
@@ -2209,7 +2454,7 @@ def with_uses(body, source, titles, construct_page):
             continue
         strip = ('<aside class="uses strip" aria-label="Constructs this '
                  'program uses"><span class="label">what it uses</span>'
-                 f'<ul>{uses_list(uses)}</ul></aside>')
+                 f'<ul class="used">{uses_list(uses)}</ul></aside>')
         end = part.rindex("</section>")
         parts[at] = part[:end] + strip + part[end:]
     return "".join(parts)
@@ -2281,6 +2526,54 @@ def shelf_count(constructs, findings, sections):
         held = ""
     where = f"{sections} sections" if sections else "one page"
     return f"{held} in {where}" if held else where
+
+
+#  Where a long guide sends its reader when it ends: the tour to programs
+#  that run, the programs to the library they call, and a C programmer's
+#  page to the tour that it keeps citing.
+NEXT_DOCS = {"tour": "examples", "examples": "library", "from-c": "tour"}
+LIBRARY_CARD = dict(out="library.html", nav="the library reference",
+                    blurb="Every module's calls and signatures, with common "
+                          "tasks as one complete program and each module's "
+                          "own example.")
+
+
+def next_card(key, docs):
+    """The card at the end of a long guide naming the one to read next."""
+    then = NEXT_DOCS.get(key)
+    if not then:
+        return ""
+    found = (LIBRARY_CARD if then == "library"
+             else next(d for d in docs if d["key"] == then))
+    return (f'<nav class="next" aria-label="next document">'
+            f'<a href="{found["out"]}"><span class="label">read next</span>'
+            f'<strong>{esc(found["nav"])} →</strong>'
+            f'<span>{shelf_blurb(found["blurb"])}</span></a></nav>')
+
+
+def not_found_page(docs):
+    """What GitHub Pages serves for a path that is not there.
+
+    It is served at whatever path was asked for, so its relative links
+    are resolved from the site's root rather than from that path.
+    """
+    hero = ("<p>The address may be mistyped, or the page "
+            "may have moved when the documents were rearranged.</p>")
+    links = [("tour.html", "the tour", "learn the language from the start"),
+             ("examples.html", "running examples", "programs to copy and run"),
+             ("library.html", "the library reference", "every module's calls"),
+             ("index.html", "the front page", "everything else")]
+    cards = "".join(
+        f'<a class="route" href="{href}"><strong>{esc(name)}</strong>'
+        f'<span class="text">{esc(what)}</span></a>'
+        for href, name, what in links)
+    body = ('<section class="landing" id="somewhere-else">'
+            f'<h2>Somewhere else</h2><div class="routes">{cards}</div>'
+            '</section>')
+    return page("No page here — Landin", "not found", "No page here", hero,
+                body, nav_html(docs, "404.html", []), "the repository",
+                out="404.html", extra='<base href="/">'
+                '\n<meta name="robots" content="noindex">')
 
 
 def tab_title(title, nav):
@@ -2687,6 +2980,10 @@ def verify(src: Path, out: Path):
     # destination only in this verification copy. Do not count both paths.
     raw = re.sub(r'(<a href=")[^"]*" data-source-href="([^"]*)"',
                  r'\1\2"', raw)
+    #  A heading set in sentence case is counted in the source's spelling,
+    #  which it carries for exactly this.
+    raw = re.sub(r'<h2 data-source-text="([^"]*)">.*?</h2>',
+                 r'<h2>\1</h2>', raw, flags=re.S)
     targets = " ".join(ATTR.findall(raw))
     got = Counter(WORD.findall(page_words(raw) + " " + targets))
     lost = {w: (n, got.get(w, 0)) for w, n in want.items() if got.get(w, 0) < n}
@@ -2838,6 +3135,7 @@ def main(argv):
         title, hero, body, nav_sections = render_guide(
             text, links, guide_targets(DOCS + GUIDES, d["src"]),
             Highlighter(*symbols, links=links))
+        body += next_card(d["key"], DOCS + GUIDES)
         nav = nav_html(DOCS + GUIDES, d["out"], nav_sections)
         out = page(tab_title(title, d["nav"]), d["nav"],
                    title or d["nav"], hero, body, nav, d["src"],
@@ -2869,9 +3167,11 @@ def main(argv):
 
         title, hero, body, nav_sections = render_guide(
             text, links, guide_targets(DOCS + GUIDES, g["src"]),
-            Highlighter(*guide_symbols, links=links))
+            Highlighter(*guide_symbols, links=links),
+            captions=g.get("captions", False))
         if g["key"] == "examples":
             body = with_uses(body, source, construct_title, construct_page)
+        body += next_card(g["key"], DOCS + GUIDES)
         nav = nav_html(DOCS + GUIDES, g["out"], nav_sections)
         out = page(tab_title(title, g["nav"]), g["nav"], title or g["nav"],
                    hero, body, nav, g["src"],
@@ -2923,6 +3223,8 @@ def main(argv):
             index_page(DOCS + GUIDES, counts, intro, status, progress, program,
                        guide_symbols, says, footnote, hello, context))
         print(f"{SITE.name}/index.html")
+        (SITE / "404.html").write_text(not_found_page(DOCS + GUIDES))
+        print(f"{SITE.name}/404.html")
         library_pages = library.write(source, SITE, SimpleNamespace(
             DOCS=DOCS, GUIDES=GUIDES, WORD=WORD, page=page,
             render_guide=render_guide, guide_targets=guide_targets,
@@ -2957,6 +3259,9 @@ def main(argv):
                          for d in docs + guides])
         if front:
             structure = verify_structure(SITE / "index.html") and structure
+            #  The not-found page reads no document, so there is no word
+            #  of one to lose; its outline is still held to the others'.
+            structure = verify_structure(SITE / "404.html") and structure
             ok = verify_front(SITE / "index.html", front,
                               DOCS + GUIDES) and ok
         ok = structure and ok
