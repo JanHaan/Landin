@@ -3,10 +3,6 @@ import hosted/system
 
 public main: () -> (code: i32) =
     host := system.new()
-    io.write(host, io.out(host), "Hello from Landin\n") else (problem)
-        _ = problem
-        code = 1
-        return
-    end
+    io.write(host, io.out(host), "Hello, world!\n") else none
     code = 0
 end main

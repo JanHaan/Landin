@@ -217,11 +217,7 @@ import hosted/system
 
 public main: () -> (code: i32) =
     host := system.new()
-    io.write(host, io.out(host), "Hello from Landin\n") else (problem)
-        _ = problem
-        code = 1
-        return
-    end
+    io.write(host, io.out(host), "Hello, world!\n") else none
     code = 0
 end main
 ```
@@ -236,28 +232,37 @@ refine compile main.ldn -o hello
 It prints
 
 ```text
-Hello from Landin
+Hello, world!
 ```
 
-The compile leaves `hello` and nothing else: the assembly it links is removed
-afterwards, and `--keep-asm` keeps it as `hello.s`. On Linux it links
-through the GCC your distribution installs, `x86_64-linux-gnu-gcc` on Debian
-and Ubuntu, `x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which on NixOS
-`nix-shell -p gcc` provides; without one, `refine` says what to install.
-Only linking needs a C driver: `refine check`, `refine fmt`, `refine lsp`
-and `refine compile --emit=asm` or `--emit=ir` run without one. A check that fails, such as an index past
-the end of an array, ends the program with a line naming the file, line,
-column and kind, `main.ldn:4:12: trap: out_of_range`, before the system
-reports the trap.
+`system.new()` is the program's handle on the operating system, and
+`io.write` writes through it. Writing can fail; `else none` says that here
+it does not matter. [The tour](tour.md) starts from this program and
+explains each line.
 
-`refine` finds its standard library, `core`, `hosted` and `platform`, beside
-its own executable, so importing it needs no option; `refine version` names
-the directory it uses, and a copied `refine` that finds none says where it
-looked and names `--library=DIR`. Your own modules are found under the roots you give
-with `--root` [1480]. [`examples.md`](examples.md) has larger programs, and
-[the tour](tour.md) teaches the language.
-If you write C, [Landin for C programmers](docs/from-c.md) gives the Landin
-form of each habit you bring, and names those with no answer yet.
+What else to know:
+
+- **The compile leaves only `hello`.** The assembly it links is removed;
+  `--keep-asm` keeps it as `hello.s`.
+- **Linking needs a C driver.** On Linux that is the GCC your distribution
+  installs: `x86_64-linux-gnu-gcc` on Debian and Ubuntu,
+  `x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which `nix-shell -p gcc`
+  provides on NixOS. Without one, `refine` says what to install.
+  `refine check`, `refine fmt`, `refine lsp` and
+  `refine compile --emit=asm` or `--emit=ir` need no driver.
+- **A failed check stops the program with its place.** An index past the
+  end of an array, for example, prints
+  `main.ldn:4:12: trap: out_of_range` before the system reports the trap.
+- **The standard library comes with `refine`.** `core`, `hosted` and
+  `platform` are found beside the executable, so importing them needs no
+  option. `refine version` names the directory it uses; a copied `refine`
+  that finds none says where it looked and names `--library=DIR`. Your own
+  modules are found under the roots you give with `--root` [1480].
+
+Next, read [the tour](tour.md). [`examples.md`](examples.md) has complete
+programs to copy. If you write C,
+[Landin for C programmers](docs/from-c.md) maps each habit you bring to
+its Landin form.
 
 ## Building
 
