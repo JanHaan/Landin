@@ -434,17 +434,26 @@ def check(path):
     #  with the code instead of scanning blanked prose on every rule pass.
     #  The two whole-file rules still see every Landin block and module.
     code = {}
+    programs = {}
     for kind, start, chunk in sections(all_lines):
         if kind == "landin":
+            #  A block that declares the hosted entry is a complete program,
+            #  a module of its own: the tour's hello world and its
+            #  reading-a-file program each have a `main`, and neither shares
+            #  names with the examples around them.
+            whole = any(re.match(r"^public\s+main\s*:", line)
+                        for line in chunk)
             for i, line in enumerate(chunk):
                 if line.strip():
                     code[start + i] = line
+                    if whole:
+                        programs[start + i] = start
     #  The module headings stay visible, so a name may repeat across the
     #  modules a prototype file contains without being declared twice.
     for i, line in enumerate(all_lines, 1):
         if module_banner(line):
             code[i] = line
-    out += check_numbered_code(sorted(code.items()))
+    out += check_numbered_code(sorted(code.items()), programs)
     return sorted(set(out))
 
 
@@ -523,8 +532,13 @@ def check_code(lines, offset):
         [(n + offset, line) for n, line in enumerate(lines, 1)])
 
 
-def check_numbered_code(lines):
-    """The six cheap rules over source-numbered code and module headings."""
+def check_numbered_code(lines, programs=None):
+    """The six cheap rules over source-numbered code and module headings.
+
+    `programs` maps the line of each complete program, a block declaring
+    `public main`, to the block it begins in, so its names are its own.
+    """
+    programs = programs or {}
     out = []
 
     #  1. a reserved word standing where a name belongs
@@ -581,7 +595,8 @@ def check_numbered_code(lines):
         m = re.match(r"^(?:public\s+|mut\s+|extern\([a-z]+\)\s+|link\([^)]*\)\s+)*"
                      r"([a-z_][a-z0-9_]*)\s*:", line)
         if m:
-            key = (module, m.group(1))
+            key = (("program", programs[n]) if n in programs else module,
+                   m.group(1))
             seen[key] += 1
             where[key].append(n)
     for (mod, name), count in seen.items():

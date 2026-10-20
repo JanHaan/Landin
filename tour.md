@@ -85,13 +85,8 @@ end print_born
 ## Reading a file
 
 This program counts the lines of the file named by its first argument.
-Give it a directory of its own beside `hello`, and save it there as
-`main.ldn`:
-
-```text
-lines/
-    main.ldn
-```
+Give it a directory of its own beside `hello`, `mkdir lines && cd lines`,
+and save it there as `main.ldn`:
 
 ```landin
 import core/failure
