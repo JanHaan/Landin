@@ -474,6 +474,7 @@ nav.side a.api-toc-item.here{color:var(--ink); border-left-color:var(--accent-so
     no band between it and the opening.  */
 .hero:not(:has(.api-tools)){border-bottom:0; padding-bottom:0; margin-bottom:0}
 .hero:not(:has(.api-tools)) h1{margin-bottom:.75rem}
+.hero:not(:has(.api-tools)) + section.api-opening{padding-top:.25rem}
 .api-opening{padding-top:0}
 .api-prose section.guide{margin:0; border:0}
 .api-prose div.guide{margin:0; padding:0}
@@ -494,13 +495,16 @@ section > h2.api-h, .api-prose section.api-section > h2, .api-modules > h2{
 ul.api-index{list-style:none; margin:0; padding:0; columns:12rem; column-gap:2rem;
   border-top:1px solid var(--rule)}
 ul.api-index li{break-inside:avoid; border-bottom:1px solid var(--rule-soft)}
-ul.api-index a{display:block; padding:.3rem 0; text-decoration:none; font-size:.9rem}
-ul.api-index code{padding:0; background:none; font-size:.85rem; color:var(--accent)}
-ul.api-index a:hover code{text-decoration:underline}
+/*  The index is navigation and keeps the accent; the shared rule that
+    quiets a link whose text is code is for code in a sentence or cell.  */
+ul.api-index li > a{display:block; padding:.3rem 0; color:var(--accent);
+  text-decoration:none; font-size:.9rem}
+ul.api-index li > a code{padding:0; background:none; font-size:.85rem; color:var(--accent)}
+ul.api-index li > a:hover code{text-decoration:underline}
 /*  A phone had one column of 127 names.  */
 @media (max-width:35rem){
   ul.api-index{columns:2; column-gap:1rem}
-  ul.api-index code{font-size:.78rem; overflow-wrap:anywhere}
+  ul.api-index li > a code{font-size:.78rem; overflow-wrap:anywhere}
 }
 ul.api-modules-list{list-style:none; margin:0; padding:0; border-top:1px solid var(--rule)}
 ul.api-modules-list li{display:grid; grid-template-columns:12rem minmax(0,1fr); gap:1.25rem;
@@ -514,9 +518,6 @@ ul.api-modules-list li > span{color:var(--ink-soft); font-size:.9rem; line-heigh
 }
 
 /* ---- one declaration: a heading row, the code, the prose ---- */
-/*  Clear of the bar, as the shared sheet will set every addressed
-    element in main; until then, here.  */
-section.api-item, .api-source-line, .api-table tr{scroll-margin-top:calc(var(--bar) + 1rem)}
 section.api-item{padding:1.6rem 0 1rem; border-top:1px solid var(--rule)}
 .api-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem .8rem;
   margin:0 0 .7rem}
@@ -786,7 +787,9 @@ CONTENTS = """
  if(menu){
   menu.addEventListener('change',()=>{
    sync();
-   if(menu.checked)requestAnimationFrame(()=>reveal(true));
+   /* After the shared script's own scroll to the section being read, so
+      the drawer opens at the name being read. */
+   if(menu.checked)requestAnimationFrame(()=>requestAnimationFrame(()=>reveal(true)));
   });
   /* The shared script closes the drawer on a followed link and on
      Escape without a change event; the button's state follows. */
@@ -1143,7 +1146,7 @@ def write(root, destination, render):
     def nav(current, toc=''):
         here = ' aria-current="page"' if current == 'library.html' else ''
         out = ['<a class="doc" href="index.html">the front page</a>',
-               f'<a class="doc{" here" if here else ""}"{here} href="library.html">library reference</a>',
+               f'<a class="doc{" here" if here else ""}"{here} href="library.html">the library reference</a>',
                toc if here else '',
                '<a class="doc" href="core.html">library guide</a>']
         for base in ROOTS:
@@ -1159,7 +1162,10 @@ def write(root, destination, render):
         # The site's own documents, in the shared renderer's groups and
         # order, folded below the modules: from a module page the tour
         # and the examples were out of reach.
+        # The library's own card, which the other pages list in the first
+        # group, is the head of this sidebar already.
         for num, name, members in renderer.nav_groups(render.DOCS + render.GUIDES):
+            members = [d for d in members if d['out'] != 'library.html']
             out.append(f'<details class="api-docs"><summary>{num} · {html.escape(name)}'
                        f'<span class="count">{len(members)}</span></summary>')
             for d in members:
