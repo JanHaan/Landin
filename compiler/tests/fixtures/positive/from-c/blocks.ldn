@@ -1,0 +1,16 @@
+import core/cmp
+import core/mem
+import core/text
+
+--- Copy a packet into the front of `scratch`, clear the rest, and say
+--- whether the copy matches.
+byte_blocks: (packet: []u8, scratch: []mut u8)
+             -> (same: bool) ! mem.out_of_bounds =
+    try mem.copy(scratch, packet) -- fails, writing nothing, if it is short
+    mem.fill(scratch[lenof packet..<lenof scratch], 0)
+    same = cmp.compare(scratch[0..<lenof packet], packet) == cmp.equal
+end byte_blocks
+
+is_main: (name: utf8) -> (yes: bool) =
+    yes = text.equal(name, "main")
+end is_main

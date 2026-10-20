@@ -1,0 +1,10 @@
+--- C's `assert`: stop the program when `holds` is false.
+expect: (holds: bool) -> none =
+    if not holds then compiler.unreachable() end if
+end expect
+
+--- How many whole 32-bit words a block holds; it must hold nothing else.
+words_in: (bytes: []u8) -> (words: usize) =
+    expect(lenof bytes % 4 == 0)
+    words = lenof bytes / 4
+end words_in

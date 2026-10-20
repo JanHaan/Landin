@@ -1,0 +1,62 @@
+--  Count the lines of the file named by the first argument, as `wc -l`
+--  does.  A failure is said in words on standard error, and the program
+--  then returns 1.
+import core/failure
+import core/io
+import core/text
+import hosted/system
+
+--- How many lines the file at `path` holds.  A last line without its
+--- newline counts, and so does a line too long for the buffer.
+count_lines: (host: system.host, path: text.host_string)
+             -> (lines: u64) ! ... =
+    lines = 0
+    opened: io.file = try io.open_read(host, path)
+    defer io.close(host, opened) else none
+    mut buffer: [4096]u8 = zeroed
+    mut reader := io.lines_over(host, opened, buffer)
+    loop do
+        item: io.line = io.read_line(reader) else (problem)
+            fail problem when problem <> io.line_too_long
+            inc lines
+            continue
+        end
+        break when item.finished
+        inc lines
+    end loop
+end count_lines
+
+--- Say on standard error what failed and why: `count: notes.log: not
+--- found`.
+complain: (host: system.host, subject: []u8, problem: failure.reason)
+          -> none =
+    mut room: [256]u8 = zeroed
+    mut err := io.buffered_over(host, io.err(host), room)
+    io.put(err, "count: ") else none
+    io.put(err, subject) else none
+    io.put(err, ": ") else none
+    io.put(err, failure.words(problem)) else none
+    io.put(err, "\n") else none
+    io.flush(err) else none
+end complain
+
+public main: () -> (code: i32) =
+    host := system.new()
+    code = 1
+    path := io.argument_at(host, 0) else (problem)
+        io.write(host, io.err(host), "usage: count FILE\n") else none
+        return
+    end
+    lines := count_lines(host, path) else (problem)
+        complain(host, text.host_bytes(path), problem)
+        return
+    end
+    mut storage: [64]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    io.format(out, "{} lines\n", [any(addr lines)]) else none
+    io.flush(out) else (problem)
+        complain(host, "standard output", problem)
+        return
+    end
+    code = 0
+end main

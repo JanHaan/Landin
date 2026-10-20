@@ -4,6 +4,7 @@
 --  through a buffered writer, the client reads them back through a line
 --  reader of its own, and the report goes to standard output through a
 --  buffered writer, flushed on every way out.
+import core/failure
 import core/io
 import core/net
 import core/text
@@ -141,6 +142,18 @@ exchange: (host: system.host,
                text.used(echoed))
 end exchange
 
+--- Say on standard error why the echo could not be run or reported.
+complain: (host: system.host, problem: wrong_sender | failure.reason)
+          -> none =
+    reason: []u8 = match problem
+        wrong_sender: "a datagram came from the wrong sender"
+        _ (rest): failure.words(rest)
+    end match
+    io.write(host, io.err(host), "echo: ") else none
+    io.write(host, io.err(host), reason) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [512]u8 = zeroed
@@ -155,12 +168,15 @@ public main: () -> (code: i32) =
             if problem == net.address_unavailable then
                 io.put(out, "this system has no such loopback address\n")
                     else none
+                code = 2
+            else
+                complain(host, problem)
             end if
-            code = 2
             return
         end
     end for
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0

@@ -1,0 +1,16 @@
+import core/sort
+
+--- Whether `left` goes before `right`: shorter first, or longer first when
+--- `longest_first` says so.
+by_length: (longest_first: bool, left: []u8, right: []u8) -> (yes: bool) =
+    if longest_first then
+        yes = lenof left > lenof right
+    else
+        yes = lenof left < lenof right
+    end if
+end by_length
+
+--- Sort words by length, the comparison passed as a function value.
+sort_words: (words: []mut []u8) -> none =
+    sort.sort_by(words, false, by_length)
+end sort_words

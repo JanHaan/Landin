@@ -1,12 +1,13 @@
 # Running examples
 
 Complete Landin programs you can copy, compile and run. Two short lessons
-on printing and on failures come first, then the classic exercises, then
-two small tools that read their input, then larger tools that use
-processes, the network and the file system, shortest first. Last come the
-Benchmark Game ports used to compare Landin with other languages. Each
-section names the tour entries it leans on, such as [0570], so you can read
-up on anything new.
+on printing and on failures come first, with a small tool that counts the
+lines of the file you name. Then come the classic exercises and a program
+that puts the language's main ideas together, then two small tools that
+read their input, then larger tools that use processes, the network and
+the file system, shortest first. Last come the Benchmark Game ports used
+to compare Landin with other languages. Each section names the tour
+entries it leans on, such as [0570], so you can read up on anything new.
 
 ## Compile and run
 
@@ -43,6 +44,11 @@ Integers, `bool`, `utf8`, `[]u8` and host strings format themselves. Write
 `{{` or `}}` for a brace. The template is checked against its values when
 it runs, and a mismatch is the failure `text.invalid_format`.
 
+A float has no `{}` of its own yet. The last lines show what to write
+today: scale the value to a whole number of tenths and print the whole
+part and the tenth as two integers. A conversion to an integer truncates
+toward zero [0310], so adding 0.5 first rounds.
+
 `io.format` formats each line straight into the buffer, so a line larger
 than the whole buffer fails with `text.no_space`. The deferred flush
 drops a failure without a word. A program that must know its output
@@ -74,14 +80,25 @@ public main: () -> (code: i32) =
     people: [3]person = [(name: "Ada Lovelace", born: 1815, died: 1852),
                          (name: "Grace Hopper", born: 1906, died: 1992),
                          (name: "Peter Landin", born: 1930, died: 2009)]
+    mut lived: u32 = 0
     for someone in people do
         io.format(out, "{} was born in {} and died in {}.\n",
                   [any(addr someone.name), any(addr someone.born),
                    any(addr someone.died)]) else none
+        lived += someone.died - someone.born
     end for
 
     count: usize = lenof people
     io.format(out, "{} people in all.\n", [any(addr count)]) else none
+
+    --  A float has no `{}` of its own: scale it to a whole number of
+    --  tenths, rounding, and print the whole part and the tenth apart.
+    average: f64 = f64(lived) / f64(count)
+    tenths: u64 = u64(average * 10.0 + 0.5)
+    whole: u64 = tenths / 10
+    tenth: u64 = tenths % 10
+    io.format(out, "They lived {}.{} years on average.\n",
+              [any(addr whole), any(addr tenth)]) else none
     code = 0
 end main
 ```
@@ -93,6 +110,7 @@ Ada Lovelace was born in 1815 and died in 1852.
 Grace Hopper was born in 1906 and died in 1992.
 Peter Landin was born in 1930 and died in 2009.
 3 people in all.
+They lived 67.3 years on average.
 ```
 
 ## Reporting a failure in words
@@ -112,7 +130,8 @@ the library fails with.
   and a last arm `_ (rest)` hands the library's atoms that remain to
   `failure.words(rest)` [1210].
 
-A real tool would write these lines to standard error, `io.err(host)`.
+A real tool writes these lines to standard error, `io.err(host)`, and
+returns 1, as the next program does.
 
 Fixture source: `compiler/tests/fixtures/runtime/example-failure-words/main.ldn`.
 
@@ -174,6 +193,103 @@ It prints
 half: not a number
 missing-settings.conf: not found
 ```
+
+## Counting lines in a named file
+
+`wc -l` for one file: the program opens the file its first argument names,
+counts its lines and prints the count. When something fails, it says what
+in words on standard error and returns 1.
+
+- `io.argument_at(host, 0)` lends the first argument as a host string, the
+  bytes the system gave [1660]. With no argument it fails, and the program
+  prints how to use it.
+- `count_lines` declares its failures as `! ...`, which lets the compiler
+  infer the set from every `fail` and `try` in the body. Only a routine
+  that is not `public` may leave its set to the compiler [0960].
+- `io.lines_over` makes a line reader over a buffer in the routine's frame,
+  and `io.read_line` lends each line [0790] [0800]. A line too long for the
+  buffer is the failure `io.line_too_long`, which the count takes as one
+  more line.
+- A `defer` closes the file on every way out of `count_lines` [1100].
+- `complain` writes the program's name, what it was working on and
+  `failure.words` of the failure to `io.err(host)`.
+
+Fixture source: `compiler/tests/fixtures/runtime/line-count/main.ldn`.
+
+```landin
+--  Count the lines of the file named by the first argument, as `wc -l`
+--  does.  A failure is said in words on standard error, and the program
+--  then returns 1.
+import core/failure
+import core/io
+import core/text
+import hosted/system
+
+--- How many lines the file at `path` holds.  A last line without its
+--- newline counts, and so does a line too long for the buffer.
+count_lines: (host: system.host, path: text.host_string)
+             -> (lines: u64) ! ... =
+    lines = 0
+    opened: io.file = try io.open_read(host, path)
+    defer io.close(host, opened) else none
+    mut buffer: [4096]u8 = zeroed
+    mut reader := io.lines_over(host, opened, buffer)
+    loop do
+        item: io.line = io.read_line(reader) else (problem)
+            fail problem when problem <> io.line_too_long
+            inc lines
+            continue
+        end
+        break when item.finished
+        inc lines
+    end loop
+end count_lines
+
+--- Say on standard error what failed and why: `count: notes.log: not
+--- found`.
+complain: (host: system.host, subject: []u8, problem: failure.reason)
+          -> none =
+    mut room: [256]u8 = zeroed
+    mut err := io.buffered_over(host, io.err(host), room)
+    io.put(err, "count: ") else none
+    io.put(err, subject) else none
+    io.put(err, ": ") else none
+    io.put(err, failure.words(problem)) else none
+    io.put(err, "\n") else none
+    io.flush(err) else none
+end complain
+
+public main: () -> (code: i32) =
+    host := system.new()
+    code = 1
+    path := io.argument_at(host, 0) else (problem)
+        io.write(host, io.err(host), "usage: count FILE\n") else none
+        return
+    end
+    lines := count_lines(host, path) else (problem)
+        complain(host, text.host_bytes(path), problem)
+        return
+    end
+    mut storage: [64]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    io.format(out, "{} lines\n", [any(addr lines)]) else none
+    io.flush(out) else (problem)
+        complain(host, "standard output", problem)
+        return
+    end
+    code = 0
+end main
+```
+
+Named a file of four lines:
+
+```sh
+refine compile main.ldn -o count
+./count notes.log
+```
+
+it prints `4 lines`. Named a file that is not there, it prints
+`count: missing.log: not found` on standard error and returns 1.
 
 ## FizzBuzz
 
@@ -612,6 +728,125 @@ before: -12 5 0 99 5 2 -3 18
 after: -12 -3 0 2 5 5 18 99
 ```
 
+## Sensors
+
+The language's main ideas working together in one program. Two kinds of
+sensor conform to one concept [1230] [1240] and share one array as
+`any sensor` values [1370], so each read is dispatched at runtime.
+
+- `poll` is generic over its allocator [1290] [1360]; `main` lends it an
+  arena over 256 bytes of its own frame [0820], and the list of readings
+  grows there and nowhere else.
+- A read can fail with a declared atom [0940]: the poll skips the unplugged
+  door, would stop at a jammed sensor, and passes running out of memory on
+  with `try` [0960].
+
+Fixture source: `compiler/tests/fixtures/runtime/example-sensors/main.ldn`.
+
+```landin
+--  Sensors of different kinds behind one concept, polled through `any`,
+--  their readings kept in a list whose memory the caller lends.
+import core/arena
+import core/io
+import core/mem
+import core/vec
+import hosted/system
+
+offline, jammed: atom
+
+sensor: type = concept (t: type)
+    read: (self: ptr mut t) -> (value: i32) ! offline | jammed
+end sensor
+
+thermometer: type = struct
+    celsius: i32
+end thermometer
+
+door: type = struct
+    openings: i32
+    wired: bool
+end door
+
+read_thermometer: (self: ptr mut thermometer)
+                  -> (value: i32) ! offline | jammed =
+    fail jammed when self.val.celsius < -40
+    value = self.val.celsius
+end read_thermometer
+
+read_door: (self: ptr mut door) -> (value: i32) ! offline | jammed =
+    fail offline when not self.val.wired
+    inc self.val.openings
+    value = self.val.openings
+end read_door
+
+thermometer is sensor (read: read_thermometer)
+door is sensor (read: read_door)
+
+--- Generic over where the memory comes from; the caller decides.
+poll: (provider: type is mem.allocator, memory: provider,
+       sensors: []mut any sensor)
+      -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
+    readings = vec.new(item: i32)
+    for device in sensors do
+        --  An unplugged sensor is skipped; a jammed one stops the poll.
+        value := device.read() else (why)
+            fail jammed when why == jammed
+            continue
+        end
+        try vec.push(readings, memory, value)
+    end for
+end poll
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+
+    --  The readings live in an arena over 256 bytes of this frame.
+    mut bytes: [256]u8 = zeroed
+    mut space: arena.space = zeroed
+    bump := arena.over_unchecked(space, addr bytes[0], lenof bytes)
+
+    mut kitchen: thermometer = (celsius: 21)
+    mut hall: thermometer = (celsius: 19)
+    mut front: door = (openings: 1, wired: true)
+    mut cellar: door = (openings: 0, wired: false)
+    mut sensors: [4]any sensor
+    sensors[0] = any(addr kitchen)
+    sensors[1] = any(addr front)
+    sensors[2] = any(addr cellar)
+    sensors[3] = any(addr hall)
+
+    mut readings := poll(bump, sensors[0..<4]) else (problem)
+        if problem == jammed then
+            io.put(out, "a sensor is jammed\n") else none
+        else
+            io.put(out, "out of memory\n") else none
+        end if
+        code = 1
+        return
+    end
+    defer vec.release(readings, bump)
+
+    for value in vec.used(readings) do
+        io.format(out, "read {}\n", [any(addr value)]) else none
+    end for
+    count: usize = vec.length(readings)
+    io.format(out, "{} of 4 sensors answered\n", [any(addr count)]) else none
+    code = 0
+end main
+```
+
+It prints
+
+```text
+read 21
+read 2
+read 19
+3 of 4 sensors answered
+```
+
 ## Word count
 
 `wc` with no file named: the program reads its standard input to the end
@@ -625,7 +860,8 @@ memory.
 - The totals go out through a buffered writer and `io.format`, as in
   Printing formatted values.
 - `main` checks the format and the final flush, so a total that could not
-  be written makes the program return 1 rather than 0 [1030].
+  be written makes the program say why on standard error and return 1
+  rather than 0 [1030].
 
 Fixture source: `compiler/tests/fixtures/runtime/word-count/main.ldn`.
 
@@ -634,6 +870,7 @@ Fixture source: `compiler/tests/fixtures/runtime/word-count/main.ldn`.
 --  is named no file.  The counting asks only for a reader, the narrowest
 --  capability it uses, so the same routine counts a pipe, a file or bytes in
 --  memory.
+import core/failure
 import core/io
 import hosted/system
 
@@ -674,6 +911,13 @@ count: (provider: type is io.reader, source: provider,
     end loop
 end count
 
+--- Say on standard error why the totals could not be written.
+complain: (host: system.host, problem: failure.reason) -> none =
+    io.write(host, io.err(host), "wc: ") else none
+    io.write(host, io.err(host), failure.words(problem)) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [64]u8 = zeroed
@@ -689,9 +933,11 @@ public main: () -> (code: i32) =
     io.format(out, "{} {} {}\n",
               [any(addr totals.lines), any(addr totals.words),
                any(addr totals.bytes)]) else (problem)
+        complain(host, problem)
         return
     end
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0
@@ -725,6 +971,8 @@ number, right-aligned in six columns, and a tab.
 - The output goes through a buffered writer. There are no destructors, so
   `main` flushes at the end and a `defer` flushes on every other way out
   [1100].
+- When the numbering or the last flush fails, as writing to `/dev/full`
+  does, `main` says why on standard error and returns 1.
 
 Fixture source: `compiler/tests/fixtures/runtime/line-numbers/main.ldn`.
 
@@ -734,6 +982,7 @@ Fixture source: `compiler/tests/fixtures/runtime/line-numbers/main.ldn`.
 --  through a buffer of 32 bytes; one too long for it is numbered with a
 --  note in its place, and the lines after it are numbered as usual.  The
 --  output goes through a buffered writer, flushed on every way out.
+import core/failure
 import core/io
 import core/text
 import hosted/system
@@ -766,6 +1015,13 @@ numbered: (provider: type is io.world, host: provider,
     end loop
 end numbered
 
+--- Say on standard error why the lines could not be numbered.
+complain: (host: system.host, problem: failure.reason) -> none =
+    io.write(host, io.err(host), "numbers: ") else none
+    io.write(host, io.err(host), failure.words(problem)) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
@@ -773,9 +1029,11 @@ public main: () -> (code: i32) =
     defer io.flush(out) else none
     code = 1
     numbered(host, out) else (problem)
+        complain(host, problem)
         return
     end
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0
@@ -817,6 +1075,8 @@ which reads from it.
 - `time.now` and `time.elapsed` time the child on the monotonic clock.
 - `search_path` passes on the parent's `PATH`, and its `else` supplies a
   fallback value when there is none [1030].
+- When the shell cannot be started, read or reported, `main` says why on
+  standard error and returns 1.
 
 Fixture source: `compiler/tests/fixtures/runtime/run-shell/main.ldn`.
 
@@ -825,6 +1085,7 @@ Fixture source: `compiler/tests/fixtures/runtime/run-shell/main.ldn`.
 --  its output and its errors while it runs, time it, and report what it
 --  said, what it complained of, how it ended and how long it took.  The
 --  report goes through a buffered writer, flushed on every way out.
+import core/failure
 import core/io
 import core/text
 import core/time
@@ -916,6 +1177,13 @@ search_path: (host: system.host) -> (path: text.host_string from host) =
         else text.host_over("/bin:/usr/bin")
 end search_path
 
+--- Say on standard error why the shell could not be run or reported.
+complain: (host: system.host, problem: failure.reason) -> none =
+    io.write(host, io.err(host), "run-shell: ") else none
+    io.write(host, io.err(host), failure.words(problem)) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
@@ -933,6 +1201,7 @@ public main: () -> (code: i32) =
     started := io.spawn(host, text.host_over("/bin/sh"),
                         arguments, variables,
                         io.capturing) else (problem)
+        complain(host, problem)
         return
     end
     mut said: [512]u8 = zeroed
@@ -940,14 +1209,17 @@ public main: () -> (code: i32) =
     mut output := text.over(said)
     mut errors := text.over(complained)
     ended: io.ending = capture(host, started, output, errors) else (problem)
+        complain(host, problem)
         return
     end
     took: time.duration = time.elapsed(began, time.now(host))
     report(out, text.used(output), text.used(errors), ended,
            took) else (problem)
+        complain(host, problem)
         return
     end
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     match ended.how
@@ -987,7 +1259,8 @@ over UDP, on `127.0.0.1` and then on `::1`. Read `tcp_echo` first, then
 - `net.set_timeouts` makes a receive give up with `net.timed_out` rather
   than wait for ever. Every failure is an atom of its concept [0940].
 - A system without IPv6's loopback address cannot run the second half: the
-  program says so and returns 2.
+  program says so and returns 2. Any other failure it says in words on
+  standard error, and returns 1.
 
 Fixture source: `compiler/tests/fixtures/runtime/network-echo/main.ldn`.
 
@@ -998,6 +1271,7 @@ Fixture source: `compiler/tests/fixtures/runtime/network-echo/main.ldn`.
 --  through a buffered writer, the client reads them back through a line
 --  reader of its own, and the report goes to standard output through a
 --  buffered writer, flushed on every way out.
+import core/failure
 import core/io
 import core/net
 import core/text
@@ -1135,6 +1409,18 @@ exchange: (host: system.host,
                text.used(echoed))
 end exchange
 
+--- Say on standard error why the echo could not be run or reported.
+complain: (host: system.host, problem: wrong_sender | failure.reason)
+          -> none =
+    reason: []u8 = match problem
+        wrong_sender: "a datagram came from the wrong sender"
+        _ (rest): failure.words(rest)
+    end match
+    io.write(host, io.err(host), "echo: ") else none
+    io.write(host, io.err(host), reason) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [512]u8 = zeroed
@@ -1149,12 +1435,15 @@ public main: () -> (code: i32) =
             if problem == net.address_unavailable then
                 io.put(out, "this system has no such loopback address\n")
                     else none
+                code = 2
+            else
+                complain(host, problem)
             end if
-            code = 2
             return
         end
     end for
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0
@@ -1183,12 +1472,13 @@ UDP over ::1: the server echoed 2 datagrams
 ## Directory listing
 
 `ls -l` cut down to what every hosted system agrees on: each entry of a
-directory with its kind, a file's size in bytes and its name, in byte
-order. Read `list`, which reads the entries, and `show`, which prints
-them: they are at the top of the file. So that it has something known to
-list, the program first builds a small directory where it runs, checks the
-listing and removes the directory again; that code comes after the comment
-`Everything below`.
+directory with its kind, a file's size in bytes and its name, in byte order.
+Read `list`, which reads the entries, and `show`, which prints them: they
+are at the top of the file. Given a path, `./listing DIR` lists that
+directory, up to 256 entries. With no argument, so that it has something
+known to list, the program builds a small directory where it runs, lists it,
+checks the listing and removes the directory again; that code comes after
+the comment `Everything below`.
 
 - `io.read_entry` lends each name from the directory's buffer until the
   next read [0790] [0800], so the program copies each name it keeps with
@@ -1198,6 +1488,9 @@ listing and removes the directory again; that code comes after the comment
 - `core/sort` sorts the copies by the `cmp.ordered` conformance the
   program declares for them [1280].
 - A `defer` closes the directory on every way out of `list` [1100].
+- `complain` words the program's own atoms with a `match` and hands the
+  library's to `failure.words` with `_ (rest)` [1210], as Reporting a
+  failure in words describes.
 
 Fixture source: `compiler/tests/fixtures/runtime/directory-listing/main.ldn`.
 
@@ -1209,6 +1502,7 @@ Fixture source: `compiler/tests/fixtures/runtime/directory-listing/main.ldn`.
 --  escaped.  The code after the comment `Everything below` only builds a
 --  directory to list and checks the result.
 import core/cmp
+import core/failure
 import core/io
 import core/mem
 import core/sort
@@ -1334,6 +1628,30 @@ escaped: (name: []u8, inout into: text.builder) -> none ! text.no_space =
     end for
 end escaped
 
+--- List the directory the first argument names, up to 256 entries.
+list_named: (host: system.host, inout out: io.buffered_writer(system.host))
+            -> none ! ... =
+    path: []u8 = text.host_bytes(try io.argument_at(host, 0))
+    blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
+    mut entries: [256]kept = [256 of blank]
+    count: usize = try list(host, path, entries)
+    _ = try show(out, entries[0..<count])
+end list_named
+
+--- Say on standard error why the listing stopped.
+complain: (host: system.host,
+           problem: too_many | too_long | differs | failure.reason) -> none =
+    reason: []u8 = match problem
+        too_many: "more entries than the listing keeps"
+        too_long: "a name longer than the listing keeps"
+        differs: "the listing does not hold what was built"
+        _ (rest): failure.words(rest)
+    end match
+    io.write(host, io.err(host), "listing: ") else none
+    io.write(host, io.err(host), reason) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
+
 --  Everything below only sets up the demonstration: it builds a small
 --  directory where the program runs, lists it, checks that the listing
 --  holds what it built, and removes the directory again.
@@ -1447,10 +1765,19 @@ public main: () -> (code: i32) =
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
-    demonstrate(host, out) else (problem)
-        return
-    end
+    if io.argument_count(host) > 0 then
+        list_named(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    else
+        demonstrate(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    end if
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0
@@ -1481,16 +1808,20 @@ and leaves the directory as it found it.
 
 `cp -a` cut down to what Linux, macOS and FreeBSD all keep: each file's
 bytes, its permission bits and its times, and each symbolic link as a link
-to the same target, never followed. Read `copy_directory` first, at the
-top of the file, and then `copy_file`, `filled` and `copy_link`, which it
-calls. So that it has something known to copy, the program builds a small
-tree where it runs, copies it twice, checks the copy, prints a listing of
-it and removes both; that code comes after the comment `Everything below`.
+to the same target, never followed. Read `copy_directory` first, at the top
+of the file, and then `copy_file`, `filled` and `copy_link`, which it calls.
+Given two paths, `./tree-copy FROM TO` copies the directory FROM to TO and
+says how many files, links and directories it copied. A directory may hold
+up to 256 entries, a name up to 255 bytes and a path up to 256 bytes. With
+no arguments, so that it has something known to copy, the program builds a
+small tree where it runs, copies it twice, checks the copy, prints a listing
+of it and removes both; that code comes after the comment `Everything
+below`.
 
-- Each file is written to a temporary file beside its destination,
-  `io.make_temporary`, then `io.synchronize`d and `io.rename`d into place,
-  so a program reading the copy sees the old file or the new one, never
-  half of either.
+- Each file is written to a temporary file that `io.make_temporary` makes
+  beside its destination. `io.synchronize` then puts its bytes on the disk
+  and `io.rename` moves it into place, so a program reading the copy sees
+  the old file or the new one, never half of either.
 - `io.read_at`, `io.write_at` and `io.truncate` copy a file so that a hole
   in it stays a hole.
 - `platform/posix` gives what the portable concepts do not: permission
@@ -1498,6 +1829,8 @@ it and removes both; that code comes after the comment `Everything below`.
 - The copy does not keep the owner unless the process is root, the time a
   file last changed, extended attributes, or that two names are one file,
   and it skips anything that is not a file, a directory or a link.
+- `core/failure` has no words for `platform/posix`'s errno atoms, so
+  `complain` names a failure there only in general terms.
 
 Fixture source: `compiler/tests/fixtures/runtime/tree-copy/main.ldn`.
 
@@ -1511,6 +1844,7 @@ Fixture source: `compiler/tests/fixtures/runtime/tree-copy/main.ldn`.
 --  routines after it first.  The code after the comment `Everything below`
 --  only builds a tree to copy, checks the copy and removes both.
 import core/cmp
+import core/failure
 import core/io
 import core/mem
 import core/sort
@@ -1530,7 +1864,7 @@ copy_directory: (host: system.host, from_path: []u8, to_path: []u8,
     io.make_directory(host, text.host_over(to_path)) else (problem)
         fail problem when problem <> io.already_exists
     end
-    mut entries: [16]kept = [16 of blank]
+    mut entries: [256]kept = [256 of blank]
     count: usize = try entries_of(host, from_path, entries)
     mut from_room: [256]u8 = zeroed
     mut from_child := text.over(from_room)
@@ -1683,7 +2017,7 @@ too_long: atom
 --- An entry kept past the read that gave it: a directory lends a name only
 --- until its next read.
 kept: type = struct
-    name: [64]u8
+    name: [255]u8
     length: usize
     kind: io.entry_kind
 end kept
@@ -1696,7 +2030,7 @@ end before
 
 kept is cmp.ordered (less: before)
 
-blank: kept = (name: [64 of 0], length: 0, kind: io.special)
+blank: kept = (name: [255 of 0], length: 0, kind: io.special)
 
 --- The entries of the directory `path`, sorted by name, into `into`;
 --- `count` is how many there are.
@@ -1712,9 +2046,9 @@ entries_of: (host: system.host, path: []u8, into: []mut kept)
         name: []u8 = text.host_bytes(item.name)
         break when lenof name == 0
         fail too_many when count == lenof into
-        fail too_long when lenof name > 64
+        fail too_long when lenof name > 255
         into[count] = blank
-        try mem.copy(into[count].name[0..<64], name)
+        try mem.copy(into[count].name[0..<255], name)
         into[count].length = lenof name
         into[count].kind = item.kind
         inc count
@@ -1771,6 +2105,37 @@ end present
 dropped: (host: system.host, path: text.host_string) -> none =
     io.remove_file(host, path) else none
 end dropped
+
+--- Copy the directory the first argument names to the path the second
+--- names, and say what the copy did.
+copy_named: (host: system.host, inout out: io.buffered_writer(system.host))
+            -> none ! ... =
+    from_path: []u8 = text.host_bytes(try io.argument_at(host, 0))
+    to_path: []u8 = text.host_bytes(try io.argument_at(host, 1))
+    mut done: tally = (files: 0, links: 0, directories: 0, skipped: 0,
+                       replaced: 0)
+    try copy_directory(host, from_path, to_path, done)
+    try io.format(out, "copied {} files, {} links, {} directories\n",
+                  [any(addr done.files), any(addr done.links),
+                   any(addr done.directories)])
+    try io.format(out, "skipped {} entries of other kinds\n",
+                  [any(addr done.skipped)])
+end copy_named
+
+--- Say on standard error why the copy stopped.  `core/failure` words the
+--- library's failures; `platform/posix`'s are not among them.
+complain: (host: system.host, problem: too_many | too_long | differs
+           | failure.reason | posix.errno) -> none =
+    reason: []u8 = match problem
+        too_many: "a directory holds more entries than the copy keeps"
+        too_long: "a name is longer than the copy keeps"
+        differs: "the copy differs from what was copied"
+        _: "a file or directory could not be read, made or changed"
+    end match
+    io.write(host, io.err(host), "tree-copy: ") else none
+    io.write(host, io.err(host), reason) else none
+    io.write(host, io.err(host), "\n") else none
+end complain
 
 --  Everything below only sets up the demonstration: it builds a small tree
 --  where the program runs, copies it twice, checks the copy against it,
@@ -2189,10 +2554,19 @@ public main: () -> (code: i32) =
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
-    demonstrate(host, out) else (problem)
-        return
-    end
+    if io.argument_count(host) == 2 then
+        copy_named(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    else
+        demonstrate(host, out) else (problem)
+            complain(host, problem)
+            return
+        end
+    end if
     io.flush(out) else (problem)
+        complain(host, problem)
         return
     end
     code = 0
@@ -2229,125 +2603,6 @@ sparse.bin reads as zeros in its hole and as nothing past its end
 
 The number after each `+` is the entry's time in seconds after the start
 of 2000, which the program gave the source.
-
-## Sensors
-
-The language's main ideas working together in one program. Two kinds of
-sensor conform to one concept [1230] [1240] and share one array as
-`any sensor` values [1370], so each read is dispatched at runtime.
-
-- `poll` is generic over its allocator [1290] [1360]; `main` lends it an
-  arena over 256 bytes of its own frame [0820], and the list of readings
-  grows there and nowhere else.
-- A read can fail with a declared atom [0940]: the poll skips the unplugged
-  door, would stop at a jammed sensor, and passes running out of memory on
-  with `try` [0960].
-
-Fixture source: `compiler/tests/fixtures/runtime/example-sensors/main.ldn`.
-
-```landin
---  Sensors of different kinds behind one concept, polled through `any`,
---  their readings kept in a list whose memory the caller lends.
-import core/arena
-import core/io
-import core/mem
-import core/vec
-import hosted/system
-
-offline, jammed: atom
-
-sensor: type = concept (t: type)
-    read: (self: ptr mut t) -> (value: i32) ! offline | jammed
-end sensor
-
-thermometer: type = struct
-    celsius: i32
-end thermometer
-
-door: type = struct
-    openings: i32
-    wired: bool
-end door
-
-read_thermometer: (self: ptr mut thermometer)
-                  -> (value: i32) ! offline | jammed =
-    fail jammed when self.val.celsius < -40
-    value = self.val.celsius
-end read_thermometer
-
-read_door: (self: ptr mut door) -> (value: i32) ! offline | jammed =
-    fail offline when not self.val.wired
-    inc self.val.openings
-    value = self.val.openings
-end read_door
-
-thermometer is sensor (read: read_thermometer)
-door is sensor (read: read_door)
-
---- Generic over where the memory comes from; the caller decides.
-poll: (provider: type is mem.allocator, memory: provider,
-       sensors: []mut any sensor)
-      -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
-    readings = vec.new(item: i32)
-    for device in sensors do
-        --  An unplugged sensor is skipped; a jammed one stops the poll.
-        value := device.read() else (why)
-            fail jammed when why == jammed
-            continue
-        end
-        try vec.push(readings, memory, value)
-    end for
-end poll
-
-public main: () -> (code: i32) =
-    host := system.new()
-    mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage)
-    defer io.flush(out) else none
-
-    --  The readings live in an arena over 256 bytes of this frame.
-    mut bytes: [256]u8 = zeroed
-    mut space: arena.space = zeroed
-    bump := arena.over_unchecked(space, addr bytes[0], lenof bytes)
-
-    mut kitchen: thermometer = (celsius: 21)
-    mut hall: thermometer = (celsius: 19)
-    mut front: door = (openings: 1, wired: true)
-    mut cellar: door = (openings: 0, wired: false)
-    mut sensors: [4]any sensor
-    sensors[0] = any(addr kitchen)
-    sensors[1] = any(addr front)
-    sensors[2] = any(addr cellar)
-    sensors[3] = any(addr hall)
-
-    mut readings := poll(bump, sensors[0..<4]) else (problem)
-        if problem == jammed then
-            io.put(out, "a sensor is jammed\n") else none
-        else
-            io.put(out, "out of memory\n") else none
-        end if
-        code = 1
-        return
-    end
-    defer vec.release(readings, bump)
-
-    for value in vec.used(readings) do
-        io.format(out, "read {}\n", [any(addr value)]) else none
-    end for
-    count: usize = vec.length(readings)
-    io.format(out, "{} of 4 sensors answered\n", [any(addr count)]) else none
-    code = 0
-end main
-```
-
-It prints
-
-```text
-read 21
-read 2
-read 19
-3 of 4 sensors answered
-```
 
 ## Benchmark Game programs
 

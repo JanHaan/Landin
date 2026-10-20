@@ -1,0 +1,8 @@
+import core/mem
+
+--- A copy of `bytes` in whatever memory the caller passes.
+duplicate: (provider: type is mem.allocator, memory: provider, bytes: []u8)
+           -> (copy: mem.byte_buffer) ! mem.out_of_memory =
+    copy = try mem.new_bytes(memory, lenof bytes)
+    mem.copy(mem.bytes(copy), bytes) else none -- the lengths are equal
+end duplicate

@@ -1,0 +1,15 @@
+import core/io
+import hosted/system
+
+--- The length of the longest line on standard input.
+longest_line: (host: system.host)
+              -> (longest: usize) ! io.io_failed | io.line_too_long =
+    longest = 0
+    mut buffer: [256]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer)
+    loop do
+        line: io.line = try io.read_line(lines)
+        break when line.finished
+        if lenof line.bytes > longest then longest = lenof line.bytes end if
+    end loop
+end longest_line
