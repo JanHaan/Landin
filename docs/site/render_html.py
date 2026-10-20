@@ -61,8 +61,8 @@ OG_IMAGE = "og.png"
 DOCS = [
     dict(key="spec", src="spec.md", out="spec.html", kind="document",
          nav="the specification", group="the specification",
-         blurb="The grammar of the enabled kernel, and the rules the tour "
-               "left unsaid. Normative."),
+         blurb="The normative reference, not for reading through: look up "
+               "the exact rule a tour entry or a compiler message names."),
     dict(key="tour", src="tour.md", out="tour.html", kind="document",
          nav="the tour", group="the specification",
          blurb="The language explained, construct by numbered construct. "
@@ -1003,6 +1003,12 @@ GUIDE_CSS = """
 .guide p{margin:0 0 12px}
 .guide ul,.guide ol{margin:0 0 14px;padding-left:22px}
 .guide li{margin:0 0 6px}
+/*  A bullet is the small square the panels' captions carry, not the
+    browser's disc, which sat heavy beside the mono code it introduces.  */
+.guide ul{list-style:none;padding-left:20px}
+.guide ul > li{position:relative}
+.guide ul > li::before{content:"";position:absolute;left:-15px;top:.66em;
+  width:5px;height:5px;background:var(--accent)}
 .guide blockquote{margin:0 0 14px;padding:2px 0 2px 14px;
   border-left:2px solid var(--accent-soft);color:var(--ink-soft)}
 .guide blockquote p{margin:0 0 8px}
@@ -1049,6 +1055,16 @@ GUIDE_CSS = """
 .roadmap-track{border-left:1px solid var(--rule); background:var(--bg-soft);
   padding:.9rem 1.1rem 1rem}
 .roadmap-track > div{margin-bottom:.8rem}
+.roadmap-head{display:block; margin:0 0 .75rem; padding-bottom:.55rem;
+  border-bottom:1px solid var(--rule); font-family:var(--mono);
+  font-size:.72rem; color:var(--accent); text-decoration:none}
+.roadmap-head:hover{text-decoration:underline}
+.hero .status .said p.status-context{margin-top:.4rem}
+.hero .status .said p.status-links{margin-top:1rem; font-family:var(--mono);
+  font-size:.75rem}
+.hero .status .said p.status-links a{color:var(--accent); text-decoration:none;
+  margin-right:1.2rem}
+.hero .status .said p.status-links a:hover{text-decoration:underline}
 .roadmap-track > div:last-child{margin-bottom:0}
 .roadmap-label{display:block; margin-bottom:.3rem; font-family:var(--mono);
   font-size:.7rem; color:var(--ink-faint)}
@@ -1835,6 +1851,15 @@ def readme_status(text):
     return " ".join(m.group(1).split()) if m else ""
 
 
+README_LINK = re.compile(r"\[([^\]]+)\]\((#[^)\s]+)\)")
+
+
+def readme_status_context(text):
+    """The README's paragraph after its status line, which says it in full."""
+    m = re.search(r"\*\*Status:.*?\*\*\n\n(.+?)\n\n", text, re.S)
+    return " ".join(m.group(1).split()) if m else ""
+
+
 def status_parts(text):
     """The version, plain-language headline and detail in README's status."""
     prefix = f"Status: {VERSION_LINE}."
@@ -2086,7 +2111,7 @@ INSTALL_ANCHOR = "installing"
 
 
 def index_page(docs, counts, intro, status, progress, program, symbols,
-               says, footnote, hello=None):
+               says, footnote, hello=None, context=""):
     """The front door: what the language is, what it looks like, where to go.
 
     The contents remain, at the bottom, because a reader who came back for
@@ -2164,10 +2189,10 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         ("library.html", "use the library",
          "Every module's calls and signatures, with common tasks as one "
          "complete program and each module's own example."),
-        ("spec.html", "see what is decided",
-         "The specification is normative: the grammar of the kernel the "
-         "compiler accepts today, the rules the tour left unsaid, and why "
-         "each decision went the way it did."),
+        ("spec.html", "look up an exact rule",
+         "The normative reference, not something to read through: follow "
+         "a number from the tour or a compiler message to the one paragraph "
+         "that settles it."),
         ("handoff.html", "understand the design",
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
@@ -2213,6 +2238,14 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
                  f'<h2>{prose_html(headline, lambda ref: None)}</h2>')
         if detail:
             hero += f'<p>{prose_html(detail, lambda ref: None)}</p>'
+        if context:
+            hero += ('<p class="status-context">'
+                     + README_LINK.sub(
+                         r'<a href="readme.html\2">\1</a>',
+                         prose_html(context, lambda ref: None))
+                     + '</p>')
+        hero += ('<p class="status-links">'
+                 f'<a href="readme.html#{INSTALL_ANCHOR}">install →</a></p>')
         hero += '</div>'
         if progress:
             def progress_item(item):
@@ -2245,6 +2278,8 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
             recent_lane = ('<div><span class="roadmap-label">recently completed'
                            f'</span>{recent}</div>') if recent else ""
             hero += ('<div class="roadmap-track">'
+                     '<a class="roadmap-head" href="roadmap.html">'
+                     'the roadmap: its items, by state</a>'
                      f'{recent_lane}'
                      f'{current_lane}'
                      '<div><span class="roadmap-label">'
@@ -2634,7 +2669,9 @@ def main(argv):
         if missing:
             raise SystemExit("render_html: the tour's opening no longer names "
                              + ", ".join(missing) + "; update PITCH_LINKS")
-        status = readme_status((source / "README.md").read_text())
+        readme_text = (source / "README.md").read_text()
+        status = readme_status(readme_text)
+        context = readme_status_context(readme_text)
         progress = roadmap_progress((source / "ROADMAP.md").read_text())
         program = landing_program(source, construct_title, construct_page)
         hello = hello_program(source)
@@ -2662,7 +2699,7 @@ def main(argv):
 
         (SITE / "index.html").write_text(
             index_page(DOCS + GUIDES, counts, intro, status, progress, program,
-                       guide_symbols, says, footnote, hello))
+                       guide_symbols, says, footnote, hello, context))
         print(f"{SITE.name}/index.html")
         library_pages = library.write(source, SITE, SimpleNamespace(
             DOCS=DOCS, GUIDES=GUIDES, WORD=WORD, page=page,

@@ -1,5 +1,17 @@
 # The Landin specification
 
+> **You probably do not want to read this.** It is the normative reference:
+> about twenty thousand lines of grammar, rules and recorded decisions,
+> written to settle questions exactly, not to teach. Nobody reads it from
+> the top. To learn Landin, read [the tour](tour.md); to write a program,
+> copy one from [the examples](examples.md); if you know C, start with
+> [Landin for C programmers](docs/from-c.md); for the library's calls, see
+> [the library reference](docs/library.md).
+>
+> Come here with a number. The tour ends many entries with
+> "Exact rules: spec [NNNN]", and a compiler message names the paragraph it
+> enforces; follow that number to the one paragraph you need.
+
 This is the normative document. `tour.md` explains the language and this
 says what it is; where the two could be read differently, this one decides.
 It is deliberately partial and it grows one slice at a time, so it says what
