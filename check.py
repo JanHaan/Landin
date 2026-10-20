@@ -100,22 +100,40 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/site/README.md"]
 
 RUNNING_EXAMPLES = [
-    ("Sensors",
-     "compiler/tests/fixtures/runtime/sensors/main.ldn"),
+    ("Word count",
+     "compiler/tests/fixtures/runtime/word-count/main.ldn"),
+    ("Line numbers",
+     "compiler/tests/fixtures/runtime/line-numbers/main.ldn"),
+    ("Directory listing",
+     "compiler/tests/fixtures/runtime/directory-listing/main.ldn"),
+    ("Running a shell",
+     "compiler/tests/fixtures/runtime/run-shell/main.ldn"),
+    ("Copying a tree",
+     "compiler/tests/fixtures/runtime/tree-copy/main.ldn"),
+    ("Echo over loopback",
+     "compiler/tests/fixtures/runtime/network-echo/main.ldn"),
+    ("Printing formatted values",
+     "compiler/tests/fixtures/runtime/example-formatted-output/main.ldn"),
+    ("Reporting a failure in words",
+     "compiler/tests/fixtures/runtime/example-failure-words/main.ldn"),
     ("FizzBuzz",
-     "compiler/tests/fixtures/runtime/fizzbuzz/main.ldn"),
+     "compiler/tests/fixtures/runtime/example-fizzbuzz/main.ldn"),
     ("Greatest common divisor",
-     "compiler/tests/fixtures/runtime/greatest-common-divisor/main.ldn"),
+     "compiler/tests/fixtures/runtime/example-greatest-common-divisor/"
+     "main.ldn"),
     ("Insertion sort",
-     "compiler/tests/fixtures/runtime/insertion-sort/main.ldn"),
+     "compiler/tests/fixtures/runtime/example-insertion-sort/main.ldn"),
     ("Binary search",
-     "compiler/tests/fixtures/runtime/binary-search/main.ldn"),
+     "compiler/tests/fixtures/runtime/example-binary-search/main.ldn"),
     ("Sieve of Eratosthenes",
-     "compiler/tests/fixtures/runtime/sieve-of-eratosthenes/main.ldn"),
+     "compiler/tests/fixtures/runtime/example-sieve-of-eratosthenes/"
+     "main.ldn"),
     ("Run-length encoding",
-     "compiler/tests/fixtures/runtime/run-length-encoding/main.ldn"),
+     "compiler/tests/fixtures/runtime/example-run-length-encoding/main.ldn"),
     ("Merge sort",
-     "compiler/tests/fixtures/runtime/merge-sort/main.ldn"),
+     "compiler/tests/fixtures/runtime/example-merge-sort/main.ldn"),
+    ("Sensors",
+     "compiler/tests/fixtures/runtime/example-sensors/main.ldn"),
     ("Benchmark Game fannkuch-redux",
      "compiler/tests/fixtures/runtime/benchmark-game-fannkuch-redux/main.ldn"),
     ("Benchmark Game Mandelbrot",
@@ -127,25 +145,15 @@ RUNNING_EXAMPLES = [
      "main.ldn"),
     ("Benchmark Game binary-trees",
      "compiler/tests/fixtures/runtime/benchmark-game-binary-trees/main.ldn"),
-    ("Word count",
-     "compiler/tests/fixtures/runtime/word-count/main.ldn"),
-    ("Directory listing",
-     "compiler/tests/fixtures/runtime/directory-listing/main.ldn"),
-    ("Line numbers",
-     "compiler/tests/fixtures/runtime/line-numbers/main.ldn"),
-    ("Running a shell",
-     "compiler/tests/fixtures/runtime/run-shell/main.ldn"),
-    ("Echo over loopback",
-     "compiler/tests/fixtures/runtime/network-echo/main.ldn"),
-    ("Copying a tree",
-     "compiler/tests/fixtures/runtime/tree-copy/main.ldn"),
 ]
 
-#  A running example returns 42 once its own checks pass.  One that reads
-#  its standard input, or takes its size as an argument as a Benchmark Game
-#  program does, is a tool rather than a test: it returns 0, and its oracle
-#  is the output its fixture expects for the input or the arguments its
-#  fixture names.
+#  A running example is a program a reader copies, so it does what a
+#  program does: it prints what it computes and returns 0, and its fixture
+#  holds that output.  The status-42 fixtures that check themselves stay
+#  tests, run on Cortex-M where there is no standard output; an example of
+#  the same algorithm is a fixture of its own.  One that reads its standard
+#  input, or takes its size as an argument as a Benchmark Game program
+#  does, also names the input or the arguments its fixture gives it.
 READING_EXAMPLES = {"Word count", "Line numbers",
                     "Benchmark Game reverse-complement"}
 ARGUMENT_EXAMPLES = {"Benchmark Game fannkuch-redux",
@@ -7656,7 +7664,7 @@ def check_running_examples(full_run):
     A copied listing is useful only while it stays the program named beneath
     it.  The runtime fixture remains authoritative: each section carries its
     exact source in one Landin fence, and its metadata keeps saying that the
-    harness executes it and expects status 42.
+    harness executes it, expects status 0 and compares what it prints.
     """
     if not full_run:
         return []
@@ -7723,12 +7731,17 @@ def check_running_examples(full_run):
         reads = title in READING_EXAMPLES
         takes = title in ARGUMENT_EXAMPLES
         required = [("class", "runtime"), ("program", "main.ldn"),
-                    ("status", "0" if reads or takes else "42")]
+                    ("status", "0")]
         for key, value in required:
             if fields.get(key) != value:
                 out.append((source, 1,
                             "%s is showcased as running but its metadata "
                             "does not say %r" % (title, key + ": " + value)))
+        if not fields.get("run_expect"):
+            out.append((source, 1,
+                        "%s is a published example, so it prints what it "
+                        "computes and its metadata names the output "
+                        "expected" % title))
         if reads and not (fields.get("stdin")
                           and fields.get("run_expect")):
             out.append((source, 1,

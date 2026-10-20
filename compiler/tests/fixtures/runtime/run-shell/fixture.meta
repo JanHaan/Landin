@@ -5,6 +5,6 @@ program: main.ldn
 root: ../../../../..
 run_expect: output.txt
 stream: output
-status: 42
+status: 0
 constructs: 0570, 0680, 0790, 0900, 0910, 0940, 1030, 1100, 1210, 1650, 1660
 targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

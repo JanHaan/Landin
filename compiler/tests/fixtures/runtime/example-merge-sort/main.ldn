@@ -1,0 +1,55 @@
+--  Merge sort halves the range, sorts each half, and merges the two sorted
+--  halves back through a work array the caller lends.
+import core/io
+import core/text
+import hosted/system
+
+merge_sort: (values: []mut i32, work: []mut i32, left: usize, right: usize)
+            -> none =
+    return when right - left < 2
+    middle: usize = left + (right - left) / 2
+    merge_sort(values, work, left, middle)
+    merge_sort(values, work, middle, right)
+
+    for index in left..<right do
+        work[index] = values[index]
+    end for
+    mut from_left: usize = left
+    mut from_right: usize = middle
+    for destination in left..<right do
+        if from_right >= right
+          or (from_left < middle and work[from_left] <= work[from_right])
+        then
+            values[destination] = work[from_left]
+            inc from_left
+        else
+            values[destination] = work[from_right]
+            inc from_right
+        end if
+    end for
+end merge_sort
+
+--  The label, then each value after a space, then a newline.
+show: (inout out: io.buffered_writer(system.host), label: utf8,
+       values: []i32)
+      -> none ! io.io_failed | text.no_space | text.invalid_format =
+    try io.format(out, "{}:", [any(addr label)])
+    for value in values do
+        try io.format(out, " {}", [any(addr value)])
+    end for
+    try io.put(out, "\n")
+end show
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else none
+
+    mut values: [8]i32 = [-12, 5, 0, 99, 5, 2, -3, 18]
+    mut work: [8]i32 = zeroed
+    show(out, "before", values[0..<8]) else none
+    merge_sort(values[0..<8], work[0..<8], 0, 8)
+    show(out, "after", values[0..<8]) else none
+    code = 0
+end main

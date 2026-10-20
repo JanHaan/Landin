@@ -1,0 +1,41 @@
+--  Insertion sort grows a sorted prefix, moving each new value left past
+--  the larger ones before it.
+import core/io
+import core/text
+import hosted/system
+
+insertion_sort: (values: []mut i32) -> none =
+    for index in 1..<lenof values do
+        mut current: usize = index
+        while current > 0 and values[current - 1] > values[current] do
+            saved: i32 = values[current - 1]
+            values[current - 1] = values[current]
+            values[current] = saved
+            dec current
+        end while
+    end for
+end insertion_sort
+
+--  The label, then each value after a space, then a newline.
+show: (inout out: io.buffered_writer(system.host), label: utf8,
+       values: []i32)
+      -> none ! io.io_failed | text.no_space | text.invalid_format =
+    try io.format(out, "{}:", [any(addr label)])
+    for value in values do
+        try io.format(out, " {}", [any(addr value)])
+    end for
+    try io.put(out, "\n")
+end show
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else none
+
+    mut values: [8]i32 = [9, -4, 7, 7, 0, -9, 42, 1]
+    show(out, "before", values[0..<8]) else none
+    insertion_sort(values[0..<8])
+    show(out, "after", values[0..<8]) else none
+    code = 0
+end main

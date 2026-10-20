@@ -1,0 +1,37 @@
+--  Euclid's algorithm: replace the pair by the divisor and the remainder
+--  until the remainder is zero.
+import core/io
+import hosted/system
+
+gcd: (a: u32, b: u32) -> (result: u32) =
+    mut dividend: u32 = a
+    mut divisor: u32 = b
+    while divisor <> 0 do
+        remainder: u32 = dividend % divisor
+        dividend = divisor
+        divisor = remainder
+    end while
+    result = dividend
+end gcd
+
+pair: type = struct
+    a: u32
+    b: u32
+end pair
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else none
+
+    pairs: [4]pair = [(a: 1071, b: 462), (a: 54, b: 24), (a: 42, b: 0),
+                      (a: 37, b: 600)]
+    for each in pairs do
+        divisor: u32 = gcd(each.a, each.b)
+        io.format(out, "gcd({}, {}) = {}\n",
+                  [any(addr each.a), any(addr each.b), any(addr divisor)])
+            else none
+    end for
+    code = 0
+end main

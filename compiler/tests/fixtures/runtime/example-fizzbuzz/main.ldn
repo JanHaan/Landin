@@ -1,0 +1,24 @@
+--  One to a hundred, with Fizz for a multiple of three, Buzz for a
+--  multiple of five and FizzBuzz for a multiple of both.
+import core/io
+import hosted/system
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [512]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    defer io.flush(out) else none
+
+    for n in 1..100 do
+        if n % 15 == 0 then
+            io.put(out, "FizzBuzz\n") else none
+        elsif n % 3 == 0 then
+            io.put(out, "Fizz\n") else none
+        elsif n % 5 == 0 then
+            io.put(out, "Buzz\n") else none
+        else
+            io.format(out, "{}\n", [any(addr n)]) else none
+        end if
+    end for
+    code = 0
+end main

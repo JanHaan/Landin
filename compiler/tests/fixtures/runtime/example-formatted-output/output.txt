@@ -1,0 +1,4 @@
+Ada Lovelace was born in 1815 and died in 1852.
+Grace Hopper was born in 1906 and died in 1992.
+Peter Landin was born in 1930 and died in 2009.
+3 people in all.

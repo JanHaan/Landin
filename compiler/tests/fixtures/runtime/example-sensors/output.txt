@@ -1,0 +1,4 @@
+read 21
+read 2
+read 19
+3 of 4 sensors answered

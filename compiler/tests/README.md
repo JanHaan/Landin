@@ -551,55 +551,30 @@ not a verdict.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Nineteen of them are collected in `examples.md`
-and use the language and the hosted library; among them:
+single-construct probes. Twenty-one of them are collected in `examples.md`,
+which a reader copies from, so each prints what it computes and returns 0,
+and its `run_expect` holds that output. `check.py`'s `RUNNING_EXAMPLES`
+names them, and the page's listings are held to their sources byte for
+byte.
 
-- [sensors](fixtures/runtime/sensors/main.ldn) polls two kinds of sensor
-  through `any`, grows a list of readings in an arena its caller lends, and
-  skips or propagates declared failures;
-- [FizzBuzz](fixtures/runtime/fizzbuzz/main.ldn) traverses one through 100,
-  prints the traditional lines through a buffered writer and tallies their
-  atom classifications;
-- [greatest common divisor](fixtures/runtime/greatest-common-divisor/main.ldn)
-  implements Euclid's remainder reduction;
-- [insertion sort](fixtures/runtime/insertion-sort/main.ldn) sorts
-  caller-owned storage through `inout` and a writable slice;
-- [binary search](fixtures/runtime/binary-search/main.ldn) searches a read-only
-  slice and returns a found-or-missing variant;
-- [the sieve of Eratosthenes](fixtures/runtime/sieve-of-eratosthenes/main.ldn)
-  marks composites in caller-owned fixed storage;
-- [run-length encoding](fixtures/runtime/run-length-encoding/main.ldn)
-  transforms a read-only slice into caller-owned structured output;
-- [merge sort](fixtures/runtime/merge-sort/main.ldn) divides recursively and
-  loops over caller-owned storage and a local work array;
-- [fannkuch-redux](fixtures/runtime/benchmark-game-fannkuch-redux/main.ldn)
-  enumerates all permutations of the order its argument names and reports
-  the official checksum and maximum flip count for seven;
-- [Mandelbrot](fixtures/runtime/benchmark-game-mandelbrot/main.ldn) plots the
-  image of the size its argument names, the official 200-by-200 correctness
-  image as a binary portable bitmap;
-- [FASTA](fixtures/runtime/benchmark-game-fasta/main.ldn) emits the
-  repeated and weighted-random DNA sequences of the length its argument
-  names, the official 1,000-unit output among them;
-- [reverse-complement](fixtures/runtime/benchmark-game-reverse-complement/main.ldn)
-  reads FASTA's output on standard input into a builder growing on the heap
-  and writes each sequence's reverse complement;
-- [binary-trees](fixtures/runtime/benchmark-game-binary-trees/main.ldn)
-  allocates every node of many perfect trees through a region over the heap
-  and frees each tree by releasing its region.
+| group | fixtures |
+| --- | --- |
+| everyday tools | `word-count`, `line-numbers`, `directory-listing`, `run-shell`, `tree-copy`, `network-echo` |
+| printing and failures | `example-formatted-output`, `example-failure-words` |
+| classic exercises | `example-fizzbuzz`, `example-greatest-common-divisor`, `example-insertion-sort`, `example-binary-search`, `example-sieve-of-eratosthenes`, `example-run-length-encoding`, `example-merge-sort`, `example-sensors` |
+| Benchmark Game ports | `benchmark-game-fannkuch-redux`, `benchmark-game-mandelbrot`, `benchmark-game-fasta`, `benchmark-game-reverse-complement`, `benchmark-game-binary-trees` |
 
-The examples use loops for ordinary traversal, and reserve recursion for
-merge sort's divide-and-conquer step and binary-trees' trees. The classic
-exercises verify their results through status 42, and FizzBuzz additionally
-has an exact output oracle; the five Benchmark Game programs take their input
-as the Benchmark Game's own programs do, return 0 and are held to exact
-output oracles. Together they exercise aggregate parameters, fixed arrays, slices,
-`inout`, atoms, variants,
-pattern matching, computed indexing, valued loop exits, text literals,
-floating-point arithmetic, concepts, `any` dispatch, lent allocators, binary
-output and hosted I/O. The Benchmark Game
-ports use its published algorithms and run any input, but their fixtures run
-only the small correctness inputs, not the performance inputs; they are
+The `example-*` fixtures print, so they are hosted only. Each classic
+exercise also has a test of the same algorithm without the `example-`
+prefix, such as
+[insertion sort](fixtures/runtime/insertion-sort/main.ldn): it prints
+nothing, checks its own result and returns 42, so it runs on every target,
+Cortex-M included, and the construct inventory counts it.
+[FizzBuzz](fixtures/runtime/fizzbuzz/main.ldn) is the hosted exception,
+which prints and checks its tally.
+
+The Benchmark Game ports use its published algorithms and run any input,
+but their fixtures run only the small correctness inputs; they are
 correctness and compiler-pressure workloads, not competitive benchmark
 targets. Their oracles are byte for byte the official
 [fannkuch-redux](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fannkuchredux.html),
@@ -609,9 +584,8 @@ targets. Their oracles are byte for byte the official
 and [binary-trees](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/binarytrees.html)
 outputs, and `check.py` holds each to its official digest.
 
-The narrower runtime fixtures retain the single-construct and composition
-coverage behind those examples. On Linux x86-64, compile one from the
-repository root with:
+On Linux x86-64, compile one of the status-42 tests from the repository
+root with:
 
 ```sh
 refine --root=. --target=linux-x86-64 --emit=exe \
@@ -621,9 +595,8 @@ refine --root=. --target=linux-x86-64 --emit=exe \
 test $? -eq 42
 ```
 
-Each classic exercise returns 42 when its result is the expected one. They are runtime
-fixtures as well as examples. `.github/workflows/gate.yml` compiles, runs and
-checks all nineteen on each full gate run. `AGENTS.md` describes the verified
+`.github/workflows/gate.yml` compiles, runs and checks all twenty-one
+examples on each full gate run. `AGENTS.md` describes the verified
 explanatory-only reuse exception.
 
 The test program validates its complete suite-name inventory before any

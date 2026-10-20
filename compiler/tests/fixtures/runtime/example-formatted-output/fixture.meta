@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published formatting example prints a struct array's names and years and a count through io.format into a buffered writer flushed by a defer
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0520, 0670, 0710, 1030, 1100, 1150, 1380, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

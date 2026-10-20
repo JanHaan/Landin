@@ -976,6 +976,76 @@
     "runtime/evidence-projected-entries-kept": {
       "mode": "execute"
     },
+    "runtime/example-binary-search": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/binary-search executes the same algorithm here."
+    },
+    "runtime/example-failure-words": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/failure-words gives the library's phrases here."
+    },
+    "runtime/example-fizzbuzz": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to."
+    },
+    "runtime/example-formatted-output": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/buffered-writer-format formats into a buffered writer here."
+    },
+    "runtime/example-greatest-common-divisor": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/greatest-common-divisor executes the same algorithm here."
+    },
+    "runtime/example-insertion-sort": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/insertion-sort executes the same algorithm here."
+    },
+    "runtime/example-merge-sort": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/merge-sort executes the same algorithm here."
+    },
+    "runtime/example-run-length-encoding": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/run-length-encoding executes the same algorithm here."
+    },
+    "runtime/example-sensors": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/sensors executes the same poll here."
+    },
+    "runtime/example-sieve-of-eratosthenes": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/sieve-of-eratosthenes executes the same algorithm here."
+    },
     "runtime/failure-words": {
       "mode": "execute"
     },

@@ -712,5 +712,5 @@ public main: () -> (code: i32) =
         return
     end
     code = if first.replaced == 0 and second.replaced == 9
-      and first.skipped == 1 then 42 else 8 end if
+      and first.skipped == 1 then 0 else 8 end if
 end main

@@ -1,0 +1,2 @@
+input:   AAAABBBCCDAA
+encoded: 4A3B2C1D2A

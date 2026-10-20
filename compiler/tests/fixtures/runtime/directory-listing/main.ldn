@@ -247,5 +247,5 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    code = if ok then 42 else 5 end if
+    code = if ok then 0 else 5 end if
 end main

@@ -1,0 +1,44 @@
+--  Run-length encoding: each run of one repeated byte becomes its length
+--  and the byte, so AAAB is 3A1B.
+import core/io
+import hosted/system
+
+--  A run: where in the input it starts, and how many bytes long it is.
+run: type = struct
+    start: usize
+    length: usize
+end run
+
+--  The runs of `input`, written into `runs`, which the caller makes as
+--  long as the input so that every run fits.
+encode: (input: []u8, runs: []mut run) -> (used: usize) =
+    used = 0
+    for at in 0..<lenof input do
+        if used > 0 and input[runs[used - 1].start] == input[at] then
+            inc runs[used - 1].length
+        else
+            runs[used] = run(start: at, length: 1)
+            inc used
+        end if
+    end for
+end encode
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else none
+
+    input: []u8 = "AAAABBBCCDAA"
+    mut runs: [12]run = zeroed
+    used: usize = encode(input, runs[0..<12])
+
+    io.format(out, "input:   {}\nencoded: ", [any(addr input)]) else none
+    for each in runs[0..<used] do
+        byte: []u8 = input[each.start..<each.start + 1]
+        io.format(out, "{}{}", [any(addr each.length), any(addr byte)])
+            else none
+    end for
+    io.put(out, "\n") else none
+    code = 0
+end main

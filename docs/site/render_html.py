@@ -1778,7 +1778,7 @@ Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
 
 #  One whole program rather than three fragments: the fragments showed
 #  syntax, and a program shows how the pieces are meant to be used together.
-LANDING_PROGRAM = "compiler/tests/fixtures/runtime/sensors"
+LANDING_PROGRAM = "compiler/tests/fixtures/runtime/example-sensors"
 
 FENCE_OPEN = re.compile(r"^```landin\s*$")
 ROADMAP_ITEM = re.compile(
@@ -2081,7 +2081,7 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         f'<span class="grow"></span><span>{len(lines)} lines</span></figcaption>'
         f'{listing(hl.block(lines))}'
         '<div class="foot"><code>$ refine compile … -o sensors '
-        '&amp;&amp; ./sensors; echo $?</code><span class="grow"></span>'
+        '&amp;&amp; ./sensors</code><span class="grow"></span>'
         '<a href="examples.html">more programs →</a></div>'
         '</figure>'
         '<aside class="uses" aria-label="Constructs the program uses">'
@@ -2105,9 +2105,9 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
         ("examples.html", "run real programs",
-         "The sensors above, FizzBuzz, Euclid, searching, a prime sieve, "
-         "run-length encoding and sorting, plus fannkuch-redux, Mandelbrot "
-         "and FASTA: complete sources the Linux gate builds and executes."),
+         "Word count, a directory listing, a shell, a tree copy and an echo "
+         "server, then the sensors above and the classic exercises, each "
+         "printing what it computes: complete sources the gate runs."),
     ]
     cards = "".join(
         f'<a class="route" href="{href}"><span class="label">{"abcd"[i]} · '
