@@ -15,7 +15,7 @@
 > notes between this banner and that heading reconcile the sketch with the
 > specification, and a reader can skip them.
 
-Current with specification 0.2.7. Its own findings Y1-Y7 are resolved
+Current with specification 0.2.8. Its own findings Y1-Y7 are resolved
 below, except Y4, which stays an open watch in the roadmap's register.
 
 The point of this one is the word recoverable. A parser must not stop

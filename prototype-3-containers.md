@@ -16,7 +16,7 @@
 > notes between this banner and that heading reconcile the sketch with the
 > specification, and a reader can skip them.
 
-Current with specification 0.2.7. Its own findings Z1-Z19 are all
+Current with specification 0.2.8. Its own findings Z1-Z19 are all
 resolved below.
 
 This one was chosen because it presses on five things at once:

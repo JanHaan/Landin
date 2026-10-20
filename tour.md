@@ -7,7 +7,7 @@ you are being an idiot.
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.2.7 — what each version changed is in
+Version 0.2.8 — what each version changed is in
 [the handoff](handoff.md#versions).
 
 ## Hello, world

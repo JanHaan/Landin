@@ -1,7 +1,7 @@
 # Landin — orientation
 
 Everything a fresh reader, or a fresh session, needs before touching
-anything. Kept current at specification **0.2.7**, the seventh under the
+anything. Kept current at specification **0.2.8**, the eighth under the
 second implementation roadmap.
 
 ---
@@ -269,6 +269,7 @@ it:
 | 0.2.5 | A parse's mistake stays inside its construct and the reports it causes are suppressed, D260; a refused statement is reported as the smallest change that mends it, offered to tools as a repair, D261; an import without a root is refused at the import, D262; a checker refusal poisons what it refused, D263. |
 | 0.2.6 | FreeBSD x86-64 and arm64, with hosted system identity separate from C transport, D264; Linux RV64 with LP64D and explicit ISA extension sets, D265; conversions that apply the type as written, D266. `refine` gets explicit commands, shared presentation options and build-system dependency files; warnings may also advise without a repair, and command-line policy can enable, suppress or deny them, D251. |
 | 0.2.7 | The compiler identifies its exact release, its development commit and a modified checkout. |
+| 0.2.8 | A standard library in three roots, `core`, `hosted` and `platform`, found beside the compiler and shipped in its archive, D267 to D279; services are handles, D288; a hosted library over a POSIX layer: files, directories, standard input, the environment, processes, time, randomness, sockets, the rest of the file system and dynamic loading; static Linux programs make their system calls in source, D279 and D280. Several labels share a `match` arm, D405; a value call's failure is ignored under a discard with `else none`, D406; byte-packed C records, `offsetof` and flexible members, D410 to D414; only exports reach the C namespace, D415 to D418; a parameter whose type names no generic formal is an ordinary context, D419 and D420; distinct types compare, update and zero as their bases do, a pointer union compares with an atom and `_ (rest):` binds the atoms no arm named, D427 to D436; module values read compiler facts and size arrays, D437 and D438. The tour, the C guide, the examples and the library reference are rewritten for a reader new to Landin. |
 
 The history before 0.1.0 is kept in a separate archive. The part of it with
 lasting value is at the end of the tour, under WHAT WAS TRIED AND DROPPED.

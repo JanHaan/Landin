@@ -49,7 +49,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
 
-VERSION_LINE = "specification 0.2.7"
+VERSION_LINE = "specification 0.2.8"
 REPO = "https://github.com/JanHaan/Landin"
 #  The canonical host.  The pages are served from GitHub Pages under
 #  the CNAME the publishing workflow writes; every page still says

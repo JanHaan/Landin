@@ -16,7 +16,7 @@
 > notes between this banner and that heading reconcile the sketch with the
 > specification, and a reader can skip them.
 
-Current with specification 0.2.7. Its own findings W1-W7 are all
+Current with specification 0.2.8. Its own findings W1-W7 are all
 resolved below.
 
 A log filter: read a file, run every line through a chain of filters

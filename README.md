@@ -4,7 +4,7 @@
 > 32 TB*. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
 
-**Status: specification 0.2.7. Landin programs build and run on Linux,
+**Status: specification 0.2.8. Landin programs build and run on Linux,
 macOS and FreeBSD, and firmware builds for Cortex-M0.**
 
 `refine`, Landin's compiler, builds and runs programs on Linux (x86-64,
@@ -113,18 +113,14 @@ with `, dirty` after it when the clone was modified, and its `library: `
 line names the clone; [Using refine](#using-refine) says how that line is
 decided.
 
-> **Warning: the 0.2.7 release archives hold `refine` without its
-> library,** so the first program below fails at `import core/io`. So does
-> `nix profile install github:JanHaan/Landin#refine-bin`, which fetches
-> that archive. Until a release ships the library, use one of the routes
-> above.
-
-From that release on, the archive for your platform on
+From 0.2.8 on, the archive for your platform on
 [the releases page](https://github.com/JanHaan/Landin/releases) holds
 `bin/refine` and the library under `lib/landin`, with no top-level
 directory: unpack it into a directory of its own and put its `bin` on your
 `PATH`, and `refine version` prints the release and `library: ` with that
-directory's `lib/landin`.
+directory's `lib/landin`. The archives of 0.2.7 and earlier hold `refine`
+alone, without its library, so the first program below fails with one of
+them at `import core/io`.
 
 ## Your first program
 
@@ -255,7 +251,7 @@ options retain their order, and duplicate single-valued options are refused.
 Use `--` before literal operands. `@FILE` expands a bounded response file with
 single/double quotes and backslash escapes, without shell expansion.
 
-`refine version` (also `--version`) prints `refine 0.2.7` for an exact release
+`refine version` (also `--version`) prints `refine 0.2.8` for an exact release
 checkout, or `refine dev (01234567)` for a development commit. A modified
 checkout adds `dirty`; a modified release also includes its commit. The
 release name comes from an exact numeric `v` tag, independently of debug or
