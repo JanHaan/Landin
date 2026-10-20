@@ -17,6 +17,39 @@ Availability does not promise that every composition fits a particular
 firmware image. All memory and handle lifetimes remain explicit caller
 obligations.
 
+## Common tasks
+
+A hosted program imports `hosted/system` and makes its handle once,
+`host := system.new()`; every call below takes that `host`.
+
+| Task | Calls | Module |
+|---|---|---|
+| Print a formatted line | `mut out := io.buffered_over(host, io.out(host), storage[0..<256])`, then `defer io.flush(out) else none`, then `try io.format(out, "{} lines\n", [any(addr count)])` | [core/io](../core/io) |
+| Read a file named on the command line, line by line | `path := try io.argument_at(host, 0)`, `file := try io.open_read(host, path)`, `mut lines := io.lines_over(host, file, buffer[0..<4096])`, then `item := try io.read_line(lines)` until `item.finished` | [core/io](../core/io) |
+| Turn a failure into words for a person | `failure.words(problem)` in an `else (problem)` gives `not found`, `permission denied` and so on | [core/failure](../core/failure) |
+| Get the handle the calls take | `system.new()` | [hosted/system](../hosted/system) |
+
+## Reading a signature
+
+Each module's page shows every call's full signature, such as
+`io.argument_at`'s
+`(provider: type is process, host: provider, index: usize) -> (value: text.host_string from host) ! no_argument`.
+A call writes far less: `io.argument_at(host, 0)`.
+
+| In a signature | What it means |
+|---|---|
+| `provider: type is process`, first | A type parameter. The compiler deduces it from the arguments, so a call leaves it out [1300]. A call names one only where no argument has that type, as `vec.new(item: i32)`. |
+| `is process` | The type must conform to the concept `process`: a named set of operations [1230] [1240]. |
+| `host: provider` | The provider: the handle a call works through, here the one `system.new()` made. An allocator's handle is called `memory`. |
+| evidence | The table that tells generic code how a type does a concept's operations [1240] [1310]. A conformance such as `u32 is formattable (...)` supplies it. |
+| `world` | `core/io`'s concept for an ordinary program's provider: a `reader`, `writer`, `files` and `process` in one. `system.new()`'s `host` is one. |
+| `! no_argument` | What the call can fail with [0940]: pass it on with `try`, or handle it with `else`. |
+| `from host` | The result borrows from `host` and must not outlive it [0790]. |
+| `inout` | The call may change the argument in place [0900]. |
+| `sink` | The call consumes the argument [0910]. |
+
+## About this reference
+
 This reference is generated from the public declarations and their `---`
 doc comments in `core`, `hosted` and `platform`. Each module's page has
 the exact signatures, source links, module browsing and local search, and
@@ -25,9 +58,8 @@ the same comments appear in editor hover. The
 evidence; the [tour](../tour.md) teaches the language.
 
 Each module below opens with what it is for, then its main calls, then how
-it behaves. Its executable example is an existing compiler fixture,
-included in the module's page so the documentation keeps no second copy.
-The fixture's metadata and target lanes decide where it runs.
+it behaves. Its page ends with a complete program that uses it, which the
+compiler's own tests run.
 
 ## What the library does not cover yet
 
@@ -112,7 +144,7 @@ Byte blocks are slices with their lengths checked:
 - `find` gives the index of a byte's first occurrence, or the slice's
   length when there is none, so `source[0..<find(source, v)]` is always
   the part before it.
-- Comparing two byte strings is `cmp.compare`'s (D352).
+- Comparing two byte strings is `cmp.compare`'s.
 
 On hosted targets `copy`, `fill` and `find` move a `usize` word at a time:
 
@@ -121,10 +153,6 @@ On hosted targets `copy`, `fill` and `find` move a `usize` word at a time:
 | x86-64 and arm64 | Copying up and searching load and store words at any address, from the first byte, and move bytes only in the tail. |
 | Other hosted targets, and copying down or filling anywhere | Only at a multiple of the word, between a head and a tail moved a byte at a time. |
 | Firmware | Plain byte loops, whose code is smaller. |
-
-`runtime/core-mem-blocks` copies both ways within one array, and
-`runtime/core-mem-blocks-alignment` holds all three to a byte-at-a-time
-model at every offset.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-mem/main.ldn)
 
@@ -143,7 +171,7 @@ A growable contiguous list with explicit allocation and rollback on failed growt
 End views before relocation or release. Clearing or releasing a container
 never frees resources referenced by its items.
 
-A list of bytes is the growable byte container (D425):
+A list of bytes is the growable byte container:
 
 - `append_bytes` copies a slice after its bytes;
 - `spare_bytes` lends the spare capacity a read fills, and `extend_bytes`
@@ -185,7 +213,7 @@ The three concepts ship for these types:
 `compare` orders two byte strings as `less`, `equal` or `greater`. The
 first differing byte decides, and a proper prefix comes first: C's
 `memcmp` with the lengths taken into account, and the order `ls` gives
-names in the C locale. `[]u8`'s `ordered` evidence is its `less` (D352).
+names in the C locale. `[]u8`'s `ordered` evidence is its `less`.
 
 There is one register and no override: another reading of a shipped type
 goes on a `distinct` wrapper with its own evidence. A `hashable` key
@@ -219,7 +247,7 @@ not share a probe chain.
 `capacity` is how many entries fit before the next new key rebuilds the
 table, and `slots` is its size. Removed entries count against the
 capacity until a rebuild; `removed` counts the dead entries that hold
-their slots until then (D354). The representation is the module's own.
+their slots until then. The representation is the module's own.
 
 Keep keys and their backing stable while stored, and restart cursors after
 any mutation.
@@ -251,7 +279,7 @@ passes it the context `by` the caller gives, unchanged, on every call.
 So records that refer into shared storage, such as offsets into one pool
 of names, are ordered by what they refer to, and the context may be a
 pointer the comparison counts through.
-The comparison must be a strict weak ordering while it runs (D387).
+The comparison must be a strict weak ordering while it runs.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-sort/main.ldn)
 
@@ -328,7 +356,9 @@ builder as it was:
 | `append_i32`, `append_i64`, `append_isize` | decimal, with a `-` before a negative value |
 | `append_hex_u32`, `append_hex_u64`, `append_hex_usize` | lower-case hexadecimal with no `0x` |
 
-A narrower integer widens at the call.
+Each append takes exactly its own type, and nothing widens at the call:
+passing a `u8` to `append_u32` is refused. Convert a narrower integer
+explicitly, `text.append_u32(line, u32(byte))`.
 
 Width and padding apply to whatever was written since an earlier
 `length`. `align_right` puts a fill byte before the piece until it is as
@@ -354,11 +384,11 @@ reported.
 `formattable` has one entry, `append`, which writes a value into a
 builder through a pointer to it. The library supplies it for the ten
 integer types in decimal, `bool` as `true` or `false`, `utf8`, `[]u8` and
-host strings, and a program declares it for a type of its own.
+host strings, and a program declares it for a type of its own. Floats,
+`f32` and `f64`, are not formattable yet.
 
 No locale is consulted anywhere: the same values give the same bytes
-everywhere. `runtime/core-text-format-firmware` builds and formats a line
-within a Cortex-M0 image.
+everywhere, on Cortex-M0 as on a hosted system.
 
 ### Parsing numbers
 
@@ -381,13 +411,13 @@ The scan goes from the left and reports whichever it meets first.
 The builder's appends are the library's one decimal writer, and these
 parses its one parser. The slice writers `write_byte`, `write_u32`,
 `write_u64` and `write_usize` and `prefix` are retired, and `core/net`
-reads its addresses' numbers through these parses (D355).
+reads its addresses' numbers through these parses.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-text/main.ldn)
 
 ## core/io
 
-Reader, writer, file and process capabilities, their world composition, directories, running programs, entropy, the rest of the file system and terminals beside them, the memory world, a buffered writer and a line reader. Time is `core/time`, the network `core/net` and the fakes of a system `core/io/fake` (D348).
+Reader, writer, file and process capabilities, their world composition, directories, running programs, entropy, the rest of the file system and terminals beside them, the memory world, a buffered writer and a line reader. Time is `core/time`, the network `core/net` and the fakes of a system `core/io/fake`.
 
 The capabilities are concepts, and a program names only the ones it uses:
 
@@ -403,14 +433,17 @@ The capabilities are concepts, and a program names only the ones it uses:
 | `terminals` | asking whether a stream is a terminal, and its size | no |
 | `entropy` | `fill_random` | no |
 
-Typical use, as in the tour's first program:
+Typical use, as in the tour's first program. Every call takes `host`,
+the handle `system.new()` makes in [hosted/system](../hosted/system),
+which a hosted program imports beside `core/io`:
 
-| Call | What it does |
+| Task | Calls |
 |---|---|
-| `io.out(host)` | The standard output stream. |
-| `io.write(host, file, bytes)` | Write all the bytes, or fail with `io_failed`. |
-| `io.buffered_over(host, file, buffer)` | A buffered writer over your buffer. |
-| `io.lines_over(host, file, buffer)` | A line reader over your buffer. |
+| Print a formatted line | `mut out := io.buffered_over(host, io.out(host), storage[0..<256])` makes a buffered writer over your buffer, `defer io.flush(out) else none` writes what waits on the way out, and `try io.format(out, "{} of {}\n", [any(addr done), any(addr total)])` fills each `{}` with a value. |
+| Print bytes as they are | `try io.put(out, "done\n")`, through the same writer. |
+| Write straight to a stream | `io.write(host, io.err(host), bytes)` writes all the bytes, or fails with `io_failed`. |
+| Get an argument | `path := try io.argument_at(host, 0)` lends the first argument after the program's name as a host string, or fails with `no_argument`; `io.argument_count(host)` counts them. |
+| Read a file line by line | `file := try io.open_read(host, path)` opens it, `mut lines := io.lines_over(host, file, buffer[0..<4096])` makes a line reader over your buffer, and `item := try io.read_line(lines)` gives each line in `item.bytes` until `item.finished`; `try io.close(host, file)` closes it. |
 
 ### Providers
 
@@ -444,6 +477,23 @@ argument passed on as a path is never converted.
 
 Its directories are its slots' names before a `/`, so it lists them and
 reports their sizes but changes nothing.
+
+How it behaves, so that a test gets the same answer every run:
+
+- Files must already be in its table. Opening one for writing truncates
+  it, and reads stop at a file's initialized length.
+- `write` and `write_some` keep the system provider's contract below, in
+  [hosted/system](../hosted/system).
+- The read and write limits cut each transfer into chunks, and
+  `fail_read_at`, `fail_write_at` and `fail_close_at` fail the call with
+  that one-based count: 1 is the first read, and 0 never fails. So short
+  reads, partial writes and failed cleanup are reproducible.
+- A zero read limit with data still unread is an error, not the end of
+  the input.
+- `written` and `written_errors` lend what was written to standard output
+  and standard error.
+- Its arguments, like the system provider's, never include the program's
+  own name, `argv[0]`.
 
 ### Directories
 
@@ -548,8 +598,6 @@ code. A scripted program at a given path:
   started;
 - ends as it is told.
 
-`runtime/run-shell-memory` runs the published shell runner over it.
-
 ### The rest of the file system
 
 The rest of the file system is `file_system`, a concept of its own beside
@@ -636,7 +684,9 @@ flushes it.
 
 A failed flush reports the writer's `io_failed` and keeps every byte the
 writer did not take, so the next flush writes each byte once. `format`
-refuses a text larger than the whole buffer with `text.no_space` (D355).
+refuses a text larger than the whole buffer with `text.no_space`. Its
+values are `text.formattable`'s types, as `text.format`'s are: integers,
+`bool`, `utf8`, `[]u8` and host strings. Floats are not formattable yet.
 
 There are no destructors: bytes still waiting when the program ends are
 never written. Flush before every way out, `defer io.flush(out) else ...`
@@ -660,16 +710,13 @@ until the next read.
   `line_too_long`, and the rest of it is skipped, so the next read gives
   the line after it.
 
-`runtime/core-io-buffered-writer` and `runtime/core-io-line-reader` run
-both over the in-memory provider, failures included.
-
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-io/main.ldn)
 
 ## core/io/fake
 
 Fakes of a system's providers for tests that must give the same answer every run and on every target: a file system, a network, a clock, entropy and terminals, each over the caller's records.
 
-Each fake is named one way (D348):
+Each fake is named one way:
 
 | Part | Name | Example |
 |---|---|---|
@@ -702,10 +749,9 @@ path, a kind and room for a file's bytes or a link's target, and a
 - A node a file is open on cannot be removed or renamed over, where POSIX
   would keep the open file without its name.
 
-`runtime/volume-memory` holds every entry of the volume to its oracles.
-It links every entry of its conformances and does not fit a Cortex-M0
-image; `runtime/file-system-firmware` runs the temporary names and the
-memory terminals there.
+The whole volume, which links every entry of its conformances, does not
+fit a Cortex-M0 image; its temporary names and the memory terminals run
+there.
 
 ### Terminals
 
@@ -769,8 +815,7 @@ with unpredictable bytes or fails `io_failed`.
 | `fake.clock` | `clock_over`, over the caller's `clock_space` | Moves only when a test says: `advance` moves both its clocks, and a `sleep` advances them by exactly what it asks and returns at once. The test may set either reading through the state, and the state counts readings, sleeps and the time slept. |
 | `fake.entropy` | `entropy_over`, over the caller's bytes | Gives the bytes in order; a request for more than is left fails. So a program that seeds itself from entropy runs the same in every test. |
 
-`runtime/clock-manual` and `runtime/random-sequence` run both fakes on
-Cortex-M0.
+Both fakes run on Cortex-M0.
 
 [Executable example](../compiler/tests/fixtures/runtime/clock-manual/main.ldn)
 
@@ -852,9 +897,7 @@ machine of loopback addresses:
 A test may take IPv6 away with `without_ipv6` and fail a call with
 `fail_at`.
 
-`runtime/network-echo-memory` runs the published echo over it, and
-`runtime/network-addresses-firmware` reads and writes addresses on
-Cortex-M0.
+Addresses are read and written on Cortex-M0 as on a hosted system.
 
 [Executable example](../compiler/tests/fixtures/runtime/network-addresses/main.ldn)
 
@@ -874,7 +917,7 @@ checked for both.
 
 ## core/failure
 
-Words for a person: a short English phrase for each failure atom the core library raises.
+Error messages: words for a person for each library failure, a short English phrase for every failure atom the core library raises.
 
 `failure.words(problem)` gives the phrase for any of the 32 atoms in
 `failure.reason`, every atom a `core` module fails with. So a call's
@@ -891,7 +934,7 @@ program names each library atom it passes on. `platform/posix`'s errno
 detail stays with its provider.
 
 Nothing is linked into a program that never calls `words`. One that does
-carries every phrase, about 6 KB of code and text on Cortex-M0 (D388).
+carries every phrase, about 6 KB of code and text on Cortex-M0.
 
 [Executable example](../compiler/tests/fixtures/runtime/failure-words-report/main.ldn)
 
@@ -941,7 +984,7 @@ and metadata alive while allocations exist.
 - A zero-byte allocation still occupies one slot.
 - A growth and a resize keep the block in its slot, to any extent the
   slot holds, and refuse a larger one, since no slot is larger. So a list
-  over a pool grows in place until its slot is full (D386).
+  over a pool grows in place until its slot is full.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-pool/main.ldn)
 
@@ -954,7 +997,7 @@ An allocator scope that records allocations through a parent and releases them t
 
 | Capacity | Ledger |
 |---|---|
-| zero | grows through the parent; `growing_space` names it (D356) |
+| zero | grows through the parent; `growing_space` names it |
 | positive | a fixed caller ledger |
 
 Individual frees do nothing. Every allocation consumes a ledger entry
@@ -989,7 +1032,7 @@ the arena's own.
   delegated or refused.
 - A growth in place is delegated too, spending a permit, and counted by
   `growths` rather than `successes`, which counts the blocks the injector
-  gave (D356).
+  gave.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-fault/main.ldn)
 
@@ -1027,7 +1070,7 @@ bound of zero.
 
 The generator uses shifts, exclusive ors and additions on `u64`, so a
 Cortex-M0 draws what a 64-bit host draws. Its sequences are the reference
-implementation's, which `runtime/random-sequence` holds on every target.
+implementation's on every target.
 
 It is not cryptographic: its outputs reveal its state. A key, a token or
 a password comes from `io.fill_random` directly.
@@ -1063,7 +1106,7 @@ It is single-threaded. A refusal comes before any state changes.
 
 ## hosted/system
 
-Hosted file, stream and process operations, written once over `platform/posix`: the provider `host`, made by `new`, imported as `system` with no alias (D347).
+Hosted file, stream and process operations, written once over `platform/posix`: the provider `host`, made by `new`, imported as `system` with no alias.
 
 | Call | What it does |
 |---|---|
@@ -1083,7 +1126,8 @@ the shared I/O concepts, `directories`, `programs`, `network`,
 `new` makes a handle exposing process arguments, lent as host strings,
 and standard streams. They come from the root the hosted entry
 establishes through `platform/posix`'s `_landin_host_initialize_arguments`;
-a C `main` that drives Landin exports calls that initializer itself.
+a C `main` that drives Landin exports calls that initializer itself, as
+below.
 
 The handle borrows nothing, since the root, the descriptors and its
 last-error cell belong to the process. `over` makes a handle that keeps
@@ -1092,9 +1136,45 @@ library that must not share the process's.
 
 `last_errno` captures the terminal failing call as provider-specific
 detail: the number of the errno `platform/posix` failed with. It is not a
-portable error type. `last_signal` is the number of the signal that ended
+portable error type. A call that succeeds clears it, and a refusal the
+provider makes itself, without asking the system, sets none. `last_signal` is the number of the signal that ended
 the child last waited for, beside `io.ending`'s `signalled`, and zero
 after a child that exited.
+
+### What the provider promises
+
+| Call | Promise |
+|---|---|
+| `write` | Writes the whole slice, or fails. Bytes written before a failure stay written. |
+| `write_some` | Makes one attempt and returns a positive count, which may be short. A failed attempt writes nothing. |
+| either, on an empty slice | Succeeds without asking the system; `write_some` returns zero. |
+| open, `read`, `write` | Retried after a signal interrupts them only when the system guarantees the attempt made no progress: completed progress is never repeated. |
+| `close` | Consumes the file once, even when it fails, and is never retried blindly. |
+| `same_file(left, right)` | Follows symbolic links and recognises hard links. The left path must exist; a missing right path gives false, and any other failure is an error. The check is not atomic: the names must stay put until the open that follows. |
+| the arguments | Begin after the program's name: neither this provider nor the memory world includes `argv[0]`. |
+
+### A C `main` that calls Landin
+
+A Landin entry point sets up the arguments before its body runs. A program
+whose `main` is C's, calling public Landin routines, does it itself, by
+calling `_landin_host_initialize_arguments(argc, argv, envp)` from
+`platform/posix`:
+
+- Call it before the first `system.new()`, and before starting any thread
+  that may make one; `system.new()` traps before it. Importing `core/io`
+  does not initialize anything, and files, streams and the heap work
+  without it.
+- The first call needs a nonnegative `argc` and a non-null `argv`, and
+  keeps that exact `argc`, `argv` and `envp` as the process's root. A null
+  `envp` is an empty environment.
+- A later call with the identical three values is harmless. A negative
+  count, a null table, or a call that would replace any of the three,
+  traps.
+- Nothing is copied: C keeps the tables and every string they name
+  readable for as long as anything Landin made from them is used.
+- The arguments a program sees begin at `argv[1]`, and there are
+  `argc - 1` of them, or none. Looking up a null entry within that count
+  traps.
 
 ### Files and directories
 
@@ -1145,7 +1225,7 @@ and a file of the provider like any other, so `read` and `write` take a
 connection.
 
 - A write to a socket the provider made is a send, which raises no
-  SIGPIPE beside a C handler on any system (D340).
+  SIGPIPE beside a C handler on any system.
 - A listener reuses its address.
 - An IPv6 socket takes IPv6 alone on every system, which BSD does from
   the start and Linux does not.
@@ -1197,9 +1277,6 @@ fails to.
 
 A sleep a signal interrupts, or the system ends early, sleeps on: it
 never returns before the deadline as `now` reads it.
-
-`runtime/clock-system` holds all three to their oracles, and the
-published shell runner times its child.
 
 [Executable example](../compiler/tests/fixtures/runtime/core-io-erased-system/main.ldn)
 
@@ -1587,8 +1664,8 @@ architecture's, which x86-64, arm64 and RV64 share.
 
 `lock_record` is the kernel's `struct flock` on a 64-bit architecture.
 
-No routine but `_landin_start` and `_landin_start_main` is a global symbol
-(D415), so none of them replaces the C library's function of the same
+No routine but `_landin_start` and `_landin_start_main` is a global symbol,
+so none of them replaces the C library's function of the same
 name under `--link=libc`.
 
 ### The static entry
@@ -1669,7 +1746,7 @@ The vDSO, the small shared object Linux maps into every process, and the functio
 
 It is a submodule of `platform/linux`, so a program that never reads a
 clock this way does not carry it. It declares nothing on Darwin and
-FreeBSD (D346).
+FreeBSD.
 
 The kernel's vDSO is found through the auxiliary vector's
 AT_SYSINFO_EHDR.
@@ -1690,8 +1767,7 @@ AT_SYSINFO_EHDR.
 
 Every offset is held to lie within the image before a byte is read, so a
 malformed, truncated or foreign image finds nothing and never traps.
-`runtime/linux-vdso` damages a copy of the real one byte by byte to show
-it.
+A copy of the real one, damaged byte by byte, shows it.
 
 The parser has a size. On Linux x86-64 its routines are 9.5 KB of a
 static program at `--optimize size` and 12.1 KB at `speed`. Reading a

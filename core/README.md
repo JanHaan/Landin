@@ -1,32 +1,17 @@
 # Repository-owned library modules
 
+This guide is for programmers who use Landin's library: what each
+namespace is available on, the conventions every module shares, and how
+the library fits a small microcontroller. The
+[library reference](../docs/library.md) has each call. The last part,
+[for library contributors](#for-library-contributors), is for people who
+change the library, and for programs written against an earlier version
+of it: how to add a module, and what each change renamed.
+
 These ordinary Landin modules use explicit roots and imports, with no user-code
 module initialization. `spec.md` owns their language contracts, and the
 [freestanding library lane](../environments/cortex-m/README.md#freestanding-library-consumers)
 executes them on Cortex-M0.
-
-The [library reference](../docs/library.md) is generated from public signatures
-and attached `---` comments. Build it with `scripts/site.sh` and open
-`docs/site/site/library.html`; [the site guide](../docs/site/README.md) describes
-the documentation convention.
-
-## Adding a module
-
-A new `core/NAME` directory is known in four other places, and a full
-`python3 check.py` names every one it is still missing from:
-
-1. `'NAME'` in `MODULES` in `environments/cortex-m/freestanding.py`, the
-   freestanding probe's inventory, which `environments/cortex-m/test.py`
-   holds to the directories here;
-2. the probe fixture `compiler/tests/fixtures/runtime/library-shared-NAME`,
-   a `main.ldn` and `fixture.meta` as the others are;
-3. that fixture's row in `compiler/tests/cortex-m/corpus.json`, which
-   `python3 scripts/add_fixture.py runtime/library-shared-NAME` adds while it
-   regenerates the corpus's generated files;
-4. a `## core/NAME` section in `docs/library.md`, the module's overview in the
-   library reference.
-
-The availability inventory below then says which targets it serves.
 
 ## Availability inventory
 
@@ -390,7 +375,36 @@ caller-owned storage. Debugger snapshots and stack instrumentation are host
 artifacts, never an allocator capability or hidden target storage. These
 controls do not broaden the library or manual lifetime guarantees.
 
-## Container and diagnostic migration
+## For library contributors
+
+This part is for people who change the library, and for a program written
+against an earlier version of it. Adding a module comes first; each
+migration note after it says what one change renamed or reshaped.
+
+The [library reference](../docs/library.md) is generated from public signatures
+and attached `---` comments. Build it with `scripts/site.sh` and open
+`docs/site/site/library.html`; [the site guide](../docs/site/README.md) describes
+the documentation convention.
+
+### Adding a module
+
+A new `core/NAME` directory is known in four other places, and a full
+`python3 check.py` names every one it is still missing from:
+
+1. `'NAME'` in `MODULES` in `environments/cortex-m/freestanding.py`, the
+   freestanding probe's inventory, which `environments/cortex-m/test.py`
+   holds to the directories here;
+2. the probe fixture `compiler/tests/fixtures/runtime/library-shared-NAME`,
+   a `main.ldn` and `fixture.meta` as the others are;
+3. that fixture's row in `compiler/tests/cortex-m/corpus.json`, which
+   `python3 scripts/add_fixture.py runtime/library-shared-NAME` adds while it
+   regenerates the corpus's generated files;
+4. a `## core/NAME` section in `docs/library.md`, the module's overview in the
+   library reference.
+
+The availability inventory below then says which targets it serves.
+
+### Container and diagnostic migration
 
 `mem.clear(storage)` and `vec.clear(values)` discard the initialized prefix
 without reading its values or freeing backing storage. Capacity and allocation
@@ -423,7 +437,7 @@ Each bounded entry reserves its full inline message capacity, even when the
 message is short; empty log construction leaves the private entry array
 uninitialized and initializes its counters only.
 
-## Migrating to the reviewed library
+### Migrating to the reviewed library
 
 The library was read whole after its first outside reading (D272 to D274).
 Rename as follows; behaviour is unchanged except where noted.
@@ -451,7 +465,7 @@ Rename as follows; behaviour is unchanged except where noted.
 `text.valid` reports whether bytes are UTF-8 without making a view, and
 `mem.aligned_offset` is the bump arithmetic a provider of your own needs.
 
-## Migrating to standard input
+### Migrating to standard input
 
 Standard input joined the process concept. Behaviour is unchanged except
 where noted.
@@ -465,7 +479,7 @@ where noted.
 | `text.number_overflow` as a value above `u32` | a value above the type parsed into |
 | `hosted/io` reporting ENOTDIR, a path through a file, as `io_failed` | `not_found`, as ENOENT is; `last_errno` still tells them apart |
 
-## Migrating to services as handles
+### Migrating to services as handles
 
 An allocator and an I/O provider are handles passed by value; a provider's
 mutable state is the caller's `space`, which `over` fills. Behaviour is
@@ -493,7 +507,7 @@ An allocation still borrows nothing from its allocator: a container keeps the
 block in its own storage, which a block borrowed from a handle could not
 reach without every container operation retaining the handle.
 
-## Migrating to host strings and the POSIX layer
+### Migrating to host strings and the POSIX layer
 
 A path, a process argument and a directory entry's name are host strings,
 and the hosted providers are written once over `platform/posix`. Behaviour
@@ -513,7 +527,7 @@ is unchanged except where noted.
 | `io.file` as a `distinct i32` | a `distinct usize`, wide enough for any provider's identifier |
 | Darwin and FreeBSD's heap over `malloc` | size classes over `platform/posix`'s mappings, as Linux's were; single-threaded on every system |
 
-## Migrating to formatting and byte blocks
+### Migrating to formatting and byte blocks
 
 Text is built in a builder, written out through a buffered writer and read
 back a line at a time. Behaviour is unchanged except where noted.
@@ -528,7 +542,7 @@ back a line at a time. Behaviour is unchanged except where noted.
 | `io.write` for each small piece of output | `io.buffered_over(host, io.out(host), buffer)`, `io.put` and `io.flush`, with a `defer` flush on every way out |
 | splitting what `io.read` returns into lines by hand | `io.lines_over(host, io.input(host), buffer)` and `io.read_line`, whose line is lent until the next read |
 
-## Migrating to the environment and processes
+### Migrating to the environment and processes
 
 A sixth concept reads the environment and a seventh runs programs.
 Behaviour is unchanged except where noted.
@@ -541,7 +555,7 @@ Behaviour is unchanged except where noted.
 | a descriptor `platform/posix` opened, inherited by any program the process executed | closed on exec, `O_CLOEXEC`, as every descriptor the module makes is |
 | `hosted.space` holding `failure` | `failure` and `signal`, the cell `hosted.last_signal` reads |
 
-## Migrating to clocks and randomness
+### Migrating to clocks and randomness
 
 Three concepts beside the others give the time, sleeping and the system's
 random bytes, and `core/random` a generator. Behaviour is unchanged except
@@ -556,7 +570,7 @@ where noted.
 | a generator of your own | `core/random`'s `new`, `next`, `below` and `shuffle` |
 | `hosted.system` as `world`, `directories`, `environment` and `programs` | the same, and `clock`, `wall_clock` and `entropy` too |
 
-## Migrating to sockets
+### Migrating to sockets
 
 A network concept beside the others connects, listens and sends over TCP
 and UDP. Behaviour is unchanged except where noted.
@@ -569,7 +583,7 @@ and UDP. Behaviour is unchanged except where noted.
 | `hosted.system` as `world`, `directories`, `environment`, `programs`, `clock`, `wall_clock` and `entropy` | the same, and `network` too |
 | `scripts/linux_syscalls.py --tarball` to give a new wrapper its number | `scripts/linux_syscalls.py`, which writes `platform/linux/wrapped.ldn` from the committed numbers; the release is needed only to change the pin |
 
-## Migrating to the rest of the file system
+### Migrating to the rest of the file system
 
 Two concepts beside the others give the rest of the file system and
 terminals, and `platform/posix` the rest of POSIX's. Behaviour is unchanged
@@ -587,7 +601,7 @@ except where noted.
 | an open of a terminal that could make it the process's controlling terminal | every `platform/posix` open is `O_NOCTTY` |
 | `hosted.system` as `world`, `directories`, `environment`, `programs`, `clock`, `wall_clock`, `entropy` and `network` | the same, and `file_system` and `terminals` too |
 
-## Migrating container providers and indices
+### Migrating container providers and indices
 
 Allocator conformances now provide `grow(self, block, old_size, new_size,
 alignment) -> bool`. A provider may always return false; refusal must change
@@ -617,7 +631,7 @@ reinserting appends. Public map compositions must preserve both live links per
 bucket, the head/tail pair, and the capacity-valued end markers. Increased
 record sizes can reduce capacity within the same backing extent.
 
-## Migrating to the second reading of the library
+### Migrating to the second reading of the library
 
 The library was read whole a second time after the hosted items (D340 to
 D357). Rename as follows; behaviour is unchanged except where noted.
@@ -661,7 +675,7 @@ New since: `tree.kind`, `tree.leaves` and `tree.children`; `spill.clear`,
 `mem.grow`; `map.removed`; `io.format`; and `platform/posix` and `platform/libc` laid out one file per
 facility and per system (D346).
 
-## Migrating to what the newcomer's path met
+### Migrating to what the newcomer's path met
 
 Three things an outside program met in the library are answered (D386 to
 D388).
