@@ -4,6 +4,26 @@
 > 32 TB*. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
 
+**Status: specification 0.2.7. Landin programs build and run on Linux,
+macOS and FreeBSD, and firmware builds for Cortex-M0.**
+
+The compiler can build and run Landin programs for Linux x86-64, Linux
+arm64, Linux RV64, FreeBSD x86-64 and arm64, and native macOS arm64, and
+builds firmware for Cortex-M0. It handles functions, user-defined data
+types, generic routines, pointers, errors, control flow, modules,
+evidence-table dispatch and `any`. Containers, allocators, text and I/O
+capabilities, a complete recovering configuration parser and a hosted log
+filter now run alongside the automatically tested sensor-polling,
+FizzBuzz, number-theory, searching and sorting programs, plus
+correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. A
+complete derived driver and application run on the pinned Cortex-M0
+emulators with compiler-owned startup, within the recorded 32 KiB capacity
+and source-debugging limits. The roadmap that built this closed with the
+slice feature-complete pre-v1; the next one takes it to an editor, more
+targets and the microcontrollers people buy.
+
+## What Landin is
+
 A systems programming language, its compiler and a small standard
 library, designed and built from scratch. Named after Peter Landin, who
 coined the term *syntactic sugar* and wrote *The Next 700 Programming
@@ -11,186 +31,69 @@ Languages* in 1966 — this one is the 701st.
 
 One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
-at the other.
+at the other. What it is like to write:
 
-**Status: specification 0.2.7. The compiler can build and run Landin programs
-for Linux x86-64, Linux arm64, Linux RV64, FreeBSD x86-64 and arm64, and
-native macOS arm64, and builds firmware for
-Cortex-M0. It handles functions, user-defined data types, generic
-routines, pointers, errors, control flow, modules, evidence-table dispatch and
-`any`. Containers, allocators, text and I/O capabilities, a complete
-recovering configuration parser and a hosted log filter now run alongside the
-automatically tested sensor-polling, FizzBuzz, number-theory, searching
-and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and
-FASTA workloads. A complete derived driver and application run on the pinned
-Cortex-M0 emulators with compiler-owned startup, within the recorded 32 KiB
-capacity and source-debugging limits. The roadmap that built this closed with
-the slice feature-complete pre-v1; the next one takes it to an editor, more
-targets and the microcontrollers people buy.**
-
-## What is here
-
-| file | what it is |
-| --- | --- |
-| `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
-| `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
-| `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | complete programs to copy, compile and run, each printing what it computes: everyday tools such as a word count, a directory listing and a shell runner, printing values and reporting failures, the classic exercises, and the five Benchmark Game ports. The gate runs every one. |
-| `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
-| `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
-| `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
-| `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the x86-64, arm64 and Cortex-M backends and their toolchain paths, and its own test harness. |
-| `docs/from-c.md` | [Landin for C programmers](docs/from-c.md): the Landin form of each C habit, from `#include` to `exit`, and the habits with no answer yet. Its examples are a fixture the test program compiles. Derived; never an authority. |
-| `docs/documents.md` | how `spec.md` and `tour.md` are arranged, where a new rule goes, and what the arrangement is and is not evidence of. Derived; never an authority. |
-| `docs/diagnostics.md` | [what each diagnostic code means](docs/diagnostics.md) and what to change, the text `refine explain` prints. Derived from the catalogue and the specification; never an authority. |
-| `docs/format.md` | [how a source is laid out](docs/format.md): the one layout `refine fmt` gives every source, each rule with a program as written and as formatted. Derived from D252 and the implementation; never an authority. |
-| `docs/server.md` | [what the language server answers](docs/server.md): where `refine lsp` places a file, what each request is answered with, and how far it reads past a syntax error. Derived from D253 and the implementation; never an authority. |
-| `docs/ir.md` | the intermediate representation explained: its structure and rationale, maintained as a derived account of the implementation, never an authority. |
-| `docs/notes/` | exploratory design notes, explicitly non-normative and not roadmap commitments; [the formatting API note](docs/notes/printf-alternative.md) is the one so far. |
-| `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
-| `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
-| `examples/derived_containers/` | the complete prototype-3-derived client of the ordinary `core` containers and allocator capabilities; `compiler/tests/fixtures/runtime/derived-containers` supplies its host, status oracle and derivation manifest. |
-| `examples/derived_hosted/` | the complete prototype-4-derived log filter, with runtime-selected filters and destinations, complete line reading, retained arguments and explicit delivery retry; its derivation and memory-world oracle live in `compiler/tests/fixtures/runtime/derived-hosted-memory`. |
-| `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
-| `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
-| `flake.nix` | `nix develop`, for people who work that way: a shell holding the same pinned toolchain, read from `environments/pins.sh` rather than from nixpkgs. |
-| `docs/` | the environments that produce evidence, the agent-facing notes, and the site generator. |
-| [`bindings/`](bindings/README.md) | the C binding generator: asks an external Clang for a header's AST and writes Landin bindings, so `refine` never parses C. |
-| `highlight/` | the shared lexical scanner and installable Pygments, TextMate, tree-sitter and packages for the major editor families, from VS Code and JetBrains IDEs through Vim, Emacs and Notepad++. |
-| `prototype-*.md` | the four design stress tests; see below. Not learning material. |
-
-### The prototypes: design stress tests
-
-The four `prototype-*.md` files are not tutorials and not example
-programs. Each was written before the compiler existed, to make the
-specification fail: a program that needs a feature presses on the rules
-for it until they turn out silent, ambiguous or wrong. Each ends with its
-findings, and keeps the wording that turned out wrong beside its
-resolution. Between them they recorded forty-two findings, several of
-which reversed a decision.
-
-They are sketches: they leave bodies out with `...` and are not programs
-you can compile. They are kept in step with the specification so their
-findings stay true. What runs is derived from them:
-
-| prototype | what it presses on | what runs |
-| --- | --- | --- |
-| `prototype-1-driver.md` | a Cortex-M driver from a vendor SVD: registers, DMA, interrupts, a vector table | [the derived driver](compiler/tests/driver/DERIVATION.md) |
-| `prototype-2-parser.md` | a parser that recovers from errors rather than stopping at the first | `examples/config_parser/` |
-| `prototype-3-containers.md` | generic containers, allocators, escape rules | the `core` containers and `examples/derived_containers/` |
-| `prototype-4-app.md` | a hosted application chosen by its command line: runtime dispatch | `examples/derived_hosted/` |
-
-To learn the language, read [the tour](tour.md) and
-[the examples](examples.md) instead.
-
-## Reading it online
-
-Selected language documents and guides are published as syntax-highlighted
-reading copies at **<https://www.701.dev>** — including the tour, the
-specification, the running examples, the four prototypes, the roadmap, and
-the implementation notes. The renderer's `DOCS` and `GUIDES` lists define
-the selection; see [the site guide](docs/site/README.md). Every
-`[NNNN]` citation links to the construct it names, and hovering one shows what
-it says.
-
-The site also has an [editor and IDE support guide](https://www.701.dev/editors.html)
-with installation paths for the Landin extensions and plugins for Zed, VS
-Code and its relatives, Neovim, Vim, Emacs, Helix, Sublime Text, Visual
-Studio, JetBrains IDEs, Eclipse, Notepad++, Kate and Nano, plus the Pygments
-lexer.
-
-```sh
-git clone https://github.com/JanHaan/Landin
-```
-
-Canonical hosting is **<https://github.com/JanHaan/Landin>**. git.sr.ht is a
-mirror, kept in step by a second push URL on the same remote rather than by a
-job.
-
-The exact-revision native acceptance that approved every revision through
-0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it: on
-every push it runs every target unless the verified explanatory-only reuse
-exception below applies. Full runs cover Linux x86-64, Linux arm64 and macOS
-arm64 natively with GDB
-and LLDB, FreeBSD x86-64 and arm64 in accelerated VMs, and Cortex-M under
-QEMU, both compiler modes, and the
-document, binding and editor-grammar checks. Same-run release build artifacts
-avoid repeated compilation within each host platform. On a failed Cortex-M job, it is
-configured to upload diagnostic output if present and retain it for 14 days;
-it retains no successful exact-revision acceptance record and accepts no
-revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
-x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for every
-target in both build modes, and compares emitted assembly digests
-across hosts; disagreement fails the aggregate gate. Those manifests come
-from debug compilers, so the gate's `build-modes` jobs also require the debug
-and release compilers of one tree to emit the same bytes for the positive and
-runtime corpora on Linux x86-64, Linux arm64 and Cortex-M. It does not
-assemble, link or run those programs. RV64's corpus runs under QEMU's user
-emulation in the gate's `rv64-qemu` jobs, while its jobs on physical RISE
-runners stay skipped until they are dependable.
-`.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
-input changes on `main` or when dispatched manually, without running a
-compiler test.
-The verified explanatory-only remote reuse policy in `AGENTS.md` permits
-qualifying edits to reuse a full successful main gate from the preceding
-seven days. Document and script checks always run.
-
-`environments/native-ci/README.md` describes the retired arrangement. To
-render:
-
-```sh
-./scripts/site.sh              # render, verify, package
-```
-
-## Checking
-
-```sh
-python3 check.py
-```
-
-Keywords standing where names belong, spellings a decision retired,
-`when` outside an exit statement, convention markers at call sites,
-two declarations of one name in one module, `end` closing nothing,
-citations pointing at constructs that do not exist. It resolves the
-files next to itself, so it runs from anywhere.
-
-It is not a parser and does not pretend to be one. It is the set of
-invariants that are cheap to check and tedious to re-check by hand,
-and it found most of what the last several revisions fixed. Every rule
-that can be checked cheaply belongs in it, and so does every defect it
-missed once.
-
-## Where the history is
-
-The design was argued out over a long sequence of numbered revisions,
-four prototypes and two outside reviews, and that archive is kept
-separately — the conversation, the review, the implementation handoff
-and the full revision log. Nothing here depends on it.
-
-What was worth carrying came along: the tour's closing
-section, WHAT WAS TRIED AND DROPPED, keeps
-the reversals, the things that were designed and then taken out again,
-because a reader who does not know them will propose them back.
+- **Manual memory.** Arenas are the idiom, and allocators are passed in as
+  arguments. There is no garbage collector, no reference counting and no
+  destructors.
+- **Failures in the signature.** A routine declares what can go wrong as a
+  set of atoms; a caller handles them with `else` or passes them on with
+  `try`.
+- **Useful local checks, not a borrow checker.** Pointers and slices get
+  origin and escape checks within a routine. The language does not claim
+  memory safety: it is deliberately unsafe, with useful local checks.
+- **Generic code through concepts,** dispatched statically or at run time
+  through `any`.
+- **No macros and no compile-time execution.**
+- **Native code from its own backends,** handed to the platform's assembler
+  and linker.
 
 ## Installing
 
-`refine` is one executable, with its standard library in a directory beside
-it. With nix, either of these puts `refine` on your `PATH`, the first
-building it from source and the second fetching the published executable:
+`refine` is one executable, with its standard library in a directory
+beside it. Today there are two ways to get both: let nix build them, or
+build them yourself from a clone.
+
+With nix, this builds `refine` from source and puts it on your `PATH`:
 
 ```sh
 nix profile install github:JanHaan/Landin
-nix profile install github:JanHaan/Landin#refine-bin
 ```
 
-Without nix, take the archive for your platform from
-[the releases page](https://github.com/JanHaan/Landin/releases). Each is
-named `landin-VERSION-PLATFORM.tar.gz`, for `x86_64-linux`, `aarch64-linux`
-or `aarch64-darwin`, with its SHA-256 sum beside it in a `.sha256` file. An
-archive has no top-level directory: it holds `bin/refine`, the library under
-`lib/landin` and the three licence files, and puts them in whichever
-directory you unpack it into, so make one for it and put its `bin` on your
-`PATH`:
+In a clone, `nix build .#refine`, the flake's default package, builds the
+same into `result/`, as `result/bin/refine` with its library under
+`result/lib/landin`. The first build also fetches the pinned toolchain,
+which takes a few minutes.
+
+Without nix, build it from a clone with the pinned toolchain that
+[Building](#building) names:
+
+```sh
+git clone https://github.com/JanHaan/Landin
+cd Landin
+./scripts/build.sh --compiler-only
+```
+
+The build ends by printing where it put `refine`, under
+`compiler/ada/build/`. That `refine` takes the clone's own `core`, `hosted`
+and `platform` as its library, so leave it where it is and put its
+directory on your `PATH`; `refine version` then prints the clone as its
+`library: `.
+
+> **Warning: the 0.2.7 release archives hold `refine` without its
+> library,** so the first program below fails at `import core/io`. So does
+> `nix profile install github:JanHaan/Landin#refine-bin`, which fetches
+> that archive. The archive route below works from the next release; until
+> then, use one of the routes above.
+
+From the next release on, you can also take the archive for your platform
+from [the releases page](https://github.com/JanHaan/Landin/releases)
+instead. Each is named `landin-VERSION-PLATFORM.tar.gz`, for
+`x86_64-linux`, `aarch64-linux` or `aarch64-darwin`, with its SHA-256 sum
+beside it in a `.sha256` file. An archive has no top-level directory: it
+holds `bin/refine`, the library under `lib/landin` and the three licence
+files, and puts them in whichever directory you unpack it into, so make
+one for it and put its `bin` on your `PATH`:
 
 ```sh
 mkdir -p ~/landin
@@ -209,7 +112,7 @@ library: /home/you/landin/lib/landin
 
 A compiler built from a checkout says `refine dev (01234567)` instead, the
 commit it was built from, with `, dirty` after it when the checkout was
-modified; [Building](#building) says how that line is decided.
+modified; [Using refine](#using-refine) says how that line is decided.
 
 On Linux, linking an executable also needs a C compiler driver: the `gcc`
 your distribution installs, or on NixOS `nix-shell -p gcc`. `refine check`,
@@ -219,12 +122,18 @@ Xcode command-line tools.
 
 Every archive after 0.2.7 is laid out as above. The archives of 0.2.7 and
 earlier releases came before the library was shipped: they hold `refine`
-alone, and their `refine version` prints only the first line. To build from
-source instead, see [Building](#building).
+alone, and their `refine version` prints only the first line.
 
 ## Your first program
 
-With `refine` installed, save this anywhere as `hello/main.ldn`:
+With `refine` installed, make a directory for the program and go into it:
+
+```sh
+mkdir hello
+cd hello
+```
+
+Save this there as `main.ldn`:
 
 ```landin
 import core/io
@@ -237,7 +146,7 @@ public main: () -> (code: i32) =
 end main
 ```
 
-Compile and run it from that directory:
+Compile and run it:
 
 ```sh
 refine compile main.ldn -o hello
@@ -274,37 +183,20 @@ What else to know:
   that finds none says where it looked and names `--library=DIR`. Your own
   modules are found under the roots you give with `--root` [1480].
 
-Next, read [the tour](tour.md). [`examples.md`](examples.md) has complete
-programs to copy. If you write C,
-[Landin for C programmers](docs/from-c.md) maps each habit you bring to
-its Landin form.
+## Next steps
 
-## Building
+| read | for |
+| --- | --- |
+| [The tour](tour.md) | the language, from this program up, one numbered entry at a time |
+| [`examples.md`](examples.md) | complete programs to copy, compile and run |
+| [Landin for C programmers](docs/from-c.md) | the Landin form of each C habit you bring |
+| [The library reference](docs/library.md) | every public module of `core`, `hosted` and `platform`, with examples |
 
-```sh
-export LANDIN_GNAT_HOME=...      # the pinned GNAT, see compiler/ada/TOOLCHAIN.md
-export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
+All of them are also published as reading copies at
+<https://www.701.dev>; [Reading it online](#reading-it-online) says what
+else is there.
 
-./scripts/build.sh
-./scripts/test.sh
-```
-
-Use `./scripts/build.sh --compiler-only` when only `refine` is needed. The
-default build still produces the Ada test program for `scripts/test.sh`.
-
-On macOS, use `./scripts/dev-test.sh --host --target=linux-x86-64` for compiler checks and add an
-exact `--suite` or `--case` selector while editing. Every selected case must
-pass. Run Linux workloads and GDB in native Linux development slots; run Darwin
-workloads and LLDB natively on the Mac. The unfiltered harness includes Linux
-execution and cannot supply a successful Mac compiler-host result.
-See [the development and validation workflow](docs/process.md).
-
-For checksum-safe focused feedback during an edit, use
-`./scripts/dev-test.sh --suite=NAME`, `--case=SUITE/NAME`, or
-`--fixture=CLASS/NAME`. These runs say `FILTERED`; the no-argument command
-above remains the complete suite.
-
-On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
+## Using refine
 
 `refine check program.ldn ...` runs the frontend, lowering and verification
 on the named sources as one whole program, without writing an artifact.
@@ -686,6 +578,183 @@ vulnerability privately, through
 [GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new),
 and never in a discussion. Everyone taking part follows the
 [code of conduct](CODE_OF_CONDUCT.md).
+
+## For contributors
+
+The rest of this page is for people working on Landin itself: what the
+repository holds, how to build and check it, how the published site and
+the CI gate work, and where the design history is.
+
+## What is here
+
+| file | what it is |
+| --- | --- |
+| `handoff.md` | the design in one page: the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
+| `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
+| `tour.md` | start here to learn the language: the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
+| `examples.md` | complete programs to copy, compile and run, each printing what it computes: everyday tools such as a word count, a directory listing and a shell runner, printing values and reporting failures, the classic exercises, and the five Benchmark Game ports. The gate runs every one. |
+| `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
+| `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
+| `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
+| `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the x86-64, arm64 and Cortex-M backends and their toolchain paths, and its own test harness. |
+| `docs/from-c.md` | [Landin for C programmers](docs/from-c.md): the Landin form of each C habit, from `#include` to `exit`, and the habits with no answer yet. Its examples are a fixture the test program compiles. Derived; never an authority. |
+| `docs/documents.md` | how `spec.md` and `tour.md` are arranged, where a new rule goes, and what the arrangement is and is not evidence of. Derived; never an authority. |
+| `docs/diagnostics.md` | [what each diagnostic code means](docs/diagnostics.md) and what to change, the text `refine explain` prints. Derived from the catalogue and the specification; never an authority. |
+| `docs/format.md` | [how a source is laid out](docs/format.md): the one layout `refine fmt` gives every source, each rule with a program as written and as formatted. Derived from D252 and the implementation; never an authority. |
+| `docs/server.md` | [what the language server answers](docs/server.md): where `refine lsp` places a file, what each request is answered with, and how far it reads past a syntax error. Derived from D253 and the implementation; never an authority. |
+| `docs/ir.md` | the intermediate representation explained: its structure and rationale, maintained as a derived account of the implementation, never an authority. |
+| `docs/notes/` | exploratory design notes, explicitly non-normative and not roadmap commitments; [the formatting API note](docs/notes/printf-alternative.md) is the one so far. |
+| `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
+| `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
+| `examples/derived_containers/` | the complete prototype-3-derived client of the ordinary `core` containers and allocator capabilities; `compiler/tests/fixtures/runtime/derived-containers` supplies its host, status oracle and derivation manifest. |
+| `examples/derived_hosted/` | the complete prototype-4-derived log filter, with runtime-selected filters and destinations, complete line reading, retained arguments and explicit delivery retry; its derivation and memory-world oracle live in `compiler/tests/fixtures/runtime/derived-hosted-memory`. |
+| `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
+| `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
+| `flake.nix` | `nix develop`, for people who work that way: a shell holding the same pinned toolchain, read from `environments/pins.sh` rather than from nixpkgs. |
+| `docs/` | the environments that produce evidence, the agent-facing notes, and the site generator. |
+| [`bindings/`](bindings/README.md) | the C binding generator: asks an external Clang for a header's AST and writes Landin bindings, so `refine` never parses C. |
+| `highlight/` | the shared lexical scanner and installable Pygments, TextMate, tree-sitter and packages for the major editor families, from VS Code and JetBrains IDEs through Vim, Emacs and Notepad++. |
+| `prototype-*.md` | the four design stress tests; see below. Not learning material. |
+
+### The prototypes: design stress tests
+
+The four `prototype-*.md` files are not tutorials and not example
+programs. Each was written before the compiler existed, to make the
+specification fail: a program that needs a feature presses on the rules
+for it until they turn out silent, ambiguous or wrong. Each ends with its
+findings, and keeps the wording that turned out wrong beside its
+resolution. Between them they recorded forty-two findings, several of
+which reversed a decision.
+
+They are sketches: they leave bodies out with `...` and are not programs
+you can compile. They are kept in step with the specification so their
+findings stay true. What runs is derived from them:
+
+| prototype | what it presses on | what runs |
+| --- | --- | --- |
+| `prototype-1-driver.md` | a Cortex-M driver from a vendor SVD: registers, DMA, interrupts, a vector table | [the derived driver](compiler/tests/driver/DERIVATION.md) |
+| `prototype-2-parser.md` | a parser that recovers from errors rather than stopping at the first | `examples/config_parser/` |
+| `prototype-3-containers.md` | generic containers, allocators, escape rules | the `core` containers and `examples/derived_containers/` |
+| `prototype-4-app.md` | a hosted application chosen by its command line: runtime dispatch | `examples/derived_hosted/` |
+
+To learn the language, read [the tour](tour.md) and
+[the examples](examples.md) instead.
+
+## Building
+
+```sh
+export LANDIN_GNAT_HOME=...      # the pinned GNAT, see compiler/ada/TOOLCHAIN.md
+export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
+
+./scripts/build.sh
+./scripts/test.sh
+```
+
+Use `./scripts/build.sh --compiler-only` when only `refine` is needed. The
+default build still produces the Ada test program for `scripts/test.sh`.
+
+On macOS, use `./scripts/dev-test.sh --host --target=linux-x86-64` for compiler checks and add an
+exact `--suite` or `--case` selector while editing. Every selected case must
+pass. Run Linux workloads and GDB in native Linux development slots; run Darwin
+workloads and LLDB natively on the Mac. The unfiltered harness includes Linux
+execution and cannot supply a successful Mac compiler-host result.
+See [the development and validation workflow](docs/process.md).
+
+For checksum-safe focused feedback during an edit, use
+`./scripts/dev-test.sh --suite=NAME`, `--case=SUITE/NAME`, or
+`--fixture=CLASS/NAME`. These runs say `FILTERED`; the no-argument command
+above remains the complete suite.
+
+On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
+
+## Reading it online
+
+Selected language documents and guides are published as syntax-highlighted
+reading copies at **<https://www.701.dev>** — including the tour, the
+specification, the running examples, the four prototypes, the roadmap, and
+the implementation notes. The renderer's `DOCS` and `GUIDES` lists define
+the selection; see [the site guide](docs/site/README.md). Every
+`[NNNN]` citation links to the construct it names, and hovering one shows what
+it says.
+
+The site also has an [editor and IDE support guide](https://www.701.dev/editors.html)
+with installation paths for the Landin extensions and plugins for Zed, VS
+Code and its relatives, Neovim, Vim, Emacs, Helix, Sublime Text, Visual
+Studio, JetBrains IDEs, Eclipse, Notepad++, Kate and Nano, plus the Pygments
+lexer.
+
+```sh
+git clone https://github.com/JanHaan/Landin
+```
+
+Canonical hosting is **<https://github.com/JanHaan/Landin>**. git.sr.ht is a
+mirror, kept in step by a second push URL on the same remote rather than by a
+job.
+
+The exact-revision native acceptance that approved every revision through
+0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it: on
+every push it runs every target unless the verified explanatory-only reuse
+exception below applies. Full runs cover Linux x86-64, Linux arm64 and macOS
+arm64 natively with GDB
+and LLDB, FreeBSD x86-64 and arm64 in accelerated VMs, and Cortex-M under
+QEMU, both compiler modes, and the
+document, binding and editor-grammar checks. Same-run release build artifacts
+avoid repeated compilation within each host platform. On a failed Cortex-M job, it is
+configured to upload diagnostic output if present and retain it for 14 days;
+it retains no successful exact-revision acceptance record and accepts no
+revision. The gate calls `.github/workflows/determinism.yml`, which builds the compiler on Linux
+x86-64, Linux arm64 and macOS arm64, compiles every positive fixture for every
+target in both build modes, and compares emitted assembly digests
+across hosts; disagreement fails the aggregate gate. Those manifests come
+from debug compilers, so the gate's `build-modes` jobs also require the debug
+and release compilers of one tree to emit the same bytes for the positive and
+runtime corpora on Linux x86-64, Linux arm64 and Cortex-M. It does not
+assemble, link or run those programs. RV64's corpus runs under QEMU's user
+emulation in the gate's `rv64-qemu` jobs, while its jobs on physical RISE
+runners stay skipped until they are dependable.
+`.github/workflows/pages.yml` publishes <https://www.701.dev> when a site
+input changes on `main` or when dispatched manually, without running a
+compiler test.
+The verified explanatory-only remote reuse policy in `AGENTS.md` permits
+qualifying edits to reuse a full successful main gate from the preceding
+seven days. Document and script checks always run.
+
+`environments/native-ci/README.md` describes the retired arrangement. To
+render:
+
+```sh
+./scripts/site.sh              # render, verify, package
+```
+
+## Checking
+
+```sh
+python3 check.py
+```
+
+Keywords standing where names belong, spellings a decision retired,
+`when` outside an exit statement, convention markers at call sites,
+two declarations of one name in one module, `end` closing nothing,
+citations pointing at constructs that do not exist. It resolves the
+files next to itself, so it runs from anywhere.
+
+It is not a parser and does not pretend to be one. It is the set of
+invariants that are cheap to check and tedious to re-check by hand,
+and it found most of what the last several revisions fixed. Every rule
+that can be checked cheaply belongs in it, and so does every defect it
+missed once.
+
+## Where the history is
+
+The design was argued out over a long sequence of numbered revisions,
+four prototypes and two outside reviews, and that archive is kept
+separately — the conversation, the review, the implementation handoff
+and the full revision log. Nothing here depends on it.
+
+What was worth carrying came along: the tour's closing
+section, WHAT WAS TRIED AND DROPPED, keeps
+the reversals, the things that were designed and then taken out again,
+because a reader who does not know them will propose them back.
 
 ## License
 

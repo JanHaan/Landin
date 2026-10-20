@@ -3868,7 +3868,7 @@ file positive/from-c/abort.ldn tokens 19
   122 123 )
   124 127 end
   128 135 give_up
-file positive/from-c/arguments.ldn tokens 103
+file positive/from-c/arguments.ldn tokens 100
   0 6 import
   7 11 core
   11 12 /
@@ -3926,52 +3926,49 @@ file positive/from-c/arguments.ldn tokens 103
   270 271 (
   271 278 problem
   278 279 )
-  292 293 _
-  294 295 =
-  296 303 problem
-  316 322 return
-  331 334 end
-  343 346 try
-  347 349 io
-  349 350 .
-  350 355 write
-  355 356 (
-  356 360 host
-  360 361 ,
-  362 364 io
-  364 365 .
-  365 368 out
-  368 369 (
-  369 373 host
-  373 374 )
-  374 375 ,
-  376 380 text
-  380 381 .
-  381 391 host_bytes
-  391 392 (
-  392 400 argument
-  400 401 )
-  401 402 )
-  411 414 try
-  415 417 io
-  417 418 .
-  418 423 write
-  423 424 (
-  424 428 host
-  428 429 ,
-  430 432 io
-  432 433 .
-  433 436 out
-  436 437 (
-  437 441 host
-  441 442 )
-  442 443 ,
-  444 448 "\n"
-  448 449 )
-  454 457 end
-  458 461 for
-  462 465 end
-  466 481 print_arguments
+  292 298 return
+  307 310 end
+  319 322 try
+  323 325 io
+  325 326 .
+  326 331 write
+  331 332 (
+  332 336 host
+  336 337 ,
+  338 340 io
+  340 341 .
+  341 344 out
+  344 345 (
+  345 349 host
+  349 350 )
+  350 351 ,
+  352 356 text
+  356 357 .
+  357 367 host_bytes
+  367 368 (
+  368 376 argument
+  376 377 )
+  377 378 )
+  387 390 try
+  391 393 io
+  393 394 .
+  394 399 write
+  399 400 (
+  400 404 host
+  404 405 ,
+  406 408 io
+  408 409 .
+  409 412 out
+  412 413 (
+  413 417 host
+  417 418 )
+  418 419 ,
+  420 424 "\n"
+  424 425 )
+  430 433 end
+  434 437 for
+  438 441 end
+  442 457 print_arguments
 file positive/from-c/arithmetic.ldn tokens 43
   69 77 entry_at
   77 78 :
@@ -4644,7 +4641,7 @@ file positive/from-c/flexible.ldn tokens 86
   513 514 ]
   515 518 end
   519 530 record_name
-file positive/from-c/getenv.ldn tokens 63
+file positive/from-c/getenv.ldn tokens 60
   0 6 import
   7 11 core
   11 12 /
@@ -4696,18 +4693,15 @@ file positive/from-c/getenv.ldn tokens 63
   258 259 (
   259 266 problem
   266 267 )
-  276 277 _
-  278 279 =
-  280 287 problem
-  296 300 text
-  300 301 .
-  301 310 host_over
-  310 311 (
-  311 314 "/"
-  314 315 )
-  320 323 end
-  324 327 end
-  328 342 home_directory
+  276 280 text
+  280 281 .
+  281 290 host_over
+  290 291 (
+  291 294 "/"
+  294 295 )
+  300 303 end
+  304 307 end
+  308 322 home_directory
 file positive/from-c/include.ldn tokens 29
   0 6 import
   7 11 core
@@ -4819,7 +4813,7 @@ file positive/from-c/layout.ldn tokens 26
   154 155 =
   156 162 sizeof
   163 169 header
-file positive/from-c/main.ldn tokens 81
+file positive/from-c/main.ldn tokens 78
   0 6 import
   7 11 core
   11 12 /
@@ -4888,19 +4882,16 @@ file positive/from-c/main.ldn tokens 81
   278 279 (
   279 286 problem
   286 287 )
-  296 297 _
-  298 299 =
-  300 307 problem
-  316 320 code
-  321 322 =
-  323 324 1
-  333 339 return
-  344 347 end
-  352 356 code
-  357 358 =
-  359 360 0
-  361 364 end
-  365 369 main
+  296 300 code
+  301 302 =
+  303 304 1
+  313 319 return
+  324 327 end
+  332 336 code
+  337 338 =
+  339 340 0
+  341 344 end
+  345 349 main
 file positive/from-c/malloc.ldn tokens 176
   0 6 import
   7 11 core
