@@ -10,7 +10,8 @@ public invalid_format: atom
 --- A value that writes its own text into a builder, which `format` fills
 --- a placeholder with.  The library supplies it for the ten integer types
 --- in decimal, `bool` as `true` or `false`, `utf8`, `[]u8` and host
---- strings as their bytes.  A type of the program's own conforms with a
+--- strings as their bytes.  Floats, `f32` and `f64`, are not formattable
+--- yet.  A type of the program's own conforms with a
 --- function that appends its text; a different reading of a supplied type,
 --- hexadecimal for one, is a typed `append` call, or a `distinct` wrapper
 --- with its own conformance [1280].

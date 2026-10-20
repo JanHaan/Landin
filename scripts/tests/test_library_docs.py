@@ -156,13 +156,42 @@ public after: atom
         with self.assertRaisesRegex(ValueError, 'unsupported public value'):
             self.read('--- Nothing.\npublic empty: i64 =\n--- After.\npublic after: atom\n')
 
+    def test_alias_continued_on_indented_lines_is_whole(self):
+        """core/failure's `reason` lost all but its first line of atoms."""
+        text = '''--- Every reason.
+public reason: type = mem.empty | mem.full
+    | io.not_found
+    | text.no_space
+--- Next line.
+public kind: type =
+    one | two
+    | three
+--- After.
+public after: atom
+'''
+        result = self.read(text)
+        self.assertEqual([i.name for i in result], ['reason', 'kind', 'after'])
+        self.assertEqual(result[0].signature,
+                         'public reason: type = mem.empty | mem.full\n'
+                         '    | io.not_found\n    | text.no_space')
+        self.assertEqual(result[1].signature,
+                         'public kind: type =\n    one | two\n    | three')
+
+    def test_live_failure_reason_lists_every_atom(self):
+        source = ROOT / 'core/failure/failure.ldn'
+        item = next(i for i in library.read_items(source.read_text(),
+                                                  'core/failure/failure.ldn')
+                    if i.name == 'reason')
+        self.assertIn('text.invalid_format', item.signature)
+        self.assertEqual(item.signature.count('|') + 1, 32)
+
     def test_unknown_public_form_and_unclosed_type_fail(self):
         with self.assertRaisesRegex(ValueError, 'unsupported public'):
             self.read('--- Forward.\npublic import core/mem\n')
         with self.assertRaisesRegex(ValueError, 'unsupported public'):
             self.read('fixed if compiler.hosted then public hidden: atom\n')
         with self.assertRaisesRegex(ValueError, 'unsupported multiline'):
-            self.read('--- Union.\npublic choice: type = one |\n    two\n')
+            self.read('--- Union.\npublic choice: type = one |\n--- After.\npublic after: atom\n')
         with self.assertRaisesRegex(ValueError, 'unclosed'):
             self.read('--- Broken.\npublic broken: type = struct\n')
 
@@ -280,6 +309,18 @@ class GeneratedReference(unittest.TestCase):
         self.assertIn('library.html', (self.destination / 'index.html').read_text())
         self.assertIn('href="library.html"', (self.destination / 'readme.html').read_text())
         self.assertIn('library-index.json', (self.destination / 'llms.txt').read_text())
+
+    def test_module_summaries_render_code_and_module_links(self):
+        # The index once showed a summary's backticks as written.
+        page = (self.destination / 'library.html').read_text()
+        index = page[page.index('<li id="core-io">'):]
+        index = index[:index.index('</li>')]
+        self.assertIn('<code>core/time</code>', index)
+        self.assertNotIn('`', index)
+        # A link to a module's directory is its page.
+        self.assertIn('href="library-core-failure.html" '
+                      'data-source-href="../core/failure"', page)
+        self.assertNotIn('blob/main/core/', page)
 
     def test_front_page_reaches_installation(self):
         # The front page once linked no installation steps.

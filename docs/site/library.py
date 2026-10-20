@@ -190,13 +190,14 @@ def read_items(text, source):
                 signature = '\n'.join(lines[i:j+1])
                 kind = 'concept' if block[1] == 'concept' else 'type'
             else:
-                continued = (code.rstrip().endswith('=')
-                             and last + 1 < len(codes)
-                             and codes[last+1].startswith(prefix + '    ')
-                             and codes[last+1].strip())
-                if continued:
-                    # An alias whose right side the layout put on the next line.
-                    code = code.rstrip() + ' ' + codes[last+1].strip()
+                # An alias whose right side the layout put on the next line,
+                # or continued on more deeply indented ones: a union of
+                # atoms written one `| ...` line after another.
+                j = last
+                while (j + 1 < len(codes) and codes[j+1].strip()
+                       and codes[j+1].startswith(prefix + '    ')):
+                    j += 1
+                    code = code.rstrip() + ' ' + codes[j].strip()
                 if '=' not in code or not code.split('=', 1)[1].strip():
                     raise ValueError(f'{source}:{i+1}: unsupported type alias')
                 rhs = code.split('=', 1)[1].strip()
@@ -205,7 +206,7 @@ def read_items(text, source):
                         or rhs.count('(') != rhs.count(')')
                         or rhs.count('[') != rhs.count(']')):
                     raise ValueError(f'{source}:{i+1}: unsupported multiline type')
-                signature = '\n'.join(lines[i:last + (2 if continued else 1)])
+                signature = '\n'.join(lines[i:j + 1])
                 kind = 'type'
         elif after == 'atom':
             signature, kind = '\n'.join(lines[i:last+1]), 'atom'
@@ -565,8 +566,12 @@ def write(root, destination, render):
             out.append('</details>')
         return '\n'.join(out)
     def prose(text, source='docs/library.md'):
+        # A link to a module's directory, `[core/io](../core/io)`, is its
+        # page here, and the directory itself where the source is read.
+        targets = render.guide_targets(render.DOCS + render.GUIDES, source)
+        targets.pages.update({module: page_name(module) for module in modules})
         _, hero, body, _ = render.render_guide(text, lambda ref: anchors.get(ref),
-                    render.guide_targets(render.DOCS + render.GUIDES, source), render.Highlighter())
+                    targets, render.Highlighter())
         return '<div class="api-prose">\n' + (hero + body).replace(' id="top"', '') + '</div>\n'
     def emit(filename, title, body, source, current='', description=''):
         out = render.page(title + ' — Landin', 'library reference', title, search,
@@ -583,7 +588,13 @@ def write(root, destination, render):
         for module in modules:
             if module.startswith(base + '/'):
                 summary = descriptions[module][0].split('\n\n')[0]
-                body += f'<li id="{module.replace("/", "-")}"><a href="{page_name(module)}"><code>{module}</code></a> — {html.escape(" ".join(summary.split()))}</li>\n'
+                # Through the inline formatter, as the module's own page
+                # renders it: escaped, it showed its backticks literally.
+                written = render.inline(" ".join(summary.split()),
+                                        lambda ref: anchors.get(ref),
+                                        render.guide_targets(render.DOCS + render.GUIDES,
+                                                             'docs/library.md'))
+                body += f'<li id="{module.replace("/", "-")}"><a href="{page_name(module)}"><code>{module}</code></a> — {written}</li>\n'
         body += '</ul>\n'
     emit('library.html', 'Library reference', body, 'docs/library.md and core, hosted, platform sources')
     for module, items in modules.items():

@@ -109,8 +109,9 @@ end pending
 --- flush, into the whole buffer.  A text larger than the whole buffer is
 --- `text.no_space` and leaves nothing of itself waiting; a template that
 --- does not fit its values is `text.invalid_format`; a failed flush is the
---- writer's `io_failed`.  The buffered writer and the builder are the byte
---- sinks a template is formatted into (D355).
+--- writer's `io_failed`.  The values are `text.formattable`'s types, and
+--- floats are not formattable yet.  The buffered writer and the builder
+--- are the byte sinks a template is formatted into (D355).
 public format: (provider: type is writer,
                 inout out: buffered_writer(provider), template: utf8,
                 values: []any text.formattable)
