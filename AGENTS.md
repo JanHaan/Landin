@@ -103,6 +103,35 @@ nix build .#refine
 nix build .#refine-bin
 ```
 
+## Agent feedback without unnecessary round trips
+
+Batch independent searches and file reads in one tool response, inspect every
+result, then choose the next step. Keep edits, dependent operations and checks
+over shared mutable build outputs ordered. A shell command that gathers several
+independent facts avoids a model round trip per fact.
+
+Use one `dev-test.sh` invocation with all affected exact `--suite` and `--case`
+selectors, rather than a shell loop invoking it once per selector. It already
+checks the build; run `dev-build.sh` separately when compilation feedback or an
+explicit build-worker bound is needed. Enter `nix develop` once around related
+commands. Keep the existing host, worker, target and verification requirements.
+
+For a long local command, use `scripts/run_logged.py` inside that environment
+and the agent's background-command facility. Wait for its completion
+notification while doing independent work;
+do not add sleep/log-probe loops. Without notifications, use the tool's blocking
+wait. Inspect `result.json` and the retained log after completion. Report the
+command's scope and status, including `FILTERED` or `HOST-ONLY` where applicable;
+an exit-zero summary alone is not full-suite evidence. The wrapper retains full
+output and prints a bounded tail on failure. Never pipe a check through a
+filter that hides its failure status. See [the local feedback recipe](docs/process.md#local-agent-feedback).
+
+Reduce repeated orchestration, not reasoning effort, model capability, required
+checks or review depth. Keep relevant design context; return concise results
+and log paths instead of repeatedly pasting complete transcripts.
+
+## The mechanical gate
+
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
 push and pull request. A new candidate runs every target the compiler has,
 in jobs that report separate verdicts. RV64 runs under QEMU's user

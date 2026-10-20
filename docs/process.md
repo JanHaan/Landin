@@ -11,7 +11,7 @@ what they cost.
 
 | stage | command | what it says |
 |---|---|---|
-| edit/test loop | `./scripts/dev-test.sh` with one exact `--suite`, `--case` or `--fixture` selector | checksum-safe feedback; the transcript says `FILTERED` |
+| edit/test loop | `./scripts/dev-test.sh` with affected exact `--suite` and `--case` selectors, or one `--fixture` selector | checksum-safe feedback; the transcript says `FILTERED` |
 | Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
 | another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 --toolchain=DRIVER` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's |
 | before pushing a candidate | affected exact developer cases/suites and script controls; `python3 check.py` after documentation changes | focused feedback; the complete matrix runs once in CI |
@@ -77,6 +77,61 @@ diagnostic output if present and retain it for 14 days. The called determinism w
 artifacts. These are not a successful exact-revision acceptance record; green says the tree passed there, not that
 a revision is accepted. Documentation changes still receive the full
 `check.py`; its mechanical checks do not establish prose accuracy.
+
+## Local agent feedback
+
+Gather independent searches and reads in one tool response before deciding
+what to change. Run dependent steps in order, and keep checks that share
+mutable build outputs within the existing lock and worker limits. Preserve
+the same model, reasoning effort, required checks and review depth when
+reducing orchestration overhead.
+
+Several exact suites or cases can be selected in one developer invocation.
+The wrapper performs the build check once, then the harness runs the union
+of the selections. Do not replace that union with a narrower selection to
+make feedback faster. A fixture selector remains a single-fixture operation.
+For example, on the appropriate Linux development host:
+
+```sh
+feedback_parent=$(mktemp -d)
+nix develop -c python3 scripts/run_logged.py \
+    --output "$feedback_parent/checking-and-lowering" -- \
+    env LANDIN_TEST_JOBS=1 ./scripts/dev-test.sh \
+        --suite=checking --suite=lowering
+```
+
+Choose the selectors for the change. `dev-test.sh` checks its own build;
+a preceding `dev-build.sh -j2` is useful when compilation feedback or an
+explicit compiler-worker bound is needed, rather than a mandatory separate
+step before each suite. When several related commands are necessary, enter
+`nix develop` once and run them inside it. Use `sh -eu -c` for dependent
+commands, so an earlier failure stops the sequence.
+
+In Claude Code, launch the long command through Bash's `run_in_background`
+facility and use its completion notification. For a remote handoff, request
+the host tool's completion notification. Continue independent work while it
+runs; do not launch shell loops that sleep and probe logs. If notifications
+are unavailable, use the tool's blocking wait. A live progress inspection is
+appropriate when diagnosing a stall, rather than as a timer.
+
+`scripts/run_logged.py` requires a new output directory and writes complete
+combined stdout/stderr to `command.log`. It prints paths, elapsed time, CPU
+time, peak child RSS and the exit status; on failure it also prints a bounded
+log tail. `result.json` records the argument vector, working directory,
+timestamps, resource measurements and status. Cancellation forwards SIGINT
+or SIGTERM to the command's process group and records the resulting status.
+It executes arguments directly, without interpreting them as shell text.
+A shell explicitly passed to it still owns its pipeline semantics: avoid
+filtering a check through a pipeline that loses the check's exit status.
+
+The log remains the source for warnings, failures and selected scope. Inspect
+those after completion, retrieving detailed sections as needed, and report
+`FILTERED` or `HOST-ONLY` when applicable; the
+wrapper does not turn a focused check into complete-suite evidence. Retain
+full diagnostics even when returning only a concise summary to the main
+agent. CPU time includes reaped children; peak child RSS is a process peak,
+not the simultaneous memory of all workers. These measurements can identify
+expensive commands, but do not establish a CPU or SSD bottleneck alone.
 
 ## Historical: choosing acceptance scope
 
