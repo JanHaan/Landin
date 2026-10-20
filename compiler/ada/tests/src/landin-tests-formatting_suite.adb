@@ -769,7 +769,7 @@ package body Landin.Tests.Formatting_Suite is
       --  One listing for each running example, which check.py's
       --  RUNNING_EXAMPLES names: publishing one raises both counts.
       Landin.Testing.Check
-        (Item, Listings = 19, "every running example was read, and"
+        (Item, Listings = 21, "every running example was read, and"
          & Listings'Image & " were: publishing an example raises the count"
          & " in Core_And_Examples_Are_Formatted beside check.py's"
          & " RUNNING_EXAMPLES");

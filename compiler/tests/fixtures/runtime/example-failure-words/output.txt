@@ -1,0 +1,4 @@
+75: 75 per cent
+250: number out of range
+half: not a number
+missing-settings.conf: not found

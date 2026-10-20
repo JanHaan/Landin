@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published merge sort sorts a writable slice recursively through a work array its caller lends and prints the values before and after
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0570, 0960, 0970, 1150
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

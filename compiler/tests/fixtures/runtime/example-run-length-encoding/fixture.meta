@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published run-length encoder writes the runs of a text into caller-owned struct storage and prints each run's length and byte
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0260, 0540, 0570, 0670, 0700
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

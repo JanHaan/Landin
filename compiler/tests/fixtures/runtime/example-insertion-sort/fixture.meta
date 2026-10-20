@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published insertion sort sorts a writable slice in place and prints the values before and after through a helper that passes write failures on with try
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0400, 0570, 0900, 0960, 1140, 1150
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

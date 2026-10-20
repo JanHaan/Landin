@@ -164,5 +164,5 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    code = 42
+    code = 0
 end main

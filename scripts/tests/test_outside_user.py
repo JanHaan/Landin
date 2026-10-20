@@ -45,18 +45,17 @@ class Documents(unittest.TestCase):
             if expected is not None:
                 self.assertTrue(expected, name)
             if given:
-                #  A program that reads its input is a tool, which returns
-                #  0, and is held to the output for the input it is given.
+                #  A program that reads its input is held to the output for
+                #  the input it is given.
                 reading += 1
             if arguments:
                 #  A Benchmark Game port takes its size as its argument and
                 #  is held, as one, to the game's output for that size.
                 sized += 1
-            if given or arguments:
-                self.assertEqual(status, 0, name)
-                self.assertIsNotNone(expected, name)
-            else:
-                self.assertEqual(status, 42, name)
+            #  Every example prints what it computes and returns 0, and is
+            #  held to that output.
+            self.assertEqual(status, 0, name)
+            self.assertIsNotNone(expected, name)
         self.assertGreaterEqual(reading, 1)
         self.assertGreaterEqual(sized, 1)
 

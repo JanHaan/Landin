@@ -1,0 +1,43 @@
+--  The sieve of Eratosthenes: cross out the multiples of each prime, and
+--  the numbers left are the primes.
+import core/io
+import hosted/system
+
+--  Mark every number below `lenof composite` that is not prime.
+sieve: (composite: []mut bool) -> none =
+    composite[0] = true
+    composite[1] = true
+    for candidate in 2..<lenof composite do
+        --  A smaller multiple has a smaller prime factor, which has already
+        --  marked it, so the marking starts at the square.
+        if not composite[candidate]
+          and candidate <= (lenof composite - 1) / candidate
+        then
+            mut multiple: usize = candidate * candidate
+            while multiple < lenof composite do
+                composite[multiple] = true
+                multiple += candidate
+            end while
+        end if
+    end for
+end sieve
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [512]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    defer io.flush(out) else none
+
+    mut composite: [100]bool = zeroed
+    sieve(composite[0..<100])
+    io.put(out, "primes below 100:") else none
+    mut count: u32 = 0
+    for number in 0..<lenof composite do
+        if not composite[number] then
+            io.format(out, " {}", [any(addr number)]) else none
+            inc count
+        end if
+    end for
+    io.format(out, "\n{} primes\n", [any(addr count)]) else none
+    code = 0
+end main

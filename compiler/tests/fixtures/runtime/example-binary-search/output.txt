@@ -1,0 +1,4 @@
+-20 is at index 0
+3 is at index 3
+4 is missing
+55 is at index 9

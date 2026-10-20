@@ -1,0 +1,32 @@
+--  Values of different types printed into one line each, through a
+--  buffered writer that gathers the lines and writes them together.
+import core/io
+import hosted/system
+
+person: type = struct
+    name: utf8
+    born: u32
+    died: u32
+end person
+
+public main: () -> (code: i32) =
+    host := system.new()
+    --  The lines wait in this buffer and are written when it fills, and
+    --  the deferred flush writes what is left on the way out of main.
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else none
+
+    people: [3]person = [(name: "Ada Lovelace", born: 1815, died: 1852),
+                         (name: "Grace Hopper", born: 1906, died: 1992),
+                         (name: "Peter Landin", born: 1930, died: 2009)]
+    for someone in people do
+        io.format(out, "{} was born in {} and died in {}.\n",
+                  [any(addr someone.name), any(addr someone.born),
+                   any(addr someone.died)]) else none
+    end for
+
+    count: usize = lenof people
+    io.format(out, "{} people in all.\n", [any(addr count)]) else none
+    code = 0
+end main

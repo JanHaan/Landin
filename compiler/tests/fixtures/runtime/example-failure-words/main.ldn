@@ -1,0 +1,47 @@
+--  Turn a failure into words for a person: core/failure has a short phrase
+--  for every atom the library fails with.
+import core/failure
+import core/io
+import core/text
+import hosted/system
+
+--  The percentage written in `given`, a whole number from 0 to 100.
+percent: (given: utf8) -> (value: u8)
+         ! text.invalid_number | text.number_overflow =
+    value = try text.parse_u8(text.bytes(given))
+    fail text.number_overflow when value > 100
+end percent
+
+--  One line for a person: what was being done, a colon, and why it failed.
+report: (inout out: io.buffered_writer(system.host), subject: []u8,
+         problem: failure.reason) -> none =
+    reason: []u8 = failure.words(problem)
+    io.format(out, "{}: {}\n", [any(addr subject), any(addr reason)])
+        else none
+end report
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    defer io.flush(out) else none
+    code = 0
+
+    inputs: [3]utf8 = ["75", "250", "half"]
+    for given in inputs do
+        value := percent(given) else (problem)
+            report(out, text.bytes(given), problem)
+            continue
+        end
+        io.format(out, "{}: {} per cent\n", [any(addr given), any(addr value)])
+            else none
+    end for
+
+    path: []u8 = "missing-settings.conf"
+    file := io.open_read(host, text.host_over(path)) else (problem)
+        report(out, path, problem)
+        return
+    end
+    defer io.close(host, file) else none
+    io.format(out, "{}: opened\n", [any(addr path)]) else none
+end main

@@ -331,10 +331,10 @@ def primer(source, release, site_url):
             "leaves",
             "unsaid, and a register of every decision with the alternative "
             "it was",
-            "chosen over and the fixture that pins it. `examples.md` is ten "
+            "chosen over and the fixture that pins it. `examples.md` holds "
             "complete",
-            "programs the compiler emits and the gates run. Where the tour "
-            "and the",
+            "programs that print what they compute, which the gate runs. "
+            "Where the tour and the",
             "specification could be read differently, the specification "
             "decides.", ""]
     return "\n".join(out)

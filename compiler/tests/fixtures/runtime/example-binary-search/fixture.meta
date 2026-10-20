@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: the published binary search finds three values and misses one in a sorted slice, its answer a variant produced by a valued loop exit and matched to print each result
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0570, 0680, 1170, 1190, 1210
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
