@@ -46,7 +46,9 @@ Line by line:
   compiler does not stop a routine from calling `system.new()` itself
   ([1680]).
 - `io.write` can fail, and Landin will not let a failure pass unnoticed.
-  `else none` says that here it does not matter ([1030]).
+  `else none` says that here it does not matter ([1030]). It is the
+  handler to reach for last: [1030] also shows passing a failure on and
+  reporting it, as the next program does.
 
 To print values, use `format` through a buffered writer. Each `{}` takes
 the next value from the list:
@@ -68,10 +70,13 @@ end print_born
 ```
 
 - `buffered_over` collects output in a buffer you supply, here on the
-  stack, so printing allocates nothing. A line larger than the whole
-  buffer fails with `text.no_space`.
-- `defer` runs `flush` when the routine ends, however it ends. There are
-  no destructors, so nothing flushes for you ([1100]).
+  stack, so printing allocates nothing. One `format` call's whole output
+  must fit in the buffer, or that call fails with `text.no_space`. A line
+  made by several calls may be longer, and `io.put` writes bytes larger
+  than the buffer straight through.
+- `defer` runs `flush` when the routine ends, by returning or by a
+  failure, but not on a trap, which runs no cleanup ([1100]). There are no
+  destructors, so nothing flushes for you.
 - `any(addr name)` hands `format` the address of a value it can turn into
   text ([1370]). Integers, `bool`, `utf8` and byte strings are formattable;
   floats are not yet. A type of your own becomes formattable by declaring
@@ -79,10 +84,20 @@ end print_born
 
 ## Reading a file
 
-This routine counts the lines of the file named by the program's first
-argument:
+This program counts the lines of the file named by its first argument.
+Give it a directory of its own beside `hello`, and save it there as
+`main.ldn`:
+
+```text
+lines/
+    main.ldn
+```
 
 ```landin
+import core/failure
+import core/io
+import hosted/system
+
 --- How many lines the file named by the first argument has.
 count_file_lines: (host: system.host) -> (lines: usize)
                   ! io.no_argument | io.not_found | io.no_access | io.io_failed
@@ -99,37 +114,64 @@ count_file_lines: (host: system.host) -> (lines: usize)
         inc lines
     end loop
 end count_file_lines
+
+public main: () -> (code: i32) =
+    host := system.new()
+    mut storage: [256]u8 = zeroed
+    lines := count_file_lines(host) else (problem)
+        mut err := io.buffered_over(host, io.err(host), storage)
+        defer io.flush(err) else none
+        words: []u8 = failure.words(problem)
+        io.format(err, "error: {}\n", [any(addr words)]) else none
+        code = 1
+        return
+    end
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    io.format(out, "{} lines\n", [any(addr lines)]) else none
+    code = 0
+end main
 ```
 
-- The `!` list after the result says every way it can fail. `try` passes a
-  failure straight on to the caller ([0960]).
+- The `!` list after the result of `count_file_lines` says every way it
+  can fail. `try` passes a failure straight on to the caller ([0960]).
 - `io.argument_at(host, 0)` is the first argument after the program's own
   name.
 - `io.lines_over` reads through a buffer you supply and hands out one line
   at a time ([1130] for `loop`, [0400] for `inc`).
+- `main` decides what a failure means. `else (problem)` handles it in
+  place ([1030]): `failure.words`, from `core/failure`, has words for
+  every library failure, `io.err(host)` is standard error, and `code = 1`
+  is the exit status. The handler returns before `out` is made, so the two
+  writers can share one buffer.
 
-The caller decides what a failure means. `core/failure` has words for
-every library failure:
+Make a small file, then run the program on it and on a file that is not
+there:
 
-```landin
-    lines := count_file_lines(host) else (problem)
-        words: []u8 = failure.words(problem)
-        io.format(out, "error: {}\n", [any(addr words)]) else none
-        code = 1
-        return
-    end
-    io.format(out, "{} lines\n", [any(addr lines)]) else none
+```sh
+refine compile main.ldn -o lines
+printf 'one\ntwo\nthree\n' > notes
+./lines notes
+./lines missing
+echo $?
 ```
 
-Run on a missing file, it prints `error: not found`. `else (problem)`
-handles the failure in place ([1030]); the tour explains each piece in
-order, starting below. [`examples.md`](examples.md) has complete programs
-that list directories, run commands and talk over sockets.
+```text
+3 lines
+error: not found
+1
+```
+
+The tour explains each piece in order, starting below.
+[`examples.md`](examples.md) has complete programs that list directories,
+run commands and talk over sockets.
 
 ## How to read this tour
 
 Read it from the top. Each entry is one idea, with an example, and the
-sections build on each other.
+sections build on each other. The first part, up to the end of MODULES, is
+the path: read it in order and you can write ordinary programs. The rest
+is reference, to read when you need it.
 
 The numbers in brackets, such as [0430], never change, so other documents
 and the compiler's own messages can point here: a refusal ends with a note
@@ -360,8 +402,8 @@ Two declarations of one name in the same scope are an error (spec [1850]).
 The integer types are `u8`, `u16`, `u32` and `u64`, and the signed `i8`,
 `i16`, `i32` and `i64`.
 
-There are no 128-bit integers yet. They are planned under
-Language evolution, for when a program needs them.
+128-bit integers are not in Landin yet; they are planned, for when a
+program needs them (Language evolution, in [the roadmap](ROADMAP.md)).
 
 Odd widths such as `u4` or `u12` exist only as fields of packed register
 images ([0730]). Reading one gives you the next ordinary width up, so a
@@ -377,7 +419,8 @@ and a `u1` does not convert to or from `bool` on its own.
 The float types are `f32` and `f64`. There is no `f80`.
 
 There is no `f16` yet either: neither baseline x86-64 nor Cortex-M0 has a
-half-precision instruction. It is planned under Language evolution.
+half-precision instruction. It is planned (Language evolution, in
+[the roadmap](ROADMAP.md)).
 
 ### [0180] Booleans
 
@@ -589,11 +632,12 @@ end wrap_demo
 
 ### [0310] Conversions are written out
 
-Nothing converts implicitly. To convert, apply the type to the value, like
-a call. If the value is known at compile time, an impossible conversion is a
-compile error; otherwise it traps at run time. A float converts to an
-integer by truncating toward zero. An integer converts to a float by
-rounding, and that never traps.
+Nothing converts implicitly, except that a writable reference passes
+where a read-only one is expected ([0440]). To convert, apply the type to
+the value, like a call. If the value is known at compile time, an
+impossible conversion is a compile error; otherwise it traps at run time.
+A float converts to an integer by truncating toward zero. An integer
+converts to a float by rounding, and that never traps.
 
 ```landin
 -- bad: u8 = u8(300)        compile error
@@ -715,10 +759,10 @@ end measure_demo
 The fine print:
 
 - `lenof` measures a name, a field or element reached through it, or what
-  a call returns. The call runs, but an array that a name or path reaches
+  a call returns. A call whose result is measured runs; the elements of a
+  measured literal, like the `roll_die()` calls above, are checked to have
+  one scalar type but not evaluated. An array that a name or path reaches
   is not read, because its type holds its length.
-- In a literal measured by `lenof`, the elements are checked to have one
-  scalar type, but they are not evaluated.
 - `offsetof` gives a field's offset in bytes from the start of its struct
   type, through nested structs.
 - `lenof` and `offsetof` are not reserved: everywhere else, they are
@@ -1086,6 +1130,10 @@ less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
 Writing one makes a fixed code address; it does not run the body. State
 travels as an explicit parameter, as in [1000]'s callback.
 
+A bound anonymous function is a value: `less_i32(1, 2)` calls it, and it
+can be passed wherever its function type is expected, but it cannot supply
+a concept's entry ([1240]).
+
 ## TYPES YOU DECLARE
 
 Atoms, structs, variants, and types made from other types. Device register
@@ -1428,9 +1476,9 @@ say.
 
 ### [1050] Branching with `if`
 
-`if` takes a condition of type `bool`, and `then` closes it. No integer or
-pointer stands in for a `bool`. `elsif` and `else` are optional, and
-`end if` closes the whole thing.
+`if` takes a condition of type `bool`, and `then` begins the body. No
+integer or pointer stands in for a `bool`. `elsif` and `else` are
+optional, and `end if` closes the whole thing.
 
 ```landin
     if x > 0 then
@@ -1713,43 +1761,46 @@ Only exits take `when`: `return`, `fail`, `break` and `continue`.
 
 ### [0950] What deserves an error, and what does not
 
-Landin prefers that you check what you can foresee and keep `fail` for
-what you cannot. Ask whether the problem can be determined from what you
-already hold. If it can, check for it, and where you can, work around it
-rather than reporting it.
+A failure ends the operation without a result, and the caller handles it.
+A diagnostic is reported while the work goes on. Choose by what the caller
+needs: no result at all, or a result with notes about what was wrong. Where
+you can see a problem in what you already hold, prefer checking for it and
+working around it to failing.
 
-- A syntax mistake is entirely in the bytes the parser is looking at, so
-  the parser checks it, records a diagnostic and carries on. A parser that
-  stops at the first mistake hides the other twelve.
+`sum_digits` notes a problem instead of failing on it. It adds the digits
+in a line and counts what it had to skip, so every line still gets a sum:
+
+```landin
+--- Adds up the digits in a line and counts what is not a digit.
+sum_digits: (line: []u8) -> (sum: u32, skipped: u32) =
+    sum = 0
+    skipped = 0
+    for b in line do
+        if b >= u8('0') and b <= u8('9') then
+            sum += u32(b - u8('0'))
+        else
+            inc skipped -- noted, and the work goes on
+        end if
+    end for
+end sum_digits
+```
+
+- A parser is the usual case: a syntax mistake is entirely in the bytes it
+  is reading, so it records a diagnostic and carries on. One that stops at
+  the first mistake hides the other twelve.
+- Input with no usable answer may well be a failure: [0940]'s `port_from`
+  fails on text that is not a port, because its caller has no port to use.
 - Out of memory, a missing file, an unplugged device: these depend on the
-  world, not on your data, and checking first would only be a race. That
-  is what `fail` is for.
-
-So there are two different things. A diagnostic is data: the parser
-collects any number of them and still finishes. A failure is the
-operation itself giving up: the call leaves through its `!` set and
-produces nothing.
+  world, not on your data, and checking first would only be a race. They
+  are failures.
 
 Collecting diagnostics needs somewhere to put them, and that is an
 ordinary parameter. The library's sink is the concept `core/diag.log`,
-which a routine takes as `any diag.log`, meaning any kind of log at all
-([1370]). Here `node`, `statements`, `out_of_memory` and `too_deep` stand
-for the rest of a parser:
-
-```landin
-import core/diag
-import core/io
-
-parse: (src: utf8, inout log: any diag.log)
-       -> (tree: ptr node) ! out_of_memory | too_deep | io.io_failed =
-    tree = try statements(src, log)
-end parse
-```
-
-The log's `note` entry takes a position in the text, a severity and the
-message bytes. Recording a note is a diagnostic; failing to record it is
-an operation failure, so `note` declares `io.io_failed`, and `parse` lists
-it.
+which a routine takes as `inout log: any diag.log`, meaning any kind of
+log at all ([1370]). Its `note` entry takes a position in the text, a
+severity and the message bytes. Recording a note is a diagnostic; failing
+to record it is an operation failure, so `note` declares `io.io_failed`,
+and a routine that records notes lists it too.
 
 - A bounded logger never fails. When it is full it stops keeping entries,
   counts them in `dropped`, and still records whether an error was
@@ -1757,11 +1808,9 @@ it.
 - A streaming logger writes as it goes, and fails with `io_failed` when a
   write does.
 - Both pass as `any diag.log`, so the producer does not know which policy
-  its caller chose.
-
-The sink is a capability ([1680]): passing one makes the destination
-explicit. The parameter list alone does not prove that the routine cannot
-make another sink or reach the host.
+  its caller chose. The sink is a capability ([1680]): passing one makes
+  the destination explicit, though the parameter list alone does not
+  prove that the routine cannot make another sink or reach the host.
 
 ### [1100] Cleanup on the way out: `defer`
 
@@ -2011,7 +2060,7 @@ means the innermost loop.
         for item in items do
             break search when item == 0
         end for
-        all_nonzero = true
+        out = 1 -- no item was zero
     end search
 ```
 
@@ -2281,15 +2330,14 @@ Fine print:
 `zeroed` is the value of a type whose bits are all zero. Two separate
 questions decide where you may write it.
 
-`irq_set` and `clock_mode` below are register types from [0730]: a set of
-flag bits and a named value set.
+`point` is [0120]'s struct and `compass` [0640]'s enumeration:
 
 ```landin
 mut buffer: [256]u8 = zeroed
 buffer = zeroed -- clear the existing array as a whole
-irqs: irq_set = zeroed -- fine: a set is bools, see [0730]
--- mode: clock_mode = zeroed    -- error, write 'internal'
--- p:    ptr u32     = zeroed   -- error, no zero image
+corner: point = zeroed -- fine: both fields are floats
+-- facing_now: compass = zeroed -- error, write 'north'
+-- p: ptr u32 = zeroed -- error, no zero image
 ```
 
 - **Does the type have a zero image?** It does when all-zero bits are a
@@ -2341,7 +2389,7 @@ Atoms, functions, pointers and slices are not in it. It is a closed list,
 not reflection over arbitrary types.
 
 This is how a container that needs a filler value for storage it has not
-used yet says so, instead of pretending: see `small` at [1350] and the
+used yet says so, instead of pretending: see `cleared` at [1350] and the
 reason at [0510].
 
 ### [0570] Slices are views
@@ -2708,6 +2756,18 @@ Fine print:
   refused by name before any root is searched.
 - Otherwise the namespace names are ordinary identifiers.
 
+## What you can write now
+
+That is the path. You can now write ordinary programs: routines with
+failures, your own types, loops and matches, arrays and text, modules, and
+the host's files and streams through `hosted/system` and `core/io`.
+[`examples.md`](examples.md) has complete programs to read and copy.
+
+The sections after this one are reference, to read when you need them:
+POINTERS; LIFETIME AND ESCAPE; CONCEPTS AND GENERIC CODE; RUNTIME
+DISPATCH; COMPILE TIME; THE TOOLCHAIN, C, AND THE MACHINE; and the
+principles, the omissions and the open questions at the end.
+
 ## POINTERS
 
 Most code never needs a pointer: slices, handles and indices do the
@@ -2966,8 +3026,9 @@ So a pointer to a local can go into any call whose parameter does not say
 `escaping`, and then the caller may only pass something that lives long
 enough: allocated or static, never frame.
 
-Assume a struct `node` with a field `next: ptr mut node`. `mem.new` is the
-allocation call from the opening of ARRAYS, SLICES AND TEXT.
+Assume a struct `node` with a field `next: ptr mut node`. `mem.new`
+allocates one value through the allocator it is given and returns a
+pointer to it ([1360]; `core/mem` in the [library guide](docs/library.md)).
 
 ```landin
 push_front: (escaping inout head: ptr mut node, escaping item: ptr mut node)
@@ -3080,7 +3141,8 @@ A result with `from` borrows its source just as a view does in [0830].
 The signature supplies the derivation instead of one expression showing
 it, and the fix is the same: take the view again afterwards.
 
-`core/vec`'s `vec.used` is declared with `from`, like [0790]'s `used`:
+`core/vec`'s `vec.used` is declared with `from`, like [0790]'s
+`filled_part`:
 
 ```landin
 import core/mem
@@ -3125,8 +3187,10 @@ more about its lifetime. It also does not check that the storage is live
 or large enough: that stays the library's unsafe obligation ([1720]).
 
 ```landin
-address: usize = usize(self.base) + offset
-block: ptr mut u8 = ptr(address) -- no tracked derivation survives
+block_at: (base: ptr mut u8, offset: usize) -> (block: ptr mut u8) =
+    address: usize = usize(base) + offset
+    block = ptr(address) -- no tracked derivation survives
+end block_at
 ```
 
 This is how `core/arena` returns a block without borrowing the arena,
@@ -3270,12 +3334,15 @@ A conformance registers one type against one concept, naming the
 function that supplies each entry.
 
 ```landin
-i32 is ordered (less: less_i32)
+less_than_i32: (a: i32, b: i32) -> (yes: bool) = a < b end less_than_i32
+
+i32 is ordered (less: less_than_i32)
 ```
 
-`less_i32` is the anonymous function from [1010]. Each label is an entry
-of the concept, and each supplying function must have exactly the
-entry's signature with `t` replaced by `i32`. There is no implicit
+Each label is an entry of the concept, and each supplying function must
+have exactly the entry's signature with `t` replaced by `i32`. It must be
+a declared function: [1010]'s `less_i32`, a binding that holds an
+anonymous function, cannot supply an entry. There is no implicit
 conformance: a type with a matching `less` is still not `ordered` until
 a line like this one says so.
 
@@ -3436,11 +3503,13 @@ end pair
 way: `core/vec`'s `list(t)` is one, and [0510] explains how it keeps its
 empty slots out of sight. A type parameter may carry one concept
 constraint, and a `fixed` parameter is an integer known at compile time.
-Here `hashable` is a concept `core/cmp` provides, and `zeroable` is
-[0540]'s:
+Here `cmp.hashable` is a concept `core/cmp` provides, and `zeroable` is
+[0550]'s:
 
 ```landin
-key_value: type (key_type: type is hashable, value_type: type) = struct
+import core/cmp
+
+key_value: type (key_type: type is cmp.hashable, value_type: type) = struct
     key: key_type
     value: value_type
 end key_value
@@ -3473,7 +3542,7 @@ A conformance for a generic type declares its type variables in front,
 because it holds for every one of them.
 
 The examples use two concepts met later: `iterable`, which `for` loops
-use ([1320]), and `allocator` ([1360]). `counted(provider)` is an
+use ([1320]), and `mem.allocator` ([1360]). `counted(provider)` is an
 allocator that wraps another, and the `pair_...` and `counted_...` names
 are the functions that supply each entry.
 
@@ -3482,7 +3551,7 @@ are the functions that supply each entry.
                                first: pair_first, at_end: pair_at_end,
                                item: pair_item, next: pair_next)
 
-(provider: type is allocator) counted(provider) is allocator
+(provider: type is mem.allocator) counted(provider) is mem.allocator
     (alloc: counted_alloc, grow: counted_grow, resize: counted_resize,
      free: counted_free)
 ```
@@ -4011,7 +4080,9 @@ capabilities it hands out, and what happens when a check fails.
 platform's own assembler and linker turn that into an executable. There is
 no LLVM and no C in between.
 
-- The output is deterministic: the same program gives the same bytes.
+- The emitted assembly is deterministic: the same program and options
+  give the same bytes, whatever the build directory, environment or order.
+  The linked executable is not covered by that promise.
 - Every ordinary routine and every interrupt handler sets up the frame
   pointer, so a debugger or a backtrace can always walk the stack. On
   Cortex-M0 a routine with no calls, no assembly and no stack changes may
@@ -4302,7 +4373,8 @@ end bump
 
 There is no atomic wrapper type in `core`. Cortex-M0 has no
 read-modify-write atomics at all, so what a portable wrapper should offer
-is a library question, planned under Broader standard library.
+is a library question. It is planned (Broader standard library, in
+[the roadmap](ROADMAP.md)).
 
 Each tool for shared memory does one thing:
 
@@ -4356,7 +4428,8 @@ result you destructure.
 What an operand can be:
 
 - An integer scalar that fits one register. A float operand is refused by
-  name; float operands are planned under Language evolution.
+  name. Float operands are not in Landin yet; they are planned
+  (Language evolution, in [the roadmap](ROADMAP.md)).
 - A pointer crosses as `usize(p)` and comes back through `ptr(u)`, whose
   zero check then happens there. A flag comes back as `x <> 0`.
 - Inputs are evaluated once, left to right, before the block runs.
@@ -4733,10 +4806,12 @@ The language does not reserve that to the entry point: any routine can call
 the constructors ([1680]). A hosted root imports `hosted/system`; a
 caller-backed one needs only `core/io`.
 
-This is the essential flow of the entry of `examples/derived_hosted`, a
-complete log filter. It imports `hosted/system`, `hosted/heap`,
-`core/region`, `core/diag` and `core/io`, and `run_logged` is the
-application's own routine that does the work:
+This is the essential flow of `examples/derived_hosted`, a complete log
+filter. Its `main` is one line, `code = app.entry()`, and the work starts
+in `entry`, a public routine of the program's own `app` module. That
+module imports `hosted/system`, `hosted/heap`, `core/region`, `core/diag`
+and `core/io`, and `run_logged` is the application's routine that does
+the work:
 
 ```landin
 public entry: () -> (code: i32) =
@@ -4795,7 +4870,11 @@ It is four concepts, because a provider should supply only what it has
 | `io.files` | open, close, `same_file` |
 | `io.process` | the three standard streams, the argument table |
 
-`io.world` composes all four for a root that has everything, and
+`core/io` has more concepts beside these four, each separate and not part
+of the world: `directories`, `environment`, `programs`, `file_system`,
+`terminals` and `entropy`.
+
+`io.world` composes the four for a root that has everything, and
 `world.write` on an erased world reaches the writer's entry. A UART
 implements `writer` and nothing else. A diagnostics log asks for
 `any io.writer`, which is why `entry` builds one from the same `host`: an
@@ -4971,7 +5050,8 @@ Shadowing is never warned about.
 
 ### [0620] Storing a collection field by field (deferred)
 
-DEFERRED: not in Landin yet, and planned under Language evolution. A
+DEFERRED: not in Landin yet; it is planned (Language evolution, in
+[the roadmap](ROADMAP.md)). A
 collection could be stored transposed, one array per field instead of one
 array of structs, written `soa [4096]entity`, so that one field of every
 element is a contiguous slice. It touches aliasing, generics, slicing,
