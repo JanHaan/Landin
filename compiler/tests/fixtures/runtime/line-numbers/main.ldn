@@ -7,14 +7,14 @@ import core/io
 import core/text
 import hosted/system
 
---  Write every line of INPUT to OUT, numbered.
+--- Write every line of `host`'s standard input to `out`, numbered.
 numbered: (provider: type is io.world, host: provider,
            inout out: io.buffered_writer(provider))
           -> none ! ... =
     mut buffer: [32]u8 = zeroed
-    mut lines := io.lines_over(host, io.input(host), buffer[0..<32])
+    mut lines := io.lines_over(host, io.input(host), buffer)
     mut room: [16]u8 = zeroed
-    mut prefix := text.over(room[0..<16])
+    mut prefix := text.over(room)
     mut number: u64 = 0
     loop do
         inc number
@@ -38,15 +38,13 @@ end numbered
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
     numbered(host, out) else (problem)
-        _ = problem
         return
     end
     io.flush(out) else (problem)
-        _ = problem
         return
     end
     code = 0

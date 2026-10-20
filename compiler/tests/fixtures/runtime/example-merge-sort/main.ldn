@@ -29,7 +29,7 @@ merge_sort: (values: []mut i32, work: []mut i32, left: usize, right: usize)
     end for
 end merge_sort
 
---  The label, then each value after a space, then a newline.
+--- `label`, then each of `values` after a space, then a newline.
 show: (inout out: io.buffered_writer(system.host), label: utf8,
        values: []i32)
       -> none ! io.io_failed | text.no_space | text.invalid_format =
@@ -43,13 +43,13 @@ end show
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     mut values: [8]i32 = [-12, 5, 0, 99, 5, 2, -3, 18]
     mut work: [8]i32 = zeroed
-    show(out, "before", values[0..<8]) else none
-    merge_sort(values[0..<8], work[0..<8], 0, 8)
-    show(out, "after", values[0..<8]) else none
+    show(out, "before", values) else none
+    merge_sort(values, work, 0, 8)
+    show(out, "after", values) else none
     code = 0
 end main

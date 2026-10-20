@@ -80,7 +80,7 @@ fannkuch: (n: usize) -> (result: score) =
     end loop
 end fannkuch
 
---  The order named by the first argument, one to sixteen.
+--- The order named by the first argument, one to sixteen.
 order_size: (host: system.host)
             -> (n: usize)
             ! io.no_argument | text.invalid_number | text.number_overflow
@@ -105,7 +105,6 @@ public main: () -> (code: i32) =
     host := system.new()
     code = 1
     n := order_size(host) else (problem)
-        _ = problem
         io.write(host, io.err(host),
                  "usage: fannkuch-redux N, where N is 1 to 16\n") else none
         return
@@ -113,7 +112,6 @@ public main: () -> (code: i32) =
 
     value: score = fannkuch(n)
     report(host, n, value) else (problem)
-        _ = problem
         return
     end
     code = 0

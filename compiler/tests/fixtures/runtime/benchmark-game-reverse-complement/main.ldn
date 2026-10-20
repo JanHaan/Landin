@@ -10,13 +10,13 @@ import core/text
 import hosted/heap
 import hosted/system
 
---  Each IUB code and the code it pairs with.  A lowercase code pairs with
---  the same uppercase complement as its uppercase form.
+--- Each IUB code and the code it pairs with.  A lowercase code pairs
+--- with the same uppercase complement as its uppercase form.
 codes: []u8 = "ACGTUMRWSYKVHDBN"
 pairs: []u8 = "TGCAAKYWSRMBDHVN"
 
---  Every byte's complement, at the byte's own index.  A byte that is no
---  IUB code is its own complement.
+--- Every byte's complement, at the byte's own index.  A byte that is no
+--- IUB code is its own complement.
 complements: () -> (table: [256]u8) =
     table = zeroed
     for at in usize(0)..<256 do
@@ -28,21 +28,21 @@ complements: () -> (table: [256]u8) =
     end for
 end complements
 
---  Append all of standard input to WHOLE, a read at a time.
+--- Append all of standard input to `whole`, a read at a time.
 read_all: (host: system.host, inout whole: text.builder)
           -> none ! io.io_failed | text.no_space =
     input: io.file = io.input(host)
     mut chunk: [65536]u8 = zeroed
     loop do
-        got: usize = try io.read(host, input, chunk[0..<65536])
+        got: usize = try io.read(host, input, chunk)
         break when got == 0
         try text.append(whole, chunk[0..<got])
     end loop
 end read_all
 
---  Write SEQUENCE to OUT from its last base to its first, each replaced by
---  its complement, leaving out its line breaks and breaking it again into
---  lines of sixty.
+--- Write `sequence` to `out` from its last base to its first, each
+--- replaced by its complement, leaving out its line breaks and breaking it
+--- again into lines of sixty.
 write_reversed: (inout out: io.buffered_writer(system.host),
                  sequence: []u8, table: [256]u8) -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
@@ -56,7 +56,7 @@ write_reversed: (inout out: io.buffered_writer(system.host),
         inc width
         if width == 60 then
             line[60] = 10
-            try io.put(out, line[0..<61])
+            try io.put(out, line)
             width = 0
         end if
     end while
@@ -66,9 +66,9 @@ write_reversed: (inout out: io.buffered_writer(system.host),
     end if
 end write_reversed
 
---  Write every record of INPUT to OUT: its header line, which begins with
---  `>`, as it is, and then its sequence, every line up to the next header,
---  turned around.
+--- Write every record of `input` to `out`: its header line, which begins
+--- with `>`, as it is, and then its sequence, every line up to the next
+--- header, turned around.
 records: (inout out: io.buffered_writer(system.host), input: []u8)
          -> none ! io.io_failed =
     table: [256]u8 = complements()
@@ -91,7 +91,7 @@ public main: () -> (code: i32) =
     host := system.new()
     memory := heap.new()
     mut storage: [65536]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<65536])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     mut whole := text.growing(any(addr memory))
     defer text.release(whole)
@@ -107,13 +107,11 @@ public main: () -> (code: i32) =
         return
     end
     records(out, text.used(whole)) else (problem)
-        _ = problem
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
             else none
         return
     end
     io.flush(out) else (problem)
-        _ = problem
         io.write(host, io.err(host), "revcomp: standard output could not be written\n")
             else none
         return

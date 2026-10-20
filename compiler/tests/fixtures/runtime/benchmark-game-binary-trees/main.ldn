@@ -12,7 +12,7 @@ import hosted/system
 
 bad_depth: atom
 
---  A missing child, which only a leaf has.
+--- A missing child, which only a leaf has.
 leaf: atom
 
 child: type = leaf | ptr mut node
@@ -26,7 +26,7 @@ nodes_region: type = region.region(heap.heap)
 
 min_depth: usize = 4
 
---  A perfect tree with DEPTH levels below its root.
+--- A perfect tree with `depth` levels below its root.
 build: (memory: nodes_region, depth: usize)
        -> (root: ptr mut node) ! mem.out_of_memory =
     mut left: child = leaf
@@ -39,7 +39,7 @@ build: (memory: nodes_region, depth: usize)
     root = try mem.new(memory, shape)
 end build
 
---  The nodes of TREE, counted by walking all of it.
+--- The nodes of `tree`, counted by walking all of it.
 check: (tree: ptr mut node) -> (count: usize) =
     count = 1 + check_child(tree.val.left) + check_child(tree.val.right)
 end check
@@ -51,7 +51,7 @@ check_child: (branch: child) -> (count: usize) =
     end match
 end check_child
 
---  Build a tree of DEPTH in a region of its own, check it and free it.
+--- Build a tree of `depth` in a region of its own, check it and free it.
 checked_tree: (memory: heap.heap, depth: usize)
               -> (count: usize) ! mem.out_of_memory =
     mut ledger: region.growing_space = zeroed
@@ -61,7 +61,7 @@ checked_tree: (memory: heap.heap, depth: usize)
     count = check(tree)
 end checked_tree
 
---  Write one line of the report.
+--- Write one line of the report.
 say: (host: system.host, template: utf8, values: []any text.formattable)
      -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [96]u8 = zeroed
@@ -105,8 +105,8 @@ binary_trees: (host: system.host, n: usize)
             [any(addr max_depth), any(addr long_check)])
 end binary_trees
 
---  The depth named by the first argument; above fifty-nine the nodes counted
---  at depth four would not fit in a usize.
+--- The depth named by the first argument; above fifty-nine the nodes
+--- counted at depth four would not fit in a usize.
 tree_depth: (host: system.host)
             -> (n: usize) ! io.no_argument | text.invalid_number
                           | text.number_overflow | bad_depth =
@@ -120,7 +120,6 @@ public main: () -> (code: i32) =
     host := system.new()
     code = 1
     n := tree_depth(host) else (problem)
-        _ = problem
         io.write(host, io.err(host),
                  "usage: binary-trees N, where N is 0 to 59\n") else none
         return

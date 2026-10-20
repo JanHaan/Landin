@@ -3,14 +3,14 @@
 import core/io
 import hosted/system
 
---  A run: where in the input it starts, and how many bytes long it is.
+--- A run: where in the input it starts, and how many bytes long it is.
 run: type = struct
     start: usize
     length: usize
 end run
 
---  The runs of `input`, written into `runs`, which the caller makes as
---  long as the input so that every run fits.
+--- The runs of `input`, written into `runs`, which the caller makes as
+--- long as the input so that every run fits.
 encode: (input: []u8, runs: []mut run) -> (used: usize) =
     used = 0
     for at in 0..<lenof input do
@@ -26,12 +26,12 @@ end encode
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     input: []u8 = "AAAABBBCCDAA"
     mut runs: [12]run = zeroed
-    used: usize = encode(input, runs[0..<12])
+    used: usize = encode(input, runs)
 
     io.format(out, "input:   {}\nencoded: ", [any(addr input)]) else none
     for each in runs[0..<used] do

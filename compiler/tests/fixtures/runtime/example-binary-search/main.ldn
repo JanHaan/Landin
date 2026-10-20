@@ -31,13 +31,13 @@ end search
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     values: [10]i32 = [-20, -5, 0, 3, 8, 11, 18, 21, 34, 55]
     needles: [4]i32 = [-20, 3, 4, 55]
     for needle in needles do
-        result: answer = search(values[0..<10], needle)
+        result: answer = search(values, needle)
         match result.kind
             found(index):
                 io.format(out, "{} is at index {}\n",

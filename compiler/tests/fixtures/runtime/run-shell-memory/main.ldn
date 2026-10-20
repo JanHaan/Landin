@@ -26,7 +26,7 @@ capture: (provider: type is io.programs, host: provider,
     mut running: io.child = started
     mut buffer: [256]u8 = zeroed
     loop do
-        part: io.child_read = try io.read_child(host, running, buffer[0..<256])
+        part: io.child_read = try io.read_child(host, running, buffer)
         break when part.finished
         if part.stream == io.child_errors then
             try text.append(errors, buffer[0..<part.count])
@@ -65,7 +65,7 @@ report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     try io.put(out, "and complained:\n")
     try quoted(out, errors)
     mut room: [64]u8 = zeroed
-    mut line := text.over(room[0..<64])
+    mut line := text.over(room)
     match ended.how
         io.exited(code): try text.format(line, "and exited with code {}\n",
                                          [any(addr code)])

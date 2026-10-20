@@ -22,7 +22,7 @@ end pair
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<256])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
 
     pairs: [4]pair = [(a: 1071, b: 462), (a: 54, b: 24), (a: 42, b: 0),

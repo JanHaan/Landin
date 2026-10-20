@@ -165,7 +165,7 @@ ARGUMENT_EXAMPLES = {"Benchmark Game fannkuch-redux",
 SHARED_ROUTINES = {
     "compiler/tests/fixtures/runtime/word-count/main.ldn": {
         "compiler/tests/fixtures/runtime/word-count-memory/main.ldn":
-            ("counts", "blank", "count", "render"),
+            ("counts", "blank", "count"),
         "compiler/tests/fixtures/runtime/word-count-closed-input/main.ldn":
             ("counts", "blank", "count"),
     },

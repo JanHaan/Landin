@@ -10,24 +10,24 @@ import core/text
 import core/time
 import hosted/system
 
---  What the client sends over TCP: three lines.
+--- What the client sends over TCP: three lines.
 request: []u8 = "one\ntwo\nhello, world\n"
 
---  What the client sends over UDP: two datagrams.
+--- What the client sends over UDP: two datagrams.
 messages: [2][]u8 = ["ping", "hello, datagram"]
 
---  A reply came from somewhere other than the server it was sent to.
+--- A reply came from somewhere other than the server it was sent to.
 wrong_sender: atom
 
---  Serve one connection: read each line through a line reader and write it
---  back through a buffered writer, until the client has finished sending,
---  and then finish sending too.  How many lines it echoed.
+--- Serve `connection`: read each line through a line reader and write it
+--- back through a buffered writer, until the client has finished sending,
+--- and then finish sending too.  `lines` is how many it echoed.
 serve: (provider: type is net.network, host: provider, connection: io.file)
        -> (lines: usize) ! ... =
     mut incoming: [64]u8 = zeroed
-    mut reader := io.lines_over(host, connection, incoming[0..<64])
+    mut reader := io.lines_over(host, connection, incoming)
     mut outgoing: [64]u8 = zeroed
-    mut writer := io.buffered_over(host, connection, outgoing[0..<64])
+    mut writer := io.buffered_over(host, connection, outgoing)
     lines = 0
     loop do
         item: io.line = try io.read_line(reader)
@@ -40,12 +40,12 @@ serve: (provider: type is net.network, host: provider, connection: io.file)
     try net.shutdown(host, connection, net.sending)
 end serve
 
---  Echo `request` over TCP between a server and a client on FAMILY's
---  loopback address, and put what the client read back in `echoed`, a line
---  at a time: how many lines the server echoed.  The listener asks for
---  port 0, any free one, and says which it got; the client sends all of
---  its lines and finishes sending before the server accepts, which the
---  system's buffers allow in one thread.
+--- Echo `request` over TCP between a server and a client on `family`'s
+--- loopback address, and put what the client read back in `echoed`, a line
+--- at a time; `lines` is how many the server echoed.  The listener asks for
+--- port 0, any free one, and says which it got; the client sends all of
+--- its lines and finishes sending before the server accepts, which the
+--- system's buffers allow in one thread.
 tcp_echo: (provider: type is net.network, host: provider,
            family: net.address_family, inout echoed: text.builder)
           -> (lines: usize) ! ... =
@@ -62,7 +62,7 @@ tcp_echo: (provider: type is net.network, host: provider,
     try net.set_timeouts(host, server, time.seconds(5), time.seconds(5))
     lines = try serve(host, server)
     mut incoming: [64]u8 = zeroed
-    mut replies := io.lines_over(host, client, incoming[0..<64])
+    mut replies := io.lines_over(host, client, incoming)
     loop do
         item: io.line = try io.read_line(replies)
         break when item.finished
@@ -71,9 +71,9 @@ tcp_echo: (provider: type is net.network, host: provider,
     end loop
 end tcp_echo
 
---  Echo `messages` over UDP between two sockets on FAMILY's loopback
---  address: the server sends each datagram back to whoever sent it, and
---  the client puts each reply in `echoed`, a line each.
+--- Echo `messages` over UDP between two sockets on `family`'s loopback
+--- address: the server sends each datagram back to whoever sent it, and
+--- the client puts each reply in `echoed`, a line each.
 udp_echo: (provider: type is net.network, host: provider,
            family: net.address_family, inout echoed: text.builder)
           -> none ! ... =
@@ -87,17 +87,16 @@ udp_echo: (provider: type is net.network, host: provider,
     mut buffer: [64]u8 = zeroed
     for message in messages do
         try net.send_to(host, client, message, at)
-        got: net.datagram = try net.receive_from(host, server, buffer[0..<64])
+        got: net.datagram = try net.receive_from(host, server, buffer)
         try net.send_to(host, server, buffer[0..<got.count], got.sender)
-        back: net.datagram = try net.receive_from(host, client,
-                                                  buffer[0..<64])
+        back: net.datagram = try net.receive_from(host, client, buffer)
         fail wrong_sender when not net.same_address(back.sender, at)
         try text.append(echoed, buffer[0..<back.count])
         try text.append_byte(echoed, u8('\n'))
     end for
 end udp_echo
 
---  Write each line of BYTES to OUT after a bar.
+--- Write each line of `bytes` to `out` after a bar.
 quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
          bytes: []u8) -> none ! ... =
     mut start: usize = 0
@@ -110,13 +109,13 @@ quoted: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     end for
 end quoted
 
---  Report what came back over PROTOCOL on FAMILY's loopback address: how
---  many of what the server echoed, and each of them.
+--- Report what came back over `protocol` on `family`'s loopback address:
+--- `count` of `what` the server echoed, and each of them.
 report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
          protocol: []u8, family: net.address_family, count: usize,
          what: []u8, echoed: []u8) -> none ! ... =
     mut room: [64]u8 = zeroed
-    mut line := text.over(room[0..<64])
+    mut line := text.over(room)
     at: net.address = net.loopback(family, 0)
     try text.append(line, protocol)
     try text.append(line, " over ")
@@ -127,12 +126,13 @@ report: (provider: type is io.writer, inout out: io.buffered_writer(provider),
     try quoted(out, echoed)
 end report
 
---  Echo over TCP and then UDP on FAMILY's loopback address, and report it.
+--- Echo over TCP and then UDP on `family`'s loopback address, and report
+--- what came back to `out`.
 exchange: (host: system.host,
            inout out: io.buffered_writer(system.host),
            family: net.address_family) -> none ! ... =
     mut room: [256]u8 = zeroed
-    mut echoed := text.over(room[0..<256])
+    mut echoed := text.over(room)
     lines: usize = try tcp_echo(host, family, echoed)
     try report(out, "TCP", family, lines, "lines", text.used(echoed))
     text.clear(echoed)
@@ -144,7 +144,7 @@ end exchange
 public main: () -> (code: i32) =
     host := system.new()
     mut storage: [512]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage[0..<512])
+    mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
     code = 1
     families: [2]net.address_family = [net.ipv4, net.ipv6]
@@ -161,7 +161,6 @@ public main: () -> (code: i32) =
         end
     end for
     io.flush(out) else (problem)
-        _ = problem
         return
     end
     code = 0
