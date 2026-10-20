@@ -419,25 +419,52 @@ main .hero .api-results p.api-count{font-family:var(--mono); font-size:.72rem; c
 /* ---- the page's own contents, in the sidebar and the phone's drawer ---- */
 nav.side .api-toc-label{display:block; padding:.3rem .75rem .25rem .8rem;
   font-family:var(--mono); font-size:.68rem; color:var(--ink-faint)}
-nav.side a.api-toc-kind{padding:.14rem .75rem .14rem 1.6rem; margin-left:-1px;
-  border-left:1px solid transparent; font-size:.8rem; color:var(--ink-faint)}
+nav.side a.api-toc-kind, nav.side .api-toc-group > summary{
+  padding:.14rem .75rem .14rem 1.6rem; margin-left:-1px;
+  border-left:1px solid transparent; font-family:var(--ui); font-size:.8rem;
+  line-height:1.35; color:var(--ink-faint)}
 nav.side a.api-toc-kind:hover{color:var(--ink)}
-nav.side a.api-toc-kind.here{color:var(--ink); border-left-color:var(--accent)}
+nav.side a.api-toc-kind.here, nav.side .api-toc-group > summary.here{
+  color:var(--ink); border-left-color:var(--accent)}
 nav.side .api-toc .count{margin-left:.3rem; font-family:var(--mono); font-size:.66rem;
   color:var(--ink-faint)}
+/*  A kind folds its names: the shared summary's chevron and hidden count
+    are for the document groups; a kind keeps its count beside its name.  */
+nav.side details.api-toc-group{margin:0}
+nav.side .api-toc-group > summary{justify-content:flex-start; gap:0}
+nav.side .api-toc-group > summary::after{margin-left:.5rem}
+nav.side .api-toc-group[open] > summary .count{visibility:visible}
+nav.side a.api-toc-item{padding:.1rem .75rem .1rem 2.35rem; margin-left:-1px;
+  border-left:1px solid transparent; font-family:var(--mono); font-size:.72rem;
+  color:var(--ink-faint); overflow-wrap:anywhere}
+nav.side a.api-toc-item:hover{color:var(--ink)}
+nav.side a.api-toc-item.here{color:var(--ink); border-left-color:var(--accent-soft)}
+@media (max-width:60rem){
+  nav.side a.api-toc-kind, nav.side .api-toc-group > summary,
+  nav.side a.api-toc-item{padding-block:.45rem; min-height:24px}
+}
 .api-onpage{display:none}
 @media (max-width:60rem){
   .api-onpage{display:inline-flex; align-items:center; margin:0 0 1rem;
     padding:.4rem .75rem; min-height:2.5rem; cursor:pointer;
-    font-family:var(--mono); font-size:.75rem; color:var(--ink-soft);
+    font:inherit; font-family:var(--mono); font-size:.75rem; color:var(--ink-soft);
+    background:none; border-radius:0;
     border:1px solid var(--rule-strong, color-mix(in oklch, var(--ink-faint) 80%, var(--bg)))}
-  .api-onpage:hover{color:var(--accent)}
+  .api-onpage:hover, .api-onpage[aria-expanded="true"]{color:var(--accent);
+    border-color:var(--accent-soft)}
 }
 
 /* ---- headings: the overview's sections, the items, the example ---- */
+/*  A module's title has nothing under it but the skip link: no rule and
+    no band between it and the opening.  */
+.hero:not(:has(.api-tools)){border-bottom:0; padding-bottom:0; margin-bottom:0}
+.hero:not(:has(.api-tools)) h1{margin-bottom:.75rem}
 .api-opening{padding-top:0}
 .api-prose section.guide{margin:0; border:0}
 .api-prose div.guide{margin:0; padding:0}
+/*  The opening paragraph is the guide's lead, outside its .guide, and ran
+    the page's whole width: about 120 characters a line.  */
+.api-prose > p{max-width:42rem}
 section > h2.api-h, .api-prose section.api-section > h2, .api-modules > h2{
   font-size:1.35rem; font-weight:650; line-height:1.3; letter-spacing:-.01em;
   text-transform:none}
@@ -619,43 +646,115 @@ SEARCH = '''
 #  The sidebar keeps the page's own contents in view: on a desktop, the
 #  current module's entry scrolled up to where it can be seen, and in the
 #  phone's drawer the same, each time it opens.  While an item is read,
-#  the entry for its kind is lit -- the shared bar lights only sections
-#  the sidebar names, and the items are too many to name there.
+#  its kind's list of names is open and its own name lit -- the shared bar
+#  lights only sections the sidebar names, and the items are too many to
+#  name there unfolded.  On a phone, "On this page" opens the drawer at
+#  those contents, and focus goes with it: it never stays behind the
+#  drawer, which closes when focus leaves it.
 CONTENTS = """
 (() => {
  const side=document.querySelector('nav.side');
  const toc=document.getElementById('api-toc');
+ /* The skip link lands on the page's own entry, so the next Tab is its
+    contents; followed as a plain fragment, focus stayed in the page. */
+ const skip=document.querySelector('a.api-skip-nav');
+ if(skip&&side)skip.addEventListener('click',e=>{
+  const here=side.querySelector('a[aria-current]')||side.querySelector('a');
+  if(here){e.preventDefault();here.focus();}
+ });
  if(!side||!toc)return;
  const own=toc.previousElementSibling;
+ let timer=0, lit=null, opened=null;
+ /* The drawer opens at the name being read, or at the module's entry. */
  function reveal(always){
-  const box=side.getBoundingClientRect(), at=(own||toc).getBoundingClientRect();
+  const box=side.getBoundingClientRect(), at=(lit||own||toc).getBoundingClientRect();
   if(!always && at.top>=box.top && at.bottom<=box.top+box.height*0.6)return;
-  side.scrollTop+=at.top-box.top-12;
+  side.scrollTop+=at.top-box.top-(lit?box.height/3:12);
  }
  if(getComputedStyle(side).position==='sticky')reveal(false);
  const menu=document.getElementById('menu');
- if(menu)menu.addEventListener('change',()=>{
-  if(menu.checked)requestAnimationFrame(()=>reveal(true));
+ const bar=document.querySelector('header.bar');
+ const onpage=document.getElementById('api-onpage');
+ const drawer=()=>menu&&menu.checked&&getComputedStyle(side).position==='fixed';
+ function sync(){if(onpage)onpage.setAttribute('aria-expanded',menu&&menu.checked?'true':'false');}
+ function setMenu(on){
+  if(!menu||menu.checked===on)return;
+  menu.checked=on;menu.dispatchEvent(new Event('change'));
+ }
+ if(menu){
+  menu.addEventListener('change',()=>{
+   sync();
+   if(menu.checked)requestAnimationFrame(()=>reveal(true));
+  });
+  /* The shared script closes the drawer on a followed link and on
+     Escape without a change event; the button's state follows. */
+  document.addEventListener('click',()=>setTimeout(sync,0));
+ }
+ let fromButton=false;
+ if(onpage&&menu){
+  onpage.addEventListener('click',()=>{
+   const opening=!menu.checked;
+   setMenu(opening);
+   fromButton=opening;
+   if(opening){
+    const first=toc.querySelector('a.api-toc-item.here')||toc.querySelector('.here')
+     ||toc.querySelector('a, summary');
+    if(first)first.focus({preventScroll:true});
+   }
+  });
+  document.addEventListener('keydown',e=>{
+   if(e.key==='Escape'&&menu.checked&&fromButton)
+    setTimeout(()=>{sync();onpage.focus();fromButton=false;},0);
+  });
+ }
+ if(menu)document.addEventListener('focusin',e=>{
+  if(!drawer())return;
+  const t=e.target;
+  if(side.contains(t)||t===menu||t===onpage||(bar&&bar.contains(t)))return;
+  setMenu(false);fromButton=false;
  });
- const kinds={};
+ const kinds={}, groups={}, names={};
  toc.querySelectorAll('a.api-toc-kind[href^="#items-"]').forEach(a=>{
   kinds[a.getAttribute('href').slice(7)]=a;
  });
+ toc.querySelectorAll('details.api-toc-group').forEach(d=>{
+  groups[d.dataset.kind]=d;
+  /* A list the reader opened or closed is the reader's from then on. */
+  d.querySelector('summary').addEventListener('click',()=>{d.dataset.held='1';});
+ });
+ toc.querySelectorAll('a.api-toc-item').forEach(a=>{names[a.getAttribute('href').slice(1)]=a;});
  const items=[].slice.call(document.querySelectorAll('main section.api-item'));
  if(!items.length)return;
- const bar=document.querySelector('header.bar');
- let timer=0;
  function mark(){
-  const line=(bar?bar.getBoundingClientRect().bottom:48)+8;
+  /* Past the 1rem an item lands below the bar. */
+  const line=(bar?bar.getBoundingClientRect().bottom:48)+24;
   let low=0, high=items.length-1, best=-1;
   while(low<=high){
    const middle=(low+high)>>1;
    if(items[middle].getBoundingClientRect().top<=line){best=middle;low=middle+1;}
    else high=middle-1;
   }
-  const now=best>=0 && items[best].getBoundingClientRect().bottom>line
-   ? items[best].dataset.kind : null;
+  const item=best>=0 && items[best].getBoundingClientRect().bottom>line ? items[best] : null;
+  const now=item ? item.dataset.kind : null;
   for(const kind in kinds)kinds[kind].classList.toggle('here',kind===now);
+  for(const kind in groups)groups[kind].querySelector('summary').classList.toggle('here',kind===now);
+  const group=now&&groups[now];
+  if(opened&&opened!==group&&!opened.dataset.held){opened.open=false;opened=null;}
+  if(group&&!group.open&&!group.dataset.held){group.open=true;opened=group;}
+  const name=item&&names[item.id];
+  if(lit!==name){
+   if(lit)lit.classList.remove('here');
+   lit=name||null;
+   if(lit){
+    lit.classList.add('here');
+    /* The lit name stays in the sidebar's view, unless the reader is
+       using the sidebar. */
+    if(!side.matches(':hover, :focus-within')){
+     const box=side.getBoundingClientRect(), at=lit.getBoundingClientRect();
+     if(at.top<box.top+24||at.bottom>box.bottom-24)side.scrollTop+=at.top-box.top-box.height/3;
+    }
+   }
+  }
  }
  addEventListener('scroll',()=>{clearTimeout(timer);timer=setTimeout(mark,60);},{passive:true});
  addEventListener('hashchange',mark);
@@ -750,15 +849,25 @@ def untitled_lead(body):
 def toc_html(entries, label):
     """The page's own sections, nested under its link in the sidebar.
 
-    `entries` are (href, title, cls): `sect` links are the shared bar's,
-    which follow the section being read; `api-toc-kind` ones are this
-    page's script's, which follow the kind of the item being read.
+    `entries` are (href, title, cls) or (href, title, cls, names):
+    `sect` links are the shared bar's, which follow the section being
+    read; `api-toc-kind` ones are this page's script's, which follow the
+    kind of the item being read.  An entry with names is a kind whose
+    items the sidebar lists, folded: a reader halfway down a module could
+    find the kinds there but not one of their names.
     """
     if not entries:
         return ''
     out = [f'<div class="toc api-toc" id="api-toc"><span class="api-toc-label">{label}</span>']
-    for href, title, cls in entries:
-        out.append(f'<a class="{cls}" href="{href}">{title}</a>')
+    for href, title, cls, *names in entries:
+        if names:
+            out.append(f'<details class="api-toc-group" data-kind="{href.removeprefix("#items-")}">'
+                       f'<summary class="{cls}">{title}</summary>'
+                       + ''.join(f'<a class="api-toc-item" href="#item-{name}">{name}</a>'
+                                 for name in names[0])
+                       + '</details>')
+        else:
+            out.append(f'<a class="{cls}" href="{href}">{title}</a>')
     out.append('</div>')
     return '\n'.join(out)
 
@@ -874,6 +983,9 @@ def write(root, destination, render):
                               url=page_name(module) + '#' + item.anchor))
     index.sort(key=lambda i: i['name'])
     pages = []
+    # The shared renderer's module, whose document groups the sidebar
+    # lists after the modules rather than a copy of them.
+    renderer = sys.modules[render.page.__module__]
 
     def resolver(current, aliases=None):
         """Where a name written in `current`'s prose is declared, or None."""
@@ -908,9 +1020,19 @@ def write(root, destination, render):
                     if here:
                         out.append(toc)
             out.append('</details>')
+        # The site's own documents, in the shared renderer's groups and
+        # order, folded below the modules: from a module page the tour
+        # and the examples were out of reach.
+        for num, name, members in renderer.nav_groups(render.DOCS + render.GUIDES):
+            out.append(f'<details class="api-docs"><summary>{num} · {html.escape(name)}'
+                       f'<span class="count">{len(members)}</span></summary>')
+            for d in members:
+                cls = 'doc retired' if d['key'] in renderer.RETIRED else 'doc'
+                out.append(f'<a class="{cls}" href="{d["out"]}">{html.escape(d["nav"])}</a>')
+            out.append('</details>')
         return '\n'.join(part for part in out if part)
 
-    def prose(text, source='docs/library.md', link=None):
+    def prose(text, source='docs/library.md', link=None, after_lead=''):
         # A link to a module's directory, `[core/io](../core/io)`, is its
         # page here, and the directory itself where the source is read.
         targets = render.guide_targets(render.DOCS + render.GUIDES, source)
@@ -923,9 +1045,15 @@ def write(root, destination, render):
         return '<div class="api-prose">\n' + out + '</div>\n'
 
     def emit(filename, title, body, source, current='', description='',
-             toc='', compact=True):
+             toc='', search=False):
+        # The sidebar follows the page in the source, so a page read as
+        # text opens with the module rather than with every module's name;
+        # a keyboard reader skips to it from here rather than tabbing
+        # through every link of the page first.
+        hero = ('<a class="skip api-skip-nav" href="#side">skip to the library navigation</a>\n'
+                + (search_box() if search else ''))
         out = render.page(title + ' — Landin', 'library reference', title,
-                          search_box(compact), body, nav(current, toc), source,
+                          hero, body, nav(current, toc), source,
                           out=filename, description=description, linked=LINKED,
                           source_note='API reference derived from library sources. The specification defines language rules.')
         (destination / filename).write_text(out)
@@ -933,11 +1061,18 @@ def write(root, destination, render):
 
     def on_this_page():
         # The drawer holds the module's own contents; on a phone this
-        # opens it there rather than at the top of the module list.
-        return ('<label for="menu" class="api-onpage" id="api-onpage">'
-                'On this page</label>\n')
+        # opens it there rather than at the top of the module list, and
+        # takes focus into it.  A button, so a keyboard reaches it; without
+        # a script the drawer's own box is what opens it.
+        return ('<button type="button" class="api-onpage" id="api-onpage" '
+                'aria-controls="side" aria-expanded="false">On this page</button>\n'
+                '<label for="menu" class="api-onpage api-onpage-plain">On this page</label>\n')
 
     for name, text in render.linked_assets(LINKED, CSS, SEARCH + CONTENTS).items():
+        if name == LINKED + '-theme.js':
+            # Run in the head, so the controls only a script can work are
+            # shown or hidden before the first paint, not after the page.
+            text += SCRIPTED
         (destination / name).write_text(text)
     body = prose(intro.replace('# Library reference', '', 1), link=resolver(''))
     body = '<section class="api-opening">\n' + body + '</section>\n'
@@ -964,7 +1099,7 @@ def write(root, destination, render):
     body += '</section>\n'
     emit('library.html', 'Library reference', body,
          'docs/library.md and core, hosted, platform sources', 'library.html',
-         toc=toc_html(toc, 'On this page'), compact=False)
+         toc=toc_html(toc, 'On this page'), search=True)
     for module, items in modules.items():
         overview, example_path, example_prose = descriptions[module]
         aliases = {}
@@ -1088,7 +1223,7 @@ def write(root, destination, render):
                             for name in names)
             body += '</ul></div>\n'
             toc.append((f'#items-{kind}', f'{title} <span class="count">{len(names)}</span>',
-                        'api-toc-kind'))
+                        'api-toc-kind', names))
         body += ('<div class="api-group" id="items-other">'
                  '<h3 class="api-group-title">Also on this page</h3>\n<ul class="api-index">\n')
         if table:
