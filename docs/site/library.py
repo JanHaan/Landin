@@ -387,30 +387,45 @@ def merged_documentation(texts):
 #  guide's sections, prose, listings and program panels, and these only
 #  what a reference has and a guide does not.
 CSS = '''
-/* ---- search: full on the index, a small field under a module's title ---- */
-.api-tools{margin:1.5rem 0 0}
+/* ---- without a script: no field to type into, no button that waits for one ---- */
+:root:not(.api-js) .api-tools label, :root:not(.api-js) .api-tools input,
+:root:not(.api-js) button.api-onpage, :root.api-js label.api-onpage-plain{display:none !important}
+/*  The sidebar is on the left but after the page in the source; the
+    shared skip link's style, and only where there is a sidebar to reach.  */
+@media (max-width:60rem){ a.api-skip-nav{display:none} }
+
+/* ---- search: full on the index, a small field after a module's opening ---- */
+.api-tools{position:relative; margin:1.5rem 0 0}
 .api-tools label{display:block; margin:0 0 .35rem; font-size:.85rem; color:var(--ink-soft)}
 .api-tools input{width:100%; padding:.65rem .8rem; font:inherit; color:var(--ink);
-  background:var(--panel); border-radius:0;
+  background:var(--panel); border-radius:0; -webkit-appearance:none; appearance:none;
   border:1px solid var(--rule-strong, color-mix(in oklch, var(--ink-faint) 80%, var(--bg)))}
+/*  The browser's own clear button was a blue disc; Escape clears.  */
+.api-tools input::-webkit-search-cancel-button{-webkit-appearance:none; appearance:none; display:none}
 /*  The browser's own placeholder is the ink at reduced opacity, about 4:1.  */
 .api-tools input::placeholder{color:var(--ink-faint); opacity:1}
-.api-tools.compact{margin:.9rem 0 0}
-.api-tools.compact label{position:absolute; width:1px; height:1px; margin:-1px;
-  overflow:hidden; clip-path:inset(50%); white-space:nowrap}
-.api-tools.compact input{max-width:22rem; padding:.38rem .6rem; font-size:.85rem}
-.api-results{margin-top:.75rem; border-top:1px solid var(--rule)}
-/*  Under the title, the hero's own paragraph rules would set these as
-    its lead.  */
-main .hero .api-results p{margin:.5rem 0; max-width:none; font-size:.85rem; line-height:1.5;
+.api-tools.compact{margin:.25rem 0 1.25rem; max-width:22rem}
+.api-tools.compact label{margin:0 0 .25rem; font-family:var(--mono); font-size:.72rem;
+  color:var(--ink-faint)}
+.api-tools.compact input{padding:.38rem .6rem; font-size:.85rem}
+/*  A panel over the page under the field: in the flow, the results
+    pushed the page down under the reader.  */
+.api-results{position:absolute; z-index:30; top:calc(100% + .25rem); left:0;
+  width:min(100%, 40rem); max-height:min(65vh, 34rem); overflow:auto;
+  overscroll-behavior:contain; padding:0 .9rem;
+  background:var(--panel); border:1px solid var(--rule); box-shadow:var(--sh)}
+.api-tools.compact .api-results{width:min(calc(100vw - 2.3rem), 34rem)}
+.api-results p{margin:.5rem 0; max-width:none; font-size:.85rem; line-height:1.5;
   color:var(--ink-soft)}
-main .hero .api-results p.api-count{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint)}
+.api-results p.api-count{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint)}
 .api-results a.api-hit{display:block; padding:.45rem 0 .5rem; text-decoration:none;
-  border-bottom:1px solid var(--rule-soft)}
+  border-top:1px solid var(--rule-soft)}
+.api-results a.api-hit:focus-visible{outline-offset:-2px; background:var(--accent-bg)}
 .api-hit-name{font-family:var(--mono); font-size:.85rem; color:var(--accent)}
 .api-hit-module{color:var(--ink-faint)}
-.api-hit-kind{margin-left:.6rem; font-size:.66rem; letter-spacing:.07em;
-  text-transform:uppercase; color:var(--ink-faint)}
+.api-hit-kind, .api-kind{font-family:var(--mono); font-size:.72rem; font-weight:400;
+  text-transform:none; letter-spacing:0; color:var(--ink-faint)}
+.api-hit-kind{margin-left:.6rem}
 .api-hit-summary{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
   line-clamp:2; overflow:hidden; margin-top:.1rem; font-size:.86rem; line-height:1.45;
   color:var(--ink-soft)}
@@ -581,6 +596,11 @@ figure.panel.api-program{margin:1rem 0 0}
 
 SEARCH_SCRIPT = 'library-search.js'
 
+#  Marks the page as one whose scripts run: without them the search field
+#  and the "On this page" button are hidden, and the plain label and the
+#  noscript line stand in.
+SCRIPTED = "document.documentElement.classList.add('api-js');\n"
+
 # The stylesheet and scripts every library page links rather than carries:
 # LINKED.css, LINKED-theme.js and LINKED.js.  Inline, they were the first
 # 28 KB a reader of a page as text met, before the module's first word.
@@ -594,28 +614,57 @@ LINKED = 'library'
 SEARCH = '''
 (() => {
  const field=document.getElementById('api-search');
+ if(!field)return;
+ const tools=field.closest('.api-tools');
  const results=document.getElementById('api-results');
  let items=null, loading=false;
  const normalize=s=>s.toLowerCase().replaceAll('::','.');
+ function entry(item){
+  const name=normalize(item.name), cut=name.lastIndexOf('.');
+  return {item,name,leaf:name.slice(cut+1),rest:normalize(item.summary+' '+item.kind)};
+ }
  function load(){
   if(items||loading)return;
   loading=true;
   const script=document.createElement('script');
   script.src=field.dataset.index;
-  script.onload=()=>{items=window.landinLibraryIndex||[];show();};
-  script.onerror=()=>{loading=false;results.hidden=false;
+  script.onload=()=>{items=(window.landinLibraryIndex||[]).map(entry);show();};
+  script.onerror=()=>{loading=false;open(true);
    results.textContent='The search index could not be loaded; browse the module and item indexes below.';};
   document.head.append(script);
  }
  function span(cls,text){const s=document.createElement('span');s.className=cls;s.textContent=text;return s;}
+ /* How well a term names an entry, best first: the name itself, the
+    start of the name, inside the name, the module, then the summary.
+    By the summary alone, "read" led with every function whose summary
+    says "reads". */
+ function tier(e,t){
+  if(e.leaf===t||e.name===t||e.name.endsWith('/'+t))return 0;
+  if(e.leaf.startsWith(t))return 1;
+  if(e.leaf.includes(t))return 2;
+  if(e.name.includes(t))return 3;
+  if(e.rest.includes(t))return 4;
+  return -1;
+ }
+ function open(on){
+  results.hidden=!on;
+  field.setAttribute('aria-expanded',on?'true':'false');
+ }
  function show(){
   const query=field.value.trim();
   const terms=normalize(query).split(/\\s+/).filter(Boolean);
   results.replaceChildren();
-  if(!terms.length){results.hidden=true;return;}
+  if(!terms.length){open(false);return;}
   if(!items){load();return;}
-  const matches=items.filter(i=>terms.every(t=>normalize(i.name+' '+i.summary+' '+i.kind).includes(t)));
-  results.hidden=false;
+  const ranked=[];
+  for(const e of items){
+   let score=0;
+   for(const t of terms){const r=tier(e,t);if(r<0){score=-1;break;}score+=r;}
+   if(score>=0)ranked.push([score,e]);
+  }
+  ranked.sort((a,b)=>a[0]-b[0]||a[1].leaf.length-b[1].leaf.length||(a[1].name<b[1].name?-1:1));
+  const matches=ranked.map(r=>r[1].item);
+  open(true);
   if(!matches.length){
    /* Nothing found says what to try next, not only that nothing was. */
    const p=document.createElement('p');
@@ -637,6 +686,28 @@ SEARCH = '''
   }
   if(matches.length>80){const p=document.createElement('p');p.textContent='Showing the first 80; refine your search.';results.append(p);}
  }
+ /* The keys a list of results answers: down and up move through them,
+    up from the first and Escape go back to the field, and Escape in the
+    field closes the panel before it clears the text. */
+ const hits=()=>[].slice.call(results.querySelectorAll('a.api-hit'));
+ field.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){
+   const h=hits();
+   if(h.length){e.preventDefault();open(true);h[0].focus();}
+  }else if(e.key==='Escape'&&!results.hidden){e.preventDefault();e.stopPropagation();open(false);}
+ });
+ results.addEventListener('keydown',e=>{
+  const h=hits(), at=h.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'){e.preventDefault();if(at>=0&&at<h.length-1)h[at+1].focus();}
+  else if(e.key==='ArrowUp'){e.preventDefault();if(at>0)h[at-1].focus();else field.focus();}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();field.focus();}
+ });
+ /* The panel lies over the page, so it goes when the reader leaves it:
+    by a result followed, a click elsewhere or focus moved on. */
+ results.addEventListener('click',e=>{if(e.target.closest('a'))open(false);});
+ results.addEventListener('mousedown',e=>{if(e.target===results)e.preventDefault();});
+ tools.addEventListener('focusout',e=>{if(!tools.contains(e.relatedTarget))open(false);});
+ field.addEventListener('focus',()=>{if(results.childElementCount&&field.value.trim())open(true);});
  field.addEventListener('focus',load,{once:true});
  field.addEventListener('input',show);
 })();
@@ -804,13 +875,17 @@ def search_box(compact=False):
     """The search field; its script is in the linked library.js.
 
     Full width on the index, where finding a name is what the page is
-    for; a small field under a module's title, where the module is.
+    for; a small field under a module's opening paragraph, where the
+    module is, with a short label that says it searches every module.
+    The results are a panel over the page under the field, not a block
+    that pushed the page down.
     """
     cls = 'api-tools compact' if compact else 'api-tools'
-    return (f'<div class="{cls}">\n<label for="api-search">Search library APIs</label>\n'
+    label = 'search all library APIs' if compact else 'Search library APIs'
+    return (f'<div class="{cls}">\n<label for="api-search">{label}</label>\n'
             '<input type="search" id="api-search" placeholder="Name, module or purpose" '
             f'data-index="{SEARCH_SCRIPT}" '
-            'aria-controls="api-results" autocomplete="off">\n'
+            'aria-controls="api-results" aria-expanded="false" autocomplete="off">\n'
             '<div id="api-results" class="api-results" aria-live="polite" hidden></div>\n'
             '<noscript>Browse the module and item indexes below; search needs JavaScript.</noscript>\n'
             '</div>\n')
@@ -1039,7 +1114,7 @@ def write(root, destination, render):
         targets.pages.update({module: page_name(module) for module in modules})
         _, hero, body, _ = render.render_guide(text, lambda ref: anchors.get(ref),
                     targets, render.Highlighter())
-        out = hero + untitled_lead(body)
+        out = hero + after_lead + untitled_lead(body)
         if link is not None:
             out = shape_tables(out, link)
         return '<div class="api-prose">\n' + out + '</div>\n'
@@ -1192,8 +1267,10 @@ def write(root, destination, render):
         body += '</section>\n'
         # A `###` of the overview is a section of the page, beside the
         # items and the example: under the h1 it was an h3 with no h2.
+        # The compact search follows the module's opening paragraph: between
+        # the title and the description it came before what the page is.
         written = prose(re.sub(r'^### ', '## ', overview, flags=re.M),
-                        link=resolver(module, aliases))
+                        link=resolver(module, aliases), after_lead=search_box(True))
         written = written.replace('<section class="guide" id=',
                                   '<section class="guide api-section" id=')
         body += written
