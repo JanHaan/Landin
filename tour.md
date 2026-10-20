@@ -2759,9 +2759,11 @@ the host's files and streams through `hosted/system` and `core/io`.
 [`examples.md`](examples.md) has complete programs to read and copy.
 
 The sections after this one are reference, to read when you need them:
-POINTERS; LIFETIME AND ESCAPE; CONCEPTS AND GENERIC CODE; RUNTIME
-DISPATCH; COMPILE TIME; THE TOOLCHAIN, C, AND THE MACHINE; and the
-principles, the omissions and the open questions at the end.
+[Pointers](#pointers); [Lifetime and escape](#lifetime-and-escape);
+[Concepts and generic code](#concepts-and-generic-code);
+[Runtime dispatch](#runtime-dispatch); [Compile time](#compile-time);
+[The toolchain, C, and the machine](#the-toolchain-c-and-the-machine); and
+the principles, the omissions and the open questions at the end.
 
 ## POINTERS
 
