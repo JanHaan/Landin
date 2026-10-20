@@ -1293,7 +1293,8 @@ f.kind = rectangle(width: 3.0, height: 4.0)
 ### [0710] Struct literals take their type from context
 
 A struct literal has no type of its own, like a number literal. It takes
-the type its context wants, named or anonymous.
+the named struct type its context wants. A struct type written inline is
+not yet such a context: declare the type and use its name (spec [1830]).
 
 ```landin
 here: point = (x: 1.0, y: 2.0)
