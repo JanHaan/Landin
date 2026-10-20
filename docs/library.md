@@ -1,41 +1,62 @@
 # Library reference
 
-The API reference is generated from public declarations and their `---` doc
-comments in `core`, `hosted` and `platform`. It includes exact signatures,
-source links, module browsing and local search. The comments also appear in
-editor hover. The [library guide](../core/README.md) explains the shared
-conventions and evidence; the [tour](../tour.md) teaches the language.
+Landin's library is ordinary Landin source, shipped with the compiler, in
+three namespaces:
 
-`core` is available on every enabled target. `hosted` requires a hosted
-system. Each `platform` module declares a narrower target scope:
+| Namespace | Available on |
+|---|---|
+| `core` | Every enabled target, firmware included. |
+| `hosted` | A hosted system only. |
+| `platform` | The narrower target scope each module declares. |
+
 `platform/posix`, and beneath it each system's own interface,
-`platform/linux` and `platform/libc`, serve the hosted POSIX systems,
-Linux, Darwin and FreeBSD, and are refused on firmware. Availability does
-not promise that every composition fits a particular firmware image. All
-memory and handle lifetimes remain explicit caller obligations.
+`platform/linux` and `platform/libc`, serve the hosted POSIX systems:
+Linux, Darwin and FreeBSD. They are refused on firmware.
 
-The examples below are existing compiler fixtures, included directly in the
-rendered reference so the documentation does not maintain a second copy.
-Their fixture metadata and target lanes determine where they execute.
+Availability does not promise that every composition fits a particular
+firmware image. All memory and handle lifetimes remain explicit caller
+obligations.
+
+This reference is generated from the public declarations and their `---`
+doc comments in `core`, `hosted` and `platform`. Each module's page has
+the exact signatures, source links, module browsing and local search, and
+the same comments appear in editor hover. The
+[library guide](../core/README.md) explains the shared conventions and
+evidence; the [tour](../tour.md) teaches the language.
+
+Each module below opens with what it is for, then its main calls, then how
+it behaves. Its executable example is an existing compiler fixture,
+included in the module's page so the documentation keeps no second copy.
+The fixture's metadata and target lanes decide where it runs.
 
 ## What the library does not cover yet
 
-The library covers memory, containers, text, files, directories, standard
-input and output, process arguments, the environment, running programs,
-clocks, sleeping, the system's entropy, a deterministic generator,
-blocking TCP and UDP sockets over IPv4 and IPv6, and the rest of the file
-system: opening with options, renaming, a file's status, read-only files,
-synchronizing, truncation, reading and writing at an offset, temporary
-files, the working directory's path and terminals. `platform/posix` gives
-POSIX's own files, directories, memory mappings, `poll`, pipes, children,
-waiting, clocks, random bytes, sockets, Unix-domain ones among them, links,
-permission bits, owners, file times, locks, terminals and their raw mode,
-pseudo-terminals and the user and group databases, in Landin types on
-Linux, Darwin and FreeBSD alike, and loads shared objects with the system's
-own loader wherever a C runtime started the program: on Darwin and FreeBSD,
-and on Linux under `--link=libc`. A program that needs something neither
-covers yet reaches the operating system itself, and the route differs
-between Linux and the C library's systems:
+The library covers:
+
+- memory, containers and text;
+- files, directories, standard input and output, process arguments and
+  the environment;
+- running programs, clocks, sleeping, the system's entropy and a
+  deterministic generator;
+- blocking TCP and UDP sockets over IPv4 and IPv6;
+- the rest of the file system: opening with options, renaming, a file's
+  status, read-only files, synchronizing, truncation, reading and writing
+  at an offset, temporary files, the working directory's path and
+  terminals.
+
+`platform/posix` gives POSIX's own facilities in Landin types, on Linux,
+Darwin and FreeBSD alike: files, directories, memory mappings, `poll`,
+pipes, children, waiting, clocks, random bytes, sockets (Unix-domain ones
+among them), links, permission bits, owners, file times, locks, terminals
+and their raw mode, pseudo-terminals and the user and group databases.
+
+It also loads shared objects with the system's own loader wherever a C
+runtime started the program: on Darwin and FreeBSD, and on Linux under
+`--link=libc`.
+
+A program that needs something neither covers yet reaches the operating
+system itself, and the route differs between Linux and the C library's
+systems:
 
 | Need | Planned | Route until then |
 |---|---|---|
@@ -47,21 +68,63 @@ between Linux and the C library's systems:
 | Extended attributes, access control lists, file flags | not yet planned | On Linux, the call's number from `platform/linux/numbers` through `linux.system_call`; on Darwin and FreeBSD, the C function declared `extern(c)`. |
 | Accounts kept outside /etc/passwd and /etc/group on Linux, a directory service's or NSS's | `--link=libc` | A static Linux program reads the two files itself; linked with `--link=libc`, `platform/posix` asks the C library, which asks NSS. |
 
-Every Linux system call is reachable this way. `platform/linux/numbers`
-names each call's number, generated from a pinned kernel release, and
-`linux.system_call` makes the call with six integer arguments and returns
-the kernel's result, minus the errno on a failure. Nothing checks those
-arguments: a pointer goes as `i64(usize(p))`, and a flag or a record is the
-program's to get right for each architecture. Prefer a typed wrapper where
-`platform/linux` has one, and `platform/posix` where it gives the call.
+Every Linux system call is reachable this way:
+
+- `platform/linux/numbers` names each call's number, generated from a
+  pinned kernel release;
+- `linux.system_call` makes the call with six integer arguments and
+  returns the kernel's result, minus the errno on a failure.
+
+Nothing checks those arguments: a pointer goes as `i64(usize(p))`, and a
+flag or a record is the program's to get right for each architecture.
+Prefer a typed wrapper where `platform/linux` has one, and
+`platform/posix` where it gives the call.
 
 ## core/mem
 
 Memory providers and typed storage: the foundation for allocation, initialized prefixes and caller-owned backing.
 
-Use `allocator` evidence to supply storage explicitly. A provider is a handle passed by value, `memory` in every signature, so several containers share one without locking it. The arena is `core/arena`'s. `aligned_offset` is the arithmetic a bump provider of your own needs. Typed storage over caller bytes comes from `storage_over`; it does not establish ownership or prove alias lifetimes. Use the same provider and extent when freeing a block. `resize` gives a block a new extent, larger or smaller, in place or by moving it, keeping the bytes the two extents share, and a refusal leaves the block as it was; a provider that cannot resize in place answers with `relocate`, which allocates, copies and frees. Deterministic failure injection over any provider is `core/fault`.
+| Call | What it does |
+|---|---|
+| `mem.allocate`, `mem.free` | Take a block from a provider, and give it back through the same provider with the same extent. |
+| `mem.resize` | Give a block a new extent, larger or smaller, in place or by moving it. |
+| `mem.storage_over` | Typed storage over the caller's bytes. |
+| `mem.copy`, `mem.fill`, `mem.find` | Copy, set and search byte blocks. |
 
-Byte blocks are slices with their lengths checked. `copy` puts every byte of a source at the start of a destination with `memmove`'s rule, so the two may overlap in either direction, and reports `out_of_bounds` before writing anything when the destination is shorter; `fill` sets every byte; comparing two byte strings is `cmp.compare`'s (D352); and `find` gives the index of a byte's first occurrence, or the slice's length when there is none, so `source[0..<find(source, v)]` is always the part before it. On hosted targets `copy`, `fill` and `find` move a `usize` word at a time: copying up and searching load and store words at any address on x86-64 and arm64, and otherwise only at a multiple of the word, between a head and a tail moved a byte at a time; firmware keeps plain byte loops, whose code is smaller. `runtime/core-mem-blocks` copies both ways within one array, and `runtime/core-mem-blocks-alignment` holds all three to a byte-at-a-time model at every offset.
+Use `allocator` evidence to supply storage explicitly. A provider is a
+handle passed by value, `memory` in every signature, so several containers
+share one without locking it. The arena is `core/arena`'s, and
+deterministic failure injection over any provider is `core/fault`.
+
+`resize` keeps the bytes the two extents share, and a refusal leaves the
+block as it was. A provider that cannot resize in place answers with
+`relocate`, which allocates, copies and frees. `aligned_offset` is the
+arithmetic a bump provider of your own needs.
+
+`storage_over` does not establish ownership or prove alias lifetimes.
+
+Byte blocks are slices with their lengths checked:
+
+- `copy` puts every byte of a source at the start of a destination with
+  `memmove`'s rule, so the two may overlap in either direction. It reports
+  `out_of_bounds` before writing anything when the destination is shorter.
+- `fill` sets every byte.
+- `find` gives the index of a byte's first occurrence, or the slice's
+  length when there is none, so `source[0..<find(source, v)]` is always
+  the part before it.
+- Comparing two byte strings is `cmp.compare`'s (D352).
+
+On hosted targets `copy`, `fill` and `find` move a `usize` word at a time:
+
+| Where | How the words move |
+|---|---|
+| x86-64 and arm64 | Copying up and searching load and store words at any address, from the first byte, and move bytes only in the tail. |
+| Other hosted targets, and copying down or filling anywhere | Only at a multiple of the word, between a head and a tail moved a byte at a time. |
+| Firmware | Plain byte loops, whose code is smaller. |
+
+`runtime/core-mem-blocks` copies both ways within one array, and
+`runtime/core-mem-blocks-alignment` holds all three to a byte-at-a-time
+model at every offset.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-mem/main.ldn)
 
@@ -69,7 +132,25 @@ Byte blocks are slices with their lengths checked. `copy` puts every byte of a s
 
 A growable contiguous list with explicit allocation and rollback on failed growth.
 
-`new` starts without allocating; `reserve` and `push` receive the provider's handle. `get` copies, `at` lends a writable pointer, and `used` lends the initialized slice. End views before relocation or release. Clearing or releasing a container never frees resources referenced by its items. A list of bytes is the growable byte container (D425): `append_bytes` copies a slice after its bytes, `spare_bytes` lends the spare capacity a read fills and `extend_bytes` counts what was written there, a word at a time where `mem.copy` moves words, as a list's items are when it grows into a new block.
+| Call | What it does |
+|---|---|
+| `vec.new` | Start an empty list; nothing is allocated. |
+| `vec.reserve`, `vec.push` | Grow it, through the provider's handle. |
+| `vec.get` | Copy an item out. |
+| `vec.at` | Lend a writable pointer to an item. |
+| `vec.used` | Lend the initialized slice. |
+
+End views before relocation or release. Clearing or releasing a container
+never frees resources referenced by its items.
+
+A list of bytes is the growable byte container (D425):
+
+- `append_bytes` copies a slice after its bytes;
+- `spare_bytes` lends the spare capacity a read fills, and `extend_bytes`
+  counts what was written there.
+
+They move a word at a time where `mem.copy` moves words, as a list's items
+are when it grows into a new block.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-vec/main.ldn)
 
@@ -77,7 +158,13 @@ A growable contiguous list with explicit allocation and rollback on failed growt
 
 A list that keeps an inline prefix and spills into allocated storage when it fills.
 
-Queries use a pointer to avoid copying the inline array. Popping from spilled storage retains that allocation; `release` returns to an empty inline representation. Items need no zero image: pointers and atom-bearing records are stored like any other.
+Queries use a pointer to avoid copying the inline array.
+
+Popping from spilled storage retains that allocation; `release` returns
+to an empty inline representation.
+
+Items need no zero image: pointers and atom-bearing records are stored
+like any other.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-spill/main.ldn)
 
@@ -85,7 +172,27 @@ Queries use a pointer to avoid copying the inline array. Popping from spilled st
 
 Equality, hashing and ordering evidence, apart from the containers and algorithms that consume it.
 
-`equatable`, `hashable` and `ordered` ship for the ten integer scalars, `bool` (equality and hashing) and `[]u8` (all three); `core/text` adds all three for `utf8`. `compare` orders two byte strings as `less`, `equal` or `greater`, the first differing byte deciding and a proper prefix first, which is C's `memcmp` with the lengths taken into account and the order `ls` gives names in the C locale, and `[]u8`'s `ordered` evidence is its `less` (D352). There is one register and no override: another reading of a shipped type goes on a `distinct` wrapper with its own evidence. A `hashable` key declares its `equatable` conformance as well. The compiler does not prove the laws: equality must be an equivalence, equal keys must hash alike, and `less` must be a strict weak ordering. Floating-point types have no shipped evidence.
+The three concepts ship for these types:
+
+| Type | `equatable` | `hashable` | `ordered` |
+|---|---|---|---|
+| the ten integer scalars | yes | yes | yes |
+| `bool` | yes | yes | no |
+| `[]u8` | yes | yes | yes, by `compare` |
+| `utf8`, from `core/text` | yes | yes | yes |
+| floating-point types | no | no | no |
+
+`compare` orders two byte strings as `less`, `equal` or `greater`. The
+first differing byte decides, and a proper prefix comes first: C's
+`memcmp` with the lengths taken into account, and the order `ls` gives
+names in the C locale. `[]u8`'s `ordered` evidence is its `less` (D352).
+
+There is one register and no override: another reading of a shipped type
+goes on a `distinct` wrapper with its own evidence. A `hashable` key
+declares its `equatable` conformance as well.
+
+The compiler does not prove the laws. Equality must be an equivalence,
+equal keys must hash alike, and `less` must be a strict weak ordering.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-cmp/main.ldn)
 
@@ -93,9 +200,33 @@ Equality, hashing and ordering evidence, apart from the containers and algorithm
 
 An insertion-ordered hash map with explicit entry walks.
 
-Keys are constrained on `core/cmp`'s `hashable`, which ships for ten integer scalars, `bool` and `[]u8`; `core/text` adds UTF-8 evidence. Alternative policies use a `distinct` wrapper. Hashes are spread before they choose a slot, so keys sharing a stride do not share a probe chain. `capacity` is how many entries fit before the next new key rebuilds the table, and `slots` its size; removed entries count against the capacity until a rebuild. Keep keys and their backing stable while stored, and restart cursors after any mutation. Floating-point keys need an explicit equality and hashing policy.
+| Call | What it does |
+|---|---|
+| `map.new` | Start an empty map. |
+| `map.insert` | Add a key and its item, through the provider's handle. |
+| `map.get`, `map.at`, `map.contains` | Copy an item, lend a pointer to it, or ask whether a key is there. |
+| `map.remove` | Remove a key. |
+| `map.entries`, `map.next_entry` | Walk the entries in insertion order. |
 
-Complete map workloads can exceed the Cortex-M0 test profile of 32 KiB flash. The bounded example below checks the empty-map surface; it does not demonstrate that a populated map fits that profile. Its representation is the module's own; `removed` counts the dead entries that hold their slots until the next rebuild (D354).
+Keys are constrained on `core/cmp`'s `hashable`, which ships for ten
+integer scalars, `bool` and `[]u8`; `core/text` adds UTF-8 evidence.
+Alternative policies use a `distinct` wrapper. Floating-point keys need an
+explicit equality and hashing policy.
+
+Hashes are spread before they choose a slot, so keys sharing a stride do
+not share a probe chain.
+
+`capacity` is how many entries fit before the next new key rebuilds the
+table, and `slots` is its size. Removed entries count against the
+capacity until a rebuild; `removed` counts the dead entries that hold
+their slots until then (D354). The representation is the module's own.
+
+Keep keys and their backing stable while stored, and restart cursors after
+any mutation.
+
+Complete map workloads can exceed the Cortex-M0 test profile of 32 KiB
+flash. The bounded example below checks the empty-map surface; it does
+not demonstrate that a populated map fits that profile.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-map/main.ldn)
 
@@ -103,7 +234,24 @@ Complete map workloads can exceed the Cortex-M0 test profile of 32 KiB flash. Th
 
 Allocation-free in-place heapsort and selection sort using ordering evidence, and heapsort by a comparison given a context.
 
-Items are constrained on `core/cmp`'s `ordered`, which ships for the ten integer scalars; `core/text` supplies UTF-8 byte ordering. Custom `ordered` evidence must obey a strict weak ordering. `sort_by` takes the order as a comparison instead, `less(by, left, right)`, and passes it the context `by` the caller gives, unchanged, on every call: records that refer into shared storage, offsets into one pool of names, are ordered by what they refer to, and the context may be a pointer the comparison counts through. It is the same heapsort with no allocation, and the comparison must be a strict weak ordering while it runs (D387). None of the three promises stability.
+| Call | What it does |
+|---|---|
+| `sort.sort` | Heapsort by the items' `ordered` evidence. |
+| `sort.sort_selection` | Selection sort by the same evidence. |
+| `sort.sort_by` | Heapsort by a comparison you pass, with a context. |
+
+None of the three allocates or promises stability.
+
+Items are constrained on `core/cmp`'s `ordered`, which ships for the ten
+integer scalars; `core/text` supplies UTF-8 byte ordering. Custom
+`ordered` evidence must obey a strict weak ordering.
+
+`sort_by` takes the order as a comparison, `less(by, left, right)`, and
+passes it the context `by` the caller gives, unchanged, on every call.
+So records that refer into shared storage, such as offsets into one pool
+of names, are ordered by what they refer to, and the context may be a
+pointer the comparison counts through.
+The comparison must be a strict weak ordering while it runs (D387).
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-sort/main.ldn)
 
@@ -111,15 +259,129 @@ Items are constrained on `core/cmp`'s `ordered`, which ships for the ten integer
 
 Byte cursors, validated UTF-8 views, byte search, a text builder, formatting and parsing numbers.
 
-Cursors advance by bytes. `from_bytes` validates bytes as UTF-8 and reports `invalid_text` when they are not, and `valid` answers the same question without a view; the `utf8(bytes)` conversion validates too but traps on malformed input. A `text.position` indexes `utf8` by byte offset, while a `usize` index into `utf8` counts scalars, so do not index with `offset(position)`. This module does not turn byte offsets into validated character boundaries. UTF-8 equality, hashing and ordering use encoded bytes, with no normalization or locale collation. Views borrow their input.
+| Call | What it does |
+|---|---|
+| `text.from_bytes`, `text.valid` | Check bytes are UTF-8, as a view or as a yes or no. |
+| `text.over`, `text.growing` | Make a builder over your buffer, or one that grows from an allocator. |
+| `text.append_text`, `text.append_u32` and the rest | Append a piece to a builder. |
+| `text.format` | Append a template with each `{}` filled in. |
+| `text.parse_u32` and the rest | Read a number from bytes. |
+| `text.host_over`, `text.from_host` | Make a host string, and check one is UTF-8. |
 
-A host string, `host_string`, is a path, a process argument or a directory entry's name in the representation its system gives and takes: bytes on Linux, Darwin and FreeBSD, which need not be UTF-8. It is never converted on the way through, so an argument passed on as a path reaches the system as it was given. `from_host` is its checked conversion to `utf8`, reporting `invalid_text` as `from_bytes` does; `host_bytes` lends its bytes; `host_equal` compares it with a literal; and `host_over` makes one over the caller's bytes, `text.host_over("input.txt")` for a literal path. A host string lends what it was made from. The NUL a C call needs is never the caller's: `platform/posix` adds it beneath the provider and refuses a path that holds one.
+### Views and cursors
 
-A `builder` writes text into bytes a piece at a time. `over` makes one over the caller's buffer, which never grows, and `growing` one that takes its storage from an erased allocator, `text.growing(any(addr heap))`, doubling what it holds and giving it back with `release`. It is a value the caller passes `inout`; `used` lends what it holds until it next changes, `length` is the offset the next piece begins at, `clear` empties it and `truncate` cuts it back. Each append writes its whole piece or reports `no_space` and leaves the builder as it was: `append` for bytes as they are, the byte string a listing used to append by hand, `append_byte`, `append_text` for `utf8`, `append_host` for a host string's bytes, `append_u32`, `append_u64` and `append_usize` in decimal, `append_i32`, `append_i64` and `append_isize` with a `-` before a negative value, and `append_hex_u32`, `append_hex_u64` and `append_hex_usize` in lower-case hexadecimal with no `0x`. A narrower integer widens at the call. Width and padding apply to whatever was written since an earlier `length`: `align_right` puts a fill byte before the piece until it is as wide as the field, and `align_left` after it; the fill goes before a sign too, so a zero fill suits an unsigned value.
+Cursors advance by bytes. Views borrow their input.
 
-`format` appends a template with each `{}` replaced by the next of an array of `any formattable` values, and `{{` and `}}` written as braces. A placeholder takes nothing else; width, padding and hexadecimal are the typed calls. Nothing runs at compile time, so the template is checked against the values when it runs: a different number of placeholders, or a brace that is neither part of `{}` nor doubled, is `invalid_format`, and nothing is written, and a builder that fills partway is put back before `no_space` is reported. `formattable` has one entry, `append`, which writes a value into a builder through a pointer to it; the library supplies it for the ten integer types in decimal, `bool` as `true` or `false`, `utf8`, `[]u8` and host strings, and a program declares it for a type of its own. The values are an array literal written at the call, which lends it as a slice: `text.format(line, "{} {}\n", [any(addr count), any(addr name)])`. No locale is consulted anywhere: the same values give the same bytes everywhere. `runtime/core-text-format-firmware` builds and formats a line within a Cortex-M0 image.
+`from_bytes` validates bytes as UTF-8 and reports `invalid_text` when they
+are not, and `valid` answers the same question without a view. The
+`utf8(bytes)` conversion validates too, but traps on malformed input.
 
-Parsing is the mirror of the appends, over a byte slice that need not be UTF-8. `parse_u8` to `parse_u64` and `parse_usize` read nonempty ASCII digits; `parse_i8` to `parse_i64` and `parse_isize` read an optional `-` before them, never a `+`, since no append writes one; `parse_hex_u32`, `parse_hex_u64` and `parse_hex_usize` read hexadecimal digits of either case with no `0x`. Anything else, a space included, is `invalid_number`, and a value outside the type, above its maximum or below a signed minimum, is `number_overflow`, whichever the scan from the left meets first. `usize` and `isize` are the target's, 32 bits on Cortex-M. `to_u32` is `parse_u32` over a `utf8` view. The builder's appends are the library's one decimal writer and these parses its one parser: the slice writers `write_byte`, `write_u32`, `write_u64` and `write_usize` and `prefix` are retired, and `core/net` reads its addresses' numbers through them (D355).
+A `text.position` indexes `utf8` by byte offset, while a `usize` index
+into `utf8` counts scalars, so do not index with `offset(position)`. This
+module does not turn byte offsets into validated character boundaries.
+
+UTF-8 equality, hashing and ordering use encoded bytes, with no
+normalization or locale collation.
+
+### Host strings
+
+A host string, `host_string`, is a path, a process argument or a
+directory entry's name in the representation its system gives and takes:
+bytes on Linux, Darwin and FreeBSD, which need not be UTF-8. It is never
+converted on the way through, so an argument passed on as a path reaches
+the system as it was given.
+
+| Call | What it does |
+|---|---|
+| `from_host` | The checked conversion to `utf8`, reporting `invalid_text` as `from_bytes` does. |
+| `host_bytes` | Lend its bytes. |
+| `host_equal` | Compare it with a literal. |
+| `host_over` | Make one over the caller's bytes: `text.host_over("input.txt")` for a literal path. |
+
+A host string lends what it was made from. The NUL a C call needs is
+never the caller's: `platform/posix` adds it beneath the provider and
+refuses a path that holds one.
+
+### The builder
+
+A `builder` writes text into bytes a piece at a time. It is a value the
+caller passes `inout`.
+
+- `over` makes one over the caller's buffer, which never grows.
+- `growing` makes one that takes its storage from an erased allocator,
+  `text.growing(any(addr heap))`, doubling what it holds and giving it
+  back with `release`.
+- `used` lends what it holds until it next changes, and `length` is the
+  offset the next piece begins at.
+- `clear` empties it and `truncate` cuts it back.
+
+Each append writes its whole piece, or reports `no_space` and leaves the
+builder as it was:
+
+| Append | Writes |
+|---|---|
+| `append` | bytes as they are: the byte string a listing used to append by hand |
+| `append_byte` | one byte |
+| `append_text` | a `utf8` |
+| `append_host` | a host string's bytes |
+| `append_u32`, `append_u64`, `append_usize` | decimal |
+| `append_i32`, `append_i64`, `append_isize` | decimal, with a `-` before a negative value |
+| `append_hex_u32`, `append_hex_u64`, `append_hex_usize` | lower-case hexadecimal with no `0x` |
+
+A narrower integer widens at the call.
+
+Width and padding apply to whatever was written since an earlier
+`length`. `align_right` puts a fill byte before the piece until it is as
+wide as the field, and `align_left` after it. The fill goes before a sign
+too, so a zero fill suits an unsigned value.
+
+### Formatting
+
+`format` appends a template with each `{}` replaced by the next of an
+array of `any formattable` values, and `{{` and `}}` written as braces. A
+placeholder takes nothing else; width, padding and hexadecimal are the
+typed calls.
+
+The values are an array literal written at the call, which lends it as a
+slice: `text.format(line, "{} {}\n", [any(addr count), any(addr name)])`.
+
+Nothing runs at compile time, so the template is checked against the
+values when it runs. A different number of placeholders, or a brace that
+is neither part of `{}` nor doubled, is `invalid_format`, and nothing is
+written. A builder that fills partway is put back before `no_space` is
+reported.
+
+`formattable` has one entry, `append`, which writes a value into a
+builder through a pointer to it. The library supplies it for the ten
+integer types in decimal, `bool` as `true` or `false`, `utf8`, `[]u8` and
+host strings, and a program declares it for a type of its own.
+
+No locale is consulted anywhere: the same values give the same bytes
+everywhere. `runtime/core-text-format-firmware` builds and formats a line
+within a Cortex-M0 image.
+
+### Parsing numbers
+
+Parsing is the mirror of the appends, over a byte slice that need not be
+UTF-8:
+
+| Parse | Reads |
+|---|---|
+| `parse_u8` to `parse_u64`, `parse_usize` | nonempty ASCII digits |
+| `parse_i8` to `parse_i64`, `parse_isize` | an optional `-` before them, never a `+`, since no append writes one |
+| `parse_hex_u32`, `parse_hex_u64`, `parse_hex_usize` | hexadecimal digits of either case, with no `0x` |
+| `to_u32` | `parse_u32` over a `utf8` view |
+
+Anything else, a space included, is `invalid_number`. A value outside the
+type, above its maximum or below a signed minimum, is `number_overflow`.
+The scan goes from the left and reports whichever it meets first.
+
+`usize` and `isize` are the target's, 32 bits on Cortex-M.
+
+The builder's appends are the library's one decimal writer, and these
+parses its one parser. The slice writers `write_byte`, `write_u32`,
+`write_u64` and `write_usize` and `prefix` are retired, and `core/net`
+reads its addresses' numbers through these parses (D355).
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-text/main.ldn)
 
@@ -127,19 +389,279 @@ Parsing is the mirror of the appends, over a byte slice that need not be UTF-8. 
 
 Reader, writer, file and process capabilities, their world composition, directories, running programs, entropy, the rest of the file system and terminals beside them, the memory world, a buffered writer and a line reader. Time is `core/time`, the network `core/net` and the fakes of a system `core/io/fake` (D348).
 
-Use the smallest concept a consumer needs. A provider is a handle passed by value, `host` in every signature, and an erased capability is built from the address of a handle binding, `any(addr host)`; using a handle locks nothing, so a program and its logger write through one, and two lent arguments and a query are live at once. An erased world can lend `writer_of` to a writer-only consumer. Providers retain authority over files and arguments. `process` lends the three standard streams, `input`, `out` and `err`, and the argument table, `io.out(host)`; standard input is read through `reader` like any file, and a read of zero bytes into a nonempty buffer is its end. A path and an argument are host strings, `text.host_string`, so an argument passed on as a path is never converted; `memory_over` takes the arguments as their bytes, lent back as host strings, so a table can be static data; it fills the caller's `memory_space`, whose limits and counters stay readable and settable, and keeps all storage with the caller, the bytes its standard input reads among them. `directories` is a fifth concept beside the four, and not part of `world`: a program that lists, makes or removes directories names it as well. `open_directory` takes a buffer from the caller and returns an open `directory`, a value the caller passes `inout` to `read_entry`, which refills the buffer as entries are read. Each entry's name is a host string that need not be UTF-8, lent from the directory until the next read, so a name kept past it is refused [0800] and a program copies the names it keeps; an empty name is the end. `.` and `..` are never listed, and the order is the system's. `entry_size` asks the open directory for an entry's size by name as a `u64`, not following a symbolic link. `make_directory`, `remove_file` and `remove_directory` change the tree. A missing path, and a path through or to something that is not a directory, are `not_found`; a name already taken is `already_exists`. Close a directory through the provider that opened it; one dropped unclosed keeps what its provider holds for it until the process ends. The memory world's directories are its slots' names before a `/`, so it lists them and reports their sizes but changes nothing.
+The capabilities are concepts, and a program names only the ones it uses:
 
-The environment is a concept of its own, `environment`, outside `world`, so a provider without one and a firmware image that never asks for one carry none of it: `variable_count` counts its variables, `variable_at` lends the one at an index, an `io.variable` of a name and a value, and `variable_named` lends the value of the first variable with a name, compared as bytes, or reports `no_variable`. Names and values are host strings that need not be UTF-8, lent from the provider for as long as the process lives. The environment is read-only: a process does not change its own, which is not safe beside threads, and gives a child the environment it builds instead. `variables_over` makes a `memory_variables`, an environment provider over a table of `NAME=value` byte strings, which firmware can declare as data.
+| Concept | What it gives | Part of `world` |
+|---|---|---|
+| `reader`, `writer` | `read`, `write`, `write_some` | yes |
+| `files` | `open_read`, `open_write`, `same_file`, `close` | yes |
+| `process` | the standard streams `input`, `out` and `err`, and the arguments | yes |
+| `directories` | listing, making and removing directories | no |
+| `environment` | the process's variables | no |
+| `programs` | running other programs | no |
+| `file_system` | opening with options, renaming, status, temporary files and the rest | no |
+| `terminals` | asking whether a stream is a terminal, and its size | no |
+| `entropy` | `fill_random` | no |
 
-`programs` is a seventh concept, outside `world`, for running other programs. `spawn` starts the program at a path, a host string, never looked up on a search path or handed to a shell, with the arguments it sees after its own name and exactly the variables the caller builds, and connects each of its three standard streams as `child_streams` says: `inherited`, the parent's own; `discarded`, connected to nothing; or `piped`, the parent holding the other end. `inheriting`, `capturing` and `discarding` are the common three. A missing program is `not_found`, one the caller may not run `no_access`, and on any failure no child exists. The `child` it returns is a value the caller keeps, whose fields are the provider's: `write_child` writes to its piped input and `close_input` closes it, so that the child reads to its end, and `read_child` reads its piped output and errors together, waiting until either has something and saying which it read, so that a child writing more than a pipe holds to both never waits on a full one. The hosted provider's pipes are its own files, which `reader` and `writer` also take, a line reader over a child's output among them; the memory world's are not. `wait` closes every pipe the child still has, waits for it, and reports how it ended, an `ending` whose variant part is `exited` with a code or `signalled`, ended from outside, whose detail is the provider's; it consumes the child. A child never waited for keeps what its provider holds for it until the process ends. Close a child's pipes only through `close_input` and `wait`, never through `files`. `scripted_over` makes `scripted_programs`, a programs provider beside a memory world over the caller's `scripted_program` records, a provider of its own so that a world that runs no program carries none of its code: one at a given path writes the given output and errors when it starts, as each stream says, an inherited one into the world's own standard output or error, keeps what its parent writes to its piped input with `write_child`, records how many arguments and variables it was given and how often it started, and ends as it is told. `runtime/run-shell-memory` runs the published shell runner over it.
+Typical use, as in the tour's first program:
 
-The rest of the file system is `file_system`, a concept of its own beside `files` and `directories` and outside `world`, so an image that never renames or truncates carries none of it. `open_file` opens a path as an `open_options` record says: to `read`, to `write`, or both, to `append` every write at the end, to `create` it when missing and with `exclusive` to refuse a name that is taken with `already_exists`, and to `truncate` it; `updating`, `appending` and `creating` are the common three, and `valid_options` says whether an open can have the options at all, `io_failed` otherwise. `rename` gives a file a new name in one step, replacing a file already called that, which is how a whole file is replaced: write a `make_temporary` file beside it, `synchronize` it, close it and rename it onto the old one; a missing name is `not_found`, and a rename across file systems, or of a directory onto a file or a file onto a directory, `io_failed`. `status_of` gives a path's `status`, its size, its `entry_kind`, its last modification as a `wall_time` and whether it is `read_only`, following a final symbolic link or not as asked, and `status_of_file` an open file's; `set_read_only` makes a file read-only or writable by its owner again, and a read-only file refuses an open for writing with `no_access`, except to a process the system lets past every permission, as POSIX's root. `synchronize` has what the provider holds of a file written where it lasts, its data alone when asked. `truncate` gives a file a size, cutting it or extending it with zeros. `read_at` and `write_at` read and write at an offset without moving the position `read` and `write` use: a read at or past the end reads nothing, and a write past it leaves zeros between, a hole a file system may keep without storing it; never write at an offset to a file opened to append. `make_temporary` makes and opens a new file in a directory under a name no other file has, `.tmp-` and sixteen hexadecimal digits drawn from an `entropy` the caller passes, the hosted provider itself in an ordinary program, `io.make_temporary(host, host, directory, buffer)`; it is created exclusively, readable and writable by its owner alone, a name already taken is tried again with fresh bytes up to `temporary_tries` times, and nothing removes it: rename it into place or remove it. `temporary_path` is the name it tries, for a provider in another module. `current_directory` puts the working directory's path in the caller's buffer; nothing here changes it, since it is the whole process's.
+| Call | What it does |
+|---|---|
+| `io.out(host)` | The standard output stream. |
+| `io.write(host, file, bytes)` | Write all the bytes, or fail with `io_failed`. |
+| `io.buffered_over(host, file, buffer)` | A buffered writer over your buffer. |
+| `io.lines_over(host, file, buffer)` | A line reader over your buffer. |
 
-Terminals are `terminals`, one more concept outside `world`: `is_terminal` says whether a stream is one and `window_size` gives its `window`, rows and columns, or `not_a_terminal`.
+### Providers
 
-A `buffered_writer` gathers writes to one file in a buffer the caller supplies and hands them to a writer when the buffer fills or the program flushes it. `buffered_over` makes one from a writer's handle, the file and the buffer; `put` writes bytes through it, flushing first when they do not fit and sending bytes as large as the buffer straight to the writer; `flush` writes what waits; and `pending` says how many bytes do. A failed flush reports the writer's `io_failed` and keeps every byte the writer did not take, so the next flush writes each byte once. There are no destructors: bytes still waiting when the program ends are never written, so flush before every way out, `defer io.flush(out) else ...` being the idiom, and flush where the bytes must be out before something else happens. `format` formats a template straight into its buffer, flushing first when the text does not fit after what waits, and refuses one larger than the whole buffer with `text.no_space` (D355).
+Use the smallest concept a consumer needs. A provider is a handle passed
+by value, `host` in every signature. An erased capability is built from
+the address of a handle binding, `any(addr host)`. Using a handle locks
+nothing, so a program and its logger write through one, and two lent
+arguments and a query are live at once. An erased world can lend
+`writer_of` to a writer-only consumer.
 
-A `line_reader` reads a file through a buffer the caller supplies and lends it back a line at a time, as a directory lends its names: `lines_over` makes one from a reader's handle, the file and the buffer, and `read_line` gives the next `line`, its bytes lent from the reader until the next read. A line ends at `\n`, and a `\r` just before it is part of the ending, so text written with `\r\n` reads as text written with `\n`; a lone `\r` is an ordinary byte, and the last line need not end. The end of input is a line that has `finished`, every time it is asked again; an empty line has not. A line that does not fit the buffer with its ending is `line_too_long`, and the rest of it is skipped, so the next read gives the line after it. `runtime/core-io-buffered-writer` and `runtime/core-io-line-reader` run both over the in-memory provider, failures included.
+Providers retain authority over files and arguments.
+
+`process` lends the three standard streams, `input`, `out` and `err`, and
+the argument table: `io.out(host)`. Standard input is read through
+`reader` like any file, and a read of zero bytes into a nonempty buffer is
+its end.
+
+A path and an argument are host strings, `text.host_string`, so an
+argument passed on as a path is never converted.
+
+### The memory world
+
+`memory_over` makes the memory world, firmware's own:
+
+- it takes the arguments as their bytes, lent back as host strings, so a
+  table can be static data;
+- it fills the caller's `memory_space`, whose limits and counters stay
+  readable and settable;
+- it keeps all storage with the caller, the bytes its standard input
+  reads among them.
+
+Its directories are its slots' names before a `/`, so it lists them and
+reports their sizes but changes nothing.
+
+### Directories
+
+`directories` is a fifth concept beside the four, and not part of
+`world`: a program that lists, makes or removes directories names it as
+well.
+
+`open_directory` takes a buffer from the caller and returns an open
+`directory`, a value the caller passes `inout` to `read_entry`, which
+refills the buffer as entries are read.
+
+- Each entry's name is a host string that need not be UTF-8, lent from
+  the directory until the next read. A name kept past it is refused
+  [0800], so a program copies the names it keeps.
+- An empty name is the end.
+- `.` and `..` are never listed, and the order is the system's.
+- `entry_size` asks the open directory for an entry's size by name, as a
+  `u64`, not following a symbolic link.
+
+`make_directory`, `remove_file` and `remove_directory` change the tree. A
+missing path, and a path through or to something that is not a
+directory, are `not_found`; a name already taken is `already_exists`.
+
+Close a directory through the provider that opened it. One dropped
+unclosed keeps what its provider holds for it until the process ends.
+
+### The environment
+
+The environment is a concept of its own, `environment`, outside `world`,
+so a provider without one, and a firmware image that never asks for one,
+carry none of it.
+
+- `variable_count` counts its variables.
+- `variable_at` lends the one at an index, an `io.variable` of a name and
+  a value.
+- `variable_named` lends the value of the first variable with a name,
+  compared as bytes, or reports `no_variable`.
+
+Names and values are host strings that need not be UTF-8, lent from the
+provider for as long as the process lives.
+
+The environment is read-only. A process does not change its own, which is
+not safe beside threads, and gives a child the environment it builds
+instead.
+
+`variables_over` makes a `memory_variables`, an environment provider over
+a table of `NAME=value` byte strings, which firmware can declare as data.
+
+### Running programs
+
+`programs` is a seventh concept, outside `world`, for running other
+programs.
+
+`spawn` starts the program at a path, a host string. The path is never
+looked up on a search path or handed to a shell. The program gets the
+arguments it sees after its own name and exactly the variables the caller
+builds. Each of its three standard streams is connected as
+`child_streams` says:
+
+| Choice | The child's stream is |
+|---|---|
+| `inherited` | the parent's own |
+| `discarded` | connected to nothing |
+| `piped` | a pipe whose other end the parent holds |
+
+`inheriting`, `capturing` and `discarding` are the common three
+combinations.
+
+A missing program is `not_found`, one the caller may not run `no_access`,
+and on any failure no child exists.
+
+The `child` it returns is a value the caller keeps, whose fields are the
+provider's:
+
+- `write_child` writes to its piped input, and `close_input` closes it,
+  so that the child reads to its end.
+- `read_child` reads its piped output and errors together. It waits until
+  either has something and says which it read, so a child that writes
+  more than a pipe holds to both never waits on a full one.
+- `wait` closes every pipe the child still has, waits for it, and reports
+  how it ended. The `ending`'s variant part is `exited` with a code, or
+  `signalled`, ended from outside, whose detail is the provider's. It
+  consumes the child.
+
+A child never waited for keeps what its provider holds for it until the
+process ends. Close a child's pipes only through `close_input` and
+`wait`, never through `files`.
+
+The hosted provider's pipes are its own files, which `reader` and
+`writer` also take, a line reader over a child's output among them. The
+memory world's are not.
+
+`scripted_over` makes `scripted_programs`, a programs provider beside a
+memory world, over the caller's `scripted_program` records. It is a
+provider of its own, so a world that runs no program carries none of its
+code. A scripted program at a given path:
+
+- writes the given output and errors when it starts, as each stream
+  says, an inherited one into the world's own standard output or error;
+- keeps what its parent writes to its piped input with `write_child`;
+- records how many arguments and variables it was given and how often it
+  started;
+- ends as it is told.
+
+`runtime/run-shell-memory` runs the published shell runner over it.
+
+### The rest of the file system
+
+The rest of the file system is `file_system`, a concept of its own beside
+`files` and `directories` and outside `world`, so an image that never
+renames or truncates carries none of it.
+
+`open_file` opens a path as an `open_options` record says:
+
+| Option | Meaning |
+|---|---|
+| `read`, `write` | open to read, to write, or both |
+| `append` | every write goes at the end |
+| `create` | create the file when it is missing |
+| `exclusive` | with `create`, refuse a name that is taken, with `already_exists` |
+| `truncate` | cut the file to nothing |
+
+`updating`, `appending` and `creating` are the common three.
+`valid_options` says whether an open can have the options at all, and
+`io_failed` answers one that cannot.
+
+| Call | What it does |
+|---|---|
+| `rename` | Give a file a new name in one step, replacing a file already called that. |
+| `status_of`, `status_of_file` | A path's or an open file's `status`. |
+| `set_read_only` | Make a file read-only, or writable by its owner again. |
+| `synchronize` | Have what the provider holds of a file written where it lasts, its data alone when asked. |
+| `truncate` | Give a file a size, cutting it or extending it with zeros. |
+| `read_at`, `write_at` | Read and write at an offset. |
+| `make_temporary` | Make and open a new file under a fresh name. |
+| `current_directory` | Put the working directory's path in the caller's buffer. |
+
+`rename` is how a whole file is replaced: write a `make_temporary` file
+beside it, `synchronize` it, close it and rename it onto the old one. A
+missing name is `not_found`. A rename across file systems, or of a
+directory onto a file or a file onto a directory, is `io_failed`.
+
+A `status` holds the size, its `entry_kind`, the last modification as a
+`wall_time` and whether it is `read_only`. `status_of` follows a final
+symbolic link or not, as asked.
+
+A read-only file refuses an open for writing with `no_access`, except to
+a process the system lets past every permission, as POSIX's root.
+
+`read_at` and `write_at` do not move the position `read` and `write` use.
+A read at or past the end reads nothing. A write past it leaves zeros
+between, a hole a file system may keep without storing it. Never write at
+an offset to a file opened to append.
+
+`make_temporary` creates the file in a directory under a name no other
+file has: `.tmp-` and sixteen hexadecimal digits, drawn from an `entropy`
+the caller passes. In an ordinary program that is the hosted provider
+itself: `io.make_temporary(host, host, directory, buffer)`.
+
+- The file is created exclusively, readable and writable by its owner
+  alone.
+- A name already taken is tried again with fresh bytes, up to
+  `temporary_tries` times.
+- Nothing removes it: rename it into place or remove it.
+- `temporary_path` is the name it tries, for a provider in another
+  module.
+
+Nothing here changes the working directory, since it is the whole
+process's.
+
+### Terminals
+
+Terminals are `terminals`, one more concept outside `world`.
+`is_terminal` says whether a stream is one, and `window_size` gives its
+`window`, rows and columns, or `not_a_terminal`.
+
+### The buffered writer
+
+A `buffered_writer` gathers writes to one file in a buffer the caller
+supplies, and hands them to a writer when the buffer fills or the program
+flushes it.
+
+| Call | What it does |
+|---|---|
+| `buffered_over` | Make one from a writer's handle, the file and the buffer. |
+| `put` | Write bytes through it, flushing first when they do not fit. Bytes as large as the buffer go straight to the writer. |
+| `format` | Format a template straight into its buffer, flushing first when the text does not fit after what waits. |
+| `flush` | Write what waits. |
+| `pending` | Say how many bytes wait. |
+
+A failed flush reports the writer's `io_failed` and keeps every byte the
+writer did not take, so the next flush writes each byte once. `format`
+refuses a text larger than the whole buffer with `text.no_space` (D355).
+
+There are no destructors: bytes still waiting when the program ends are
+never written. Flush before every way out, `defer io.flush(out) else ...`
+being the idiom, and flush where the bytes must be out before something
+else happens.
+
+### The line reader
+
+A `line_reader` reads a file through a buffer the caller supplies and
+lends it back a line at a time, as a directory lends its names.
+`lines_over` makes one from a reader's handle, the file and the buffer,
+and `read_line` gives the next `line`, its bytes lent from the reader
+until the next read.
+
+- A line ends at `\n`, and a `\r` just before it is part of the ending,
+  so text written with `\r\n` reads as text written with `\n`.
+- A lone `\r` is an ordinary byte, and the last line need not end.
+- The end of input is a line that has `finished`, every time it is asked
+  again; an empty line has not.
+- A line that does not fit the buffer with its ending is
+  `line_too_long`, and the rest of it is skipped, so the next read gives
+  the line after it.
+
+`runtime/core-io-buffered-writer` and `runtime/core-io-line-reader` run
+both over the in-memory provider, failures included.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-io/main.ldn)
 
@@ -147,9 +669,48 @@ A `line_reader` reads a file through a buffer the caller supplies and lends it b
 
 Fakes of a system's providers for tests that must give the same answer every run and on every target: a file system, a network, a clock, entropy and terminals, each over the caller's records.
 
-Each fake is named one way: its provider type for what it fakes, `fake.volume`, `fake.network`, `fake.clock`, `fake.entropy` and `fake.terminals`, its caller-owned state that name with `_space`, declared `zeroed`, and its constructor that name with `_over`, which fills the state and returns the handle (D348). The memory world, which is firmware's own world rather than a fake of a system's, stays in `core/io` as `io.memory`.
+Each fake is named one way (D348):
 
-`volume_over` makes a `fake.volume`, the fake of `file_system` and of `reader`, `writer`, `files` and `directories` over the same files: a file system in memory over the caller's `volume_node` records, each a path, a kind and room for a file's bytes or a link's target, and a `volume_space` the caller declares `zeroed`, whose time stamps each change and whose `fail_at` fails a chosen call, counting every call of the volume, each `read_entry`, `entry_size` and `same_file` among them. A node with no path is free for a new file, a file grows only into its node's room, and a write that finds none is `io_failed`, as a full device is; a symbolic link is a node the caller makes, followed where a path is followed. A node a file is open on cannot be removed or renamed over, where POSIX would keep the open file without its name. `terminals_over` makes `fake.terminals` over the caller's `screen` records, each a file of a size, and every other file is no terminal. `runtime/volume-memory` holds every entry of the volume to its oracles; it links every entry of its conformances and does not fit a Cortex-M0 image, and `runtime/file-system-firmware` runs the temporary names and the memory terminals there.
+| Part | Name | Example |
+|---|---|---|
+| its provider type, for what it fakes | the name | `fake.volume` |
+| its caller-owned state, declared `zeroed` | the name with `_space` | `fake.volume_space` |
+| its constructor, which fills the state and returns the handle | the name with `_over` | `fake.volume_over` |
+
+The fakes are `fake.volume`, `fake.network`, `fake.clock`, `fake.entropy`
+and `fake.terminals`. The clock and entropy are described with
+`core/time`, and the network with `core/net`. The memory world, which is
+firmware's own world rather than a fake of a system's, stays in `core/io`
+as `io.memory`.
+
+### The volume
+
+`volume_over` makes a `fake.volume`: the fake of `file_system`, and of
+`reader`, `writer`, `files` and `directories` over the same files. It is a
+file system in memory over the caller's `volume_node` records, each a
+path, a kind and room for a file's bytes or a link's target, and a
+`volume_space` the caller declares `zeroed`.
+
+- The space time-stamps each change.
+- Its `fail_at` fails a chosen call, counting every call of the volume,
+  each `read_entry`, `entry_size` and `same_file` among them.
+- A node with no path is free for a new file.
+- A file grows only into its node's room, and a write that finds none is
+  `io_failed`, as a full device is.
+- A symbolic link is a node the caller makes, followed where a path is
+  followed.
+- A node a file is open on cannot be removed or renamed over, where POSIX
+  would keep the open file without its name.
+
+`runtime/volume-memory` holds every entry of the volume to its oracles.
+It links every entry of its conformances and does not fit a Cortex-M0
+image; `runtime/file-system-firmware` runs the temporary names and the
+memory terminals there.
+
+### Terminals
+
+`terminals_over` makes `fake.terminals` over the caller's `screen`
+records, each a file of a size, and every other file is no terminal.
 
 [Executable example](../compiler/tests/fixtures/runtime/volume-memory/main.ldn)
 
@@ -157,7 +718,59 @@ Each fake is named one way: its provider type for what it fakes, `fake.volume`, 
 
 Spans and instants of time counted in nanoseconds, the wall clock's time, and the monotonic and wall clock concepts.
 
-Time is two concepts outside `world`, so an image that never asks the time carries neither. `clock` is a monotonic clock, `now`, which never goes back, and sleeping on it, `sleep`, which returns once at least the span asked has passed on that clock and never sooner; `wall_clock` is the system's UTC time, `wall_now`, a `wall_time` of seconds since 1970 and the nanoseconds after them, which the system may set and so may go back, so a task is timed with `clock`. A reading is an `instant` and a span a `duration`, each a distinct `u64` of nanoseconds, which holds 584 years: `u64(at)` is the count, two of a kind compare with `==`, `<>`, `<`, `<=`, `>` and `>=` as their counts do, and neither has arithmetic of its own, so `elapsed` is the span between two readings taken in order, trapping if the second is the earlier, `later` a deadline, `nanoseconds`, `microseconds`, `milliseconds` and `seconds` make a span, trapping past 584 years, and `in_milliseconds` rounds one down. There is no floating point, and the arithmetic is the same on every target. Calendars, time zones and formatting a date are not here. `clock_over` makes a `fake.clock` over the caller's `clock_space`, which moves only when a test says: `advance` moves both its clocks, a `sleep` advances them by exactly what it asks and returns at once, the test may set either reading through the state, and the state counts readings, sleeps and the time slept. `entropy` is a third, `fill_random`, which fills all of a buffer with unpredictable bytes or fails `io_failed`; `entropy_over` makes `fake.entropy` over the caller's bytes, given in order, a request for more than is left failing, so a program that seeds itself from entropy runs the same in every test. `runtime/clock-manual` and `runtime/random-sequence` run both fakes on Cortex-M0.
+| Call | What it does |
+|---|---|
+| `time.now(host)` | Read the monotonic clock: an `instant`. |
+| `time.elapsed(earlier, later)` | The span between two readings taken in order. |
+| `time.sleep(host, span)` | Sleep for at least a span. |
+| `time.milliseconds(n)` | Make a span; `nanoseconds`, `microseconds` and `seconds` too. |
+| `time.wall_now(host)` | Read the wall clock: a `wall_time`. |
+
+### Clocks
+
+Time is two concepts outside `world`, so an image that never asks the time
+carries neither.
+
+| Concept | Call | Reads |
+|---|---|---|
+| `clock` | `now`, `sleep` | a monotonic clock, which never goes back |
+| `wall_clock` | `wall_now` | the system's UTC time, a `wall_time` of seconds since 1970 and the nanoseconds after them |
+
+`sleep` returns once at least the span asked has passed on that clock,
+never sooner. The system may set the wall clock, so it may go back; time
+a task with `clock`.
+
+### Spans and instants
+
+A reading is an `instant` and a span a `duration`, each a distinct `u64`
+of nanoseconds, which holds 584 years.
+
+- `u64(at)` is the count.
+- Two of a kind compare with `==`, `<>`, `<`, `<=`, `>` and `>=`, as
+  their counts do.
+- Neither has arithmetic of its own: `elapsed` is the span between two
+  readings taken in order, trapping if the second is the earlier, and
+  `later` gives a deadline.
+- `nanoseconds`, `microseconds`, `milliseconds` and `seconds` make a span,
+  trapping past 584 years, and `in_milliseconds` rounds one down.
+
+There is no floating point, and the arithmetic is the same on every
+target. Calendars, time zones and formatting a date are not here.
+
+### Entropy
+
+`entropy` is a third concept, `fill_random`, which fills all of a buffer
+with unpredictable bytes or fails `io_failed`.
+
+### Fakes
+
+| Fake | Made by | Behaviour |
+|---|---|---|
+| `fake.clock` | `clock_over`, over the caller's `clock_space` | Moves only when a test says: `advance` moves both its clocks, and a `sleep` advances them by exactly what it asks and returns at once. The test may set either reading through the state, and the state counts readings, sleeps and the time slept. |
+| `fake.entropy` | `entropy_over`, over the caller's bytes | Gives the bytes in order; a request for more than is left fails. So a program that seeds itself from entropy runs the same in every test. |
+
+`runtime/clock-manual` and `runtime/random-sequence` run both fakes on
+Cortex-M0.
 
 [Executable example](../compiler/tests/fixtures/runtime/clock-manual/main.ldn)
 
@@ -165,7 +778,83 @@ Time is two concepts outside `world`, so an image that never asks the time carri
 
 The network concept, whose connections are readers and writers, and internet addresses with their text.
 
-The network is one more concept outside `world`, `network`, so an image that never connects carries none of it. It is a reader and a writer of its own sockets as well, so a connection is read and written through `read` and `write`, a line reader and a buffered writer among them, whose failures are `io_failed`; `send` and `receive` say more, `timed_out` when a limit has passed and `disconnected` when the peer has gone, and a `receive` or `read` of zero is the end of what the peer sends. `listen` takes an address and returns a listener, port 0 for a free port that `local_address` then gives, and may take an address its own closed connections still hold, never one another socket listens at, which is `address_in_use`; `accept` takes the next connection; `connect` makes one, `refused` where nothing listens and `unreachable` where no route leads; `open_datagram` binds a UDP socket, `send_to` sends a datagram whole and `receive_from` gives the next with its `sender`, cutting one longer than the buffer; `shutdown` stops `receiving`, `sending` or `both_directions`; `peer_address` names a connection's other end; `set_timeouts` limits how long a receive, an accept and a send wait, zero for no limit; `set_no_delay` turns Nagle's algorithm off; and `close_socket` closes a socket. An address the system does not have, or a family it lacks, is `address_unavailable`. Every call waits as a blocking socket does, so one thread can connect to its own listener and send before it accepts, since the system completes the handshake, but a receive waits for its peer. An `address` is a family, `ipv4` or `ipv6`, sixteen bytes and a port: `loopback`, `unspecified`, `ipv4_address`, `ipv6_address` and `with_port` make one, `same_address` and `is_unspecified` compare, `parse_ip` reads `192.0.2.1` or `2001:db8::1` and `parse_address` `192.0.2.1:80` or `[2001:db8::1]:80`, refusing a leading zero, a zone and anything else with `invalid_address`, and `append_ip` and `append_address` write them back as RFC 5952 does, lower case, the longest run of zero groups shortened and an IPv4-mapped address in dotted decimal; an address is `text.formattable`. Nothing here resolves a name. `network_over` makes a `fake.network` over the caller's `network_socket` records, each made by `socket_over` from a buffer that is its receive buffer, and a `network_space` whose counters a test reads: a machine of loopback addresses on which a connection and a datagram arrive at once, whole and in order, a datagram no socket takes is lost and counted, and a call that would wait answers `timed_out` at once, since nothing in one thread could ever end the wait. A test may take IPv6 away with `without_ipv6` and fail a call with `fail_at`. `runtime/network-echo-memory` runs the published echo over it, and `runtime/network-addresses-firmware` reads and writes addresses on Cortex-M0.
+| Call | What it does |
+|---|---|
+| `net.connect` | Connect to an address. |
+| `net.listen`, `net.accept` | Listen at an address and take the next connection. |
+| `net.send`, `net.receive` | Send and receive on a connection. |
+| `net.open_datagram`, `net.send_to`, `net.receive_from` | A UDP socket and its datagrams. |
+| `net.parse_address`, `net.append_address` | Read and write `192.0.2.1:80` and `[2001:db8::1]:80`. |
+| `net.close_socket` | Close a socket. |
+
+### Sockets
+
+The network is one more concept outside `world`, `network`, so an image
+that never connects carries none of it.
+
+It is a reader and a writer of its own sockets as well. A connection is
+read and written through `read` and `write`, a line reader and a buffered
+writer among them, whose failures are `io_failed`. `send` and `receive`
+say more: `timed_out` when a limit has passed and `disconnected` when the
+peer has gone. A `receive` or `read` of zero is the end of what the peer
+sends.
+
+| Call | Behaviour |
+|---|---|
+| `listen` | Takes an address and returns a listener. Port 0 asks for a free port, which `local_address` then gives. It may take an address its own closed connections still hold, never one another socket listens at, which is `address_in_use`. |
+| `accept` | Takes the next connection. |
+| `connect` | Makes one: `refused` where nothing listens and `unreachable` where no route leads. |
+| `open_datagram` | Binds a UDP socket. |
+| `send_to` | Sends a datagram whole. |
+| `receive_from` | Gives the next datagram with its `sender`, cutting one longer than the buffer. |
+| `shutdown` | Stops `receiving`, `sending` or `both_directions`. |
+| `peer_address` | Names a connection's other end. |
+| `set_timeouts` | Limits how long a receive, an accept and a send wait; zero for no limit. |
+| `set_no_delay` | Turns Nagle's algorithm off. |
+| `close_socket` | Closes a socket. |
+
+An address the system does not have, or a family it lacks, is
+`address_unavailable`.
+
+Every call waits as a blocking socket does. One thread can connect to its
+own listener and send before it accepts, since the system completes the
+handshake, but a receive waits for its peer.
+
+### Addresses
+
+An `address` is a family, `ipv4` or `ipv6`, sixteen bytes and a port.
+
+- `loopback`, `unspecified`, `ipv4_address`, `ipv6_address` and
+  `with_port` make one.
+- `same_address` and `is_unspecified` compare.
+- `parse_ip` reads `192.0.2.1` or `2001:db8::1`, and `parse_address`
+  reads `192.0.2.1:80` or `[2001:db8::1]:80`. Both refuse a leading zero,
+  a zone and anything else with `invalid_address`.
+- `append_ip` and `append_address` write them back as RFC 5952 does: lower
+  case, the longest run of zero groups shortened, and an IPv4-mapped
+  address in dotted decimal.
+- An address is `text.formattable`.
+
+Nothing here resolves a name.
+
+### The fake network
+
+`network_over` makes a `fake.network` over the caller's `network_socket`
+records, each made by `socket_over` from a buffer that is its receive
+buffer, and a `network_space` whose counters a test reads. It is a
+machine of loopback addresses:
+
+- a connection and a datagram arrive at once, whole and in order;
+- a datagram no socket takes is lost and counted;
+- a call that would wait answers `timed_out` at once, since nothing in one
+  thread could ever end the wait.
+
+A test may take IPv6 away with `without_ipv6` and fail a call with
+`fail_at`.
+
+`runtime/network-echo-memory` runs the published echo over it, and
+`runtime/network-addresses-firmware` reads and writes addresses on
+Cortex-M0.
 
 [Executable example](../compiler/tests/fixtures/runtime/network-addresses/main.ldn)
 
@@ -173,7 +862,13 @@ The network is one more concept outside `world`, `network`, so an image that nev
 
 Bounded diagnostic storage and streaming diagnostics through a writer capability.
 
-Severity is the atom set `warning | error`, so a `match` over it is checked for both. A bounded log stores at most its fixed number of entries and drops messages exceeding 256 bytes. It counts dropped entries and remembers error diagnostics even when they are dropped. A streaming log from `stream` holds a copy of an erased writer and a file, writes each note as `W:` or `E:`, the decimal byte offset, `:` and the message, and propagates I/O failure.
+Severity is the atom set `warning | error`, so a `match` over it is
+checked for both.
+
+| Log | Made by | Behaviour |
+|---|---|---|
+| bounded | `diag.new` | Stores at most its fixed number of entries, and drops messages exceeding 256 bytes. It counts dropped entries and remembers error diagnostics even when they are dropped. |
+| streaming | `diag.stream` | Holds a copy of an erased writer and a file. Writes each note as `W:` or `E:`, the decimal byte offset, `:` and the message, and propagates I/O failure. |
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-diag/main.ldn)
 
@@ -181,7 +876,22 @@ Severity is the atom set `warning | error`, so a `match` over it is checked for 
 
 Words for a person: a short English phrase for each failure atom the core library raises.
 
-`failure.words(problem)` gives the phrase for any of the 32 atoms in `failure.reason`, every atom a `core` module fails with, so a call's `else (problem)` passes its failure straight on, whatever subset it declares. A phrase is lower case with no final stop and reads after a subject and a colon, `settings: not found`; it is static text, borrows nothing and never changes with a locale. A set that also holds an atom of the program's own does not widen to `failure.reason`, and a `match` arm of `_` does not narrow it, so such a program names each library atom it passes on. `platform/posix`'s errno detail stays with its provider. Nothing is linked into a program that never calls `words`; one that does carries every phrase, about 6 KB of code and text on Cortex-M0 (D388).
+`failure.words(problem)` gives the phrase for any of the 32 atoms in
+`failure.reason`, every atom a `core` module fails with. So a call's
+`else (problem)` passes its failure straight on, whatever subset it
+declares.
+
+A phrase is lower case with no final stop, and reads after a subject and
+a colon: `settings: not found`. It is static text, borrows nothing and
+never changes with a locale.
+
+A set that also holds an atom of the program's own does not widen to
+`failure.reason`, and a `match` arm of `_` does not narrow it, so such a
+program names each library atom it passes on. `platform/posix`'s errno
+detail stays with its provider.
+
+Nothing is linked into a program that never calls `words`. One that does
+carries every phrase, about 6 KB of code and text on Cortex-M0 (D388).
 
 [Executable example](../compiler/tests/fixtures/runtime/failure-words-report/main.ldn)
 
@@ -189,7 +899,13 @@ Words for a person: a short English phrase for each failure atom the core librar
 
 An append-only store of named leaves and branches addressed by node identifiers.
 
-A branch names a contiguous range of previously published nodes. Leaf totals are precomputed, so queries use constant stack and time. Shared children count once for each incoming path. Names borrow their UTF-8 backing; releasing the tree frees node storage, not names.
+A branch names a contiguous range of previously published nodes.
+
+Leaf totals are precomputed, so queries use constant stack and time.
+Shared children count once for each incoming path.
+
+Names borrow their UTF-8 backing; releasing the tree frees node storage,
+not names.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-tree/main.ldn)
 
@@ -197,7 +913,18 @@ A branch names a contiguous range of previously published nodes. Leaf totals are
 
 A monotonic allocator over caller-supplied bytes.
 
-`over` fills the caller's `arena.space`, declared `zeroed` beside the backing, and returns the handle, an `arena.arena`, `from` it; `over_unchecked` takes local backing with an explicit lifetime opt-out, and the caller ends every allocation before that backing ends. An individual free reclaims nothing, and `reset` gives every allocation back at once; `used` counts the bytes handed out, padding included. The arena resizes its latest block in place and moves any other. It allocates no backing of its own.
+| Call | What it does |
+|---|---|
+| `arena.over` | Fill the caller's `arena.space`, declared `zeroed` beside the backing, and return the handle, an `arena.arena`, `from` it. |
+| `arena.over_unchecked` | The same over local backing, with an explicit lifetime opt-out. |
+| `arena.reset` | Give every allocation back at once. |
+| `arena.used` | Count the bytes handed out, padding included. |
+
+With `over_unchecked`, the caller ends every allocation before that
+backing ends.
+
+An individual free reclaims nothing. The arena resizes its latest block
+in place and moves any other. It allocates no backing of its own.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-arena/main.ldn)
 
@@ -205,7 +932,16 @@ A monotonic allocator over caller-supplied bytes.
 
 A reclaiming allocator over fixed-size slots and caller-supplied bookkeeping.
 
-`over` fills the caller's `pool.space` and returns the pool's handle; the pool allocates no backing storage of its own. It reuses the lowest free slot and rejects malformed frees without reclaiming a slot. A zero-byte allocation still occupies one slot. A growth and a resize keep the block in its slot, to any extent the slot holds, and refuse a larger one, since no slot is larger; so a list over a pool grows in place until its slot is full (D386). Keep both payload backing and metadata alive while allocations exist.
+`over` fills the caller's `pool.space` and returns the pool's handle. The
+pool allocates no backing storage of its own. Keep both payload backing
+and metadata alive while allocations exist.
+
+- It reuses the lowest free slot.
+- It rejects malformed frees without reclaiming a slot.
+- A zero-byte allocation still occupies one slot.
+- A growth and a resize keep the block in its slot, to any extent the
+  slot holds, and refuse a larger one, since no slot is larger. So a list
+  over a pool grows in place until its slot is full (D386).
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-pool/main.ldn)
 
@@ -213,7 +949,24 @@ A reclaiming allocator over fixed-size slots and caller-supplied bookkeeping.
 
 An allocator scope that records allocations through a parent and releases them together.
 
-`over` makes a region's handle over the caller's ledger, `space(capacity)`, and a copy of the parent's handle; a capacity of zero grows the ledger through the parent, and a positive one is a fixed caller ledger. Individual frees do nothing; every allocation consumes a ledger entry until release, whether or not its payload is still live. A resize of the newest allocation goes to the parent and its entry follows the block; any other block is moved into a new entry, the old one freed at release. `release` takes the ledger and the same parent, frees payloads in reverse order and is refused while the region's handle is still used. End all payload uses before releasing the region. `growing_space` names the ledger that grows through its parent, a capacity of zero (D356).
+`over` makes a region's handle over the caller's ledger,
+`space(capacity)`, and a copy of the parent's handle:
+
+| Capacity | Ledger |
+|---|---|
+| zero | grows through the parent; `growing_space` names it (D356) |
+| positive | a fixed caller ledger |
+
+Individual frees do nothing. Every allocation consumes a ledger entry
+until release, whether or not its payload is still live.
+
+A resize of the newest allocation goes to the parent, and its entry
+follows the block. Any other block is moved into a new entry, the old one
+freed at release.
+
+`release` takes the ledger and the same parent and frees payloads in
+reverse order. It is refused while the region's handle is still used.
+End all payload uses before releasing the region.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-region/main.ldn)
 
@@ -221,7 +974,22 @@ An allocator scope that records allocations through a parent and releases them t
 
 Deterministic allocation-failure injection over any allocator, with cumulative counters.
 
-`over` wraps a copy of a provider's handle in an `injector` over the caller's `space`. The budget counts delegated attempts, including attempts the inner provider refuses, so wrapping an arena counts both injected failures and the arena's own. `permit` replaces that budget without resetting evidence. Free calls delegate to the parent; in-place growth is refused so allocation-failure tests remain predictable. A resize is an attempt like an allocation: it spends the budget and is delegated or refused. A growth in place is delegated too, spending a permit, and counted by `growths` rather than `successes`, which counts the blocks the injector gave (D356).
+`over` wraps a copy of a provider's handle in an `injector` over the
+caller's `space`. `permit` replaces the budget without resetting
+evidence.
+
+The budget counts delegated attempts, including attempts the inner
+provider refuses, so wrapping an arena counts both injected failures and
+the arena's own.
+
+- Free calls delegate to the parent.
+- In-place growth is refused, so allocation-failure tests remain
+  predictable.
+- A resize is an attempt like an allocation: it spends the budget and is
+  delegated or refused.
+- A growth in place is delegated too, spending a permit, and counted by
+  `growths` rather than `successes`, which counts the blocks the injector
+  gave (D356).
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-fault/main.ldn)
 
@@ -229,7 +997,11 @@ Deterministic allocation-failure injection over any allocator, with cumulative c
 
 The four compiler panic atoms and their shared panic-kind domain.
 
-Checked range, arithmetic and conversion faults, and an unreachable path, use these atoms. An entry-module panic handler has the language-specified nonreturning signature. A panic is distinct from a recoverable allocator or I/O error.
+Checked range, arithmetic and conversion faults, and an unreachable path,
+use these atoms.
+
+An entry-module panic handler has the language-specified nonreturning
+signature. A panic is distinct from a recoverable allocator or I/O error.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-panic/main.ldn)
 
@@ -237,7 +1009,28 @@ Checked range, arithmetic and conversion faults, and an unreachable path, use th
 
 A deterministic generator of pseudorandom numbers, the same sequence for a seed on every target.
 
-`generator` is xoshiro256** 1.0, Blackman and Vigna's, 256 bits of state that each draw advances, a value the caller keeps and passes `inout`. `new` seeds it from a `u64` through splitmix64, as its authors suggest, and `from_entropy` from 32 bytes of any `io.entropy` provider, the hosted system's or a test's scripted bytes. `next` draws 64 bits and `next_u32` the upper 32; `below` draws a value under a bound with each equally likely, by masking to the bound's width and drawing again when the value is too large, so no division is made and no value is favoured, and traps for a bound of zero; `shuffle` puts a slice in a uniformly drawn order. It uses shifts, exclusive ors and additions on `u64`, so a Cortex-M0 draws what a 64-bit host draws, and its sequences are the reference implementation's, which `runtime/random-sequence` holds on every target. It is not cryptographic: its outputs reveal its state, so a key, a token or a password comes from `io.fill_random` directly.
+| Call | What it does |
+|---|---|
+| `random.new` | Seed a generator from a `u64`, through splitmix64, as its authors suggest. |
+| `random.from_entropy` | Seed one from 32 bytes of any `io.entropy` provider, the hosted system's or a test's scripted bytes. |
+| `random.next` | Draw 64 bits. |
+| `random.next_u32` | Draw the upper 32. |
+| `random.below` | Draw a value under a bound, each equally likely. |
+| `random.shuffle` | Put a slice in a uniformly drawn order. |
+
+`generator` is xoshiro256** 1.0, Blackman and Vigna's: 256 bits of state
+that each draw advances, a value the caller keeps and passes `inout`.
+
+`below` masks to the bound's width and draws again when the value is too
+large, so no division is made and no value is favoured. It traps for a
+bound of zero.
+
+The generator uses shifts, exclusive ors and additions on `u64`, so a
+Cortex-M0 draws what a 64-bit host draws. Its sequences are the reference
+implementation's, which `runtime/random-sequence` holds on every target.
+
+It is not cryptographic: its outputs reveal its state. A key, a token or
+a password comes from `io.fill_random` directly.
 
 [Executable example](../compiler/tests/fixtures/runtime/random-sequence/main.ldn)
 
@@ -245,7 +1038,26 @@ A deterministic generator of pseudorandom numbers, the same sequence for a seed 
 
 An explicit allocator over the host runtime heap.
 
-`new` returns a `heap`, a handle that borrows nothing: the heap belongs to the process. Allocations remain manual obligations; no ambient allocator is installed, and containers still receive the provider explicitly. A block grows or shrinks in place while its slot or mapping holds it, and a mapping grows where the pages after it are free; otherwise a resize on Linux moves a mapping's pages with `mremap`, and anything else is copied. Every `usize` alignment is honoured by over-allocating and keeping a header before the block. The provider keeps eight size classes, of 32 to 4096 bytes, over chunks it maps through `platform/posix`, written once for every hosted system: a freed slot goes back on its class's list and is the next one handed out, and a larger request is a mapping of its own, rounded to the system's page and unmapped when it is freed. It is single-threaded. A refusal comes before any state changes.
+`new` returns a `heap`, a handle that borrows nothing: the heap belongs to
+the process. Allocations remain manual obligations. No ambient allocator
+is installed, and containers still receive the provider explicitly.
+
+The provider keeps eight size classes, of 32 to 4096 bytes, over chunks
+it maps through `platform/posix`, written once for every hosted system:
+
+- a freed slot goes back on its class's list and is the next one handed
+  out;
+- a larger request is a mapping of its own, rounded to the system's page
+  and unmapped when it is freed.
+
+A block grows or shrinks in place while its slot or mapping holds it, and
+a mapping grows where the pages after it are free. Otherwise a resize on
+Linux moves a mapping's pages with `mremap`, and anything else is copied.
+
+Every `usize` alignment is honoured by over-allocating and keeping a
+header before the block.
+
+It is single-threaded. A refusal comes before any state changes.
 
 [Executable example](../compiler/tests/fixtures/runtime/hosted-heap-provider/main.ldn)
 
@@ -253,15 +1065,141 @@ An explicit allocator over the host runtime heap.
 
 Hosted file, stream and process operations, written once over `platform/posix`: the provider `host`, made by `new`, imported as `system` with no alias (D347).
 
-`host` supplies the shared I/O concepts. `new` makes a handle exposing process arguments, lent as host strings, and standard streams, from the root the hosted entry establishes through `platform/posix`'s `_landin_host_initialize_arguments`; a C `main` that drives Landin exports calls that initializer itself. Standard input, output and error are descriptors 0, 1 and 2. Open-write creates or truncates regular files. A path that names nothing is `not_found`, whether a component is missing or one before the last is not a directory, ENOENT or ENOTDIR; `same_file` answers false for such an output path. `host` returns a handle that borrows nothing, since the root, the descriptors and its last-error cell belong to the process; `over` makes a handle that keeps its last errno in a `space` the caller declares, for a C thread or a library that must not share the process's. `last_errno` captures the terminal failing call as provider-specific detail, the number of the errno `platform/posix` failed with; it is not a portable error type. `last_signal` is the number of the signal that ended the child last waited for, beside `io.ending`'s `signalled`, and zero after a child that exited. A path that holds a NUL is `io_failed` with EINVAL, and one longer than the system's PATH_MAX with ENAMETOOLONG, as `platform/posix` refuses them. `host` also supplies `directories`. A directory's buffer must hold at least `io.directory_buffer`, 1024 bytes, or opening it fails with `io_failed` before anything is opened, so that every entry a hosted system gives fits. It is read through `platform/posix`'s directory streams, `.` and `..` left out. An entry whose type the file system does not record is asked with a status call relative to the directory. `make_directory` gives a new directory 0777, which the process umask filters, and is not retried when interrupted, because a directory made before the interruption would then report `already_exists`.
+| Call | What it does |
+|---|---|
+| `system.new()` | The process's provider: a `host` handle that borrows nothing. |
+| `system.over(space)` | A provider that keeps its last errno in a `space` the caller declares. |
+| `system.last_errno(host)` | The errno number of the last failing call. |
+| `system.last_signal(host)` | The signal that ended the last child waited for. |
+| `system.descriptor_of(file)`, `system.file_of(descriptor)` | Convert between a provider's file and a `platform/posix` descriptor. |
+| `system.socket_of(descriptor)` | A provider's socket from a socket of `platform/posix`'s. |
 
-The environment is the one the process's entry was given, read where the entry left it, never copied and never changed. `host` also supplies `programs`, over `platform/posix`'s `spawn`: a discarded stream is the system's `/dev/null`, and a piped one a pipe whose child end is closed in the parent once the child has it. A child receives only its three streams, since every descriptor the provider makes is closed on exec and the spawn closes any other. `read_child` polls both pipes when both are open and reads the output first when both have something. `wait` closes the child's pipes before it waits, so a child still writing to one meets a closed pipe rather than a parent that never reads. An interrupted spawn, poll, read or wait is made again.
+`host` supplies every concept of `core/io`, `core/time` and `core/net`:
+the shared I/O concepts, `directories`, `programs`, `network`,
+`file_system`, `terminals`, `clock`, `wall_clock` and `entropy`.
 
-`host` supplies `network` too, over `platform/posix`'s sockets: a socket is a descriptor and a file of the provider like any other, so `read` and `write` take a connection, and a write to a socket the provider made is a send, which raises no SIGPIPE beside a C handler on any system (D340); `socket_of` makes one from a socket of `platform/posix`'s. A listener reuses its address and an IPv6 socket takes IPv6 alone on every system, which BSD does from the start and Linux does not; up to 128 connections wait to be accepted. An interrupted call is made again, a connection a signal interrupted is waited out with `poll` and its outcome read from the socket, an accept refused because its connection was reset before it was taken accepts the next, and a send goes on after a short one until every byte is sent. A send to a peer that has gone is `disconnected`, EPIPE or ECONNRESET kept as the last errno, and a `write` to it `io_failed` with EPIPE: the process ignores SIGPIPE, so neither ends it.
+### The provider
 
-`host` supplies `file_system` and `terminals` too, over `platform/posix`. `open_file` creates a file 0666, which the process umask filters, and refuses options no open can have with `io_failed` and EINVAL kept before it asks the system; a taken name `exclusive` meets is `already_exists`. `rename` is `renameat`, ENOENT `not_found` and the rest `io_failed` with the errno kept, and is not retried when interrupted. A file is `read_only` when no permission bit lets anyone write it; `set_read_only` clears every write bit, or sets the owner's again, reading the bits and setting them in two calls. `synchronize` is `fsync`, or `fdatasync` for the data alone, and on Darwin `F_FULLFSYNC` either way. A temporary file is created exclusively with 0600, and when every try finds its name taken the last errno is EEXIST. `window_size` of anything but a terminal is `not_a_terminal`, ENOTTY kept. `descriptor_of` gives the `platform/posix` descriptor a file of this provider is, for a call the portable concepts do not make, a permission bit, a lock or a terminal's raw mode, and `file_of` the file a descriptor is.
+`new` makes a handle exposing process arguments, lent as host strings,
+and standard streams. They come from the root the hosted entry
+establishes through `platform/posix`'s `_landin_host_initialize_arguments`;
+a C `main` that drives Landin exports calls that initializer itself.
 
-`host` supplies `clock`, `wall_clock` and `entropy` too. `now` is `platform/posix`'s monotonic clock, in nanoseconds since the system started, and `wall_now` its realtime clock; a clock the system cannot read ends the program, since no hosted system fails to. `sleep` takes its deadline from the monotonic clock and asks the system to sleep for what is left until that clock has reached it, so a sleep a signal interrupts, or the system ends early, sleeps on, and it never returns before the deadline as `now` reads it. `fill_random` is `platform/posix`'s `random_bytes` until the buffer is full, asked again after an interruption: `getrandom` on Linux, which waits at boot until the kernel's pool is ready, and `arc4random_buf` on Darwin and FreeBSD. `runtime/clock-system` holds all three to their oracles, and the published shell runner times its child.
+The handle borrows nothing, since the root, the descriptors and its
+last-error cell belong to the process. `over` makes a handle that keeps
+its last errno in a `space` the caller declares, for a C thread or a
+library that must not share the process's.
+
+`last_errno` captures the terminal failing call as provider-specific
+detail: the number of the errno `platform/posix` failed with. It is not a
+portable error type. `last_signal` is the number of the signal that ended
+the child last waited for, beside `io.ending`'s `signalled`, and zero
+after a child that exited.
+
+### Files and directories
+
+- Standard input, output and error are descriptors 0, 1 and 2.
+- Open-write creates or truncates regular files.
+- A path that names nothing is `not_found`, whether a component is
+  missing or one before the last is not a directory, ENOENT or ENOTDIR.
+  `same_file` answers false for such an output path.
+- A path that holds a NUL is `io_failed` with EINVAL, and one longer than
+  the system's PATH_MAX is `io_failed` with ENAMETOOLONG, as
+  `platform/posix` refuses them.
+
+A directory's buffer must hold at least `io.directory_buffer`, 1024
+bytes, so that every entry a hosted system gives fits; otherwise opening
+it fails with `io_failed` before anything is opened. It is read through
+`platform/posix`'s directory streams, `.` and `..` left out. An entry
+whose type the file system does not record is asked with a status call
+relative to the directory.
+
+`make_directory` gives a new directory 0777, which the process umask
+filters. It is not retried when interrupted, because a directory made
+before the interruption would then report `already_exists`.
+
+### The environment and programs
+
+The environment is the one the process's entry was given, read where the
+entry left it, never copied and never changed.
+
+`programs` runs over `platform/posix`'s `spawn`:
+
+- a discarded stream is the system's `/dev/null`;
+- a piped one is a pipe whose child end is closed in the parent once the
+  child has it;
+- a child receives only its three streams, since every descriptor the
+  provider makes is closed on exec and the spawn closes any other;
+- `read_child` polls both pipes when both are open, and reads the output
+  first when both have something;
+- `wait` closes the child's pipes before it waits, so a child still
+  writing to one meets a closed pipe rather than a parent that never
+  reads.
+
+An interrupted spawn, poll, read or wait is made again.
+
+### The network
+
+`network` runs over `platform/posix`'s sockets. A socket is a descriptor
+and a file of the provider like any other, so `read` and `write` take a
+connection.
+
+- A write to a socket the provider made is a send, which raises no
+  SIGPIPE beside a C handler on any system (D340).
+- A listener reuses its address.
+- An IPv6 socket takes IPv6 alone on every system, which BSD does from
+  the start and Linux does not.
+- Up to 128 connections wait to be accepted.
+
+Interruptions and partial results are handled for you:
+
+- an interrupted call is made again;
+- a connection a signal interrupted is waited out with `poll`, and its
+  outcome read from the socket;
+- an accept refused because its connection was reset before it was taken
+  accepts the next;
+- a send goes on after a short one until every byte is sent.
+
+A send to a peer that has gone is `disconnected`, EPIPE or ECONNRESET kept
+as the last errno, and a `write` to it is `io_failed` with EPIPE. The
+process ignores SIGPIPE, so neither ends it.
+
+### The rest of the file system and terminals
+
+`file_system` and `terminals` run over `platform/posix`:
+
+| Call | On the hosted provider |
+|---|---|
+| `open_file` | Creates a file 0666, which the process umask filters. Refuses options no open can have with `io_failed`, keeping EINVAL, before it asks the system. A taken name `exclusive` meets is `already_exists`. |
+| `rename` | `renameat`: ENOENT is `not_found` and the rest `io_failed` with the errno kept. Not retried when interrupted. |
+| `read_only` status | A file is read-only when no permission bit lets anyone write it. |
+| `set_read_only` | Clears every write bit, or sets the owner's again, reading the bits and setting them in two calls. |
+| `synchronize` | `fsync`, or `fdatasync` for the data alone; on Darwin `F_FULLFSYNC` either way. |
+| `make_temporary` | Created exclusively with 0600; when every try finds its name taken, the last errno is EEXIST. |
+| `window_size` | Of anything but a terminal is `not_a_terminal`, keeping ENOTTY. |
+
+`descriptor_of` gives the `platform/posix` descriptor a file of this
+provider is, for a call the portable concepts do not make: a permission
+bit, a lock or a terminal's raw mode. `file_of` gives the file a
+descriptor is.
+
+### Clocks and entropy
+
+| Call | On the hosted provider |
+|---|---|
+| `now` | `platform/posix`'s monotonic clock, in nanoseconds since the system started. |
+| `wall_now` | Its realtime clock. |
+| `sleep` | Takes its deadline from the monotonic clock, and asks the system to sleep for what is left until that clock has reached it. |
+| `fill_random` | `platform/posix`'s `random_bytes` until the buffer is full, asked again after an interruption: `getrandom` on Linux, which waits at boot until the kernel's pool is ready, and `arc4random_buf` on Darwin and FreeBSD. |
+
+A clock the system cannot read ends the program, since no hosted system
+fails to.
+
+A sleep a signal interrupts, or the system ends early, sleeps on: it
+never returns before the deadline as `now` reads it.
+
+`runtime/clock-system` holds all three to their oracles, and the
+published shell runner times its child.
 
 [Executable example](../compiler/tests/fixtures/runtime/core-io-erased-system/main.ldn)
 
@@ -269,7 +1207,262 @@ The environment is the one the process's entry was given, read where the entry l
 
 POSIX's facilities in Landin types, on Linux, Darwin and FreeBSD alike.
 
-A `descriptor` is a handle type, not a number to count with, so descriptors compare with `==` and nothing else; `standard_input`, `standard_output` and `standard_error` are 0, 1 and 2, and `working_directory` is the directory an `*_at` call's relative path starts from. A failure is the errno as an atom of `errno`, one atom for each errno the three systems define, named after its C macro in lower case, `enoent` and `eintr` among them; `number` gives the number this system uses for an atom and `errno_of` the atom for a number, and `unlisted` is a failure with no errno this module names. A path or an argument is a host string, which the module copies into a buffer of the system's PATH_MAX with the NUL a C call needs, refusing one that holds a NUL with `einval` and one too long with `enametoolong`. The calls are POSIX's own, not policy: `open_at` with `open_options` (`reading` and `writing` are the two the hosted provider uses), `read`, `write`, `close`, `status_at` for a structured `status` of device, inode, kind and size, `open_directory`, `read_directory` and `close_directory` over a caller's buffer, listing `.` and `..` as POSIX does, `make_directory_at`, `unlink_at` and `remove_directory_at`, `map` and `unmap` for anonymous memory and `page_size`, `exit`, and `poll` over entries made by `watch` and read by `happened`, whose `poll_events` is a distinct flag set: `poll_input`, `poll_output` and `poll_urgent` are asked about, `poll_error`, `poll_hung_up` and `poll_invalid` only reported, combined with `|` and tested with `&` against `poll_no_events`. An interrupted call fails with `eintr` and is not retried here, and a short transfer is returned as it came. Every descriptor the module makes is closed when the process executes a program. `pipe` makes a pipe's two ends, with `pipe2` on Linux and FreeBSD and `pipe` and `fcntl` on Darwin. `spawn` starts a program by its path with its arguments after `argv[0]`, which is the path, and an environment of `core/io`'s `variable` records, its standard streams duplicated from three descriptors, `standard_streams`, of which `inherited_streams` are the parent's own; every other descriptor is closed in the child, and a failure, `enoent` for a missing program and `einval` for a NUL in an argument or a bad name, starts nothing. On Linux it copies the process with `clone`, as `fork` does, and the child moves its streams into place and executes the program, reporting a failure through a pipe closed on exec; on Darwin and FreeBSD it is the C library's `posix_spawn`. `wait` is `waitpid`, reporting a `child_status` whose variant part is `exited` with a code or `signalled` with the signal's number, which each system numbers its own way. `clock_time` reads the `monotonic_clock` or the `realtime_clock` as a `time_value` of seconds and nanoseconds, POSIX's `clock_gettime`: on Linux through the vDSO's `clock_gettime` when the auxiliary vector names a vDSO that has one, found once and kept, under `--link=libc` as under a static link, and the system call otherwise; on Darwin and FreeBSD through the C library. On Linux `_landin_host_initialize_arguments` hands `platform/linux` the tables it is given, so that a program the C runtime started finds the auxiliary vector after the initial stack's `envp` too. `sleep` is `nanosleep`, failing `eintr` with part of the span unslept, on Linux `clock_nanosleep` on the monotonic clock. `random_bytes` fills a buffer with the system's random bytes, `getrandom` without `GRND_NONBLOCK` on Linux, which may fill a request over 256 bytes short and fail `eintr`, and `arc4random_buf` on Darwin and FreeBSD, which fills it all and never fails. The process's arguments and environment are its root, established by `_landin_host_initialize_arguments` from C's `argc`, `argv` and `envp`, and read through `arguments` and `argument`, `environment` and `variable`; `program_name` is `argv[0]`. The sockets are POSIX's too: `socket` of a `socket_family`, `internet`, `internet6` or `local` for Unix-domain sockets, and a `socket_kind`, `stream` or `datagram`; `socket_pair` for two connected Unix-domain sockets; `bind`, `listen`, `accept`, `connect`, `send`, `receive`, `send_to`, `receive_from`, `shutdown` with a `shutdown_side`, `socket_name` and `peer_name`; and the options `set_reuse_address`, `set_no_delay`, `set_ipv6_only`, `set_receive_timeout`, `set_send_timeout`, `receive_timeout` and `pending_error`, which fails with the error pending on a socket. The receive limit bounds an `accept` on every system, `eagain` when it passes: Linux's kernel limits it, and on Darwin and FreeBSD, which do not, `accept` polls for a connection for as long as the limit first. A `socket_address` is the system's own record, laid out here for each system, Darwin's and FreeBSD's length byte included: `internet_address` makes one from an `net.address`, `unix_address` from a path, refusing one too long for the system's 108 or 104 bytes, and `family_of`, `address_of` and `unix_path` read one back. Every socket is closed on exec, with SOCK_CLOEXEC on Linux and FreeBSD and `fcntl` just after on Darwin, and a send to a peer that has gone fails `epipe` without raising SIGPIPE: Linux sends with MSG_NOSIGNAL, and Darwin and FreeBSD set SO_NOSIGPIPE on each socket. `closed_on_exec` says whether a descriptor is, and no open makes a terminal the process's controlling terminal, `O_NOCTTY`. A `status` also gives a file's permission bits, its links, its owner and group as a `user_id` and a `group_id`, and when it was last read, written and changed, and `status_of` gives an open file's. `read_at` and `write_at` are `pread` and `pwrite`, refusing an offset C's `off_t` cannot hold with `einval`; `truncate` is `ftruncate`; `synchronize` is `fsync`, `fdatasync` with `data_only`, and on Darwin `F_FULLFSYNC` falling back to `fsync`. `rename_at` renames in one step, replacing a file already at the new name; `link_at` gives a file a second name without following a final link of the old one; `symbolic_link_at` makes a link and `read_link_at` reads its target into the caller's buffer, `erange` when the target fills it. `change_mode_at` and `change_mode` set permission bits, `einval` beyond `0o7777`; `change_owner_at` and `change_owner` set an owner and group, `unchanged_user` and `unchanged_group` keeping either, a link's own with `follow` false; `set_times_at` and `set_times` set when a file was last read and written, to the nanosecond, a link's own with `follow` false. `current_directory` is `getcwd`; nothing here changes the working directory. Two kinds of advisory lock are given, as every one of the systems has both: `lock` and `unlock` are BSD's `flock`, a whole-file lock of a `lock_kind`, `shared_lock` or `exclusive_lock`, belonging to the open file, so a second open of the file in the same process stands in its way, and lasting until every descriptor of that open file is closed; `lock_range` and `unlock_range` are POSIX's record locks, `fcntl`'s `F_SETLK` and `F_SETLKW`, which belong to the process, so the process never stands in its own way, a child does not inherit them, and closing any descriptor of the file, even one opened elsewhere for a moment, gives every one of them up. A refused attempt is `eagain`, or `eacces` for a record lock where the system says so; use one kind on a file, since the systems differ in how the two see each other. A terminal: `is_terminal`, `window_size_of` and `set_window_size`, a `window_size` of rows, columns and pixels; `terminal_mode_of` and `set_terminal_mode`, `immediately`, `after_output` or `discarding_input`, with the system's own record in a `terminal_mode`; `raw_mode` makes one raw as `cfmakeraw` does, `reads_lines` says whether one reads a line at a time with echo and `same_terminal_mode` whether two are the same; there are no destructors, so a program that changes a terminal gives it back the settings it found with a `defer`. `open_pseudo_terminal` opens a `pseudo_terminal`, a `controller` and its `terminal`, both closed on exec, through /dev/ptmx and `TIOCGPTPEER` on Linux, or the terminal's /dev/pts path where a kernel or an emulator lacks it, and `posix_openpt` elsewhere. Users and groups: `real_user`, `effective_user`, `real_group` and `effective_group`; `account_with_id`, `account_named`, `group_with_id` and `group_named` read an `account` or a `group_entry` into the caller's buffer, `no_account` when there is none and `erange` when the buffer is too small; on Darwin, FreeBSD and Linux under `--link=libc`, which `compiler.c_runtime` tells apart when the program is compiled, through the C library, which asks every database the system is set to, and on a static Linux program from /etc/passwd and /etc/group, read a line at a time, the first entry that matches, skipping every line that is not one, and `erange` when a line too long for the buffer might have been the one. `parse_account` and `parse_group` read one line of those files' form, refusing a comment, an NIS line, a field missing or too many, an empty name and an ID that is not a decimal below `0xFFFFFFFF` with `malformed_entry`, and `member_count` and `member` read a group's members, an empty name between commas skipped. Shared objects: `open_library` loads one by its path, or by the system's search for a name with no slash, binding every symbol it needs at once, POSIX's `RTLD_NOW`, with its symbols `local_symbols`, resolving no other object's references, or `global_symbols`, resolving those of every object loaded after it, which is always said because Darwin's default is not the other systems'; a `library` is a handle that counts one use of the object, and loading it again gives the same object and counts another. `find_symbol` gives a symbol's address, never zero, as a `usize`, and a C function type applied to it, `adder(address)`, makes the function a value; nothing can check that type, as nothing checks a C cast, and a function found in a library is the program's to call only while a use of it is open, which no check of the language follows. `close_library` gives one use back. A failure is `no_library` or `no_symbol`, and `library_failure` copies the loader's own words for the last one on this thread into the caller's buffer, at once, since asking clears them and the next call may replace them. It is the C library's `dlopen`, `dlsym`, `dlclose` and `dlerror` on every system, so a static Linux program that loads a library is refused before it links, naming the routine and `--link=libc`. What is loaded is C, or another language's code reached through its C entry points. The argument initializer ignores SIGPIPE when it finds the default, so that a write to a pipe or a socket nobody reads is `epipe` and not the end of the process, while a handler a C `main` installed first is kept; `broken_pipe_ignored` says whether it is ignored, and `spawn` gives every child SIGPIPE's default back, in Linux's child before it executes the program and through `posix_spawnattr_setsigdefault` on Darwin and FreeBSD. A program that imports no part of the POSIX layer keeps the system's default. It is written twice beneath its interface, over `platform/linux`'s system calls and over `platform/libc`, and a system that is not POSIX, as Windows is not, has none.
+The calls are POSIX's own, not policy. This module is what `hosted/system`
+is written over, and what a program uses when it needs a call the
+portable concepts do not make.
+
+It is written twice beneath its interface: over `platform/linux`'s system
+calls, and over `platform/libc`. A system that is not POSIX, as Windows
+is not, has none.
+
+### Descriptors, failures and paths
+
+A `descriptor` is a handle type, not a number to count with, so
+descriptors compare with `==` and nothing else.
+
+| Value | Is |
+|---|---|
+| `standard_input`, `standard_output`, `standard_error` | 0, 1 and 2 |
+| `working_directory` | the directory an `*_at` call's relative path starts from |
+
+A failure is the errno as an atom of `errno`: one atom for each errno the
+three systems define, named after its C macro in lower case, `enoent` and
+`eintr` among them.
+
+- `number` gives the number this system uses for an atom, and `errno_of`
+  the atom for a number.
+- `unlisted` is a failure with no errno this module names.
+- An interrupted call fails with `eintr` and is not retried here.
+- A short transfer is returned as it came.
+
+A path or an argument is a host string. The module copies it into a
+buffer of the system's PATH_MAX with the NUL a C call needs, refusing one
+that holds a NUL with `einval` and one too long with `enametoolong`.
+
+Every descriptor the module makes is closed when the process executes a
+program. `closed_on_exec` says whether a descriptor is. No open makes a
+terminal the process's controlling terminal, `O_NOCTTY`.
+
+### Files and directories
+
+| Call | What it does |
+|---|---|
+| `open_at` | Open with `open_options`; `reading` and `writing` are the two the hosted provider uses. |
+| `read`, `write`, `close` | As POSIX's. |
+| `read_at`, `write_at` | `pread` and `pwrite`, refusing an offset C's `off_t` cannot hold with `einval`. |
+| `truncate` | `ftruncate`. |
+| `synchronize` | `fsync`, or `fdatasync` with `data_only`. |
+| `status_at`, `status_of` | A structured `status` of a path, or of an open file. |
+| `open_directory`, `read_directory`, `close_directory` | Read a directory over a caller's buffer, listing `.` and `..` as POSIX does. |
+| `make_directory_at`, `unlink_at`, `remove_directory_at` | Change the tree. |
+| `rename_at` | Rename in one step, replacing a file already at the new name. |
+| `link_at` | Give a file a second name, without following a final link of the old one. |
+| `symbolic_link_at`, `read_link_at` | Make a link, and read its target into the caller's buffer, `erange` when the target fills it. |
+| `change_mode_at`, `change_mode` | Set permission bits; `einval` beyond `0o7777`. |
+| `change_owner_at`, `change_owner` | Set an owner and group; `unchanged_user` and `unchanged_group` keep either, and a link's own with `follow` false. |
+| `set_times_at`, `set_times` | Set when a file was last read and written, to the nanosecond; a link's own with `follow` false. |
+| `current_directory` | `getcwd`; nothing here changes the working directory. |
+
+A `status` gives device, inode, kind and size. It also gives a file's
+permission bits, its links, its owner and group as a `user_id` and a
+`group_id`, and when it was last read, written and changed.
+
+### Locks
+
+Two kinds of advisory lock are given, as every one of the systems has
+both:
+
+| | `lock`, `unlock` | `lock_range`, `unlock_range` |
+|---|---|---|
+| Is | BSD's `flock`, a whole-file lock | POSIX's record locks, `fcntl`'s `F_SETLK` and `F_SETLKW` |
+| Kind | a `lock_kind`, `shared_lock` or `exclusive_lock` | the same |
+| Belongs to | the open file, so a second open of the file in the same process stands in its way | the process, so the process never stands in its own way, and a child does not inherit them |
+| Lasts until | every descriptor of that open file is closed | any descriptor of the file is closed, even one opened elsewhere for a moment, which gives every one of them up |
+| A refused attempt | `eagain` | `eagain`, or `eacces` where the system says so |
+
+Use one kind on a file, since the systems differ in how the two see each
+other.
+
+### Memory and polling
+
+`map` and `unmap` handle anonymous memory, and `page_size` gives the
+page. `extend` grows a mapping where it is, and `remap` grows it where it
+is or moves its pages.
+
+`poll` runs over entries made by `watch` and read by `happened`. Its
+`poll_events` is a distinct flag set, combined with `|` and tested with
+`&` against `poll_no_events`:
+
+| Flags | Use |
+|---|---|
+| `poll_input`, `poll_output`, `poll_urgent` | asked about |
+| `poll_error`, `poll_hung_up`, `poll_invalid` | only reported |
+
+### Processes
+
+| Call | What it does |
+|---|---|
+| `pipe` | Make a pipe's two ends. |
+| `spawn` | Start a program by its path. |
+| `wait` | `waitpid`, reporting a `child_status`. |
+| `exit` | End the process. |
+| `arguments`, `argument` | The process's arguments. |
+| `environment`, `variable` | The process's environment. |
+| `program_name` | `argv[0]`. |
+
+`spawn` gives the program its arguments after `argv[0]`, which is the
+path, and an environment of `core/io`'s `variable` records. Its standard
+streams are duplicated from three descriptors, `standard_streams`, of
+which `inherited_streams` are the parent's own. Every other descriptor is
+closed in the child. A failure starts nothing: `enoent` for a missing
+program, and `einval` for a NUL in an argument or a bad name.
+
+A `child_status`'s variant part is `exited` with a code, or `signalled`
+with the signal's number, which each system numbers its own way.
+
+The process's arguments and environment are its root, established by
+`_landin_host_initialize_arguments` from C's `argc`, `argv` and `envp`.
+
+The argument initializer ignores SIGPIPE when it finds the default, so a
+write to a pipe or a socket nobody reads is `epipe` and not the end of
+the process. A handler a C `main` installed first is kept.
+`broken_pipe_ignored` says whether it is ignored, and `spawn` gives every
+child SIGPIPE's default back. A program that imports no part of the POSIX
+layer keeps the system's default.
+
+### Clocks and random bytes
+
+`clock_time` reads the `monotonic_clock` or the `realtime_clock` as a
+`time_value` of seconds and nanoseconds, POSIX's `clock_gettime`.
+
+`sleep` is `nanosleep`, failing `eintr` with part of the span unslept.
+
+`random_bytes` fills a buffer with the system's random bytes.
+
+### Sockets
+
+The sockets are POSIX's too.
+
+| Call | What it does |
+|---|---|
+| `socket` | Make a socket of a `socket_family`, `internet`, `internet6` or `local` for Unix-domain sockets, and a `socket_kind`, `stream` or `datagram`. |
+| `socket_pair` | Two connected Unix-domain sockets. |
+| `bind`, `listen`, `accept`, `connect` | As POSIX's. |
+| `send`, `receive`, `send_to`, `receive_from` | As POSIX's. |
+| `shutdown` | With a `shutdown_side`. |
+| `socket_name`, `peer_name` | The two ends' addresses. |
+| `set_reuse_address`, `set_no_delay`, `set_ipv6_only` | Options. |
+| `set_receive_timeout`, `set_send_timeout`, `receive_timeout` | Time limits. |
+| `pending_error` | Fails with the error pending on a socket. |
+
+The receive limit bounds an `accept` on every system, `eagain` when it
+passes.
+
+A `socket_address` is the system's own record, laid out here for each
+system, Darwin's and FreeBSD's length byte included.
+
+- `internet_address` makes one from a `net.address`.
+- `unix_address` makes one from a path, refusing one too long for the
+  system.
+- `family_of`, `address_of` and `unix_path` read one back.
+
+A send to a peer that has gone fails `epipe` without raising SIGPIPE.
+
+### Terminals
+
+| Call | What it does |
+|---|---|
+| `is_terminal` | Say whether a descriptor is a terminal. |
+| `window_size_of`, `set_window_size` | A `window_size` of rows, columns and pixels. |
+| `terminal_mode_of`, `set_terminal_mode` | Read and set a `terminal_mode`, the system's own record; a change applies `immediately`, `after_output` or `discarding_input`. |
+| `raw_mode` | Make a mode raw, as `cfmakeraw` does. |
+| `reads_lines` | Say whether a mode reads a line at a time, with echo. |
+| `same_terminal_mode` | Say whether two modes are the same. |
+| `open_pseudo_terminal` | Open a `pseudo_terminal`: a `controller` and its `terminal`, both closed on exec. |
+
+There are no destructors, so a program that changes a terminal gives it
+back the settings it found with a `defer`.
+
+### Users and groups
+
+| Call | What it does |
+|---|---|
+| `real_user`, `effective_user`, `real_group`, `effective_group` | The process's IDs. |
+| `account_with_id`, `account_named` | Read an `account` into the caller's buffer. |
+| `group_with_id`, `group_named` | Read a `group_entry` into the caller's buffer. |
+| `parse_account`, `parse_group` | Read one line of /etc/passwd's or /etc/group's form. |
+| `member_count`, `member` | Read a group's members. |
+
+A lookup reports `no_account` when there is none, and `erange` when the
+buffer is too small. Where it looks is told apart by `compiler.c_runtime`
+when the program is compiled; the table below says which.
+
+On a static Linux program, /etc/passwd and /etc/group are read a line at
+a time. The first entry that matches is taken, every line that is not one
+is skipped, and `erange` is reported when a line too long for the buffer
+might have been the one.
+
+`parse_account` and `parse_group` refuse with `malformed_entry`: a
+comment, an NIS line, a field missing or too many, an empty name, and an
+ID that is not a decimal below `0xFFFFFFFF`. `member` skips an empty name
+between commas.
+
+### Shared objects
+
+| Call | What it does |
+|---|---|
+| `open_library` | Load a shared object by its path, or by the system's search for a name with no slash. |
+| `find_symbol` | A symbol's address, never zero, as a `usize`. |
+| `close_library` | Give one use back. |
+| `library_failure` | Copy the loader's own words for the last failure on this thread into the caller's buffer. |
+
+`open_library` binds every symbol the object needs at once, POSIX's
+`RTLD_NOW`. Its symbols are `local_symbols`, resolving no other object's
+references, or `global_symbols`, resolving those of every object loaded
+after it. The scope is always said, because Darwin's default is not the
+other systems'.
+
+A `library` is a handle that counts one use of the object. Loading it
+again gives the same object and counts another.
+
+A C function type applied to an address, `adder(address)`, makes the
+function a value. Nothing can check that type, as nothing checks a C
+cast. A function found in a library is the program's to call only while a
+use of it is open, which no check of the language follows.
+
+A failure is `no_library` or `no_symbol`. Call `library_failure` at once,
+since asking clears the words and the next call may replace them.
+
+It is the C library's `dlopen`, `dlsym`, `dlclose` and `dlerror` on every
+system, so a static Linux program that loads a library is refused before
+it links, naming the routine and `--link=libc`. What is loaded is C, or
+another language's code reached through its C entry points.
+
+### How each system does it
+
+| Call or fact | Linux | Darwin | FreeBSD |
+|---|---|---|---|
+| beneath the interface | `platform/linux`'s system calls | `platform/libc` | `platform/libc` |
+| `pipe` | `pipe2` | `pipe` and `fcntl` | `pipe2` |
+| `spawn` | copies the process with `clone`, as `fork` does; the child moves its streams into place and executes the program, reporting a failure through a pipe closed on exec | the C library's `posix_spawn` | the C library's `posix_spawn` |
+| SIGPIPE's default in a child | restored in the child before it executes the program | `posix_spawnattr_setsigdefault` | `posix_spawnattr_setsigdefault` |
+| `clock_time` | the vDSO's `clock_gettime` when the auxiliary vector names a vDSO that has one, found once and kept, under `--link=libc` as under a static link; the system call otherwise | the C library | the C library |
+| `sleep` | `clock_nanosleep` on the monotonic clock | `nanosleep` | `nanosleep` |
+| `random_bytes` | `getrandom` without `GRND_NONBLOCK`, which may fill a request over 256 bytes short and fail `eintr` | `arc4random_buf`, which fills it all and never fails | `arc4random_buf`, likewise |
+| `synchronize` | `fsync`, or `fdatasync` | `F_FULLFSYNC`, falling back to `fsync` | `fsync`, or `fdatasync` |
+| `extend` | `mremap` without `MREMAP_MAYMOVE` | asks for the pages after the mapping, kept only when the system puts them there | as Darwin |
+| `remap` | `mremap` with `MREMAP_MAYMOVE`, moving pages rather than copying bytes | cannot move a mapping: `extend` | as Darwin |
+| a socket closed on exec | SOCK_CLOEXEC | `fcntl` just after | SOCK_CLOEXEC |
+| a send without SIGPIPE | MSG_NOSIGNAL | SO_NOSIGPIPE set on each socket | SO_NOSIGPIPE set on each socket |
+| `accept`'s time limit | the kernel limits it | `accept` polls for a connection for as long as the limit first | as Darwin |
+| `unix_address`'s longest path | 108 bytes | 104 bytes | 104 bytes |
+| `open_pseudo_terminal` | /dev/ptmx and `TIOCGPTPEER`, or the terminal's /dev/pts path where a kernel or an emulator lacks it | `posix_openpt` | `posix_openpt` |
+| accounts and groups | from /etc/passwd and /etc/group in a static program; through the C library under `--link=libc` | the C library, which asks every database the system is set to | as Darwin |
+| shared objects | under `--link=libc` only | the C library | the C library |
+
+On Linux `_landin_host_initialize_arguments` hands `platform/linux` the
+tables it is given, so a program the C runtime started finds the
+auxiliary vector after the initial stack's `envp` too.
 
 [Executable example](../compiler/tests/fixtures/runtime/posix-files/main.ldn)
 
@@ -277,7 +1470,66 @@ A `descriptor` is a handle type, not a number to count with, so descriptors comp
 
 The C library's declarations, as ordinary `extern(c)` imports, raw.
 
-On Darwin and FreeBSD, whose C library is their system interface, `platform/posix` reaches the operating system only through this module; on Linux it makes `platform/linux`'s system calls, and this module serves a program linked with `--link=libc`. Its scope is the systems with a C library, Linux, Darwin and FreeBSD. Every declaration is bodyless, so a program that names none of them needs no C library, and a static Linux program that names one is refused before it links. `open` and `openat` are declared variadic, as C declares them, and take the mode as the one unnamed argument. Facts that differ between systems are chosen by `compiler.os`: the errno accessor `errno_cell`, `__errno_location` on Linux and `__error` on Darwin and FreeBSD, the `open` and `mmap` flags and `poll`'s count type; `stat`'s record follows the system and the C ABI. Read the errno cell immediately after a failing call. `mmap`'s failure is `map_failed`. The process calls are `pipe`, `pipe2` where it exists, the variadic `fcntl`, `waitpid` and `posix_spawn` with its file actions and attributes, each a C-library pointer in a `spawn_object` cell, with Darwin's `posix_spawn_cloexec_default` and `addinherit_np` and FreeBSD's `addclosefrom_np`; `posix_spawn` reports its failure as its result, not in errno. The directory calls are `fdopendir`, `readdir`, `closedir`, `fstatat`, `mkdirat` and `unlinkat`, with each system's `struct dirent` as `directory_record`, its `at_fdcwd`, `o_directory`, `at_symlink_nofollow` and `at_removedir`, and the `d_type` and mode bits; `readdir`'s and `fdopendir`'s null pointer is `no_directory`. `mkdirat`'s mode is 16 bits on Darwin and FreeBSD and 32 on Linux, as each system's `mode_t` is. `clock_gettime` takes a `clock_realtime` or a `clock_monotonic`, which is 1 on Linux, 6 on Darwin and 4 on FreeBSD, and `nanosleep` a `timespec`; `arc4random_buf` is Darwin's and FreeBSD's. The socket calls are `socket`, `socketpair`, `bind`, `listen`, `accept`, `accept4` on Linux and FreeBSD, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `shutdown`, `setsockopt`, `getsockopt`, `getsockname` and `getpeername`, with each system's `af_inet6`, `sol_socket` and option numbers, `sock_cloexec` and `msg_nosignal` where they exist and `so_nosigpipe` on Darwin and FreeBSD, the address records' sizes and its `time_limit`, C's `struct timeval`, whose microseconds are an `int` on Darwin; an optional pointer is the `no_address` union. `sigaction` takes each system's `signal_action` and `signal_set`, and `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef` is Darwin's and FreeBSD's. The rest of the file system is `pread`, `pwrite`, `ftruncate`, `fsync`, `fdatasync` where it is declared, Linux's and FreeBSD's, and Darwin's `f_fullfsync`, `getcwd`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `fchmodat` and `fchmod`, whose mode is a `u16` on Darwin and FreeBSD, `fchownat`, `fchown`, `utimensat`, `futimens`, `fstat`, `flock` with its `lock_sh`, `lock_ex`, `lock_nb` and `lock_un`, and `fcntl`'s record locks with each system's `f_getlk`, `f_setlk`, `f_setlkw`, lock types and `lock_record`, C's `struct flock`. `getuid`, `geteuid`, `getgid` and `getegid` give the process's IDs, and `getpwuid_r`, `getpwnam_r`, `getgrgid_r` and `getgrnam_r` read each system's `account_record`, C's `struct passwd`, and the shared `group_record`. `dlopen`, `dlsym`, `dlclose` and `dlerror` load shared objects, `dlopen`'s null pointer `not_loaded` and the others' `no_address`, with `rtld_now` and each system's `rtld_local` and `rtld_global`, which Darwin numbers its own way; glibc keeps them in its libc since 2.34. On Darwin and FreeBSD a terminal is `isatty`, the variadic `ioctl` with `tiocgwinsz` and `tiocswinsz` over a `window_record`, `tcgetattr` and `tcsetattr` with `tcsanow`, `tcsadrain` and `tcsaflush` over each system's `terminal_record`, its mode bits and `vmin` and `vtime`, and `posix_openpt`, `grantpt`, `unlockpt` and `ptsname_r`; `o_noctty` and `at_symlink_follow` are each system's. A program that declares one of these C functions itself must declare it with the same types, or the two declarations of one C symbol are refused with L0347.
+Its scope is the systems with a C library: Linux, Darwin and FreeBSD.
+
+| System | Who uses this module |
+|---|---|
+| Darwin, FreeBSD | `platform/posix` reaches the operating system only through it, since their C library is their system interface. |
+| Linux | `platform/posix` makes `platform/linux`'s system calls; this module serves a program linked with `--link=libc`. |
+
+Every declaration is bodyless, so a program that names none of them needs
+no C library, and a static Linux program that names one is refused before
+it links.
+
+A program that declares one of these C functions itself must declare it
+with the same types, or the two declarations of one C symbol are refused
+with L0347.
+
+### Conventions
+
+- `open` and `openat` are declared variadic, as C declares them, and take
+  the mode as the one unnamed argument.
+- Facts that differ between systems are chosen by `compiler.os`; the
+  table below lists them. `stat`'s record follows the system and the C
+  ABI.
+- Read the errno cell immediately after a failing call.
+- `mmap`'s failure is `map_failed`.
+- `posix_spawn` reports its failure as its result, not in errno.
+- `readdir`'s and `fdopendir`'s null pointer is `no_directory`;
+  `dlopen`'s is `not_loaded` and the other loader calls' `no_address`. An
+  optional pointer is the `no_address` union.
+
+### What it declares
+
+| Area | Declarations |
+|---|---|
+| processes | `pipe`, `pipe2` where it exists, the variadic `fcntl`, `waitpid` and `posix_spawn` with its file actions and attributes, each a C-library pointer in a `spawn_object` cell |
+| directories | `fdopendir`, `readdir`, `closedir`, `fstatat`, `mkdirat` and `unlinkat`, with each system's `struct dirent` as `directory_record`, its `at_fdcwd`, `o_directory`, `at_symlink_nofollow` and `at_removedir`, and the `d_type` and mode bits |
+| clocks and randomness | `clock_gettime` with a `clock_realtime` or a `clock_monotonic`, `nanosleep` with a `timespec`, and `arc4random_buf` |
+| sockets | `socket`, `socketpair`, `bind`, `listen`, `accept`, `accept4`, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `shutdown`, `setsockopt`, `getsockopt`, `getsockname` and `getpeername`, with each system's `af_inet6`, `sol_socket` and option numbers, `sock_cloexec` and `msg_nosignal` where they exist, `so_nosigpipe`, the address records' sizes and its `time_limit`, C's `struct timeval` |
+| signals | `sigaction` with each system's `signal_action` and `signal_set`, and `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef` |
+| the rest of the file system | `pread`, `pwrite`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat`, `futimens`, `fstat`, `flock` with its `lock_sh`, `lock_ex`, `lock_nb` and `lock_un`, and `fcntl`'s record locks with each system's `f_getlk`, `f_setlk`, `f_setlkw`, lock types and `lock_record`, C's `struct flock` |
+| users and groups | `getuid`, `geteuid`, `getgid` and `getegid` for the process's IDs, and `getpwuid_r`, `getpwnam_r`, `getgrgid_r` and `getgrnam_r` over each system's `account_record`, C's `struct passwd`, and the shared `group_record` |
+| shared objects | `dlopen`, `dlsym`, `dlclose` and `dlerror`, with `rtld_now` and each system's `rtld_local` and `rtld_global`; glibc keeps them in its libc since 2.34 |
+| terminals, as Darwin and FreeBSD use them | `isatty`, the variadic `ioctl` with `tiocgwinsz` and `tiocswinsz` over a `window_record`, `tcgetattr` and `tcsetattr` with `tcsanow`, `tcsadrain` and `tcsaflush` over each system's `terminal_record`, its mode bits and `vmin` and `vtime`, and `posix_openpt`, `grantpt`, `unlockpt` and `ptsname_r`; `o_noctty` and `at_symlink_follow` are each system's |
+
+### How each system differs
+
+| Fact | Linux | Darwin | FreeBSD |
+|---|---|---|---|
+| the errno accessor `errno_cell` | `__errno_location` | `__error` | `__error` |
+| `open` and `mmap` flags, `poll`'s count type | Linux's | Darwin's | FreeBSD's |
+| `mkdirat`'s mode, as `mode_t` | 32 bits | 16 bits | 16 bits |
+| `fchmodat`'s and `fchmod`'s mode | as `mode_t` | a `u16` | a `u16` |
+| `clock_monotonic` | 1 | 6 | 4 |
+| `arc4random_buf` | not declared | declared | declared |
+| `accept4` | declared | not declared | declared |
+| `fdatasync` | declared | not declared; `f_fullfsync` instead | declared |
+| `so_nosigpipe` | none | yes | yes |
+| `time_limit`'s microseconds | an `i64` | an `int` | an `i64` |
+| `posix_spawnattr_setsigdefault` | not declared | declared | declared |
+| `posix_spawn` extras | none | `posix_spawn_cloexec_default` and `addinherit_np` | `addclosefrom_np` |
+| `rtld_local`, `rtld_global` | as FreeBSD's | numbered its own way | as Linux's |
 
 [Executable example](../compiler/tests/fixtures/abi/r440-native-hosted/program.ldn)
 
@@ -285,7 +1537,102 @@ On Darwin and FreeBSD, whose C library is their system interface, `platform/posi
 
 Linux's system calls with no C library beneath them, and the process entry of a static Linux executable, raw.
 
-Every declaration is Linux-only. Landin has no conditional import, so `platform/posix` imports this module on every system it serves, and the module's scope is theirs, Linux, Darwin and FreeBSD; on Darwin and FreeBSD it declares nothing. Each call is one assembly block on x86-64, arm64 and RV64, and a failure comes back in its result as minus the errno; there is no errno cell. The `*at` calls take `at_fdcwd` for a path relative to the working directory, and `statx`'s `file_status` is the kernel's one record on every architecture; `ppoll` is the poll call every architecture has. No routine but `_landin_start` and `_landin_start_main` is a global symbol (D415), so none of them replaces the C library's function of the same name under `--link=libc`. `_landin_start` is where a static executable starts: it reads `argc`, `argv`, the environment and the auxiliary vector from the initial stack and calls `main` as C's runtime would. Before `main` it holds the processor to the executable's CPU feature level, as a loader holds an x86-64 executable to its ISA note: `cpuid` and the operating system's enabled state on x86-64, AT_HWCAP on arm64 and `riscv_hwprobe` on RV64. A processor without a feature of the level ends the process with status 127 and one line on standard error naming the level and the missing feature; the baseline checks nothing. `level`, `read_cpu_words` and `missing_feature` expose the check. No C library initialisation runs and there is no thread-local storage. `environment` and `auxiliary` report what that entry found. When the C runtime started the program instead, under `--link=libc`, `adopt_start` takes the environment and the auxiliary vector from the `argc`, `argv` and `envp` C's `main` was given, which `platform/posix`'s argument initializer passes it, but only when they are laid out as the kernel lays out the initial stack: `argv` above the calling frame, `envp` right after `argv`'s null, every string above the tables, a vector ending in AT_NULL within 64 entries and before the lowest string, with AT_PAGESZ a power of two of at least 4096 and AT_RANDOM's bytes between the vector and the strings. Nothing above the lowest string is read. Tables a C `main` built itself, or C's `environ` after it changed, are not taken, and then `environment` and `auxiliary` find nothing and `page_size` is 4096, as before. `system_call` is the raw route to every Linux call: six `i64` arguments, unused ones zero, and the kernel's result; `platform/linux/numbers` names each call's number. The typed wrappers are the calls the library makes, `getdents64`, `mkdirat`, `unlinkat`, `ppoll`, `pipe2`, `dup3`, `fcntl`, `fork` (a `clone` with SIGCHLD and nothing shared), `execve`, `wait4`, `close_range`, `clock_gettime`, `clock_nanosleep`, `getrandom`, the socket calls from `socket` to `getpeername`, with `accept4`, `sendto` and `recvfrom` standing for the calls arm64 and x86-64 lack, and `rt_sigaction` with the kernel's `signal_action`, which RV64 lays out without a restorer, `pread64`, `pwrite64`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat2`, which is every architecture's rename, `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat`, whose path may be `no_path`, `flock`, `ioctl` and the four ID calls among them, and their numbers come from the same generated tables. A terminal is the kernel's own `terminal_record`, `struct termios`, which `ioctl` reads and sets with `tcgets`, `tcsets`, `tcsetsw` and `tcsetsf`, smaller than the C library's; its mode bits, `vmin` and `vtime`, `window_record`, `tiocgwinsz`, `tiocswinsz` and the pseudo-terminal requests `tiocsptlck`, `tiocgptpeer` and `tiocgptn` are the generic architecture's, which x86-64, arm64 and RV64 share; `lock_record` is the kernel's `struct flock` on a 64-bit architecture, and `statx_basic_stats` and `at_empty_path` ask `statx` for every field of an open file.
+Every declaration is Linux-only. Landin has no conditional import, so
+`platform/posix` imports this module on every system it serves, and the
+module's scope is theirs: Linux, Darwin and FreeBSD. On Darwin and
+FreeBSD it declares nothing.
+
+| Call | What it does |
+|---|---|
+| `linux.system_call` | The raw route to every Linux call: six `i64` arguments, unused ones zero, and the kernel's result. |
+| the typed wrappers | The calls the library makes, listed below. |
+| `_landin_start` | Where a static executable starts. |
+| `adopt_start` | Take the tables from a C runtime's `main`, under `--link=libc`. |
+| `environment`, `auxiliary` | What the entry found. |
+| `level`, `read_cpu_words`, `missing_feature` | The CPU feature check. |
+
+### Calls
+
+- Each call is one assembly block on x86-64, arm64 and RV64.
+- A failure comes back in its result as minus the errno; there is no
+  errno cell.
+- `platform/linux/numbers` names each call's number for `system_call`,
+  and the wrappers' numbers come from the same generated tables.
+- The `*at` calls take `at_fdcwd` for a path relative to the working
+  directory.
+- `statx`'s `file_status` is the kernel's one record on every
+  architecture, and `statx_basic_stats` and `at_empty_path` ask `statx`
+  for every field of an open file.
+- `ppoll` is the poll call every architecture has.
+
+The typed wrappers are the calls the library makes:
+
+| Area | Wrappers |
+|---|---|
+| files and directories | `getdents64`, `mkdirat`, `unlinkat`, `pread64`, `pwrite64`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat2` (every architecture's rename), `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat` (whose path may be `no_path`), `flock` |
+| descriptors | `ppoll`, `pipe2`, `dup3`, `fcntl`, `close_range`, `ioctl` |
+| processes | `fork` (a `clone` with SIGCHLD and nothing shared), `execve`, `wait4`, `rt_sigaction` and the four ID calls |
+| time and randomness | `clock_gettime`, `clock_nanosleep`, `getrandom` |
+| sockets | the socket calls from `socket` to `getpeername`, with `accept4`, `sendto` and `recvfrom` standing for the calls arm64 and x86-64 lack |
+
+`rt_sigaction` takes the kernel's `signal_action`, which RV64 lays out
+without a restorer.
+
+A terminal is the kernel's own `terminal_record`, `struct termios`,
+smaller than the C library's. `ioctl` reads and sets it with `tcgets`,
+`tcsets`, `tcsetsw` and `tcsetsf`. Its mode bits, `vmin` and `vtime`,
+`window_record`, `tiocgwinsz`, `tiocswinsz` and the pseudo-terminal
+requests `tiocsptlck`, `tiocgptpeer` and `tiocgptn` are the generic
+architecture's, which x86-64, arm64 and RV64 share.
+
+`lock_record` is the kernel's `struct flock` on a 64-bit architecture.
+
+No routine but `_landin_start` and `_landin_start_main` is a global symbol
+(D415), so none of them replaces the C library's function of the same
+name under `--link=libc`.
+
+### The static entry
+
+`_landin_start` reads `argc`, `argv`, the environment and the auxiliary
+vector from the initial stack, and calls `main` as C's runtime would. No
+C library initialisation runs and there is no thread-local storage.
+`environment` and `auxiliary` report what that entry found.
+
+Before `main` it holds the processor to the executable's CPU feature
+level, as a loader holds an x86-64 executable to its ISA note:
+
+| Architecture | Checked with |
+|---|---|
+| x86-64 | `cpuid` and the operating system's enabled state |
+| arm64 | AT_HWCAP |
+| RV64 | `riscv_hwprobe` |
+
+A processor without a feature of the level ends the process with status
+127 and one line on standard error naming the level and the missing
+feature. The baseline checks nothing. `level`, `read_cpu_words` and
+`missing_feature` expose the check.
+
+### Started by the C runtime
+
+When the C runtime started the program instead, under `--link=libc`,
+`adopt_start` takes the environment and the auxiliary vector from the
+`argc`, `argv` and `envp` C's `main` was given, which `platform/posix`'s
+argument initializer passes it.
+
+It takes them only when they are laid out as the kernel lays out the
+initial stack:
+
+- `argv` above the calling frame;
+- `envp` right after `argv`'s null;
+- every string above the tables;
+- a vector ending in AT_NULL within 64 entries and before the lowest
+  string;
+- AT_PAGESZ a power of two of at least 4096;
+- AT_RANDOM's bytes between the vector and the strings.
+
+Nothing above the lowest string is read. Tables a C `main` built itself,
+or C's `environ` after it changed, are not taken. Then `environment` and
+`auxiliary` find nothing, and `page_size` is 4096, as before.
 
 [Executable example](../compiler/tests/fixtures/runtime/linux-system-calls/main.ldn)
 
@@ -293,7 +1640,26 @@ Every declaration is Linux-only. Landin has no conditional import, so `platform/
 
 Every Linux system call's number on x86-64, arm64 and RV64, generated from a pinned kernel release.
 
-Each number is its call's name in the kernel's table followed by `_number`, `numbers.getpid_number` for one, so no number can take a reserved word's spelling. Give it to `linux.system_call`. The numbers are the kernel's own, read by `scripts/linux_syscalls.py` from each architecture's table with the ABIs that architecture's 64-bit build selects, x32's excluded; the file's header names the release and its SHA-256, and nothing in it is written by hand. A new typed wrapper in `platform/linux` needs no download: `scripts/linux_syscalls.py` with no release named holds this file to being its own rendering and writes the wrappers' numbers from it, and `--check` says whether they are current. The release is needed only to change the pin. A call the running kernel lacks returns minus ENOSYS. It is a module of its own, apart from `platform/linux`, so that a program making no raw call does not compile a thousand declarations; its scope is `platform/linux`'s, and on Darwin and FreeBSD it declares nothing.
+Each number is its call's name in the kernel's table followed by
+`_number`, `numbers.getpid_number` for one, so no number can take a
+reserved word's spelling. Give it to `linux.system_call`. A call the
+running kernel lacks returns minus ENOSYS.
+
+The numbers are the kernel's own. `scripts/linux_syscalls.py` reads them
+from each architecture's table, with the ABIs that architecture's 64-bit
+build selects, x32's excluded. The file's header names the release and
+its SHA-256, and nothing in it is written by hand.
+
+A new typed wrapper in `platform/linux` needs no download:
+
+- `scripts/linux_syscalls.py` with no release named holds this file to
+  being its own rendering, and writes the wrappers' numbers from it;
+- `--check` says whether they are current;
+- the release is needed only to change the pin.
+
+It is a module of its own, apart from `platform/linux`, so that a program
+making no raw call does not compile a thousand declarations. Its scope is
+`platform/linux`'s, and on Darwin and FreeBSD it declares nothing.
 
 [Executable example](../compiler/tests/fixtures/runtime/linux-system-calls/main.ldn)
 
@@ -301,7 +1667,41 @@ Each number is its call's name in the kernel's table followed by `_number`, `num
 
 The vDSO, the small shared object Linux maps into every process, and the functions found in it, raw.
 
-A submodule of `platform/linux`, so a program that never reads a clock this way does not carry it; it declares nothing on Darwin and FreeBSD (D346). The vDSO the kernel maps into every process is found through the auxiliary vector's AT_SYSINFO_EHDR: `vdso.kernel_image` is its bytes as far as its first load segment reaches, the image the kernel mapped, `vdso.find` finds a global or weak function by name and version in any image of a 64-bit little-endian ELF object, through its program headers, dynamic table, DT_HASH or DT_GNU_HASH, symbols and version definitions, and `vdso.symbol` gives the function's address. `vdso.clock_symbol` and `vdso.clock_version` name its `clock_gettime`, `__vdso_clock_gettime` of `LINUX_2.6` on x86-64, `__kernel_clock_gettime` of `LINUX_2.6.39` on arm64 and `__vdso_clock_gettime` of `LINUX_4.15` on RV64, and `vdso.clock_gettime` is its C type. Every offset is held to lie within the image before a byte is read, so a malformed, truncated or foreign image finds nothing and never traps; `runtime/linux-vdso` damages a copy of the real one byte by byte to show it. The parser has a size: on Linux x86-64 its routines are 9.5 KB of a static program at `--optimize size` and 12.1 KB at `speed`, and reading a clock through `platform/posix`, which brings them with the clock path, the errno table and the auxiliary-vector lookup, grows the program's text by 16.7 KB and 19.9 KB, against 5.9 KB for a program that reads none. A size-bound Linux program that needs a clock and not that speed can call `linux.clock_gettime`, the system call, itself and carry none of it.
+It is a submodule of `platform/linux`, so a program that never reads a
+clock this way does not carry it. It declares nothing on Darwin and
+FreeBSD (D346).
+
+The kernel's vDSO is found through the auxiliary vector's
+AT_SYSINFO_EHDR.
+
+| Call | What it does |
+|---|---|
+| `vdso.kernel_image` | The vDSO's bytes as far as its first load segment reaches: the image the kernel mapped. |
+| `vdso.find` | Find a global or weak function by name and version in any image of a 64-bit little-endian ELF object, through its program headers, dynamic table, DT_HASH or DT_GNU_HASH, symbols and version definitions. |
+| `vdso.symbol` | The function's address. |
+| `vdso.clock_symbol`, `vdso.clock_version` | The name and version of its `clock_gettime`. |
+| `vdso.clock_gettime` | That function's C type. |
+
+| Architecture | `clock_gettime` in the vDSO |
+|---|---|
+| x86-64 | `__vdso_clock_gettime` of `LINUX_2.6` |
+| arm64 | `__kernel_clock_gettime` of `LINUX_2.6.39` |
+| RV64 | `__vdso_clock_gettime` of `LINUX_4.15` |
+
+Every offset is held to lie within the image before a byte is read, so a
+malformed, truncated or foreign image finds nothing and never traps.
+`runtime/linux-vdso` damages a copy of the real one byte by byte to show
+it.
+
+The parser has a size. On Linux x86-64 its routines are 9.5 KB of a
+static program at `--optimize size` and 12.1 KB at `speed`. Reading a
+clock through `platform/posix` brings them with the clock path, the errno
+table and the auxiliary-vector lookup, and grows the program's text by
+16.7 KB and 19.9 KB, against 5.9 KB for a program that reads none.
+
+A size-bound Linux program
+that needs a clock and not that speed can call `linux.clock_gettime`, the
+system call, itself, and carry none of it.
 
 [Executable example](../compiler/tests/fixtures/runtime/linux-vdso/main.ldn)
 
@@ -309,7 +1709,14 @@ A submodule of `platform/linux`, so a program that never reads a clock this way 
 
 C scalar spellings for the target's C ABI, on every target whose C data model is LP64.
 
-LP64 is a data model, not an architecture: C `int` is 32 bits while `long` and pointers are 64, as on every 64-bit Unix. Windows' LLP64 keeps `long` at 32 bits and Cortex-M's ILP32 makes all three 32 bits; neither is admitted here. Within LP64 the C ABI depends on the operating system as well as the architecture, so the compiler names it with one fact per ABI rather than reading it from `compiler.arch` or the pointer width:
+LP64 is a data model, not an architecture: C `int` is 32 bits while
+`long` and pointers are 64, as on every 64-bit Unix. Windows' LLP64 keeps
+`long` at 32 bits, and Cortex-M's ILP32 makes all three 32 bits; neither
+is admitted here.
+
+Within LP64 the C ABI depends on the operating system as well as the
+architecture, so the compiler names it with one fact per ABI rather than
+reading it from `compiler.arch` or the pointer width:
 
 | Target | ABI fact | Plain `char` |
 |---|---|---|
@@ -318,7 +1725,20 @@ LP64 is a data model, not an architecture: C `int` is 32 bits while `long` and p
 | `linux-arm64`, `freebsd-arm64` | `compiler.c_aapcs64_lp64`: the standard AAPCS64 | `u8` |
 | `linux-rv64` | `compiler.c_riscv_lp64d`: RISC-V LP64D, LP64 with double-precision float registers | `u8` |
 
-Darwin and Linux share `compiler.arch == arm64` and still disagree on `char`, which is why the fact names the ABI. Every other alias is the same on all four: `c_int` is `i32`, `c_long` and `c_longlong` are `i64`, `c_size` is `usize`. The aliases keep ordinary Landin scalar identity; `c_char` is a numeric byte and never a Unicode scalar. Cortex-M C signatures are not admitted by this module.
+Darwin and Linux share `compiler.arch == arm64` and still disagree on
+`char`, which is why the fact names the ABI.
+
+Every other alias is the same on all four:
+
+| Alias | Is |
+|---|---|
+| `c_int` | `i32` |
+| `c_long`, `c_longlong` | `i64` |
+| `c_size` | `usize` |
+
+The aliases keep ordinary Landin scalar identity; `c_char` is a numeric
+byte and never a Unicode scalar. Cortex-M C signatures are not admitted
+by this module.
 
 [Executable example](../compiler/tests/fixtures/runtime/r440-c-aliases/main.ldn)
 
@@ -326,7 +1746,10 @@ Darwin and Linux share `compiler.arch == arm64` and still disagree on `char`, wh
 
 M-profile interrupt masking, waiting and memory barriers.
 
-Save the mask from `disable_interrupts` and restore it, including on early returns. NMI and HardFault are not masked. Waiting can wake spuriously; barriers do not prove completion of a device protocol or supply a DMA lifetime discipline.
+Save the mask from `disable_interrupts` and restore it, including on
+early returns. NMI and HardFault are not masked.
+
+Waiting can wake spuriously. Barriers do not prove completion of a device
+protocol or supply a DMA lifetime discipline.
 
 [Executable example](../environments/cortex-m/probes/core-cpu.ldn)
-
