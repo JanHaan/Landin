@@ -404,6 +404,7 @@ border-bottom:1px solid var(--rule); vertical-align:top}
 .api-table tr:target {background:var(--panel)} .api-table tr {scroll-margin-top:5rem}
 .api-table td code, .api-table th code {white-space:nowrap}
 .api-condition {font-size:.9rem} @media(max-width:600px){.api-index{columns:1}}
+figure.panel.api-program {margin:1rem 0 0}
 '''
 
 SEARCH_SCRIPT = 'library-search.js'
@@ -754,9 +755,9 @@ def fixture_fields(directory):
 
 
 def example_run(root, example_path):
-    """The command that runs a module's program and what it prints, as
-    Markdown, from its fixture's own metadata; '' for one that prints
-    nothing the fixture compares.
+    """The command that runs a module's program, the files it reads and
+    what it prints, from its fixture's own metadata; None for one that
+    prints nothing the fixture compares.
 
     The harness gives a `run_files` file as a path wherever its lane put
     the fixture, and the page writes the name; a program shown here
@@ -766,7 +767,7 @@ def example_run(root, example_path):
     fields = fixture_fields(directory)
     expected = fields.get('run_expect')
     if not expected or fields.get('class') != 'runtime':
-        return ''
+        return None
     name = directory.name.removeprefix('library-')
     words = fields.get('run_args', '').split()
     files = [f.strip() for f in fields.get('run_files', '').split(',') if f.strip()]
@@ -775,36 +776,49 @@ def example_run(root, example_path):
     stdin = fields.get('stdin')
     if stdin:
         command += ' < ' + stdin
-    out = []
-    for given in files + ([stdin] if stdin else []):
-        out.append(f'With `{given}` holding:\n\n```text\n'
-                   + (directory / given).read_text().rstrip('\n') + '\n```\n')
+    given = [(each, (directory / each).read_text().rstrip('\n'))
+             for each in files + ([stdin] if stdin else [])]
     status = fields.get('status', '0')
-    ends = '' if status == '0' else f', and it exits with {status}'
     stream = ('standard output' if fields.get('stream') == 'output'
-              else 'standard output and standard error together')
-    out.append(f'Compiled and run, it prints this on {stream}{ends}:\n\n'
-               f'```sh\n{command}\n```\n\n```text\n'
-               + (directory / expected).read_text().rstrip('\n') + '\n```\n')
-    return '\n'.join(out)
+              else 'standard output and standard error')
+    said = stream + ('' if status == '0' else f', exit status {status}')
+    return dict(command=command, files=given, said=said,
+                output=(directory / expected).read_text().rstrip('\n'))
 
 
 def example_section(root, example_path, example_prose, prose, render):
-    """The page's last section: the module's complete program."""
-    body = ('<section class="api-example" id="example">\n'
-            '<h2>Example program</h2>\n')
+    """The page's last section: the module's complete program, in the
+    site's program panel -- its path and length above it, and below it
+    what it reads and what running it prints."""
+    body = ('<section class="api-example" id="example" data-title="Example program">\n'
+            '<h2 class="api-h">Example program</h2>\n')
     if example_prose:
         body += prose(example_prose)
     body += ('<p>This complete program is one of the compiler\'s runtime tests. '
              f'<a href="{source_name(example_path)}#L1">View source</a>.</p>\n')
     run = example_run(root, example_path)
     example = (root / example_path).read_text()
-    listing = render.listing_of(render.render_landin(example.splitlines(),
-                                                     render.Highlighter()))
+    lines = example.splitlines()
+    listing = render.listing_of(render.render_landin(lines, render.Highlighter()))
+    figure = ('<figure class="panel api-program">\n'
+              '<figcaption><span class="dot"></span>'
+              f'<span class="path">{html.escape(example_path)}</span>'
+              f'<span class="grow"></span><span>{len(lines)} lines</span></figcaption>\n'
+              + listing + '\n')
+    if run:
+        for given, text in run['files']:
+            figure += (f'<div class="foot"><span><span class="mono">{html.escape(given)}</span> holds</span></div>\n'
+                       + render.listing_of('<pre>' + html.escape(text, quote=False) + '</pre>') + '\n')
+        figure += ('<div class="foot"><span>in a terminal</span><span class="grow"></span>'
+                   f'<span>prints on {run["said"]}</span></div>\n'
+                   + render.listing_of('<pre>$ ' + html.escape(run['command'], quote=False)
+                                       + '\n' + html.escape(run['output'], quote=False)
+                                       + '</pre>') + '\n')
+    figure += '</figure>\n'
     if example_prose or run:
-        body += listing + (prose(run) if run else '')
+        body += figure
     else:
-        body += '<details><summary>The program</summary>\n' + listing + '</details>\n'
+        body += f'<details><summary>The program, {len(lines)} lines</summary>\n{figure}</details>\n'
     return body + '</section>\n'
 
 
@@ -953,7 +967,7 @@ def verify(destination, pages, modules, render, sources=None, overviews=None,
             raise ValueError(f'{module}: overview lost words: {sorted(missing)}')
     for module, text in (examples or {}).items():
         written = (destination / page_name(module)).read_text()
-        start = written.index('<section class="api-example" id="example">')
+        start = written.index('<section class="api-example" id="example"')
         region = written[start:written.index('</section>', start)]
         got = Counter(render.WORD.findall(html.unescape(re.sub(r'<[^>]+>', ' ', region))))
         want = Counter(render.WORD.findall(re.sub(r'\]\([^)]+\)', ']', text)))
