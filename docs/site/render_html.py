@@ -473,16 +473,6 @@ main{padding:2.75rem 3rem 6rem; min-width:0; max-width:62rem}
 
 /* ---- hero ---- */
 .hero{border-bottom:1px solid var(--rule); padding-bottom:2rem; margin-bottom:.5rem}
-.hero .logo{
-  float:right; width:5.25rem; height:5.25rem; margin:0 0 1rem 1.5rem;
-  border:1px solid var(--rule); border-radius:1.15rem;
-}
-.hero .logo rect{fill:var(--panel)}
-.hero .logo path{fill:var(--accent)}
-.hero.wide::after{content:""; display:block; clear:both}
-/* On a phone the bar already carries the mark, and a float beside the
-   opening line only breaks it into a ragged first few words.  */
-@media (max-width:35rem){ .hero .logo{display:none} }
 .hero h1{
   margin:.45rem 0 1rem; font-size:clamp(1.8rem, 1.3rem + 1.9vw, 2.6rem);
   line-height:1.08; letter-spacing:-.025em; font-weight:650; text-wrap:balance;
@@ -1328,26 +1318,31 @@ nav.next a:hover strong{color:var(--accent)}
 .hero-actions{display:flex; flex-wrap:wrap; gap:.6rem; margin:1.4rem 0 0}
 .hero-actions a{
   display:inline-flex; align-items:center; min-height:2.5rem;
-  padding:.45rem .95rem; border:1px solid var(--rule);
+  padding:.45rem .95rem; border:1px solid var(--rule-strong);
   font-size:.9rem; font-weight:600; text-decoration:none; color:var(--ink);
 }
 .hero-actions a.primary{color:var(--bg); background:var(--accent); border-color:var(--accent)}
 .hero-actions a:hover{border-color:var(--accent)}
 .hero-actions a.primary:hover{background:color-mix(in oklch, var(--accent) 88%, var(--ink))}
 
+/*  The hero's one line of status, which the section further down says
+    in full.  */
+.hero p.status-line{margin:1.3rem 0 0; font-family:var(--mono); font-size:.75rem;
+  line-height:1.5; color:var(--ink-faint)}
+.hero p.status-line a{white-space:nowrap}
 /*  The status: what the README says on the left, where the roadmap is on
     the right.  */
-.hero .status{
-  display:grid; grid-template-columns:2fr 1fr; margin-top:2.2rem;
+.status{
+  display:grid; grid-template-columns:2fr 1fr;
   border:1px solid var(--rule); background:var(--panel);
   color:var(--ink-soft); font-size:.92rem;
 }
-.hero .status > .said{padding:1.1rem 1.25rem 1.25rem}
-.hero .status .said p.status-meta{margin:0 0 .5rem; font-family:var(--mono);
+.status > .said{padding:1.1rem 1.25rem 1.25rem}
+.status .said p.status-meta{margin:0 0 .5rem; font-family:var(--mono);
   font-size:.72rem; line-height:1.4; color:var(--accent)}
-.hero .status h2{margin:0 0 .6rem; color:var(--ink); font-size:1.05rem;
+.status h3{margin:0 0 .6rem; color:var(--ink); font-size:1.05rem;
   line-height:1.4; font-weight:650; text-wrap:balance}
-.hero .status .said p:not(.status-meta){margin:0; color:var(--ink-soft); font-size:.92rem; line-height:1.6}
+.status .said p:not(.status-meta){margin:0; color:var(--ink-soft); font-size:.92rem; line-height:1.6}
 .roadmap-track{border-left:1px solid var(--rule); background:var(--bg-soft);
   padding:.9rem 1.1rem 1rem}
 .roadmap-track > div{margin-bottom:.8rem}
@@ -1355,12 +1350,12 @@ nav.next a:hover strong{color:var(--accent)}
   border-bottom:1px solid var(--rule); font-family:var(--mono);
   font-size:.72rem; color:var(--accent); text-decoration:none}
 .roadmap-head:hover{text-decoration:underline}
-.hero .status .said p.status-context{margin-top:.4rem}
-.hero .status .said p.status-links{margin-top:1rem; font-family:var(--mono);
+.status .said p.status-context{margin-top:.4rem}
+.status .said p.status-links{margin-top:1rem; font-family:var(--mono);
   font-size:.75rem}
-.hero .status .said p.status-links a{color:var(--accent); text-decoration:none;
+.status .said p.status-links a{color:var(--accent); text-decoration:none;
   margin-right:1.2rem}
-.hero .status .said p.status-links a:hover{text-decoration:underline}
+.status .said p.status-links a:hover{text-decoration:underline}
 .roadmap-track > div:last-child{margin-bottom:0}
 .roadmap-label{display:block; margin-bottom:.3rem; font-family:var(--mono);
   font-size:.7rem; color:var(--ink-faint)}
@@ -1455,7 +1450,7 @@ figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
   .card span{grid-column:1/-1; grid-row:2}
 }
 @media (max-width:48rem){
-  .hero .status{grid-template-columns:1fr}
+  .status{grid-template-columns:1fr}
   .roadmap-track{border-left:0; border-top:1px solid var(--rule)}
   .routes{grid-template-columns:1fr}
   .shelf .group{grid-template-columns:1fr}
@@ -2247,7 +2242,6 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 <div class="wrap">
 {lead}<main id="document">
 <div class="hero{' wide' if logo else ''}" id="{slug(heading)}">
-  {landin_icon.inline("light", classes="logo") if logo else ''}
   <h1>{esc(heading)}</h1>
   {hero}
 </div>
@@ -2430,7 +2424,9 @@ def uses_list(uses, here=""):
     return "".join(
         f'<li><a href="{"" if where == here else where}#{cid}" '
         f'data-cite="{cid}">'
-        f'<span class="tag">{cid}</span><span>{esc(label)}</span></a></li>'
+        f'<span class="tag">{cid}</span>'
+        #  A construct's title is Markdown: `any C` is code, not backticks.
+        f'<span>{prose_html(label, lambda ref: None)}</span></a></li>'
         for cid, label, where in uses)
 
 
@@ -2519,12 +2515,13 @@ def shelf_count(constructs, findings, sections):
     headings at all as "0 sections".
     """
     if constructs:
-        held = f"{constructs} constructs"
+        held = f"{constructs} construct{'' if constructs == 1 else 's'}"
     elif findings:
-        held = f"{findings} findings"
+        held = f"{findings} finding{'' if findings == 1 else 's'}"
     else:
         held = ""
-    where = f"{sections} sections" if sections else "one page"
+    where = (f"{sections} section{'' if sections == 1 else 's'}"
+             if sections else "one page")
     return f"{held} in {where}" if held else where
 
 
@@ -2625,20 +2622,28 @@ def pitch_html(text):
 INSTALL_ANCHOR = "installing"
 
 
+def status_places(headline):
+    """The places the README's headline names, for the hero's one line:
+    every capitalised word after its first, which is the language's own
+    name -- "Linux, macOS, FreeBSD, Cortex-M0"."""
+    words = re.findall(r"[A-Za-z][\w-]*", headline)[1:]
+    return [w for w in words if re.search(r"[A-Z]", w)]
+
+
 def index_page(docs, counts, intro, status, progress, program, symbols,
                says, footnote, hello=None, context=""):
     """The front door: what the language is, what it looks like, where to go.
 
-    The contents remain, at the bottom, because a reader who came back for
-    one document should not have to read the introduction again.
+    In the order a newcomer asks: the pitch, then the smallest whole
+    program, then which document to open, then a larger program, and only
+    then how far the work has got.  The contents remain, at the bottom,
+    because a reader who came back for one document should not have to
+    read the introduction again.
     """
     body = []
 
-    #  What it looks like: one whole program the gate runs, not a handful
-    #  of lines chosen to fit.  It is read from its fixture, so what is
-    #  shown is what compiles; beside it, the constructs it leans on, each
-    #  a link to where the language explains it.
-    #  It opens with the first program, the command and what it prints.
+    #  What it looks like: the first program, the command and what it
+    #  prints, read from its fixture so what is shown is what compiles.
     first = ""
     if hello:
         hello_path, hello_lines, printed = hello
@@ -2656,16 +2661,57 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
             f'<span>{len(hello_lines)} lines</span></figcaption>'
             f'{listing(hello_hl.block(hello_lines))}'
             '<div class="foot"><span>in a terminal</span></div>'
-            f'{listing(run)}'
+            f'<div class="out">{listing(run)}</div>'
             '</figure></div>')
+    body.append('<section class="landing" id="what-it-looks-like">'
+                f'<h2>What it looks like</h2>{first}</section>')
+
+    #  Six ways in, because the documents answer different questions and
+    #  a reader who starts in the wrong one finds it slow going.  The four
+    #  that teach come first; the two that decide and explain come after.
+    #  Each is labelled by who it is for, not by its file name, which
+    #  means nothing to a reader who has not opened it yet.
+    routes = [
+        ("tour.html", "the language", "learn the language",
+         "The tour teaches it in numbered constructs, from comments to "
+         "runtime dispatch. Start at the top and read down."),
+        ("examples.html", "the language", "run real programs",
+         "Printing, reporting failures and the classic exercises, then "
+         "everyday tools: counting lines, a directory listing, a shell, an "
+         "echo server and a tree copy, each printing what it computes."),
+        ("from-c.html", "the language", "come from C",
+         "The Landin form of each C habit: strings, structs, pointers, "
+         "errors and allocation, with examples the compiler accepts."),
+        ("library.html", "the library", "use the library",
+         "Every module's calls and signatures, with common tasks as one "
+         "complete program and each module's own example."),
+        ("spec.html", "the specification", "look up an exact rule",
+         "The normative reference, not something to read through: follow "
+         "a number from the tour or a compiler message to the one paragraph "
+         "that settles it."),
+        ("handoff.html", "the project", "understand the design",
+         "The design in one page, the principles behind it, and which "
+         "decisions must not be quietly reversed."),
+    ]
+    cards = "".join(
+        f'<a class="route" href="{href}"><span class="label">{esc(group)}'
+        f'</span><strong>{esc(head)}</strong>'
+        f'<span class="text">{esc(text)}</span></a>'
+        for href, group, head, text in routes)
+    body.append('<section class="landing" id="start-here">'
+                f'<h2>Start here</h2><div class="routes">{cards}</div>'
+                '</section>')
+
+    #  A larger one: one whole program the gate runs, not a handful of
+    #  lines chosen to fit, and beside it the constructs it leans on, each
+    #  a link to where the language explains it.
     path, lines, uses = program
     hl = Highlighter(*collect_symbols(lines), links=lambda ref: None)
     used = uses_list(uses)
     body.append(
-        '<section class="landing" id="what-it-looks-like">'
-        '<h2>what it looks like</h2>'
-        f'{first}'
-        '<p class="lead">A larger one: sensors of two kinds behind one '
+        '<section class="landing" id="a-larger-one">'
+        '<h2>A larger one</h2>'
+        '<p class="lead">Sensors of two kinds behind one '
         'concept, polled through runtime dispatch. The poll is generic over '
         'its allocator, which the caller lends as an arena over a stack '
         'buffer; each failure is declared in a signature and either skipped '
@@ -2682,63 +2728,10 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         '</figure>'
         '<aside class="uses" aria-label="Constructs the program uses">'
         '<span class="label">what it uses</span>'
-        f'<ul>{used}</ul>'
+        f'<ul class="used">{used}</ul>'
         '<p>Both programs compile with today\'s refine. The '
         '<a href="tour.html">tour</a> explains each construct they use.'
         '</p></aside></div></section>')
-
-    #  Six ways in, because the documents answer different questions and
-    #  a reader who starts in the wrong one finds it slow going.  The four
-    #  that teach come first; the two that decide and explain come after.
-    routes = [
-        ("tour.html", "learn the language",
-         "The tour teaches it in numbered constructs, from comments to "
-         "runtime dispatch. Start at the top and read down."),
-        ("examples.html", "run real programs",
-         "Printing, reporting failures and the classic exercises, then "
-         "everyday tools: counting lines, a directory listing, a shell, an "
-         "echo server and a tree copy, each printing what it computes."),
-        ("from-c.html", "come from C",
-         "The Landin form of each C habit: strings, structs, pointers, "
-         "errors and allocation, with examples the compiler accepts."),
-        ("library.html", "use the library",
-         "Every module's calls and signatures, with common tasks as one "
-         "complete program and each module's own example."),
-        ("spec.html", "look up an exact rule",
-         "The normative reference, not something to read through: follow "
-         "a number from the tour or a compiler message to the one paragraph "
-         "that settles it."),
-        ("handoff.html", "understand the design",
-         "The design in one page, the principles behind it, and which "
-         "decisions must not be quietly reversed."),
-    ]
-    cards = "".join(
-        f'<a class="route" href="{href}"><span class="label">{"abcdef"[i]} · '
-        f'{href}</span><strong>{esc(head)}</strong>'
-        f'<span class="text">{esc(text)}</span></a>'
-        for i, (href, head, text) in enumerate(routes))
-    body.append('<section class="landing" id="start-here">'
-                f'<h2>start here</h2><div class="routes">{cards}</div>'
-                '</section>')
-
-    #  The contents, in the sidebar's groups.
-    rows = []
-    for num, name, members in nav_groups(docs):
-        rows.append(f'<div class="group"><h3>{num} · {esc(name)}</h3><div>')
-        for d in members:
-            n = counts.get(d["out"], "")
-            retired = " retired" if d["key"] in RETIRED else ""
-            rows.append(
-                f'<a class="card{retired}" href="{d["out"]}">'
-                f'<strong>{esc(d["nav"])}</strong>'
-                f'<span>{shelf_blurb(d["blurb"])}</span><em>{esc(n)}</em></a>')
-        rows.append("</div></div>")
-    body.append('<section class="landing" id="every-document">'
-                '<h2>every document</h2>'
-                f'<div class="shelf">{"".join(rows)}</div>'
-                '</section>')
-    body.append(f'<p class="fine-print" id="fine-print">'
-                f'{esc(footnote)}</p>')
 
     hero = "".join(f"<p>{pitch_html(t)}</p>" for t in intro)
     hero += ('<div class="hero-actions">'
@@ -2747,21 +2740,29 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
              f'<a href="readme.html#{INSTALL_ANCHOR}">install refine</a></div>')
     if status:
         version, headline, detail = status_parts(status)
-        hero += ('<aside class="status" aria-label="Project status">'
-                 '<div class="said">'
-                 f'<p class="status-meta">Status · {esc(version)}.</p>'
-                 f'<h2>{prose_html(headline, lambda ref: None)}</h2>')
+        #  One line in the hero; the status in full is a section of its
+        #  own further down, after the language has had its say.
+        places = status_places(headline)
+        hero += ('<p class="status-line">'
+                 '<a href="#status">status</a> · '
+                 + esc(version)
+                 + (" · " + esc(", ".join(places)) if places else "")
+                 + ' · <a href="roadmap.html">roadmap →</a></p>')
+        box = ('<aside class="status" aria-label="Project status">'
+               '<div class="said">'
+               f'<p class="status-meta">Status · {esc(version)}.</p>'
+               f'<h3>{prose_html(headline, lambda ref: None)}</h3>')
         if detail:
-            hero += f'<p>{prose_html(detail, lambda ref: None)}</p>'
+            box += f'<p>{prose_html(detail, lambda ref: None)}</p>'
         if context:
-            hero += ('<p class="status-context">'
-                     + README_LINK.sub(
-                         r'<a href="readme.html\2">\1</a>',
-                         prose_html(context, lambda ref: None))
-                     + '</p>')
-        hero += ('<p class="status-links">'
-                 f'<a href="readme.html#{INSTALL_ANCHOR}">install →</a></p>')
-        hero += '</div>'
+            box += ('<p class="status-context">'
+                    + README_LINK.sub(
+                        r'<a href="readme.html\2">\1</a>',
+                        prose_html(context, lambda ref: None))
+                    + '</p>')
+        box += ('<p class="status-links">'
+                f'<a href="readme.html#{INSTALL_ANCHOR}">install →</a></p>')
+        box += '</div>'
         if progress:
             def progress_item(item):
                 heading = f'{item["key"]} — {item["title"]}'
@@ -2792,20 +2793,43 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
             #  show here, and an empty lane under a label reads as a fault.
             recent_lane = ('<div><span class="roadmap-label">recently completed'
                            f'</span>{recent}</div>') if recent else ""
-            hero += ('<div class="roadmap-track">'
-                     '<a class="roadmap-head" href="roadmap.html">'
-                     'the roadmap: its items, by state</a>'
-                     f'{recent_lane}'
-                     f'{current_lane}'
-                     '<div><span class="roadmap-label">'
-                     f'{last_label}</span>'
-                     f'{last_item}</div></div>')
-        hero += '</aside>'
+            box += ('<div class="roadmap-track">'
+                    '<a class="roadmap-head" href="roadmap.html">'
+                    'the roadmap: its items, by state</a>'
+                    f'{recent_lane}'
+                    f'{current_lane}'
+                    '<div><span class="roadmap-label">'
+                    f'{last_label}</span>'
+                    f'{last_item}</div></div>')
+        box += '</aside>'
+        body.append('<section class="landing" id="status">'
+                    f'<h2>Status and roadmap</h2>{box}</section>')
+
+    #  The contents, in the sidebar's groups.
+    rows = []
+    for num, name, members in nav_groups(docs):
+        rows.append(f'<div class="group"><h3>{num} · {esc(name)}</h3><div>')
+        for d in members:
+            n = counts.get(d["out"], "")
+            retired = " retired" if d["key"] in RETIRED else ""
+            rows.append(
+                f'<a class="card{retired}" href="{d["out"]}">'
+                f'<strong>{esc(d["nav"])}</strong>'
+                f'<span>{shelf_blurb(d["blurb"])}</span><em>{esc(n)}</em></a>')
+        rows.append("</div></div>")
+    body.append('<section class="landing" id="every-document">'
+                '<h2>Every document</h2>'
+                f'<div class="shelf">{"".join(rows)}</div>'
+                '</section>')
+    body.append(f'<p class="fine-print" id="fine-print">'
+                f'{esc(footnote)}</p>')
 
     nav = nav_html(docs, "index.html", [
-        ("what-it-looks-like", "what it looks like", 0),
-        ("start-here", "start here", 0),
-        ("every-document", "every document", 0)])
+        ("what-it-looks-like", "What it looks like", 0),
+        ("start-here", "Start here", 0),
+        ("a-larger-one", "A larger one", 0),
+        ("status", "Status and roadmap", 0),
+        ("every-document", "Every document", 0)])
     #  What a search result and a chat preview say about the front page.
     #  Two sentences, because that is what is shown before it is cut.
     #  Under 160 characters, because that is where a search result is cut.
