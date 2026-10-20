@@ -383,27 +383,173 @@ def merged_documentation(texts):
     return ' / '.join(distinct)
 
 
+#  The library's own rules, after the site's: the shared sheet styles every
+#  guide's sections, prose, listings and program panels, and these only
+#  what a reference has and a guide does not.
 CSS = '''
-.api-tools {margin:1.5rem 0} .api-tools input {width:100%; padding:.7rem;
-font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--rule)}
-.api-results {max-height:24rem; overflow:auto} .api-results a {display:block; padding:.4rem}
-.api-item {scroll-margin-top:5rem; padding:1.5rem 0; border-top:1px solid var(--rule)}
-.api-item h2 {margin-top:0} .api-kind {font-size:.8rem; font-weight:normal}
-.api-prose .guide {margin:0;padding:0;border:0}
-.api-signature code {padding:0;background:none;border:0}
-.api-source {font-size:.85rem} .api-signature {overflow:auto; padding:1rem;
-background:var(--panel); border:1px solid var(--rule); white-space:pre}
-.api-signature a {text-decoration:underline; text-decoration-style:dotted}
-.api-index {columns:2; padding-left:1.2rem} .api-source-line {display:block;scroll-margin-top:5rem}
-.api-source-line:target {background:var(--panel)} .api-line-number {display:inline-block;
-min-width:4ch;margin-right:1.2em;color:var(--ink-faint);user-select:none}
-.api-table {border-collapse:collapse; font-size:.9rem}
-.api-table th, .api-table td {text-align:left; padding:.25rem .8rem .25rem 0;
-border-bottom:1px solid var(--rule); vertical-align:top}
-.api-table th[scope=row] {font-weight:normal; font-family:var(--mono)}
-.api-table tr:target {background:var(--panel)} .api-table tr {scroll-margin-top:5rem}
-.api-table td code, .api-table th code {white-space:nowrap}
-.api-condition {font-size:.9rem} @media(max-width:600px){.api-index{columns:1}}
+/* ---- search: full on the index, a small field under a module's title ---- */
+.api-tools{margin:1.5rem 0 0}
+.api-tools label{display:block; margin:0 0 .35rem; font-size:.85rem; color:var(--ink-soft)}
+.api-tools input{width:100%; padding:.65rem .8rem; font:inherit; color:var(--ink);
+  background:var(--panel); border-radius:0;
+  border:1px solid var(--rule-strong, color-mix(in oklch, var(--ink-faint) 80%, var(--bg)))}
+/*  The browser's own placeholder is the ink at reduced opacity, about 4:1.  */
+.api-tools input::placeholder{color:var(--ink-faint); opacity:1}
+.api-tools.compact{margin:.9rem 0 0}
+.api-tools.compact label{position:absolute; width:1px; height:1px; margin:-1px;
+  overflow:hidden; clip-path:inset(50%); white-space:nowrap}
+.api-tools.compact input{max-width:22rem; padding:.38rem .6rem; font-size:.85rem}
+.api-results{margin-top:.75rem; border-top:1px solid var(--rule)}
+/*  Under the title, the hero's own paragraph rules would set these as
+    its lead.  */
+main .hero .api-results p{margin:.5rem 0; max-width:none; font-size:.85rem; line-height:1.5;
+  color:var(--ink-soft)}
+main .hero .api-results p.api-count{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint)}
+.api-results a.api-hit{display:block; padding:.45rem 0 .5rem; text-decoration:none;
+  border-bottom:1px solid var(--rule-soft)}
+.api-hit-name{font-family:var(--mono); font-size:.85rem; color:var(--accent)}
+.api-hit-module{color:var(--ink-faint)}
+.api-hit-kind{margin-left:.6rem; font-size:.66rem; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--ink-faint)}
+.api-hit-summary{display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  line-clamp:2; overflow:hidden; margin-top:.1rem; font-size:.86rem; line-height:1.45;
+  color:var(--ink-soft)}
+.api-results a.api-hit:hover .api-hit-name{text-decoration:underline}
+
+/* ---- the page's own contents, in the sidebar and the phone's drawer ---- */
+nav.side .api-toc-label{display:block; padding:.3rem .75rem .25rem .8rem;
+  font-family:var(--mono); font-size:.68rem; color:var(--ink-faint)}
+nav.side a.api-toc-kind{padding:.14rem .75rem .14rem 1.6rem; margin-left:-1px;
+  border-left:1px solid transparent; font-size:.8rem; color:var(--ink-faint)}
+nav.side a.api-toc-kind:hover{color:var(--ink)}
+nav.side a.api-toc-kind.here{color:var(--ink); border-left-color:var(--accent)}
+nav.side .api-toc .count{margin-left:.3rem; font-family:var(--mono); font-size:.66rem;
+  color:var(--ink-faint)}
+.api-onpage{display:none}
+@media (max-width:60rem){
+  .api-onpage{display:inline-flex; align-items:center; margin:0 0 1rem;
+    padding:.4rem .75rem; min-height:2.5rem; cursor:pointer;
+    font-family:var(--mono); font-size:.75rem; color:var(--ink-soft);
+    border:1px solid var(--rule-strong, color-mix(in oklch, var(--ink-faint) 80%, var(--bg)))}
+  .api-onpage:hover{color:var(--accent)}
+}
+
+/* ---- headings: the overview's sections, the items, the example ---- */
+.api-opening{padding-top:0}
+.api-prose section.guide{margin:0; border:0}
+.api-prose div.guide{margin:0; padding:0}
+section > h2.api-h, .api-prose section.api-section > h2, .api-modules > h2{
+  font-size:1.35rem; font-weight:650; line-height:1.3; letter-spacing:-.01em;
+  text-transform:none}
+.api-condition{font-size:.85rem; color:var(--ink-soft)}
+
+/* ---- the indexes: items by kind, and the modules ---- */
+.api-group-title{margin:1.5rem 0 .45rem; font-size:.85rem; font-weight:600;
+  color:var(--ink-soft)}
+.api-group-title .count{margin-left:.35rem; font-family:var(--mono); font-size:.7rem;
+  font-weight:400; color:var(--ink-faint)}
+.api-group-title code{background:none; padding:0}
+ul.api-index{list-style:none; margin:0; padding:0; columns:12rem; column-gap:2rem;
+  border-top:1px solid var(--rule)}
+ul.api-index li{break-inside:avoid; border-bottom:1px solid var(--rule-soft)}
+ul.api-index a{display:block; padding:.3rem 0; text-decoration:none; font-size:.9rem}
+ul.api-index code{padding:0; background:none; font-size:.85rem; color:var(--accent)}
+ul.api-index a:hover code{text-decoration:underline}
+ul.api-modules-list{list-style:none; margin:0; padding:0; border-top:1px solid var(--rule)}
+ul.api-modules-list li{display:grid; grid-template-columns:12rem minmax(0,1fr); gap:1.25rem;
+  padding:.55rem 0; border-bottom:1px solid var(--rule-soft); align-items:baseline}
+ul.api-modules-list li > a{text-decoration:none}
+ul.api-modules-list li > a code{padding:0; background:none; font-size:.85rem; color:var(--accent)}
+ul.api-modules-list li > a:hover code{text-decoration:underline}
+ul.api-modules-list li > span{color:var(--ink-soft); font-size:.9rem; line-height:1.5}
+@media (max-width:35rem){
+  ul.api-modules-list li{grid-template-columns:minmax(0,1fr); gap:.15rem}
+}
+
+/* ---- one declaration: a heading row, the code, the prose ---- */
+section.api-item{padding:1.6rem 0 1rem; border-top:1px solid var(--rule);
+  scroll-margin-top:var(--bar)}
+.api-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem .8rem;
+  margin:0 0 .7rem}
+.api-head .grow{flex:1}
+h3.api-name{margin:0; font-size:1.1rem; line-height:1.3; font-weight:600;
+  text-transform:none; letter-spacing:0}
+h3.api-name code{padding:0; background:none; font-size:1em; color:var(--ink);
+  text-transform:none; letter-spacing:0}
+.api-kind{font-size:.66rem; font-weight:500; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--ink-faint)}
+a.api-source, a.api-back{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint);
+  text-decoration:none; white-space:nowrap}
+a.api-source:hover, a.api-back:hover{color:var(--accent); text-decoration:underline}
+.api-condition a.api-source{margin-left:.6rem}
+.api-item .api-prose p{max-width:42rem}
+
+/*  A declaration scrolls sideways line for line; its members' `---`
+    documentation wraps as prose between its lines, at their indentation.  */
+.api-decl{margin:.3rem 0 .9rem; background:var(--code-bg);
+  border:1px solid var(--code-rule, var(--rule))}
+pre.api-signature{margin:0; overflow-x:auto; white-space:pre; font-size:.82rem; line-height:1.6;
+  tab-size:4}
+.api-decl > pre.api-signature{padding:.15rem 1rem}
+.api-decl > :first-child{padding-top:.75rem}
+.api-decl > :last-child{padding-bottom:.75rem}
+.api-signature code{padding:0; background:none; border:0; font-size:1em}
+.api-signature a{text-decoration:underline; text-decoration-style:dotted}
+.api-doc{padding:.1rem 1rem .3rem calc(1rem + var(--indent, 0) * 1ch);
+  font-family:var(--mono); font-size:.82rem}
+.api-doc p{margin:0 0 .2rem; max-width:40rem; font-family:var(--ui); font-size:1.04em;
+  line-height:1.5; color:var(--ink-soft)}
+.api-doc code{font-size:.92em}
+/*  A source page's whole file.  */
+main > pre.api-signature{padding:1rem; background:var(--code-bg); border:1px solid var(--rule)}
+/*  Inline blocks, not blocks: the newline between two blocks in a <pre>
+    is a line of its own, and every source page was double-spaced.  */
+.api-source-line{display:inline-block; min-width:100%; scroll-margin-top:calc(var(--bar) + 1rem)}
+.api-source-line:target{background:var(--accent-bg)}
+.api-signature a.api-line-number{display:inline-block; min-width:4ch; margin-right:1.2em;
+  color:var(--ink-faint); text-decoration:none; user-select:none}
+
+/* ---- the overview's tables ---- */
+.api-prose table.api-shaped{table-layout:fixed}
+.api-prose table.api-shaped.short{table-layout:auto; width:auto; min-width:min(100%, 28rem)}
+.api-prose table.short th, .api-prose table.short td{padding-right:2.5rem}
+.api-prose table.api-shaped th[scope=row]{font-weight:600; color:var(--ink);
+  border-bottom:1px solid var(--rule-soft); padding:7px 10px 7px 0; vertical-align:top}
+.api-prose table.api-shaped tr:last-child th{border-bottom:0}
+.api-prose .guide td code, .api-prose .guide th code{white-space:normal; overflow-wrap:break-word}
+.api-prose td a code, .api-prose th a code{color:var(--accent)}
+@media (max-width:48rem){
+  .api-prose .guide td code, .api-prose .guide th code{overflow-wrap:anywhere}
+}
+/*  A phone has room for one column: each row is a block, each cell under
+    its column's title.  */
+@media (max-width:35rem){
+  .api-prose table.api-shaped, .api-prose table.api-shaped tbody,
+  .api-prose table.api-shaped tr, .api-prose table.api-shaped th[scope=row],
+  .api-prose table.api-shaped td{display:block; width:auto}
+  .api-prose table.api-shaped colgroup{display:none}
+  .api-prose table.api-shaped thead{position:absolute; width:1px; height:1px;
+    overflow:hidden; clip-path:inset(50%)}
+  .api-prose table.api-shaped tr{padding:.55rem 0; border-bottom:1px solid var(--rule-soft)}
+  .api-prose table.api-shaped tr:last-child{border-bottom:0}
+  .api-prose table.api-shaped th[scope=row], .api-prose table.api-shaped td{
+    border:0; padding:.05rem 0}
+  .api-prose table.api-shaped td::before{content:attr(data-label); display:block;
+    margin-top:.25rem; font-family:var(--mono); font-size:.68rem; font-weight:400;
+    color:var(--ink-faint)}
+}
+
+/* ---- the values-by-target table ---- */
+.api-table{border-collapse:collapse; font-size:.9rem}
+.api-table th, .api-table td{text-align:left; padding:.25rem .8rem .25rem 0;
+  border-bottom:1px solid var(--rule); vertical-align:top}
+.api-table th[scope=row]{font-weight:600; font-family:var(--mono); font-size:.85rem}
+.api-table tr:target{background:var(--accent-bg)}
+.api-table tr{scroll-margin-top:calc(var(--bar) + 1rem)}
+.api-table td code, .api-table th code{white-space:nowrap}
+
+/* ---- the example: the site's program panel ---- */
+figure.panel.api-program{margin:1rem 0 0}
 '''
 
 SEARCH_SCRIPT = 'library-search.js'
@@ -434,17 +580,33 @@ SEARCH = '''
    results.textContent='The search index could not be loaded; browse the module and item indexes below.';};
   document.head.append(script);
  }
+ function span(cls,text){const s=document.createElement('span');s.className=cls;s.textContent=text;return s;}
  function show(){
-  const terms=normalize(field.value).trim().split(/\\s+/).filter(Boolean);
+  const query=field.value.trim();
+  const terms=normalize(query).split(/\\s+/).filter(Boolean);
   results.replaceChildren();
   if(!terms.length){results.hidden=true;return;}
   if(!items){load();return;}
   const matches=items.filter(i=>terms.every(t=>normalize(i.name+' '+i.summary+' '+i.kind).includes(t)));
   results.hidden=false;
-  const count=document.createElement('p');count.textContent=matches.length+(matches.length===1?' result':' results');results.append(count);
+  if(!matches.length){
+   /* Nothing found says what to try next, not only that nothing was. */
+   const p=document.createElement('p');
+   const a=document.createElement('a');a.href='library.html#modules';a.textContent='the module index';
+   p.append('Nothing matches "'+query+'". Try a shorter term, or a module name such as text or io, or browse ',a,'.');
+   results.append(p);return;
+  }
+  const count=document.createElement('p');count.className='api-count';
+  count.textContent=matches.length+(matches.length===1?' result':' results');results.append(count);
   for(const item of matches.slice(0,80)){
-   const a=document.createElement('a');a.href=item.url;
-   a.textContent=item.name+' — '+item.summary;results.append(a);
+   /* The module, faint, then the name: core/io.open_read. */
+   const a=document.createElement('a');a.href=item.url;a.className='api-hit';
+   const cut=item.name.lastIndexOf('.')+1;
+   const name=span('api-hit-name','');
+   const module=span('api-hit-module','');module.textContent=item.name.slice(0,cut);
+   name.append(module,item.name.slice(cut));
+   a.append(name,span('api-hit-kind',item.kind),span('api-hit-summary',item.summary));
+   results.append(a);
   }
   if(matches.length>80){const p=document.createElement('p');p.textContent='Showing the first 80; refine your search.';results.append(p);}
  }
@@ -454,37 +616,58 @@ SEARCH = '''
 '''
 
 
-# Font swapping can move a deep source line after the browser's first hash
-# scroll. Align again after layout settles, unless the reader has interacted.
-ANCHORS = """
+#  The sidebar keeps the page's own contents in view: on a desktop, the
+#  current module's entry scrolled up to where it can be seen, and in the
+#  phone's drawer the same, each time it opens.  While an item is read,
+#  the entry for its kind is lit -- the shared bar lights only sections
+#  the sidebar names, and the items are too many to name there.
+CONTENTS = """
 (() => {
- let latest=0;
- function settle(){
-  const fragment=location.hash, attempt=++latest;
-  if(!fragment)return;
-  let cancelled=false;
-  const cancel=()=>{cancelled=true;};
-  const events=['wheel','touchstart','pointerdown','keydown'];
-  events.forEach(name=>addEventListener(name,cancel,{passive:true}));
-  const ready=document.fonts ? document.fonts.ready : Promise.resolve();
-  ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
-   events.forEach(name=>removeEventListener(name,cancel));
-   if(cancelled || latest!==attempt || location.hash!==fragment)return;
-   let id;try{id=decodeURIComponent(fragment.slice(1));}catch{return;}
-   const target=document.getElementById(id);
-   if(target)target.scrollIntoView({block:'start',behavior:'instant'});
-  })));
+ const side=document.querySelector('nav.side');
+ const toc=document.getElementById('api-toc');
+ if(!side||!toc)return;
+ const own=toc.previousElementSibling;
+ function reveal(always){
+  const box=side.getBoundingClientRect(), at=(own||toc).getBoundingClientRect();
+  if(!always && at.top>=box.top && at.bottom<=box.top+box.height*0.6)return;
+  side.scrollTop+=at.top-box.top-12;
  }
- if(document.readyState==='loading')addEventListener('DOMContentLoaded',settle,{once:true});
- else settle();
- addEventListener('hashchange',settle);
+ if(getComputedStyle(side).position==='sticky')reveal(false);
+ const menu=document.getElementById('menu');
+ if(menu)menu.addEventListener('change',()=>{
+  if(menu.checked)requestAnimationFrame(()=>reveal(true));
+ });
+ const kinds={};
+ toc.querySelectorAll('a.api-toc-kind[href^="#items-"]').forEach(a=>{
+  kinds[a.getAttribute('href').slice(7)]=a;
+ });
+ const items=[].slice.call(document.querySelectorAll('main section.api-item'));
+ if(!items.length)return;
+ const bar=document.querySelector('header.bar');
+ let timer=0;
+ function mark(){
+  const line=(bar?bar.getBoundingClientRect().bottom:48)+8;
+  let low=0, high=items.length-1, best=-1;
+  while(low<=high){
+   const middle=(low+high)>>1;
+   if(items[middle].getBoundingClientRect().top<=line){best=middle;low=middle+1;}
+   else high=middle-1;
+  }
+  const now=best>=0 && items[best].getBoundingClientRect().bottom>line
+   ? items[best].dataset.kind : null;
+  for(const kind in kinds)kinds[kind].classList.toggle('here',kind===now);
+ }
+ addEventListener('scroll',()=>{clearTimeout(timer);timer=setTimeout(mark,60);},{passive:true});
+ addEventListener('hashchange',mark);
+ mark();
 })();
 """
 
 
 def value_section(table, module, source_name, reference, render, links):
     """The table: a row per name, a column per target condition."""
-    out = ['<section class="api-values" id="values"><h2>Values by target</h2>'
+    out = ['<section class="api-values" id="values" data-title="Values by target">'
+           '<h2 class="api-h">Values by target</h2>'
            '<p>Each name is declared once for each target condition below; '
            'a dash means the name is not declared there.</p><ul class="api-columns">']
     for label, column in zip(table.labels, table.columns):
@@ -518,9 +701,14 @@ def value_section(table, module, source_name, reference, render, links):
     return '\n'.join(out) + '\n'
 
 
-def search_box():
-    """The search field; its script is in the linked library.js."""
-    return ('<div class="api-tools">\n<label for="api-search">Search library APIs</label>\n'
+def search_box(compact=False):
+    """The search field; its script is in the linked library.js.
+
+    Full width on the index, where finding a name is what the page is
+    for; a small field under a module's title, where the module is.
+    """
+    cls = 'api-tools compact' if compact else 'api-tools'
+    return (f'<div class="{cls}">\n<label for="api-search">Search library APIs</label>\n'
             '<input type="search" id="api-search" placeholder="Name, module or purpose" '
             f'data-index="{SEARCH_SCRIPT}" '
             'aria-controls="api-results" autocomplete="off">\n'
@@ -535,6 +723,133 @@ def search_index(index):
     return 'window.landinLibraryIndex=' + data.replace('<', '\\u003c') + ';\n'
 
 
+KINDS = ('concept', 'type', 'atom', 'value', 'function')
+KIND_TITLES = {'concept': 'Concepts', 'type': 'Types', 'atom': 'Atoms',
+               'value': 'Values', 'function': 'Functions'}
+
+#  A titled section of the guide renderer: what the sidebar lists under the
+#  page being read.
+TITLED = re.compile(r'<section class="guide" id="([^"]+)" data-title="([^"]*)">')
+
+
+def untitled_lead(body):
+    """The guide renderer's untitled lead as a <div>, not a <section>.
+
+    The shared bar names the last <section> scrolled past, and an item's
+    documentation renders through the same reader: as sections, each
+    item's prose took the label back from the item's own name.
+    """
+    lead = '<section class="guide" id="top">'
+    if body.startswith(lead):
+        end = body.index('\n</section>')
+        body = ('<div class="guide">' + body[len(lead):end] + '\n</div>'
+                + body[end + len('\n</section>'):])
+    return body
+
+
+def toc_html(entries, label):
+    """The page's own sections, nested under its link in the sidebar.
+
+    `entries` are (href, title, cls): `sect` links are the shared bar's,
+    which follow the section being read; `api-toc-kind` ones are this
+    page's script's, which follow the kind of the item being read.
+    """
+    if not entries:
+        return ''
+    out = [f'<div class="toc api-toc" id="api-toc"><span class="api-toc-label">{label}</span>']
+    for href, title, cls in entries:
+        out.append(f'<a class="{cls}" href="{href}">{title}</a>')
+    out.append('</div>')
+    return '\n'.join(out)
+
+
+TABLE = re.compile(r'<table>(.*?)</table>', re.S)
+ROW_HTML = re.compile(r'<tr>(.*?)</tr>', re.S)
+CELL_HTML = re.compile(r'<td>(.*?)</td>', re.S)
+TAGS = re.compile(r'<[^>]+>')
+CODE_HTML = re.compile(r'<code>(.*?)</code>', re.S)
+LINKED_HTML = re.compile(r'(<a\b[^>]*>.*?</a>)', re.S)
+#  What a code span in a table names: a call, perhaps bound or tried --
+#  `mut out := io.buffered_over(...)`, `try io.read_line(lines)` -- or a
+#  name alone.
+CALLED = re.compile(r'(?:(?:mut\s+)?\w+\s*:=\s*)?(?:try\s+)?(\w+(?:\.\w+)?)(?:\(.*\))?')
+
+
+#  Below this many characters across its columns' typical cells, a table is
+#  set at its own width.
+SHORT_TABLE = 50
+
+
+def column_widths(head, rows):
+    """Each column's share of a table, from what its cells hold.
+
+    The browser's own sizing gave a long column everything and wrapped a
+    short one to a word a line; a header's words count less than a
+    cell's, so "Part of world" over yes and no stays narrow.
+    """
+    weights = []
+    for i, title in enumerate(head):
+        texts = [' '.join(html.unescape(TAGS.sub('', r[i])).split())
+                 for r in rows if i < len(r)] or ['']
+        average = sum(map(len, texts)) / len(texts)
+        # A column is never narrower than its longest word, which would
+        # otherwise be cut: hosted/system lost its last letter.
+        longest = max(len(word) for text in texts for word in text.split() or [''])
+        weights.append(min(60.0, max(5.0, average, longest, .6 * len(title))))
+    total = sum(weights)
+    return [round(100 * w / total) for w in weights], total
+
+
+def shape_tables(text, link):
+    """The overview's tables: widths, row headers, labels and links.
+
+    Each cell carries its column's title for a phone, where a row is
+    stacked into a block; the first cell of a row is its header; and a
+    code span naming a library declaration links to it.
+    """
+    def one(match):
+        inner = match[1]
+        head = [' '.join(html.unescape(TAGS.sub('', h)).split())
+                for h in re.findall(r'<th scope="col">(.*?)</th>', inner, re.S)]
+        rows = [CELL_HTML.findall(r) for r in ROW_HTML.findall(inner.split('<tbody>', 1)[-1])]
+        widths, total = column_widths(head, rows)
+        # A table of short cells is as wide as they are, not the page:
+        # stretched, two words sat half a page apart.
+        if total < SHORT_TABLE:
+            shaped, cols = 'api-shaped short', ''
+        else:
+            shaped = 'api-shaped'
+            cols = '<colgroup>' + ''.join(f'<col style="width:{w}%">' for w in widths) + '</colgroup>'
+
+        def row(found):
+            cells = CELL_HTML.findall(found[1])
+            out = []
+            for i, cell in enumerate(cells):
+                label = html.escape(head[i]) if i < len(head) else ''
+                cell = linked_code(cell, link)
+                if i == 0:
+                    out.append(f'<th scope="row" data-label="{label}">{cell}</th>')
+                else:
+                    out.append(f'<td data-label="{label}">{cell}</td>')
+            return '<tr>' + '\t'.join(out) + '</tr>'
+        head_part, _, body_part = inner.partition('<tbody>')
+        return (f'<table class="{shaped}">{cols}'
+                + head_part + '<tbody>' + ROW_HTML.sub(row, body_part) + '</table>')
+    return TABLE.sub(one, text)
+
+
+def linked_code(cell, link):
+    """`cell` with each code span that names a declaration made a link."""
+    parts = LINKED_HTML.split(cell)
+    for i in range(0, len(parts), 2):
+        def code(found):
+            called = CALLED.fullmatch(' '.join(html.unescape(found[1]).split()))
+            target = link(called[1]) if called else None
+            return f'<a href="{target}">{found[0]}</a>' if target else found[0]
+        parts[i] = CODE_HTML.sub(code, parts[i])
+    return ''.join(parts)
+
+
 def write(root, destination, render):
     """Render with the site's shell, Markdown reader, fonts and highlighter."""
     modules, sources = collect(root)
@@ -542,6 +857,9 @@ def write(root, destination, render):
                for ref in re.findall(r'^### \[(\d{4})\]', (root / d['src']).read_text(), re.M)}
     intro, descriptions = overviews(root, modules)
     exports = {module: {i.name for i in items} for module, items in modules.items()}
+    leaves = {}
+    for module in modules:
+        leaves.setdefault(module.split('/')[-1], []).append(module)
     index = []
     for module, items in modules.items():
         seen = set()
@@ -553,11 +871,30 @@ def write(root, destination, render):
                               summary=' '.join(item.documentation.split('\n\n')[0].split()).replace('`', ''),
                               url=page_name(module) + '#' + item.anchor))
     index.sort(key=lambda i: i['name'])
-    search = search_box()
     pages = []
-    def nav(current):
+
+    def resolver(current, aliases=None):
+        """Where a name written in `current`'s prose is declared, or None."""
+        def link(name):
+            if '.' in name:
+                qualifier, leaf = name.split('.', 1)
+                target = (aliases or {}).get(qualifier)
+                if target is None and current and current.split('/')[-1] == qualifier:
+                    target = current
+                if target is None and len(leaves.get(qualifier, [])) == 1:
+                    target = leaves[qualifier][0]
+                if target and leaf in exports[target]:
+                    return ('' if target == current else page_name(target)) + '#item-' + leaf
+            elif current and name in exports[current]:
+                return '#item-' + name
+            return None
+        return link
+
+    def nav(current, toc=''):
+        here = ' aria-current="page"' if current == 'library.html' else ''
         out = ['<a class="doc" href="index.html">the front page</a>',
-               '<a class="doc" href="library.html">library reference</a>',
+               f'<a class="doc{" here" if here else ""}"{here} href="library.html">library reference</a>',
+               toc if here else '',
                '<a class="doc" href="core.html">library guide</a>']
         for base in ROOTS:
             out.append('<details open><summary>' + base + '</summary>')
@@ -566,28 +903,50 @@ def write(root, destination, render):
                     here = ' aria-current="page"' if module == current else ''
                     cls = 'doc here' if here else 'doc'
                     out.append(f'<a class="{cls}"{here} href="{page_name(module)}">{module}</a>')
+                    if here:
+                        out.append(toc)
             out.append('</details>')
-        return '\n'.join(out)
-    def prose(text, source='docs/library.md'):
+        return '\n'.join(part for part in out if part)
+
+    def prose(text, source='docs/library.md', link=None):
         # A link to a module's directory, `[core/io](../core/io)`, is its
         # page here, and the directory itself where the source is read.
         targets = render.guide_targets(render.DOCS + render.GUIDES, source)
         targets.pages.update({module: page_name(module) for module in modules})
         _, hero, body, _ = render.render_guide(text, lambda ref: anchors.get(ref),
                     targets, render.Highlighter())
-        return '<div class="api-prose">\n' + (hero + body).replace(' id="top"', '') + '</div>\n'
-    def emit(filename, title, body, source, current='', description=''):
-        out = render.page(title + ' — Landin', 'library reference', title, search,
-                          body, nav(current), source, out=filename,
-                          description=description, linked=LINKED,
+        out = hero + untitled_lead(body)
+        if link is not None:
+            out = shape_tables(out, link)
+        return '<div class="api-prose">\n' + out + '</div>\n'
+
+    def emit(filename, title, body, source, current='', description='',
+             toc='', compact=True):
+        out = render.page(title + ' — Landin', 'library reference', title,
+                          search_box(compact), body, nav(current, toc), source,
+                          out=filename, description=description, linked=LINKED,
                           source_note='API reference derived from library sources. The specification defines language rules.')
         (destination / filename).write_text(out)
         pages.append(filename)
-    for name, text in render.linked_assets(LINKED, CSS, SEARCH + ANCHORS).items():
+
+    def on_this_page():
+        # The drawer holds the module's own contents; on a phone this
+        # opens it there rather than at the top of the module list.
+        return ('<label for="menu" class="api-onpage" id="api-onpage">'
+                'On this page</label>\n')
+
+    for name, text in render.linked_assets(LINKED, CSS, SEARCH + CONTENTS).items():
         (destination / name).write_text(text)
-    body = prose(intro.replace('# Library reference', '', 1))
+    body = prose(intro.replace('# Library reference', '', 1), link=resolver(''))
+    body = '<section class="api-opening">\n' + body + '</section>\n'
+    toc = [(f'#{sid}', title, 'sect') for sid, title in TITLED.findall(body)]
+    body += ('<section class="api-modules" id="modules" data-title="Modules">\n'
+             '<h2>Modules</h2>\n')
+    toc.append(('#modules', 'Modules', 'sect'))
     for base in ROOTS:
-        body += f'<h2>{base}</h2>\n<ul>\n'
+        body += (f'<div class="api-group" id="modules-{base}">'
+                 f'<h3 class="api-group-title">{base}</h3>\n<ul class="api-modules-list">\n')
+        toc.append((f'#modules-{base}', base, 'api-toc-kind'))
         for module in modules:
             if module.startswith(base + '/'):
                 summary = descriptions[module][0].split('\n\n')[0]
@@ -597,9 +956,13 @@ def write(root, destination, render):
                                         lambda ref: anchors.get(ref),
                                         render.guide_targets(render.DOCS + render.GUIDES,
                                                              'docs/library.md'))
-                body += f'<li id="{module.replace("/", "-")}"><a href="{page_name(module)}"><code>{module}</code></a> — {written}</li>\n'
-        body += '</ul>\n'
-    emit('library.html', 'Library reference', body, 'docs/library.md and core, hosted, platform sources')
+                body += (f'<li id="{module.replace("/", "-")}"><a href="{page_name(module)}">'
+                         f'<code>{module}</code></a>\n<span>{written}</span></li>\n')
+        body += '</ul></div>\n'
+    body += '</section>\n'
+    emit('library.html', 'Library reference', body,
+         'docs/library.md and core, hosted, platform sources', 'library.html',
+         toc=toc_html(toc, 'On this page'), compact=False)
     for module, items in modules.items():
         overview, example_path, example_prose = descriptions[module]
         aliases = {}
@@ -617,10 +980,23 @@ def write(root, destination, render):
                 return '#item-' + name
             return None
         def signature(text, own=None):
+            """The declaration as code, its members' documentation as prose.
+
+            A concept's entries and a struct's fields carry `---` lines; in
+            the code panel they were lines no phone could wrap.
+            """
             scanner = Scanner()
-            rows = []
+            blocks = []          # ('code', [rows]) or ('doc', indent, [text])
             for line in text.splitlines():
                 tokens = list(scanner.scan(line))
+                said = DOC.fullmatch(line)
+                if said:
+                    indent = len(line) - len(line.lstrip())
+                    if blocks and blocks[-1][0] == 'doc' and blocks[-1][1] == indent:
+                        blocks[-1][2].append(said[1])
+                    else:
+                        blocks.append(('doc', indent, [said[1]]))
+                    continue
                 spans, at = [], 0
                 while at < len(tokens):
                     cls, part = tokens[at]
@@ -640,12 +1016,30 @@ def write(root, destination, render):
                         target = None
                     spans.append(f'<a href="{target}">{marked}</a>' if target else marked)
                     at += 1
-                rows.append(''.join(spans))
-            return '<pre class="api-signature"><code>' + '\n'.join(rows) + '</code></pre>\n'
+                if blocks and blocks[-1][0] == 'code':
+                    blocks[-1][1].append(''.join(spans))
+                else:
+                    blocks.append(('code', [''.join(spans)]))
+            out = ['<div class="api-decl">']
+            for block in blocks:
+                if block[0] == 'code':
+                    out.append('<pre class="api-signature"><code>' + '\n'.join(block[1])
+                               + '</code></pre>')
+                else:
+                    paragraphs = '\n'.join(block[2]).strip().split('\n\n')
+                    out.append(f'<div class="api-doc" style="--indent:{block[1]}">' + ''.join(
+                        '<p>' + re.sub(r'`([^`]+)`', r'<code>\1</code>',
+                                       html.escape(' '.join(p.split()), quote=False)) + '</p>'
+                        for p in paragraphs if p.strip()) + '</div>')
+            return '\n'.join(out) + '\n</div>\n'
         availability = ('Shared: available on every enabled target.' if module.startswith('core/')
                         else 'Hosted targets only.' if module.startswith('hosted/')
                         else 'Target scope is enforced by the module assertion below.')
-        body = '<p class="api-condition">' + availability + '</p>\n' + prose(overview)
+        # The opening is a section of its own, untitled, so the bar says
+        # what the page is until the reader reaches the overview's first
+        # section: the shared script otherwise names the first one at once.
+        body = ('<section class="api-opening">\n' + on_this_page()
+                + '<p class="api-condition">' + availability + '</p>\n')
         if module.startswith('platform/'):
             # A module declares its scope once, in one of its files; a
             # generated file or one implementing a single system need not
@@ -658,42 +1052,82 @@ def write(root, destination, render):
             if not assertions:
                 raise ValueError(f'{module}: no target assertion')
             body += signature(assertions[0])
-        body += '<h2>Items</h2>\n<ul class="api-index">\n'
+        body += '</section>\n'
+        # A `###` of the overview is a section of the page, beside the
+        # items and the example: under the h1 it was an h3 with no h2.
+        written = prose(re.sub(r'^### ', '## ', overview, flags=re.M),
+                        link=resolver(module, aliases))
+        written = written.replace('<section class="guide" id=',
+                                  '<section class="guide api-section" id=')
+        body += written
+        toc = [(f'#{sid}', title, 'sect') for sid, title in
+               re.findall(r'<section class="guide api-section" id="([^"]+)" data-title="([^"]*)">',
+                          written)]
         grouped = {}
         for item in items:
             grouped.setdefault(item.name, []).append(item)
-        kinds = ('concept', 'type', 'atom', 'value', 'function')
         grouped = dict(sorted(grouped.items(), key=lambda entry:
-                              (kinds.index(entry[1][0].kind), entry[0])))
+                              (KINDS.index(entry[1][0].kind), entry[0])))
         table = value_table(grouped)
         tabled = table.rows if table else {}
-        for kind in kinds:
-            for name, variants in grouped.items():
-                if variants[0].kind == kind and name not in tabled:
-                    body += f'<li><a href="#item-{name}">{name}</a> <span class="api-kind">{kind}</span></li>\n'
+        body += ('<section class="api-items" id="items" data-title="Items">\n'
+                 '<h2 class="api-h">Items</h2>\n<div class="api-groups">\n')
+        toc.append(('#items', 'Items', 'sect'))
+        for kind in KINDS:
+            names = [name for name, variants in grouped.items()
+                     if variants[0].kind == kind and name not in tabled]
+            if not names:
+                continue
+            title = KIND_TITLES[kind]
+            body += (f'<div class="api-group" id="items-{kind}">'
+                     f'<h3 class="api-group-title">{title} '
+                     f'<span class="count">{len(names)}</span></h3>\n<ul class="api-index">\n')
+            body += ''.join(f'<li><a href="#item-{name}"><code>{name}</code></a></li>\n'
+                            for name in names)
+            body += '</ul></div>\n'
+            toc.append((f'#items-{kind}', f'{title} <span class="count">{len(names)}</span>',
+                        'api-toc-kind'))
+        body += ('<div class="api-group" id="items-other">'
+                 '<h3 class="api-group-title">Also on this page</h3>\n<ul class="api-index">\n')
         if table:
-            body += (f'<li><a href="#values">{len(tabled)} values by target</a> '
-                     '<span class="api-kind">table</span></li>\n')
-        body += ('<li><a href="#example">example program</a> '
-                 '<span class="api-kind">program</span></li>\n</ul>\n')
+            body += (f'<li><a href="#values">{len(tabled)} values by target</a></li>\n')
+        body += '<li><a href="#example">The example program</a></li>\n</ul></div>\n'
+        body += '</div>\n</section>\n'
         if table:
             body += value_section(table, module, source_name, reference, render,
                                   lambda ref: anchors.get(ref))
+            toc.append(('#values', 'Values by target', 'sect'))
         for name, variants in grouped.items():
             if name in tabled:
                 continue
             item = variants[0]
-            body += f'<section class="api-item" id="{item.anchor}">\n<h2>{name} <span class="api-kind">{item.kind}</span></h2>\n'
+            # The source line beside the name when there is one; a name
+            # declared once per target says each one's under its condition.
+            only = variants[0] if len(variants) == 1 else None
+            source = (f'<a class="api-source" href="{source_name(only.source)}#L{only.line}">'
+                      f'{only.source}:{only.line}</a>\n') if only else ''
+            body += (f'<section class="api-item" id="{item.anchor}" data-title="{name}" '
+                     f'data-kind="{item.kind}">\n<div class="api-head">\n'
+                     f'<h3 class="api-name"><code>{name}</code></h3>\n'
+                     f'<span class="api-kind">{item.kind}</span>\n'
+                     f'<span class="grow"></span>\n{source}'
+                     f'<a class="api-back" href="#items-{item.kind}" '
+                     f'aria-label="back to the item index">items ↑</a>\n</div>\n')
             for variant in variants:
                 if variant.condition:
-                    body += '<p class="api-condition">When <code>' + html.escape(variant.condition) + '</code></p>\n'
+                    body += ('<p class="api-condition">When <code>' + html.escape(variant.condition)
+                             + '</code>' + ('' if only else
+                                            f'\n<a class="api-source" href="{source_name(variant.source)}'
+                                            f'#L{variant.line}">{variant.source}:{variant.line}</a>\n')
+                             + '</p>\n')
                 body += signature(variant.signature, '#' + item.anchor)
-                body += f'<p class="api-source"><a href="{source_name(variant.source)}#L{variant.line}">{variant.source}:{variant.line}</a></p>\n'
                 body += prose(variant.documentation, variant.source)
             body += '</section>\n'
         body += example_section(root, example_path, example_prose, prose, render)
+        toc.append(('#example', 'Example program', 'sect'))
         sources[example_path] = (root / example_path).read_text()
-        emit(page_name(module), module, body, module + '/*.ldn', module, overview.split('\n\n')[0])
+        emit(page_name(module), module, body, module + '/*.ldn', module,
+             overview.split('\n\n')[0], toc=toc_html(toc, 'In this module'))
     for path, text in sources.items():
         hl = render.Highlighter()
         body = '<pre class="api-signature"><code>' + '\n'.join(
@@ -754,9 +1188,9 @@ def fixture_fields(directory):
 
 
 def example_run(root, example_path):
-    """The command that runs a module's program and what it prints, as
-    Markdown, from its fixture's own metadata; '' for one that prints
-    nothing the fixture compares.
+    """The command that runs a module's program, the files it reads and
+    what it prints, from its fixture's own metadata; None for one that
+    prints nothing the fixture compares.
 
     The harness gives a `run_files` file as a path wherever its lane put
     the fixture, and the page writes the name; a program shown here
@@ -766,7 +1200,7 @@ def example_run(root, example_path):
     fields = fixture_fields(directory)
     expected = fields.get('run_expect')
     if not expected or fields.get('class') != 'runtime':
-        return ''
+        return None
     name = directory.name.removeprefix('library-')
     words = fields.get('run_args', '').split()
     files = [f.strip() for f in fields.get('run_files', '').split(',') if f.strip()]
@@ -775,36 +1209,49 @@ def example_run(root, example_path):
     stdin = fields.get('stdin')
     if stdin:
         command += ' < ' + stdin
-    out = []
-    for given in files + ([stdin] if stdin else []):
-        out.append(f'With `{given}` holding:\n\n```text\n'
-                   + (directory / given).read_text().rstrip('\n') + '\n```\n')
+    given = [(each, (directory / each).read_text().rstrip('\n'))
+             for each in files + ([stdin] if stdin else [])]
     status = fields.get('status', '0')
-    ends = '' if status == '0' else f', and it exits with {status}'
     stream = ('standard output' if fields.get('stream') == 'output'
-              else 'standard output and standard error together')
-    out.append(f'Compiled and run, it prints this on {stream}{ends}:\n\n'
-               f'```sh\n{command}\n```\n\n```text\n'
-               + (directory / expected).read_text().rstrip('\n') + '\n```\n')
-    return '\n'.join(out)
+              else 'standard output and standard error')
+    said = stream + ('' if status == '0' else f', exit status {status}')
+    return dict(command=command, files=given, said=said,
+                output=(directory / expected).read_text().rstrip('\n'))
 
 
 def example_section(root, example_path, example_prose, prose, render):
-    """The page's last section: the module's complete program."""
-    body = ('<section class="api-example" id="example">\n'
-            '<h2>Example program</h2>\n')
+    """The page's last section: the module's complete program, in the
+    site's program panel -- its path and length above it, and below it
+    what it reads and what running it prints."""
+    body = ('<section class="api-example" id="example" data-title="Example program">\n'
+            '<h2 class="api-h">Example program</h2>\n')
     if example_prose:
         body += prose(example_prose)
     body += ('<p>This complete program is one of the compiler\'s runtime tests. '
              f'<a href="{source_name(example_path)}#L1">View source</a>.</p>\n')
     run = example_run(root, example_path)
     example = (root / example_path).read_text()
-    listing = render.listing_of(render.render_landin(example.splitlines(),
-                                                     render.Highlighter()))
+    lines = example.splitlines()
+    listing = render.listing_of(render.render_landin(lines, render.Highlighter()))
+    figure = ('<figure class="panel api-program">\n'
+              '<figcaption><span class="dot"></span>'
+              f'<span class="path">{html.escape(example_path)}</span>'
+              f'<span class="grow"></span><span>{len(lines)} lines</span></figcaption>\n'
+              + listing + '\n')
+    if run:
+        for given, text in run['files']:
+            figure += (f'<div class="foot"><span><span class="mono">{html.escape(given)}</span> holds</span></div>\n'
+                       + render.listing_of('<pre>' + html.escape(text, quote=False) + '</pre>') + '\n')
+        figure += ('<div class="foot"><span>in a terminal</span><span class="grow"></span>'
+                   f'<span>prints on {run["said"]}</span></div>\n'
+                   + render.listing_of('<pre>$ ' + html.escape(run['command'], quote=False)
+                                       + '\n' + html.escape(run['output'], quote=False)
+                                       + '</pre>') + '\n')
+    figure += '</figure>\n'
     if example_prose or run:
-        body += listing + (prose(run) if run else '')
+        body += figure
     else:
-        body += '<details><summary>The program</summary>\n' + listing + '</details>\n'
+        body += f'<details><summary>The program, {len(lines)} lines</summary>\n{figure}</details>\n'
     return body + '</section>\n'
 
 
@@ -941,7 +1388,7 @@ def verify(destination, pages, modules, render, sources=None, overviews=None,
     for module, text in (overviews or {}).items():
         written = (destination / page_name(module)).read_text()
         start = written.index('<p class="api-condition">')
-        region = written[start:written.index('<h2>Items</h2>', start)]
+        region = written[start:written.index('<section class="api-items" id="items"', start)]
         got = Counter(render.WORD.findall(html.unescape(re.sub(r'<[^>]+>', ' ', region))))
         # A fenced program's words are its highlighted tokens, split by
         # their markup; check.py holds each such block to a fixture's text.
@@ -953,7 +1400,7 @@ def verify(destination, pages, modules, render, sources=None, overviews=None,
             raise ValueError(f'{module}: overview lost words: {sorted(missing)}')
     for module, text in (examples or {}).items():
         written = (destination / page_name(module)).read_text()
-        start = written.index('<section class="api-example" id="example">')
+        start = written.index('<section class="api-example" id="example"')
         region = written[start:written.index('</section>', start)]
         got = Counter(render.WORD.findall(html.unescape(re.sub(r'<[^>]+>', ' ', region))))
         want = Counter(render.WORD.findall(re.sub(r'\]\([^)]+\)', ']', text)))
