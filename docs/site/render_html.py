@@ -59,30 +59,34 @@ SITE_URL = "https://www.701.dev"
 OG_IMAGE = "og.png"
 
 DOCS = [
-    dict(key="spec", src="spec.md", out="spec.html", kind="document",
+    dict(key="spec", banner=True, src="spec.md", out="spec.html", kind="document",
          nav="the specification", group="the specification",
          blurb="The normative reference, not for reading through: look up "
                "the exact rule a tour entry or a compiler message names."),
+    #  The tour's opening three paragraphs are its lead, its first
+    #  programs wrap on a phone, and its sidebar says where its path ends.
     dict(key="tour", src="tour.md", out="tour.html", kind="document",
+         lead_paras=3, wrap_opening=True,
+         reference_after="What you can write now",
          nav="the tour", group="the specification",
          blurb="The language explained, construct by numbered construct. "
                "It teaches; the specification decides."),
-    dict(key="p1", group="design stress tests", src="prototype-1-driver.md", out="prototype-1.html", kind="document",
+    dict(key="p1", banner=True, group="design stress tests", src="prototype-1-driver.md", out="prototype-1.html", kind="document",
          nav="prototype 1 — driver",
          blurb="Not learning material: a Cortex-M driver sketch, written "
                "before the compiler to find where the specification was "
                "silent. Its findings are the point."),
-    dict(key="p2", group="design stress tests", src="prototype-2-parser.md", out="prototype-2.html", kind="document",
+    dict(key="p2", banner=True, group="design stress tests", src="prototype-2-parser.md", out="prototype-2.html", kind="document",
          nav="prototype 2 — parser",
          blurb="Not learning material: a recovering parser sketch, written "
                "before the compiler to find where the specification was "
                "silent. Its findings are the point."),
-    dict(key="p3", group="design stress tests", src="prototype-3-containers.md", out="prototype-3.html", kind="document",
+    dict(key="p3", banner=True, group="design stress tests", src="prototype-3-containers.md", out="prototype-3.html", kind="document",
          nav="prototype 3 — containers",
          blurb="Not learning material: a generic container library sketch, "
                "written before the compiler to find where the specification "
                "was silent. Its findings are the point."),
-    dict(key="p4", group="design stress tests", src="prototype-4-app.md", out="prototype-4.html", kind="document",
+    dict(key="p4", banner=True, group="design stress tests", src="prototype-4-app.md", out="prototype-4.html", kind="document",
          nav="prototype 4 — application",
          blurb="Not learning material: a hosted application sketch, written "
                "before the compiler to find where the specification was "
@@ -303,7 +307,8 @@ a.skip{
   padding:.45rem .7rem; background:var(--panel); color:var(--ink);
   border:1px solid var(--accent); font-size:.85rem;
 }
-a.skip:focus{top:.5rem}
+/*  Below the bar, not over the brand.  */
+a.skip:focus{top:calc(var(--bar) + .5rem)}
 html{-webkit-text-size-adjust:100%}
 body{
   margin:0; background:var(--bg); color:var(--ink);
@@ -330,8 +335,21 @@ main input:not([type="checkbox"]):not([type="radio"]){border-color:var(--rule-st
 /*  A long path in a sentence or a cell may break anywhere rather than
     push the page wider than the phone.  An identifier keeps its case
     wherever an uppercase transform reaches it.  */
-p code, li code, td code, th code, blockquote code{overflow-wrap:anywhere}
+/*  A long path in a sentence or a cell may break rather than push the
+    page wider than the phone.  In a sentence it breaks only where a word
+    cannot fit at all -- `anywhere` split `--level=armv7-m` after its
+    dashes and identifiers mid-token -- and on a wide screen a short span
+    does not break at all; a span the generator marks long still may.  A
+    table cell and a caption's path have no room to spare and keep
+    `anywhere`.  */
+p code, li code, blockquote code{overflow-wrap:break-word}
+td code, th code{overflow-wrap:anywhere}
+@media (min-width:48rem){
+  p code:not(.long), li code:not(.long){white-space:nowrap}
+}
 :is(h1,h2,h3,h4,.where,summary) code{text-transform:none}
+/*  Code in a heading is part of the title, not a chip inside it.  */
+:is(h1,h2,h3,h4) code{background:none; padding:0; font-size:.92em}
 a{
   color:var(--accent); text-underline-offset:.18em;
   text-decoration-thickness:1px;
@@ -346,8 +364,8 @@ header.bar{
   position:sticky; top:0; z-index:40;
   display:flex; align-items:center; gap:.9rem;
   height:var(--bar); padding:0 1.5rem 0 1.25rem;
-  background:color-mix(in oklch, var(--bg) 90%, transparent);
-  backdrop-filter:saturate(1.3) blur(10px);
+  /*  Opaque: translucent, the text scrolling under it showed through.  */
+  background:var(--bg);
   border-bottom:1px solid var(--rule);
 }
 header.bar .brand{
@@ -392,7 +410,7 @@ input.menu-x:checked + label{
   :root:has(#theme:checked) .dark-only{display:inline-block}
   :root:has(#theme:checked) .light-only{display:none}
 }
-input.theme-x, input.menu-x{
+.sr-only, input.theme-x, input.menu-x{
   position:absolute; width:1px; height:1px; margin:-1px; padding:0;
   border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
 }
@@ -408,18 +426,32 @@ input.menu-x:focus-visible + label{
 @media (max-width:35rem){
   :root{--bar:3.75rem}
   header.bar{gap:.45rem; padding:0 .65rem}
-  /*  A phone keeps its place in the document, cut short.  */
-  header.bar .where{min-width:0; flex:0 1 auto; font-size:.7rem}
-  header.bar .grow{flex:1 0 0}
-  header.bar .src, header.bar label{
-    width:2.75rem; height:2.75rem; justify-content:center; gap:0; padding:0;
+  /*  A phone keeps its place in the document, cut short, and gets the
+      room discuss and source took: those two move to the foot of the
+      drawer, where a reader looking for them opens the menu anyway.  */
+  header.bar .where{min-width:0; flex:1 1 auto; font-size:.7rem}
+  header.bar .grow{display:none}
+  header.bar .src{display:none}
+  header.bar label{height:2.75rem; justify-content:center; padding:0 .7rem}
+  header.bar label[for="theme"]{width:2.75rem; gap:0; padding:0}
+  header.bar label[for="theme"] span{
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+    border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
   }
-  header.bar .src span, header.bar label span{
+}
+/*  On a phone narrower than the menu's word needs, the icon alone.  */
+@media (max-width:22rem){
+  header.bar label[for="menu"]{width:2.75rem; gap:0; padding:0}
+  header.bar label[for="menu"] span{
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
   }
 }
 header.bar label[for="menu"]{display:none}
+/*  The drawer's foot: discuss and source, where a phone's bar has no
+    room for them.  Hidden wherever the bar still carries them.  */
+nav.side .side-foot{display:none}
+label.scrim{display:none}
 
 /* ---- layout ---- */
 .wrap{display:grid; grid-template-columns:16.5rem minmax(0,1fr); align-items:start}
@@ -432,7 +464,10 @@ nav.side{
   padding:1.2rem 0 3rem; border-right:1px solid var(--rule);
   font-size:.875rem; scrollbar-width:thin;
 }
-nav.side a{display:block; color:var(--ink-soft); text-decoration:none; line-height:1.35}
+nav.side a{display:block; color:var(--ink-soft); text-decoration:none; line-height:1.35;
+  text-wrap:pretty}
+/*  Inside the link: the drawer and the sidebar clip anything outside.  */
+nav.side a:focus-visible{outline-offset:-2px}
 nav.side a.doc{padding:.26rem 1rem .26rem 1.25rem; border-left:2px solid transparent}
 nav.side a.doc:hover{color:var(--accent)}
 nav.side a.doc.here{color:var(--accent); border-left-color:var(--accent); font-weight:650}
@@ -468,11 +503,29 @@ nav.side a.sect{
 }
 nav.side a.sect:hover{color:var(--ink)}
 nav.side a.sect.here{color:var(--ink); border-left-color:var(--accent)}
+/*  A section's own entries, under it, where a page lists them: indented,
+    smaller, and with the script running, shown only under the section
+    being read.  */
+nav.side .subs a.sect{padding-left:1.55rem; font-size:.76rem}
+nav.side .toc.folding .subs{display:none}
+nav.side .toc.folding .subs.open{display:block}
+/*  Where a document's teaching ends and its reference begins.  */
+nav.side .toc .divide{display:block; margin:.6rem 0 .25rem; padding:.45rem .75rem 0 .8rem;
+  border-top:1px solid var(--rule); font-family:var(--mono); font-size:.68rem;
+  color:var(--ink-faint)}
+nav.side .toc .divide ~ a.sect:not(.here){color:var(--ink-faint)}
+nav.side .toc .divide ~ a.sect:not(.here):hover{color:var(--ink)}
 
 main{padding:2.75rem 3rem 6rem; min-width:0; max-width:62rem}
 
 /* ---- hero ---- */
 .hero{border-bottom:1px solid var(--rule); padding-bottom:2rem; margin-bottom:.5rem}
+/*  A title with nothing under it needs no rule to end it, and the first
+    section follows it closely rather than across an empty band.  */
+.hero.bare{border-bottom:0; padding-bottom:0; margin-bottom:0}
+.hero.bare h1{margin-bottom:0}
+.hero + section{padding-top:1.75rem}
+.hero.bare + section{padding-top:1.25rem}
 .hero h1{
   margin:.45rem 0 1rem; font-size:clamp(1.8rem, 1.3rem + 1.9vw, 2.6rem);
   line-height:1.08; letter-spacing:-.025em; font-weight:650; text-wrap:balance;
@@ -482,7 +535,7 @@ main{padding:2.75rem 3rem 6rem; min-width:0; max-width:62rem}
 .hero pre{
   margin:.7rem 0; padding:.7rem .9rem; overflow-x:auto;
   background:var(--code-bg); border:1px solid var(--rule);
-  font-size:.8rem; line-height:1.55; color:var(--ink-soft);
+  font-size:.82rem; line-height:1.55; color:var(--ink-soft);
 }
 .hero blockquote{
   margin:.7rem 0; padding:.1rem 0 .1rem 1rem;
@@ -490,7 +543,11 @@ main{padding:2.75rem 3rem 6rem; min-width:0; max-width:62rem}
 }
 
 /* ---- sections ---- */
-section{padding-top:3rem; scroll-margin-top:var(--bar)}
+section{padding-top:3rem; scroll-margin-top:calc(var(--bar) + 1rem)}
+/*  Every addressable heading lands clear of the sticky bar, not under it:
+    from-c.html#printf put its heading at the top edge, behind the bar.  */
+main [id]{scroll-margin-top:calc(var(--bar) + 1rem)}
+main .item[id]{scroll-margin-top:calc(var(--bar) + 1.5rem)}
 /*  A section heading outranks the text under it: larger than the body,
     in sentence case, with the rule running out to the column's edge.  */
 section > h2{
@@ -506,7 +563,7 @@ section > p{max-width:42rem}
 
 /* ---- one construct ---- */
 .item{position:relative; padding:0 0 1.6rem 0;
-      scroll-margin-top:calc(var(--bar) + .6rem)}
+      scroll-margin-top:calc(var(--bar) + 1.5rem)}
 .item .tag{
   display:inline-block; font-size:.75rem; color:var(--ink-faint);
   text-decoration:none; margin-bottom:.2rem;
@@ -514,12 +571,18 @@ section > p{max-width:42rem}
 .item .tag:hover{color:var(--accent)}
 .item:target .tag, .item.lit .tag{color:var(--accent); font-weight:700}
 /*  Arriving at a construct draws a brick rule down its left edge.  */
-.item:target::before, .item.lit::before{
-  content:""; position:absolute; left:-1.1rem; top:.3rem; bottom:1.4rem;
-  width:2px; background:var(--accent);
+/*  Only where the gutter holds it: narrower, the rule sat at the
+    screen's edge, and the accent tag already marks the landing.  */
+@media (min-width:70rem){
+  .item:target::before, .item.lit::before{
+    content:""; position:absolute; left:-1.1rem; top:.3rem; bottom:1.4rem;
+    width:2px; background:var(--accent);
+  }
 }
 .item p{margin:0 0 .75rem; max-width:42rem}
 .item p:last-child{margin-bottom:0}
+/*  An entry ending in code is spaced like one ending in prose.  */
+.item > :last-child{margin-bottom:0}
 @media (min-width:70rem){
   .item{padding-left:4.2rem}
   .item .tag{position:absolute; left:0; top:.55rem; margin:0}
@@ -528,33 +591,53 @@ section > p{max-width:42rem}
 /* ---- code ---- */
 .listing{position:relative; margin:.4rem 0 1.1rem}
 .listing pre{
-  margin:0; padding:.85rem 1rem; overflow-x:auto;
+  /*  The right padding is the copy button's corner, so the first line
+      clears it rather than running under it.  */
+  margin:0; padding:.85rem 3rem .85rem 1rem; overflow-x:auto;
   background:var(--code-bg); border:1px solid var(--code-rule);
   font-size:.82rem; line-height:1.6; tab-size:4;
 }
+/*  The copy button sits in the panel's top-right corner on every device,
+    at full strength with a control's border: faded to .55 at rest it read
+    as disabled, and on a phone its strip of its own was 36px of nothing
+    above every listing.  */
 .listing .copy{
-  position:absolute; top:.45rem; right:.45rem; opacity:.55;
-  display:inline-flex; align-items:center; justify-content:center;
-  min-width:2rem; min-height:2rem; padding:0;
+  position:absolute; top:.45rem; right:.45rem;
+  display:inline-flex; align-items:center; justify-content:center; gap:.35rem;
+  min-width:2rem; min-height:2rem; padding:0 .4rem;
   font:inherit; font-size:.8rem; line-height:1;
-  color:var(--ink-faint); background:var(--panel); cursor:pointer;
-  border:1px solid var(--rule);
-  transition:opacity .12s;
+  color:var(--ink-soft); background:var(--panel); cursor:pointer;
+  border:1px solid var(--rule-strong);
 }
-.listing .copy:hover{color:var(--accent); border-color:var(--accent-soft)}
+.listing .copy:hover{color:var(--accent); border-color:var(--accent)}
 .listing .copy .done{display:none}
 .listing .copy.done .i{display:none}
 .listing .copy.done .done{display:inline-block; color:var(--q)}
+/*  Copied: the button says so in words, for two seconds.  */
+.listing .copy.done::after{content:"copied"; font-family:var(--mono); font-size:.72rem;
+  color:var(--ink)}
 /*  No clipboard: the code is selected instead, and the button says so.  */
 .listing .copy.manual .i{display:none}
-.listing .copy.manual::after{content:"selected \2014  copy it"; padding:0 .55rem;
+.listing .copy.manual::after{content:"selected \2014  copy it"; padding:0 .15rem;
   font-family:var(--mono); font-size:.72rem; color:var(--accent)}
-.listing:hover .copy, .listing .copy:focus, .listing .copy.manual{opacity:1}
-/*  On a phone, or wherever nothing hovers, the button gets a strip of
-    its own above the code instead of sitting on top of the first line.  */
-@media (max-width:48rem), (hover:none){
-  .listing{padding-top:2.25rem}
-  .listing .copy{top:0; right:0; opacity:1; min-height:2rem}
+/*  On a phone a listing's comments wrap, and its code keeps its columns:
+    102 of the tour's 176 listings scrolled sideways at 390px, most of
+    them for a comment.  A listing marked `wraps` -- the first programs a
+    reader meets -- wraps whole, each line under its own indentation.  */
+@media (max-width:35rem){
+  /*  And a listing runs to the screen's edges, as wide as a phone has:
+      the copy button's corner costs six columns, and the page's margins
+      gave back five of them.  */
+  main .listing:not(figure .listing), main pre.sample:not(.listing > pre){
+    margin-inline:-1.15rem}
+  main .listing:not(figure .listing) pre, main pre.sample:not(.listing > pre){
+    border-inline:0; padding-left:1.15rem}
+  main figure.panel{margin-inline:-1.15rem; max-width:none; border-inline:0}
+  main figure.panel .listing pre{padding-left:1.15rem}
+  .listing pre :is(.c, .cd){white-space:pre-wrap}
+  .listing.wraps pre{white-space:pre-wrap; overflow-wrap:anywhere}
+  .listing.wraps pre .ln{display:block;
+    padding-left:calc((var(--i, 0) + 2) * 1ch); text-indent:calc((var(--i, 0) + 2) * -1ch)}
 }
 /*  A panel that scrolls sideways says so at its right edge (JS marks one
     that overflows, and unmarks it at the end of its scroll).  */
@@ -565,7 +648,7 @@ section > p{max-width:42rem}
 pre.sample:not(.listing > pre){
   margin:.15rem 0 .85rem; padding:.55rem .85rem; overflow-x:auto;
   background:var(--code-bg); border:1px solid var(--rule);
-  font-size:.8rem; line-height:1.55;
+  font-size:.82rem; line-height:1.55;
 }
 .k{color:var(--k)} .t{color:var(--t)} .f{color:var(--f)} .d{color:var(--d); font-weight:650}
 .n{color:var(--n)} .q{color:var(--q)} .v{color:var(--b)} .b{color:var(--b); font-weight:600}
@@ -574,7 +657,22 @@ pre.sample:not(.listing > pre){
 pre a.cite, pre a.cite:hover{color:inherit; text-decoration-style:dotted}
 
 /* ---- citations ---- */
-a.cite{font-size:.9em; text-decoration:none; border-bottom:1px dotted var(--accent-soft)}
+/*  A citation, and a link whose text is code, is quiet: the ink of the
+    prose around it with an accent underline, and the accent itself only
+    under the pointer or the keyboard.  Accent text in every sentence --
+    three citations a line in places -- outshouted the prose, and the
+    navigation and real links, which keep it.  */
+a.cite, :is(p,li,td,th,dd,blockquote,figcaption) a:has(> code:only-child){
+  color:var(--ink-soft); text-decoration:underline; text-decoration-style:dotted;
+  text-decoration-thickness:1px; text-underline-offset:.22em;
+  text-decoration-color:var(--accent-soft);
+}
+a.cite{font-size:.9em}
+:is(p,li,td,th,dd,blockquote,figcaption) a:has(> code:only-child) code{color:inherit}
+a.cite:is(:hover,:focus-visible),
+:is(p,li,td,th,dd,blockquote,figcaption) a:has(> code:only-child):is(:hover,:focus-visible){
+  color:var(--accent); text-decoration-style:solid; text-decoration-color:currentColor;
+}
 a.cite:hover{background:var(--accent-bg)}
 #pop{
   position:absolute; z-index:60; max-width:29rem; display:none;
@@ -595,24 +693,51 @@ footer{
 }
 footer code{font-size:.9em; color:var(--ink-soft)}
 footer .totop{float:right; margin-left:1rem}
-.anchor{position:absolute; scroll-margin-top:calc(var(--bar) + .6rem)}
+.anchor{position:absolute; scroll-margin-top:calc(var(--bar) + 1rem)}
 
 @media (max-width:60rem){
   .wrap{grid-template-columns:minmax(0,1fr)}
   footer{grid-column:1; margin-left:1.15rem; margin-right:1.15rem}
+  /*  The drawer runs the full height under the bar, over a scrim that
+      closes it when tapped -- a second label for the box, so that works
+      without a script too -- and the page behind it does not scroll.  */
   nav.side{
-    position:fixed; inset:var(--bar) 0 auto 0; height:auto; max-height:78vh;
-    background:var(--bg); border-right:0; border-bottom:1px solid var(--rule);
-    box-shadow:var(--sh); z-index:35; display:none;
+    position:fixed; inset:var(--bar) auto 0 0; width:min(22rem, 88vw);
+    /*  Stretched, not the sidebar's `align-self:start`: a fixed box
+        aligned to its start shrinks to its content, and the drawer ran
+        past the screen's foot with nothing to scroll.  */
+    height:auto; max-height:none; align-self:stretch;
+    background:var(--bg); border-right:1px solid var(--rule);
+    box-shadow:var(--sh); z-index:35; display:none; padding-bottom:1.5rem;
   }
   /*  A checkbox rather than a button, so the drawer opens without a
       script; the script only closes it again after a link is followed.  */
   :root:has(#menu:checked) nav.side{display:block}
+  :root:has(#menu:checked) label.scrim{display:block; position:fixed;
+    inset:var(--bar) 0 0 0; z-index:34; cursor:pointer;
+    background:oklch(0.2 0.02 255 / .35)}
+  :root:has(#menu:checked){overflow:hidden}
   header.bar label[for="menu"]{display:inline-flex}
   main{padding:1.75rem 1.15rem 5rem}
   /*  A finger needs a target: at least 24px a link in the drawer.  */
   nav.side a.doc, nav.side a.sect{padding-block:.5rem; min-height:24px}
 }
+@media (max-width:35rem){
+  nav.side .side-foot{display:flex; gap:.6rem; margin:1.4rem 1.25rem 0;
+    padding-top:1rem; border-top:1px solid var(--rule)}
+  nav.side .side-foot a{display:inline-flex; align-items:center; gap:.45rem;
+    padding:.55rem .75rem; border:1px solid var(--rule-strong);
+    font-family:var(--mono); font-size:.75rem; color:var(--ink-soft)}
+  nav.side .side-foot a:hover{color:var(--accent); border-color:var(--accent)}
+}
+"""
+CSS = CSS.replace("{DARK}", DARK)
+
+#  The paper's rules come last, after GUIDE_CSS and anything a page adds:
+#  written inside CSS, before GUIDE_CSS, its square bullets lost to the
+#  guide's own `list-style:none` at the same specificity, and every list
+#  printed without a marker.
+PRINT_CSS = """
 /*  Paper is light whatever the screen was: the dark values printed pale
     ink on white.  */
 @media print{
@@ -632,18 +757,18 @@ footer .totop{float:right; margin-left:1rem}
   body{background:#fff; color:#000}
   .wrap{display:block}
   main{max-width:42rem; padding:0}
-  .listing{padding-top:0}
-  .listing pre, pre.sample{white-space:pre-wrap}
+  .listing pre, pre.sample{white-space:pre-wrap; padding-right:1rem}
   .overflows{-webkit-mask-image:none; mask-image:none}
   a{color:inherit}
   h1, h2, h3, .item > .tag{break-after:avoid}
   .item > h3, .listing, figure.panel{break-inside:avoid}
   .guide ul:not([class]){list-style:square; padding-left:1.2rem}
   .guide ul:not([class]) > li::before{display:none}
+  .item:target::before, .item.lit::before{display:none}
+  label.scrim{display:none}
   footer{margin:2rem 0 0}
 }
 """
-CSS = CSS.replace("{DARK}", DARK)
 
 #  The stacks are substituted rather than written above, because the list
 #  of vendored families is assets/fonts.py's to keep, and the CSS is one
@@ -698,9 +823,24 @@ JS = """
   var root=document.documentElement;
   var side=document.querySelector('nav.side');
   var menu=document.getElementById('menu');
+  /* The box says whether the drawer it controls is open, and opening it
+     brings the section being read into view inside it, rather than the
+     top of a list forty entries long. */
+  function opened(){
+    if(!menu) return;
+    menu.setAttribute('aria-expanded',menu.checked?'true':'false');
+    if(menu.checked && side){
+      var here=side.querySelector('a.sect.here')||side.querySelector('a.doc.here');
+      if(here) requestAnimationFrame(function(){
+        here.scrollIntoView({block:'center',behavior:'instant'});
+      });
+    }
+  }
+  if(menu){ menu.addEventListener('change',opened); opened(); }
   function closeMenu(focus){
     if(!menu || !menu.checked) return;
     menu.checked=false;
+    opened();
     if(focus) menu.focus();
   }
   if(side) side.addEventListener('click',function(e){
@@ -776,17 +916,27 @@ JS = """
     b.classList.add('manual');
     setTimeout(function(){ b.classList.remove('manual'); },4000);
   }
+  /* Copied is said, not only drawn: the button reads "copied" for two
+     seconds, and a status region tells a screen reader the same. */
+  var status=document.createElement('span');
+  status.className='sr-only'; status.setAttribute('role','status');
+  status.setAttribute('aria-live','polite');
+  document.body.appendChild(status);
   function done(b){
     b.classList.add('done');
-    setTimeout(function(){ b.classList.remove('done'); },1100);
+    status.textContent='copied';
+    setTimeout(function(){ b.classList.remove('done'); status.textContent=''; },2000);
   }
   document.addEventListener('click',function(e){
     var b=e.target.closest('.copy'); if(!b) return;
     var pre=b.parentNode.querySelector('pre'); if(!pre) return;
+    /* The text as written: innerText follows the layout, and a listing
+       that wraps on a phone sets each line as a block of its own. */
+    var text=pre.textContent;
     /* A page opened from disk or served over plain http has no
        clipboard; the code is selected instead and the button says so. */
     if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
-      navigator.clipboard.writeText(pre.innerText).then(function(){ done(b); },
+      navigator.clipboard.writeText(text).then(function(){ done(b); },
         function(){ selectCode(b,pre); });
     } else selectCode(b,pre);
   });
@@ -812,9 +962,17 @@ JS = """
   /* which section am I in */
   var where=document.getElementById('where');
   var links={}, sections=[].slice.call(document.querySelectorAll('main section'));
-  document.querySelectorAll('nav.side a.sect').forEach(function(a){
+  /* The entries a section holds, which the bar names once one is being
+     read: the site cites entries, not sections.  The sidebar still
+     marks the section. */
+  var items=[].slice.call(document.querySelectorAll('main .item[data-title]'));
+  document.querySelectorAll('nav.side a.sect:not(.sub)').forEach(function(a){
     links[a.getAttribute('href').slice(1)]=a;
   });
+  /* A section's own entries in the sidebar show only under the section
+     being read, where the list would otherwise run to forty. */
+  var folds=[].slice.call(document.querySelectorAll('nav.side .toc[data-fold] .subs'));
+  folds.forEach(function(f){ f.parentNode.classList.add('folding'); });
   /* Which one is decided by where the sections are, not by which ones a
      margin happens to overlap.  An observer band starting above the
      landing point meant the tail of the previous section was still inside
@@ -826,21 +984,37 @@ JS = """
         reaches the line, so the top of the page keeps its label. */
     var kind=where?where.textContent:'';
     var last=0;
+    /*  A section lands a little below the bar's bottom edge, so the line
+        that decides which one you are in is set below that landing.  */
+    function line(){ return (bar?bar.getBoundingClientRect().bottom:48)+32; }
     function current(){
-      /*  A section lands with its top at the bar's bottom edge, so
-          the line that decides which one you are in has to be a
-          hair below that and not above it.  */
-      var line=(bar?bar.getBoundingClientRect().bottom:48)+8;
-      var best=null;
+      var at=line(), best=null;
       sections.forEach(function(s){
         if(s.classList.contains('hide')) return;
-        if(s.getBoundingClientRect().top<=line) best=s;
+        if(s.getBoundingClientRect().top<=at) best=s;
       });
       return best;
     }
+    /*  The last entry whose top has passed the line, found by halving:
+        the tour has four hundred.  Only one inside the current section
+        counts, so a section's opening prose names the section.  */
+    function entry(section){
+      if(!section || !items.length) return null;
+      var at=line(), lo=0, hi=items.length-1, best=-1;
+      while(lo<=hi){
+        var mid=(lo+hi)>>1;
+        if(items[mid].getBoundingClientRect().top<=at){ best=mid; lo=mid+1; }
+        else hi=mid-1;
+      }
+      var it=best<0?null:items[best];
+      return it && section.contains(it) ? it : null;
+    }
     function mark(){
-      var now=current();
-      if(where) where.textContent=(now&&now.dataset.title)||kind;
+      var now=current(), it=entry(now);
+      if(where) where.textContent=(it&&it.dataset.title)||(now&&now.dataset.title)||kind;
+      folds.forEach(function(f){
+        f.classList.toggle('open',!!now && f.dataset.of===now.id);
+      });
       Object.keys(links).forEach(function(k){
         var on=!!now && (k===now.id);
         links[k].classList.toggle('here',on);
@@ -964,9 +1138,22 @@ JS = """
     var inside=function(n){ return n && (shown.contains(n) || pop.contains(n)); };
     if(inside(from) && !inside(to)) later();
   });
+  /* A tap focuses the link before it clicks it.  Opened on that focus,
+     the preview moved the page under the finger, the click landed on the
+     body and closed it again: under a touch, the click opens it and the
+     focus that precedes it is ignored.  Keyboard focus still opens it. */
+  var pressed=0;
+  function press(e){
+    if(e.type==='touchstart' || e.pointerType==='touch' || e.pointerType==='pen')
+      pressed=Date.now();
+  }
+  addEventListener('pointerdown',press,{passive:true,capture:true});
+  addEventListener('touchstart',press,{passive:true,capture:true});
+  function touching(){ return Date.now()-pressed<1000; }
   document.addEventListener('focusin',function(e){
     var a=e.target.closest(CITED);
-    if(a) show(a); else if(pop && pop.contains(e.target)) keep();
+    if(a){ if(!(touch.matches && touching())) show(a); }
+    else if(pop && pop.contains(e.target)) keep();
   });
   document.addEventListener('focusout',function(e){
     if(shown && !(e.relatedTarget && (pop.contains(e.relatedTarget) ||
@@ -989,11 +1176,17 @@ JS = """
   window.addEventListener('scroll',function(){ if(!touch.matches) hide(); },{passive:true});
 
   /* light up the construct a link arrives at */
+  var unlit=0;
   function lit(){
     document.querySelectorAll('.lit').forEach(function(n){ n.classList.remove('lit'); });
+    clearTimeout(unlit);
     if(location.hash.length>1){
       var t=document.getElementById(location.hash.slice(1));
-      if(t) t.classList.add('lit');
+      if(t){
+        t.classList.add('lit');
+        /* The light is for arriving; it goes out after a few seconds. */
+        unlit=setTimeout(function(){ t.classList.remove('lit'); },4000);
+      }
     }
   }
   window.addEventListener('hashchange',function(){ hide(); lit(); }); lit();
@@ -1025,11 +1218,38 @@ def slug(title):
     return s or "section"
 
 
-def listing(code_html, label=""):
-    return listing_of(f"<pre>{code_html}</pre>", label)
+def listing(code_html, label="", wrap=False):
+    if wrap:
+        code_html = hanging(code_html)
+    return listing_of(f"<pre>{code_html}</pre>", label, wrap)
 
 
-def listing_of(pre_html, label=""):
+#  A line's leading spaces, read off its highlighted HTML: the scanner
+#  leaves whitespace outside any span, and entities are never spaces.
+LEADING = re.compile(r"^((?:<span[^>]*>)*)( *)")
+
+
+def hanging(code_html):
+    """Each line of a listing as a span of its own, carrying its indent.
+
+    On a phone a listing marked `wraps` wraps whole, and each line's
+    continuation hangs two columns in from where the line itself starts,
+    so a wrapped call still reads as the statement it is part of.  The
+    line break stays inside the span, as text, so the page copies, reads
+    and verifies as the listing it was; wide, the spans are inline and
+    nothing changes.
+    """
+    lines = code_html.split("\n")
+    out = []
+    for at, line in enumerate(lines):
+        indent = len(LEADING.match(line).group(2))
+        style = f' style="--i:{indent}"' if indent else ""
+        end = "\n" if at + 1 < len(lines) else ""
+        out.append(f'<span class="ln"{style}>{line}{end}</span>')
+    return "".join(out)
+
+
+def listing_of(pre_html, label="", wrap=False):
     """The frame around a listing whose <pre> is already built.
 
     A <pre> may not contain a <pre>, and render_sample returns one of its
@@ -1040,13 +1260,13 @@ def listing_of(pre_html, label=""):
     #  what a screen reader announces, one after another.  The construct
     #  the listing belongs to is the only thing that tells them apart.
     says = (f'copy the code for [{label}]' if label else "copy the code")
-    return (f'<div class="listing">{pre_html}'
+    return (f'<div class="listing{" wraps" if wrap else ""}">{pre_html}'
             f'<button class="copy" type="button" aria-label="{says}" '
             f'title="{says}">' + icons.use("copy") + icons.use("check", "i done")
             + "</button></div>")
 
 
-def render_landin(lines, hl):
+def render_landin(lines, hl, wrap=False):
     """A block tagged `landin` is Landin, and every line of it is highlighted.
 
     Nothing is guessed here, because the fence already said what the block
@@ -1057,9 +1277,8 @@ def render_landin(lines, hl):
     across the tour and the four prototypes rendered with no highlighting
     at all, and every word was on the page, so the gate saw nothing.
     """
-    return ('<pre class="sample">'
-            + "\n".join(hl.line(l) if l.strip() else "" for l in lines)
-            + "</pre>")
+    code = "\n".join(hl.line(l) if l.strip() else "" for l in lines)
+    return '<pre class="sample">' + (hanging(code) if wrap else code) + "</pre>"
 
 
 def render_sample(lines, hl, links):
@@ -1120,6 +1339,7 @@ GUIDES = [
                "exercises and the Benchmark Game ports."),
     dict(key="from-c", src="docs/from-c.md", out="from-c.html",
          nav="for C programmers", group="the language", captions=True,
+         nest=True,
          blurb="Each habit a C programmer brings, from `#include` to "
                "`exit`, in its Landin form, and the habits with no answer "
                "yet."),
@@ -1241,8 +1461,9 @@ GUIDE_CSS = """
 .guide blockquote p:last-child{margin:0}
 /*  A page's banner -- "You probably do not want to read this", "Not
     learning material" -- is the first thing it says and must not read
-    as the faintest.  */
-.guide#top > blockquote:first-child{
+    as the faintest.  Only the pages that carry one: the README opens
+    with its pitch in a quote, and that is not a warning.  */
+main.banner .guide#top > blockquote:first-child{
   color:var(--ink); background:var(--panel-2); border:1px solid var(--rule);
   border-left:3px solid var(--accent); padding:.85rem 1.1rem; margin-bottom:1.6rem;
 }
@@ -1251,7 +1472,9 @@ GUIDE_CSS = """
 .guide aside.fine{margin:.2rem 0 1rem; padding:.15rem 0 .15rem 1rem;
   border-left:2px solid var(--rule-strong); color:var(--ink-soft);
   font-size:.9rem; max-width:42rem}
-.guide aside.fine p.fine-head{margin:0 0 .35rem; font-weight:650; color:var(--ink-soft)}
+.guide aside.fine p.fine-head{margin:0 0 .35rem}
+/*  A footnote in a guide: the tour's asterisk under its pitch.  */
+.guide p.fine-print{margin:1.4rem 0 0}
 .guide aside.fine ul:not([class]){margin-bottom:.2rem}
 .guide aside.fine ul:not([class]) > li::before{background:var(--ink-faint)}
 .guide p.exact{font-family:var(--mono); font-size:.75rem; color:var(--ink-faint);
@@ -1260,13 +1483,16 @@ GUIDE_CSS = """
 /*  A table with a long path in a cell cannot fit a phone, and nothing
     scrolled: it simply overflowed the page.  */
 .scroller{overflow-x:auto; margin:0 0 16px}
-.guide table{width:100%;border-collapse:collapse;
+/*  As wide as its cells want, up to the column: stretched to the full
+    width, a table of two short columns sat its words half a page apart.  */
+.guide table{width:auto;min-width:min(100%,42rem);border-collapse:collapse;
   font:400 14px/1.5 var(--ui)}
 .guide th{text-align:left;font-weight:600;color:var(--ink-soft);
-  border-bottom:1px solid var(--rule);padding:7px 10px 7px 0;
+  border-bottom:1px solid var(--rule);padding:7px 18px 7px 0;
   vertical-align:top}
-.guide td{border-bottom:1px solid var(--rule-soft);padding:7px 10px 7px 0;
+.guide td{border-bottom:1px solid var(--rule-soft);padding:7px 18px 7px 0;
   vertical-align:top}
+.guide th:last-child, .guide td:last-child{padding-right:0}
 .guide tr:last-child td{border-bottom:0}
 .guide td code,.guide th code{white-space:nowrap}
 @media (max-width:48rem){
@@ -1338,8 +1564,7 @@ nav.next a:hover strong{color:var(--accent)}
   color:var(--ink-soft); font-size:.92rem;
 }
 .status > .said{padding:1.1rem 1.25rem 1.25rem}
-.status .said p.status-meta{margin:0 0 .5rem; font-family:var(--mono);
-  font-size:.72rem; line-height:1.4; color:var(--accent)}
+.status .said p.status-meta{margin:0 0 .5rem; line-height:1.4}
 .status h3{margin:0 0 .6rem; color:var(--ink); font-size:1.05rem;
   line-height:1.4; font-weight:650; text-wrap:balance}
 .status .said p:not(.status-meta){margin:0; color:var(--ink-soft); font-size:.92rem; line-height:1.6}
@@ -1392,12 +1617,24 @@ figure.panel figcaption .path{min-width:0; overflow:hidden; text-overflow:ellips
   white-space:nowrap; direction:rtl; text-align:left}
 figure.panel figcaption > span:last-child{white-space:nowrap}
 figure.panel figcaption .dot{width:.5rem; height:.5rem; background:var(--accent); flex:none}
+/*  The file's short name: a link to its source, as quiet as the caption.  */
+figure.panel figcaption a.name{color:var(--ink-soft); min-width:0;
+  overflow-wrap:anywhere; text-decoration-color:var(--accent-soft)}
+figure.panel figcaption a.name:hover{color:var(--accent)}
 figure.panel figcaption .grow, figure.panel .foot .grow{flex:1}
 figure.panel .foot{border-top:1px solid var(--rule)}
 figure.panel .foot code{background:none; padding:0; font-size:1em; color:var(--ink-soft)}
 figure.panel .foot a{white-space:nowrap}
 figure.panel .listing{margin:0}
-figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
+figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.82rem}
+/*  A panel's own copy button sits in its caption row, at the right, so
+    the code under it keeps its whole width.  A terminal under the code
+    keeps its button in its own corner.  */
+figure.panel{position:relative}
+figure.panel > .listing{position:static}
+figure.panel > figcaption{padding-right:3.1rem; min-height:2.3rem}
+figure.panel > .listing .copy{top:.15rem; right:.3rem}
+figure.panel .out .listing pre{padding-right:3rem}
 .uses{position:sticky; top:calc(var(--bar) + 1.5rem); flex:1 0 13.5rem}
 .uses .label{display:block; margin-bottom:.5rem}
 .uses ul{list-style:none; margin:0; padding:0; border-top:1px solid var(--rule);
@@ -1433,20 +1670,24 @@ figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
   border-bottom:1px solid var(--rule)}
 .shelf .group > h3{margin:0; padding:.8rem 1rem .8rem 0; font-family:var(--mono);
   font-weight:500; font-size:.75rem; color:var(--ink-faint)}
-.card{display:grid; grid-template-columns:12rem minmax(0,1fr) auto; gap:1.25rem;
+/*  Every card shares the same three columns, so the shelf reads as one
+    table: with the count's column sized to its own card, the blurbs
+    started and ended somewhere different on every row.  */
+.card{display:grid; grid-template-columns:14.5rem minmax(0,1fr) 9rem; gap:1.25rem;
   padding:.72rem 0; text-decoration:none; color:inherit;
   border-bottom:1px solid var(--rule-soft); align-items:baseline}
 .shelf .group .card:last-child{border-bottom:0}
 .card strong{font-weight:600; font-size:.92rem; color:var(--ink)}
 .card span{color:var(--ink-soft); font-size:.86rem; line-height:1.5}
 .card em{font-style:normal; font-family:var(--mono); font-size:.7rem;
-  color:var(--ink-faint); text-align:right; white-space:nowrap}
+  color:var(--ink-faint); text-align:right; text-wrap:balance}
 .card:hover strong{color:var(--accent)}
 .card.retired strong{color:var(--ink-faint); font-weight:500}
 
 @media (max-width:70rem){
   .uses{position:static}
-  .card{grid-template-columns:minmax(0,1fr) auto}
+  .card{grid-template-columns:minmax(0,1fr) auto; row-gap:.2rem}
+  .card em{white-space:nowrap}
   .card span{grid-column:1/-1; grid-row:2}
 }
 @media (max-width:48rem){
@@ -1455,10 +1696,11 @@ figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
   .routes{grid-template-columns:1fr}
   .shelf .group{grid-template-columns:1fr}
   .shelf .group > h3{padding-bottom:0}
-  figure.panel .foot code{display:none}
-}
-@media (max-width:35rem){
-  figure.panel .listing pre{font-size:.74rem}
+  /*  The run command stays on a phone, stacked above the way on.  */
+  figure.panel .foot{flex-wrap:wrap; row-gap:.35rem}
+  figure.panel .foot code{flex:1 1 100%; overflow-wrap:anywhere}
+  figure.panel .foot .grow{display:none}
+  .card{row-gap:.3rem}
 }
 """
 
@@ -1554,9 +1796,14 @@ def guide_table(rows, links, targets):
     together, "Concept", "What it gives" and "Part of world" read as one
     word."""
     head = cells(rows[0])
-    #  A table whose cells hold code stacks into records on a phone, each
-    #  cell under its column's name, rather than running off the side.
-    stack = any("`" in row for row in rows[2:])
+    #  A wide table stacks into records on a phone, each cell under its
+    #  column's name, rather than running off the side: one of four or
+    #  more columns, or one whose cells are mostly code, which cannot
+    #  wrap.  Any other stays a table, in a scroller, because a two-column
+    #  table read as records is twice as long and no easier to compare.
+    body_cells = [cell for row in rows[2:] for cell in cells(row)]
+    coded = sum(1 for cell in body_cells if "`" in cell)
+    stack = len(head) >= 4 or (len(head) >= 3 and 2 * coded > len(body_cells))
     labels = [attr(html.unescape(TAG.sub(
         "", inline(cell, lambda ref: None, targets)))) for cell in head]
     out = ['<div class="scroller">',
@@ -1750,20 +1997,53 @@ EXACT = re.compile(r"^Exact rules: [^.]{0,80}\.?$")
 #  listing it introduces.
 FIXTURE_LINE = re.compile(r"^Fixture source: `([^`]+)`\.$")
 #  What a program prints, introduced by a short paragraph of its own.
-PRINTS_LINE = re.compile(r"^It prints\b[^.]{0,60}$")
+PRINTS_LINE = re.compile(r"^It prints\b([^.]{0,60})$")
+#  A footnote: a paragraph opening with the asterisk its mark carries.
+FOOTNOTE = re.compile(r"^\*[^*\s][^*]*$")
+#  A code span in a sentence longer than this may break on a wide screen;
+#  a shorter one stays whole.
+LONG_CODE = 40
+CODE_TAG = re.compile(r"<code>(.*?)</code>", re.S)
+
+
+def mark_long(text):
+    """Mark the code spans in a sentence too long to be kept whole."""
+    return CODE_TAG.sub(
+        lambda m: (f'<code class="long">{m.group(1)}</code>'
+                   if len(html.unescape(TAG.sub("", m.group(1)))) > LONG_CODE
+                   else m.group(0)), text)
+
+
+def source_link(path, label):
+    """A short name for a file, the full path its title and its link."""
+    return (f'<a class="name" href="{REPO}/blob/main/{quote(path, safe="/")}" '
+            f'title="{attr(path)}">{esc(label)}</a>')
+
+
+def line_count(lines):
+    return f"{len(lines)} line{'' if len(lines) == 1 else 's'}"
+
+
+def terminal_label(text):
+    """`It prints` as the footer's label: always "in a terminal", with
+    anything the line says beyond that kept after it."""
+    rest = PRINTS_LINE.match(text).group(1).strip(" ,:")
+    return "in a terminal" + (f" · {esc(rest)}" if rest else "")
 #  The name a fence's tag is captioned with, where a page asks for that.
 FENCE_NAMES = {"c": "C", "landin": "Landin", "ldn": "Landin"}
 
 
-def panel(caption, inner, classes="", foot=""):
+def panel(caption, inner, classes="", foot="", source_text=""):
     """A listing in the front page's frame: a caption row, the code, and
     what follows it.  One design for every captioned listing."""
     cls = "panel" + (f" {classes}" if classes else "")
-    return (f'<figure class="{cls}"><figcaption>{caption}</figcaption>'
+    said = f' data-source-text="{attr(source_text)}"' if source_text else ""
+    return (f'<figure class="{cls}"><figcaption{said}>{caption}</figcaption>'
             f"{inner}{foot}</figure>")
 
 
-def render_guide_blocks(blocks, links, targets, hl, captions=False):
+def render_guide_blocks(blocks, links, targets, hl, captions=False,
+                        wrap=False):
     out = []
     open_item = False
     inside = ""
@@ -1771,11 +2051,11 @@ def render_guide_blocks(blocks, links, targets, hl, captions=False):
     def code_html(payload):
         language, body = payload
         if language in ("ldn", "landin"):
-            return listing_of(render_landin(body, hl), inside)
+            return listing_of(render_landin(body, hl, wrap), inside, wrap)
         #  A shell or text block is a listing too, and used to be built by
         #  hand here -- which is why it was the one kind of block with no
         #  copy button.
-        return listing(esc("\n".join(body)), inside)
+        return listing(esc("\n".join(body)), inside, wrap)
 
     def is_code(at, *languages):
         return (at < len(blocks) and blocks[at][0] == "code"
@@ -1788,8 +2068,13 @@ def render_guide_blocks(blocks, links, targets, hl, captions=False):
                 and is_code(at + 1, "text", ""))
 
     def output(at):
-        said = inline(blocks[at][1][0], links, targets)
-        return said, listing(esc("\n".join(blocks[at + 1][1][1])), inside)
+        """The terminal's label, said as every panel says it, with the
+        source's own words kept for the check that none went missing."""
+        text = blocks[at][1][0]
+        said = (f'<span class="said" data-source-text="{attr(text)}">'
+                f"{terminal_label(text)}</span>")
+        return said, listing(esc("\n".join(blocks[at + 1][1][1])), inside,
+                             wrap)
 
     at = 0
     while at < len(blocks):
@@ -1799,32 +2084,47 @@ def render_guide_blocks(blocks, links, targets, hl, captions=False):
             text = payload[0]
             fixture = FIXTURE_LINE.match(text)
             if fixture and is_code(at):
-                #  The line stays word for word; it becomes the caption of
-                #  the listing it names, with what the program prints as
-                #  the panel's terminal when the page says so next.
-                caption = ('<span class="dot"></span><span class="source">'
-                           f"{inline(text, links, targets)}</span>")
+                #  The line stays in the Markdown, where the checks read
+                #  it, and becomes the caption of the listing it names as
+                #  every panel is captioned: the file's short name and its
+                #  length, with the full path its title and its link.  The
+                #  line itself is kept for the check that no word was lost.
+                path = fixture.group(1)
+                body_lines = blocks[at][1][1]
+                caption = ('<span class="dot"></span>'
+                           + source_link(path, posixpath.basename(path))
+                           + '<span class="grow"></span>'
+                           f"<span>{line_count(body_lines)}</span>")
                 inner = code_html(blocks[at][1])
                 at += 1
                 foot = ""
                 if prints_at(at):
                     said, shown = output(at)
-                    foot = (f'<div class="foot prints"><span>{said}</span></div>'
+                    foot = (f'<div class="foot prints">{said}</div>'
                             f'<div class="out">{shown}</div>')
                     at += 2
-                out.append(panel(caption, inner, foot=foot))
+                out.append(panel(caption, inner, foot=foot,
+                                 source_text=text))
                 continue
             if PRINTS_LINE.match(text) and is_code(at, "text", ""):
                 said, shown = output(at - 1)
-                out.append(panel(f"<span>{said}</span>", shown, "output"))
+                out.append(panel(said, shown, "output"))
                 at += 1
                 continue
             if FINE_HEAD.match(text) and at < len(blocks) \
                     and blocks[at][0] == "list":
                 held = render_guide_blocks([blocks[at]], links, targets, hl)
-                out.append(f'<aside class="fine"><p class="fine-head">'
-                           f'{inline(text, links, targets)}</p>{held}</aside>')
+                #  One label, as every label on the site is set, saying
+                #  what the reader may do with it.
+                out.append('<aside class="fine"><p class="fine-head label" '
+                           f'data-source-text="{attr(text)}">fine print · '
+                           'skip on a first read</p>'
+                           f'{held}</aside>')
                 at += 1
+                continue
+            if FOOTNOTE.match(text):
+                out.append('<p class="fine-print" id="fine-print">'
+                           f"{inline(text, links, targets)}</p>")
                 continue
             if EXACT.match(text):
                 out.append(f'<p class="exact">{inline(text, links, targets)}</p>')
@@ -1836,7 +2136,7 @@ def render_guide_blocks(blocks, links, targets, hl, captions=False):
             found = FINDING.match(text)
             anchor = (f'<span class="anchor" id="{found.group(1)}"></span>'
                       if found else "")
-            out.append(f"<p>{anchor}{inline(text, links, targets)}</p>")
+            out.append(f"<p>{anchor}{mark_long(inline(text, links, targets))}</p>")
         elif kind == "sub":
             #  A construct heading is `[NNNN] title`, and its anchor is the
             #  id alone: 872 citations outside the documents link to
@@ -1852,14 +2152,18 @@ def render_guide_blocks(blocks, links, targets, hl, captions=False):
                 if open_item:
                     out.append("</div>")
                 cid = found.group(1)
-                out.append(f'<div class="item" id="{cid}">')
+                rest = payload[len(cid) + 2:].strip() or payload
+                #  What the bar says while this entry is being read: the
+                #  site cites entries, so the bar names one, not only the
+                #  section around it.
+                named = attr(f"{cid} · {plain_title(rest)}")
+                out.append(f'<div class="item" id="{cid}" data-title="{named}">')
                 open_item, inside = True, cid
                 #  The number, as its own anchor.  The stylesheet reserves
                 #  a gutter for it and lights it up when a citation
                 #  arrives; without it the gutter was empty on every
                 #  construct and arriving at one highlighted nothing.
                 out.append(f'<a class="tag" href="#{cid}">{cid}</a>')
-                rest = payload[len(cid) + 2:].strip() or payload
                 out.append(f'<h3 class="sub">{inline(rest, links, targets)}</h3>')
             else:
                 out.append(f'<h3 class="sub" id="{slug(payload)}">'
@@ -1884,14 +2188,14 @@ def render_guide_blocks(blocks, links, targets, hl, captions=False):
                     #  visible rather than being silently renumbered.
                     value = f' value="{marker}"' if marker != expected else ""
                     rendered.append(
-                        f"<li{value}>{inline(item, links, targets)}</li>")
+                        f"<li{value}>{mark_long(inline(item, links, targets))}</li>")
                     expected = marker + 1
                 body = "\n".join(rendered)
                 out.append(f"<ol{start}>{body}</ol>")
             else:
                 #  An item a line, so a list read as text is not one run.
                 body = "\n".join(
-                    f"<li>{inline(item, links, targets)}</li>"
+                    f"<li>{mark_long(inline(item, links, targets))}</li>"
                     for _, item in items)
                 out.append(f"<ul>{body}</ul>")
         elif kind == "table":
@@ -1947,38 +2251,70 @@ def plain_title(title):
     return sentence_case(title).replace("`", "")
 
 
-def render_guide(text, links, targets, hl, captions=False):
+def render_guide(text, links, targets, hl, captions=False, lead_paras=1,
+                 wrap_opening=False):
     title, lead, sections = parse_guide(text)
 
-    #  The hero carries the opening paragraph and nothing else.  Anything
-    #  further above the first heading is ordinary body: a table in a hero
-    #  is a table outside the styling that makes it readable, and a
-    #  document with no headings at all is not a document with no content.
-    opening = lead[:1] if lead and lead[0][0] == "para" else []
+    #  The hero carries the opening paragraph and nothing else -- or, for
+    #  a document that asks, its first few, so that what it says before
+    #  its first heading reads as its lead rather than as an orphaned
+    #  section under an empty band.  Anything further above the first
+    #  heading is ordinary body: a table in a hero is a table outside the
+    #  styling that makes it readable, and a document with no headings at
+    #  all is not a document with no content.
+    count = 0
+    while (count < min(lead_paras, len(lead)) and lead[count][0] == "para"
+           and not FOOTNOTE.match(lead[count][1][0])):
+        count += 1
+    opening = lead[:count]
     remainder = lead[len(opening):]
 
     hero = render_guide_blocks(opening, links, targets, hl, captions)
     body = []
     nav_sections = []
 
+    #  A document's opening programs, before its first numbered entry, are
+    #  the first a reader meets, and on a phone they wrap whole rather
+    #  than scroll; past that point code keeps its columns.
+    wrapping = wrap_opening
+
+    def constructs(blocks):
+        return any(kind == "sub" and re.match(r"^\[\d{4}\]", payload)
+                   for kind, payload in blocks)
+
     if remainder:
+        wrapping = wrapping and not constructs(remainder)
         body.append('<section class="guide" id="top">\n'
                     + render_guide_blocks(remainder, links, targets, hl,
-                                          captions)
+                                          captions, wrap=wrapping)
                     + "\n</section>")
 
     for sec in sections:
         sid = slug(sec["title"])
+        wrapping = wrapping and not constructs(sec["blocks"])
         subs = sum(1 for kind, _ in sec["blocks"] if kind == "sub")
-        nav_sections.append((sid, sec["title"], subs))
+        #  The entries a section holds, where they are headings of their
+        #  own rather than numbered constructs: the sidebar can list them.
+        entries = [(slug(payload), payload) for kind, payload in sec["blocks"]
+                   if kind == "sub" and not re.match(r"^\[\d{4}\]", payload)]
+        nav_sections.append((sid, sec["title"], subs, entries))
         body.append(
             f'<section class="guide" id="{sid}" '
             f'data-title="{attr(plain_title(sec["title"]))}">\n'
             f'{section_heading(sec["title"], links, targets)}\n'
-            + render_guide_blocks(sec["blocks"], links, targets, hl, captions)
+            + render_guide_blocks(sec["blocks"], links, targets, hl, captions,
+                                  wrap=wrapping)
             + "\n</section>")
 
-    return title, hero, "\n".join(body), nav_sections
+    #  The pitch's asterisk leads to the footnote it promises, where the
+    #  document has one.
+    joined = "\n".join(body)
+    if 'id="fine-print"' in joined and FINE_PRINT_MARK in hero:
+        hero = hero.replace(FINE_PRINT_MARK,
+                            '32 TB<a class="asterisk" href="#fine-print" '
+                            'aria-label="the fine print">*</a>', 1)
+
+    return title, hero, joined, nav_sections
 
 
 #  The sidebar's groups, in reading order.  A reader looking for the
@@ -1988,7 +2324,8 @@ def render_guide(text, links, targets, hl, captions=False):
 #  being read start open.  The front page's shelf uses the same table, so
 #  the two cannot disagree about where a document lives.
 NAV_GROUPS = [
-    ("the language", ["tour", "spec", "examples", "from-c", "documents"]),
+    ("the language", ["tour", "spec", "examples", "from-c", "library",
+                      "documents"]),
     ("the project", ["readme", "roadmap", "handoff"]),
     ("the compiler", ["compiler", "ir", "diagnostics", "format", "server",
                       "targets", "core", "toolchain", "editors"]),
@@ -2001,8 +2338,14 @@ RETIRED = {"native-ci"}
 
 
 def nav_groups(docs):
-    """The documents in NAV_GROUPS order, each exactly once."""
+    """The documents in NAV_GROUPS order, each exactly once.
+
+    The library reference is not one of DOCS or GUIDES -- library.py
+    writes it -- but it is a document a reader looks for among the
+    language's, so it takes its place in the groups from LIBRARY_CARD.
+    """
     by_key = {d["key"]: d for d in docs}
+    by_key.setdefault("library", LIBRARY_CARD)
     listed = [k for _, keys in NAV_GROUPS for k in keys]
     if sorted(listed) != sorted(by_key):
         raise SystemExit("render_html: NAV_GROUPS and the documents differ: "
@@ -2011,7 +2354,11 @@ def nav_groups(docs):
             for i, (name, keys) in enumerate(NAV_GROUPS, 1)]
 
 
-def nav_html(docs, current, sections):
+def nav_html(docs, current, sections, reference_after=None):
+    """The sidebar: every document in its group, and under the one being
+    read, its sections -- with their own entries nested under them where
+    the page lists those, and a divider after `reference_after`, the
+    section where a document's teaching ends and its reference begins."""
     def toc():
         if not sections:
             return ""
@@ -2020,13 +2367,25 @@ def nav_html(docs, current, sections):
         #  sections, and reducing all four to CORE/MEM made the navigation
         #  indistinguishable.  Keep unique compact labels and disambiguate
         #  only the collisions with the full heading.
-        compact = [title.split("  —  ")[0] for _, title, _ in sections]
+        compact = [entry[1].split("  —  ")[0] for entry in sections]
         repeats = {label for label in compact if compact.count(label) > 1}
-        out = ['<div class="toc">']
-        for sid, title, _ in sections:
+        nested = any(len(entry) > 3 and entry[3] for entry in sections)
+        #  A long list of entries folds to the section being read; the
+        #  script does the folding, so without one every entry shows.
+        out = ['<div class="toc" data-fold>' if nested else '<div class="toc">']
+        for entry in sections:
+            sid, title = entry[0], entry[1]
             short = title.split("  —  ")[0]
             label = esc(plain_title(title if short in repeats else short))
             out.append(f'<a class="sect" href="#{sid}">{label}</a>')
+            if nested and entry[3]:
+                out.append(f'<div class="subs" data-of="{sid}">' + "".join(
+                    f'<a class="sect sub" href="#{eid}">'
+                    f"{esc(plain_title(named))}</a>"
+                    for eid, named in entry[3]) + "</div>")
+            if reference_after and title == reference_after:
+                out.append('<span class="divide">reference · when you '
+                           'need it</span>')
         out.append("</div>")
         return "".join(out)
 
@@ -2037,8 +2396,7 @@ def nav_html(docs, current, sections):
         return f'<a class="{cls}"{now} href="{out}">{esc(label)}</a>' + (
             toc() if here else "")
 
-    out = [link("index.html", "the front page"),
-           link("library.html", "library reference")]
+    out = [link("index.html", "the front page")]
     for num, name, members in nav_groups(docs):
         holds = any(d["out"] == current for d in members)
         #  The language is open everywhere; any other group only when the
@@ -2156,7 +2514,8 @@ LINKED_CSS = """
 
 def linked_assets(prefix, css="", js=""):
     """The files the pages linked under `prefix` load: {name: text}."""
-    return {prefix + ".css": FONT_CSS + CSS + GUIDE_CSS + LINKED_CSS + css,
+    return {prefix + ".css": FONT_CSS + CSS + GUIDE_CSS + LINKED_CSS + css
+                             + PRINT_CSS,
             prefix + "-theme.js": THEME_JS + "\n",
             prefix + ".js": js + JS}
 
@@ -2193,18 +2552,22 @@ def footer_note(docname):
 
 def page(title, kind, heading, hero, body, nav, docname, logo=False,
          out="index.html", description="", extra="", says=None,
-         source_note=None, linked=None):
+         source_note=None, linked=None, banner=False):
     if linked:
         style = f'<link rel="stylesheet" href="{linked}.css">'
         theme = f'<script src="{linked}-theme.js"></script>'
         script = f'<script src="{linked}.js"></script>'
     else:
-        style = f"<style>{FONT_CSS}{CSS}{GUIDE_CSS}</style>"
+        style = f"<style>{FONT_CSS}{CSS}{GUIDE_CSS}{PRINT_CSS}</style>"
         theme = f"<script>{THEME_JS}</script>"
         script = f"<script>{JS}</script>"
+    #  The drawer's foot carries discuss and source on a phone, where the
+    #  bar has no room for them; wider, the bar does and this is hidden.
     side = f"""<nav class="side" id="side" aria-label="documents and sections">
 {nav}
+<div class="side-foot"><a href="{REPO}/discussions">{icons.use("messages-square")}<span>discuss</span></a><a href="{REPO}">{icons.use("git-branch")}<span>source</span></a></div>
 </nav>
+<label class="scrim" for="menu" aria-hidden="true"></label>
 """
     lead, trail = ("", side) if linked else (side, "")
     note = (footer_note(docname) if source_note is None else
@@ -2233,15 +2596,16 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
   <a class="src" href="{REPO}/discussions">{icons.use("messages-square")}<span>discuss</span></a>
   <a class="src" href="{REPO}">{icons.use("git-branch")}<span>source</span></a>
   <input class="menu-x" id="menu" type="checkbox" autocomplete="off"
-         aria-label="documents and sections" aria-controls="side">
+         aria-label="documents and sections" aria-controls="side"
+         aria-expanded="false">
   <label for="menu">{icons.use("menu")}<span>menu</span></label>
   <input class="theme-x" id="theme" type="checkbox">
   {theme}
   <label for="theme">{icons.use("moon", "i light-only")}{icons.use("sun", "i dark-only")}<span>theme</span></label>
 </header>
 <div class="wrap">
-{lead}<main id="document">
-<div class="hero{' wide' if logo else ''}" id="{slug(heading)}">
+{lead}<main id="document"{' class="banner"' if banner else ''}>
+<div class="hero{' wide' if logo else ''}{'' if hero.strip() else ' bare'}" id="{slug(heading)}">
   <h1>{esc(heading)}</h1>
   {hero}
 </div>
@@ -2434,8 +2798,8 @@ def uses_list(uses, here=""):
 #  fixture says which constructs it exercises.  The strip goes at the end
 #  of the example's section, under its listing.
 FIXTURE_SOURCE = re.compile(
-    r'Fixture source: <code>(compiler/tests/fixtures/runtime/[\w-]+)/'
-    r'main\.ldn</code>')
+    r'<figcaption data-source-text="Fixture source: '
+    r'`(compiler/tests/fixtures/runtime/[\w-]+)/main\.ldn`\.">')
 
 
 def with_uses(body, source, titles, construct_page):
@@ -2529,7 +2893,7 @@ def shelf_count(constructs, findings, sections):
 #  that run, the programs to the library they call, and a C programmer's
 #  page to the tour that it keeps citing.
 NEXT_DOCS = {"tour": "examples", "examples": "library", "from-c": "tour"}
-LIBRARY_CARD = dict(out="library.html", nav="the library reference",
+LIBRARY_CARD = dict(key="library", out="library.html", nav="the library reference",
                     blurb="Every module's calls and signatures, with common "
                           "tasks as one complete program and each module's "
                           "own example.")
@@ -2656,12 +3020,13 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
             '<code>main.ldn</code>, compiled and run:</p>'
             '<div class="program">'
             '<figure class="panel">'
-            f'<figcaption><span class="dot"></span><span class="path">'
-            f'{esc(hello_path)}</span><span class="grow"></span>'
-            f'<span>{len(hello_lines)} lines</span></figcaption>'
-            f'{listing(hello_hl.block(hello_lines))}'
+            '<figcaption><span class="dot"></span>'
+            + source_link(hello_path, posixpath.basename(hello_path))
+            + '<span class="grow"></span>'
+            f'<span>{line_count(hello_lines)}</span></figcaption>'
+            f'{listing(hello_hl.block(hello_lines), wrap=True)}'
             '<div class="foot"><span>in a terminal</span></div>'
-            f'<div class="out">{listing(run)}</div>'
+            f'<div class="out">{listing(run, wrap=True)}</div>'
             '</figure></div>')
     body.append('<section class="landing" id="what-it-looks-like">'
                 f'<h2>What it looks like</h2>{first}</section>')
@@ -2672,24 +3037,24 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
     #  Each is labelled by who it is for, not by its file name, which
     #  means nothing to a reader who has not opened it yet.
     routes = [
-        ("tour.html", "the language", "learn the language",
+        ("tour.html", "the tour", "learn the language",
          "The tour teaches it in numbered constructs, from comments to "
          "runtime dispatch. Start at the top and read down."),
-        ("examples.html", "the language", "run real programs",
+        ("examples.html", "examples", "run real programs",
          "Printing, reporting failures and the classic exercises, then "
          "everyday tools: counting lines, a directory listing, a shell, an "
          "echo server and a tree copy, each printing what it computes."),
-        ("from-c.html", "the language", "come from C",
+        ("from-c.html", "from C", "come from C",
          "The Landin form of each C habit: strings, structs, pointers, "
          "errors and allocation, with examples the compiler accepts."),
-        ("library.html", "the library", "use the library",
+        ("library.html", "library", "use the library",
          "Every module's calls and signatures, with common tasks as one "
          "complete program and each module's own example."),
-        ("spec.html", "the specification", "look up an exact rule",
+        ("spec.html", "reference", "look up an exact rule",
          "The normative reference, not something to read through: follow "
          "a number from the tour or a compiler message to the one paragraph "
          "that settles it."),
-        ("handoff.html", "the project", "understand the design",
+        ("handoff.html", "design", "understand the design",
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
     ]
@@ -2719,9 +3084,10 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         'runs as shown.</p>'
         '<div class="program">'
         '<figure class="panel">'
-        f'<figcaption><span class="dot"></span><span class="path">{esc(path)}</span>'
-        f'<span class="grow"></span><span>{len(lines)} lines</span></figcaption>'
-        f'{listing(hl.block(lines))}'
+        '<figcaption><span class="dot"></span>'
+        + source_link(path, posixpath.basename(path))
+        + f'<span class="grow"></span><span>{line_count(lines)}</span></figcaption>'
+        f'{listing(hl.block(lines), wrap=True)}'
         '<div class="foot"><code>$ refine compile main.ldn -o sensors '
         '&amp;&amp; ./sensors</code><span class="grow"></span>'
         '<a href="examples.html">more programs →</a></div>'
@@ -2736,7 +3102,10 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
     hero = "".join(f"<p>{pitch_html(t)}</p>" for t in intro)
     hero += ('<div class="hero-actions">'
              '<a class="primary" href="tour.html">read the tour</a>'
-             '<a href="spec.html">browse the specification</a>'
+             #  Not the specification, whose first words tell a newcomer
+             #  they probably do not want to read it; that is a link in
+             #  the status line, for the reader who does.
+             '<a href="examples.html">run the examples</a>'
              f'<a href="readme.html#{INSTALL_ANCHOR}">install refine</a></div>')
     if status:
         version, headline, detail = status_parts(status)
@@ -2745,12 +3114,12 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
         places = status_places(headline)
         hero += ('<p class="status-line">'
                  '<a href="#status">status</a> · '
-                 + esc(version)
+                 f'<a href="spec.html">{esc(version)}</a>'
                  + (" · " + esc(", ".join(places)) if places else "")
                  + ' · <a href="roadmap.html">roadmap →</a></p>')
         box = ('<aside class="status" aria-label="Project status">'
                '<div class="said">'
-               f'<p class="status-meta">Status · {esc(version)}.</p>'
+               f'<p class="status-meta label">status · {esc(version)}</p>'
                f'<h3>{prose_html(headline, lambda ref: None)}</h3>')
         if detail:
             box += f'<p>{prose_html(detail, lambda ref: None)}</p>'
@@ -3004,10 +3373,11 @@ def verify(src: Path, out: Path):
     # destination only in this verification copy. Do not count both paths.
     raw = re.sub(r'(<a href=")[^"]*" data-source-href="([^"]*)"',
                  r'\1\2"', raw)
-    #  A heading set in sentence case is counted in the source's spelling,
-    #  which it carries for exactly this.
-    raw = re.sub(r'<h2 data-source-text="([^"]*)">.*?</h2>',
-                 r'<h2>\1</h2>', raw, flags=re.S)
+    #  A heading set in sentence case, a caption or a label said in the
+    #  site's own words is counted in the source's spelling, which it
+    #  carries for exactly this.
+    raw = re.sub(r'<(\w+)\b[^>]*? data-source-text="([^"]*)"[^>]*>.*?</\1>',
+                 r"<\1>\2</\1>", raw, flags=re.S)
     targets = " ".join(ATTR.findall(raw))
     got = Counter(WORD.findall(page_words(raw) + " " + targets))
     lost = {w: (n, got.get(w, 0)) for w, n in want.items() if got.get(w, 0) < n}
@@ -3045,7 +3415,7 @@ def verify_front(out: Path, pieces, docs):
     else:
         print(f"  {out.name}: all {len(pieces)} source pieces are on the page")
 
-    want_shelf = Counter(d["out"] for d in docs)
+    want_shelf = Counter([d["out"] for d in docs] + [LIBRARY_CARD["out"]])
     got_shelf = Counter(page_shape(out).shelf)
     shelf_ok = got_shelf == want_shelf
     if not shelf_ok:
@@ -3158,12 +3528,18 @@ def main(argv):
 
         title, hero, body, nav_sections = render_guide(
             text, links, guide_targets(DOCS + GUIDES, d["src"]),
-            Highlighter(*symbols, links=links))
+            Highlighter(*symbols, links=links),
+            lead_paras=d.get("lead_paras", 1),
+            wrap_opening=d.get("wrap_opening", False))
         body += next_card(d["key"], DOCS + GUIDES)
-        nav = nav_html(DOCS + GUIDES, d["out"], nav_sections)
+        if not d.get("nest"):
+            nav_sections = [entry[:3] for entry in nav_sections]
+        nav = nav_html(DOCS + GUIDES, d["out"], nav_sections,
+                       d.get("reference_after"))
         out = page(tab_title(title, d["nav"]), d["nav"],
                    title or d["nav"], hero, body, nav, d["src"],
-                   out=d["out"], description=d["blurb"], says=says)
+                   out=d["out"], description=d["blurb"], says=says,
+                   banner=d.get("banner", False))
         (SITE / d["out"]).write_text(out)
         counts[d["out"]] = shelf_count(
             sum(1 for c, w in construct_page.items() if w == d["out"]),
@@ -3196,6 +3572,8 @@ def main(argv):
         if g["key"] == "examples":
             body = with_uses(body, source, construct_title, construct_page)
         body += next_card(g["key"], DOCS + GUIDES)
+        if not g.get("nest"):
+            nav_sections = [entry[:3] for entry in nav_sections]
         nav = nav_html(DOCS + GUIDES, g["out"], nav_sections)
         out = page(tab_title(title, g["nav"]), g["nav"], title or g["nav"],
                    hero, body, nav, g["src"],
@@ -3261,7 +3639,12 @@ def main(argv):
         for name in llms.write(SITE, source, DOCS + GUIDES, SITE_URL):
             print(f"{SITE.name}/{name}"
                   f"{(SITE / name).stat().st_size / 1024:>10.0f} KB")
-        front = ([("the pitch", " ".join(intro)), ("the status", status),
+        #  The status in the words the page shows: the version, then the
+        #  headline and detail; the "Status:" prefix and the period after
+        #  the version are the README's punctuation, which status_parts
+        #  has already held it to.
+        front = ([("the pitch", " ".join(intro)),
+                  ("the status", " ".join(status_parts(status))),
                   ("the fine print", footnote)]
                  + [(f'roadmap {item["key"]}', item["title"])
                     for item in (progress["recent"]
