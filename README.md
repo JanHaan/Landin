@@ -372,10 +372,11 @@ This is the maintained inventory of what the compiler does today:
   options and ordered roots. D227's memory model supplies scalar atomics,
   volatile accesses and barriers, and D228 packed register images with
   checked encoded fields. D450's stack builtins, `compiler.stack_prepare` and
-  `compiler.stack_switch`, run on Linux and FreeBSD x86-64 and on Linux,
-  Darwin and FreeBSD arm64; a stack past its limit traps D451's fifth panic
-  kind, `stack_exhausted`, and the other targets refuse both until their
-  backends emit them.
+  `compiler.stack_switch`, run on every target with a native backend:
+  Linux and FreeBSD x86-64, Linux, Darwin and FreeBSD arm64, Linux RV64 and
+  Cortex-M0, where a prepared stack runs on the process stack pointer
+  (D460, D461). A stack past its limit traps D451's fifth panic kind,
+  `stack_exhausted`; synthetic-32 refuses both.
   `compiler/tests/constructs.matrix` records every normative construct's
   state, targets and evidence, and `check.py` refuses a stale or unexplained
   row.

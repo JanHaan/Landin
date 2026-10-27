@@ -23,13 +23,14 @@ package body Landin.Targets.Capabilities is
       end case;
    end Memory_Access;
 
-   --  Linux and FreeBSD x86-64 share the backend that emits both, as
-   --  Linux, FreeBSD and Darwin arm64 share theirs.  The RV64 and
-   --  Cortex-M0 backends are enabled here as each lands.
+   --  Every native backend emits both: x86-64 for Linux and FreeBSD, arm64
+   --  for Linux, FreeBSD and Darwin, RV64 for Linux, and Cortex-M0, where a
+   --  prepared stack runs on the process stack pointer.
    function Stack_Switching (Facts : Target_Facts) return Boolean is
      (case Backend_For (Facts) is
-         when X86_64_ELF | Darwin_Arm64_Mach_O | Arm64_ELF => True,
-         when RV64_ELF | Cortex_M0_ELF | No_Backend => False);
+         when X86_64_ELF | Darwin_Arm64_Mach_O | Arm64_ELF | RV64_ELF
+            | Cortex_M0_ELF => True,
+         when No_Backend => False);
 
 
    function C_Signatures (Facts : Target_Facts) return Boolean is

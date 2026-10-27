@@ -956,6 +956,43 @@ package body Landin.Backend.RiscV is
         is (Local_Prefix & "landin_trap_line_"
             & Trimmed (Positive'Image (Index)));
 
+      --  D450: a program that prepares or switches a stack carries one
+      --  switch routine and one start routine, emitted after its bodies;
+      --  the comment there says what each does.  The switch routine's frame
+      --  holds Stack_Saved registers, the return address first, then the
+      --  frame pointer, the integer callee-saved set x9 and x18 to x27 and
+      --  the LP64D float callee-saved set f8, f9 and f18 to f27, the Nth at
+      --  Stack_Save_Offset (N) above the stack pointer and so at that many
+      --  bytes less Stack_Frame_Bytes below the CFA.  A prepared stack's
+      --  first frame is the same frame.
+      Stack_Used : Boolean := False;
+      Stack_Switcher : constant String :=
+        Local_Prefix & "landin_stack_switch";
+      Stack_Start : constant String := Local_Prefix & "landin_stack_start";
+      Stack_Saved : constant := 25;
+      Stack_Frame_Bytes : constant := 208;
+
+      function Stack_Save_Offset (Index : Positive) return Natural
+        is (Stack_Frame_Bytes - 8 * Index);
+
+      --  The Nth saved register's number within its bank, whether it is a
+      --  float register, and its DWARF register number.
+      function Stack_Register (Index : Positive) return Natural
+        is (case Index is
+               when 1 => 1,
+               when 2 => 8,
+               when 3 => 9,
+               when 4 .. 13 => Index + 14,
+               when 14 => 8,
+               when 15 => 9,
+               when others => Index + 2);
+
+      function Stack_Float (Index : Positive) return Boolean
+        is (Index >= 14);
+
+      function Stack_Dwarf (Index : Positive) return Natural
+        is (Stack_Register (Index) + (if Stack_Float (Index) then 32 else 0));
+
       --  Internal code labels use the collision-checked ELF prefix.
       Step_Prefix : constant String :=
         Local_Prefix;
@@ -2516,14 +2553,55 @@ package body Landin.Backend.RiscV is
                      Retry : constant String := Fresh;
                      Done : constant String := Fresh;
                   begin
-                     --  D450: not emitted here yet.  The checker refuses
-                     --  the stack builtins on this target and the verifier
-                     --  an image carrying one, so this is a defect.
-                     if M in Landin.Memory.Stack_Operation then
-                        raise Landin.Compiler_Defect with
-                          "a stack builtin reached a backend that lacks it";
-                     end if;
-                     if Landin.Memory.Operands (M) = 0 then
+                     if M = Stack_Prepare then
+                        --  D450: the operands are the stack's base and
+                        --  length, the entry and its argument.  The top is
+                        --  aligned down to sixteen and the switch routine's
+                        --  frame laid below it as its loads read it: the
+                        --  start routine as the return address, a zero
+                        --  frame pointer, the entry in x9, its argument in
+                        --  x18 and every other saved register zero.  A
+                        --  slice that cannot hold the frame traps
+                        --  stack_exhausted (D451); the difference is
+                        --  signed, since aligning a short slice's top may
+                        --  take it below the base.
+                        Load_Value (Operand (1), "x5");
+                        Load_Value (Operand (2), "x6");
+                        Emit ("add x6, x6, x5");
+                        Emit ("andi x6, x6, -16");
+                        Emit ("sub x6, x6, x5");
+                        Emit ("li x7, " & Image (Stack_Frame_Bytes));
+                        Emit ("blt x6, x7, " & Trap);
+                        Emit ("add x5, x5, x6");
+                        Emit ("addi x5, x5, -" & Image (Stack_Frame_Bytes));
+                        for Index in 0 .. Stack_Frame_Bytes / 8 - 1 loop
+                           Emit ("sd zero, " & Image (8 * Index) & "(x5)");
+                        end loop;
+                        Load_Value (Operand (3), "x7");
+                        Emit ("sd x7, " & Image (Stack_Save_Offset (3))
+                              & "(x5)");
+                        Load_Value (Operand (4), "x7");
+                        Emit ("sd x7, " & Image (Stack_Save_Offset (4))
+                              & "(x5)");
+                        Emit ("lla x7, " & Stack_Start);
+                        Emit ("sd x7, " & Image (Stack_Save_Offset (1))
+                              & "(x5)");
+                        Stack_Used := True;
+                        Store_Value (Value, "x5");
+                     elsif M = Stack_Switch then
+                        --  D450/D447: the limit is checked here, against
+                        --  the leaving stack, so the trap is this call's
+                        --  own site; the switch itself is one call of the
+                        --  program's switch routine.  Every value here has
+                        --  a frame home, so nothing is kept in a register
+                        --  across it, as across any call.
+                        Load_Value (Operand (3), "x5");
+                        Emit ("bltu sp, x5, " & Trap);
+                        Load_Value (Operand (1), "x10");
+                        Load_Value (Operand (2), "x11");
+                        Emit ("call " & Stack_Switcher);
+                        Stack_Used := True;
+                     elsif Landin.Memory.Operands (M) = 0 then
                         if M /= Compiler_Barrier then
                            Emit ("fence iorw, iorw");
                         end if;
@@ -5222,6 +5300,109 @@ package body Landin.Backend.RiscV is
                end;
             end loop;
          end;
+      end if;
+      --  D450 and D447.  The switch routine is out of line, one per
+      --  program, so that its unwind information is exact at every
+      --  instruction rather than threaded through a caller's frame.  It is
+      --  called with the address to save through in a0 and the stack
+      --  pointer to resume in a1, after the caller has checked the limit.
+      --  It stores the return address, the frame pointer and the whole
+      --  LP64D callee-saved set, integer and float, in one frame on the
+      --  leaving stack, stores sp, loads the resumed one and loads the same
+      --  registers from the frame there before returning into the resumed
+      --  context.  Both stacks hold the same frame at the switch, so one CFA
+      --  rule, sp plus the frame, is right at every instruction: stopped
+      --  before the store, a debugger unwinds into the leaving fibre's
+      --  frames, and after the load into the resumed fibre's.  The float
+      --  set is saved although this backend keeps nothing in it, because
+      --  a C frame suspended below a switch may.  Every caller-saved
+      --  register is left changed, as by a call.
+      --
+      --  The start routine is the return address of a prepared stack's
+      --  first frame: the switch's loads leave the entry in x9, its
+      --  argument in x18 and zero in x8, so the frame-pointer chain ends at
+      --  the entry's first frame, and its unwind information says the
+      --  return address is undefined, which ends a debugger's walk there.
+      --  Its description opens one instruction before the label, because
+      --  a debugger looks up a return address less one.  An entry is
+      --  `-> noreturn`; if it returns anyway, that is D232's `unreachable`
+      --  at site zero, as a firmware entry's return is.
+      if Stack_Used then
+         Emit (".section .text.landin_stack,""ax"",@progbits");
+         Emit (".p2align 2");
+         Platform_Directive (ELF_Spelling.Function_Type (Stack_Switcher));
+         Put (Stack_Switcher & ":");
+         if Debug /= null then
+            Emit (".cfi_startproc");
+         end if;
+         Emit ("addi sp, sp, -" & Image (Stack_Frame_Bytes));
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset " & Image (Stack_Frame_Bytes));
+         end if;
+         for Index in 1 .. Stack_Saved loop
+            Emit ((if Stack_Float (Index) then "fsd f" else "sd x")
+                  & Image (Stack_Register (Index)) & ", "
+                  & Image (Stack_Save_Offset (Index)) & "(sp)");
+            if Debug /= null then
+               Emit (".cfi_offset " & Image (Stack_Dwarf (Index)) & ", -"
+                     & Image (8 * Index));
+            end if;
+         end loop;
+         Emit ("sd sp, 0(x10)");
+         Emit ("mv sp, x11");
+         for Index in reverse 1 .. Stack_Saved loop
+            Emit ((if Stack_Float (Index) then "fld f" else "ld x")
+                  & Image (Stack_Register (Index)) & ", "
+                  & Image (Stack_Save_Offset (Index)) & "(sp)");
+            if Debug /= null then
+               Emit (".cfi_restore " & Image (Stack_Dwarf (Index)));
+            end if;
+         end loop;
+         Emit ("addi sp, sp, " & Image (Stack_Frame_Bytes));
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 0");
+         end if;
+         Emit ("ret");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
+         Platform_Directive (ELF_Spelling.Size_To_Here (Stack_Switcher));
+
+         Emit (".p2align 2");
+         Platform_Directive (ELF_Spelling.Function_Type (Stack_Start));
+         if Debug /= null then
+            Emit (".cfi_startproc");
+            Emit (".cfi_undefined ra");
+         end if;
+         Emit ("nop");
+         Put (Stack_Start & ":");
+         Emit ("mv x10, x18");
+         Emit ("jalr ra, 0(x9)");
+         if Panic /= null and then Landin.Panics.Handler (Panic.all)
+           /= Landin.IR.No_Item
+         then
+            Immediate ("x10", Pattern (Landin.Panics.Code
+              (Panic.all, Landin.Panics.Unreachable)));
+            Emit ("li x11, 0");
+            Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+         elsif Panic /= null
+           and then Landin.Panics.Reports_Default (Panic.all)
+         then
+            declare
+               Line : constant String := Landin.Panics.Report
+                 (Panic.all, Landin.Provenance.No_Origin,
+                  Landin.Panics.Unreachable);
+            begin
+               Emit ("lla x10, " & Report_Label (Reports.Index_Of (Line)));
+               Immediate ("x11", Pattern (Line'Length));
+               Emit ("call " & Reporter);
+            end;
+         end if;
+         Emit ("unimp");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
+         Platform_Directive (ELF_Spelling.Size_To_Here (Stack_Start));
       end if;
       --  D361's writer: Linux's write system call to descriptor 2, with the
       --  line's address and length as a call's first two arguments.  It
