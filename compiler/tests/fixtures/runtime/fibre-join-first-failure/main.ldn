@@ -1,0 +1,61 @@
+--  D444: nothing cancels a fibre.  Two tasks take turns and both fail,
+--  `a` first; the group keeps the first failure, and join fails with it
+--  only once both tasks have run to their ends.
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/net
+
+mut ended: u32 = 0
+
+turn: type = struct
+    runs: any fibre.turns
+    digit: u32
+    turns: u32
+end turn
+
+turn_of: (runs: any fibre.turns, digit: u32, turns: u32)
+         -> (made: turn from runs) =
+    made = (runs: runs, digit: digit, turns: turns)
+end turn_of
+
+--  Take `turns` turns, note that it ended, and fail.
+take: (inout state: turn) -> none ! failure.reason =
+    mut taken: u32 = 0
+    while taken < state.turns do
+        state.runs.yield()
+        inc taken
+    end while
+    ended = ended * 10 + state.digit
+    fail net.refused when state.digit == 1
+    fail io.io_failed
+end take
+
+both: (runs: any fibre.turns) -> none ! failure.reason =
+    mut backing: [2 * 4096]u8 = zeroed
+    mut tasks := try fibre.turns_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    a := turn_of(runs, 1, 1)
+    try fibre.admit(tasks, take, a)
+    b := turn_of(runs, 2, 3)
+    try fibre.admit(tasks, take, b)
+    try fibre.join(tasks)
+end both
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    both(any(addr round)) else (problem)
+        if problem == net.refused and ended == 12 then
+            code = 42
+        end if
+        return
+    end
+end main

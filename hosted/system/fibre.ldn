@@ -1,0 +1,33 @@
+--  The hosted provider's `fibre.scheduler` (D444): the blocking host runs
+--  each task to its end, on the caller's stack, before `start` returns,
+--  as `fibre.whole` does.  Its calls block the thread, so it has nothing
+--  to yield to and is no provider of `fibre.turns`; a program that needs
+--  turns makes a round, or an Io that waits for events, instead.  It
+--  imports core/fibre and not its switch, so every hosted target admits
+--  it whether or not its backend switches stacks.
+
+import core/fibre
+import core/mem
+
+fibre_start: (self: host, escaping record: ptr mut fibre.space,
+              escaping stack: []mut u8, escaping work: any fibre.task)
+             -> none ! mem.out_of_memory =
+    _ = self
+    _ = stack
+    record.val.status = 1
+    work.run()
+    record.val.status = 0
+end fibre_start
+
+fibre_finished: (self: host, record: fibre.space) -> (yes: bool) =
+    _ = self
+    yes = record.status == 0
+end fibre_finished
+
+--  Nothing is ever running when `start` has returned.
+fibre_wait: (self: host) -> none =
+    _ = self
+end fibre_wait
+
+host is fibre.scheduler (start: fibre_start, finished: fibre_finished,
+                         wait: fibre_wait)

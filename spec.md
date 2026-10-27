@@ -23393,10 +23393,20 @@ checker rule that a frame-backed group is joined on every path, recorded in
 the register rather than taken; and error sets as generic parameters,
 recorded there too. All were declined.
 
-**Pinned by** nothing that runs yet: prototype 5's V1, V2, V8 and V15 record
-the pressure, and the fibre fixtures will pin it, among them a group over
-`whole` that runs its tasks in admission order and a `turns_over` refused for
-a provider of `scheduler` alone.
+**Pinned by** `runtime/library-shared-fibre`, a group over `whole` that runs
+its tasks in admission order, keeps the first failure for `join` and refuses
+a backing too small for its stacks; `runtime/fibre-turns-interleave`, a group
+over a round of turns whose two tasks yield in turn while the home stack goes
+on past both admissions; `runtime/fibre-same-source-any-provider`, prototype
+5's two requests from one source, answered `a` first over the blocking host
+and `whole` and `b` first over a round whose clock takes turns, each state
+keeping a pointer to the caller's parameter through `escaping into`;
+`runtime/fibre-join-first-failure`, both tasks ended before `join` fails with
+the first failure; `negative/fibre-turns-over-scheduler-only`, `turns_over`
+refused for `whole` and the blocking host; and
+`negative/fibre-admit-state-after-group`, a state referring to a local
+declared after the group. Prototype 5's V1, V2, V8 and V15 record the
+pressure.
 
 ### D448 — On one core, requests are answered one at a time, in order
 
@@ -23459,3 +23469,105 @@ All were declined.
 **Pinned by** nothing that runs yet: prototype 5's V7, V10 and V14 record the
 pressure, and the second Io's, the wrapper's and the fake network's fixtures
 will pin it.
+
+### D463 — The switch is a module beneath `core/fibre`
+
+**The tour said** nothing about fibres. D444 puts the switch, the concepts,
+`whole`, the round of turns and the group in `core/fibre`, and says the
+blocking host provides `scheduler`. D453 refuses a stack builtin by name on a
+target whose backend does not emit it yet, and synthetic-32 admits neither
+(D450); a builtin is refused wherever it is written in the program, called or
+not.
+
+**Chosen:** `core/fibre` holds the concepts `task`, `scheduler` and `turns`,
+the record `space`, `whole` and the group, and calls no builtin. The switch,
+`prepare` and `switch`, and the round of fixed turns built on it, `round`,
+are the submodule `core/fibre/stacks`, as `core/io/fake` is `core/io`'s. A
+program that never switches a stack, a group over `whole` or over the
+blocking host, is then admitted on every target, firmware and synthetic-32
+included; one that imports `core/fibre/stacks` is admitted where its backend
+emits the builtins. `hosted/system` provides `fibre.scheduler` in a file of
+its own and imports `core/fibre` and not its switch, so no hosted target is
+refused for it. There is no import cycle: `core/fibre` imports `core/failure`
+for its error set and `core/mem`, and neither imports anything hosted. The
+price is the closure: every hosted program now reaches `core/fibre`,
+`core/failure` and the `core/map` and `core/tree` that `core/failure` names
+atoms from, which made a hosted program's debug compile about a tenth slower
+when it was measured and its executable no larger.
+
+**The alternatives:** everything in `core/fibre`, which refuses every program
+that imports `hosted/system` on each target whose backend does not emit the
+switch yet, and every program using `core/fibre` on synthetic-32 for ever;
+the host's conformance in a module a program imports to get it, which leaves
+`any(addr host)` refused where prototype 5 writes it, for a reason the source
+does not show; and the checker refusing a builtin only in a routine the
+program reaches, which would change D453 for one library's sake. All were
+declined.
+
+**Pinned by** `runtime/library-shared-fibre`, a group over `whole` executed on
+every target Cortex-M0 included; `runtime/fibre-same-source-any-provider`,
+the blocking host as a `fibre.scheduler`; and
+`negative/fibre-turns-over-scheduler-only` on every hosted target.
+
+### D464 — The spellings `core/fibre` changed from prototype 5's sketch
+
+**The tour said** nothing. Prototype 5's `core/fibre` was the design record and
+said every spelling in it might change when the switch was written.
+
+**Chosen:** four spellings and one representation, each because the
+sketch's would not compile or would not hold. `task`'s entry is
+`run: (self: ptr mut task_type) -> none`: an `inout self` has no erased
+table (D146), and a provider is handed `any task`. The
+switch's, the providers' and the group's failure is `mem.out_of_memory`,
+where the sketch had `stack_too_small | stack_misaligned`: `failure.reason`
+must hold whatever `admit` fails with, which would make `core/failure` import
+`core/fibre`; a stack is aligned by `stack_prepare` and never misaligned; and
+caller-lent backing too small for its use is out of memory, as `core/arena`'s
+and `core/pool`'s is. `prepare` takes a fourth record, `after`, the one a
+fibre resumes when its task has ended: the sketch's "switches back to whoever
+started it" is not the round's next turn, and a provider is the one that
+knows. A round's wait when nobody can run is the concept `stacks.idler`, given
+to `round_over`, with `stacks.spin` returning at once; it is called after a
+whole round in which every unfinished entry yielded and nothing started or
+ended. And a group made over `turns` keeps its provider as `any turns`
+beside an unused `any scheduler`, because the one does not convert to the
+other.
+
+**The alternatives:** `inout self` with a concrete provider type, which no
+`any` can carry; atoms of `core/fibre`'s own in `failure.reason`, which
+changes a module every program imports for one that few do; the trampoline
+asking the provider where to go, which puts a provider entry in the first
+frame; and a function value as the idle hook, which captures nothing [1010]
+and so cannot reach an event Io's state. All were declined.
+
+**Pinned by** `runtime/fibre-turns-interleave`, the round over its idler;
+`runtime/fibre-join-first-failure`, a task ending into the round; and
+`runtime/library-shared-fibre`, `mem.out_of_memory` for a backing too small.
+
+### D465 — Where a record's limit stands
+
+**The tour said** nothing. D447 has a fibre's record keep the lowest address
+its stack may reach and every switch check against it; D450's switch checks
+the stack pointer before it saves anything. D444 keeps each record at the
+base of its stack.
+
+**Chosen:** `prepare` sets the limit 1 KiB above the stack's lowest byte, and
+refuses a stack smaller than 2 KiB. The check is made at a switch, inside the
+provider, after the provider's own calls on the way to it, and those took
+several hundred bytes below the task's frame at the higher optimization
+profiles; with the limit at the lowest byte, a task's overflow reached its own
+record, below the stack, before any switch read the limit from it, and the
+program ran on into a fault. With the room, a task whose calls go a little
+past the limit between two switches traps `stack_exhausted` at the next before
+it has written below its stack. One that goes further has written there
+already: the check is late, as D447 said, and the depth report it names is
+what bounds a stack.
+
+**The alternatives:** the limit at the lowest byte, which the provider's own
+frames overran in the measurement; the record at the top of its stack, which
+keeps the limit readable but hands the overflow to the stack below and its
+live frames; and a room sized per target, which waits for D447's depth report
+to be measured from. All were declined.
+
+**Pinned by** `runtime/fibre-stack-past-limit-traps`, a task taking a turn at
+every depth, trapped at the round's switch at every optimization profile.

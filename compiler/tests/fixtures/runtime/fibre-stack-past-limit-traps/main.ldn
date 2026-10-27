@@ -1,0 +1,44 @@
+--  D447/D451: a task whose calls go deeper at every turn reaches its
+--  stack's limit, and the switch of the first turn past it traps
+--  `stack_exhausted` there, inside the provider, before the task has
+--  written below its stack.
+import core/failure
+import core/fibre
+import core/fibre/stacks
+
+deep: type = struct
+    runs: any fibre.turns
+end deep
+
+--  Each level takes a turn before it goes deeper, so a switch is made at
+--  every depth and the first one past the stack's limit traps.
+descend: (runs: any fibre.turns, depth: u32) -> (reached: u32) =
+    runs.yield()
+    reached = descend(runs, depth + 1) + 1
+end descend
+
+dive: (inout state: deep) -> none ! failure.reason =
+    _ = descend(state.runs, 0)
+end dive
+
+run_all: (runs: any fibre.turns) -> none ! failure.reason =
+    mut backing: [2 * 8192]u8 = zeroed
+    mut tasks := try fibre.turns_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    task: deep = (runs: runs)
+    try fibre.admit(tasks, dive, task)
+    try fibre.join(tasks)
+end run_all
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    run_all(any(addr round)) else none
+    code = 0
+end main

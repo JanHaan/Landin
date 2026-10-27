@@ -1,0 +1,347 @@
+--  Fibres: tasks a routine starts as a group and waits for before it goes
+--  on (D444).  Three layers, of which an application uses the last.  The
+--  switch, `core/fibre/stacks`, is for whoever writes a provider that runs
+--  fibres on stacks of their own; the concepts `scheduler` and `turns` say
+--  what a provider is; and the group, here, is all an application calls.
+--  Fibres are cooperative: a fibre gives the core away only inside a call
+--  to an entry of the provider that runs it (D446).  Nothing here
+--  allocates: the stacks are a backing the caller lends, and the records
+--  and states are kept on them, behind integer-made pointers that stay
+--  inside this module [0810].
+
+import core/failure
+import core/mem
+
+--- The caller's record of one fibre: where its stack pointer was saved,
+--- the lowest address its stack may reach, and whether a task runs on it.
+--- A group keeps these at the base of the stacks it cuts, so an
+--- application never declares one. `status` is zero when no task runs on
+--- the record, before the first start and after a task has ended; a
+--- provider makes it nonzero while one does.
+public space: type = struct
+    saved: usize
+    limit: usize
+    status: u8
+end space
+
+--- What a provider starts: one entry, no error set, since a fibre's first
+--- frame has no caller to fail to. An application does not write one; a
+--- group makes it from a routine and a state.
+public task: type = concept (task_type: type)
+    --- Run the task to its end.
+    run: (self: ptr mut task_type) -> none
+end task
+
+--- What runs fibres. A `scheduler` may run a task to its end inside
+--- `start`, before returning, and a program written against it must be
+--- right when every task does. `start` fails `mem.out_of_memory` when
+--- `stack` cannot hold the task's first frame. `finished` says whether
+--- the task last started on `record` has ended. `wait` returns once one
+--- of the provider's fibres has finished, or at once when none is running,
+--- which is how a group waits for a free stack. The provider runs at most
+--- one of its fibres at a time, and its fibres are one execution context
+--- (D446).
+public scheduler: type = concept (provider: type)
+    --- Start `work` on `record` and `stack`, or run it to its end.
+    start: (self: provider, escaping record: ptr mut space,
+            escaping stack: []mut u8, escaping work: any task)
+           -> none ! mem.out_of_memory
+    --- Whether the task last started on `record` has ended.
+    finished: (self: provider, record: space) -> (yes: bool)
+    --- Wait until one of the provider's fibres has finished.
+    wait: (self: provider) -> none
+end scheduler
+
+--- A `scheduler` whose fibres take turns. `yield` gives the core to
+--- another fibre of the provider that can run, and its contract is the
+--- promise: a fibre that yields lets every other unfinished fibre of the
+--- provider run before it resumes. A provider that runs every task to its
+--- end has nothing to yield to, and so does not provide `turns`; a program
+--- that needs turns asks for them with `turns_over`, and is refused there.
+public turns: type = concept (provider: type) is scheduler
+    --- Let every other unfinished fibre run, then go on.
+    yield: (self: provider) -> none
+end turns
+
+--- Give the core to the provider's other fibres, through `turns`
+--- evidence, for a provider the program holds as itself.
+public yield: (provider: type is turns, host: provider) -> none =
+    provider.yield(host)
+end yield
+
+--- A provider that has no second stack to give: it runs every task to its
+--- end, on the caller's stack, before `start` returns, and ignores the
+--- stack it is given. The blocking host, `system.host`, is another; a
+--- device that wants no switching is a third. Make one `zeroed`.
+public whole: type = struct
+    reserved: u32
+end whole
+
+whole_start: (self: whole, escaping record: ptr mut space,
+              escaping stack: []mut u8, escaping work: any task)
+             -> none ! mem.out_of_memory =
+    _ = self
+    _ = stack
+    record.val.status = 1
+    work.run()
+    record.val.status = 0
+end whole_start
+
+whole_finished: (self: whole, record: space) -> (yes: bool) =
+    _ = self
+    yes = record.status == 0
+end whole_finished
+
+--  Nothing is ever running when `start` has returned.
+whole_wait: (self: whole) -> none =
+    _ = self
+end whole_wait
+
+whole is scheduler (start: whole_start, finished: whole_finished,
+                    wait: whole_wait)
+
+--  The group's one cell of shared state, kept at the front of its backing
+--  so a task finds it wherever the group's handle has been copied to.
+ledger: type = struct
+    failed: bool
+    problem: failure.reason
+end ledger
+
+--  `any turns` does not convert to `any scheduler`, so a group holds one
+--  of each and says which it runs on; the other is one of these, which
+--  runs nothing and is never called.
+unused: type = struct
+    reserved: u32
+end unused
+
+unused_start: (self: unused, escaping record: ptr mut space,
+               escaping stack: []mut u8, escaping work: any task)
+              -> none ! mem.out_of_memory =
+    _ = self
+    _ = record
+    _ = stack
+    _ = work
+end unused_start
+
+unused_finished: (self: unused, record: space) -> (yes: bool) =
+    _ = self
+    _ = record
+    yes = true
+end unused_finished
+
+unused_wait: (self: unused) -> none =
+    _ = self
+end unused_wait
+
+unused is scheduler (start: unused_start, finished: unused_finished,
+                     wait: unused_wait)
+unused is turns (yield: unused_wait)
+
+nobody: unused = zeroed
+
+--  The alignment every stack and record is cut to, and the room kept at
+--  the backing's front for the ledger and at each stack's base for its
+--  record.
+alignment: usize = 16
+ledger_room: usize = 32
+record_room: usize = 32
+
+--  The least a stack keeps below a task's state for the task's own calls:
+--  room for the provider's first frame and a few calls.  A stack this
+--  small is a test's; a real one is as deep as the routine's calls.
+least_stack: usize = 512
+
+group_value: type = struct
+    runs: any scheduler
+    turning: any turns
+    takes_turns: bool
+    backing: []mut u8
+    front: usize
+    size: usize
+    count: usize
+end group_value
+
+--- Fibres a routine starts and waits for: `count` equal stacks cut from
+--- a backing the caller lends, each with its record at its base, and the
+--- provider that runs them. Made by `group_over` or `turns_over`, given
+--- tasks by `admit`, and waited for by `join`, which the routine making
+--- the group defers as it would a region's release: a group must be
+--- joined before its backing goes, and nothing else makes sure it is.
+public group: type = group_value
+
+--  A value rounded down to the alignment stacks are cut to.
+round_down: (value: usize) -> (result: usize) =
+    result = value - value % alignment
+end round_down
+
+--  Where the ledger goes, the backing's first aligned byte, and the size
+--  of each of `count` stacks after it; it fails when they would be
+--  smaller than a stack's least.
+cut: (backing: []mut u8, count: usize)
+     -> (front: usize, size: usize) ! mem.out_of_memory =
+    fail mem.out_of_memory when count == 0 or lenof backing == 0
+    start: usize = usize(addr backing[0])
+    skip: usize = (alignment - start % alignment) % alignment
+    fail mem.out_of_memory when lenof backing < skip + ledger_room
+    front = start + skip
+    size = round_down((lenof backing - skip - ledger_room) / count)
+    fail mem.out_of_memory when size < record_room + least_stack
+    --  [0810]: the ledger and the records are the backing's bytes.
+    kept: ptr mut ledger = ptr(front)
+    kept.val = (failed: false, problem: mem.out_of_memory)
+    mut index: usize = 0
+    while index < count do
+        record: ptr mut space = ptr(front + ledger_room + index * size)
+        record.val = (saved: 0, limit: 0, status: 0)
+        inc index
+    end while
+end cut
+
+--- A group over a `scheduler`, which may run each task to its end as it
+--- is admitted. It cuts `backing` into `count` equal stacks and fails
+--- `mem.out_of_memory` when they would be smaller than a stack's least,
+--- 512 bytes after its record. The group borrows the provider and the
+--- backing for as long as it is used [0790].
+public group_over: (runs: any scheduler, backing: []mut u8, count: usize)
+                   -> (g: group from runs, backing) ! mem.out_of_memory =
+    (front, size) := try cut(backing, count)
+    g = (runs: runs, turning: any(addr nobody), takes_turns: false,
+         backing: backing, front: front, size: size, count: count)
+end group_over
+
+--- A group over a provider of `turns`, whose tasks take turns: a task
+--- that yields, or waits in a call to the provider, lets the others run.
+--- A provider that cannot promise that is refused here, where the group
+--- is made, rather than when a task waits for ever.
+public turns_over: (runs: any turns, backing: []mut u8, count: usize)
+                   -> (g: group from runs, backing) ! mem.out_of_memory =
+    (front, size) := try cut(backing, count)
+    g = (runs: any(addr nobody), turning: runs, takes_turns: true,
+         backing: backing, front: front, size: size, count: count)
+end turns_over
+
+--  The group's provider's three `scheduler` entries, through whichever
+--  of its two it runs on.
+start_on: (g: group, escaping record: ptr mut space,
+           escaping stack: []mut u8, escaping work: any task)
+          -> none ! mem.out_of_memory =
+    if g.takes_turns then
+        try g.turning.start(record, stack, work)
+    else
+        try g.runs.start(record, stack, work)
+    end if
+end start_on
+
+wait_on: (g: group) -> none =
+    if g.takes_turns then
+        g.turning.wait()
+    else
+        g.runs.wait()
+    end if
+end wait_on
+
+--  Whether the task last started on the group's stack `index` has ended.
+ended: (g: group, index: usize) -> (yes: bool) =
+    record: ptr mut space = record_of(g, index)
+    if g.takes_turns then
+        yes = g.turning.finished(record.val)
+    else
+        yes = g.runs.finished(record.val)
+    end if
+end ended
+
+--  What a task's stack holds at its top: the routine, the address of its
+--  group's ledger and the state the routine is called with.
+launch: type (state_type: type) = struct
+    work: (inout state: state_type) -> none ! failure.reason
+    kept: usize
+    state: state_type
+end launch
+
+launch_run: (state_type: type, self: ptr mut launch(state_type)) -> none =
+    self.val.work(self.val.state) else (problem)
+        kept: ptr mut ledger = ptr(self.val.kept)
+        if not kept.val.failed then
+            kept.val = (failed: true, problem: problem)
+        end if
+    end
+end launch_run
+
+(state_type: type) launch(state_type) is task (run: launch_run)
+
+record_of: (g: group, index: usize) -> (record: ptr mut space) =
+    --  [0810]: a record is the base of its stack, in the group's backing.
+    record = ptr(g.front + ledger_room + index * g.size)
+end record_of
+
+--  The index of a stack whose task has ended, waiting through the
+--  provider until one has.
+free_stack: (g: group) -> (index: usize) =
+    loop do
+        index = 0
+        while index < g.count do
+            return when ended(g, index)
+            inc index
+        end while
+        wait_on(g)
+    end loop
+end free_stack
+
+--- Start a task: wait, through the provider, until one of the group's
+--- stacks is free; copy `state` onto the top of that stack, as a call
+--- passes an argument; and start a fibre whose first frame calls `work`
+--- with the copy. Because each task's state lives on its own stack, one
+--- group holds tasks of different state types.
+---
+--- `work`'s failure is kept by the group, the first one only, and `join`
+--- fails with it. A task with atoms of its own maps them to
+--- `failure.reason` before returning. `state` is kept in the group until
+--- the task ends, so what it refers to must outlive the group (D445): a
+--- parameter of the routine making the group does, and so does a local
+--- declared before the group. It fails `mem.out_of_memory` when the state
+--- leaves the stack less than its least, 512 bytes, for its own calls.
+public admit: (state_type: type, inout g: group,
+               work: (inout state: state_type) -> none ! failure.reason,
+               escaping into g state: state_type)
+              -> none ! mem.out_of_memory =
+    index: usize = free_stack(g)
+    record: ptr mut space = record_of(g, index)
+    low: usize = usize(record) + record_room
+    high: usize = usize(record) + g.size
+    extent: usize = sizeof launch(state_type)
+    fail mem.out_of_memory when extent > high - low - least_stack
+    mut place: usize = round_down(high - extent)
+    place -= place % alignof launch(state_type)
+    fail mem.out_of_memory when place < low + least_stack
+    --  [0810]: the launch is the stack's top bytes, kept until the task
+    --  ends; its stack is the bytes below it.
+    copy: ptr mut launch(state_type) = ptr(place)
+    copy.val = (work: work, kept: g.front, state: state)
+    bottom: ptr mut [1]u8 = ptr(low)
+    mut stack: []mut u8 = bottom.val[0..<1]
+    unchecked begin
+        --  The bytes from `low` to the launch are the backing's.
+        stack = stack[0..<place - low]
+    end unchecked
+    try start_on(g, record, stack, any(copy))
+end admit
+
+--- Wait until every task admitted to `g` has ended. The first failure any
+--- of them had is `join`'s, handed on once; the rest ran to their own
+--- ends regardless, since nothing cancels a fibre (D449). A group may be
+--- joined again, and given more tasks after it is.
+public join: (inout g: group) -> none ! failure.reason =
+    mut index: usize = 0
+    while index < g.count do
+        if ended(g, index) then
+            inc index
+        else
+            wait_on(g)
+        end if
+    end while
+    kept: ptr mut ledger = ptr(g.front)
+    if kept.val.failed then
+        kept.val.failed = false
+        fail kept.val.problem
+    end if
+end join

@@ -2535,6 +2535,18 @@ package body Landin.Stages.Checking is
       Deferred_Tries : Selection_Lists.Vector;
       Checked_Recovery_Calls : Selection_Lists.Vector;
       Contextual_Recovery_Calls : Selection_Lists.Vector;
+      --  D377: an erased call selected while no conformance of its concept
+      --  existed yet.  Whether one answers it is a fact of the closed
+      --  program, which an `any` made in a body checked later can still
+      --  change, so the call is answered once every body has been checked.
+      type Unanswered_Selection is record
+         Selection : Pending_Selection;
+         Root      : Landin.Checking.Concept_Id;
+         Flat      : Positive;
+      end record;
+      package Unanswered_Lists is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Unanswered_Selection);
+      Unanswered_Selections : Unanswered_Lists.Vector;
       Checking_Routine_Body : Boolean := False;
       --  Whether a routine body is being checked: a `mut` module binding
       --  read there holds whatever was last written, not its image.
@@ -18249,11 +18261,15 @@ package body Landin.Stages.Checking is
             end;
          end loop;
          if Root_Evidence = Landin.Checking.No_Conformance then
-            --  D377: no conformance in the closed program answers the
-            --  concept, so no `any` of it can be made [1380] and no value
-            --  reaches this call.  It is checked against the entry as the
-            --  concept writes it, and noted with no dispatch, which lowering
-            --  turns into D232's `unreachable` trap at the call.
+            --  D377: no conformance answers the concept yet.  The call is
+            --  checked against the entry as the concept writes it, which
+            --  does not depend on the represented type, and its dispatch
+            --  is left to Answer_Late_Selections: an `any` of a
+            --  parameterized provider made in a body checked after this
+            --  one materializes its conformance only then.  If the closed
+            --  program has none, no `any` of the concept was made [1380],
+            --  no value reaches this call, and lowering turns it into
+            --  D232's `unreachable` trap.
             if Direct_Entry = 0 then
                return Landin.Checking.No_Signature;
             end if;
@@ -18262,10 +18278,19 @@ package body Landin.Stages.Checking is
                  Exact_Concept_Entry_Signature
                    (Landin.Checking.No_Conformance, Positive (Direct_Entry),
                     Unanswered => Declaring);
+               Late : constant Unanswered_Selection :=
+                 (Selection =>
+                    (Syn.Source_Of (Of_Tree), Selection,
+                     Landin.Checking.Current_Routine_View (Types.all)),
+                  Root => Root,
+                  Flat => Positive (Flat_Entry));
             begin
                if Signature /= Landin.Checking.No_Signature then
                   Landin.Checking.Note_Signature
                     (Types.all, Of_Tree, Selection, Signature);
+                  if not Unanswered_Selections.Contains (Late) then
+                     Unanswered_Selections.Append (Late);
+                  end if;
                end if;
                return Signature;
             end;
@@ -37539,6 +37564,64 @@ package body Landin.Stages.Checking is
 
       Next_Selection : Positive := 1;
 
+      --  D377 over the closed program: every body has been checked, so
+      --  every `any` construction has materialized its conformance,
+      --  wherever it was written.  An erased call selected before its
+      --  concept had a conformance dispatches through one if the program
+      --  now has it, as it would had the construction been seen first,
+      --  and otherwise stays a call no value reaches.
+      procedure Answer_Late_Selections;
+
+      procedure Answer_Late_Selections is
+      begin
+         for Late of Unanswered_Selections loop
+            declare
+               Root_Evidence : Landin.Checking.Conformance_Id :=
+                 Landin.Checking.No_Conformance;
+            begin
+               for Position in 1 .. Landin.Checking.Conformance_Count
+                 (Types.all)
+               loop
+                  declare
+                     Candidate : constant Landin.Checking.Conformance_Id :=
+                       Landin.Checking.Conformance_Identities.Nth
+                         (Types.all, Position);
+                  begin
+                     if Landin.Checking.Conformance_Concept
+                       (Types.all, Candidate) = Late.Root
+                     then
+                        Root_Evidence := Candidate;
+                        exit;
+                     end if;
+                  end;
+               end loop;
+               if Root_Evidence /= Landin.Checking.No_Conformance then
+                  declare
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Tree_For (Late.Selection.Source);
+                     Previous : constant Landin.Checking.Routine_Instance_Id
+                       := Landin.Checking.Current_Routine_View (Types.all);
+                  begin
+                     Restore_Routine_View (Late.Selection.View);
+                     if Landin.Checking.Evidence_Of
+                       (Types.all, Of_Tree.all, Late.Selection.Node)
+                         = Landin.Checking.No_Conformance
+                     then
+                        Landin.Checking.Note_Any_Dispatch
+                          (Types.all, Of_Tree.all, Late.Selection.Node,
+                           Root_Evidence, Late.Flat);
+                     end if;
+                     Restore_Routine_View (Previous);
+                  exception
+                     when others =>
+                        Restore_Failed_Routine_View (Previous);
+                        raise;
+                  end;
+               end if;
+            end;
+         end loop;
+      end Answer_Late_Selections;
+
       procedure Drain_Pending_Selections;
 
       procedure Drain_Pending_Selections is
@@ -40284,6 +40367,8 @@ package body Landin.Stages.Checking is
             end if;
          end;
       end loop;
+
+      Answer_Late_Selections;
 
       --  D137 still treats a callback field as one code-address carrier,
       --  not a by-value edge to each of the callback's parameter types.

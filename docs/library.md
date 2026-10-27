@@ -1238,6 +1238,78 @@ a password comes from `io.fill_random` directly.
 
 [Executable example](../compiler/tests/fixtures/runtime/random-sequence/main.ldn)
 
+## core/fibre
+
+Fibres: tasks a routine starts as a group and waits for before it goes on.
+
+| Call | What it does |
+|---|---|
+| `fibre.group_over` | Cut a backing the caller lends into equal stacks, run by any `fibre.scheduler`, and return the group `from` both. |
+| `fibre.turns_over` | The same over a `fibre.turns`, for tasks that must take turns. |
+| `fibre.admit` | Wait for a free stack, copy a state onto it and start a task that calls a routine with the copy. |
+| `fibre.join` | Wait until every task has ended, and fail with the first failure any had. |
+| `fibre.yield` | Let the provider's other fibres run, through `turns` evidence. |
+
+A task is an ordinary routine, `(inout state: T) -> none !
+failure.reason`, and its state a value copied onto its own stack, so one
+group holds tasks of different state types. The state is kept until the
+task ends, `escaping into` the group: what it refers to must outlive the
+group, as the routine's own parameters and the locals declared before
+the group do.
+
+Two concepts say what runs the tasks:
+
+| Concept | What it promises | Providers |
+|---|---|---|
+| `scheduler` | `start`, `finished` and `wait`; it may run each task to its end as it is admitted | `fibre.whole`, the blocking host, and every provider of `turns` |
+| `turns` | a `scheduler` with `yield`: a task that yields lets every other unfinished one run first | `stacks.round` |
+
+- A program written against `scheduler` must be right when every task
+  runs to its end. One that needs turns asks `turns_over`, and is
+  refused there for a provider of `scheduler` alone.
+- Fibres are cooperative: a fibre gives the core away only inside a call
+  to its provider, and the fibres of one provider are one execution
+  context.
+- The first failure is kept and the rest are dropped; nothing cancels a
+  fibre, so `join` returns only once every task has ended.
+- A group must be joined before its backing goes. Nothing but the
+  program's `defer fibre.join(group) else none` makes sure it is.
+- Each stack is at least 512 bytes after its record; a smaller backing
+  fails `mem.out_of_memory`.
+
+[Executable example](../compiler/tests/fixtures/runtime/fibre-same-source-any-provider/main.ldn)
+
+## core/fibre/stacks
+
+The switch between stacks, and a round of fixed turns built on it.
+
+| Call | What it does |
+|---|---|
+| `stacks.round_over` | Fill the caller's `stacks.round_space` and return a `stacks.round`, a provider of `fibre.turns` over the caller's table of records. |
+| `stacks.prepare` | Lay out a fibre's first frame on a stack, for a provider of its own. |
+| `stacks.switch` | Save the leaving fibre's registers and resume another's. |
+
+A round's entry 0 is the stack it was made on; its other entries are the
+fibres it started, in the order they were started. `start` prepares and
+returns, and the fibre runs at its first turn. The table holds one entry
+more than the fibres that may be unfinished at once.
+
+When every unfinished fibre has yielded since anything last started or
+ended, the round calls its `stacks.idler` before it goes on: a device
+waits for an interrupt there, and `stacks.spin` returns at once.
+
+A switch checks the leaving stack against its record's limit, 1 KiB
+above the stack's lowest byte, and traps `stack_exhausted` past it. The
+check is made only at a switch, so a task that goes much deeper between
+two has already written below its stack. A prepared stack is at least
+2 KiB.
+
+Only the targets whose backend emits the stack builtins admit this
+module; a program over `fibre.whole` or the blocking host does not
+import it, and runs on every target.
+
+[Executable example](../compiler/tests/fixtures/runtime/fibre-turns-interleave/main.ldn)
+
 ## hosted/heap
 
 An explicit allocator over the host runtime heap.
@@ -1280,7 +1352,10 @@ Hosted file, stream and process operations, written once over `platform/posix`: 
 
 `host` supplies every concept of `core/io`, `core/time` and `core/net`:
 the shared I/O concepts, `directories`, `programs`, `network`,
-`file_system`, `terminals`, `clock`, `wall_clock` and `entropy`.
+`file_system`, `terminals`, `clock`, `wall_clock` and `entropy`. It is
+also a `fibre.scheduler` that runs each task to its end before `admit`
+returns, as `fibre.whole` does, and so is no provider of `fibre.turns`:
+its calls block the thread.
 
 ### The provider
 

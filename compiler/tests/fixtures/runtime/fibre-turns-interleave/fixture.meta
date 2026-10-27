@@ -1,0 +1,10 @@
+class: runtime
+summary: D444 a group over a round of turns interleaves two tasks that yield, the home stack going on past both admissions and its join taking turns until both have ended
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 1380, 1620, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

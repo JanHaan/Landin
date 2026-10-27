@@ -1,0 +1,267 @@
+--  The switch, and the one provider of turns the library carries over it
+--  (D444, D450).  `prepare` and `switch` are for whoever writes a provider
+--  that runs fibres on stacks of their own; `round` is one: a round of
+--  fixed turns over records the caller keeps, with the wait when nobody
+--  can run supplied by whoever builds on it.  It is a module of its own,
+--  beneath core/fibre, so that a program that never switches a stack,
+--  one over `fibre.whole` or the blocking host, carries no switch and is
+--  admitted on every target, the switch's own included or not (D463).
+--  Priorities, timers and preemption are not here: an operating system's
+--  or an RTOS's scheduler is another provider of the same concepts.
+
+import core/fibre
+import core/mem
+
+--  What a prepared stack holds at its top: the record the fibre runs on,
+--  the record it resumes when its task has ended, and the task.
+starting: type = struct
+    record: usize
+    after: usize
+    work: any fibre.task
+end starting
+
+--  The room a record's limit keeps above its stack's lowest byte, and the
+--  least a prepared stack holds beside it for the task's own calls.  The
+--  switch checks the stack pointer when it is made, inside the provider,
+--  so the limit stands above what the provider's own calls on the way to
+--  it and the switch's save take, and a task whose calls go a little past
+--  it between two switches traps at the next before it has written below
+--  the stack.  The check is late (D447): a task that goes further than
+--  the room between two switches has already written past its stack.
+switch_room: usize = 1024
+least_prepared: usize = 2048
+
+--  A fibre's first frame: run the task, mark the record ended, and resume
+--  the record the provider named.  Nothing resumes it again.
+first_frame: (argument: usize) -> noreturn =
+    --  [0810]: the argument is the address of the stack's `starting`.
+    start: ptr mut starting = ptr(argument)
+    start.val.work.run()
+    record: ptr mut fibre.space = ptr(start.val.record)
+    after: ptr mut fibre.space = ptr(start.val.after)
+    record.val.status = 0
+    switch(record, after)
+    compiler.unreachable()
+end first_frame
+
+--- Lay out a first frame on `stack` that, when a switch resumes `record`,
+--- runs `work` to its end, makes the record's status zero and switches to
+--- `after`, which the provider keeps unfinished for as long as a fibre
+--- can end into it. The record's limit is set 1 KiB above the stack's
+--- lowest byte, so a switch made past it traps `stack_exhausted` (D447,
+--- D451) before a task that went a little too deep has written below its
+--- stack; one that went further has already, as the check is made only
+--- at a switch. It fails `mem.out_of_memory` when `stack` is smaller than
+--- 2 KiB and the few words the first frame keeps at its top.
+public prepare: (escaping record: ptr mut fibre.space,
+                 escaping stack: []mut u8, escaping work: any fibre.task,
+                 escaping after: ptr mut fibre.space)
+                -> none ! mem.out_of_memory =
+    fail mem.out_of_memory when lenof stack == 0
+    low: usize = usize(addr stack[0])
+    high: usize = low + lenof stack
+    extent: usize = sizeof starting
+    fail mem.out_of_memory
+        when lenof stack < extent + alignof starting + least_prepared
+    mut place: usize = high - extent
+    place -= place % alignof starting
+    --  [0810]: the `starting` is the stack's top bytes; the first frame
+    --  is laid out below it.
+    start: ptr mut starting = ptr(place)
+    start.val = (record: usize(record), after: usize(after), work: work)
+    record.val.limit = low + switch_room
+    record.val.status = 1
+    record.val.saved = compiler.stack_prepare(stack[0..<place - low],
+                                              first_frame, place)
+end prepare
+
+--- Save the callee-saved registers and the frame pointer on the leaving
+--- stack, keep its stack pointer in `leaving`, and resume `entering`,
+--- returning when something switches back to `leaving`. The leaving
+--- stack's pointer is checked against its record's limit first, and a
+--- stack past it traps `stack_exhausted` (D451). A switch is a full
+--- compiler memory boundary (D446). Pointers rather than two `inout`
+--- records, because both commonly sit in one table.
+public switch: (leaving: ptr mut fibre.space, entering: ptr mut fibre.space)
+               -> none =
+    compiler.stack_switch(addr leaving.val.saved, entering.val.saved,
+                          leaving.val.limit)
+end switch
+
+--- What a round does when every fibre has yielded since anything last
+--- started or ended: wait for something to change. A device waits for an
+--- interrupt; an event-driven Io waits for its events; `spin` returns at
+--- once.
+public idler: type = concept (provider: type)
+    --- Wait until something a fibre waits for may have changed.
+    idle: (self: provider) -> none
+end idler
+
+--- An idler that returns at once, for a round whose fibres yield only
+--- while they have work to do, as a test's do. Make one `zeroed`.
+public spin: type = struct
+    reserved: u32
+end spin
+
+spin_idle: (self: spin) -> none =
+    _ = self
+end spin_idle
+
+spin is idler (idle: spin_idle)
+
+round_state: type = struct
+    home: fibre.space
+    current: usize
+    count: usize
+    quiet: usize
+    ended: usize
+end round_state
+
+--- Caller-owned state of a round: the record of the stack the round was
+--- made on, which entry runs, and its counts. Declare it `zeroed` and
+--- give it to `round_over`, which fills it; it must outlive the round.
+public round_space: type = round_state
+
+round_value: type = struct
+    state: ptr mut round_state
+    entries: []mut usize
+    when_idle: any idler
+end round_value
+
+--- A round of fixed turns, as a handle: copies share one round. Entry 0 is
+--- the stack the round was made on; the others are the fibres `start`
+--- prepared, each the record it was given, in the order they were
+--- started. `start` prepares and returns, and the fibre runs at its first
+--- turn. `yield` moves to the next unfinished entry after the current
+--- one, round the table, and after a whole round in which every
+--- unfinished entry yielded and nothing started or ended it calls the
+--- idler first. A provider of `fibre.turns`. Every entry may switch
+--- except `finished`.
+public round: type = round_value
+
+--- Fill `state` for a round over `entries`, the caller's table of the
+--- records it runs, and return its handle. The table holds entry 0 and
+--- one entry for each fibre that may be unfinished at once, so a group of
+--- `count` stacks needs `count + 1`; `start` fails `mem.out_of_memory`
+--- when it is full. It fails `mem.out_of_memory` when `entries` holds
+--- fewer than two. Keep `state`, `entries` and `when_idle` alive while the
+--- round is used.
+public round_over: (inout state: round_space, entries: []mut usize,
+                    when_idle: any idler)
+                   -> (handle: round from state, entries, when_idle)
+                   ! mem.out_of_memory =
+    fail mem.out_of_memory when lenof entries < 2
+    state = (home: (saved: 0, limit: 0, status: 1), current: 0, count: 1,
+             quiet: 0, ended: 0)
+    entries[0] = usize(addr state.home)
+    handle = (state: addr state, entries: entries, when_idle: when_idle)
+end round_over
+
+--  The record entry `index` names.
+entry_record: (self: round, index: usize) -> (record: ptr mut fibre.space) =
+    --  [0810]: an entry is the address of a record the round was given.
+    record = ptr(self.entries[index])
+end entry_record
+
+--  Whether entry `index` holds a fibre that has not ended; entry 0, the
+--  stack the round was made on, never ends.
+running: (self: round, index: usize) -> (yes: bool) =
+    yes = false
+    return when self.entries[index] == 0
+    record: ptr mut fibre.space = entry_record(self, index)
+    yes = record.val.status <> 0
+end running
+
+--  Empty every entry whose fibre has ended since the last sweep, counting
+--  each, so a later start may take its place.
+sweep: (self: round) -> none =
+    state: ptr mut round_state = self.state
+    mut index: usize = 1
+    while index < state.val.count do
+        if self.entries[index] <> 0 and not running(self, index) then
+            self.entries[index] = 0
+            inc state.val.ended
+            state.val.quiet = 0
+        end if
+        inc index
+    end while
+end sweep
+
+--  How many entries hold a fibre that has not ended, entry 0 among them.
+unfinished: (self: round) -> (count: usize) =
+    state: ptr mut round_state = self.state
+    count = 0
+    mut index: usize = 0
+    while index < state.val.count do
+        if index == 0 or running(self, index) then
+            inc count
+        end if
+        inc index
+    end while
+end unfinished
+
+round_start: (self: round, escaping record: ptr mut fibre.space,
+              escaping stack: []mut u8, escaping work: any fibre.task)
+             -> none ! mem.out_of_memory =
+    state: ptr mut round_state = self.state
+    sweep(self)
+    mut index: usize = 1
+    while index < state.val.count and self.entries[index] <> 0 do
+        inc index
+    end while
+    if index == state.val.count then
+        fail mem.out_of_memory when index == lenof self.entries
+        inc state.val.count
+    end if
+    home: ptr mut fibre.space = entry_record(self, 0)
+    try prepare(record, stack, work, home)
+    self.entries[index] = usize(record)
+    state.val.quiet = 0
+end round_start
+
+round_finished: (self: round, record: fibre.space) -> (yes: bool) =
+    _ = self
+    yes = record.status == 0
+end round_finished
+
+round_yield: (self: round) -> none =
+    state: ptr mut round_state = self.state
+    sweep(self)
+    inc state.val.quiet
+    if state.val.quiet >= unfinished(self) then
+        state.val.quiet = 0
+        self.when_idle.idle()
+    end if
+    was: usize = state.val.current
+    mut next: usize = was
+    loop do
+        next = (next + 1) % state.val.count
+        break when next == was or next == 0 or running(self, next)
+    end loop
+    return when next == was
+    state.val.current = next
+    switch(entry_record(self, was), entry_record(self, next))
+    --  Whoever switched back here, a turn or a fibre that ended, this
+    --  entry runs again.
+    state.val.current = was
+end round_yield
+
+round_wait: (self: round) -> none =
+    state: ptr mut round_state = self.state
+    sweep(self)
+    loop do
+        mut others: usize = unfinished(self) - 1
+        if state.val.current <> 0 then
+            others -= 1
+        end if
+        break when others == 0
+        before: usize = state.val.ended
+        round_yield(self)
+        sweep(self)
+        break when state.val.ended <> before
+    end loop
+end round_wait
+
+round_value is fibre.scheduler (start: round_start, finished: round_finished,
+                                wait: round_wait)
+round_value is fibre.turns (yield: round_yield)
