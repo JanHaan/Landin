@@ -1,0 +1,34 @@
+--  D377 over the closed program: the only conformance of `display`
+--  is box(u16)'s, materialized by an `any` made in a variant case's payload, which
+--  is checked after the erased call; the call dispatches through it
+--  rather than trapping as one no conformance answers.
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+box: type (t: type) = struct
+    value: t
+end box
+
+box_code: (t: type, self: ptr box(t)) -> (value: i32) =
+    value = 40 + i32(sizeof t)
+end box_code
+
+(t: type) box(t) is display (code: box_code)
+
+choice: type = struct
+    which: variant
+        empty |
+        held: (d: any display)
+    end which
+end choice
+
+public main: () -> (code: i32) =
+    item: box(u16) = (value: 1)
+    c: choice = (which: held(d: any(addr item)))
+    code = 1
+    match c.which
+        empty: code = 2
+        held(d): code = d.code()
+    end match
+end main

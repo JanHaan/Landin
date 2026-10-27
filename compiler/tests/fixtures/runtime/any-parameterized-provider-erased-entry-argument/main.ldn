@@ -1,0 +1,38 @@
+--  D377 over the closed program: the only conformance of `display`
+--  is box(u16)'s, materialized by an `any` made in the argument of an erased entry call, which
+--  is checked after the erased call; the call dispatches through it
+--  rather than trapping as one no conformance answers.
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+box: type (t: type) = struct
+    value: t
+end box
+
+box_code: (t: type, self: ptr box(t)) -> (value: i32) =
+    value = 40 + i32(sizeof t)
+end box_code
+
+(t: type) box(t) is display (code: box_code)
+
+taker: type = concept (t: type)
+    take: (self: ptr t, d: any display) -> (value: i32)
+end taker
+
+plain: type = struct
+    bias: i32
+end plain
+
+plain_take: (self: ptr plain, d: any display) -> (value: i32) =
+    value = d.code() + self.val.bias
+end plain_take
+
+plain is taker (take: plain_take)
+
+public main: () -> (code: i32) =
+    item: box(u16) = (value: 1)
+    p: plain = (bias: 0)
+    k: any taker = any(addr p)
+    code = k.take(any(addr item))
+end main

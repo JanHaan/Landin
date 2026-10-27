@@ -323,12 +323,7 @@ public admit: (state_type: type, inout g: group,
         --  The bytes from `low` to the launch are the backing's.
         stack = stack[0..<place - low]
     end unchecked
-    --  Bound with its type written, not passed as `any(copy)`: an erased
-    --  value of a parameterized provider made in a call's argument is not
-    --  seen before the providers' erased calls are checked, and those calls
-    --  then trap as though no conformance answered them.
-    work_on: any task = any(copy)
-    try start_on(g, record, stack, work_on)
+    try start_on(g, record, stack, any(copy))
 end admit
 
 --- Wait until every task admitted to `g` has ended. The first failure any

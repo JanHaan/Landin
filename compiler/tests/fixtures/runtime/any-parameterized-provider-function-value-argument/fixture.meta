@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: D377 an `any` of a parameterized provider made in the argument of a call through a function value materializes the only conformance of its concept, and an erased call checked before it dispatches through that conformance rather than trapping
+program: main.ldn
+status: 42
+constructs: 1230, 1290, 1370, 1380, 1390
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

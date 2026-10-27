@@ -354,6 +354,42 @@
     "runtime/any-parameterized-provider": {
       "mode": "execute"
     },
+    "runtime/any-parameterized-provider-argument": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-array-element": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-assignment": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-erased-entry-argument": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-expression-result": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-field": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-field-assignment": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-function-value-argument": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-generic-argument": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-result": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-static-entry-argument": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider-variant-payload": {
+      "mode": "execute"
+    },
     "runtime/any-return-origin": {
       "mode": "execute"
     },
