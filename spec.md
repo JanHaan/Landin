@@ -67,7 +67,7 @@ enclosing production recognises. Thus 'of', 'lenof', 'offsetof', 'variant', 'cal
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
 'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
 'align', 'section', 'keep', 'vector', 'interrupt', 'naked', 'noreturn',
-'distinct' and 'out' remain identifier tokens everywhere
+'distinct', 'out' and 'into' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
 production names contextual representation widths; it does not expand the
@@ -448,7 +448,12 @@ and resolution foundation on
 a declared routine. Its complete signature scope collects type/fixed formals,
 runtime parameters and named returns before resolving any type; runtime
 formals alone make the runtime signature. `escaping` precedes an explicitly
-written convention, and both precede the parameter name (D140). An omitted
+written convention, and both precede the parameter name (D140). `escaping into
+p` names the parameter whose storage may keep this one (D445); `into` is a
+contextual word [1760] does not reserve, a target only when a second name
+follows it, so a parameter may still be called `into`. Its name is associated
+with a runtime parameter position as a `from` name is, and the parameter it
+names may stand earlier or later in the list (D455). An omitted
 convention and explicit `in` have the same language meaning but remain distinct
 syntax facts. Each `from` name is retained in written order and associated with
 the correspondingly labelled runtime parameter position. For every returning
@@ -517,8 +522,8 @@ errors             ::= "!" (declaration_reference
                              ("|" declaration_reference)* | "...")
 parameters         ::= parameter ("," parameter)*
 parameter          ::= "caller" identifiers ":" declared_type
-                     | "escaping"? parameter_convention? identifiers ":"
-                       declared_type
+                     | ("escaping" ("into" identifier)?)? parameter_convention?
+                       identifiers ":" declared_type
 parameter_convention ::= "in" | "inout" | "sink"
 returns     ::= "(" named_return ("," named_return)* ")" | "none" | "noreturn"
 named_return ::= identifiers ":" declared_type
@@ -1421,7 +1426,12 @@ its destination's backing storage, including `inout` parameters, pointer
 pointees, slice elements and reference-bearing fields or variant payloads.
 Caller storage cannot retain a frame reference or a non-escaping reference
 from another parameter origin. Updating storage with a reference from that
-same origin is permitted; retaining another parameter requires `escaping`.
+same origin is permitted; retaining another parameter requires `escaping`,
+or `escaping into` naming the parameter whose storage keeps it (D445). Such a
+parameter may be kept in that storage and in no other, and its argument at a
+call must outlive the origin of the argument for the named parameter, as D445
+and D455 decide it locally; afterwards the frame storage that argument
+reaches holds what was kept, as a store through a known address does.
 A known address alias to a local joins its writes into the local's value
 origins, while a pointee write does not change the pointer descriptor's origin.
 Integer-created pointers are explicitly untracked [0470]; joining one with a
@@ -11731,8 +11741,8 @@ an allocation outlive anything the caller's frame holds; a local outlives
 another local of the same frame when it is declared before it; and a frame
 reference never outlives a parameter's storage. A writable reference kept this
 way must name every place it is kept, as D222 requires of a result. `escaping`
-alone keeps its meaning. The form is not enabled until the fibre work
-implements it with the checker, and the tour's [0780] gains it then.
+alone keeps its meaning. The form is enabled, the tour's [0780] teaches it, and
+D455 decides what the rule left to the checker.
 
 **The alternatives:** leave `escaping` as it is, which forces every capability
 a fibre uses into an allocation or module storage, and module storage cannot
@@ -11742,10 +11752,60 @@ lifetime parameters, which are the borrow checker Landin does not have; and a
 privileged rule for the group's `admit`, which is a library type the language
 would have to know. All were declined.
 
-**Pinned by** nothing that runs yet: prototype 5's V3 records the pressure,
-and the fixtures that enable the form will pin it, a positive one for the
-group's state and `push_front`'s frame node, a negative one for a local
-declared after the storage it is kept in.
+**Pinned by** `runtime/escaping-into-frame-list`, `push_front`'s frame nodes
+on a frame list declared after them; `runtime/escaping-into-group-state`, a
+frame group keeping states that hold the caller's parameter, directly and
+through a function value; `negative/escaping-into-later-local`, a local
+declared after the storage it is kept in; and
+`negative/escaping-into-third-place`. Prototype 5's V3 records the pressure.
+
+### D455 — What `escaping into` compares, and where its target stands
+
+**The tour said** at [0780] that a routine may keep a parameter in another
+parameter's storage when it says `escaping into`, and D445 said the argument
+must outlive the origin of the argument for the named parameter. Neither said
+where the named parameter may stand, what the origin of an `inout` argument
+is, what a refused name is, or what the caller knows after the call.
+
+**Chosen:** the named parameter may stand earlier or later in the list, so
+two parameters may each name the other, as `push_front`'s do. `into` is a
+contextual word, a target only when a second name follows it. The name must
+be another runtime parameter of the same signature, whose type holds a
+reference; an unknown name, a parameter naming itself and a target that can
+hold nothing are L0339. The parameter is not `escaping`: it may be kept in
+the named parameter's storage, in storage of its own origin and in the frame,
+and anywhere else is L0314. The contract is part of the function's type, so
+a function value, a concept entry and a generic instance carry it and a call
+through any of them is checked as a direct call is; two types that differ in
+it do not agree.
+
+At a call, the kept argument's origin is its value's, as `escaping` reads
+it. The origin of the argument for the named parameter is read as a call's
+`from` result reads it: an `inout` argument is its place, and any other is
+what its value refers to. A local is declared before another when it comes
+first in the same block or an enclosing one, and a frame reference with no
+declaration to order it, a literal or a copied subject, is refused. An
+untracked argument is the program's claim [0470], as for `escaping`, and a
+holder whose origin is not known is taken to outlive the call. After the
+call, the frame storage the holder's argument reaches, and an `inout` place,
+hold what was kept, so returning or keeping it later is checked against the
+kept origin. The code generator treats the parameter as escaping, since it
+outlives the call.
+
+**The alternatives:** the named parameter only earlier in the list, which
+refuses mutual keeping such as `push_front`'s; the `inout` holder's referent
+as well as its place, which refuses any frame list whose head the checker
+cannot prove empty, since a place passed `inout` loses that proof; locals of
+one block counted as equally long-lived, which D445's "declared before" does
+not say, and which leaves a frame list's nodes in an order the reader must
+work out; and `into` reserved, which would take a word programs use as a
+name. All are declined.
+
+**Pinned by** the fixtures D445 names, `negative/escaping-into-target` for the
+refused names, `negative/escaping-into-function-value` for a call through a
+function value and for two types that differ in the contract, the parser case
+`escaping into names a target`, and the structural grammar's
+`contextual-names` corpus.
 
 ## DECISIONS: FUNCTIONS, CALLS AND RETURNS
 
@@ -13671,7 +13731,7 @@ classified failure boundary before the repository gate can pass.
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity`, `runtime/r490-generic-atom-arrays`, `runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`, `negative/r490-atom-array-wrong-member`, `negative/r490-generic-atom-field-member` |
 | `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors and L0334 for a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0313 or L0334 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results that a writable reference may reach (D375) | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `runtime/erased-static-view-under-writable-from`, `negative/erased-writable-view-under-from`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-fault-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
+| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results that a writable reference may reach (D375); a parameter `escaping into` another is kept only in that storage and its argument outlives that argument's origin (D445, D455) | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `runtime/erased-static-view-under-writable-from`, `negative/erased-writable-view-under-from`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-fault-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use`, `runtime/escaping-into-frame-list`, `runtime/escaping-into-group-state`, `negative/escaping-into-later-local`, `negative/escaping-into-third-place`, `negative/escaping-into-function-value` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302, L0327, L0331, L0343 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition`, `runtime/r480-generic-provider-entry` |
 | `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/specialization-speed-growth`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |

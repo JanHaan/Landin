@@ -735,10 +735,13 @@ does not extend the lifetime of frame storage.
 Parameters are non-escaping by default. A reference derived from one cannot
 be passed to a retaining (`escaping`) call or stored in another origin, even
 if the referenced storage will remain live. If that retention is intended,
-declare the source parameter `escaping` and make its callers satisfy that
-contract. Otherwise, keep the use non-retaining or update storage within the
-same origin. Keeping the storage alive longer alone does not grant retention
-permission.
+declare the source parameter `escaping`, or `escaping into` the parameter
+whose storage keeps it (D445), and make its callers satisfy that contract.
+A reference kept `escaping into` a parameter must outlive that argument's
+origin: a frame reference never outlives a parameter's storage, and a local
+only the storage of locals declared after it (D455). Otherwise, keep the use
+non-retaining or update storage within the same origin. Keeping the storage
+alive longer alone does not grant retention permission.
 
 ```landin
 bad: () -> (pointer: ptr u32) =
@@ -1155,8 +1158,10 @@ bad: type = bytes(u8)
 A written signature is not well formed. A function type gives each parameter
 a distinct label [0980] and each result a distinct name [0990]. A `from`
 clause names borrowed runtime parameters, once each, on a result that holds a
-reference [0790]. A `caller` parameter has the exact source-position struct
-(D192). Rename or remove the duplicate, or correct the clause.
+reference [0790]. An `escaping into` names another runtime parameter whose
+type holds a reference (D445). A `caller` parameter has the exact
+source-position struct (D192). Rename or remove the duplicate, or correct the
+clause.
 
 ```landin
 duplicated: type = (value: i32, value: bool) -> none

@@ -381,6 +381,12 @@ package body Landin.Syntax.Parser is
             Caller_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "caller");
 
+            --  D445's `escaping into p`.  It is decided as `caller` is:
+            --  only `into` followed by a second name is the target, so a
+            --  parameter spelled `into` keeps its ordinary meaning.
+            Into_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "into");
+
             --  D188's [0660] range subtype.  It is recognized only after a
             --  parsed base type at a type declaration's right-hand side, so
             --  a binding, parameter or label named `range` keeps its
@@ -6903,8 +6909,9 @@ package body Landin.Syntax.Parser is
             ------------------------------------------------------------
 
             --  parameter ::= "caller" identifiers ":" type
-            --              | "escaping"? parameter_convention?
-            --                identifiers ":" type            [1040/1800]
+            --              | ("escaping" ("into" identifier)?)?
+            --                parameter_convention?
+            --                identifiers ":" type      [1040/1800/D445]
             --  D140 fixes that modifier order and retains explicit `in`
             --  separately from the implicit default.  D138's type and fixed
             --  formals remain distinct nodes, so neither runtime modifier can
@@ -6929,6 +6936,7 @@ package body Landin.Syntax.Parser is
                Fixed       : constant Boolean := Peek = Tok.Kw_Fixed;
                Caller      : Boolean := False;
                Escaping    : Boolean := False;
+               Target      : Node_Id := No_Node;
                Convention  : Parameter_Convention := Implicit_In;
                Named       : Landin.Source.Names.Name_Id;
                At_Name     : Landin.Source.Span;
@@ -6952,6 +6960,19 @@ package body Landin.Syntax.Parser is
                   elsif Peek = Tok.Kw_Escaping then
                      Escaping := True;
                      Advance;
+                     --  D445: `escaping into p` names the parameter whose
+                     --  storage may keep this one.  Two tokens decide it,
+                     --  as they decide `caller`: a parameter spelled
+                     --  `into` writes `:` or `,` after its name.
+                     if Peek = Tok.Identifier
+                       and then Named_Here = Into_Id
+                       and then Ahead (1) = Tok.Identifier
+                     then
+                        Advance;
+                        Target := Add
+                          (Return_Source, Here, Named => Named_Here);
+                        Advance;
+                     end if;
                   end if;
 
                   if not Caller then
@@ -7041,16 +7062,22 @@ package body Landin.Syntax.Parser is
                --  [0100]: one Parameter per name, in order, each with the
                --  written `caller`, `escaping` and convention and the one
                --  written type.
+               --  D445: a parameter with an `into` target is not escaping;
+               --  it may be kept only in the storage that target names.
                declare
                   Extent : constant Landin.Source.Span :=
                     Join (Start, After_Previous);
+                  --  D445: a written `into` target is the trailing slot.
+                  Owned : constant Slot_List :=
+                    (if Target = No_Node then [Type_Node]
+                     else [Type_Node, Target]);
                   First : constant Node_Id := Add
                     (Of_Kind   => Parameter,
                      At_Token  => At_Name,
                      Extent    => Extent,
-                     Children  => [Type_Node],
+                     Children  => Owned,
                      Named     => Named,
-                     Escapes   => Escaping,
+                     Escapes   => Escaping and then Target = No_Node,
                      Caller    => Caller,
                      Convention => Convention);
                begin
@@ -7066,9 +7093,9 @@ package body Landin.Syntax.Parser is
                           (Of_Kind   => Parameter,
                            At_Token  => Each.At_Name,
                            Extent    => Extent,
-                           Children  => [Type_Node],
+                           Children  => Owned,
                            Named     => Each.Named,
-                           Escapes   => Escaping,
+                           Escapes   => Escaping and then Target = No_Node,
                            Caller    => Caller,
                            Convention => Convention,
                            Shares    => True));

@@ -1158,7 +1158,10 @@ package body Landin.Stages.Lowering is
                      when Syn.Implicit_In | Syn.Explicit_In => IR.In_Value,
                      when Syn.Inout_Convention => IR.Inout_Place,
                      when Syn.Sink_Convention => IR.Sink_Value),
-               Escaping => Part.Escaping,
+               --  D445: a parameter kept in another's storage outlives
+               --  the call as an escaping one does, which is all the IR
+               --  reads the fact for.
+               Escaping => Part.Escaping or else Part.Escaping_Into /= 0,
                Atoms =>
                  (if Part.Convention /= Syn.Inout_Convention
                     and then Part.Kind = Ty.Atom_Value

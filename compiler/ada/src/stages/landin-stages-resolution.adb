@@ -544,7 +544,26 @@ package body Landin.Stages.Resolution is
       --  in a written type [1800].  Missing and duplicated labels remain
       --  retained for the reference checker to diagnose.
       procedure Associate_Return_Sources
-        (Of_Tree : Syn.Tree; Signature_Node : Syn.Node_Id) is
+        (Of_Tree : Syn.Tree; Signature_Node : Syn.Node_Id)
+      is
+         procedure Associate (Source : Syn.Node_Id);
+
+         procedure Associate (Source : Syn.Node_Id) is
+         begin
+            for Position in
+              1 .. Syn.Parameter_Count (Of_Tree, Signature_Node)
+            loop
+               if Syn.Name
+                    (Of_Tree,
+                     Syn.Nth_Parameter (Of_Tree, Signature_Node, Position))
+                  = Syn.Name (Of_Tree, Source)
+               then
+                  Landin.Resolution.Associate_Return_Source
+                    (Meanings.all, Of_Tree, Source, Position);
+                  exit;
+               end if;
+            end loop;
+         end Associate;
       begin
          for Which in 1 .. Syn.Return_Count (Of_Tree, Signature_Node) loop
             declare
@@ -557,27 +576,24 @@ package body Landin.Stages.Resolution is
                   else Syn.Return_Source_Count (Of_Tree, Returned));
             begin
                for Source_Index in 1 .. Owned loop
-                  declare
-                     Source : constant Syn.Node_Id :=
-                       Syn.Nth_Return_Source
-                         (Of_Tree, Returned, Source_Index);
-                  begin
-                     for Position in
-                       1 .. Syn.Parameter_Count (Of_Tree, Signature_Node)
-                     loop
-                        if Syn.Name
-                             (Of_Tree,
-                              Syn.Nth_Parameter
-                                (Of_Tree, Signature_Node, Position))
-                           = Syn.Name (Of_Tree, Source)
-                        then
-                           Landin.Resolution.Associate_Return_Source
-                             (Meanings.all, Of_Tree, Source, Position);
-                           exit;
-                        end if;
-                     end loop;
-                  end;
+                  Associate
+                    (Syn.Nth_Return_Source (Of_Tree, Returned, Source_Index));
                end loop;
+            end;
+         end loop;
+         --  D445: an `escaping into` target names a parameter label the
+         --  same way, and a later shared name's target is the first's.
+         for Which in 1 .. Syn.Parameter_Count (Of_Tree, Signature_Node) loop
+            declare
+               Parameter : constant Syn.Node_Id :=
+                 Syn.Nth_Parameter (Of_Tree, Signature_Node, Which);
+            begin
+               if not Syn.Shares_Declared_Type (Of_Tree, Parameter)
+                 and then Syn.Escaping_Target (Of_Tree, Parameter)
+                   /= Syn.No_Node
+               then
+                  Associate (Syn.Escaping_Target (Of_Tree, Parameter));
+               end if;
             end;
          end loop;
       end Associate_Return_Sources;

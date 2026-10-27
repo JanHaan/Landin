@@ -16,4 +16,4 @@ args = ["lsp"]
 
 [[grammar]]
 name = "landin"
-source = { git = "https://github.com/JanHaan/Landin", rev = "ffc1941b285493417a1f6c13c004002bdeb9960f", subpath = "highlight/tree-sitter" }
+source = { git = "https://github.com/JanHaan/Landin", rev = "344c702b914efe9f03c0ff13e08e20e60b147b70", subpath = "highlight/tree-sitter" }

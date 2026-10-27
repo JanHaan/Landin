@@ -481,11 +481,16 @@ package body Landin.Diagnostics.Explanations is
                & "ved from one cannot be passed to a retaining (`escaping`"
                & ") call or stored in another origin, even if the referenc"
                & "ed storage will remain live. If that retention is intend"
-               & "ed, declare the source parameter `escaping` and make its"
-               & " callers satisfy that contract. Otherwise, keep the use "
-               & "non-retaining or update storage within the same origin. "
-               & "Keeping the storage alive longer alone does not grant re"
-               & "tention permission.",
+               & "ed, declare the source parameter `escaping`, or `escapin"
+               & "g into` the parameter whose storage keeps it (D445), and"
+               & " make its callers satisfy that contract. A reference kep"
+               & "t `escaping into` a parameter must outlive that argument"
+               & "'s origin: a frame reference never outlives a parameter'"
+               & "s storage, and a local only the storage of locals declar"
+               & "ed after it (D455). Otherwise, keep the use non-retainin"
+               & "g or update storage within the same origin. Keeping the "
+               & "storage alive longer alone does not grant retention perm"
+               & "ission.",
             when Catalogue.Borrowed_Place =>
                "A place is changed while a view derived from it is still"
                & " in use [0800] [0830]. Finish with the view first, or ta"
@@ -755,9 +760,11 @@ package body Landin.Diagnostics.Explanations is
                & "gives each parameter a distinct label [0980] and each re"
                & "sult a distinct name [0990]. A `from` clause names borro"
                & "wed runtime parameters, once each, on a result that hold"
-               & "s a reference [0790]. A `caller` parameter has the exact"
-               & " source-position struct (D192). Rename or remove the dup"
-               & "licate, or correct the clause.",
+               & "s a reference [0790]. An `escaping into` names another r"
+               & "untime parameter whose type holds a reference (D445). A "
+               & "`caller` parameter has the exact source-position struct "
+               & "(D192). Rename or remove the duplicate, or correct the c"
+               & "lause.",
             when Catalogue.Generic_Deduction =>
                "A generic call cannot deduce and instantiate one concret"
                & "e routine (D138). Deduction matches each runtime argumen"

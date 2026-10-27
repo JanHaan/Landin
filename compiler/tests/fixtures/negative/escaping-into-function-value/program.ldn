@@ -1,0 +1,25 @@
+--  D445: a call through a function value is checked as a direct call:
+--  the contract is part of the function's type.
+holder: type = struct
+    kept: ptr i32
+end holder
+
+keep: (inout h: holder, escaping into h value: ptr i32) -> none =
+    h.kept = value
+end keep
+
+keeping: type = (inout h: holder, escaping into h value: ptr i32) -> none
+
+--  A function whose parameter is not kept is a different type.
+plain: (inout h: holder, value: ptr i32) -> none =
+end plain
+
+public main: () -> (code: i32) =
+    first: i32 = 1
+    mut h: holder = (kept: addr first)
+    late: i32 = 2
+    through: keeping = keep
+    through(h, addr late)
+    other: keeping = plain
+    code = h.kept.val
+end main

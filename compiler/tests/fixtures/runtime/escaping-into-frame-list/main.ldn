@@ -1,0 +1,40 @@
+--  D445: frame nodes pushed onto a frame list declared after them.  Each
+--  parameter is kept in the other's storage, so each names the other,
+--  the earlier one naming a later parameter.  A node outlives the list
+--  and every node pushed after it, because it is declared before them.
+end_of_list: atom
+link: type = end_of_list | ptr mut node
+
+node: type = struct
+    value: i32
+    next: link
+end node
+
+push_front: (escaping into item inout head: link,
+             escaping into head item: ptr mut node) -> none =
+    item.val.next = head
+    head = item
+end push_front
+
+total: (list: link) -> (sum: i32) =
+    sum = 0
+    mut at := list
+    loop do
+        match at
+            end_of_list: return
+            ptr (front): begin
+                sum += front.val.value
+                at = front.val.next
+            end
+        end match
+    end loop
+end total
+
+public main: () -> (code: i32) =
+    mut first: node = (value: 40, next: end_of_list)
+    mut second: node = (value: 2, next: end_of_list)
+    mut list: link = end_of_list
+    push_front(list, addr first)
+    push_front(list, addr second)
+    code = total(list)
+end main
