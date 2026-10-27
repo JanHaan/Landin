@@ -1,0 +1,24 @@
+--  D444: a provider that runs every task to its end, fibre.whole or the
+--  blocking host, has nothing to yield to and provides `fibre.scheduler`
+--  alone, so a group that needs turns is refused where it is made.
+import core/failure
+import core/fibre
+import hosted/system
+
+asks: (host: system.host) -> none ! failure.reason =
+    mut backing: [2 * 4096]u8 = zeroed
+    runner: fibre.whole = zeroed
+    mut over_whole := try fibre.turns_over(any(addr runner), backing, 2)
+    try fibre.join(over_whole)
+    mut over_host := try fibre.turns_over(any(addr host), backing, 2)
+    try fibre.join(over_host)
+end asks
+
+public main: () -> (code: i32) =
+    code = 1
+    asks(system.new()) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main

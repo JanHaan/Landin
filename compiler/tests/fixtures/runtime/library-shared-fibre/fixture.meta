@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: Small shared core/fibre consumer preserves its portable interface and behavior
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+constructs: 0780, 1260, 1380, 1910

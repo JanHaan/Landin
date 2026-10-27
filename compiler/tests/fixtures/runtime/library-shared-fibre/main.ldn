@@ -1,0 +1,60 @@
+--  D444: a group over fibre.whole runs each task to its end as it is
+--  admitted, so the tasks run in admission order; the first failure is
+--  join's, after every task has ended; and a backing too small for its
+--  stacks is refused.
+import core/failure
+import core/fibre
+import core/mem
+import core/net
+
+mut order: u32 = 0
+
+step: type = struct
+    digit: u32
+    failing: bool
+end step
+
+step_of: (digit: u32, failing: bool) -> (made: step) =
+    made = (digit: digit, failing: failing)
+end step_of
+
+take: (inout state: step) -> none ! failure.reason =
+    order = order * 10 + state.digit
+    fail net.timed_out when state.failing and state.digit == 2
+    fail mem.full when state.failing
+end take
+
+three: (runs: any fibre.scheduler) -> none ! failure.reason =
+    mut backing: [2 * 1024]u8 = zeroed
+    mut steps := try fibre.group_over(runs, backing, 1)
+    defer fibre.join(steps) else none
+    first := step_of(1, false)
+    try fibre.admit(steps, take, first)
+    second := step_of(2, true)
+    try fibre.admit(steps, take, second)
+    third := step_of(3, true)
+    try fibre.admit(steps, take, third)
+    try fibre.join(steps)
+end three
+
+exercise: () -> (ok: bool) =
+    ok = false
+    runner: fibre.whole = zeroed
+    runs: any fibre.scheduler = any(addr runner)
+    mut tiny: [64]u8 = zeroed
+    _ = fibre.group_over(runs, tiny, 1) else (problem)
+        _ = problem
+        three(runs) else (failed)
+            ok = order == 123 and failed == net.timed_out
+            return
+        end
+        return
+    end
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    if exercise() then
+        code = 42
+    end if
+end main

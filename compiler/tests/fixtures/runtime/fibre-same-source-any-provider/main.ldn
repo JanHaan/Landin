@@ -1,0 +1,128 @@
+--  D444, prototype 5's two requests in miniature: one task waits on a
+--  clock and the other answers at once, from one source.  Over the
+--  blocking host and over fibre.whole each task runs to its end as it is
+--  admitted, so `a` is answered first; over a round of turns, whose clock
+--  takes turns while it waits, `b` is answered while `a` waits.  Each task
+--  records its answer through a pointer to the caller's parameter, which
+--  the group keeps through `escaping into` (D445).
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/time
+import hosted/system
+
+answers: type = struct
+    order: [2]u8
+    count: usize
+end answers
+
+asking: type = struct
+    clock: any time.clock
+    wait: u64
+    tag: u8
+    heard: ptr mut answers
+end asking
+
+--  Nothing in it knows it runs on a fibre.
+ask: (inout self: asking) -> none ! failure.reason =
+    if self.wait > 0 then
+        self.clock.sleep(time.milliseconds(self.wait))
+    end if
+    self.heard.val.order[self.heard.val.count] = self.tag
+    self.heard.val.count += 1
+end ask
+
+ask_both: (runs: any fibre.scheduler, clock: any time.clock,
+           inout heard: answers) -> none ! failure.reason =
+    mut stacks: [2 * 4096]u8 = zeroed
+    mut asks := try fibre.group_over(runs, stacks, 2)
+    defer fibre.join(asks) else none
+    a: asking = (clock: clock, wait: 20, tag: u8('a'), heard: addr heard)
+    try fibre.admit(asks, ask, a)
+    b: asking = (clock: clock, wait: 0, tag: u8('b'), heard: addr heard)
+    try fibre.admit(asks, ask, b)
+    try fibre.join(asks)
+end ask_both
+
+--  A clock whose sleep returns at once, having moved its reading on.
+still: type = struct
+    reading: ptr mut u64
+end still
+
+still_now: (self: still) -> (at: time.instant) =
+    at = time.instant(self.reading.val)
+end still_now
+
+still_sleep: (self: still, span: time.duration) -> none =
+    self.reading.val += u64(span)
+end still_sleep
+
+still is time.clock (now: still_now, sleep: still_sleep)
+
+--  A clock that takes a turn for each millisecond it sleeps: its reading
+--  moves on only while its sleeper waits, and the round's other fibres
+--  run meanwhile.
+turning: type = struct
+    reading: ptr mut u64
+    runs: any fibre.turns
+end turning
+
+turning_now: (self: turning) -> (at: time.instant) =
+    at = time.instant(self.reading.val)
+end turning_now
+
+turning_sleep: (self: turning, span: time.duration) -> none =
+    deadline: u64 = self.reading.val + u64(span)
+    while self.reading.val < deadline do
+        self.runs.yield()
+        self.reading.val += u64(time.milliseconds(1))
+    end while
+end turning_sleep
+
+turning is time.clock (now: turning_now, sleep: turning_sleep)
+
+show: (provider: type is io.writer, inout out: io.buffered_writer(provider),
+       name: []u8, heard: answers) -> none ! io.io_failed =
+    try io.put(out, name)
+    try io.put(out, ": ")
+    try io.put(out, heard.order[0..<heard.count])
+    try io.put(out, "\n")
+end show
+
+--  The same `ask_both` over three providers.
+run: (host: system.host) -> none ! failure.reason =
+    mut storage: [64]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+
+    mut over_host: answers = zeroed
+    try ask_both(any(addr host), any(addr host), over_host)
+    try show(out, "host", over_host)
+
+    runner: fibre.whole = zeroed
+    mut reading: u64 = 0
+    stopped: still = (reading: addr reading)
+    mut over_whole: answers = zeroed
+    try ask_both(any(addr runner), any(addr stopped), over_whole)
+    try show(out, "whole", over_whole)
+
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := try stacks.round_over(state, entries, any(addr idler))
+    taking: turning = (reading: addr reading, runs: any(addr round))
+    mut over_round: answers = zeroed
+    try ask_both(any(addr round), any(addr taking), over_round)
+    try show(out, "round", over_round)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    host := system.new()
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main

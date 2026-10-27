@@ -1,0 +1,10 @@
+class: runtime
+summary: D444/D445 one task source over the blocking host and fibre.whole answers a before b, and over a round of turns whose clock takes turns answers b while a waits; each state keeps a pointer to the caller's parameter through escaping into
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0780, 1380, 1620, 1910
+targets: linux-x86-64, freebsd-x86-64

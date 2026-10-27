@@ -16,12 +16,17 @@ executes them on Cortex-M0.
 ## Availability inventory
 
 The shared freestanding modules are `core/arena`, `core/cmp`, `core/diag`,
-`core/failure`, `core/fault`, `core/io` with its submodule `core/io/fake`,
+`core/failure`, `core/fault`, `core/fibre` with its submodule
+`core/fibre/stacks`, `core/io` with its submodule `core/io/fake`,
 `core/map`, `core/mem`,
 `core/net`, `core/panic`, `core/pool`, `core/random`, `core/region`,
 `core/sort`, `core/spill`, `core/text`, `core/time`, `core/tree` and
 `core/vec`. Every public interface is
-available on every target. Their providers retain caller-supplied authority.
+available on every target, but for `core/fibre/stacks`, which switches
+stacks through the compiler's stack builtins and is admitted only where the
+target's backend emits them (D453); `core/fibre` itself, its groups over
+`fibre.whole` and over the blocking host, needs no switch and serves every
+target. Their providers retain caller-supplied authority.
 
 `hosted/heap` and `hosted/system` require a hosted system. Import the I/O
 provider, `system`, beside the shared `core/io` protocol it implements, with

@@ -1,0 +1,9 @@
+class: runtime
+summary: D447/D451 a task whose calls go deeper at every turn traps stack_exhausted at the round's switch of the first turn past its record's limit
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+traps: yes
+trap_report: core/fibre/stacks/stacks.ldn:87:5: trap: stack_exhausted
+constructs: 1380, 1620, 1670, 1910
+targets: linux-x86-64, freebsd-x86-64

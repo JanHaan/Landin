@@ -1065,6 +1065,36 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/failure-words gives every phrase on Cortex-M0."
     },
+    "runtime/fibre-join-first-failure": {
+      "codes": [
+        "L0344",
+        "L0344"
+      ],
+      "mode": "refuse",
+      "reason": "D450: the Cortex-M0 backend does not emit the stack builtins yet, so the checker refuses compiler.stack_prepare and compiler.stack_switch in core/fibre/stacks there until it does."
+    },
+    "runtime/fibre-same-source-any-provider": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations; the Cortex-M0 backend does not emit the stack builtins core/fibre/stacks uses yet (D450) either."
+    },
+    "runtime/fibre-stack-past-limit-traps": {
+      "codes": [
+        "L0344",
+        "L0344"
+      ],
+      "mode": "refuse",
+      "reason": "D450: the Cortex-M0 backend does not emit the stack builtins yet, so the checker refuses compiler.stack_prepare and compiler.stack_switch in core/fibre/stacks there until it does."
+    },
+    "runtime/fibre-turns-interleave": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations; the Cortex-M0 backend does not emit the stack builtins core/fibre/stacks uses yet (D450) either."
+    },
     "runtime/file-system-firmware": {
       "mode": "execute"
     },
@@ -1457,6 +1487,9 @@
       "mode": "execute"
     },
     "runtime/library-shared-fault": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-fibre": {
       "mode": "execute"
     },
     "runtime/library-shared-io": {

@@ -36,6 +36,22 @@
     "runtime/stack-exhausted-reaches-the-handler": {
       "reason": "D450: the arm64 backend does not emit the stack builtins yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
       "counterpart": "negative/stack-builtins-target-linux-arm64"
+    },
+    "runtime/fibre-turns-interleave": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins core/fibre/stacks uses yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
+    },
+    "runtime/fibre-same-source-any-provider": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins core/fibre/stacks uses yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
+    },
+    "runtime/fibre-join-first-failure": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins core/fibre/stacks uses yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
+    },
+    "runtime/fibre-stack-past-limit-traps": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins core/fibre/stacks uses yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
     }
   }
 }

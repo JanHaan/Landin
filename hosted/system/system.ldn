@@ -1,12 +1,12 @@
 --  The provider of every core/io concept on hosted targets, `host`: reader,
 --  writer, files and process, and so of their composition, world, and
 --  directories, the environment, programs, entropy, the rest of the file
---  system and terminals beside them, and core/time's clocks and core/net's
---  network too, each in a file named as core/io names it.  It is
---  written once, over platform/posix, which reaches Linux through its
---  system calls and Darwin and FreeBSD through their C library: nothing
---  here is written per system.  Import this module only at a hosted
---  authority root.
+--  system and terminals beside them, core/time's clocks and core/net's
+--  network too, each in a file named as core/io names it, and
+--  core/fibre's scheduler in fibre.ldn.  It is written once, over
+--  platform/posix, which reaches Linux through its system calls and Darwin
+--  and FreeBSD through their C library: nothing here is written per
+--  system.  Import this module only at a hosted authority root.
 
 import core/cmp
 import core/io
@@ -33,7 +33,7 @@ end system_value
 --- `io.directories`, `io.environment`, `io.programs`, the clocks
 --- `time.clock` and `time.wall_clock`, the system's `io.entropy`,
 --- `net.network`, `io.file_system` and `io.terminals`, over platform/posix,
---- as a handle:
+--- and `fibre.scheduler`, running each task to its end, as a handle:
 --- copies share the process's descriptors, arguments and environment, and
 --- the last-error and last-signal cells they were made with. File
 --- identifiers belong to this provider; borrowed arguments and variables

@@ -1,0 +1,33 @@
+--  D444/D445: a group keeps each task's state until it is joined, so what
+--  the state refers to must outlive the group; a local declared after
+--  the group does not.
+import core/failure
+import core/fibre
+
+counting: type = struct
+    total: ptr mut u32
+end counting
+
+add: (inout state: counting) -> none ! failure.reason =
+    state.total.val += 1
+end add
+
+run: (runs: any fibre.scheduler) -> none ! failure.reason =
+    mut backing: [2 * 4096]u8 = zeroed
+    mut tasks := try fibre.group_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    mut late: u32 = 0
+    task: counting = (total: addr late)
+    try fibre.admit(tasks, add, task)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    runner: fibre.whole = zeroed
+    run(any(addr runner)) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main
