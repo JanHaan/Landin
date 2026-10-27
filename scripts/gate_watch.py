@@ -12,11 +12,16 @@ cancels the superseded run, because the gate's concurrency group does.
     python3 scripts/gate_watch.py [--run ID | --commit SHA] [--interval S]
 
 With neither, it follows the gate run for HEAD, waiting for one to appear.
+A commit may be anything `git rev-parse` names here, a short hash among
+them; GitHub matches only a full one, so it is expanded before asking, and
+a name that is neither a commit here nor a full hash is refused rather
+than waited for.
 The exit status is 0 when the run succeeded, 1 when a job failed, and 2
 when the run ended otherwise, for instance cancelled by a newer push.
 """
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -28,6 +33,23 @@ FAILED = ("failure", "timed_out", "startup_failure")
 def gh(*arguments):
     return json.loads(subprocess.run(
         ("gh",) + arguments, check=True, capture_output=True, text=True).stdout)
+
+
+def full_commit(name):
+    """The full hash `name` stands for, or None when it names nothing here.
+
+    `gh run list --commit` compares the whole hash, so a short one matches no
+    run, and the watcher used to wait for ever beside a run that had passed.
+    A full hash this clone lacks is still a commit GitHub may know.
+    """
+    found = subprocess.run(
+        ("git", "rev-parse", "--verify", "--quiet", name + "^{commit}"),
+        capture_output=True, text=True)
+    if found.returncode == 0:
+        return found.stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{40}", name):
+        return name
+    return None
 
 
 def find_run(commit, interval):
@@ -84,9 +106,10 @@ def main(argv):
     args = parser.parse_args(argv[1:])
     run = args.run
     if run is None:
-        commit = args.commit or subprocess.run(
-            ("git", "rev-parse", "HEAD"), check=True, capture_output=True,
-            text=True).stdout.strip()
+        commit = full_commit(args.commit or "HEAD")
+        if commit is None:
+            parser.error("%s names no commit in this clone; fetch it, or give "
+                         "its full hash" % args.commit)
         run = find_run(commit, args.interval)
     print("following gate run %s" % run, flush=True)
     return watch(run, args.interval)
