@@ -18727,10 +18727,12 @@ program's [1670] handler past it; which panic kind that is, the switch's
 specification says. The compiler reports, for each routine a program admits
 to a group, the deepest stack of the call graph it can close, and names where
 an `any` call, recursion or a foreign call opened it. On Cortex-M, fibres run
-on the process stack pointer and handlers on the main stack, so interrupt
-frames are paid once, by the main-stack reservation, and a fibre's stack holds
-its own calls alone; the reset stack stays on the main stack. A fibre's first
-frame ends the frame-pointer chain and says so in its unwind information;
+on the process stack pointer and handlers on the main stack, so handlers'
+own frames and every nested exception are paid once, by the main-stack
+reservation, and a fibre's stack holds its own calls and the one hardware
+exception frame the core pushes when it interrupts the fibre (D461); the
+reset stack stays on the main stack. A fibre's first frame ends the
+frame-pointer chain and says so in its unwind information;
 `switch` is written so that, stopped anywhere in it, the frames above are the
 leaving fibre's; and the records are ordinary data a debugger script walks to
 show a suspended fibre's frames. No debugger is taught about fibres.
@@ -18743,9 +18745,11 @@ charges the deepest interrupt nesting to every fibre's backing on a 16 KiB
 part; and debugger extensions per tool, which would have to be kept for GDB
 and LLDB alike. All were declined.
 
-**Pinned by** nothing that runs yet: prototype 5's V9, V11 and V12 record the
-pressure, and the switch's measurements and scripted debugger sessions on
-every target will pin it.
+**Pinned by** the Cortex-M firmware lane's `fibre` case, which takes an
+interrupt in a fibre and steps a debugger through both switches (D460,
+D461); prototype 5's V9, V11 and V12 record the pressure, and the switch's
+measurements and scripted debugger sessions on the other targets will pin
+the rest.
 
 ### D450 — The stack switch is two compiler builtins
 
@@ -18778,7 +18782,8 @@ atomics, each evaluating its arguments once from left to right.
 
 On Cortex-M a prepared stack runs on the process stack pointer, and a
 switch between the reset stack and a prepared one changes CONTROL's stack
-selection; handlers keep the main stack (D447). The builtins name no
+selection; handlers keep the main stack (D447), and D460 says how a saved
+context records which stack pointer it resumes. The builtins name no
 library type: `core/fibre` builds its records, scheduler and group over
 them, and keeps the integer-made pointers that carry its state inside
 itself [0810]. Both are admitted on every target with a native backend;
@@ -18864,6 +18869,112 @@ breaks a program at emission that checking accepted. Both were declined.
 **Pinned by** `negative/stack-builtins-argument-contract`,
 `negative/stack-builtins-target-synthetic-32` and
 `negative/stack-builtins-target-linux-arm64`.
+
+### D460 — On Cortex-M0 a saved context records which stack pointer it uses
+
+**The tour said** nothing; D447 and D450 run a prepared stack on the process
+stack pointer and keep the reset stack and handlers on the main one, and
+left open how the one `usize` a switch saves says which of the two it
+resumes.
+
+**Chosen:** the saved word is the stack pointer itself, and the frame it
+points at records the selection. A switch pushes r4 to r7 and the return
+address, then CONTROL's value with r8 to r11 above it: forty bytes, CONTROL
+lowest. Resuming reads the CONTROL word at the resumed address, writes the
+address into PSP when that word's SPSEL bit is set and into MSP when it is
+clear, writes CONTROL, executes an ISB, which makes the written pointer the
+current one, and pops the frame. `compiler.stack_prepare` aligns the slice's
+top down to eight and lays a frame whose CONTROL word is two, SPSEL set and
+privileged, with the argument in r4, the entry in r5, zero in r11 and the
+other registers, and the start routine as the return address; a slice whose
+aligned top leaves less than forty bytes traps `stack_exhausted`. So a
+prepared stack always runs on PSP, and the reset context, saved by its first
+switch with CONTROL as reset left it, resumes on MSP. CONTROL's other bits
+travel with each context. The limit is compared with the leaving stack
+pointer in the caller, before the switch routine is called. A switch in
+handler mode, where the stack pointer is always MSP and SPSEL cannot be
+written, or in unprivileged thread mode, where neither CONTROL nor MSP can,
+is outside the contract and is not checked: D446 makes a provider's entries
+the only places a fibre switches, and they run in thread mode.
+
+**The alternatives:** a tag in the saved word's low bit, which makes the
+value no longer the stack pointer D450 returns and puts every library
+computation on it a byte off; telling the two apart by address against the
+reset stack's bounds, which the compiler does not know where startup is not
+its own, as in the corpus's harness; and a switch that always loads PSP,
+which cannot resume the reset context unless the reset stack moves to PSP
+too, the one-stack design D447 declined. All were declined.
+
+**Pinned by** `runtime/stack-switch-round-trip`,
+`runtime/stack-switch-past-limit-traps`,
+`runtime/stack-prepare-too-small-traps` and
+`runtime/stack-exhausted-reaches-the-handler`, executed by the Cortex-M
+corpus at every profile, and the firmware lane's `fibre` case in
+`environments/cortex-m/firmware.py`, which reads CONTROL, MSP and PSP at
+each stop and walks the debugger's frames at every instruction of both
+switches.
+
+### D461 — A fibre's backing on Cortex-M0 holds one exception frame
+
+**The tour said** nothing. D447 said that with fibres on PSP interrupt
+frames are paid once, by the main-stack reservation, and a fibre's stack
+holds its own calls alone. Emitting the switch found that this overclaimed:
+ARMv6-M's exception entry pushes the interrupted context's eight words, r0
+to r3, r12, lr, the return address and xPSR, onto the stack the interrupted
+code was using, so an interrupt taken while a fibre runs stacks that frame
+on the fibre's PSP, and only then does the handler run on MSP.
+
+**Chosen:** a fibre's backing holds, beyond its own deepest calls and the
+forty-byte frame a switch saves (D460), one exception frame: thirty-two
+bytes, and four more when the core aligns the frame to eight bytes, which
+ARMv6-M always does, so thirty-six at most. It is paid once per fibre, not
+once per level of nesting: a nested exception is taken in handler mode and
+stacks on MSP, as every handler's own frames and calls do. The main-stack
+reservation pays for those. D447's sentence now says so, and a measurement
+of a fibre's stack charges it the thirty-six bytes.
+
+**The alternatives:** none in software. The core stacks the frame before a
+handler's first instruction runs, so only a fibre on MSP avoids it, the one
+stack pointer D447 declined because it charges every level of nesting to
+every fibre's backing.
+
+**Pinned by** the firmware lane's `fibre` case: at the handler's first
+instruction MSP is exactly the stack pointer `start` saved when it switched
+away and EXC_RETURN says a PSP thread was interrupted; the eight stacked
+words are at PSP inside the fibre's backing with the fibre's own return
+address; the painted backing below them is untouched through the handler and
+a call it makes, whose frames stand below the saved pointer on MSP; and the
+fibre resumes at PSP plus thirty-two, or thirty-six when the frame was
+realigned.
+
+### D462 — The stack builtins' fixtures run on firmware as they are
+
+**The tour said** nothing. `runtime/stack-switch-round-trip` printed its
+line through `hosted/system`, and `runtime/stack-exhausted-reaches-the-handler`
+ended the process through `posix.exit`; firmware has neither, and the
+Cortex-M corpus executes no fixture whose oracle is its output.
+
+**Chosen:** both are freestanding, so every target runs one source. The round
+trip's status says what its line said: the order the two stacks ran in, the
+module value folded on both and the local kept across both switches; its
+backing is two KiB, which the corpus's twelve KiB of static RAM holds. The
+handler fixture's fibre switches past its limit, and its handler records the
+kind and resumes the context `main` saved when it switched to the fibre, so
+`main` returns the stack_exhausted arm's code. A handler that switches away
+does not return, so D232's rule for a returning handler is not engaged; the
+panic latch stays claimed, and a later check in that image reaches the
+terminal default instruction. That is a property of the fixture and not a
+recovery idiom: [1670]'s handler still ends the program's checked
+computation.
+
+**The alternatives:** Cortex-M counterparts under
+`compiler/tests/cortex-m/cases`, which the corpus applies only to fixtures
+with a status oracle and which would keep two sources of one rule; and
+refusal rows, which would leave the Cortex-M0 builtins without a corpus
+execution. Both were declined.
+
+**Pinned by** the two fixtures, on the x86-64 targets they name and in
+the Cortex-M corpus.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

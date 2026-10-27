@@ -1,24 +1,41 @@
 --  D451: a selected handler receives the fifth kind.  Its match over
---  `panic.panic_kind` needs an arm for each of the five, and the switch
---  past its limit ends the process with the stack_exhausted arm's code.
+--  `panic.panic_kind` needs an arm for each of the five.  A fibre's switch
+--  past its limit enters the handler, which records the kind and resumes
+--  main's context, saved when main switched to the fibre; main then ends
+--  with the stack_exhausted arm's code.  It imports no provider, so
+--  firmware runs the same source, the fibre there on the process stack and
+--  the handler entered on it (D460).
 import core/panic
-import platform/posix
 
-mut saved: usize = 0
+mut backing: [1024]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut seen: i32 = 6
 
 public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
-    posix.exit(match kind
+    seen = match kind
         panic.stack_exhausted: if site <> 0 then 42 else 5 end if
         panic.out_of_range: 1
         panic.overflow: 2
         panic.bad_conversion: 3
         panic.unreachable: 4
-    end match)
+    end match
+    compiler.stack_switch(addr fibre_saved, main_saved, 0)
+    loop do
+    end loop
 end panic_handler
 
-public main: () -> (code: i32) =
-    mut probe: u8 = 0
+fibre: (argument: usize) -> noreturn =
+    mut probe: u8 = u8(argument)
     limit := usize(addr probe) + 65536
-    compiler.stack_switch(addr saved, 0, limit)
-    code = i32(probe) + 99
+    compiler.stack_switch(addr fibre_saved, main_saved, limit)
+    seen = i32(probe) + 7
+    loop do
+    end loop
+end fibre
+
+public main: () -> (code: i32) =
+    fibre_saved = compiler.stack_prepare(backing[0..<1024], fibre, 0)
+    compiler.stack_switch(addr main_saved, fibre_saved, 0)
+    code = seen
 end main

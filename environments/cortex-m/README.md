@@ -553,6 +553,17 @@ The six optimization/specialization profiles each exercise:
   eight-byte stack alignment and source results. A painted 4 KiB stack retains
   an untouched lower guard; its observed write extent is evidence for this
   small execution, never a whole-program bound.
+- A fibre on a prepared stack (D450, D460) taking IRQ0. The handler's first
+  instruction sees EXC_RETURN `0xfffffffd` and MSP exactly where `start`
+  left it when it switched away, the eight-word hardware frame at PSP inside
+  the fibre's backing with the fibre's pc, and the painted backing below that
+  frame untouched through the handler and a call it makes, whose frames
+  stand below on MSP (D461). The fibre resumes on PSP with every stacked
+  register, switches back, and `start` returns on MSP with CONTROL's SPSEL
+  clear. A second build with line information is stepped through both
+  switches an instruction at a time: GDB's walk names the leaving context's
+  frames until CONTROL selects the resumed stack and the resumed one's
+  after, and a prepared stack's walk ends at its start routine.
 - Naked source entry selecting PSP, naked SVC returning through EXC_RETURN,
   and a specialized generic opaque-assembly memory write with live values.
   A separate naked-fallthrough image reaches its appended trap without a frame.
@@ -565,7 +576,7 @@ The six optimization/specialization profiles each exercise:
   DMA continues with PRIMASK set; half notification is not completion; only
   observed completion plus the explicit boundary precedes ordinary slice reads.
 
-This adds 37 QEMU sessions (36 generated, one independent C/assembly control)
+This adds 49 QEMU sessions (48 generated, one independent C/assembly control)
 and 24 generated device runs. The independent control establishes PSP/MSP,
 four-byte interrupted SP with hardware alignment padding, nested exception
 returns and C callee saves independently of Landin emission. Ten retained
@@ -607,7 +618,7 @@ their own lanes below. General SVD generation remains companion-tool work.
 `freestanding.py` compiles rooted ordinary modules through the same generated
 reset/vector/linker path. It is mandatory after `firmware.py` in `run.py`, with
 its own `freestanding` output directory. The old 533-fixture
-backend corpus and the firmware lane's 37 QEMU/24 device sessions and 270 comparisons are
+backend corpus and the firmware lane's 49 QEMU/24 device sessions and 300 comparisons are
 unchanged. The shared inventory adds two explicitly restricted hosted C peers
 for D231/D232; neither replaces an inherited case. The declared additional lane
 has eleven consumers at six profiles: 198 QEMU sessions, six device runs and 336

@@ -1,8 +1,8 @@
 class: runtime
-summary: D451 a selected panic handler receives stack_exhausted, with a nonzero site, from a switch past its limit
+summary: D451 a selected panic handler receives stack_exhausted, with a nonzero site, from a fibre's switch past its limit, and resumes the context main saved
 program: main.ldn
 root: ../../../../..
 profiles: specialization
 status: 42
 constructs: 0890, 1620, 1670
-targets: linux-x86-64, freebsd-x86-64
+targets: linux-x86-64, freebsd-x86-64, cortex-m0
