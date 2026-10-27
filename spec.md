@@ -3152,7 +3152,7 @@ note was then a promise to a user about where to look, and a note naming
 finished work is a wrong answer to that question.
 
 No document exercises any of the three. Nothing in `tour.md`, `spec.md`,
-`examples.md` or the four prototypes writes u128, i128 or f16 in an example,
+`examples.md` or the five prototypes writes u128, i128 or f16 in an example,
 which is the honest measure of how much design pressure exists for them
 today: none that has been recorded.
 

@@ -17,7 +17,7 @@ executable, source and diagnostic foundations, host adapters, target facts,
 stage seams, the scanner, parser, syntax table, name resolver, type checker,
 verified IR, the native backends, the toolchain adapter and the
 repository-owned test harness; shared fixtures live under `compiler/tests/`.
-The four prototype files remain specification stress tests written as code
+The five prototype files remain specification stress tests written as code
 sketches; they contain omissions such as `...` and are not standalone
 programs.
 
@@ -427,8 +427,9 @@ The prototypes jointly define the implementation pressure on the specification:
 - Prototype 2 covers a recovering parser and distinguishes foreseeable syntax diagnostics from failures such as allocation failure.
 - Prototype 3 develops the conceptual `core/mem`, `core/vec`, `core/small`, `core/map`, `core/tree` and `core/sort` layers and stresses generics, allocators, evidence tables, origins, and raw storage.
 - Prototype 4 builds on prototypes 2 and 3, adds hosted I/O, and exercises heterogeneous runtime dispatch through `any C`.
+- Prototype 5 builds on prototypes 1 and 4: a server with two requests in flight and a Cortex-M0 counterpart answering them on one core. It stresses fibres over caller-supplied stacks, started only as a group the caller joins, concurrency as a provider's answer rather than a function's, switch points, origins across a switch, interrupts waking fibres without read-modify-write atomics, and stopping without cancellation. Its findings are open and feed the concurrency phase.
 
-Repeated module names describe shared future subsystems, not separately checked source dependencies. Prototypes 1 and 4 cover the freestanding and hosted authority roots respectively; capabilities below those roots are passed as ordinary arguments.
+Repeated module names describe shared future subsystems, not separately checked source dependencies. Prototypes 1 and 4 cover the freestanding and hosted authority roots respectively, and prototype 5 both at once; capabilities below those roots are passed as ordinary arguments.
 
 ## Implementation architecture
 

@@ -2481,7 +2481,7 @@ concurrency execution model" below binds this phase.
 
 ### R14.10 — Prototype 5
 
-Status: planned
+Status: complete
 Depends on: none
 
 A concurrent program written as a specification stress test, as the first four
@@ -2491,6 +2491,21 @@ Its findings are recorded as the first four's were.
 
 Exit evidence: `prototype-5` with its findings, checked by `check.py` like the
 other four.
+
+Done: `prototype-5-server.md` is a line-protocol server that admits each
+connection to a group of two fibres over stacks cut from its own frame,
+with a test client that needs the requests to overlap, and a Cortex-M0
+counterpart that takes the same two requests on one serial line with a
+taker and an answerer fibre and a round of fixed turns written in the
+application. One `app/protocol` module serves both. Switching is
+cooperative: a fibre gives the core away only inside a call to the provider
+that runs it. An application starts fibres only as a group, which it joins
+before going on, and hands each an ordinary routine and a state; the
+first draft, which started them as C starts threads, is V15, resolved.
+The other fourteen findings, V1-V14, are open, each with a proposed
+answer, and each item below names the ones it settles. `check.py` reads the
+file as it reads the other four, and the site renders it beside them. It
+has no derivation yet, so it has no row in the prototype registers.
 
 ### R14.20 — Stackful fibres
 
@@ -2505,6 +2520,18 @@ run or resume and reclaims it only after the fibre has finished and no switch
 can reach it. Specify the backing's size, alignment, creation-failure and
 release rules with the switch interface. This takes on the stackful-fibre
 part of R551-35.
+
+Prototype 5 asks it V1, whether one that runs every task to its end is a
+provider of the same concept as one that takes turns, and whether a concept
+may be a promise with no entry; V2, where a task's failure goes, and the
+error set a group can hold when an error set is no generic parameter; V3,
+`escaping into` for the state a group keeps, and who makes sure a group is
+joined before its backing goes; V4's rule for where a switch can
+happen; V5, whether a fibre is a CPU execution context under D227; V8,
+whether `core/fibre` carries a round of fixed turns and nothing more; V9,
+stack size and what happens past it; V11, the process stack pointer on
+Cortex-M; and V12, what a debugger sees. V13's single-core answer is the
+one this item specifies.
 
 Exit evidence: fibres switching on every target with debugger backtraces
 through a switch, and the single-core freestanding answer specified. On the
@@ -2527,6 +2554,9 @@ It presents the same request for two operations in flight as the hosted server
 and produces the single-core answer specified in R14.20. Record a trace that
 shows the answer and when each operation starts and finishes.
 
+Prototype 5's V13 proposes what "in flight" means on one core, and V10 how
+the tick reaches a fibre without read-modify-write.
+
 Exit evidence: the firmware derivative running in the Cortex-M0 emulator lane
 in the gate, with its captured trace checked against a repository-owned oracle
 for the specified no-concurrency answer and no two operations in flight. A
@@ -2546,6 +2576,11 @@ later implement the same Io; readiness stays below it, in `platform/posix`'s
 signalfd on Linux and kqueue on Darwin and FreeBSD, never as handlers that
 run Landin code. Windows is outside this item's scope.
 
+Prototype 5 asks it V4, which of the Io's entries may switch and what that
+does to the last-error cell; V7, that a waiter is woken with a failure when
+its descriptor is shut or closed, and signals as waitable events; and V14,
+the fake network under a scheduler.
+
 Exit evidence: prototype 5's derived server running on the hosted targets over
 both implementations of Io, unchanged.
 
@@ -2561,6 +2596,10 @@ with them on every hosted system alike,
 since one single-threaded heap serves all three (D300). Under `--link=libc`
 the C library owns thread creation and thread-local storage, so a thread there is the C library's; a static Linux program owns
 both itself.
+
+Prototype 5 asks it V6, that threads are not a provider of the fibre
+concepts and what state shared with them must use, and V10, the wrapper's
+single-writer operation on a core without read-modify-write.
 
 Exit evidence: consumers of both on every applicable target, with failure
 oracles. The hosted thread facility implements D227's creation and join
@@ -2908,6 +2947,8 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-308 | Usability | `check.py` and the test program require exactly one `landin` block per `examples.md` section, so the page cannot show a five-line snippet beside a program. Met in R13.73, showing how to call a routine on a path of your own. | The next change to the examples checks. | Snippets allowed when each is held to its program, or the rule stated in `compiler/tests/README.md`. | open |
 | SR-309 | Usability | The Claude session timing review found long local checks managed through repeated sleep/log probes; the process guide did not show how to retain complete output and the command's exit status while using completion notifications. | The next change to the local agent feedback workflow. | A documented logged-command path with completion notifications and resource measurements, preserving the selected checks. | retired: `scripts/run_logged.py` retains the complete log, exit status, elapsed time and CPU/memory measurements; AGENTS.md and `docs/process.md` describe background completion notifications, batched inspections and combined test selectors |
 | SR-310 | Usability | `scripts/tests/test_macos_environment.py`'s `test_timeout_stops_a_separate_tool_group` failed once under `scripts/script_tests.py`'s sixteen workers, inside a `check.py` control shard, and passed three times alone and on the whole job's rerun; a timing assertion under load reads as a broken change. Met in R13.73. | The next change to the macOS environment script or its tests. | The timeout test independent of host load, or its margin stated and widened. | open |
+| SR-311 | Usability | Registering a fifth prototype meant finding every place the four are named, and `grep prototype-4` finds only some: the finding letters were written out as `[XYZW]` three times in `check.py` and three in `docs/site/render_html.py`, so the new findings rendered unlinked and ROADMAP.md's citations of them went unchecked, with every check clean; and the site's navigation is a `NAV_GROUPS` list beside each document's own `group=`, which only `site.sh` refuses, after `check.py` has passed. Met in R14.10, which put the letters in `PROTOTYPE_FINDINGS` and one renderer constant that `check.py` holds to it. | The next prototype, or the next change to the renderer's document list. | `NAV_GROUPS` read from the documents' `group=` or checked by `check.py`, and the places a prototype is registered named in one place. | open |
+| SR-312 | Usability | A citation of a register record that does not exist passes every check: ROADMAP.md's R13.72 paragraph cites `SR-350`, and the register ends at SR-312 with no such row in its history. `check.py` holds construct and finding citations to a definition and register identities to staying inside ROADMAP.md, but not to existing. Met in R14.10. | The next change to `check_roadmap_citations`. | Every cited register identity defined in the register, and the `SR-350` citation corrected to the row it meant. | open |
 | R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on each full gate run, subject to the R8 gate's explanatory-only reuse exception, with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
 | R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence was a run, not a record the coverage readers read. | — | — | retired: R8.30 runs end-to-end fixtures in Darwin's diagnostics runner, which the gate runs, places their Darwin claims from it, and has `check.py` refuse any fixture whose named product target no record places |
 

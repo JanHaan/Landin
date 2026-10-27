@@ -1203,7 +1203,7 @@ edit above an instruction does not rewrite the artefact.
 
 ## Derived programs
 
-The four prototype text files in the repository root remain design-stress
+The five prototype text files in the repository root remain design-stress
 sketches, including their omissions and historical findings. Complete derived
 `.ldn` programs are separate artefacts and arrive with the roadmap work that
 can compile them.

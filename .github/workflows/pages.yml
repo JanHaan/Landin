@@ -26,6 +26,7 @@ on:
       - 'prototype-2-parser.md'
       - 'prototype-3-containers.md'
       - 'prototype-4-app.md'
+      - 'prototype-5-server.md'
       - 'docs/documents.md'
       - 'examples.md'
       - 'README.md'

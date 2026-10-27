@@ -1596,6 +1596,7 @@ class RoadmapStructure(unittest.TestCase):
 REGISTERS = ["spec.md", "tour.md", "ROADMAP.md",
              "prototype-1-driver.md", "prototype-2-parser.md",
              "prototype-3-containers.md", "prototype-4-app.md",
+             "prototype-5-server.md",
              "compiler/tests", "compiler/ada/src", "compiler/ada/tests",
              "scripts", "check.py", "environments", "devices",
              "examples", "core", "hosted", "platform", "bindings", "highlight"]

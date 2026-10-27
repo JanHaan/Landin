@@ -216,8 +216,9 @@ they are parked with a condition rather than refused.
 
 ## Where the work stands
 
-The specification is coherent and mechanically checked. Four prototypes
-exist and all their findings are worked in. Independent reviews are folded
+The specification is coherent and mechanically checked. Five prototypes
+exist. The first four's findings are all worked in; the fifth's are open and
+belong to the concurrency phase. Independent reviews are folded
 back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 
@@ -250,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R14.10 — Prototype 5 (planned).**
+**Next roadmap item: R14.20 — Stackful fibres (planned).**
 
 ## Versions
 

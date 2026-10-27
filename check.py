@@ -72,7 +72,8 @@ def absent(paths):
 LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME, "prototype-1-driver.md",
                   "prototype-2-parser.md",
                   "prototype-3-containers.md",
-                  "prototype-4-app.md"]
+                  "prototype-4-app.md",
+                  "prototype-5-server.md"]
 ROADMAP = "ROADMAP.md"
 #  The evidence registers: what the compiler's evidence is, as opposed to
 #  what is left to do.  Four tables, read here and generated into matrices.
@@ -279,7 +280,13 @@ PROTOTYPE_FINDINGS = {
     "Y": "prototype-2-parser.md",
     "Z": "prototype-3-containers.md",
     "W": "prototype-4-app.md",
+    "V": "prototype-5-server.md",
 }
+#  The finding letters as a regular-expression class.  Every reader of a
+#  finding citation uses this, and the site renderer's own copy is held to
+#  it, so a new prototype is one entry above rather than a letter added
+#  wherever a class was written out.
+FINDING_LETTERS = "[%s]" % "".join(sorted(PROTOTYPE_FINDINGS))
 #  Names that are deliberately not files here: an example in prose, a
 #  path inside a container, or a file a reader is told to create.
 NAMED_FILE_ALLOWLIST = frozenset((
@@ -410,7 +417,7 @@ def check(path):
     all_lines = text.split("\n")
     out = []
     basename = os.path.basename(path)
-    if basename == "tour.md" or re.fullmatch(r"prototype-[1-4]-.+\.md", basename):
+    if basename == "tour.md" or re.fullmatch(r"prototype-[1-5]-.+\.md", basename):
         out += live_example_tokens(text)
 
     #  A fence says what its block is; one that says nothing is a fault.
@@ -2425,7 +2432,8 @@ def check_citations(paths):
                     out.append((path, line, "[%s] is not a four-digit construct citation"
                                 % match.group(1)))
             for match in re.finditer(
-                    r"(?<![A-Za-z0-9_])([XYZW]\d+)(?![A-Za-z0-9_])", text):
+                    r"(?<![A-Za-z0-9_])(%s\d+)(?![A-Za-z0-9_])"
+                    % FINDING_LETTERS, text):
                 if match.group(1) not in findings:
                     line = text.count("\n", 0, match.start()) + 1
                     out.append((path, line, "%s is cited and not defined"
@@ -2456,7 +2464,8 @@ def check_specification_version(full_run):
         ("tour.md", re.compile(r"^Version ([0-9][0-9.]*) \u2014", re.M)),
     ] + [(name, re.compile(r"^Current with specification ([0-9][0-9.]*)\.", re.M))
          for name in ("prototype-1-driver.md", "prototype-2-parser.md",
-                      "prototype-3-containers.md", "prototype-4-app.md")]
+                      "prototype-3-containers.md", "prototype-4-app.md",
+                      "prototype-5-server.md")]
     out = absent([readme] + [path for path, _ in places])
     if out:
         return out
@@ -2477,6 +2486,31 @@ def check_specification_version(full_run):
                         "says specification %s; README.md says %s"
                         % (found.group(1), version)))
     return out
+
+
+def check_finding_letters(full_run):
+    """The site renderer links the findings of the prototypes check.py reads.
+
+    It keeps its own letters, being standard-library-only and independent of
+    this file.  When prototype 5 was added they were still `[XYZW]` here in
+    three places and there in three more, so its findings rendered unlinked
+    and ROADMAP.md's citations of them went unchecked, and nothing said so.
+    """
+    if not full_run:
+        return []
+    path = "docs/site/render_html.py"
+    out = absent([path])
+    if out:
+        return out
+    text = io.open(path, encoding="utf-8").read()
+    found = re.search(r'^FINDING_LETTERS = "(\[[A-Z]+\])"$', text, re.M)
+    if not found:
+        return [(path, 1, "has no FINDING_LETTERS for the prototypes' findings")]
+    if found.group(1) != FINDING_LETTERS:
+        line = text.count("\n", 0, found.start(1)) + 1
+        return [(path, line, "links findings %s; check.py's prototypes have %s"
+                 % (found.group(1), FINDING_LETTERS))]
+    return []
 
 
 def check_pinned_toolchain(full_run):
@@ -6201,7 +6235,7 @@ def coverage_dumps():
         source_text = (io.open(os.path.join(ROOT, source), encoding="utf-8")
                        .read() if source != "?" else "")
         locations = []
-        for finding in re.findall(r"[XYZW]\d+", row["Findings"]):
+        for finding in re.findall(FINDING_LETTERS + r"\d+", row["Findings"]):
             match = re.search(r"^%s\b" % finding, source_text, re.M)
             line = source_text.count("\n", 0, match.start()) + 1 if match else 0
             locations.append("%s:%d" % (finding, line))
@@ -6478,7 +6512,7 @@ def check_coverage_registers(full_run):
                 out.append((REGISTERS, line, "unknown prototype %s" % number))
                 continue
             text = io.open(os.path.join(ROOT, source), encoding="utf-8").read()
-            findings = re.findall(r"[XYZW]\d+", row["Findings"])
+            findings = re.findall(FINDING_LETTERS + r"\d+", row["Findings"])
             if not findings:
                 out.append((REGISTERS, line,
                             "%s names no prototype finding" % fixture))
@@ -9226,6 +9260,7 @@ def main(argv):
     extra += check_project_status(full_run)
     extra += check_roadmap_citations(full_run)
     extra += check_specification_version(full_run)
+    extra += check_finding_letters(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)
     extra += check_developer_loops(full_run)

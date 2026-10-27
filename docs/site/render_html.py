@@ -91,6 +91,12 @@ DOCS = [
          blurb="Not learning material: a hosted application sketch, written "
                "before the compiler to find where the specification was "
                "silent. Its findings are the point."),
+    dict(key="p5", banner=True, group="design stress tests", src="prototype-5-server.md", out="prototype-5.html", kind="document",
+         nav="prototype 5 — server",
+         blurb="Not learning material: a server with two requests in flight "
+               "and its single-core counterpart, written before fibres to "
+               "find where the specification was silent. Its findings are "
+               "the point."),
 ]
 
 # --------------------------------------------------------------------------
@@ -151,7 +157,9 @@ ICON_LINKS = "\n".join([
     '<link rel="apple-touch-icon" href="apple-touch-icon.png">',
 ])
 
-CITE = re.compile(r"\[((?:\d{4})|(?:[XYZW]\d+))\]")
+#  The prototypes' finding letters; check.py holds this to its own list.
+FINDING_LETTERS = "[VWXYZ]"
+CITE = re.compile(r"\[((?:\d{4})|(?:%s\d+))\]" % FINDING_LETTERS)
 
 
 def cite_links(escaped: str, links) -> str:
@@ -214,7 +222,7 @@ def sample_like(text: str) -> bool:
 # the prototypes: listings, and the findings at the end
 # --------------------------------------------------------------------------
 
-FINDING = re.compile(r"^([XYZW]\d+)\s+(\S.*)$")
+FINDING = re.compile(r"^(%s\d+)\s+(\S.*)$" % FINDING_LETTERS)
 
 
 # --------------------------------------------------------------------------
@@ -2332,7 +2340,7 @@ NAV_GROUPS = [
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
                             "environments", "devices", "driver",
                             "cortex-m", "native-ci"]),
-    ("design stress tests", ["p1", "p2", "p3", "p4"]),
+    ("design stress tests", ["p1", "p2", "p3", "p4", "p5"]),
 ]
 RETIRED = {"native-ci"}
 
@@ -3505,7 +3513,7 @@ def main(argv):
         for found, named in re.findall(r"^### \[(\d{4})\] (.*)$", held, re.M):
             construct_page[found] = entry["out"]
             construct_title[found] = named
-        for found in re.findall(r"^([XYZW]\d+)\s", held, re.M):
+        for found in re.findall(r"^(%s\d+)\s" % FINDING_LETTERS, held, re.M):
             finding_page[found] = entry["out"]
     says = construct_says(source, DOCS)
 

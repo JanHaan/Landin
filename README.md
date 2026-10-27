@@ -602,7 +602,7 @@ more targets and the microcontrollers people buy; a build tool, package acquisit
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R14.10 — Prototype 5 (planned).**
+**Next roadmap item: R14.20 — Stackful fibres (planned).**
 
 ## What is here
 
@@ -637,13 +637,14 @@ designation changes automatically.
 
 ### The prototypes: design stress tests
 
-The four `prototype-*.md` files are not tutorials and not example
-programs. Each was written before the compiler existed, to make the
-specification fail: a program that needs a feature presses on the rules
+The five `prototype-*.md` files are not tutorials and not example
+programs. Each was written before the compiler could do what it asks, to
+make the specification fail: a program that needs a feature presses on the rules
 for it until they turn out silent, ambiguous or wrong. Each ends with its
 findings, and keeps the wording that turned out wrong beside its
-resolution. Between them they recorded forty-two findings, several of
-which reversed a decision.
+resolution. The first four recorded forty-two findings between them,
+several of which reversed a decision; of the fifth's fifteen, fourteen are
+open and belong to the concurrency phase.
 
 They are sketches: they leave bodies out with `...` and are not programs
 you can compile. They are kept in step with the specification so their
@@ -655,6 +656,7 @@ findings stay true. What runs is derived from them:
 | `prototype-2-parser.md` | a parser that recovers from errors rather than stopping at the first | `examples/config_parser/` |
 | `prototype-3-containers.md` | generic containers, allocators, escape rules | the `core` containers and `examples/derived_containers/` |
 | `prototype-4-app.md` | a hosted application chosen by its command line: runtime dispatch | `examples/derived_hosted/` |
+| `prototype-5-server.md` | a server with two requests in flight, and a Cortex-M0 counterpart answering them on one core: fibres, started as a group | nothing yet |
 
 To learn the language, read [the tour](tour.md) and
 [the examples](examples.md) instead.
@@ -690,7 +692,7 @@ On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
 
 Selected language documents and guides are published as syntax-highlighted
 reading copies at **<https://www.701.dev>** — including the tour, the
-specification, the running examples, the four prototypes, the roadmap, and
+specification, the running examples, the five prototypes, the roadmap, and
 the implementation notes. The renderer's `DOCS` and `GUIDES` lists define
 the selection; see [the site guide](docs/site/README.md). Every
 `[NNNN]` citation links to the construct it names, and hovering one shows what

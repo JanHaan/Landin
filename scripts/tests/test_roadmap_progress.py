@@ -179,8 +179,9 @@ Depends on: none
         freestanding = headings["The freestanding library"]
         text = text.replace("Status: active", "Status: planned")
         device_phase = devices.split(".")[0]
+        concurrency = [headings[title] for title in CONCURRENCY]
         selected = [split, conventions, reading, review, library, boundary,
-                    linux, handles, *hosted, freestanding] + [
+                    linux, handles, *hosted, *concurrency, freestanding] + [
             identity for identity in headings.values()
             if identity.startswith(device_phase + ".")]
         for identity in selected:
