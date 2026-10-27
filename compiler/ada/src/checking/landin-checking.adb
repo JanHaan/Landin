@@ -1108,6 +1108,7 @@ package body Landin.Checking is
       Result := Mix (Result, Landin.Syntax.Parameter_Convention'Pos
         (Part.Convention));
       Result := Mix (Result, Bit (Part.Escaping));
+      Result := Mix (Result, Ada.Containers.Hash_Type (Part.Escaping_Into));
       Result := Mix (Result, Bit (Part.Caller));
       Result := Mix (Result, Ada.Containers.Hash_Type'Mod
         (Part.Constraint));
@@ -3886,7 +3887,9 @@ package body Landin.Checking is
       --  cannot lose the check.
       if A.Kind /= B.Kind
         or else A.Convention /= B.Convention
-        or else (A.Escaping /= B.Escaping and then not Ignore_Escaping)
+        or else ((A.Escaping /= B.Escaping
+                  or else A.Escaping_Into /= B.Escaping_Into)
+                 and then not Ignore_Escaping)
         or else A.Caller /= B.Caller
         or else A.Constraint /= B.Constraint
       then
@@ -3950,6 +3953,10 @@ package body Landin.Checking is
       for Index in 1 .. Signature_Parameter_Count (Of_Table, Left) loop
          if Nth_Signature_Parameter (Of_Table, Left, Index).Escaping
            /= Nth_Signature_Parameter (Of_Table, Right, Index).Escaping
+           or else Nth_Signature_Parameter (Of_Table, Left, Index)
+                     .Escaping_Into
+             /= Nth_Signature_Parameter (Of_Table, Right, Index)
+                  .Escaping_Into
          then
             return Index;
          end if;
@@ -4287,6 +4294,7 @@ package body Landin.Checking is
          Put (Landin.Types.Type_Kind'Pos (Part.Kind));
          Put (Landin.Syntax.Parameter_Convention'Pos (Part.Convention));
          Put (Boolean'Pos (Part.Escaping));
+         Put (Landin.Packed.Image (Part.Escaping_Into));
          Put (Boolean'Pos (Part.Caller));
          Put (Landin.Packed.Image (Part.Constraint));
          case Part.Kind is

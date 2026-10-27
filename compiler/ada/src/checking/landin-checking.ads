@@ -927,6 +927,11 @@ package Landin.Checking is
       Convention : Landin.Syntax.Parameter_Convention :=
         Landin.Syntax.Implicit_In;
       Escaping   : Boolean := False;
+      --  D445: the position of the parameter a written `escaping into`
+      --  names, or 0.  Escaping stays False for such a parameter: it may
+      --  be kept only in that parameter's storage.  Part of structural
+      --  identity, so a call through a function value is held to it.
+      Escaping_Into : Natural := 0;
       Caller     : Boolean := False;
       --  D188: [0660]'s constraint is part of what this parameter or
       --  result's type is, so it is part of structural signature identity

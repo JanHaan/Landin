@@ -250,6 +250,10 @@ package body Landin.Syntax is
    function Is_Escaping (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Escaping);
 
+   function Escaping_Target (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (if Run_Length (Of_Tree, Id) = 0 then No_Node
+         else Nth_Item (Of_Tree, Id, 1));
+
    function Is_Caller (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Caller);
 

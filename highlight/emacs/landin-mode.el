@@ -15,7 +15,7 @@
   '("addr" "align" "alignof" "and" "any" "as" "at" "atom" "begin"
     "big" "break" "caller" "complete" "concept" "continue" "dec"
     "defer" "distinct" "do" "else" "elsif" "end" "escaping" "extern"
-    "fail" "fixed" "for" "from" "if" "import" "in" "inc" "inout" "is"
+    "fail" "fixed" "for" "from" "if" "import" "in" "inc" "inout" "into" "is"
     "layout" "lenof" "link" "little" "loop" "match" "mut" "not" "of" "offsetof"
     "option" "or" "ptr" "public" "range" "register" "return" "set" "sink"
     "sizeof" "soa" "struct" "then" "try" "type" "unchecked" "undo" "uninit"
@@ -160,7 +160,7 @@ Scan from a known code position so comment quotes cannot open a raw string."
                  '(["addr" "alignof" "any" "as" "atom" "begin" "break" "complete"
                     "concept" "continue" "dec" "defer" "do" "else" "elsif" "end"
                     "escaping" "extern" "fail" "fixed" "for" "from" "if" "import"
-                    "in" "inc" "inout" "is" "loop" "match" "mut" "none" "option"
+                    "in" "inc" "inout" "into" "is" "loop" "match" "mut" "none" "option"
                     "ptr" "public" "return" "sink" "sizeof" "struct" "then" "try"
                     "type" "unchecked" "undo" "variant" "when" "while" "with"]
                    @font-lock-keyword-face

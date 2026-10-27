@@ -366,7 +366,8 @@ This is the maintained inventory of what the compiler does today:
   and an `any C` call no conformance of C answers builds as a trap no value
   reaches.
   Pointers and slices
-  get local origin, borrow, `escaping`, `from` and consume checks. Directory
+  get local origin, borrow, `escaping`, `escaping into` (D445), `from` and
+  consume checks. Directory
   modules have file-local imports, aliases, selected imports, typed global
   options and ordered roots. D227's memory model supplies scalar atomics,
   volatile accesses and barriers, and D228 packed register images with

@@ -1,0 +1,13 @@
+--  D445: `into` names another runtime parameter whose type can hold
+--  the reference kept in it.
+unknown: (escaping into nobody value: ptr i32, inout holder: ptr i32)
+         -> none =
+end unknown
+
+itself: (escaping into value value: ptr i32) -> none =
+end itself
+
+nothing: (escaping into count value: ptr i32, inout count: u32) -> none =
+end nothing
+
+written: type = (escaping into missing value: ptr i32) -> none

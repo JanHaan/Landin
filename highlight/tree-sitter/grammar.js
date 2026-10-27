@@ -426,7 +426,21 @@ module.exports = grammar({
         optional($.parameter_convention),
         field('name', $.identifier_list), ':', field('type', $._declared_type),
       ),
+      // D445: `escaping into p` names the parameter whose storage may keep
+      // this one.  `into` is not reserved: followed by `:` or `,` it is the
+      // first parameter's name.
+      seq(
+        'escaping', 'into', field('target', $.identifier),
+        optional($.parameter_convention),
+        field('name', $.identifier_list), ':', field('type', $._declared_type),
+      ),
+      seq(
+        'escaping',
+        field('name', alias($._into_names, $.identifier_list)),
+        ':', field('type', $._declared_type),
+      ),
     ),
+    _into_names: $ => seq(alias('into', $.identifier), repeat(seq(',', $.identifier))),
     parameter_convention: _ => choice('in', 'inout', 'sink'),
     returns: $ => choice(
       seq('(', optional(commaSep1($.named_return)), ')'),

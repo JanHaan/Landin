@@ -2231,6 +2231,13 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Source : Syn.Node_Id) return Natural
         is (Res.Source_Parameter_Position
               (Meanings.all, Of_Tree, Source));
+      --  D445: the position a parameter's `escaping into` names, or 0
+      --  for one that names none or names no runtime parameter.
+      function Escaping_Into_Of
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural
+        is (if Syn.Escaping_Target (Of_Tree, Node) = Syn.No_Node then 0
+            else Source_Parameter
+              (Of_Tree, Syn.Escaping_Target (Of_Tree, Node)));
       function Written_Return_Sources
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural;
       function Written_Return_Sources
@@ -5412,6 +5419,8 @@ package body Landin.Stages.Checking is
                         Part.Convention :=
                           Semantic_Convention (Of_Tree, Node);
                         Part.Escaping := Syn.Is_Escaping (Of_Tree, Node);
+                        Part.Escaping_Into :=
+                          Escaping_Into_Of (Of_Tree, Node);
                         Part.Caller := Syn.Is_Caller (Of_Tree, Node);
                      end if;
                      if Descriptor.Kind in Ty.Integer_Name then
@@ -9397,6 +9406,9 @@ package body Landin.Stages.Checking is
                Escaping =>
                  (Syn.Kind (Of_Tree, Declared) = Syn.Parameter
                   and then Syn.Is_Escaping (Of_Tree, Declared)),
+               Escaping_Into =>
+                 (if Syn.Kind (Of_Tree, Declared) = Syn.Parameter
+                  then Escaping_Into_Of (Of_Tree, Declared) else 0),
                Caller =>
                  (Syn.Kind (Of_Tree, Declared) = Syn.Parameter
                   and then Syn.Is_Caller (Of_Tree, Declared)),
@@ -9468,6 +9480,76 @@ package body Landin.Stages.Checking is
             begin
                Parts (Index) :=
                  Part_At (Parameter, Syn.Origin (Of_Tree, Parameter));
+            end;
+         end loop;
+
+         --  D445: `escaping into p` names another runtime parameter of
+         --  this signature, one whose type can hold what is kept in it.
+         for Index in Parts'Range loop
+            declare
+               Parameter : constant Syn.Node_Id :=
+                 Syn.Nth_Parameter (Of_Tree, Node, Index);
+               Target : constant Syn.Node_Id :=
+                 Syn.Escaping_Target (Of_Tree, Parameter);
+               Into : constant Natural := Parts (Index).Escaping_Into;
+               --  [0100]: a later shared name's target is the first
+               --  name's node, and what is wrong with it was reported.
+               Shared : constant Boolean :=
+                 Syn.Shares_Declared_Type (Of_Tree, Parameter);
+
+               procedure Refuse (Message, Because : String);
+
+               procedure Refuse (Message, Because : String) is
+               begin
+                  Bad.Report
+                    (Item    => Bad.Signature_Form,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Target),
+                     Message => Message,
+                     Note    => "D445: `escaping into p` names another"
+                                & " parameter whose storage may keep this"
+                                & " one",
+                     Related => Syn.Origin (Of_Tree, Parameter),
+                     Because => Because,
+                     Into    => Found);
+                  Valid := False;
+               end Refuse;
+            begin
+               if Target = Syn.No_Node then
+                  null;
+               elsif Into = 0 then
+                  if not Shared then
+                     Refuse ("this `into` target is not a runtime parameter"
+                             & " of the signature",
+                             "the parameter kept there");
+                  end if;
+                  Valid := False;
+               elsif Into = Index then
+                  Refuse ("a parameter cannot be kept in its own storage",
+                          "the parameter that names itself");
+               else
+                  declare
+                     Held : constant Ty.Type_Kind := Type_At
+                       (Of_Tree,
+                        Syn.Declared_Type
+                          (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Into)),
+                        Requirement => Value_Layout);
+                  begin
+                     Valid := Valid and then Held /= Ty.Ill_Typed;
+                  end;
+                  if Landin.Checking.Holds (Types.all, Parts (Into))
+                    and then not Landin.Checking.Contains_References
+                      (Types.all, Parts (Into))
+                  then
+                     if not Shared then
+                        Refuse ("this `into` target's type holds no"
+                                & " reference, so nothing can be kept in"
+                                & " its storage",
+                                "the parameter kept there");
+                     end if;
+                     Valid := False;
+                  end if;
+               end if;
             end;
          end loop;
 
@@ -13140,6 +13222,8 @@ package body Landin.Stages.Checking is
                            Part.Convention := Semantic_Convention
                              (Template_Tree.all, Node);
                            Part.Escaping := Syn.Is_Escaping
+                             (Template_Tree.all, Node);
+                           Part.Escaping_Into := Escaping_Into_Of
                              (Template_Tree.all, Node);
                            Part.Caller := Syn.Is_Caller
                              (Template_Tree.all, Node);
@@ -17690,6 +17774,8 @@ package body Landin.Stages.Checking is
                Part.Convention := Semantic_Convention
                  (Concept_Tree.all, Node);
                Part.Escaping := Syn.Is_Escaping (Concept_Tree.all, Node);
+               Part.Escaping_Into :=
+                 Escaping_Into_Of (Concept_Tree.all, Node);
                Part.Caller := Syn.Is_Caller (Concept_Tree.all, Node);
             end if;
             return Part;
@@ -19941,6 +20027,11 @@ package body Landin.Stages.Checking is
                                                Syn.Is_Escaping
                                                  (Concept_Tree.all,
                                                   Parameter);
+                                             Parameters (Position)
+                                               .Escaping_Into :=
+                                                 Escaping_Into_Of
+                                                   (Concept_Tree.all,
+                                                    Parameter);
                                              Parameters (Position).Caller :=
                                                Syn.Is_Caller
                                                  (Concept_Tree.all,
@@ -20945,6 +21036,9 @@ package body Landin.Stages.Checking is
                                         (Concept_Tree.all, Parameter);
                                     Parameters (Position).Escaping :=
                                       Syn.Is_Escaping
+                                        (Concept_Tree.all, Parameter);
+                                    Parameters (Position).Escaping_Into :=
+                                      Escaping_Into_Of
                                         (Concept_Tree.all, Parameter);
                                     Parameters (Position).Caller :=
                                       Syn.Is_Caller

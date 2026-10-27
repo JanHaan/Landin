@@ -383,9 +383,10 @@ package Landin.Syntax is
       Conformance_Entry,
       Parameter,
       Named_Return,
-      --  One source named by [0790]'s `from` clause.  It is a signature
-      --  label rather than a lexical Name_Reference; resolution associates
-      --  it with a runtime parameter position in a separate fact table.
+      --  One source named by [0790]'s `from` clause, or the parameter a
+      --  D445 `escaping into` names.  It is a signature label rather than a
+      --  lexical Name_Reference; resolution associates it with a runtime
+      --  parameter position in a separate fact table.
       Return_Source,
       If_Arm,
       Fixed_Arm,
@@ -670,9 +671,23 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Assembly_Operand;
 
+   --  `escaping` without an `into` target: a parameter that names one
+   --  (D445) may be kept only where it says, and is not escaping.
    function Is_Escaping (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Parameter;
+
+   --  D445's `escaping into p`: the label naming the parameter whose
+   --  storage this one may be kept in, or No_Node for a parameter that
+   --  writes no `into`.  The label is a Return_Source, as a `from` name
+   --  is, and resolution associates it with a runtime position the same
+   --  way.  A later shared name's target is the first name's node.
+   function Escaping_Target (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Parameter,
+          Post => Escaping_Target'Result = No_Node
+                  or else Kind (Of_Tree, Escaping_Target'Result)
+                            = Return_Source;
 
    --  D186's compiler-filled call-site parameter.  It remains an ordinary
    --  runtime parameter in the callee and in the internal ABI; only source

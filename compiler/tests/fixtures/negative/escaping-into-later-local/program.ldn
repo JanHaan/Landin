@@ -1,0 +1,22 @@
+--  D445: a local outlives another of the same frame only when it is
+--  declared before it, and this node is declared after the list.
+end_of_list: atom
+link: type = end_of_list | ptr mut node
+
+node: type = struct
+    value: i32
+    next: link
+end node
+
+push_front: (escaping into item inout head: link,
+             escaping into head item: ptr mut node) -> none =
+    item.val.next = head
+    head = item
+end push_front
+
+public main: () -> (code: i32) =
+    mut list: link = end_of_list
+    mut late: node = (value: 1, next: end_of_list)
+    push_front(list, addr late)
+    code = 0
+end main

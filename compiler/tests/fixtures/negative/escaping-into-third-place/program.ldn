@@ -1,0 +1,36 @@
+--  D445: a parameter kept in one parameter's storage may be kept nowhere
+--  else: not in a third parameter, through another's pointer, nor in
+--  module storage.
+nothing: atom
+maybe: type = nothing | ptr i32
+mut kept: maybe = nothing
+
+into_other: (escaping into holder value: ptr i32,
+             inout holder: ptr i32, inout other: ptr i32) -> none =
+    holder = value
+    other = value
+end into_other
+
+into_pointee: (escaping into holder value: ptr i32,
+               inout holder: ptr i32, slot: ptr mut ptr i32) -> none =
+    slot.val = value
+end into_pointee
+
+into_module: (escaping into holder value: ptr i32,
+              inout holder: ptr i32) -> none =
+    holder = value
+    kept = value
+end into_module
+
+--  At a call: a non-escaping parameter of the caller cannot be kept in
+--  another of its parameters' storage, nor a frame reference in a
+--  parameter's storage.
+keep: (escaping into holder value: ptr i32, inout holder: ptr i32) -> none =
+    holder = value
+end keep
+
+caller: (value: ptr i32, inout holder: ptr i32) -> none =
+    keep(value, holder)
+    local: i32 = 2
+    keep(addr local, holder)
+end caller

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a frame node is kept in a frame list declared after it, through escaping into
+program: main.ldn
+status: 42
+constructs: 0480, 0770, 0780, 0900, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

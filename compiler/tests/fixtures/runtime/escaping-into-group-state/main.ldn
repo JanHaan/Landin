@@ -1,0 +1,42 @@
+--  D445: a group in a routine's frame keeps each task's state until it
+--  is joined, and the state holds what the routine's own caller lent it.
+--  The caller's parameter outlives anything the frame holds.
+state: type = struct
+    host: ptr mut i32
+end state
+
+group: type = struct
+    states: [2]state
+    count: usize
+end group
+
+admit: (inout g: group, escaping into g task: state) -> none =
+    g.states[g.count] = task
+    g.count += 1
+end admit
+
+join: (inout g: group) -> none =
+    for task in g.states[0..<g.count] do
+        task.host.val += 1
+    end for
+    g.count = 0
+end join
+
+--  A call through a function value is held to the same contract, which
+--  is part of the function's type.
+admitting: type = (inout g: group, escaping into g task: state) -> none
+
+run: (host: ptr mut i32) -> none =
+    task: state = (host: host)
+    mut g: group = (states: [task, task], count: 0)
+    admit(g, task)
+    enter: admitting = admit
+    enter(g, task)
+    join(g)
+end run
+
+public main: () -> (code: i32) =
+    mut result: i32 = 40
+    run(addr result)
+    code = result
+end main

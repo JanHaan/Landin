@@ -1,0 +1,6 @@
+class: negative
+summary: a call through a function value is held to its escaping into contract, which is part of its type
+program: program.ldn
+codes: L0314, L0301
+constructs: 0780, 1000, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

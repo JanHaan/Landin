@@ -3055,6 +3055,33 @@ reference back into storage of the same origin is an update, not keeping,
 and needs no marker. Storing one parameter's reference into another
 parameter's storage needs `escaping`.
 
+Or it needs `escaping into`, which names the parameter whose storage keeps
+it, and no other. Then a frame node can go onto a frame list, as long as it
+lives as long as the list: it is a parameter of the caller, static,
+allocated, or a local declared before the list. Here each parameter is kept
+in the other's storage, so each names the other.
+
+```landin
+push_kept: (escaping into item inout head: ptr mut node,
+            escaping into head item: ptr mut node) -> none =
+    item.val.next = head
+    head = item
+end push_kept
+
+on_the_frame: (escaping seed: ptr mut node) -> none =
+    mut first: node = seed.val
+    mut head: ptr mut node = seed
+    push_kept(head, addr first) -- fine: first is declared before head
+
+    mut late: node = seed.val
+    push_kept(head, addr late) -- error: late is declared after head
+end on_the_frame
+```
+
+The routine may keep `item` in `head` and nowhere else. A frame reference
+never goes into a parameter's storage, and a reference from the caller's
+parameter goes into anything its frame holds.
+
 Exact rules: spec [1910].
 
 ### [0830] A view into a local holds the local still

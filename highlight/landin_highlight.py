@@ -46,7 +46,7 @@ KEYWORDS = {
     "any",
     # conventions and attributes
     "mut", "public", "volatile", "align", "link", "extern", "big", "little",
-    "escaping", "caller", "fixed", "inout", "sink", "from", "of", "at",
+    "escaping", "into", "caller", "fixed", "inout", "sink", "from", "of", "at",
     # modules
     "import", "as",
 }

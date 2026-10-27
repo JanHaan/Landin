@@ -356,3 +356,44 @@ end clear
                                                         (indexed_expression
                                                           (identifier)))))))))))))))))))))))))))
       (identifier))))
+
+==================
+Escaping into names a target, and into stays a name
+==================
+
+keep : (escaping into holder inout value : ptr u8, holder : ptr mut ptr u8, escaping into : u8, escaping into, other : u8) -> none =
+end keep
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier)
+            (parameter_convention)
+            (identifier_list
+              (identifier))
+            (pointer_type
+              (scalar_type)))
+          (parameter
+            (identifier_list
+              (identifier))
+            (pointer_type
+              (pointer_type
+                (scalar_type))))
+          (parameter
+            (identifier_list
+              (identifier))
+            (scalar_type))
+          (parameter
+            (identifier_list
+              (identifier)
+              (identifier))
+            (scalar_type)))
+        (arrow)
+        (returns))
+      (identifier))))

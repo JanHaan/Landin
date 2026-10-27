@@ -29,6 +29,7 @@
 (tool_directive module: _ @module.builtin member: (identifier) @function.builtin)
 (parameter name: (identifier_list (identifier) @variable.parameter))
 (parameter name: (identifier) @variable.parameter)
+(parameter target: (identifier) @variable.parameter)
 (named_return name: (identifier_list (identifier) @variable.parameter))
 (type_formal name: (identifier) @type.parameter)
 (field name: (identifier_list (identifier) @property))
@@ -50,7 +51,7 @@
 [
   "addr" "alignof" "any" "as" "atom" "begin" "break" "complete" "concept"
   "continue" "dec" "defer" "do" "else" "elsif" "end" "escaping" "extern" "fail"
-  "fixed" "for" "from" "if" "import" "in" "inc" "inout" "is" "loop"
+  "fixed" "for" "from" "if" "import" "in" "inc" "inout" "into" "is" "loop"
   "match" "mut" "none" "option" "ptr" "public" "return" "sink" "sizeof" "struct"
   "then" "try" "type" "unchecked" "undo" "variant" "when" "while" "with"
 ] @keyword

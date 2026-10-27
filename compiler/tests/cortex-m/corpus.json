@@ -970,6 +970,12 @@
     "runtime/erased-static-view-under-writable-from": {
       "mode": "execute"
     },
+    "runtime/escaping-into-frame-list": {
+      "mode": "execute"
+    },
+    "runtime/escaping-into-group-state": {
+      "mode": "execute"
+    },
     "runtime/evaluation-order-is-left-then-right": {
       "mode": "execute"
     },

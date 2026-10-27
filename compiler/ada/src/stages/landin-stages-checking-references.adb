@@ -33,6 +33,7 @@ package body Landin.Stages.Checking.References is
    use type Res.Argument_Role;
    use type Res.Declaration_Sort;
    use type Res.Verdict;
+   use type Res.Scope_Id;
    use type Landin.Source.Byte_Offset;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Tokens.Assignment_Operator;
@@ -279,6 +280,12 @@ package body Landin.Stages.Checking.References is
       type Reference_Fact is record
          Frame      : Boolean := False;
          Frame_Witness : Res.Declaration_Id := Res.No_Declaration;
+         --  D445: the latest declared frame storage the fact may reach,
+         --  as Frame_Witness is the earliest; a frame alternative that
+         --  names no declaration, a literal or a copied subject, sets
+         --  Frame_Anonymous instead, and no order can be read off it.
+         Frame_Latest : Res.Declaration_Id := Res.No_Declaration;
+         Frame_Anonymous : Boolean := False;
          External   : Boolean := False;
          --  D375: an External alternative that a writable reference in
          --  the value may reach.  Storage reached only through read-only
@@ -369,6 +376,11 @@ package body Landin.Stages.Checking.References is
          then
             Into_Fact.Frame_Witness := Other.Frame_Witness;
          end if;
+         if Other.Frame_Latest > Into_Fact.Frame_Latest then
+            Into_Fact.Frame_Latest := Other.Frame_Latest;
+         end if;
+         Into_Fact.Frame_Anonymous :=
+           Into_Fact.Frame_Anonymous or Other.Frame_Anonymous;
          Into_Fact.External := Into_Fact.External or Other.External;
          Into_Fact.Writable_External :=
            Into_Fact.Writable_External or Other.Writable_External;
@@ -753,6 +765,9 @@ package body Landin.Stages.Checking.References is
         [others => 0];
       Parameter_Escapes : array (1 .. Parameters) of Boolean :=
         [others => False];
+      --  D445: the parameter whose storage each one may be kept in, or 0.
+      Parameter_Into : array (1 .. Parameters) of Natural :=
+        [others => 0];
 
       --  The side tables read by a program identity.  A declaration this
       --  function cannot name has none of these facts, which is what the
@@ -981,6 +996,36 @@ package body Landin.Stages.Checking.References is
       function Known_Fact
         (Tree : Syn.Tree; Known : Argument_Facts; Node : Syn.Node_Id)
          return Origin_Fact;
+
+      --  D445: the argument for the parameter an `escaping into` names,
+      --  and the storage it may keep the reference in.
+      function Holder_Argument
+        (Tree   : Syn.Tree;
+         Call   : Syn.Node_Id;
+         Called : Landin.Checking.Signature_Id;
+         Part   : Landin.Checking.Signature_Part) return Syn.Node_Id;
+
+      function Holder_Fact
+        (Tree     : Syn.Tree;
+         Known    : Argument_Facts;
+         Called   : Landin.Checking.Signature_Id;
+         Part     : Landin.Checking.Signature_Part;
+         Argument : Syn.Node_Id) return Reference_Fact;
+
+      --  D445: a local outlives another of the same frame when it is
+      --  declared before it, in the same block or an enclosing one.
+      function Declared_Within
+        (Earlier, Later : Res.Declaration_Id) return Boolean;
+
+      --  D445: why the reference Kept may not be kept in what Holder
+      --  reaches, or "" when it outlives that storage.
+      function Kept_Into_Refusal
+        (Kept, Holder : Reference_Fact) return String;
+
+      --  D445: after the call, the holder's frame storage holds what an
+      --  `escaping into` argument kept there.
+      procedure Keep_Into_Holders
+        (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
 
       procedure Check_Escaping_Arguments
         (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
@@ -1552,10 +1597,208 @@ package body Landin.Stages.Checking.References is
                         end loop;
                      end if;
                   end;
+               elsif Part.Escaping_Into /= 0
+                 and then Argument /= Syn.No_Node
+                 and then Holder_Argument (Tree, Call, Called, Part)
+                   /= Syn.No_Node
+               then
+                  declare
+                     Kept : constant Reference_Fact :=
+                       Known_Fact (Tree, Known, Argument).Value;
+                     Refusal : constant String := Kept_Into_Refusal
+                       (Kept,
+                        Holder_Fact
+                          (Tree, Known, Called, Part,
+                           Holder_Argument (Tree, Call, Called, Part)));
+                  begin
+                     if Refusal /= "" then
+                        Report_Escape (Tree, Argument, Kept, Refusal,
+                                       Part.Site);
+                     end if;
+                  end;
                end if;
             end;
          end loop;
       end Check_Escaping_Arguments;
+
+      function Holder_Argument
+        (Tree   : Syn.Tree;
+         Call   : Syn.Node_Id;
+         Called : Landin.Checking.Signature_Id;
+         Part   : Landin.Checking.Signature_Part) return Syn.Node_Id
+      is (if Part.Escaping_Into
+             <= Landin.Checking.Signature_Parameter_Count (Types.all, Called)
+          then Runtime_Argument (Tree, Call, Part.Escaping_Into)
+          else Syn.No_Node);
+
+      function Holder_Fact
+        (Tree     : Syn.Tree;
+         Known    : Argument_Facts;
+         Called   : Landin.Checking.Signature_Id;
+         Part     : Landin.Checking.Signature_Part;
+         Argument : Syn.Node_Id) return Reference_Fact
+      is
+         Fact : constant Origin_Fact := Known_Fact (Tree, Known, Argument);
+      begin
+         --  The origin of the argument for p, as a call's `from` result
+         --  reads it: an `inout` argument is its place, and any other is
+         --  what its value refers to.
+         return
+           (if Landin.Checking.Nth_Signature_Parameter
+                 (Types.all, Called, Part.Escaping_Into).Convention
+                   = Syn.Inout_Convention
+            then Fact.Storage
+            else Fact.Value);
+      end Holder_Fact;
+
+      function Declared_Within
+        (Earlier, Later : Res.Declaration_Id) return Boolean
+      is
+         Outer : constant Res.Scope_Id :=
+           Res.Scope_Of (Meanings.all, Earlier);
+         Scope : Res.Scope_Id := Res.Scope_Of (Meanings.all, Later);
+      begin
+         if Earlier > Later then
+            return False;
+         end if;
+         loop
+            if Scope = Outer then
+               return True;
+            elsif not Res.Holds (Meanings.all, Scope) then
+               return False;
+            end if;
+            Scope := Res.Enclosing (Meanings.all, Scope);
+         end loop;
+      end Declared_Within;
+
+      function Kept_Into_Refusal
+        (Kept, Holder : Reference_Fact) return String
+      is
+         Holder_Parameter : constant Boolean :=
+           (for some Bit of Holder.From => Bit);
+         --  Static storage, an allocation, or a reference whose origin
+         --  is not known: it may outlive every parameter.
+         Holder_Lasting : constant Boolean :=
+           Holder.External or else Holder.Untracked
+           or else (Holder.Presence = Unknown_Value
+                    and then not Holder.Frame
+                    and then not Holder_Parameter);
+      begin
+         --  [0470]: an untracked reference is the program's claim, as it
+         --  is for `escaping`.  A joined tracked origin clears it.
+         if Kept.Untracked then
+            return "";
+         end if;
+         if Kept.Frame then
+            if Holder_Lasting or else Holder_Parameter then
+               return "this frame-origin reference cannot be kept in"
+                 & " storage that outlives this frame";
+            elsif Holder.Frame
+              and then
+                (Kept.Frame_Anonymous or else Holder.Frame_Anonymous
+                 or else Kept.Frame_Latest = Res.No_Declaration
+                 or else Holder.Frame_Witness = Res.No_Declaration
+                 or else not Declared_Within
+                   (Kept.Frame_Latest, Holder.Frame_Witness))
+            then
+               return "this frame-origin reference is kept in storage"
+                 & " declared before it, which it may not outlive";
+            end if;
+         end if;
+         for Source in Kept.From'Range loop
+            if Kept.From (Source) and then not Parameter_Escapes (Source)
+            then
+               if Holder_Lasting then
+                  return "this parameter is non-escaping, so its reference"
+                    & " cannot be kept in storage that outlives the call";
+               end if;
+               for Other in Holder.From'Range loop
+                  if Holder.From (Other)
+                    and then Other /= Source
+                    and then Other /= Parameter_Into (Source)
+                  then
+                     return "this parameter is non-escaping, so its"
+                       & " reference cannot be kept in another parameter's"
+                       & " storage";
+                  end if;
+               end loop;
+            end if;
+         end loop;
+         return "";
+      end Kept_Into_Refusal;
+
+      procedure Keep_Into_Holders
+        (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts)
+      is
+         Called : constant Landin.Checking.Signature_Id :=
+           Call_Signature (Tree, Call);
+      begin
+         if not Landin.Checking.Holds (Types.all, Called) then
+            return;
+         end if;
+         for Position in 1 .. Landin.Checking.Signature_Parameter_Count
+           (Types.all, Called)
+         loop
+            declare
+               Part : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Called, Position);
+               Argument : constant Syn.Node_Id :=
+                 Runtime_Argument (Tree, Call, Position);
+               Holder : constant Syn.Node_Id :=
+                 (if Part.Escaping_Into = 0 or else Argument = Syn.No_Node
+                  then Syn.No_Node
+                  else Holder_Argument (Tree, Call, Called, Part));
+            begin
+               if Holder /= Syn.No_Node then
+                  declare
+                     Kept : constant Reference_Fact :=
+                       Known_Fact (Tree, Known, Argument).Value;
+                     Through : constant Reference_Fact :=
+                       Known_Fact (Tree, Known, Holder).Value;
+                     Root : constant Res.Declaration_Id :=
+                       Root_Declaration (Tree, Holder);
+
+                     procedure Keep (Local : Local_Id);
+
+                     procedure Keep (Local : Local_Id) is
+                        Written : Origin_Fact := Origin (Local);
+                     begin
+                        Join (Written.Value, Kept);
+                        Written.Results.Clear;
+                        Set_Origin (Local, Written);
+                     end Keep;
+                  begin
+                     --  As a store through a known address does [0840]:
+                     --  the frame storage the holder refers to now holds
+                     --  what was kept, and an `inout` place holds it too.
+                     if Through.Frame then
+                        declare
+                           Stored : Natural := Next_Set (Through.Derives, 1);
+                        begin
+                           while Stored /= 0 loop
+                              if Global (Stored) /= Root then
+                                 Keep (Stored);
+                              end if;
+                              exit when Stored = Local_Id'Last;
+                              Stored := Next_Set
+                                (Through.Derives, Stored + 1);
+                           end loop;
+                        end;
+                     end if;
+                     if Landin.Checking.Nth_Signature_Parameter
+                       (Types.all, Called, Part.Escaping_Into).Convention
+                         = Syn.Inout_Convention
+                       and then Root /= Res.No_Declaration
+                       and then Local_Of (Root) /= 0
+                     then
+                        Keep (Local_Of (Root));
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end Keep_Into_Holders;
 
       --  [0830]: a borrow is live while some path from the mutating call
       --  reaches a read of the borrower before an assignment replaces it.
@@ -2465,6 +2708,7 @@ package body Landin.Stages.Checking.References is
                   else
                      Result.Frame := True;
                      Result.Frame_Witness := Id;
+                     Result.Frame_Latest := Id;
                   end if;
                when Res.Module_Binding =>
                   Result.External := True;
@@ -2486,6 +2730,7 @@ package body Landin.Stages.Checking.References is
                      else
                         Result.Frame := True;
                         Result.Frame_Witness := Id;
+                        Result.Frame_Latest := Id;
                      end if;
                   end;
                when Res.Pattern_Binding =>
@@ -2834,6 +3079,7 @@ package body Landin.Stages.Checking.References is
                      end if;
                      Check_Escaping_Arguments (Tree, Node, Known);
                      Check_Borrows (Tree, Node, Known);
+                     Keep_Into_Holders (Tree, Node, Known);
                      if Landin.Checking.Signature_Never_Returns
                        (Types.all, Called)
                        or else Landin.Configuration.Unreachable_Call
@@ -3047,6 +3293,7 @@ package body Landin.Stages.Checking.References is
          end if;
          if Syn.Kind (Tree, Node) = Syn.Array_Literal then
             Result.Value.Frame := True;
+            Result.Value.Frame_Anonymous := True;
             Result.Value.Presence := Unknown_Value;
          else
             Result.Value := Result.Storage;
@@ -3304,18 +3551,25 @@ package body Landin.Stages.Checking.References is
                   Syn.Origin (Tree, Place));
             else
                for Source in Fact.Value.From'Range loop
+                  --  D445: `escaping into p` admits p's storage, and no
+                  --  other, beside the parameter's own origin.
                   if Fact.Value.From (Source)
                     and then not Parameter_Escapes (Source)
                     and then
                       (External_Destination
                        or else (for some Other in Target.Storage.From'Range
                          => Other /= Source
+                           and then Other /= Parameter_Into (Source)
                            and then Target.Storage.From (Other)))
                   then
                      Report_Escape
                        (Tree, Value, Fact.Value,
-                        "this non-escaping parameter cannot be retained in"
-                        & " storage belonging to another origin",
+                        (if Parameter_Into (Source) /= 0
+                         then "this parameter may be kept only in the"
+                              & " storage its `escaping into` names"
+                         else "this non-escaping parameter cannot be"
+                              & " retained in storage belonging to another"
+                              & " origin"),
                         Syn.Origin (Tree, Place));
                      exit;
                   end if;
@@ -3618,7 +3872,8 @@ package body Landin.Stages.Checking.References is
                         (Tree, Syn.Target_Of (Tree, Subject_Node));
                   Subject_Storage : constant Reference_Fact :=
                     (if Match_Subject_Is_Copied (Tree, Subject_Node)
-                     then (Frame => True, others => <>)
+                     then (Frame => True, Frame_Anonymous => True,
+                           others => <>)
                      else Subject_Value.Storage);
                   Before : constant Table_Access := Origins;
                   Merged : Table_Access := Origins;
@@ -3898,7 +4153,9 @@ package body Landin.Stages.Checking.References is
                                      | Syn.Member_Selection
                                      | Syn.Element_Index
                                   then Source_Fact.Storage
-                                  else (Frame => True, others => <>)));
+                                  else (Frame => True,
+                                        Frame_Anonymous => True,
+                                        others => <>)));
                            end if;
                            Set_Origin
                              (Local_Of (Element),
@@ -4159,6 +4416,11 @@ package body Landin.Stages.Checking.References is
                  or else Syn.Convention_Of (Of_Tree, Node)
                    = Syn.Inout_Convention;
                Parameter_Escapes (Position) := Syn.Is_Escaping (Of_Tree, Node);
+               if Syn.Escaping_Target (Of_Tree, Node) /= Syn.No_Node then
+                  Parameter_Into (Position) := Res.Source_Parameter_Position
+                    (Meanings.all, Of_Tree,
+                     Syn.Escaping_Target (Of_Tree, Node));
+               end if;
                if Has_References (Id) then
                   declare
                      Parameter : Origin_Fact := Origin (Local_Of (Id));

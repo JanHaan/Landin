@@ -1,0 +1,6 @@
+class: negative
+summary: a frame reference kept through escaping into must be declared before the storage it is kept in
+program: program.ldn
+codes: L0314
+constructs: 0480, 0770, 0780, 0900, 1910
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

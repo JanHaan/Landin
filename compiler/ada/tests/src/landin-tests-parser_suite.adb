@@ -1828,6 +1828,9 @@ package body Landin.Tests.Parser_Suite is
    procedure Reference_Signature_Syntax_Is_Represented
      (Item : in out Landin.Testing.Context);
 
+   procedure Escaping_Into_Names_A_Target
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Type_Aliases_Are_Parsed
      (Item : in out Landin.Testing.Context)
    is
@@ -2064,6 +2067,74 @@ package body Landin.Tests.Parser_Suite is
    --  pointer/slice permission bit, parameter modifiers, return-source run,
    --  generic signature positions, `addr` place and ordinary `.val` member
    --  selection distinct without asking checking what any of them means.
+   --  D445: `into` is a contextual word.  Only `into` followed by a second
+   --  name is a target, which leaves the parameter not escaping; a
+   --  parameter spelled `into` keeps its ordinary meaning, alone or
+   --  sharing its type.
+   procedure Escaping_Into_Names_A_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("into.ldn",
+           "keep: type = (escaping into holder inout value: ptr u8,"
+           & " holder: ptr mut ptr u8, escaping into: ptr u8,"
+           & " escaping into, other: ptr u8) -> none" & ASCII.LF);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         Signature : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 1));
+         Kept : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Parameter (Parsed, Signature, 1);
+         Target : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Escaping_Target (Parsed, Kept);
+         Named_Into : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Parameter (Parsed, Signature, 3);
+         Shared_Into : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Parameter (Parsed, Signature, 4);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "escaping into parses without a report");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Parameter_Count (Parsed, Signature) = 5
+            and then Target /= Landin.Syntax.No_Node
+            and then Landin.Syntax.Kind (Parsed, Target)
+              = Landin.Syntax.Return_Source
+            and then Landin.Source.Names.Spelling
+              (Names, Landin.Syntax.Name (Parsed, Target)) = "holder"
+            and then not Landin.Syntax.Is_Escaping (Parsed, Kept)
+            and then Landin.Syntax.Convention_Of (Parsed, Kept)
+              = Landin.Syntax.Inout_Convention
+            and then Landin.Source.Names.Spelling
+              (Names, Landin.Syntax.Name (Parsed, Kept)) = "value",
+            "a target is retained and its parameter is not escaping");
+         Landin.Testing.Check
+           (Item,
+            Landin.Source.Names.Spelling
+              (Names, Landin.Syntax.Name (Parsed, Named_Into)) = "into"
+            and then Landin.Syntax.Is_Escaping (Parsed, Named_Into)
+            and then Landin.Syntax.Escaping_Target (Parsed, Named_Into)
+              = Landin.Syntax.No_Node
+            and then Landin.Source.Names.Spelling
+              (Names, Landin.Syntax.Name (Parsed, Shared_Into)) = "into"
+            and then Landin.Syntax.Is_Escaping (Parsed, Shared_Into)
+            and then Landin.Syntax.Escaping_Target (Parsed, Shared_Into)
+              = Landin.Syntax.No_Node,
+            "a parameter spelled into stays an ordinary name");
+      end;
+   end Escaping_Into_Names_A_Target;
+
    procedure Reference_Signature_Syntax_Is_Represented
      (Item : in out Landin.Testing.Context)
    is
@@ -4743,6 +4814,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "reference signature syntax is represented",
          Reference_Signature_Syntax_Is_Represented'Access);
+      Landin.Testing.Register
+        (Into, "parser", "escaping into names a target",
+         Escaping_Into_Names_A_Target'Access);
       Landin.Testing.Register
         (Into, "parser", "reports carry the pinned codes",
          Reports_Carry_The_Pinned_Codes'Access);

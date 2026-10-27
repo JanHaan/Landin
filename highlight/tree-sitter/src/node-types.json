@@ -2476,6 +2476,16 @@
           }
         ]
       },
+      "target": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
       "type": {
         "multiple": false,
         "required": true,
@@ -3828,6 +3838,10 @@
   {
     "type": "integer_literal",
     "named": true
+  },
+  {
+    "type": "into",
+    "named": false
   },
   {
     "type": "is",
