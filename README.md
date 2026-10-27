@@ -643,8 +643,8 @@ make the specification fail: a program that needs a feature presses on the rules
 for it until they turn out silent, ambiguous or wrong. Each ends with its
 findings, and keeps the wording that turned out wrong beside its
 resolution. The first four recorded forty-two findings between them,
-several of which reversed a decision; of the fifth's fifteen, fourteen are
-open and belong to the concurrency phase.
+several of which reversed a decision; the fifth's fifteen are decided too,
+and the concurrency phase implements them.
 
 They are sketches: they leave bodies out with `...` and are not programs
 you can compile. They are kept in step with the specification so their

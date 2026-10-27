@@ -11709,6 +11709,44 @@ typed parameter; `runtime/posix-libraries`, which reads arguments through
 `argument`; and `runtime/core-mem-resize`, `runtime/core-pool-resize` and
 `runtime/core-region-resize`, whose providers resize this way.
 
+### D445 — A parameter may be kept in another parameter's storage
+
+**The tour said** at [0780] that a parameter is non-escaping unless it says
+`escaping`, that `escaping` admits only allocated or static storage, and that
+storing one parameter's reference into another parameter's storage needs
+`escaping`. So its own `push_front` refuses a frame node pushed onto a frame
+list, though the node outlives the list. Prototype 5 met the same refusal at a
+scale that mattered: a fibre group in a routine's frame keeps each task's
+state until it is joined, and `escaping` refused every state holding what the
+routine's own caller had lent it — `main`'s host handle, a pointer to the
+caller's result — which outlives the group by construction (V3). Its first
+draft copied the host handle into an allocation to get past it.
+
+**Chosen:** a parameter may be marked `escaping into p`, where `p` names
+another parameter of the same routine. The routine may keep the reference in
+`p`'s storage, and nowhere else. At a call, the argument for it must outlive
+the origin of the argument for `p`, which is decided locally, as [0780]'s
+same-origin update already is: a parameter of the caller, static storage and
+an allocation outlive anything the caller's frame holds; a local outlives
+another local of the same frame when it is declared before it; and a frame
+reference never outlives a parameter's storage. A writable reference kept this
+way must name every place it is kept, as D222 requires of a result. `escaping`
+alone keeps its meaning. The form is not enabled until the fibre work
+implements it with the checker, and the tour's [0780] gains it then.
+
+**The alternatives:** leave `escaping` as it is, which forces every capability
+a fibre uses into an allocation or module storage, and module storage cannot
+hold a value with no zero that is made at run time; infer the relation from
+the body, which [0790]'s refusal of inferred derivation already declined;
+lifetime parameters, which are the borrow checker Landin does not have; and a
+privileged rule for the group's `admit`, which is a library type the language
+would have to know. All were declined.
+
+**Pinned by** nothing that runs yet: prototype 5's V3 records the pressure,
+and the fixtures that enable the form will pin it, a positive one for the
+group's state and `push_front`'s frame node, a negative one for a local
+declared after the storage it is kept in.
+
 ## DECISIONS: FUNCTIONS, CALLS AND RETURNS
 
 The call convention for values too large for a register, function
@@ -18578,6 +18616,75 @@ need.
 `end-to-end/assembly-refuses-a-public-main-that-is-not-the-entry` and
 `end-to-end/check-refuses-a-static-c-import`.
 
+### D446 — A fibre switches only inside its provider, and is no context of its own
+
+**The tour said** nothing about fibres; the execution model in the roadmap
+names them the route to concurrency and refuses stackless coroutines. D227
+says a CPU execution context is a thread or an interrupt handler, and its
+races are between contexts. Prototype 5 found that nothing said where a fibre
+can lose the core, so a fibre that read the provider's last errno, bumped a
+module counter or pushed onto a ring could not say whether it raced (V4, V5,
+V6).
+
+**Chosen:** fibres are cooperative. A fibre gives the core away only inside a
+call to an entry of the provider that runs it, and a provider states which of
+its entries may switch, as `hosted/system` states which retry; a query that
+does not wait, `last_errno` among them, never switches. The fibres of one
+provider are one CPU execution context in D227's sense: a switch is
+sequenced-before within it, and it is a full compiler memory boundary, as
+D227's explicit primitives are, so no ordinary access is carried across one
+in a register. A fibre does not move between threads. Threads are not a
+provider of the fibre concepts: a provider of them runs at most one of its
+fibres at a time, and state shared with a thread is the atomic wrapper's or a
+lock's.
+
+**The alternatives:** preemptive fibres, which make every access a race and
+need the locks a cooperative design avoids; each fibre its own context, which
+calls a one-at-a-time ring a race; a switch the optimizer may see through,
+which lets a register keep a value across it; and threads as one more fibre
+provider, which makes code that is right under one provider racy under
+another with nothing in its source to say so. All were declined.
+
+**Pinned by** nothing that runs yet: prototype 5's V4, V5 and V6 record the
+pressure, and the switch's fixtures will pin it, among them a module value
+written by one fibre and read by another across a switch at the highest
+optimization level.
+
+### D447 — What a switch owes the machine and the debugger
+
+**The tour said** nothing about fibres. The roadmap's execution model holds
+that call-bearing frames keep a frame pointer, the callee-saved discipline is
+explicit and no capability rides in a reserved register, so that a backend
+never forecloses switching stacks. Prototype 5 found what a switch itself must
+then do: where a fibre's stack ends, where interrupts land on Cortex-M, and
+what a debugger sees (V9, V11, V12).
+
+**Chosen:** a fibre's record keeps the lowest address its stack may reach,
+and every switch checks the saved stack pointer against it, entering the
+program's [1670] handler past it; which panic kind that is, the switch's
+specification says. The compiler reports, for each routine a program admits
+to a group, the deepest stack of the call graph it can close, and names where
+an `any` call, recursion or a foreign call opened it. On Cortex-M, fibres run
+on the process stack pointer and handlers on the main stack, so interrupt
+frames are paid once, by the main-stack reservation, and a fibre's stack holds
+its own calls alone; the reset stack stays on the main stack. A fibre's first
+frame ends the frame-pointer chain and says so in its unwind information;
+`switch` is written so that, stopped anywhere in it, the frames above are the
+leaving fibre's; and the records are ordinary data a debugger script walks to
+show a suspended fibre's frames. No debugger is taught about fibres.
+
+**The alternatives:** guard pages, which caller-supplied backing has no way
+to provide on a device and which a host provides only to storage it maps
+itself; a stack-depth bound the compiler enforces, which an `any` call makes
+impossible at the one place it is wanted; one stack pointer on Cortex-M, which
+charges the deepest interrupt nesting to every fibre's backing on a 16 KiB
+part; and debugger extensions per tool, which would have to be kept for GDB
+and LLDB alike. All were declined.
+
+**Pinned by** nothing that runs yet: prototype 5's V9, V11 and V12 record the
+pressure, and the switch's measurements and scripted debugger sessions on
+every target will pin it.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most
@@ -22937,3 +23044,124 @@ literal paths to the raw wrappers.
 
 **Pinned by** `negative/text-literal-needs-pointer`, whose note gives the
 route, and `runtime/linux-system-calls`.
+
+### D444 — A program starts fibres as a group it joins
+
+**The tour said** nothing about fibres. The roadmap's execution model makes
+concurrency a capability handed down like an allocator, with no keyword,
+second calling convention or colored function type, and the switch a stack
+the caller lends. Prototype 5's first draft started fibres as C starts
+threads: a struct and a conformance per fibre, a start that returned with the
+fibre still running, a hand-made pool of records and stacks polled for a free
+one, and a failure with nowhere to go (V15). It also found that one concept
+could not serve both a program that is right when every task runs to its end
+and one that needs them to take turns (V1), and that a group's failure needs a
+set to be carried in (V2).
+
+**Chosen:** `core/fibre` has three layers. The switch, `prepare` and `switch`
+over a caller's record and stack, is for whoever writes a provider. Two
+concepts say what a provider is: `scheduler`, whose `start` may run a task to
+its end before returning and whose `wait` returns once one of its fibres has
+finished, or at once when none is running; and `turns`, a `scheduler` that
+adds `yield`, whose contract is that a fibre that yields lets every other
+unfinished fibre of the provider run before it resumes. A provider that runs
+everything to its end has no `yield`, so a program that needs turns says so in
+the concept it asks for and is refused where it asks. The blocking host and
+`fibre.whole` provide `scheduler`; a device's round of turns, the event-driven
+Io and an RTOS's scheduler provide `turns`. The library carries the switch,
+`whole` and one round of fixed turns over caller records, with the wait when
+nobody can run supplied by the provider built on it; priorities, timers and
+preemption stay out of it.
+
+An application uses the third layer only. `group_over` takes a `scheduler`
+and `turns_over` a `turns`, with a backing the caller lends and a count, and
+cuts the backing into equal stacks; the group comes `from` the provider and
+the backing. `admit` waits, through the provider, for a free stack, copies the
+task's state onto it as a call passes an argument, and starts a fibre that
+calls an ordinary routine with that copy; one group holds tasks of different
+state types. A task's error set is `failure.reason`: the group keeps the first
+failure and `join` fails with it, after every admitted task has ended, since
+nothing cancels a fibre. A task with atoms of its own maps them before
+returning, as `core/failure` asks of a set that holds both. A group must be
+joined before its backing goes, and the program's `defer` does it, as it
+releases a region.
+
+**The alternatives:** a fibre that outlives the routine starting it, which is
+a thread and needs a thread's bookkeeping; one concept for every provider,
+which promises too little for a program that needs turns and too much for one
+that does not; a concept that adds a promise and no entry, which no concept
+has been, and which `yield` makes unnecessary; a refusal at run time when a
+provider cannot take turns, which comes later and says less; a body routine
+that receives the group and joins it on return, which cannot be got wrong but
+brings the routine-and-state ceremony back one level up and makes the group
+and the states both parameters, so that D445 can no longer order them; a
+checker rule that a frame-backed group is joined on every path, recorded in
+the register rather than taken; and error sets as generic parameters,
+recorded there too. All were declined.
+
+**Pinned by** nothing that runs yet: prototype 5's V1, V2, V8 and V15 record
+the pressure, and the fibre fixtures will pin it, among them a group over
+`whole` that runs its tasks in admission order and a `turns_over` refused for
+a provider of `scheduler` alone.
+
+### D448 — On one core, requests are answered one at a time, in order
+
+**The tour said** nothing. The roadmap's execution model names a single-core
+freestanding target as the case to design against, where the honest answer to
+a request for concurrency is that there is none. Prototype 5's device takes
+two requests on one serial line while it answers the first, and could have
+answered them in either order (V13).
+
+**Chosen:** on one core, an operation in flight is a request whose answering
+has started and not finished. A device answers in arrival order, one at a
+time, and answers `busy` when the requests waiting for it fill its queue;
+receiving goes on in a fibre of its own. Fibres on a device are for
+structure, taking input while answering, and not for overlapping answers. A
+trace of the derived firmware shows answers in request order, none starting
+before the previous one has finished.
+
+**The alternatives:** refusing a second request while one is answered, which
+needs no fibres and turns away work the device could have done; and
+overlapping answers through turns, which puts two operations in flight on one
+core and makes the trace's order depend on the requests' timing. Both were
+declined.
+
+**Pinned by** nothing that runs yet: prototype 5's V13 records the pressure,
+and the derived firmware's trace oracle will pin it.
+
+### D449 — What the second Io and the atomic wrapper owe fibres
+
+**The tour said** at [1620] that the atomic wrapper is a library question
+because Cortex-M0 has no read-modify-write, and the library reference that
+the fake network answers `timed_out` at once since nothing in one thread could
+end its wait. Prototype 5 found that stopping a server, waking a fibre from an
+interrupt and testing a server over the fake network all depend on promises
+nothing made (V7, V10, V14).
+
+**Chosen:** nothing cancels a fibre. A program stops one by failing the I/O
+it waits on: an Io that runs fibres wakes every fibre waiting on a
+descriptor when it is shut or closed through the provider, and the woken call
+fails `io_failed`; a signal reaches the provider as an event read by an entry
+that waits like a receive, never as a handler running Landin code on a
+fibre's stack. A fibre that never ends holds its group's `join` for ever, and
+one never resumed never runs its `defer`s; both are stated, not prevented.
+An interrupt handler never switches: it records what happened for the
+provider to see before it waits. The atomic wrapper names the single-writer
+update, a load and a store, as an operation of its own on every target, and
+refuses a shared read-modify-write where the target has none, naming the
+critical section. The fake network, given a scheduler that takes turns,
+yields where a call would wait and answers `timed_out` only after a whole
+round in which nothing it waits for arrived; without one it behaves as now,
+and the library reference's reason is reworded.
+
+**The alternatives:** cancellation, which unwinds another fibre's stack and
+Landin does not unwind [1670]; leaving a closed descriptor's waiter asleep,
+which epoll does and which loses the fibre; switching from an interrupt, which
+returns into another fibre's frame; a wrapper that masks interrupts behind the
+program's back, which D227 already refuses; and a fake that answers
+`timed_out` regardless, which fails every test of a program with two fibres.
+All were declined.
+
+**Pinned by** nothing that runs yet: prototype 5's V7, V10 and V14 record the
+pressure, and the second Io's, the wrapper's and the fake network's fixtures
+will pin it.

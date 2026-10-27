@@ -217,8 +217,8 @@ they are parked with a condition rather than refused.
 ## Where the work stands
 
 The specification is coherent and mechanically checked. Five prototypes
-exist. The first four's findings are all worked in; the fifth's are open and
-belong to the concurrency phase. Independent reviews are folded
+exist. The first four's findings are all worked in; the fifth's are decided and
+the concurrency phase implements them. Independent reviews are folded
 back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 

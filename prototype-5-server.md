@@ -14,9 +14,10 @@
 > notes between this banner and that heading say what it presses on, and a
 > reader can skip them.
 
-Current with specification 0.2.8. Its own finding V15 was resolved while
-it was written; V1-V14 are open, and each one waits for the roadmap item
-that ROADMAP.md says answers it.
+Current with specification 0.2.8. Its own findings V1-V15 are all
+resolved below: V15 while it was written, the rest by D444-D449. The fibres
+themselves do not exist yet, and the decisions are pinned by the fixtures
+that will implement them.
 
 A server that answers two kinds of request, one line each:
 
@@ -137,10 +138,13 @@ What runs fibres. Concepts and not types, the lesson prototype 4 learnt
 about Io: the program never learns which one it got.
 
 A `scheduler` may run a task to its end inside `start`, before returning;
-a program written against it must be right when every task does. `turns`
-promises more: a task that yields lets every other unfinished task of the
-provider run before it resumes. It adds that promise and no entry, which
-no concept has done before. [V1]
+a program written against it must be right when every task does. `wait`
+returns once one of its fibres has finished, or at once when none is
+running, which is how a group waits for a free stack. `turns` is a
+`scheduler` that can also `yield`, and that entry is its promise: a task
+that yields lets every other unfinished task of the provider run before it
+resumes. A provider that runs every task to its end has nothing to yield
+to, and so does not provide `turns`. [V1]
 
 `yield` gives the core to another fibre of this provider that can run,
 and returns at once when there is none. A provider that waits for events
@@ -150,18 +154,19 @@ public scheduler: type = concept (provider: type)
     start:    (self: provider, escaping record: ptr mut space,
                escaping stack: []mut u8, escaping work: any task)
               -> none ! stack_too_small | stack_misaligned
-    yield:    (self: provider) -> none
     finished: (self: provider, record: space) -> (yes: bool)
+    wait:     (self: provider) -> none
 end scheduler
 
 public turns: type = concept (provider: type) is scheduler
+    yield: (self: provider) -> none
 end turns
 
 ```
 Called on a provider the program holds as itself rather than erased, the
 entries go through the module, as `time.sleep` does for a clock.
 ```landin
-public yield: (provider: type is scheduler, host: provider) -> none = ... end
+public yield: (provider: type is turns, host: provider) -> none = ... end
 
 ```
 A provider that has no second stack to give: it runs every task to its
@@ -173,8 +178,8 @@ public whole: type = struct
     reserved: u32
 end whole
 
-whole is scheduler (start: whole_start, yield: whole_yield,
-                    finished: whole_finished)
+whole is scheduler (start: whole_start, finished: whole_finished,
+                    wait: whole_wait)
 
 whole_start: (self: whole, escaping record: ptr mut space,
               escaping stack: []mut u8, escaping work: any task)
@@ -185,14 +190,14 @@ whole_start: (self: whole, escaping record: ptr mut space,
     record.val.status = 0
 end whole_start
 
-whole_yield: (self: whole) -> none =
-    _ = self
-end whole_yield
-
 whole_finished: (self: whole, record: space) -> (yes: bool) =
     _ = self
     yes = record.status == 0
 end whole_finished
+
+whole_wait: (self: whole) -> none =
+    _ = self   -- nothing is ever running
+end whole_wait
 
 ```
 The group. It cuts `backing` into `count` equal stacks, each with its
@@ -213,7 +218,7 @@ public turns_over: (runs: any turns, backing: []mut u8, count: usize)
                    ! stack_too_small | stack_misaligned = ... end
 
 ```
-`admit` waits, by yielding, until one of the group's stacks is free; copies
+`admit` waits, through the provider, until one of the group's stacks is free; copies
 `state` onto the top of that stack, as a call passes an argument; and
 starts a fibre whose first frame calls `work` with the copy. Because each
 task's state lives on its own stack, one group holds tasks of different
@@ -549,11 +554,13 @@ public board: type = struct
     turns: ptr mut table
 end board
 
-board is fibre.turns (start: board_start, yield: board_yield,
-                      finished: board_finished)
+board is fibre.turns (start: board_start, finished: board_finished,
+                      wait: board_wait, yield: board_yield)
 board is time.clock (now: board_now, sleep: board_sleep)
 
 board_now: (self: board) -> (reading: time.instant) = ... end
+board_finished: (self: board, record: fibre.space) -> (yes: bool) = ... end
+board_wait: (self: board) -> none = ... end   -- yields until one has finished
 
 ```
 `start` prepares, registers the record, and returns: the fibre runs at the
@@ -730,13 +737,26 @@ anyone. [V15]
 
 Fifteen, and more than prototype 4 found: this one stretches the language
 rather than using it. V15 was resolved while the file was written. The
-other fourteen are open: each says what it asks and proposes an answer;
-ROADMAP.md names the item that settles it, and that item records the
-resolution here when it does, in the form the first four use.
+other fourteen were open when it was finished, each with a proposed answer,
+and were decided together as D444-D449 before any fibre existed; one of
+them, V1, was decided differently from its proposal. The decisions are
+pinned by the fixtures that will implement them.
 
 ---
 
-V1  OPEN. What a scheduler may do with a task, and what a program may
+V1  RESOLVED by D444: two concepts, told apart by an entry rather than a promise.
+`scheduler` starts a task, says whether it has finished and waits for one to
+finish, and may run each task to its end. `turns` is a `scheduler` that can
+also `yield`, and the entry's contract is the promise: a task that yields
+lets every other unfinished task run before it resumes. A provider that
+runs every task to its end has nothing to yield to, so it never provides
+`turns`, and no concept became a promise without an entry, which the
+proposal below wanted. A program that needs turns asks for them with
+`turns_over`, and is refused there.
+
+The original finding, for the record.
+
+What a scheduler may do with a task, and what a program may
 assume of it.
 
 The server is right under a provider that runs each task to its end and
@@ -764,7 +784,14 @@ concept may be a promise, and whether conformance to one is then the
 provider's word alone, is the part of this the specification has to
 answer, and it reaches beyond fibres.
 
-V2  OPEN. Where a task's failure goes.
+V2  RESOLVED by D444: as proposed. A task's error set is `failure.reason`, the group
+keeps the first failure and `join` fails with it, and a task with atoms of
+its own maps them before returning. Error sets as generic parameters are
+recorded in ROADMAP.md's register with what would bring them in.
+
+The original finding, for the record.
+
+Where a task's failure goes.
 
 A fibre's first frame has no caller to fail to: it was entered by a switch.
 The group gives it one. The task is an ordinary routine with an error set,
@@ -787,7 +814,18 @@ parameter, so that a group of the program's own tasks carries their own
 atoms, is a language question this file found and does not answer: it
 would reach every generic that passes a failure through.
 
-V3  OPEN. What a group may borrow, and who makes sure it is joined.
+V3  RESOLVED by D444 and D445: as proposed for the state, and by the program's
+`defer` for the join. A parameter marked `escaping into g` may be kept in
+`g`'s storage when its argument outlives `g`'s origin, decided locally, so
+`main` lends `host` to the sessions and the client its `heard`. A group is
+joined by `defer`, as a region is released; a check that a frame-backed
+group is joined on every path is recorded in ROADMAP.md's register.
+`fibre.within` was declined: it makes the group and the states both
+parameters of the body, so nothing local can order them.
+
+The original finding, for the record.
+
+What a group may borrow, and who makes sure it is joined.
 
 The group's backing is the caller's frame, and that is legal today: the
 group comes `from` the backing [0790], as an arena comes from its space.
@@ -818,7 +856,11 @@ calls `body` with it and joins before returning, at the price of one more
 routine and state at every use. The first keeps the code as written here;
 the second cannot be got wrong.
 
-V4  OPEN. Where a switch can happen.
+V4  RESOLVED by D446: as proposed.
+
+The original finding, for the record.
+
+Where a switch can happen.
 
 The specification says nothing about it, because nothing switched. The
 first draft assumed a fibre could lose the core anywhere and so wanted a
@@ -845,7 +887,11 @@ when every unfinished fibre has yielded since the last one, and a fibre
 that wants to wait on something only it can see uses a wait entry of the
 provider rather than polling.
 
-V5  OPEN. Is a fibre a CPU execution context?
+V5  RESOLVED by D446: as proposed.
+
+The original finding, for the record.
+
+Is a fibre a CPU execution context?
 
 D227 says a context is a thread or an interrupt handler, and its races are
 between contexts. A fibre is neither. If each fibre is a context, the
@@ -861,7 +907,12 @@ are. A fibre does not move between threads; if a later provider moves
 them, the move is a synchronization it must supply, and this answer is
 reopened then.
 
-V6  OPEN. Code that is right because one fibre runs at a time.
+V6  RESOLVED by D446 and D449: as proposed: threads are not a provider of the fibre
+concepts, and the atomic wrapper names the single-writer update.
+
+The original finding, for the record.
+
+Code that is right because one fibre runs at a time.
 
 `served +%= 1` is correct under every provider in this file, and racy
 under a provider that runs tasks on two threads. Nothing in the source says
@@ -877,7 +928,11 @@ by offering only what the core has: load, store, and a single-writer
 increment, as `firmware/tick` writes by hand, and no read-modify-write
 that a second writer could break.
 
-V7  OPEN. Stopping, when nothing cancels.
+V7  RESOLVED by D449: as proposed.
+
+The original finding, for the record.
+
+Stopping, when nothing cancels.
 
 There is no cancellation, and there should not be one: unwinding another
 fibre's stack is unwinding, which Landin does not do [1670], and a fibre's
@@ -899,7 +954,11 @@ two do on purpose, and a fibre that is never resumed never runs its
 `defer`s; both are stated rather than prevented. Its stack is the group's
 backing, so nothing is released under it.
 
-V8  OPEN. Where a scheduler lives.
+V8  RESOLVED by D444: as proposed.
+
+The original finding, for the record.
+
+Where a scheduler lives.
 
 The device's board is forty lines and has no priorities, timers or
 preemption, which is what makes it not a kernel. It is written in the
@@ -914,7 +973,11 @@ event wait in the hosted Io. Priorities, timers, preemption and anything
 else a kernel does stay out of the library, and an RTOS supplies its own
 provider of the same concepts.
 
-V9  OPEN. How large a fibre's stack is, and what happens past it.
+V9  RESOLVED by D447: as proposed.
+
+The original finding, for the record.
+
+How large a fibre's stack is, and what happens past it.
 
 The server guessed sixteen kilobytes and holds two 256-byte buffers in
 `serve` alone. The device guessed 640 bytes for each of two fibres out of
@@ -939,7 +1002,11 @@ make one. `admit` refuses a state that leaves less than a stated minimum
 of its stack. Which panic kind a stack past its limit is, is part of the
 answer.
 
-V10  OPEN, and half found while writing. An interrupt cannot wake a fibre.
+V10  RESOLVED by D449: as proposed, and half found while writing.
+
+The original finding, for the record.
+
+An interrupt cannot wake a fibre.
 
 The handler has to leave the wake for the fibre to find. The first draft
 did that with an ordinary `ticks +%= 1` in the handler and an atomic load
@@ -957,7 +1024,11 @@ section. A wake that needs more than a counter goes through the provider:
 a handler records an event the board looks at before it waits for an
 interrupt, never a switch.
 
-V11  OPEN. Interrupt frames land on the running fibre's stack.
+V11  RESOLVED by D447: as proposed.
+
+The original finding, for the record.
+
+Interrupt frames land on the running fibre's stack.
 
 On Cortex-M with one stack pointer, an interrupt pushes its frame, and
 every nested handler's, onto whichever stack was current. Each fibre's
@@ -973,7 +1044,11 @@ stack, entry 0 here, stays on the main stack. The frame-pointer exemption
 for call-free leaves is untouched by this: a leaf that switches is not
 call-free.
 
-V12  OPEN. What a debugger sees.
+V12  RESOLVED by D447: as proposed.
+
+The original finding, for the record.
+
+What a debugger sees.
 
 A backtrace in a fibre runs down to `prepare`'s first frame and has to
 stop there cleanly rather than wander into the bytes below the backing. A
@@ -987,7 +1062,11 @@ the frames above are the leaving fibre's; and the records are ordinary
 data a debugger script walks to show a suspended fibre's frames from its
 saved stack pointer. No debugger is taught about fibres.
 
-V13  OPEN. What "two operations in flight" means on one core.
+V13  RESOLVED by D448: as proposed.
+
+The original finding, for the record.
+
+What "two operations in flight" means on one core.
 
 The device takes `NOW b` while `WAIT 200 a` sleeps and answers it after
 `a`. That needs two fibres and keeps one operation in flight, if an
@@ -1004,7 +1083,11 @@ answering — and not to overlap answers. A trace of a derived program then
 checks that answers come in request order and that no answer starts
 before the previous one has finished.
 
-V14  OPEN. A fake that says a wait cannot end.
+V14  RESOLVED by D449: as proposed.
+
+The original finding, for the record.
+
+A fake that says a wait cannot end.
 
 `core/io/fake`'s network answers `timed_out` at once for a call that would
 wait, because "nothing in one thread could ever end the wait". With a

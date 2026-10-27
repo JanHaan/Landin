@@ -2521,17 +2521,15 @@ can reach it. Specify the backing's size, alignment, creation-failure and
 release rules with the switch interface. This takes on the stackful-fibre
 part of R551-35.
 
-Prototype 5 asks it V1, whether one that runs every task to its end is a
-provider of the same concept as one that takes turns, and whether a concept
-may be a promise with no entry; V2, where a task's failure goes, and the
-error set a group can hold when an error set is no generic parameter; V3,
-`escaping into` for the state a group keeps, and who makes sure a group is
-joined before its backing goes; V4's rule for where a switch can
-happen; V5, whether a fibre is a CPU execution context under D227; V8,
-whether `core/fibre` carries a round of fixed turns and nothing more; V9,
-stack size and what happens past it; V11, the process stack pointer on
-Cortex-M; and V12, what a debugger sees. V13's single-core answer is the
-one this item specifies.
+Prototype 5's findings were decided before this item began, and it
+implements and pins them: D444, `core/fibre`'s switch, the `scheduler` and
+`turns` concepts, `whole`, one round of fixed turns and the group an
+application starts fibres as; D445, `escaping into`, with the checker and
+the tour's [0780]; D446, cooperative switch points, a provider's fibres as
+one D227 context and a switch as a full compiler memory boundary; and D447,
+the stack-limit check at every switch, the stack-depth report, Cortex-M
+fibres on the process stack and the debugger's view. D448's single-core
+answer is the one this item specifies.
 
 Exit evidence: fibres switching on every target with debugger backtraces
 through a switch, and the single-core freestanding answer specified. On the
@@ -2554,8 +2552,8 @@ It presents the same request for two operations in flight as the hosted server
 and produces the single-core answer specified in R14.20. Record a trace that
 shows the answer and when each operation starts and finishes.
 
-Prototype 5's V13 proposes what "in flight" means on one core, and V10 how
-the tick reaches a fibre without read-modify-write.
+D448 says what "in flight" means on one core and what the trace shows;
+D449 how the tick reaches a fibre without read-modify-write.
 
 Exit evidence: the firmware derivative running in the Cortex-M0 emulator lane
 in the gate, with its captured trace checked against a repository-owned oracle
@@ -2576,10 +2574,9 @@ later implement the same Io; readiness stays below it, in `platform/posix`'s
 signalfd on Linux and kqueue on Darwin and FreeBSD, never as handlers that
 run Landin code. Windows is outside this item's scope.
 
-Prototype 5 asks it V4, which of the Io's entries may switch and what that
-does to the last-error cell; V7, that a waiter is woken with a failure when
-its descriptor is shut or closed, and signals as waitable events; and V14,
-the fake network under a scheduler.
+It implements D446's list of the Io's entries that may switch, and D449's
+wake with a failure for a waiter whose descriptor is shut or closed, signals
+as waitable events and the fake network under a scheduler that takes turns.
 
 Exit evidence: prototype 5's derived server running on the hosted targets over
 both implementations of Io, unchanged.
@@ -2597,9 +2594,9 @@ since one single-threaded heap serves all three (D300). Under `--link=libc`
 the C library owns thread creation and thread-local storage, so a thread there is the C library's; a static Linux program owns
 both itself.
 
-Prototype 5 asks it V6, that threads are not a provider of the fibre
-concepts and what state shared with them must use, and V10, the wrapper's
-single-writer operation on a core without read-modify-write.
+It holds D446's rule that threads are not a provider of the fibre
+concepts, and gives the wrapper D449's single-writer operation on a core
+without read-modify-write.
 
 Exit evidence: consumers of both on every applicable target, with failure
 oracles. The hosted thread facility implements D227's creation and join
@@ -2950,6 +2947,8 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-311 | Usability | Registering a fifth prototype meant finding every place the four are named, and `grep prototype-4` finds only some: the finding letters were written out as `[XYZW]` three times in `check.py` and three in `docs/site/render_html.py`, so the new findings rendered unlinked and ROADMAP.md's citations of them went unchecked, with every check clean; and the site's navigation is a `NAV_GROUPS` list beside each document's own `group=`, which only `site.sh` refuses, after `check.py` has passed. Met in R14.10, which put the letters in `PROTOTYPE_FINDINGS` and one renderer constant that `check.py` holds to it. | The next prototype, or the next change to the renderer's document list. | `NAV_GROUPS` read from the documents' `group=` or checked by `check.py`, and the places a prototype is registered named in one place. | open |
 | SR-312 | Usability | A citation of a register record that does not exist passes every check: ROADMAP.md's R13.72 paragraph cites `SR-350`, and the register ends at SR-312 with no such row in its history. `check.py` holds construct and finding citations to a definition and register identities to staying inside ROADMAP.md, but not to existing. Met in R14.10. | The next change to `check_roadmap_citations`. | Every cited register identity defined in the register, and the `SR-350` citation corrected to the row it meant. | open |
 | SR-313 | Usability | `scripts/gate_watch.py --commit 581b73f5` printed "no gate run for 581b73f5 yet" for 23 minutes beside a gate run that had passed: `gh run list --commit` matches only a full hash, and the watcher passed the short one on and waited. Met in R14.10. | The next change to the gate watcher. | A short hash expanded, and a name that is no commit refused. | retired: the watcher expands a name with `git rev-parse` and refuses one that is neither a commit here nor a full hash |
+| SR-314 | Language evolution | An error set cannot be a generic parameter, so a fibre group (D444) carries every task's failure as `failure.reason`, and a task failing with an atom of the program's own maps it before returning. Met deciding prototype 5's V2. | A second facility that has to carry its caller's error set through a generic: a callback runner, a comparator, a traversal, or a derived program that maps atoms only to get them through a group. | A register decision for error sets as generic parameters, or the mapping recorded as the way with the facilities that met it. | open |
+| SR-315 | Language evolution | A fibre group whose backing is the caller's frame must be joined before the frame goes, and only the program's `defer` makes sure of it (D444); a forgotten join runs a fibre on a dead frame. A check that such a group is joined on every path out, as [0910] checks that a sunk place is replaced, was declined until needed, since marking a type as needing it is close to the parked affine values. | A derived program or a fixture that forgets a join, or a second library value whose release is as unsafe to forget. | A register decision for a path check keyed on a property rather than one library type, or the `defer` recorded as the way. | open |
 | R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on each full gate run, subject to the R8 gate's explanatory-only reuse exception, with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
 | R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence was a run, not a record the coverage readers read. | — | — | retired: R8.30 runs end-to-end fixtures in Darwin's diagnostics runner, which the gate runs, places their Darwin claims from it, and has `check.py` refuse any fixture whose named product target no record places |
 
