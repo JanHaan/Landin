@@ -18862,8 +18862,11 @@ target at once with a backend defect where they are not emitted, which
 breaks a program at emission that checking accepted. Both were declined.
 
 **Pinned by** `negative/stack-builtins-argument-contract`,
-`negative/stack-builtins-target-synthetic-32` and
-`negative/stack-builtins-target-linux-arm64`.
+`negative/stack-builtins-target-synthetic-32`, and the Cortex-M corpus's
+L0344 refusals of `runtime/stack-prepare-too-small-traps` and
+`runtime/stack-switch-past-limit-traps` for a backend that does not emit
+them yet. A negative fixture pinned the same refusal on linux-arm64 until
+the arm64 backend emitted the builtins, and was retired then.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

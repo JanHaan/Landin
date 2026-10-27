@@ -163,6 +163,27 @@ package body Landin.Backend.Arm64 is
      is (if First in Argument_Register then Through - Step
          else First + Step);
 
+   --  D450: whether Value is compiler.stack_switch.  Selection emits it as
+   --  a call of the program's switch routine, which resumes another stack
+   --  and returns with only the callee-saved registers kept, so it is a
+   --  call to every location question: x0-x7 and d18-d31 are changed.
+   function Is_Switch
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Value : Landin.IR.Value_Id) return Boolean;
+
+   function Is_Switch
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Value : Landin.IR.Value_Id) return Boolean
+   is
+      use type Landin.Memory.Operation;
+   begin
+      return Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Memory_Access
+        and then Landin.IR.Memory_Operation (Of_Unit, Item, Value)
+          = Landin.Memory.Stack_Switch;
+   end Is_Switch;
+
    --  A register as selection spells it at a width: x or w, d or s.
    function Name
      (Number : Register_Number;
@@ -817,6 +838,8 @@ package body Landin.Backend.Arm64 is
                                (Of_Unit, Item, Landin.IR.Value_Id (Index))
                              in Landin.IR.Call | Landin.IR.Indirect_Call
                               | Landin.IR.Assembly
+                            or else Is_Switch
+                              (Of_Unit, Item, Landin.IR.Value_Id (Index))
                           then 1 else 0);
                   end;
                end loop;
@@ -1332,8 +1355,9 @@ package body Landin.Backend.Arm64 is
         (Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Assembly
          or else
            (Place.Register in Argument_Register | Free_Float
-            and then Landin.IR.Op_Of (Of_Unit, Item, Value)
-              in Landin.IR.Call | Landin.IR.Indirect_Call)
+            and then (Landin.IR.Op_Of (Of_Unit, Item, Value)
+                        in Landin.IR.Call | Landin.IR.Indirect_Call
+                      or else Is_Switch (Of_Unit, Item, Value)))
          or else
            (Place.Register in Argument_Register
             and then Landin.IR.Op_Of (Of_Unit, Item, Value)
@@ -2146,6 +2170,18 @@ package body Landin.Backend.Arm64 is
          then "l" & Local_Prefix (Local_Prefix'First + 1 .. Local_Prefix'Last)
          else Local_Prefix);
       Reporter : constant String := Private_Prefix & "landin_trap_report";
+
+      --  D450: a program that prepares or switches a stack carries one
+      --  switch routine and one start routine, emitted after its bodies
+      --  under linker-private names as the reporter is; the comment at
+      --  their emission says what each does.  A prepared stack's first
+      --  frame, and every switched stack's saved one, is Stack_Frame bytes:
+      --  x29 and x30, x19-x28, then d8-d15.
+      Stack_Used : Boolean := False;
+      Stack_Switcher : constant String :=
+        Private_Prefix & "landin_stack_switch";
+      Stack_Start : constant String := Private_Prefix & "landin_stack_start";
+      Stack_Frame : constant := 160;
       --  A linker-private `l` name on Mach-O, as Apple's compilers give a
       --  string literal, so the link sees each line as an atom of its own.
       function Report_Label (Index : Positive) return String
@@ -4869,14 +4905,59 @@ package body Landin.Backend.Arm64 is
                         else "");
                      Loop_Name : constant String := Fresh;
                   begin
-                     --  D450: not emitted here yet.  The checker refuses
-                     --  the stack builtins on this target and the verifier
-                     --  an image carrying one, so this is a defect.
-                     if M in Landin.Memory.Stack_Operation then
-                        raise Landin.Compiler_Defect with
-                          "a stack builtin reached a backend that lacks it";
-                     end if;
-                     if Landin.Memory.Operands (M) = 0 then
+                     if M = Stack_Prepare then
+                        --  D450: the operands are the stack's base and
+                        --  length, the entry and its argument.  The top is
+                        --  aligned down to sixteen and the first frame laid
+                        --  below it as the switch routine's restore reads
+                        --  it: x29 zero, x30 past the start routine's nop,
+                        --  x19 the entry, x20 its argument, then zero for
+                        --  x21-x28 and d8-d15.  A slice that cannot hold
+                        --  those 160 bytes traps stack_exhausted (D451);
+                        --  the difference is signed, since aligning a
+                        --  short slice's top may take it below the base.
+                        Load_Value (Operand (1), "x10");
+                        Load_Value (Operand (2), "x11");
+                        Emit ("add x11, x10, x11");
+                        Emit ("and x11, x11, #0xfffffffffffffff0");
+                        Emit ("sub x11, x11, x10");
+                        Emit ("cmp x11, #" & Trimmed (Natural'Image
+                          (Stack_Frame)));
+                        Emit ("b.lt " & Trap (Landin.Panics.Stack_Exhausted));
+                        Emit ("add x10, x10, x11");
+                        Emit ("sub x10, x10, #" & Trimmed (Natural'Image
+                          (Stack_Frame)));
+                        Load_Value (Operand (3), "x12");
+                        Load_Value (Operand (4), "x13");
+                        Address ("x14", Stack_Start);
+                        Emit ("add x14, x14, #4");
+                        Emit ("stp xzr, x14, [x10]");
+                        Emit ("stp x12, x13, [x10, #16]");
+                        for Pair in 2 .. Stack_Frame / 16 - 1 loop
+                           Emit ("stp xzr, xzr, [x10, #"
+                                 & Trimmed (Natural'Image (16 * Pair))
+                                 & "]");
+                        end loop;
+                        Stack_Used := True;
+                        Store_Value (Value, "x10");
+                     elsif M = Stack_Switch then
+                        --  D450/D447: the limit is checked here, against
+                        --  the leaving stack, so the trap is this call's
+                        --  own site; the switch itself is one call of the
+                        --  program's switch routine, with the address to
+                        --  save through in x9 and the stack pointer to
+                        --  resume in x10, which a linker's veneer leaves
+                        --  alone.  Every location question treats it as a
+                        --  call (Is_Switch).
+                        Load_Value (Operand (3), "x11");
+                        Emit ("mov x12, sp");
+                        Emit ("cmp x12, x11");
+                        Emit ("b.lo " & Trap (Landin.Panics.Stack_Exhausted));
+                        Load_Value (Operand (1), "x9");
+                        Load_Value (Operand (2), "x10");
+                        Emit ("bl " & Stack_Switcher);
+                        Stack_Used := True;
+                     elsif Landin.Memory.Operands (M) = 0 then
                         case M is
                            when Compiler_Barrier => null;
                            when Completion_Barrier => Emit ("dsb sy");
@@ -7875,6 +7956,137 @@ package body Landin.Backend.Arm64 is
                   end if;
                end;
             end loop;
+         end;
+      end if;
+      --  D450 and D447.  The switch routine is out of line, one per
+      --  program, so that its unwind information is exact at every
+      --  instruction rather than threaded through a caller's frame.  It is
+      --  called with the address to save through in x9 and the stack
+      --  pointer to resume in x10, after the caller has checked the limit.
+      --  It stores x29, x30, x19-x28 and d8-d15 on the leaving stack,
+      --  stores sp through x9, loads the resumed one and restores the same
+      --  registers before returning into the resumed context.  Both stacks
+      --  hold the same Stack_Frame bytes at the switch, so one CFA rule, sp
+      --  plus what remains stored, is right at every instruction: stopped
+      --  before the store, a debugger unwinds into the leaving fibre's
+      --  frames, and after the load into the resumed fibre's.  x29 is only
+      --  stored and restored, and x18 is never named.  Every caller-saved
+      --  register is left changed, as by a call.
+      --
+      --  The start routine is the return address of a prepared stack's
+      --  first frame: the restore leaves the entry in x19, its argument in
+      --  x20 and zero in x29, so the frame-pointer chain ends at the
+      --  entry's first frame, and its unwind information says the return
+      --  address is undefined, which ends a debugger's walk there.  A first
+      --  frame returns to the instruction after the routine's opening nop,
+      --  never run, because a debugger looks up a return address less one
+      --  and must find it inside this description; on Mach-O the nop also
+      --  keeps that address inside the routine's own atom.  An entry is
+      --  `-> noreturn`; if it returns anyway, that is D232's `unreachable`
+      --  at site zero, as a firmware entry's return is.
+      if Stack_Used then
+         declare
+            Pairs : constant array (1 .. 9) of String (1 .. 8) :=
+              ["x19, x20", "x21, x22", "x23, x24", "x25, x26", "x27, x28",
+               "d8, d9  ", "d10, d11", "d12, d13", "d14, d15"];
+            Names : constant array (1 .. 9, 1 .. 2) of String (1 .. 3) :=
+              [["w19", "w20"], ["w21", "w22"], ["w23", "w24"],
+               ["w25", "w26"], ["w27", "w28"], ["d8 ", "d9 "],
+               ["d10", "d11"], ["d12", "d13"], ["d14", "d15"]];
+            Frame_Text : constant String :=
+              Trimmed (Natural'Image (Stack_Frame));
+
+            function Image (Number : Integer) return String
+              is (Trimmed (Integer'Image (Number)));
+         begin
+            Emit (if Format = Landin.Targets.Capabilities.ELF
+                  then ".section .text.landin_stack,""ax"",@progbits"
+                  else ".text");
+            Emit (".p2align 2");
+            Platform_Directive
+              (Platform.Begin_Function (Format, Stack_Switcher));
+            Put (Stack_Switcher & ":");
+            if Debug /= null then
+               Emit (".cfi_startproc");
+            end if;
+            Emit ("stp x29, x30, [sp, #-" & Frame_Text & "]!");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset " & Frame_Text);
+               Emit (".cfi_offset w29, -" & Frame_Text);
+               Emit (".cfi_offset w30, -" & Image (Stack_Frame - 8));
+            end if;
+            for Index in Pairs'Range loop
+               Emit ("stp " & Trimmed (Pairs (Index)) & ", [sp, #"
+                     & Image (16 * Index) & "]");
+               if Debug /= null then
+                  for Half in 1 .. 2 loop
+                     Emit (".cfi_offset " & Trimmed (Names (Index, Half))
+                           & ", -" & Image
+                             (Stack_Frame - 16 * Index - 8 * (Half - 1)));
+                  end loop;
+               end if;
+            end loop;
+            Emit ("mov x11, sp");
+            Emit ("str x11, [x9]");
+            Emit ("mov sp, x10");
+            for Index in reverse Pairs'Range loop
+               Emit ("ldp " & Trimmed (Pairs (Index)) & ", [sp, #"
+                     & Image (16 * Index) & "]");
+               if Debug /= null then
+                  for Half in 1 .. 2 loop
+                     Emit (".cfi_restore " & Trimmed (Names (Index, Half)));
+                  end loop;
+               end if;
+            end loop;
+            Emit ("ldp x29, x30, [sp], #" & Frame_Text);
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 0");
+               Emit (".cfi_restore w29");
+               Emit (".cfi_restore w30");
+            end if;
+            Emit ("ret");
+            if Debug /= null then
+               Emit (".cfi_endproc");
+            end if;
+            Platform_Directive
+              (Platform.End_Function (Format, Stack_Switcher));
+
+            Emit (".p2align 2");
+            Platform_Directive
+              (Platform.Begin_Function (Format, Stack_Start));
+            Put (Stack_Start & ":");
+            if Debug /= null then
+               Emit (".cfi_startproc");
+               Emit (".cfi_undefined w30");
+            end if;
+            Emit ("nop");
+            Emit ("mov x0, x20");
+            Emit ("blr x19");
+            if Panic /= null and then Landin.Panics.Handler (Panic.all)
+              /= Landin.IR.No_Item
+            then
+               Immediate ("x0", Pattern (Landin.Panics.Code
+                 (Panic.all, Landin.Panics.Unreachable)));
+               Emit ("mov x1, #0");
+               Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+            elsif Panic /= null
+              and then Landin.Panics.Reports_Default (Panic.all)
+            then
+               declare
+                  Line : constant String := Landin.Panics.Report
+                    (Panic.all, Landin.Provenance.No_Origin,
+                     Landin.Panics.Unreachable);
+               begin
+                  Address ("x0", Report_Label (Reports.Index_Of (Line)));
+                  Immediate ("x1", Pattern (Line'Length));
+                  Emit ("bl " & Reporter);
+               end;
+            end if;
+            Emit ("brk #1");
+            if Debug /= null then
+               Emit (".cfi_endproc");
+            end if;
+            Platform_Directive (Platform.End_Function (Format, Stack_Start));
          end;
       end if;
       --  D361's writer: standard error is descriptor 2, and the line's
