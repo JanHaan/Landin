@@ -18685,6 +18685,75 @@ and LLDB alike. All were declined.
 pressure, and the switch's measurements and scripted debugger sessions on
 every target will pin it.
 
+### D450 — The stack switch is two compiler builtins
+
+**The tour said** at [1620] and [1630] that something is a builtin when the
+compiler has to know it, which made the atomics builtins and left masking
+interrupts to assembly. D444 puts the switch under `core/fibre` and D446 and
+D447 require of it a full compiler memory boundary, the target's
+callee-saved set, the frame-pointer chain, unwind information that ends a
+fibre's chain, a stack-limit check and, on Cortex-M, the process stack. The
+library has no assembly, a naked routine cannot be called from Landin, and
+an `assembler.block` sits inside a frame whose layout the compiler chooses, so
+a library `prepare` would have to guess that layout.
+
+**Chosen:** two `compiler` members, ordinary calls in source like the
+atomics, each evaluating its arguments once from left to right.
+
+- `compiler.stack_prepare(stack, entry, argument)` takes a `[]mut u8`, a
+  function value of type `(argument: usize) -> noreturn` and a `usize`, and
+  returns the `usize` stack pointer a later switch resumes. It aligns the top
+  of `stack` down to the target's call alignment and lays out a first frame
+  that, when resumed, calls `entry(argument)` with the frame-pointer chain
+  and unwind information ending there. A slice too small for that frame
+  traps `stack_exhausted` (D451).
+- `compiler.stack_switch(save, resume, limit)` takes a `ptr mut usize` and two
+  `usize`s. It traps `stack_exhausted` when the current stack pointer is
+  below `limit`; otherwise it saves the callee-saved registers and the frame
+  pointer on the current stack, stores the stack pointer through `save`, and
+  resumes the context `resume` names, returning there. It is a full compiler
+  memory boundary.
+
+On Cortex-M a prepared stack runs on the process stack pointer, and a
+switch between the reset stack and a prepared one changes CONTROL's stack
+selection; handlers keep the main stack (D447). The builtins name no
+library type: `core/fibre` builds its records, scheduler and group over
+them, and keeps the integer-made pointers that carry its state inside
+itself [0810]. Both are admitted on every target with a native backend;
+synthetic-32 admits neither.
+
+**The alternatives:** the switch in assembly inside `core/fibre`, which
+would admit assembly into `core` and guess a frame layout the compiler owns;
+naked routines made callable, which would give every naked routine an
+ordinary calling convention it does not have; and one builtin taking a
+library record, which would make the compiler know `core/fibre`'s types.
+All were declined.
+
+**Pinned by** nothing that runs yet: the switch's fixtures will pin it on
+every target, with a prepared stack resumed and returned from, a switch
+past its limit trapping, and the backtrace through a switch.
+
+### D451 — A stack past its limit is a fifth panic kind
+
+**The tour said** at [1670] that a failed check calls a handler with one of
+four kinds, and D232 made those four `core/panic`'s canonical domain. D447
+left open which kind a stack past its limit is.
+
+**Chosen:** `core/panic` gains `stack_exhausted`, and `panic_kind` is the
+union of five. D232's handler contract takes the five-atom domain; a handler
+written with `panic.panic_kind` accepts it unchanged, and one that matches the
+kind completely gains an arm. The hosted default handler reports it as it
+reports the others, and firmware keeps its bare instruction. Only the stack
+builtins (D450) raise it today.
+
+**The alternatives:** `out_of_range`, which is true of the pointer but tells a
+handler nothing it can act on and leaves the site number to tell the two
+apart; and a separate handler for stacks, which would be a second hook with
+its own contract. Both were declined.
+
+**Pinned by** nothing that runs yet: the switch's limit fixture and the
+handler contract's fixtures, updated to the five-atom domain, will pin it.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most

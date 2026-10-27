@@ -2509,7 +2509,7 @@ has no derivation yet, so it has no row in the prototype registers.
 
 ### R14.20 — Stackful fibres
 
-Status: planned
+Status: active
 Depends on: R14.10
 
 A stack switch on every target, specified with a register decision. The caller
@@ -2529,7 +2529,8 @@ the tour's [0780]; D446, cooperative switch points, a provider's fibres as
 one D227 context and a switch as a full compiler memory boundary; and D447,
 the stack-limit check at every switch, the stack-depth report, Cortex-M
 fibres on the process stack and the debugger's view. D448's single-core
-answer is the one this item specifies.
+answer is the one this item specifies. D450 makes the switch two compiler builtins and
+D451 adds `stack_exhausted` to `core/panic`'s kinds.
 
 Exit evidence: fibres switching on every target with debugger backtraces
 through a switch, and the single-core freestanding answer specified. On the
