@@ -2408,10 +2408,10 @@ runtime/slice-lower-after-upper-traps | linux-x86-64, linux-arm64, darwin-arm64,
 runtime/slice-place-in-value-arm | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/specialization-speed-growth | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/stack-arguments-cross-calls | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-runtime/stack-exhausted-reaches-the-handler | linux-x86-64, freebsd-x86-64, linux-rv64
-runtime/stack-prepare-too-small-traps | linux-x86-64, freebsd-x86-64, linux-rv64
-runtime/stack-switch-past-limit-traps | linux-x86-64, freebsd-x86-64, linux-rv64
-runtime/stack-switch-round-trip | linux-x86-64, freebsd-x86-64, linux-rv64
+runtime/stack-exhausted-reaches-the-handler | linux-x86-64, freebsd-x86-64, cortex-m0
+runtime/stack-prepare-too-small-traps | linux-x86-64, freebsd-x86-64
+runtime/stack-switch-past-limit-traps | linux-x86-64, freebsd-x86-64
+runtime/stack-switch-round-trip | linux-x86-64, freebsd-x86-64, cortex-m0
 runtime/standalone-try-discards-a-stored-result | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/statements-run-as-they-read | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/static-origin-satisfies-from | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

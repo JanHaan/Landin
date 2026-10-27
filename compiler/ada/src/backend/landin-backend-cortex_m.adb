@@ -1029,6 +1029,17 @@ package body Landin.Backend.Cortex_M is
       --  and consequently the order of generated flash/RAM veneers.
       Debug_Prefix : constant String := Unused_Local_Prefix (".Llandin_");
 
+      --  D450 and D460: a program that prepares or switches a stack
+      --  carries one switch routine and one start routine, emitted after
+      --  its bodies; the block that emits them says what each does.  A
+      --  context's saved frame is Stack_Frame bytes: the CONTROL word, r8
+      --  to r11, r4 to r7 and the address the switch returns to.
+      Stack_Used : Boolean := False;
+      Stack_Switcher : constant String :=
+        Local_Prefix & "landin_stack_switch";
+      Stack_Start : constant String := Local_Prefix & "landin_stack_start";
+      Stack_Frame : constant := 40;
+
       procedure Put (Line : String) is
       begin
          Unbounded.Append (Out_Text, Line & LF);
@@ -4219,14 +4230,65 @@ package body Landin.Backend.Cortex_M is
                           Facts);
                      Bytes : constant Positive := Landin.Targets.Bytes (Size);
                   begin
-                     --  D450: not emitted here yet.  The checker refuses
-                     --  the stack builtins on this target and the verifier
-                     --  an image carrying one, so this is a defect.
-                     if M in Landin.Memory.Stack_Operation then
-                        raise Landin.Compiler_Defect with
-                          "a stack builtin reached a backend that lacks it";
-                     end if;
-                     if Landin.Memory.Operands (M) = 0 then
+                     if M = Stack_Prepare then
+                        --  D450/D460: the operands are the stack's base
+                        --  and length, the entry and its argument.  The
+                        --  top is aligned down to eight and the first frame
+                        --  laid below it as the switch routine's pops read
+                        --  it: CONTROL with SPSEL set, so the stack runs on
+                        --  PSP; r8 to r11 zero, r11 ending the frame chain;
+                        --  r4 the argument, r5 the entry, r6 and r7 zero;
+                        --  then the start routine, past its nop, as the
+                        --  return address.  A slice too short for those
+                        --  40 bytes traps stack_exhausted (D451), inside
+                        --  unchecked too; the difference is signed, since
+                        --  aligning a short slice's top may take it below
+                        --  the base.
+                        Load_Value (Operand (1), "r0");
+                        Load_Value (Operand (2), "r1");
+                        Emit ("adds r1, r1, r0");
+                        Emit ("movs r2, #7");
+                        Emit ("bics r1, r2");
+                        Emit ("subs r1, r1, r0");
+                        Emit ("cmp r1, #" & Trimmed (Natural'Image
+                          (Stack_Frame)));
+                        Branch ("lt", Trap);
+                        Emit ("adds r0, r0, r1");
+                        Emit ("subs r0, #" & Trimmed (Natural'Image
+                          (Stack_Frame)));
+                        Load_Value (Operand (4), "r1");
+                        Emit ("str r1, [r0, #20]");
+                        Load_Value (Operand (3), "r1");
+                        Emit ("str r1, [r0, #24]");
+                        Emit ("movs r1, #0");
+                        for Offset in 1 .. 8 loop
+                           if Offset not in 5 .. 6 then
+                              Emit ("str r1, [r0, #"
+                                & Trimmed (Natural'Image (4 * Offset))
+                                & "]");
+                           end if;
+                        end loop;
+                        Emit ("movs r1, #2");
+                        Emit ("str r1, [r0]");
+                        Address ("r1", Stack_Start & " + 2");
+                        Emit ("str r1, [r0, #36]");
+                        Stack_Used := True;
+                        Store_Value (Value);
+                     elsif M = Stack_Switch then
+                        --  D450/D447: the limit is checked here, against
+                        --  the leaving stack, so the trap is this call's
+                        --  own site; the switch itself is one call of the
+                        --  program's switch routine, so the routine holding
+                        --  it is never call-free (Call_Free reads its bl).
+                        Load_Value (Operand (3), "r0");
+                        Emit ("mov r1, sp");
+                        Emit ("cmp r1, r0");
+                        Branch ("cc", Trap);
+                        Load_Value (Operand (1), "r0");
+                        Load_Value (Operand (2), "r1");
+                        Emit ("bl " & Stack_Switcher);
+                        Stack_Used := True;
+                     elsif Landin.Memory.Operands (M) = 0 then
                         case M is
                            when Compiler_Barrier => null;
                            when Completion_Barrier => Emit ("dsb sy");
@@ -5936,6 +5998,132 @@ package body Landin.Backend.Cortex_M is
             end if;
          end;
       end loop;
+      --  D450, D447 and D460.  The switch routine is out of line, one per
+      --  program, so that its unwind information is exact at every
+      --  instruction.  It is called with the address to save through in r0
+      --  and the stack pointer to resume in r1, after the caller checked
+      --  the limit.  It pushes r4 to r7 and lr, then r8 to r11 through r4
+      --  to r7 with CONTROL below them, so the saved frame records which
+      --  stack pointer the leaving context ran on; stores sp; reads the
+      --  resumed frame's CONTROL word, writes the resumed stack pointer
+      --  into MSP or PSP as that word's SPSEL says, then CONTROL and an
+      --  ISB, which makes it the current sp; and pops the same frame.
+      --  Both frames have the same 40-byte layout, so one CFA rule, sp
+      --  plus what remains pushed, holds at every instruction: until
+      --  CONTROL is written sp is still the leaving stack's, and after it
+      --  the resumed one's.  Between the pop of r8 to r11 into r4 to r7
+      --  and their moves back, the rule names the low register holding
+      --  each, since the popped words below sp are an interrupt's to
+      --  overwrite.  Every caller-saved register is left changed, as by a
+      --  call.  A switch in handler mode, or in unprivileged thread mode,
+      --  cannot write CONTROL and is outside D460's contract.
+      --
+      --  The start routine, past its first instruction, is the return
+      --  address of a prepared stack's first frame: the pops leave the
+      --  argument in r4, the entry in r5 and zero in r11, so the frame
+      --  chain ends at the entry's first frame, and its unwind information
+      --  says the return address is undefined, which ends a debugger's walk
+      --  there.  It opens with a nop the resumed frame returns past,
+      --  because a debugger looks up a return address less one, which then
+      --  still names this routine.  An entry is `-> noreturn`; if it
+      --  returns anyway, that is D232's `unreachable` at site zero, as a
+      --  firmware entry's return is.
+      if Stack_Used then
+         Put (Character'Val (9)
+              & ".section .text.landin_stack,""ax"",%progbits");
+         Emit (".balign 2");
+         Emit (".type " & Stack_Switcher & ", %function");
+         Emit (".thumb_func");
+         Put (Stack_Switcher & ":");
+         if Debug /= null then
+            Emit (".cfi_startproc simple");
+            Emit (".cfi_return_column lr");
+            Emit (".cfi_def_cfa sp, 0");
+         end if;
+         Emit ("push {r4, r5, r6, r7, lr}");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 20");
+            for Reg in 4 .. 7 loop
+               Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
+                 & Trimmed (Integer'Image ((9 - Reg) * 4)));
+            end loop;
+            Emit (".cfi_offset lr, -4");
+         end if;
+         Emit ("mov r4, r8");
+         Emit ("mov r5, r9");
+         Emit ("mov r6, r10");
+         Emit ("mov r7, r11");
+         Emit ("mrs r3, control");
+         Emit ("push {r3, r4, r5, r6, r7}");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 40");
+            for Reg in 8 .. 11 loop
+               Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
+                 & Trimmed (Integer'Image ((17 - Reg) * 4)));
+            end loop;
+         end if;
+         Emit ("mov r2, sp");
+         Emit ("str r2, [r0]");
+         Emit ("ldr r3, [r1]");
+         Emit ("movs r2, #2");
+         Emit ("tst r3, r2");
+         Emit ("bne 1f");
+         Emit ("msr msp, r1");
+         Emit ("b 2f");
+         Put ("1:");
+         Emit ("msr psp, r1");
+         Put ("2:");
+         Emit ("msr control, r3");
+         Emit ("isb sy");
+         Emit ("pop {r3, r4, r5, r6, r7}");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 20");
+            for Reg in 8 .. 11 loop
+               Emit (".cfi_register r" & Trimmed (Reg'Image) & ", r"
+                 & Trimmed (Integer'Image (Reg - 4)));
+            end loop;
+         end if;
+         for Reg in 8 .. 11 loop
+            Emit ("mov r" & Trimmed (Reg'Image) & ", r"
+              & Trimmed (Integer'Image (Reg - 4)));
+            if Debug /= null then
+               Emit (".cfi_restore r" & Trimmed (Reg'Image));
+            end if;
+         end loop;
+         Emit ("pop {r4, r5, r6, r7, pc}");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
+         Emit (".size " & Stack_Switcher & ", . - " & Stack_Switcher);
+
+         Emit (".balign 2");
+         Emit (".type " & Stack_Start & ", %function");
+         if Debug /= null then
+            Emit (".cfi_startproc simple");
+            Emit (".cfi_return_column lr");
+            Emit (".cfi_def_cfa sp, 0");
+            Emit (".cfi_undefined lr");
+         end if;
+         Emit (".thumb_func");
+         Put (Stack_Start & ":");
+         Emit ("nop");
+         Emit ("mov r0, r4");
+         Emit ("blx r5");
+         if Panic /= null and then Landin.Panics.Handler (Panic.all)
+           /= Landin.IR.No_Item
+         then
+            Emit ("ldr r0, =" & Trimmed (Positive'Image
+              (Landin.Panics.Code (Panic.all, Landin.Panics.Unreachable))));
+            Emit ("movs r1, #0");
+            Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+         end if;
+         Emit ("udf #1");
+         Emit (".ltorg");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
+         Emit (".size " & Stack_Start & ", . - " & Stack_Start);
+      end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);

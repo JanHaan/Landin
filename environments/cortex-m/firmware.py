@@ -222,6 +222,109 @@ def interrupts(run, elf):
     ], 'R660_INTERRUPT_PASS')
 
 
+def fibre(run, refine, optimize, specialize):
+    """D447/D460: an interrupt taken while a prepared stack runs.
+
+    The fibre runs on PSP.  Exception entry stacks the interrupted
+    context's eight words on PSP, the fibre's own stack, and the handler
+    then runs on MSP: at its first instruction MSP is exactly what start
+    left when it switched away, so nothing of the exception reached the
+    main stack, and its own frames and a nested call go below that, while
+    the fibre's backing below the hardware frame stays painted.  The
+    return resumes the fibre on PSP with every stacked register, and the
+    fibre switches back to start on MSP.  The same program built with
+    line information is then stepped through both switches, an instruction
+    at a time: GDB's walk names the leaving context's frames until CONTROL
+    selects the resumed stack, and the resumed one's after it, and a
+    prepared stack's walk ends at its start routine.
+    """
+    program = (Path(__file__).parent / 'probes/firmware-fibre.ldn').read_text()
+    elf = build(run, refine, program, optimize, specialize)
+    execute(run, elf, [
+        'break *start', 'continue', 'delete breakpoints', 'python',
+        'base = v("&backing")',
+        'gdb.selected_inferior().write_memory(base, bytes([0xa5])*1024)',
+        'gdb.selected_inferior().write_memory(0x20003000, bytes([0xa5])*(v("$sp")-0x20003000))',
+        'assert v("$control") & 2 == 0 and v("$sp") == v("$msp") == 0x20004000',
+        'end',
+        'break *irq_handler', 'continue', 'delete breakpoints', 'python',
+        'assert v("$lr") == 0xfffffffd, "the exception did not interrupt a PSP thread"',
+        'assert v("$xpsr") & 511 == 16',
+        'saved = v("*(unsigned*)&main_saved")',
+        'psp = v("$psp")',
+        'assert v("$msp") == v("$sp") == saved, "the exception wrote to the main stack"',
+        'assert base <= psp and psp + 32 <= base + 1024 and psp % 8 == 0',
+        'frame = [v("*(unsigned*)(%d)" % (psp + 4*i)) for i in range(8)]',
+        'assert frame[7] & 511 == 0, "the stacked context was not thread mode"',
+        'assert gdb.execute("info symbol %d" % frame[6], to_string=True).startswith("fibre")',
+        'resume = psp + 32 + (4 if frame[7] & 0x200 else 0)',
+        'paint = bytes([0xa5])*(psp-base)',
+        'assert bytes(gdb.selected_inferior().read_memory(base, psp-base)) == paint',
+        'end',
+        'break *deeper', 'continue', 'delete breakpoints', 'python',
+        'assert v("$xpsr") & 511 == 16',
+        'assert v("$sp") < saved and v("$sp") >= 0x20003000, "a handler frame left the main stack"',
+        'assert v("$psp") == psp',
+        'assert bytes(gdb.selected_inferior().read_memory(base, psp-base)) == paint, '
+        '"a handler frame reached the fibre stack"',
+        'gdb.execute("break *%d" % frame[6])', 'end',
+        'continue', 'delete breakpoints', 'python',
+        'assert v("$xpsr") & 511 == 0 and v("$control") & 2 == 2',
+        'assert v("$sp") == v("$psp") == resume',
+        'assert [v("$r%d" % i) for i in (0,1,2,3,12)] == frame[:5]',
+        'assert v("$lr") == frame[5]',
+        'assert v("*(unsigned*)&handled") == 11',
+        'end', 'break _landin_firmware_returned', 'continue', 'python',
+        'assert v("*(unsigned*)&finished") == 1111',
+        'assert v("*(unsigned*)&observed") == 111',
+        'assert v("$control") & 2 == 0',
+        'assert v("$sp") == v("$msp") == 0x20004000 and v("$r11") == 0',
+        'stack = bytes(gdb.selected_inferior().read_memory(0x20003000, 4096))',
+        'fibre_stack = bytes(gdb.selected_inferior().read_memory(base, 1024))',
+        'main_first = next(i for i, b in enumerate(stack) if b != 0xa5)',
+        'fibre_first = next(i for i, b in enumerate(fibre_stack) if b != 0xa5)',
+        'assert 0x20003000 + main_first < saved',
+        'print("R1420_OBSERVED_STACK_BYTES main %d fibre %d" % (4096-main_first, 1024-fibre_first))',
+        'print("R1420_FIBRE_INTERRUPT_PASS")', 'end',
+    ], 'R1420_FIBRE_INTERRUPT_PASS')
+    unwind = run.out / 'unwind'
+    unwind.mkdir()
+    run = Run(unwind, run.tools)
+    elf = build(run, refine, program, optimize, specialize, debug='lines')
+    execute(run, elf, [
+        'python',
+        'def names():',
+        '    f, found = gdb.newest_frame(), []',
+        '    while f is not None and len(found) < 8:',
+        '        found.append(f.name() or hex(f.pc())); f = f.older()',
+        '    return found',
+        'switch = v("&Llandin_stack_switch")',
+        'gdb.execute("break *%d" % switch)',
+        'def across(before, after):',
+        '    gdb.execute("continue")',
+        '    phases = set()',
+        '    for step in range(40):',
+        '        found = names()',
+        '        if found[0] != "Llandin_stack_switch": break',
+        '        above = after if v("$control") & 2 == want else before',
+        '        assert found[1:] == above, (hex(v("$pc")), found, above)',
+        '        phases.add(above is after)',
+        '        gdb.execute("stepi", to_string=True)',
+        '    assert phases == {False, True}, phases',
+        '    return names()',
+        'want = 2',
+        'assert across(["start", "_landin_firmware_reset"], ["Llandin_stack_start"]) == ["Llandin_stack_start"]',
+        'gdb.execute("delete breakpoints")',
+        'gdb.execute("break *%d" % v("&fibre"))', 'gdb.execute("continue")',
+        'assert names() == ["fibre", "Llandin_stack_start"], names()',
+        'gdb.execute("delete breakpoints")',
+        'gdb.execute("break *%d" % switch)',
+        'want = 0',
+        'assert across(["fibre", "Llandin_stack_start"], ["start", "_landin_firmware_reset"]) == ["start", "_landin_firmware_reset"]',
+        'print("R1420_FIBRE_UNWIND_PASS")', 'end',
+    ], 'R1420_FIBRE_UNWIND_PASS')
+
+
 def dma(run, refine, optimize="none", specialize="off"):
     here = Path(__file__).resolve().parent
     source = here / 'probes/firmware-dma.ldn'
@@ -519,7 +622,7 @@ def execute_suite(parent, refine, profiles=PROFILES):
             require((images[0] / ('firmware.elf' + suffix)).read_bytes() ==
                     (images[1] / ('firmware.elf' + suffix)).read_bytes(),
                     'fresh firmware artifact differs: ' + suffix)
-        for kind in ('interrupts', 'dma', 'machine', 'veneers', 'fallthrough', 'images', 'hole', 'byte'):
+        for kind in ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images', 'hole', 'byte'):
             out = profile / kind
             out.mkdir()
             run = Run(out, parent.tools)
@@ -534,6 +637,8 @@ def execute_suite(parent, refine, profiles=PROFILES):
                     require({'retained','svc_handler','irq_handler'} <= present,
                             'retained/vector-referenced sections disappeared')
                     interrupts(run, elf)
+                elif kind == 'fibre':
+                    fibre(run, refine, optimize, specialize)
                 elif kind == 'dma':
                     dma(run, refine, optimize, specialize)
                 elif kind == 'machine':
