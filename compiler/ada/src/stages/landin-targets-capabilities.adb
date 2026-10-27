@@ -23,12 +23,13 @@ package body Landin.Targets.Capabilities is
       end case;
    end Memory_Access;
 
-   --  Linux and FreeBSD x86-64 share the backend that emits both.  The
-   --  arm64, RV64 and Cortex-M0 backends are enabled here as each lands.
+   --  Linux and FreeBSD x86-64 share the backend that emits both, and
+   --  Linux RV64's emits them too.  The arm64 and Cortex-M0 backends are
+   --  enabled here as each lands.
    function Stack_Switching (Facts : Target_Facts) return Boolean is
      (case Backend_For (Facts) is
-         when X86_64_ELF => True,
-         when Darwin_Arm64_Mach_O | Arm64_ELF | RV64_ELF | Cortex_M0_ELF
+         when X86_64_ELF | RV64_ELF => True,
+         when Darwin_Arm64_Mach_O | Arm64_ELF | Cortex_M0_ELF
             | No_Backend => False);
 
 

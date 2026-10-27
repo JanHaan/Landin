@@ -5,4 +5,4 @@ root: ../../../../..
 profiles: specialization
 status: 42
 constructs: 0890, 1620, 1670
-targets: linux-x86-64, freebsd-x86-64
+targets: linux-x86-64, freebsd-x86-64, linux-rv64
