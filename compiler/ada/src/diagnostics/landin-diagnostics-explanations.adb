@@ -813,11 +813,16 @@ package body Landin.Diagnostics.Explanations is
                & "end every path in a call that does not return.",
             when Catalogue.Memory_Contract =>
                "A memory intrinsic is used outside its explicit contract"
-               & " [1620] (D227). Each operation takes the operand types, "
-               & "permissions and memory orderings its contract lists, the"
-               & " target must support it, and an intrinsic cannot fail. U"
-               & "se an ordering and operand the operation admits on this "
-               & "target.",
+               & " [1620] (D227), or a stack builtin outside its own (D450"
+               & ", D453). Each operation takes the operand types, permiss"
+               & "ions and memory orderings its contract lists, the target"
+               & " must support it, and an intrinsic cannot fail. `compile"
+               & "r.stack_prepare` takes a `[]mut u8`, an ordinary `(argum"
+               & "ent: usize) -> noreturn` entry and a `usize`; `compiler."
+               & "stack_switch` takes a `ptr mut usize` and two `usize`s; "
+               & "a target whose backend does not emit them yet refuses bo"
+               & "th by name. Use an ordering and operand the operation ad"
+               & "mits on this target.",
             when Catalogue.Machine_Entry_Contract =>
                "An interrupt or naked routine is used outside its machin"
                & "e-entry contract [1570]. The machine convention is Corte"

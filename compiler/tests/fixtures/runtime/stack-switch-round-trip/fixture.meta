@@ -1,0 +1,10 @@
+class: runtime
+summary: D450 a prepared stack is entered, left, re-entered and left again, in order, with module state written on each stack read on the other across every switch and a local kept across both
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 1620
+targets: linux-x86-64, freebsd-x86-64

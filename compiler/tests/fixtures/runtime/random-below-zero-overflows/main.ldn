@@ -13,6 +13,7 @@ public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
         panic.out_of_range: 2
         panic.bad_conversion: 3
         panic.unreachable: 4
+        panic.stack_exhausted: 5
     end match)
 end panic_handler
 

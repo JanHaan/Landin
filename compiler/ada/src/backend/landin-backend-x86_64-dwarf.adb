@@ -145,8 +145,10 @@ package body Landin.Backend.X86_64.Dwarf is
       function Writes (Value : Value_Id) return Boolean is
         (Op_Of (Of_Unit, Item, Value) = Assembly
          or else (Place.Kind = Allocation.SSE
-                  and then Op_Of (Of_Unit, Item, Value)
-                    in Call | Indirect_Call)
+                  and then (Op_Of (Of_Unit, Item, Value)
+                              in Call | Indirect_Call
+                            or else Allocation.Is_Switch
+                              (Of_Unit, Item, Value)))
          or else (Place.Kind = Allocation.GP
                   and then Place.Register in Allocation.Caller_Saved
                   and then Allocation.Touches

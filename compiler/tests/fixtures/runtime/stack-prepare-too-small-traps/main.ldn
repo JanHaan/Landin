@@ -1,0 +1,18 @@
+--  D450/D451: a slice too small to hold a first frame cannot be prepared,
+--  and the prepare traps `stack_exhausted` rather than writing below it,
+--  inside `unchecked` as outside it: the size is the builtin's contract,
+--  not a check an unchecked region removes.
+mut tiny: [24]u8 = zeroed
+
+entry: (argument: usize) -> noreturn =
+    _ = argument
+    compiler.unreachable()
+end entry
+
+public main: () -> (code: i32) =
+    mut resume: usize = 0
+    unchecked begin
+        resume = compiler.stack_prepare(tiny[0..<24], entry, 0)
+    end unchecked
+    code = i32(resume & 1) + 99
+end main

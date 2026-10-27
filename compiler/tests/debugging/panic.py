@@ -98,7 +98,7 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
     offset = text.index('high += value')
     operation_line = text[:offset].count('\n')+1
     handler_line = text[:text.index('observed_site = site')].count('\n')+1
-    site = 4*offset+2
+    site = 5*offset+2
     retained = output / 'sources'
     retained.mkdir()
     shutil.copyfile(SOURCE, retained / 'main.ldn')

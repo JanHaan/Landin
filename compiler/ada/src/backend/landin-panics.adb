@@ -2,6 +2,7 @@ with Ada.Strings.Fixed;
 with Landin.Backend;
 with Landin.Checking;
 with Landin.Machine;
+with Landin.Memory;
 with Landin.Modules;
 with Landin.Resolution;
 with Landin.Source.Names;
@@ -14,6 +15,7 @@ package body Landin.Panics is
    package R renames Landin.Resolution;
    use type IR.Item_Id;
    use type IR.Item_Kind;
+   use type IR.Opcode;
    use type IR.Declaration_Id;
    use type IR.Atom_Set_Id;
    use type IR.Signature_Id;
@@ -32,6 +34,11 @@ package body Landin.Panics is
 
    use type Landin.Targets.Capabilities.Hosted_System;
 
+   --  D232 reserves one site number per kind at each source byte, in the
+   --  kinds' order; D452 made that five when D451 added the fifth.
+   Kind_Count : constant Positive := Kind'Pos (Kind'Last) + 1;
+   Families : constant Site_Number := Site_Number (Kind_Count);
+
    function Handler (Of_Plan : Plan) return IR.Item_Id is (Of_Plan.Selected);
 
    function Reports_Default (Of_Plan : Plan) return Boolean
@@ -45,7 +52,8 @@ package body Landin.Panics is
          when Out_Of_Range => "out_of_range",
          when Overflow => "overflow",
          when Bad_Conversion => "bad_conversion",
-         when Unreachable => "unreachable");
+         when Unreachable => "unreachable",
+         when Stack_Exhausted => "stack_exhausted");
 
    function Report
      (Of_Plan : Plan; Origin : Landin.Provenance.Origin;
@@ -92,6 +100,12 @@ package body Landin.Panics is
    begin
       if IR.Checks_Representation (Of_Unit, Item, Value) then
          return Bad_Conversion;
+      elsif IR.Op_Of (Of_Unit, Item, Value) = IR.Memory_Access
+        and then IR.Memory_Operation (Of_Unit, Item, Value)
+          in Landin.Memory.Stack_Operation
+      then
+         --  D451: the stack builtins' only check.
+         return Stack_Exhausted;
       end if;
       case IR.Op_Of (Of_Unit, Item, Value) is
          when IR.Negation | IR.Add | IR.Subtract | IR.Multiply |
@@ -136,7 +150,7 @@ package body Landin.Panics is
       then
          raise Compiler_Defect with "panic site is outside its source";
       end if;
-      return First + 4 * Site_Number (Origin.Where.First)
+      return First + Families * Site_Number (Origin.Where.First)
         + Site_Number (Kind'Pos (Reason));
    end Site;
 
@@ -153,6 +167,7 @@ package body Landin.Panics is
         Landin.Stages.Identities (Context).all;
       Next : Site_Number := 1;
       Selected : IR.Declaration_Id := IR.No_Declaration;
+      Wrong_Domain : Boolean := False;
       Atoms : array (Kind) of IR.Declaration_Id :=
         [others => IR.No_Declaration];
       Core : constant Landin.Modules.Module_Id :=
@@ -231,20 +246,22 @@ package body Landin.Panics is
                   if Part.Atoms /= IR.No_Atom_Set then
                      return False;
                   end if;
-               elsif Part.Atoms = IR.No_Atom_Set
-                 or else IR.Atom_Count (Unit, Part.Atoms) /= 4
-               then
+               elsif Part.Atoms = IR.No_Atom_Set then
+                  return False;
+               elsif IR.Atom_Count (Unit, Part.Atoms) /= Kind_Count then
+                  Wrong_Domain := True;
                   return False;
                else
                   for Reason in Kind loop
                      declare
                         Found : Boolean := False;
                      begin
-                        for Position in 1 .. 4 loop
+                        for Position in 1 .. Kind_Count loop
                            Found := Found or else IR.Nth_Atom
                              (Unit, Part.Atoms, Position) = Atoms (Reason);
                         end loop;
                         if not Found then
+                           Wrong_Domain := True;
                            return False;
                         end if;
                      end;
@@ -289,7 +306,8 @@ package body Landin.Panics is
               (Landin.Stages.Source (Context, Id));
             Held : Source_Range;
          begin
-            if Site_Number (Length) >= (Site_Number'Last - Next) / 4 then
+            if Site_Number (Length) >= (Site_Number'Last - Next) / Families
+            then
                Problem := US.To_Unbounded_String
                  ("source snapshots exceed the u32 panic-site space");
                return;
@@ -297,7 +315,7 @@ package body Landin.Panics is
             Held.First := Next;
             Held.Length := Length;
             Into.Sources.Append (Held);
-            Next := Next + 4 * (Site_Number (Length) + 1);
+            Next := Next + Families * (Site_Number (Length) + 1);
          end;
       end loop;
       for Index in 1 .. R.Declaration_Count (Meanings) loop
@@ -351,7 +369,12 @@ package body Landin.Panics is
       if not Valid then
          Problem := US.To_Unbounded_String
            ("panic_handler must be public, ordinary, non-generic and "
-            & "infallible: (core/panic.panic_kind, u32) -> noreturn");
+            & "infallible: (core/panic.panic_kind, u32) -> noreturn"
+            & (if Wrong_Domain
+               then "; its kind is not core/panic.panic_kind, whose atoms"
+                    & " are out_of_range, overflow, bad_conversion,"
+                    & " unreachable and stack_exhausted (D451)"
+               else ""));
          return;
       end if;
       --  The ordinary atom ABI is dense declaration order, excluding zero;

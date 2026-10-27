@@ -18,22 +18,23 @@ def resolve(table, file_id):
 
 
 def panic_position(table, site):
-    """Decode the four check-family slots at each canonical source byte."""
+    """Decode the five check-family slots at each canonical source byte."""
     if not 0 < site < 2**32:
         raise ValueError("panic site must be a nonzero u32; zero is a synthetic guard")
     entries = [entry for entry in table["files"]
                if "panic_base" in entry and entry["panic_base"] <= site
-               < entry["panic_base"] + 4 * (entry["byte_length"] + 1)]
+               < entry["panic_base"] + 5 * (entry["byte_length"] + 1)]
     if len(entries) != 1:
         raise ValueError("panic site has no unique entry in this table")
     entry = entries[0]
-    offset, kind = divmod(site - entry["panic_base"], 4)
+    offset, kind = divmod(site - entry["panic_base"], 5)
     lines = entry["line_offsets"]
     if not lines or lines[0] != 0 or any(a >= b for a, b in zip(lines, lines[1:])):
         raise ValueError("invalid panic line map")
     line = bisect.bisect_right(lines, offset)
     column = offset - lines[line - 1] + 1
-    reason = ("out_of_range", "overflow", "bad_conversion", "unreachable")[kind]
+    reason = ("out_of_range", "overflow", "bad_conversion", "unreachable",
+              "stack_exhausted")[kind]
     return entry["file_id"], line, column, reason
 
 

@@ -2822,6 +2822,34 @@
     "runtime/stack-arguments-cross-calls": {
       "mode": "execute"
     },
+    "runtime/stack-exhausted-reaches-the-handler": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations; its handler ends the process through posix.exit."
+    },
+    "runtime/stack-prepare-too-small-traps": {
+      "codes": [
+        "L0344"
+      ],
+      "mode": "refuse",
+      "reason": "D450: the Cortex-M0 backend does not emit the stack builtins yet, so the checker refuses compiler.stack_prepare there until it does."
+    },
+    "runtime/stack-switch-past-limit-traps": {
+      "codes": [
+        "L0344"
+      ],
+      "mode": "refuse",
+      "reason": "D450: the Cortex-M0 backend does not emit the stack builtins yet, so the checker refuses compiler.stack_switch there until it does."
+    },
+    "runtime/stack-switch-round-trip": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations; the Cortex-M0 backend does not emit the stack builtins yet (D450), and the switch fixtures that import nothing are refused for that."
+    },
     "runtime/standalone-try-discards-a-stored-result": {
       "mode": "execute"
     },

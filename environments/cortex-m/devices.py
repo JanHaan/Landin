@@ -271,7 +271,7 @@ def refusal(run, elf, name):
         offset += len(data)+1
     else:
         raise RuntimeError('missing panic oracle input')
-    site = offset*4+3
+    site = offset*5+3
     text = run.command('refusal-symbols', [run.bin / 'arm-none-eabi-nm', elf])
     symbols = {s[2]: int(s[0], 16) for line in text.splitlines() if len(s := line.split()) == 3}
     trace = {'hole':'r32:4:00000008','reserved':'r32:4:00000800','alignment':''}[name]

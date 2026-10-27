@@ -19,6 +19,13 @@ package Landin.Targets.Capabilities is
      (Facts : Target_Facts; Op : Landin.Memory.Operation;
       Width : Scalar_Size) return Boolean;
 
+   --  D450: whether the target's backend emits compiler.stack_prepare and
+   --  compiler.stack_switch.  D450 admits both on every target with a
+   --  native backend and neither on synthetic-32; each backend is enabled
+   --  here once it emits them, and until then the checker refuses the two
+   --  builtins on its targets as not yet emitted there.
+   function Stack_Switching (Facts : Target_Facts) return Boolean;
+
    --  An ABI identity describes the intended boundary. Each implemented
    --  capability must be enabled explicitly; equal LP64 widths prove none.
    function C_Signatures (Facts : Target_Facts) return Boolean;

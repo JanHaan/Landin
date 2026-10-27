@@ -1,0 +1,8 @@
+class: runtime
+summary: D450/D451 a stack too small for its first frame traps stack_exhausted at the prepare, inside unchecked too, and the hosted default handler reports it
+program: main.ldn
+profiles: specialization
+traps: yes
+trap_report: main.ldn:15:18: trap: stack_exhausted
+constructs: 1620, 1670
+targets: linux-x86-64, freebsd-x86-64

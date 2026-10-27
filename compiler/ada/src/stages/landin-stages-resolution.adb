@@ -1118,7 +1118,7 @@ package body Landin.Stages.Resolution is
          begin
             if Op /= Landin.Memory.No_Operation then
                for I in 1 .. Natural'Min
-                 (Landin.Memory.Operands (Op),
+                 (Landin.Memory.Source_Arguments (Op),
                   Syn.Argument_Count (Of_Tree, Node))
                loop
                   Resolve

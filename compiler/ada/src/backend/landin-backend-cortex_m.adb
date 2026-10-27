@@ -4219,6 +4219,13 @@ package body Landin.Backend.Cortex_M is
                           Facts);
                      Bytes : constant Positive := Landin.Targets.Bytes (Size);
                   begin
+                     --  D450: not emitted here yet.  The checker refuses
+                     --  the stack builtins on this target and the verifier
+                     --  an image carrying one, so this is a defect.
+                     if M in Landin.Memory.Stack_Operation then
+                        raise Landin.Compiler_Defect with
+                          "a stack builtin reached a backend that lacks it";
+                     end if;
                      if Landin.Memory.Operands (M) = 0 then
                         case M is
                            when Compiler_Barrier => null;

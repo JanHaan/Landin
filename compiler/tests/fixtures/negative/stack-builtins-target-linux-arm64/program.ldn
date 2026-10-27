@@ -1,0 +1,14 @@
+--  D450: both stack builtins need a backend that emits them.
+mut saved: usize = 0
+mut stack: [256]u8 = zeroed
+
+entry: (argument: usize) -> noreturn =
+    _ = argument
+    compiler.unreachable()
+end entry
+
+public main: () -> (code: i32) =
+    resume := compiler.stack_prepare(stack[0..<256], entry, 0)
+    compiler.stack_switch(addr saved, resume, 0)
+    code = 0
+end main

@@ -20,6 +20,22 @@
     "abi/r440-sret-pointer-observation": {
       "reason": "SysV returns the hidden destination in rax; AAPCS64 passes it in x8 with no returned-pointer obligation. Indirect results in both call directions are held by abi/r440-native-aggregates, which runs on linux-arm64.",
       "counterpart": "abi/r440-native-aggregates"
+    },
+    "runtime/stack-switch-round-trip": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
+    },
+    "runtime/stack-switch-past-limit-traps": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
+    },
+    "runtime/stack-prepare-too-small-traps": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
+    },
+    "runtime/stack-exhausted-reaches-the-handler": {
+      "reason": "D450: the arm64 backend does not emit the stack builtins yet; the checker refuses them on linux-arm64 until it does, which the counterpart pins. The record goes when the arm64 switch lands and the fixture names linux-arm64.",
+      "counterpart": "negative/stack-builtins-target-linux-arm64"
     }
   }
 }

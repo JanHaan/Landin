@@ -5777,6 +5777,71 @@ package body Landin.Stages.Lowering is
             Success : Landin.Memory.Ordering := Landin.Memory.No_Ordering;
             Failure : Landin.Memory.Ordering := Landin.Memory.No_Ordering;
          begin
+            --  D450: the stack builtins evaluate their arguments once,
+            --  left to right, as the atomics do.  Prepare's slice becomes
+            --  its base and its length, so the instruction carries only
+            --  usize operands; each is spilled before the next argument is
+            --  evaluated, since a later one may introduce blocks.
+            if Op in Landin.Memory.Stack_Operation then
+               declare
+                  Values : IR.Value_Id_Array (1 .. Count);
+                  Cells : array (1 .. Count) of IR.Slot_Id;
+                  Filled : Natural := 0;
+                  procedure Keep (Value : IR.Value_Id);
+                  procedure Keep (Value : IR.Value_Id) is
+                  begin
+                     Filled := Filled + 1;
+                     --  The entry keeps its signature in its cell, as
+                     --  every slot holding a function value does.
+                     Cells (Filled) := IR.Add_Slot
+                       (Unit.all, Filling, Ty.Usize, Res.No_Declaration,
+                        Site,
+                        Signature => IR.Signature_Of
+                          (Unit.all, Filling, Value));
+                     IR.Emit_Store
+                       (Unit.all, Filling, Cells (Filled), Value, Site);
+                  end Keep;
+               begin
+                  for I in 1 .. Landin.Memory.Source_Arguments (Op) loop
+                     declare
+                        Arg : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Of_Tree, Node, I);
+                     begin
+                        if I = 1 and then Op = Landin.Memory.Stack_Prepare
+                        then
+                           declare
+                              Stack : constant Slice_Values :=
+                                Lower_Slice (Of_Tree, Arg, Scope);
+                           begin
+                              if Current = IR.No_Block then
+                                 return IR.No_Value;
+                              end if;
+                              Keep (Stack.Base);
+                              Keep (Stack.Length);
+                           end;
+                        else
+                           declare
+                              Value : constant IR.Value_Id :=
+                                Lower_Expression (Of_Tree, Arg, Scope);
+                           begin
+                              if Current = IR.No_Block then
+                                 return IR.No_Value;
+                              end if;
+                              Keep (Value);
+                           end;
+                        end if;
+                     end;
+                  end loop;
+                  for I in Values'Range loop
+                     Values (I) := IR.Emit_Load
+                       (Unit.all, Filling, Cells (I), Site);
+                  end loop;
+                  return IR.Emit_Memory
+                    (Unit.all, Filling, Op, Ty.Usize,
+                     Landin.Memory.No_Ordering, Landin.Memory.No_Ordering,
+                     Values, Site);
+               end;
+            end if;
             if Op /= Landin.Memory.No_Operation then
                --  Spill each evaluated argument before evaluating the next:
                --  a later expression may introduce control-flow blocks.

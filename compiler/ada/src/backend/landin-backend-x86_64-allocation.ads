@@ -89,6 +89,15 @@ package Landin.Backend.X86_64.Allocation is
       Value : Landin.IR.Value_Id;
       Facts : Landin.Targets.Target_Facts) return String;
 
+   --  D450: whether Value is compiler.stack_switch.  Selection emits it
+   --  as a call of the program's switch routine, which resumes another
+   --  stack and returns with only the callee-saved registers kept, so it
+   --  is a call to every location question, XMM registers included.
+   function Is_Switch
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Value : Landin.IR.Value_Id) return Boolean;
+
    --  Whether selection writes Register in emitting Value other than as
    --  Value's own location.  Calls, copies, clears and fills, selecting a
    --  variant, assembly and a leave copying an aggregate result or

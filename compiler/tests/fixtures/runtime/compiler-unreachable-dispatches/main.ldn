@@ -5,9 +5,9 @@
 -- and a spin never satisfies `traps: yes`.
 import core/panic
 
--- The call's site in this file: one, plus four times the byte offset of
+-- The call's site in this file: one, plus five times the byte offset of
 -- `compiler.unreachable()` below, plus the unreachable family's three.
-expected_site: u32 = 3356
+expected_site: u32 = 4194
 
 public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
     if kind == panic.unreachable and site == expected_site then

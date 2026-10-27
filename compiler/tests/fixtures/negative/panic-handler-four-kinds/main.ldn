@@ -1,0 +1,16 @@
+--  D451: the handler contract takes core/panic's five-atom domain, so a
+--  handler written against the former four kinds is no longer the hook.
+import core/panic
+
+public panic_handler: (kind: panic.out_of_range | panic.overflow
+                             | panic.bad_conversion | panic.unreachable,
+                       site: u32) -> noreturn =
+    _ = kind
+    _ = site
+    loop do
+    end loop
+end panic_handler
+
+public main: () -> (code: i32) =
+    code = 0
+end main

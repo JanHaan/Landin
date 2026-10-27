@@ -4842,8 +4842,9 @@ package body Landin.Tests.Driver_Suite is
       Core : constant String :=
         "public out_of_range: atom public overflow: atom "
         & "public bad_conversion: atom public unreachable: atom "
+        & "public stack_exhausted: atom "
         & "public panic_kind: type = out_of_range | overflow | "
-        & "bad_conversion | unreachable" & LF;
+        & "bad_conversion | unreachable | stack_exhausted" & LF;
 
       procedure Check (Target, Handler : String; Good : Boolean);
       procedure Check (Target, Handler : String; Good : Boolean) is
@@ -4953,8 +4954,9 @@ package body Landin.Tests.Driver_Suite is
       Core : constant String :=
         "public out_of_range: atom public overflow: atom "
         & "public bad_conversion: atom public unreachable: atom "
+        & "public stack_exhausted: atom "
         & "public panic_kind: type = out_of_range | overflow | "
-        & "bad_conversion | unreachable" & LF;
+        & "bad_conversion | unreachable | stack_exhausted" & LF;
       Handler : constant String :=
         "import core/panic" & LF
         & "public panic_handler: (kind: panic.panic_kind, site: u32)"
@@ -4975,7 +4977,7 @@ package body Landin.Tests.Driver_Suite is
             Offset : constant Natural :=
               Ada.Strings.Fixed.Index (Program, "compiler.unreachable") - 1;
             Site : constant String := Ada.Strings.Fixed.Trim
-              (Natural'Image (1 + 4 * Offset + 3), Ada.Strings.Both);
+              (Natural'Image (1 + 5 * Offset + 3), Ada.Strings.Both);
             Result : Landin.Driver.Outcome;
          begin
             Host.Add_Directory ("app");

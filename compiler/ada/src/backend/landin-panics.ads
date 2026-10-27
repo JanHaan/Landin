@@ -14,7 +14,10 @@ with Landin.Source;
 with Landin.Stages;
 
 package Landin.Panics is
-   type Kind is (Out_Of_Range, Overflow, Bad_Conversion, Unreachable);
+   --  D232's canonical domain, with D451's fifth kind: a stack switch
+   --  past its limit, or a stack too small to prepare.
+   type Kind is
+     (Out_Of_Range, Overflow, Bad_Conversion, Unreachable, Stack_Exhausted);
    type Site_Number is range 0 .. 2 ** 32 - 1;
    type Plan is private;
 
@@ -72,7 +75,7 @@ private
    type Plan is record
       Selected : Landin.IR.Item_Id := Landin.IR.No_Item;
       Hosted : Boolean := False;
-      Codes : Code_Array := [1, 2, 3, 4];
+      Codes : Code_Array := [1, 2, 3, 4, 5];
       Sources : Range_Vectors.Vector;
    end record;
 end Landin.Panics;

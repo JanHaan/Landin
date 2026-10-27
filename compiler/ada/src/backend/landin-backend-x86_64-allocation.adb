@@ -4,6 +4,7 @@ with Landin.Backend.C_ABI;
 with Landin.Backend.Work_Arrays;
 with Landin.IR.Control_Flow;
 with Landin.IR.Liveness;
+with Landin.Memory;
 with Landin.Targets.Layouts;
 with Landin.Types;
 
@@ -144,6 +145,18 @@ package body Landin.Backend.X86_64.Allocation is
       raise Landin.Compiler_Defect with "an unsaved register has no save home";
    end Save_Index;
 
+   function Is_Switch
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Value : Landin.IR.Value_Id) return Boolean
+   is
+      use type Landin.Memory.Operation;
+   begin
+      return Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Memory_Access
+        and then Landin.IR.Memory_Operation (Of_Unit, Item, Value)
+          = Landin.Memory.Stack_Switch;
+   end Is_Switch;
+
    function Touches
      (Of_Unit : Landin.IR.Unit;
       Item : Landin.IR.Item_Id;
@@ -156,6 +169,10 @@ package body Landin.Backend.X86_64.Allocation is
             | Landin.IR.Clear_Array | Landin.IR.Fill_Array
             | Landin.IR.Select_Variant | Landin.IR.Assembly =>
             return True;
+         when Landin.IR.Memory_Access =>
+            --  D450: a switch calls out of line and resumes another
+            --  stack, which leaves every caller-saved register changed.
+            return Is_Switch (Of_Unit, Item, Value);
          when Landin.IR.Leave =>
             --  A scalar result moves to the accumulator and a `-> none`
             --  routine moves nothing; the teardown names none of them.
@@ -1232,7 +1249,9 @@ package body Landin.Backend.X86_64.Allocation is
                      Sequence (Tick) := Index;
                      Starts (Index) := Tick;
                      Lasts (Index) := Tick;
-                     if Op in Landin.IR.Call | Landin.IR.Indirect_Call then
+                     if Op in Landin.IR.Call | Landin.IR.Indirect_Call
+                       or else Is_Switch (Of_Unit, Item, Value)
+                     then
                         Calls := Calls + 1;
                      end if;
                      Calls_Through (Tick) := Calls;

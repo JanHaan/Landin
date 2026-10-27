@@ -1,0 +1,7 @@
+class: negative
+summary: D451 a panic handler whose kind is the former four-atom domain is not the hook, since the canonical domain has five kinds
+program: main.ldn
+root: ../../../../..
+codes: L0506
+constructs: 0890, 1670
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

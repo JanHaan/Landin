@@ -17032,15 +17032,16 @@ the compiler-generated `core-cpu.ldn` and ordinary-slice DMA execution in
 
 **Chosen:** [1670] is a source-level hook on every implemented target.
 `core/panic` declares public atoms `out_of_range`, `overflow`,
-`bad_conversion`, `unreachable`, and their union `panic_kind`. They use the
+`bad_conversion`, `unreachable`, D451's `stack_exhausted`, and their union
+`panic_kind`. They use the
 ordinary nonzero u32 atom ABI, in declaration-identity order across the final
 compilation; their integers are not fixed enumerator encodings. Zero remains
 private call success and is not admitted into this source atom domain.
 
 A module-level declaration named `panic_handler` in the entry module selects
 replacement. It must be a public, defined, nongeneric, ordinary Landin routine
-with two by-value parameters, the exact canonical four-atom domain and plain
-u32, and infallible `noreturn`. Equivalent aliases of that domain are accepted;
+with two by-value parameters, the exact canonical five-atom domain (D451) and
+plain u32, and infallible `noreturn`. Equivalent aliases of that domain are accepted;
 independently declared same-spelled atoms are different. Parameter names are
 not part of identity. C, interrupt, naked, external, generic, failing, returning,
 inout/sink, constrained or distinct site types, caller-inserted parameters,
@@ -17074,6 +17075,7 @@ The complete enabled check disposition is:
 | Volatile/atomic scalar address alignment; atom-domain validation; packed encoded membership, packed field-width fit or reserved-bit pattern validation | `bad_conversion` at the operation that validates the value. Raw packed copying still preserves every bit without extracting or validating fields. |
 | A callee returns despite `noreturn` | `unreachable` at the call, before any continuation. |
 | `compiler.unreachable()` [1560] | `unreachable` at the call, including inside `unchecked` (D278). |
+| `compiler.stack_switch` with the stack pointer below its limit; `compiler.stack_prepare` with a slice too small for its first frame (D450) | `stack_exhausted` (D451) at the call, including inside `unchecked`. |
 | Compiler-owned firmware entry returns | `unreachable`, synthetic site zero. Normal entry cleanup runs before an ordinary entry return reaches this guard. |
 | Recursive/concurrent panic entry, or a selected handler somehow returns | Terminal default instruction; no second handler invocation. |
 | Naked assembly fallthrough | Terminal default instruction: the programmer has not supplied the required machine transfer or a safe ordinary-call frame. |
@@ -17113,10 +17115,10 @@ its register.
 Site zero is reserved for synthetic guards without a source operation. Other
 sites use a deterministic, collision-free compilation-local space. In canonical
 source order, each source byte position, including its one-past-end position,
-reserves four numbers in the above atom-name order. The first source begins
-at one; the next begins after the previous source's complete range. A site's
-number is `base + 4 * first_byte_offset + family_offset`, where family offsets
-are zero through three. Multiple machine guards for one source operation and
+reserves five numbers in the above atom-name order (D452). The first source
+begins at one; the next begins after the previous source's complete range. A
+site's number is `base + 5 * first_byte_offset + family_offset`, where family
+offsets are zero through four. Multiple machine guards for one source operation and
 family share a site. Distinct families at that position have different sites.
 Unused positions cost no image bytes. A source-space total that cannot fit u32
 is refused as L0506, never truncated or hashed. Sites are not persistent across
@@ -18645,10 +18647,10 @@ which lets a register keep a value across it; and threads as one more fibre
 provider, which makes code that is right under one provider racy under
 another with nothing in its source to say so. All were declined.
 
-**Pinned by** nothing that runs yet: prototype 5's V4, V5 and V6 record the
-pressure, and the switch's fixtures will pin it, among them a module value
-written by one fibre and read by another across a switch at the highest
-optimization level.
+**Pinned by** `runtime/stack-switch-round-trip`, a module value written on one
+stack and read on the other across every switch at every optimization
+profile, on the targets whose backend emits the switch (D453); prototype 5's
+V4, V5 and V6 record the pressure the provider rules answer.
 
 ### D447 — What a switch owes the machine and the debugger
 
@@ -18729,9 +18731,11 @@ ordinary calling convention it does not have; and one builtin taking a
 library record, which would make the compiler know `core/fibre`'s types.
 All were declined.
 
-**Pinned by** nothing that runs yet: the switch's fixtures will pin it on
-every target, with a prepared stack resumed and returned from, a switch
-past its limit trapping, and the backtrace through a switch.
+**Pinned by** `runtime/stack-switch-round-trip`, a prepared stack entered,
+left and re-entered, `runtime/stack-switch-past-limit-traps` and
+`runtime/stack-prepare-too-small-traps` on the targets whose backend emits
+the builtins (D453); each further backend's fixtures and the backtrace
+through a switch will pin the rest.
 
 ### D451 — A stack past its limit is a fifth panic kind
 
@@ -18751,8 +18755,55 @@ handler nothing it can act on and leaves the site number to tell the two
 apart; and a separate handler for stacks, which would be a second hook with
 its own contract. Both were declined.
 
-**Pinned by** nothing that runs yet: the switch's limit fixture and the
-handler contract's fixtures, updated to the five-atom domain, will pin it.
+**Pinned by** `runtime/stack-switch-past-limit-traps` and
+`runtime/stack-prepare-too-small-traps` for the hosted default's report,
+`runtime/stack-exhausted-reaches-the-handler` for a selected handler, and
+`negative/panic-handler-four-kinds` for the five-atom contract.
+
+### D452 — A panic site reserves five numbers per source byte
+
+**The tour said** nothing about site numbers; D232 reserved four numbers at
+each source byte, one per kind in the atom-name order, so that distinct kinds
+at one position have distinct sites. D451 added a fifth kind.
+
+**Chosen:** each source byte, including its one-past-end position, reserves
+five numbers, `base + 5 * first_byte_offset + family_offset` with family
+offsets zero through four in `core/panic`'s order, `stack_exhausted` fourth.
+Every other rule of D232's site space is unchanged, and a site number is
+still not persistent across changed source inputs.
+
+**The alternatives:** keep four and give `stack_exhausted` another kind's
+offset, which lets an addition that starts where a stack builtin's call
+starts share its site; and number `stack_exhausted` sites from a separate
+range, which makes the map two spaces for one rule. Both were declined.
+
+**Pinned by** `abi/r670-panic`, whose peer pins sites from source byte
+positions, `scripts/tests/test_panic_locations.py` for the map's decoder, and
+the Cortex-M panic controls in `environments/cortex-m/freestanding.py`.
+
+### D453 — The stack builtins' refusals, and a backend that does not emit them yet
+
+**The tour said** nothing; D450 admits the builtins on every target with a
+native backend and none on synthetic-32, and D227 gave the memory
+intrinsics' refusals one code.
+
+**Chosen:** the stack builtins are refused with L0344, as the memory
+intrinsics are: an argument outside D450's contract, a missing argument, a
+recovery, and a target that does not admit them. A target whose backend does
+not emit them yet refuses both by name, "not yet emitted on" the target,
+rather than admitting a call its backend cannot carry; each backend lifts the
+refusal for its targets as it lands, which leaves D450's admission the rule
+once all have. An argument that is not a `usize` is the ordinary type
+disagreement, L0301, as an atomic's value operand is.
+
+**The alternatives:** a code of the stack builtins' own, which would split
+one contract family over two codes; and admitting them on every native
+target at once with a backend defect where they are not emitted, which
+breaks a program at emission that checking accepted. Both were declined.
+
+**Pinned by** `negative/stack-builtins-argument-contract`,
+`negative/stack-builtins-target-synthetic-32` and
+`negative/stack-builtins-target-linux-arm64`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

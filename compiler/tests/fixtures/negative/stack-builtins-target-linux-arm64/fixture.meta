@@ -1,0 +1,9 @@
+class: negative
+summary: D450 the arm64 backend does not emit the stack builtins yet, so linux-arm64 refuses both until it does
+program: program.ldn
+expect: expected.txt
+args: --target=linux-arm64 ../tests/fixtures/negative/stack-builtins-target-linux-arm64/program.ldn
+codes: L0344, L0344
+status: 1
+constructs: 1620
+targets: linux-arm64

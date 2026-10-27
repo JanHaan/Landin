@@ -8,6 +8,7 @@ with Landin.IR.Control_Flow;
 with Landin.IR.Liveness;
 with Landin.IR.Shape_Measurement;
 with Landin.Memory;
+with Landin.Provenance;
 with Landin.Packed;
 with Landin.Targets.Packed;
 with Ada.Strings.Fixed;
@@ -749,6 +750,16 @@ package body Landin.Backend.X86_64 is
 
       Float_Decode_Used : array (Landin.Types.Float_Name) of Boolean :=
         [others => False];
+
+      --  D450: a program that prepares or switches a stack carries one
+      --  switch routine and one start routine, emitted after its bodies;
+      --  Emit_Stack_Routines says what each does.  A prepared stack's
+      --  first frame is Stack_First_Frame bytes below its aligned top.
+      Stack_Used : Boolean := False;
+      Stack_Switcher : constant String :=
+        Local_Prefix & "landin_stack_switch";
+      Stack_Start : constant String := Local_Prefix & "landin_stack_start";
+      Stack_First_Frame : constant := 72;
 
       function Float_Decode_Label
         (From : Landin.Types.Float_Name) return String
@@ -2200,7 +2211,8 @@ package body Landin.Backend.X86_64 is
                      when Landin.Panics.Out_Of_Range => "range",
                      when Landin.Panics.Overflow => "overflow",
                      when Landin.Panics.Bad_Conversion => "conversion",
-                     when Landin.Panics.Unreachable => "unreachable"));
+                     when Landin.Panics.Unreachable => "unreachable",
+                     when Landin.Panics.Stack_Exhausted => "stack"));
 
          --  Value's trap for Reason is queued once, however many of its
          --  guards branch to it.  One instruction's guards are emitted
@@ -3062,6 +3074,12 @@ package body Landin.Backend.X86_64 is
                            | Landin.IR.Fill_Array | Landin.IR.Select_Variant
                            | Landin.IR.Store_Variant_Field =>
                            Epoch := Epoch + 1;
+                        when Landin.IR.Memory_Access =>
+                           --  D446: another fibre runs inside a switch.
+                           if Allocation.Is_Switch (Of_Unit, Item, Value)
+                           then
+                              Epoch := Epoch + 1;
+                           end if;
                         when others => null;
                      end case;
                   end;
@@ -4623,7 +4641,66 @@ package body Landin.Backend.X86_64 is
                      S : constant String := Suffix (Size);
                      A : constant String := Accumulator (Size);
                   begin
-                     if Landin.Memory.Operands (M) = 0 then
+                     if M = Stack_Prepare then
+                        --  D450: the operands are the stack's base and
+                        --  length, the entry and its argument.  The top is
+                        --  aligned down to sixteen and the first frame laid
+                        --  below it as the switch routine's pops read it:
+                        --  r15, r14, r13 (the argument), r12 (the entry),
+                        --  rbx, rbp (zero), then the start routine as the
+                        --  return address and sixteen bytes of padding, so
+                        --  the entry is called with the stack aligned.  A
+                        --  slice that cannot hold those 72 bytes traps
+                        --  stack_exhausted (D451); the difference is
+                        --  signed, since aligning a short slice's top may
+                        --  take it below the base.
+                        Emit ("movq " & Value_Operand (Operand (1))
+                              & ", %rax");
+                        Emit ("movq " & Value_Operand (Operand (2))
+                              & ", %rcx");
+                        Emit ("addq %rax, %rcx");
+                        Emit ("andq $-16, %rcx");
+                        Emit ("subq %rax, %rcx");
+                        Emit ("cmpq $" & Trimmed (Natural'Image
+                          (Stack_First_Frame)) & ", %rcx");
+                        Trap_On ("jl");
+                        Emit ("addq %rcx, %rax");
+                        Emit ("subq $" & Trimmed (Natural'Image
+                          (Stack_First_Frame)) & ", %rax");
+                        Emit ("movq " & Value_Operand (Operand (4))
+                              & ", %rdx");
+                        Emit ("movq %rdx, 16(%rax)");
+                        Emit ("movq " & Value_Operand (Operand (3))
+                              & ", %rdx");
+                        Emit ("movq %rdx, 24(%rax)");
+                        Emit ("xorl %edx, %edx");
+                        Emit ("movq %rdx, (%rax)");
+                        Emit ("movq %rdx, 8(%rax)");
+                        Emit ("movq %rdx, 32(%rax)");
+                        Emit ("movq %rdx, 40(%rax)");
+                        Emit ("movq %rdx, 56(%rax)");
+                        Emit ("movq %rdx, 64(%rax)");
+                        Emit ("leaq " & Stack_Start & "(%rip), %rdx");
+                        Emit ("movq %rdx, 48(%rax)");
+                        Stack_Used := True;
+                        Store_Value (Value, "%rax");
+                     elsif M = Stack_Switch then
+                        --  D450/D447: the limit is checked here, against
+                        --  the leaving stack, so the trap is this call's
+                        --  own site; the switch itself is one call of the
+                        --  program's switch routine, which the allocator
+                        --  treats as a call (Allocation.Is_Switch).
+                        Emit ("movq " & Value_Operand (Operand (3))
+                              & ", %rax");
+                        Emit ("cmpq %rax, %rsp");
+                        Trap_On ("jb");
+                        Emit ("movq " & Value_Operand (Operand (1))
+                              & ", %rdi");
+                        Emit ("movq " & Value_Operand (Operand (2))
+                              & ", %rsi");
+                        Emit ("call " & Stack_Switcher);
+                        Stack_Used := True;
+                     elsif Landin.Memory.Operands (M) = 0 then
                         if M /= Compiler_Barrier then
                            Emit ("mfence");
                         end if;
@@ -8841,6 +8918,108 @@ package body Landin.Backend.X86_64 is
             Emit_Float_Decode (From);
          end if;
       end loop;
+
+      --  D450 and D447.  The switch routine is out of line, one per
+      --  program, so that its unwind information is exact at every
+      --  instruction rather than threaded through a caller's frame.  It is
+      --  called with the address to save through in %rdi and the stack
+      --  pointer to resume in %rsi, after the caller has checked the
+      --  limit.  It pushes %rbp and the callee-saved registers on the
+      --  leaving stack, stores %rsp, loads the resumed one and pops the
+      --  same six registers before returning into the resumed context.
+      --  Both stacks hold the same 56 bytes at the switch, so one CFA rule,
+      --  %rsp plus what remains pushed, is right at every instruction:
+      --  stopped before the store, a debugger unwinds into the leaving
+      --  fibre's frames, and after the load into the resumed fibre's.
+      --  Every caller-saved register is left changed, as by a call.
+      --
+      --  The start routine is the return address of a prepared stack's
+      --  first frame: the switch's pops leave the entry in %r12, its
+      --  argument in %r13 and zero in %rbp, so the frame-pointer chain ends
+      --  at the entry's first frame, and its unwind information says the
+      --  return address is undefined, which ends a debugger's walk there.
+      --  Its description opens one instruction before the label, because
+      --  a debugger looks up a return address less one.  An entry is
+      --  `-> noreturn`; if it returns anyway, that is D232's `unreachable`
+      --  at site zero, as a firmware entry's return is.
+      if Stack_Used then
+         declare
+            Pushed : constant array (1 .. 6) of String (1 .. 4) :=
+              ["%rbp", "%rbx", "%r12", "%r13", "%r14", "%r15"];
+         begin
+            Put (Character'Val (9)
+                 & ".section .text.landin_stack,""ax"",@progbits");
+            Put (Character'Val (9) & ".type " & Stack_Switcher
+                 & ", @function");
+            Put (Stack_Switcher & ":");
+            if Debug /= null then
+               Emit (".cfi_startproc");
+            end if;
+            for Index in Pushed'Range loop
+               Emit ("pushq " & Pushed (Index));
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset "
+                        & Trimmed (Natural'Image (8 + 8 * Index)));
+                  Emit (".cfi_offset " & Pushed (Index) & ", -"
+                        & Trimmed (Natural'Image (8 + 8 * Index)));
+               end if;
+            end loop;
+            Emit ("movq %rsp, (%rdi)");
+            Emit ("movq %rsi, %rsp");
+            for Index in reverse Pushed'Range loop
+               Emit ("popq " & Pushed (Index));
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset "
+                        & Trimmed (Natural'Image (8 * Index)));
+                  Emit (".cfi_restore " & Pushed (Index));
+               end if;
+            end loop;
+            Emit ("ret");
+            if Debug /= null then
+               Emit (".cfi_endproc");
+            end if;
+            Put (Character'Val (9) & ELF.Size_To_Here (Stack_Switcher));
+
+            Put (Character'Val (9) & ".type " & Stack_Start
+                 & ", @function");
+            if Debug /= null then
+               Emit (".cfi_startproc");
+               Emit (".cfi_undefined %rip");
+            end if;
+            Emit ("nop");
+            Put (Stack_Start & ":");
+            Emit ("movq %r13, %rdi");
+            Emit ("call *%r12");
+            if Panic /= null and then Landin.Panics.Handler (Panic.all)
+              /= Landin.IR.No_Item
+            then
+               Emit ("movl $" & Trimmed (Positive'Image
+                 (Landin.Panics.Code
+                    (Panic.all, Landin.Panics.Unreachable))) & ", %edi");
+               Emit ("xorl %esi, %esi");
+               Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+            elsif Panic /= null
+              and then Landin.Panics.Reports_Default (Panic.all)
+            then
+               declare
+                  Line : constant String := Landin.Panics.Report
+                    (Panic.all, Landin.Provenance.No_Origin,
+                     Landin.Panics.Unreachable);
+                  Index : constant Positive := Reports.Index_Of (Line);
+               begin
+                  Emit ("leaq " & Report_Label (Index) & "(%rip), %rdi");
+                  Emit ("movl $" & Trimmed (Natural'Image (Line'Length))
+                        & ", %esi");
+                  Emit ("call " & Reporter);
+               end;
+            end if;
+            Emit ("ud2");
+            if Debug /= null then
+               Emit (".cfi_endproc");
+            end if;
+            Put (Character'Val (9) & ELF.Size_To_Here (Stack_Start));
+         end;
+      end if;
 
       --  D161: read-only images sit in `.rodata`, so a write through a
       --  reference the checker should have refused faults instead of

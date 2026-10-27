@@ -1,0 +1,9 @@
+class: negative
+summary: D450 synthetic-32 has no native backend, so it admits neither stack builtin
+program: program.ldn
+expect: expected.txt
+args: --target=synthetic-32 ../tests/fixtures/negative/stack-builtins-target-synthetic-32/program.ldn
+codes: L0344, L0344
+status: 1
+constructs: 1620
+targets: synthetic-32

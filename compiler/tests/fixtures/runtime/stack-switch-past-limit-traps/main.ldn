@@ -1,0 +1,11 @@
+--  D450/D451: a switch whose stack pointer is below its limit traps
+--  `stack_exhausted` at the switch, before it saves or resumes anything.
+--  A limit above a local of this frame is above the stack pointer.
+mut saved: usize = 0
+
+public main: () -> (code: i32) =
+    mut probe: u8 = 0
+    limit := usize(addr probe) + 65536
+    compiler.stack_switch(addr saved, 0, limit)
+    code = i32(probe) + 99
+end main

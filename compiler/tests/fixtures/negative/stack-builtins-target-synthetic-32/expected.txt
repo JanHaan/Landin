@@ -1,0 +1,20 @@
+error[L0344]: compiler.stack_prepare needs a native backend, and synthetic-32 has none
+  --> ../tests/fixtures/negative/stack-builtins-target-synthetic-32/program.ldn:11:15
+   |
+11 |     resume := compiler.stack_prepare(stack[0..<256], entry, 0)
+   |               ^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/stack-builtins-target-synthetic-32/program.ldn:11:15
+   |
+11 |     resume := compiler.stack_prepare(stack[0..<256], entry, 0)
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this stack builtin
+  = note: D450: compiler.stack_prepare is admitted on every target whose backend emits it; compile for one that does, such as linux-x86-64
+error[L0344]: compiler.stack_switch needs a native backend, and synthetic-32 has none
+  --> ../tests/fixtures/negative/stack-builtins-target-synthetic-32/program.ldn:12:5
+   |
+12 |     compiler.stack_switch(addr saved, resume, 0)
+   |     ^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/stack-builtins-target-synthetic-32/program.ldn:12:5
+   |
+12 |     compiler.stack_switch(addr saved, resume, 0)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this stack builtin
+  = note: D450: compiler.stack_switch is admitted on every target whose backend emits it; compile for one that does, such as linux-x86-64

@@ -1,0 +1,54 @@
+--  D450: main prepares a stack from module storage, switches to it, and
+--  the fibre switches back; main switches to it again and it switches back
+--  a second time.  Each side appends a letter to `trace` and folds a digit
+--  into `shared`, so the line printed says both the order the two stacks
+--  ran in and that module state one stack wrote was read by the other
+--  across every switch (D446): at the highest optimization a value kept in
+--  a register over a switch would print another number.  `kept` is a local
+--  that lives in main's frame across both switches.
+import core/io
+import hosted/system
+
+mut backing: [16384]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut fibre_limit: usize = 0
+mut shared: u64 = 0
+mut trace: [8]u8 = zeroed
+mut steps: usize = 0
+
+note: (letter: u8) -> none =
+    trace[steps] = letter
+    steps += 1
+end note
+
+fibre: (argument: usize) -> noreturn =
+    note(u8(argument))
+    shared = shared * 10 + 2
+    compiler.stack_switch(addr fibre_saved, main_saved, fibre_limit)
+    note(u8(argument) + 2)
+    shared = shared * 10 + 4
+    compiler.stack_switch(addr fibre_saved, main_saved, fibre_limit)
+    compiler.unreachable()
+end fibre
+
+public main: () -> (code: i32) =
+    host := system.new()
+    note(97)
+    kept: u64 = u64(steps) * 1000 + 7
+    fibre_limit = usize(addr backing[0]) + 1024
+    fibre_saved = compiler.stack_prepare(backing[0..<16384], fibre, 98)
+    shared = 1
+    compiler.stack_switch(addr main_saved, fibre_saved, 0)
+    note(99)
+    shared = shared * 10 + 3
+    compiler.stack_switch(addr main_saved, fibre_saved, 0)
+    note(101)
+    shared = shared * 10 + 5
+    mut storage: [64]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    io.put(out, trace[0..<steps]) else none
+    io.format(out, " {} {}\n", [any(addr shared), any(addr kept)]) else none
+    io.flush(out) else none
+    code = 0
+end main

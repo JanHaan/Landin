@@ -760,6 +760,7 @@ negative/operand-with-no-block-text-is-refused-there | linux-x86-64, linux-arm64
 negative/operands-of-two-types | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/option-outside-configuration | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/packed-field-width-is-not-a-scalar-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/panic-handler-four-kinds | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/parameter-hides-a-concept | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/parameterized-alias-arity | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/parameterized-alias-cycle | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1240,6 +1241,9 @@ negative/sink-past-continue | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x
 negative/sink-repeated-by-while | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/sink-through-dereference | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/slice-comparison-refused | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/stack-builtins-argument-contract | linux-x86-64, freebsd-x86-64
+negative/stack-builtins-target-linux-arm64 | linux-arm64
+negative/stack-builtins-target-synthetic-32 | synthetic-32
 negative/statement-where-a-value-belongs-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/statements-after-a-bare-else-name-its-binder | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/static-origin-beside-unnamed-source | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2398,6 +2402,10 @@ runtime/slice-lower-after-upper-traps | linux-x86-64, linux-arm64, darwin-arm64,
 runtime/slice-place-in-value-arm | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/specialization-speed-growth | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/stack-arguments-cross-calls | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/stack-exhausted-reaches-the-handler | linux-x86-64, freebsd-x86-64
+runtime/stack-prepare-too-small-traps | linux-x86-64, freebsd-x86-64
+runtime/stack-switch-past-limit-traps | linux-x86-64, freebsd-x86-64
+runtime/stack-switch-round-trip | linux-x86-64, freebsd-x86-64
 runtime/standalone-try-discards-a-stored-result | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/statements-run-as-they-read | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/static-origin-satisfies-from | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

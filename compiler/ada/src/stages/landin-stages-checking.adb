@@ -23983,7 +23983,201 @@ package body Landin.Stages.Checking is
                         Because => "this memory operation", Into => Found);
                      return Kept (Ty.Ill_Typed);
                   end Refuse;
+
+                  --  D450's two stack builtins.  Their arguments are typed
+                  --  by their own contract rather than by a memory scalar:
+                  --  a `[]mut u8` stack, a `(argument: usize) -> noreturn`
+                  --  entry and its usize argument for prepare, and a
+                  --  `ptr mut usize` to save through, the usize to resume
+                  --  and the usize limit for switch.  Each is checked before
+                  --  the target is, as the atomics' operands are.
+                  function Check_Stack return Ty.Type_Kind;
+                  function Check_Stack return Ty.Type_Kind is
+                     use type Landin.Targets.Capabilities.Backend_Kind;
+                     Prepare : constant Boolean := Op = Stack_Prepare;
+                     function Refuse_Stack
+                       (Message : String; At_Node : Syn.Node_Id := Syn.No_Node;
+                        Target : Boolean := False) return Ty.Type_Kind;
+                     function Refuse_Stack
+                       (Message : String; At_Node : Syn.Node_Id := Syn.No_Node;
+                        Target : Boolean := False) return Ty.Type_Kind is
+                     begin
+                        Bad.Report
+                          (Item => Bad.Memory_Contract,
+                           Source => Syn.Source_Of (Of_Tree),
+                           Where => Syn.Where
+                             (Of_Tree,
+                              (if At_Node = Syn.No_Node
+                               then Syn.Callee_Of (Of_Tree, Node)
+                               else At_Node)),
+                           Message => Message,
+                           Note => "D450: compiler." & Intrinsic
+                             & (if Target
+                                then " is admitted on every target whose"
+                                     & " backend emits it; compile for one"
+                                     & " that does, such as linux-x86-64"
+                                elsif Prepare
+                                then " takes a []mut u8 stack, an entry of"
+                                     & " type (argument: usize) -> noreturn"
+                                     & " and its usize argument"
+                                else " takes a ptr mut usize to save"
+                                     & " through, the usize stack pointer to"
+                                     & " resume and the usize limit"),
+                           Related => Syn.Origin (Of_Tree, Node),
+                           Because => "this stack builtin", Into => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end Refuse_Stack;
+
+                     First : Syn.Node_Id;
+                     Held : Ty.Type_Kind;
+                  begin
+                     if Syn.Argument_Count (Of_Tree, Node) /=
+                       Landin.Memory.Source_Arguments (Op)
+                     then
+                        return Refuse_Stack
+                          ("compiler." & Intrinsic & " takes "
+                           & Counted (Landin.Memory.Source_Arguments (Op),
+                                      "argument"));
+                     elsif Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
+                        return Refuse_Stack
+                          ("stack builtins cannot fail",
+                           Syn.Recovery_Of (Of_Tree, Node));
+                     end if;
+                     First := Syn.Nth_Argument (Of_Tree, Node, 1);
+                     Held := Synthesise (Of_Tree, First);
+                     if Prepare then
+                        if Held /= Ty.Slice_Value then
+                           return Refuse_Stack
+                             ("a prepared stack is a []mut u8 slice", First);
+                        end if;
+                        declare
+                           Ref : constant
+                             Landin.Checking.Reference_Descriptor :=
+                               Landin.Checking.Descriptor_Of
+                                 (Types.all, Landin.Checking.Reference_Of
+                                   (Types.all, Of_Tree, First));
+                        begin
+                           if Ref.View /= Ty.Ordinary_View
+                             or else Ref.Referent /= Ty.U8
+                             or else Ref.Nominal /=
+                               Landin.Checking.No_Nominal_Type
+                           then
+                              return Refuse_Stack
+                                ("a prepared stack is a []mut u8 slice",
+                                 First);
+                           elsif not Ref.Mutable then
+                              return Refuse_Stack
+                                ("a prepared stack needs mutable"
+                                 & " permission, []mut u8", First);
+                           end if;
+                        end;
+                        declare
+                           Entry_Node : constant Syn.Node_Id :=
+                             Syn.Nth_Argument (Of_Tree, Node, 2);
+                           Entry_Held : constant Ty.Type_Kind :=
+                             Synthesise (Of_Tree, Entry_Node);
+                           Signature : Landin.Checking.Signature_Id :=
+                             Landin.Checking.No_Signature;
+                           Fits : Boolean := False;
+                        begin
+                           if Entry_Held = Ty.Function_Value then
+                              Signature := Landin.Checking.Signature_Of
+                                (Types.all, Of_Tree, Entry_Node);
+                           end if;
+                           if Signature /= Landin.Checking.No_Signature
+                             and then Landin.Checking.Signature_Parameter_Count
+                               (Types.all, Signature) = 1
+                           then
+                              declare
+                                 package LC renames Landin.Checking;
+                                 Part : constant LC.Signature_Part :=
+                                   LC.Nth_Signature_Parameter
+                                     (Types.all, Signature, 1);
+                              begin
+                                 Fits :=
+                                   Part.Kind = Ty.Usize
+                                   and then Part.Nominal =
+                                     LC.No_Nominal_Type
+                                   and then Part.Convention in
+                                     Syn.Implicit_In | Syn.Explicit_In
+                                   and then not Part.Caller
+                                   and then Part.Constraint =
+                                     LC.No_Constraint
+                                   and then LC.Signature_Never_Returns
+                                     (Types.all, Signature)
+                                   and then LC.Signature_Error_Form
+                                     (Types.all, Signature) = LC.Infallible
+                                   and then LC.Signature_Machine
+                                     (Types.all, Signature)
+                                       = Landin.Machine.Ordinary
+                                   and then not LC.Signature_Uses_C_ABI
+                                     (Types.all, Signature);
+                              end;
+                           end if;
+                           if not Fits then
+                              return Refuse_Stack
+                                ("a stack's entry is an ordinary"
+                                 & " (argument: usize) -> noreturn function",
+                                 Entry_Node);
+                           end if;
+                        end;
+                        Require (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 3),
+                                 Ty.Usize, Syn.Origin (Of_Tree, Node),
+                                 "the entry's argument");
+                     else
+                        if Held /= Ty.Pointer_Value then
+                           return Refuse_Stack
+                             ("a switch saves through a ptr mut usize", First);
+                        end if;
+                        declare
+                           Ref : constant
+                             Landin.Checking.Reference_Descriptor :=
+                               Landin.Checking.Descriptor_Of
+                                 (Types.all, Landin.Checking.Reference_Of
+                                   (Types.all, Of_Tree, First));
+                        begin
+                           if Ref.Empty_Atom /= Res.No_Declaration
+                             or else Ref.View /= Ty.Ordinary_View
+                             or else Ref.Nominal /=
+                               Landin.Checking.No_Nominal_Type
+                             or else Ref.Referent /= Ty.Usize
+                           then
+                              return Refuse_Stack
+                                ("a switch saves through a ptr mut usize",
+                                 First);
+                           elsif not Ref.Mutable then
+                              return Refuse_Stack
+                                ("a switch's save needs mutable permission,"
+                                 & " ptr mut usize", First);
+                           end if;
+                        end;
+                        Require (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 2),
+                                 Ty.Usize, Syn.Origin (Of_Tree, Node),
+                                 "the stack pointer the switch resumes");
+                        Require (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 3),
+                                 Ty.Usize, Syn.Origin (Of_Tree, Node),
+                                 "the switch's stack limit");
+                     end if;
+                     if not Landin.Targets.Capabilities.Stack_Switching
+                       (Facts)
+                     then
+                        return Refuse_Stack
+                          ((if Landin.Targets.Capabilities.Backend_For (Facts)
+                              = Landin.Targets.Capabilities.No_Backend
+                            then "compiler." & Intrinsic & " needs a native"
+                                 & " backend, and "
+                                 & Landin.Targets.Name (Facts) & " has none"
+                            else "compiler." & Intrinsic & " is not yet"
+                                 & " emitted on "
+                                 & Landin.Targets.Name (Facts)),
+                           Target => True);
+                     end if;
+                     return Kept (if Prepare then Ty.Usize else Ty.No_Value);
+                  end Check_Stack;
                begin
+                  if Op in Landin.Memory.Stack_Operation then
+                     return Check_Stack;
+                  end if;
                   if Op /= No_Operation then
                      if Syn.Argument_Count (Of_Tree, Node) /=
                        Count + (if Register_Read then 1

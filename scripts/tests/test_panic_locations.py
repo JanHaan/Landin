@@ -26,8 +26,9 @@ class PanicLocations(unittest.TestCase):
                            'line_offsets': [0, 5, 12]}]}))
             command = [sys.executable, ROOT / 'scripts/source-location.py', table]
             for kind, name in enumerate(('out_of_range', 'overflow',
-                                         'bad_conversion', 'unreachable')):
-                args = command + ['--panic-site', str(101 + 4 * 14 + kind)]
+                                         'bad_conversion', 'unreachable',
+                                         'stack_exhausted')):
+                args = command + ['--panic-site', str(101 + 5 * 14 + kind)]
                 result = subprocess.run(args + ['--assembly', assembly],
                                         capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -35,7 +36,7 @@ class PanicLocations(unittest.TestCase):
                 for identity in ([], ['--build-id', 'b' * 64]):
                     self.assertNotEqual(subprocess.run(args + identity,
                         capture_output=True, timeout=10).returncode, 0)
-            for site in (0, -1, 100, 181, 2**32):
+            for site in (0, -1, 100, 201, 2**32):
                 result = subprocess.run(command + ['--panic-site', str(site),
                     '--assembly', assembly], capture_output=True, timeout=10)
                 self.assertNotEqual(result.returncode, 0)

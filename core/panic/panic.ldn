@@ -9,7 +9,10 @@ public overflow: atom
 public bad_conversion: atom
 --- Execution reached a path declared unreachable.
 public unreachable: atom
---- The compiler's four panic atoms. A program may supply the specified
+--- A stack switch found the stack pointer below its limit, or a stack was
+--- too small to prepare (D451).
+public stack_exhausted: atom
+--- The compiler's five panic atoms. A program may supply the specified
 --- nonreturning panic handler; these failures are not allocator error
 --- returns.
-public panic_kind: type = out_of_range | overflow | bad_conversion | unreachable
+public panic_kind: type = out_of_range | overflow | bad_conversion | unreachable | stack_exhausted

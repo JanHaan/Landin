@@ -24,9 +24,9 @@ void wrongly_returns(void) { }
 int main(void)
 {
     /* Independent source-byte pins, not values read from generated assembly.
-       Each byte reserves four family slots: 1 + 4*offset + family-1. */
+       Each byte reserves five family slots: 1 + 5*offset + family-1. */
     static const uint32_t kinds[] = {2,3,1,2,1,3,4,2,2,2,4,3,3,3};
-    static const uint32_t sites[] = {3666,3887,4197,4426,4617,4815,4996,3666,2934,3666,0,5483,5891,6695};
+    static const uint32_t sites[] = {4582,4858,5246,5532,5771,6018,6244,4582,3667,4582,0,6853,7363,8368};
     static const int32_t values[] = {1,256,2,0,-1,2,0,1,0,1,0,0,0,255};
     struct rlimit limit = {0, 0};
     if (setrlimit(RLIMIT_CORE, &limit) != 0) return 1;

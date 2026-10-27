@@ -1,0 +1,6 @@
+class: negative
+summary: D450 each stack builtin refuses a save that is not a ptr mut usize, a limit that is not a usize, a missing argument, an immutable or non-slice stack and an entry that returns
+program: main.ldn
+codes: L0344, L0344, L0301, L0344, L0344, L0344, L0344
+constructs: 1620
+targets: linux-x86-64, freebsd-x86-64

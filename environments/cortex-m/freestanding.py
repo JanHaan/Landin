@@ -209,7 +209,7 @@ def panic(run, elf):
     values = [1, 256, 2, 0, -1, 2, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 255]
     for mode, (token, kind, value) in enumerate(zip(tokens, kinds, values)):
         after = program.index(b'elsif mode == 1 then') if mode == 1 else 0
-        site = 0 if token is None else 4 * program.index(token, after) + kind
+        site = 0 if token is None else 5 * program.index(token, after) + kind
         lane = run.out / ('panic-'+str(mode))
         lane.mkdir()
         prefix = [
@@ -247,10 +247,11 @@ def panic(run, elf):
             output = run.command('site-'+str(mode), [sys.executable,
                 ROOT / 'scripts/source-location.py', str(elf)+'.sources.json',
                 '--panic-site', str(site), '--assembly', str(elf)+'.s'])
-            offset = (site-kind)//4
+            offset = (site-kind)//5
             line = program[:offset].count(b'\n')+1
             column = offset-program.rfind(b'\n', 0, offset)
-            reason = ('out_of_range', 'overflow', 'bad_conversion', 'unreachable')[kind-1]
+            reason = ('out_of_range', 'overflow', 'bad_conversion', 'unreachable',
+                      'stack_exhausted')[kind-1]
             require(output.strip() == f'source/app/main.ldn:{line}:{column} ({reason})',
                     'panic source map disagrees with independent input coordinates')
 

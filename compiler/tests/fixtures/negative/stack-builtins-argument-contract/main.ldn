@@ -1,0 +1,42 @@
+--  D450: each stack builtin's arguments are its whole contract.
+mut saved: usize = 0
+mut word: u32 = 0
+mut stack: [256]u8 = zeroed
+frozen: [256]u8 = zeroed
+
+entry: (argument: usize) -> noreturn =
+    _ = argument
+    compiler.unreachable()
+end entry
+
+returns: (argument: usize) -> none =
+    _ = argument
+end returns
+
+save_is_not_a_usize: () -> none =
+    compiler.stack_switch(addr word, 0, 0)
+end save_is_not_a_usize
+
+save_is_not_mutable: (place: ptr usize) -> none =
+    compiler.stack_switch(place, 0, 0)
+end save_is_not_mutable
+
+limit_is_not_a_usize: () -> none =
+    compiler.stack_switch(addr saved, 0, true)
+end limit_is_not_a_usize
+
+switch_without_a_limit: () -> none =
+    compiler.stack_switch(addr saved, 0)
+end switch_without_a_limit
+
+stack_is_not_mutable: () -> (resume: usize) =
+    resume = compiler.stack_prepare(frozen[0..<256], entry, 0)
+end stack_is_not_mutable
+
+stack_is_not_a_slice: () -> (resume: usize) =
+    resume = compiler.stack_prepare(saved, entry, 0)
+end stack_is_not_a_slice
+
+entry_returns: () -> (resume: usize) =
+    resume = compiler.stack_prepare(stack[0..<256], returns, 0)
+end entry_returns

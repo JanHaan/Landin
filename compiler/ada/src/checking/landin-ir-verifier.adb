@@ -7659,12 +7659,51 @@ package body Landin.IR.Verifier is
 
                            when Memory_Access =>
                               declare
+                                 use type Landin.Memory.Ordering;
                                  M : constant Landin.Memory.Operation :=
                                    Memory_Operation (Of_Unit, Id, V);
                                  S : constant Landin.Types.Scalar_Name :=
                                    Memory_Scalar (Of_Unit, Id, V);
+                                 Switches : constant Boolean :=
+                                   Landin.Targets.Capabilities.Stack_Switching
+                                     (Facts);
                               begin
-                                 if not Landin.Memory.Legal
+                                 --  D450: every operand of a stack
+                                 --  builtin is a usize, prepare gives the
+                                 --  usize a switch resumes, and only a
+                                 --  target whose backend emits them
+                                 --  carries either.  No `unchecked` region
+                                 --  removes the limit check.
+                                 if M in Landin.Memory.Stack_Operation then
+                                    if S /= Landin.Types.Usize
+                                      or else Memory_Order (Of_Unit, Id, V)
+                                        /= Landin.Memory.No_Ordering
+                                      or else Memory_Order
+                                        (Of_Unit, Id, V, True)
+                                          /= Landin.Memory.No_Ordering
+                                      or else Is_Unchecked (Of_Unit, Id, V)
+                                      or else (Check_Image and then not
+                                        Switches)
+                                      or else Result_Of (Of_Unit, Id, V) /=
+                                        (if Landin.Memory.Returns_Value (M)
+                                         then Landin.Types.Usize
+                                         else Landin.Types.Not_Typed)
+                                    then
+                                       return
+                                         (Result_Disagrees, Id, Block, V);
+                                    end if;
+                                    for I in 1 .. Operand_Count
+                                      (Of_Unit, Id, V)
+                                    loop
+                                       if Result_Of (Of_Unit, Id,
+                                         Nth_Operand (Of_Unit, Id, V, I)) /=
+                                           Landin.Types.Usize
+                                       then
+                                          return
+                                            (Result_Disagrees, Id, Block, V);
+                                       end if;
+                                    end loop;
+                                 elsif not Landin.Memory.Legal
                                    (M, Memory_Order (Of_Unit, Id, V),
                                     Memory_Order (Of_Unit, Id, V, True))
                                    or else S not in Landin.Types.U8
