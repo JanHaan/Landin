@@ -986,7 +986,30 @@ package body Landin.Diagnostics.Explanations is
                "One routine's saved registers and local frame exceed the"
                & " selected 4 KiB firmware stack reservation [1990]. Move "
                & "large local storage elsewhere or make it smaller. This c"
-               & "heck does not bound calls or interrupt nesting.");
+               & "heck does not bound calls or interrupt nesting.",
+            when Catalogue.Handler_Exceeds_Stack_Margin =>
+               "A program that prepares a stack selects a panic handler "
+               & "that does not fit the target's stack margin [1670]. A fa"
+               & "iled check enters the handler on the stack that overflow"
+               & "ed, so the handler and everything it calls run in the ma"
+               & "rgin a prepared stack keeps above its base (D472): 640 b"
+               & "ytes on x86-64 and arm64, 768 on RV64 and 384 on Cortex-"
+               & "M0. The message gives what the handler needs, the margin"
+               & " and the target: what the margin pays before the handler"
+               & ", and the handler's depth from the stack report's `trap`"
+               & " figure, by its deepest path. When the handler's calls r"
+               & "each an `any` call, a call through a generic's table or "
+               & "a function value, a foreign call, recursion, a runtime h"
+               & "elper or assembly that moves the stack, its depth cannot"
+               & " be known, and the message names the opening's kind and "
+               & "points at it. Make the handler's frame smaller, call les"
+               & "s from it, or call through nothing that opens its graph;"
+               & " a handler that only records the kind and switches away "
+               & "fits on every target. A program with no `compiler.stack_"
+               & "prepare`, and one that selects no handler, is not refuse"
+               & "d: the default report always fits. The rule is decided f"
+               & "rom emitted frames, so `refine check` does not raise it "
+               & "(D474).");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -1569,6 +1592,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Panic_Contract_Invalid =>
                "",
             when Catalogue.Firmware_Frame_Exceeds_Stack =>
+               "",
+            when Catalogue.Handler_Exceeds_Stack_Margin =>
                "");
 
 end Landin.Diagnostics.Explanations;

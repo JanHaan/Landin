@@ -1,0 +1,9 @@
+class: negative
+summary: D474 a program that prepares a stack is refused when its selected panic handler calls through an any value, whose depth cannot be known
+program: main.ldn
+root: ../../../../..
+args: --target=linux-x86-64 --link=libc --emit=asm
+status: 1
+codes: L0508
+constructs: 1620, 1670
+targets: linux-x86-64

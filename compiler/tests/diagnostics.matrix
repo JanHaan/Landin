@@ -96,3 +96,4 @@ L0504  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb 
 L0505  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/r660-materialization,test:landin-tests-cortex_suite.adb
 L0506  Live     error   no-fix   false empty-ok    0..0 0     landin-driver-checking.adb          negative/panic-handler-four-kinds,negative/r670-panic-handler,test:landin-tests-driver_suite.adb
 L0507  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/r660-firmware-frame,test:landin-tests-cortex_suite.adb
+L0508  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/stack-handler-exceeds-margin,negative/stack-handler-opens-its-graph

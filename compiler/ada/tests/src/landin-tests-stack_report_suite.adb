@@ -542,6 +542,300 @@ package body Landin.Tests.Stack_Report_Suite is
          "a stack report does not overwrite a source");
    end A_Stack_Report_Needs_Emitted_Code;
 
+   --  D474: programs that select a panic handler, with core/panic beside
+   --  them.  Prepares says whether the program holds a
+   --  `compiler.stack_prepare`; Handler is the handler's body, or "" for
+   --  a program that selects none.
+   Panic_Core : constant String :=
+     "public out_of_range: atom public overflow: atom "
+     & "public bad_conversion: atom public unreachable: atom "
+     & "public stack_exhausted: atom "
+     & "public panic_kind: type = out_of_range | overflow | "
+     & "bad_conversion | unreachable | stack_exhausted" & LF;
+
+   Small_Handler : constant String :=
+     "    seen = if site <> 0 then 42 else 5 end if" & LF
+     & "    _ = kind" & LF;
+
+   Large_Handler : constant String :=
+     "    mut notes: [512]u8 = zeroed" & LF
+     & "    mut index: usize = 0" & LF
+     & "    while index < 512 do" & LF
+     & "        notes[index] = 7" & LF
+     & "        inc index" & LF
+     & "    end while" & LF
+     & "    seen = i32(notes[index - 1])" & LF
+     & "    _ = kind" & LF
+     & "    _ = site" & LF;
+
+   Erased_Handler : constant String :=
+     "    seen = i32(erased(any(addr held)))" & LF
+     & "    _ = kind" & LF
+     & "    _ = site" & LF;
+
+   function Handler_Program
+     (Handler : String; Prepares : Boolean) return String;
+
+   function Handler_Program
+     (Handler : String; Prepares : Boolean) return String
+   is ("import core/panic" & LF
+       & "counter: type = concept (provider: type)" & LF
+       & "    total: (self: provider) -> (sum: u32)" & LF
+       & "end counter" & LF
+       & "tally: type = struct" & LF
+       & "    sum: u32" & LF
+       & "end tally" & LF
+       & "tally_total: (self: tally) -> (sum: u32) =" & LF
+       & "    sum = self.sum" & LF
+       & "end tally_total" & LF
+       & "tally is counter (total: tally_total)" & LF
+       & "erased: (item: any counter) -> (sum: u32) =" & LF
+       & "    sum = item.total()" & LF
+       & "end erased" & LF
+       & "mut held: tally = (sum: 3)" & LF
+       & "mut memory: [2048]u8 = zeroed" & LF
+       & "mut main_saved: usize = 0" & LF
+       & "mut fibre_saved: usize = 0" & LF
+       & "mut seen: i32 = 0" & LF
+       & (if Handler = "" then ""
+          else "public panic_handler: (kind: panic.panic_kind, site: u32)"
+               & " -> noreturn =" & LF
+               & Handler
+               & "    compiler.stack_switch(addr fibre_saved, main_saved)"
+               & LF
+               & "    loop do" & LF
+               & "    end loop" & LF
+               & "end panic_handler" & LF)
+       & "fibre: (argument: usize) -> noreturn =" & LF
+       & "    seen = i32(argument) + i32(erased(any(addr held)))" & LF
+       & "    compiler.stack_switch(addr fibre_saved, main_saved)" & LF
+       & "    loop do" & LF
+       & "    end loop" & LF
+       & "end fibre" & LF
+       & "public main: () -> (code: i32) =" & LF
+       & (if Prepares
+          then "    fibre_saved = compiler.stack_prepare(memory[0..<2048],"
+               & " fibre, 3)" & LF
+          else "    fibre_saved = 0" & LF)
+       & "    compiler.stack_switch(addr main_saved, fibre_saved)" & LF
+       & "    code = seen" & LF
+       & "end main" & LF);
+
+   type Handler_Outcome is record
+      Status : Natural := 0;
+      Said : US.Unbounded_String;
+      Stack : US.Unbounded_String;
+      Writes : Natural := 0;
+   end record;
+
+   --  The program emitted as assembly for Target at the reference
+   --  profile, with a stack report.
+   function Emit_Handler
+     (Program : String; Target : String) return Handler_Outcome;
+
+   function Emit_Handler
+     (Program : String; Target : String) return Handler_Outcome
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      Result : Landin.Driver.Outcome;
+      Outcome : Handler_Outcome;
+   begin
+      Host.Add_Directory ("app");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/core");
+      Host.Add_Directory ("root/core/panic");
+      Host.Add_File ("root/core/panic/panic.ldn", Panic_Core);
+      Host.Add_File ("app/main.ldn", Program);
+      Args.Append ("--root=root");
+      Args.Append ("--target=" & Target);
+      if Ada.Strings.Fixed.Index (Target, "linux") > 0 then
+         Args.Append ("--link=libc");
+      end if;
+      Args.Append ("--optimize=none");
+      Args.Append ("--specialize=off");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("out.s");
+      Args.Append ("--stack-report=stack.json");
+      Args.Append ("app");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Outcome.Status := Result.Status;
+      Outcome.Said := Result.Report;
+      Outcome.Writes := Host.Write_Count;
+      if Result.Status = Landin.Driver.Status_Success then
+         Outcome.Stack :=
+           US.To_Unbounded_String (Host.Written ("stack.json"));
+      end if;
+      return Outcome;
+   end Emit_Handler;
+
+   Every_Backend : constant array (Positive range <>) of Target_Name :=
+     [new String'("linux-x86-64"), new String'("linux-arm64"),
+      new String'("linux-rv64"), new String'("darwin-arm64"),
+      new String'("freebsd-x86-64"), new String'("freebsd-arm64"),
+      new String'("cortex-m0")];
+
+   --  What the margin pays before a handler on each of Every_Backend
+   --  (D472's table), and the margin itself.
+   Before_Handler : constant array (Every_Backend'Range) of Natural :=
+     [152, 144, 144, 144, 152, 144, 188];
+   Margin : constant array (Every_Backend'Range) of Natural :=
+     [640, 640, 768, 640, 640, 640, 384];
+
+   --  D474: a handler that records the kind and switches away fits the
+   --  margin on every target, and with no handler the default report
+   --  always does, D361's report or Cortex-M0's trap instruction: what
+   --  the margin pays before the handler and the `trap` depth are no
+   --  more than the margin.
+   procedure A_Handler_That_Fits_Is_Emitted
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Handler_That_Fits_Is_Emitted
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Fits (Index : Positive; Handler, What : String);
+
+      procedure Fits (Index : Positive; Handler, What : String) is
+         Target : constant String := Every_Backend (Index).all;
+         Outcome : constant Handler_Outcome :=
+           Emit_Handler (Handler_Program (Handler, True), Target);
+         Text : constant String := US.To_String (Outcome.Stack);
+         Trap : constant String :=
+           (if Ada.Strings.Fixed.Index (Text, """trap"":") > 0
+            then Text (Ada.Strings.Fixed.Index (Text, """trap"":")
+                       .. Text'Last)
+            else "");
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Outcome.Status, Landin.Driver.Status_Success,
+            Target & ": " & What & " is emitted: "
+            & US.To_String (Outcome.Said));
+         Landin.Testing.Check_Equal
+           (Item, Field (Text, "handler_entry_bytes"), Before_Handler (Index),
+            Target & ": what the margin pays before a handler");
+         Landin.Testing.Check_Equal
+           (Item, Field (Text, "margin_bytes"), Margin (Index),
+            Target & ": the margin");
+         Landin.Testing.Check
+           (Item, Field (Trap, "depth_bytes") >= 0
+              and then Before_Handler (Index) + Field (Trap, "depth_bytes")
+                <= Margin (Index),
+            Target & ": " & What & " fits the margin: " & Trap);
+      end Fits;
+   begin
+      for Index in Every_Backend'Range loop
+         Fits (Index, Small_Handler, "a handler that switches away");
+         Fits (Index, "", "the default report");
+      end loop;
+   end A_Handler_That_Fits_Is_Emitted;
+
+   --  D474: a handler whose own frame is larger than the margin is
+   --  refused on every target with the target's own figures, the
+   --  handler's deepest path, and nothing written.
+   procedure A_Handler_Past_The_Margin_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Handler_Past_The_Margin_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      Own : constant array (Every_Backend'Range) of Natural :=
+        [1504, 1504, 1664, 1504, 1504, 1504, 1184];
+   begin
+      for Index in Every_Backend'Range loop
+         declare
+            Target : constant String := Every_Backend (Index).all;
+            Outcome : constant Handler_Outcome :=
+              Emit_Handler (Handler_Program (Large_Handler, True), Target);
+            Said : constant String := US.To_String (Outcome.Said);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Outcome.Status, Landin.Driver.Status_Reported,
+               Target & ": a handler past the margin is refused: " & Said);
+            Landin.Testing.Check
+              (Item, Contains
+                 (Said, "error[L0508]: the panic handler"
+                  & " `main.panic_handler` needs"
+                  & Natural'Image (Before_Handler (Index) + Own (Index))
+                  & " bytes below a failed check, more than the"
+                  & Natural'Image (Margin (Index))
+                  & "-byte margin of a prepared stack on " & Target & ":"
+                  & Natural'Image (Before_Handler (Index))
+                  & " before it and" & Natural'Image (Own (Index))
+                  & " for it, by main.panic_handler -> (trap) (D474)")
+                 and then Contains (Said, "app/main.ldn:20:1"),
+               Target & ": the refusal gives both numbers, the target and"
+               & " the path, at the handler: " & Said);
+            Landin.Testing.Check_Equal
+              (Item, Outcome.Writes, 0,
+               Target & ": a refused handler writes nothing");
+         end;
+      end loop;
+   end A_Handler_Past_The_Margin_Is_Refused;
+
+   --  D474: a handler whose calls reach an `any` call cannot be measured
+   --  and is refused, naming the opening's kind and pointing at it.
+   procedure An_Open_Handler_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Open_Handler_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Index in Every_Backend'Range loop
+         declare
+            Target : constant String := Every_Backend (Index).all;
+            Outcome : constant Handler_Outcome :=
+              Emit_Handler (Handler_Program (Erased_Handler, True), Target);
+            Said : constant String := US.To_String (Outcome.Said);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Outcome.Status, Landin.Driver.Status_Reported,
+               Target & ": an open handler is refused: " & Said);
+            Landin.Testing.Check
+              (Item, Contains
+                 (Said, "error[L0508]: the panic handler"
+                  & " `main.panic_handler` runs on the margin of a stack it"
+                  & " overflowed," & Natural'Image (Margin (Index))
+                  & " bytes on " & Target & ", and its depth cannot be"
+                  & " known: its calls reach an opening of kind `any` in"
+                  & " `main.erased` (D474)")
+                 and then Contains (Said, "app/main.ldn:13:11"),
+               Target & ": the refusal names the opening where it is: "
+               & Said);
+         end;
+      end loop;
+   end An_Open_Handler_Is_Refused;
+
+   --  D474 applies only where a fibre can exist: without a
+   --  `compiler.stack_prepare` the same large handler, and one that
+   --  calls through `any`, are emitted on every target.
+   procedure Without_A_Prepared_Stack_Any_Handler_Is_Emitted
+     (Item : in out Landin.Testing.Context);
+
+   procedure Without_A_Prepared_Stack_Any_Handler_Is_Emitted
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Index in Every_Backend'Range loop
+         declare
+            Target : constant String := Every_Backend (Index).all;
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Emit_Handler
+                 (Handler_Program (Large_Handler, False), Target).Status,
+               Landin.Driver.Status_Success,
+               Target & ": a large handler with no prepared stack");
+            Landin.Testing.Check_Equal
+              (Item, Emit_Handler
+                 (Handler_Program (Erased_Handler, False), Target).Status,
+               Landin.Driver.Status_Success,
+               Target & ": an open handler with no prepared stack");
+         end;
+      end loop;
+   end Without_A_Prepared_Stack_Any_Handler_Is_Emitted;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -565,6 +859,19 @@ package body Landin.Tests.Stack_Report_Suite is
       Landin.Testing.Register
         (Into, "stack report", "a stack report needs emitted code",
          A_Stack_Report_Needs_Emitted_Code'Access);
+      Landin.Testing.Register
+        (Into, "stack report", "a handler that fits is emitted",
+         A_Handler_That_Fits_Is_Emitted'Access);
+      Landin.Testing.Register
+        (Into, "stack report", "a handler past the margin is refused",
+         A_Handler_Past_The_Margin_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "stack report", "an open handler is refused",
+         An_Open_Handler_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "stack report",
+         "without a prepared stack any handler is emitted",
+         Without_A_Prepared_Stack_Any_Handler_Is_Emitted'Access);
    end Register;
 
 end Landin.Tests.Stack_Report_Suite;

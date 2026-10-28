@@ -380,7 +380,9 @@ This is the maintained inventory of what the compiler does today:
   against the current stack's limit in its prologue and traps D451's fifth
   panic kind, `stack_exhausted`, at its own site before it writes below the
   stack, at any depth; a switch carries each stack's limit, which stands a
-  margin above its base for the handler (D471, D472). A program that
+  margin above its base for the handler (D471, D472). A selected handler
+  that does not fit that margin, or whose calls the compiler cannot
+  measure, is refused when the program is compiled (D474). A program that
   prepares no stack has no check. Synthetic-32 refuses both builtins. On
   the retained Cortex-M0 profile a consumer of `core/fibre`'s round of
   turns, two fibres on 1,472-byte stacks cut from fixed module storage,

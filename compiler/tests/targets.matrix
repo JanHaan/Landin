@@ -1249,6 +1249,8 @@ negative/sink-through-dereference | linux-x86-64, linux-arm64, darwin-arm64, syn
 negative/slice-comparison-refused | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/stack-builtins-argument-contract | linux-x86-64, freebsd-x86-64
 negative/stack-builtins-target-synthetic-32 | synthetic-32
+negative/stack-handler-exceeds-margin | linux-x86-64
+negative/stack-handler-opens-its-graph | linux-x86-64
 negative/statement-where-a-value-belongs-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/statements-after-a-bare-else-name-its-binder | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/static-origin-beside-unnamed-source | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

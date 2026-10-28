@@ -440,11 +440,13 @@ or the routine is naked. `Landin.Backend.Dispatch.Stack_Facts_Of` holds
 what the code outside the program's routines takes: the switch routine's
 frame on the leaving stack, the first frame `compiler.stack_prepare` lays,
 where the entry starts below a prepared top, D361's report, and D472's
-margin above a prepared stack's base and largest unchecked frame.
+margin above a prepared stack's base, largest unchecked frame and what
+the margin pays before a selected handler.
 `Landin.Build_Reports.Stacks` reads the call graph from the unit the
 backend was given, closes it where a call names its routine, and renders
 `landin-stack-report-1`: the target, level and controls, `switch_bytes`,
-`prepared_bytes`, `entry_bytes`, `margin_bytes`, `unchecked_bytes`, a
+`prepared_bytes`, `entry_bytes`, `margin_bytes`, `unchecked_bytes`,
+`handler_entry_bytes`, a
 `trap` object, `openings` (`kind`,
 `routine`, `file`, `line`, `column`, `callee` when one is named) and one
 `routines` row per emitted routine with `frame_bytes`, `depth_bytes`,
@@ -453,7 +455,10 @@ backend was given, closes it where a call names its routine, and renders
 D361's report names them, so the bytes do not depend on where the program
 was read or written. The report is frames and depths; sizing a fibre's
 backing from them, alignment of the top and D461's exception frame
-included, is its reader's arithmetic.
+included, is its reader's arithmetic. The same measure decides D474:
+`Fit_Handler` refuses, after emission and before the driver writes
+anything, a program that prepares a stack and selects a handler that does
+not fit the margin or whose graph is open.
 
 `--debug=full` requests Linux or Darwin source-debugger metadata; `--debug=none` is the
 default. This control is independent of `--build-mode`, `--optimize` and

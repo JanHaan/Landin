@@ -212,7 +212,8 @@ package Landin.Diagnostics.Catalogue is
       Frame_Not_Addressable,
       Image_Materialization_Limit,
       Panic_Contract_Invalid,
-      Firmware_Frame_Exceeds_Stack);
+      Firmware_Frame_Exceeds_Stack,
+      Handler_Exceeds_Stack_Margin);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -314,7 +315,8 @@ package Landin.Diagnostics.Catalogue is
             when Frame_Not_Addressable      => "L0504",
             when Image_Materialization_Limit => "L0505",
             when Panic_Contract_Invalid    => "L0506",
-            when Firmware_Frame_Exceeds_Stack => "L0507");
+            when Firmware_Frame_Exceeds_Stack => "L0507",
+            when Handler_Exceeds_Stack_Margin => "L0508");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -344,7 +346,7 @@ package Landin.Diagnostics.Catalogue is
             when Call_Argument_Match .. Traversal_Source => Error,
             --  Stage warnings do not refuse; invocation policy is separate.
             when Mutable_Never_Written | Unused_Pure_Local => Warning,
-            when No_Toolchain .. Firmware_Frame_Exceeds_Stack => Error);
+            when No_Toolchain .. Handler_Exceeds_Stack_Margin => Error);
 
    --  Argument_Not_In_A_Register was retired by the internal scalar
    --  convention, which places every argument after the sixth in an aligned
@@ -385,6 +387,7 @@ package Landin.Diagnostics.Catalogue is
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable | Image_Materialization_Limit
                | Panic_Contract_Invalid | Firmware_Frame_Exceeds_Stack
+               | Handler_Exceeds_Stack_Margin
                => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
@@ -634,7 +637,11 @@ package Landin.Diagnostics.Catalogue is
                "[1670]: invalid panic handler or unrepresentable site space",
             when Firmware_Frame_Exceeds_Stack =>
                "[1990]: one Cortex-M0 firmware frame exceeds the selected"
-               & " stack reservation");
+               & " stack reservation",
+            when Handler_Exceeds_Stack_Margin =>
+               "[1670]: a selected panic handler in a program that"
+               & " prepares a stack exceeds or cannot be measured against"
+               & " the target's stack margin");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -677,7 +684,7 @@ package Landin.Diagnostics.Catalogue is
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
             --  in an empty file or a source-free fallback.
-            when No_Toolchain .. Firmware_Frame_Exceeds_Stack => False);
+            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -717,7 +724,7 @@ package Landin.Diagnostics.Catalogue is
             when Unused_Pure_Local => True,
             when Call_Argument_Match .. Traversal_Source
                => True,
-            when No_Toolchain .. Firmware_Frame_Exceeds_Stack => False);
+            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False);
 
    --  The admitted secondary-label interval. Every code except L0201, L0300,
    --  L0304, L0305, L0306 and L0325 has one exact count. L0300 and L0306

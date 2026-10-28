@@ -1,0 +1,51 @@
+--  D474: a program that prepares a stack selects a handler that calls
+--  through an `any` value.  What the call reaches is a run-time fact, so
+--  the handler's depth on the margin it runs on cannot be known, and the
+--  compiler refuses it, naming the opening and where it is.
+import core/panic
+
+counter: type = concept (provider: type)
+    total: (self: provider) -> (sum: u32)
+end counter
+
+tally: type = struct
+    sum: u32
+end tally
+
+tally_total: (self: tally) -> (sum: u32) =
+    sum = self.sum
+end tally_total
+
+tally is counter (total: tally_total)
+
+mut memory: [2048]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut held: tally = (sum: 3)
+mut seen: i32 = 0
+
+erased: (item: any counter) -> (sum: u32) =
+    sum = item.total()
+end erased
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    seen = i32(erased(any(addr held)))
+    _ = kind
+    _ = site
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end panic_handler
+
+fibre: (argument: usize) -> noreturn =
+    seen = i32(argument)
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end fibre
+
+public main: () -> (code: i32) =
+    fibre_saved = compiler.stack_prepare(memory[0..<2048], fibre, 3)
+    compiler.stack_switch(addr main_saved, fibre_saved)
+    code = seen
+end main

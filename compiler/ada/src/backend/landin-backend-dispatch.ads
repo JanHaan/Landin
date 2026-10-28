@@ -40,7 +40,9 @@ package Landin.Backend.Dispatch is
    --  library's `write`, whose stack is not known here.  Limit_Margin is
    --  how far above a prepared stack's base its limit stands, and
    --  Unchecked the largest call-free frame or call area no check covers
-   --  (D471, D472); both are Landin.Backend's.  On Cortex-M0 a
+   --  (D471, D472), and Handler_Entry what the margin pays before a
+   --  selected handler's own frames (D474); all three are
+   --  Landin.Backend's.  On Cortex-M0 a
    --  failed check with no handler is an undefined instruction, whose
    --  exception frame D461 charges to every stack an exception can take.
    type Stack_Facts is record
@@ -51,10 +53,16 @@ package Landin.Backend.Dispatch is
       Report_Foreign : Boolean := False;
       Limit_Margin   : Landin.Targets.Byte_Count := 0;
       Unchecked      : Landin.Targets.Byte_Count := 0;
+      Handler_Entry  : Landin.Targets.Byte_Count := 0;
    end record;
 
    function Stack_Facts_Of
      (Facts : Landin.Targets.Target_Facts) return Stack_Facts;
+
+   --  D471: whether the program holds a `compiler.stack_prepare`, so that
+   --  its routines check their frames against a stack's limit and its
+   --  selected handler runs on a prepared stack's margin (D474).
+   function Prepares_Stacks (Of_Unit : Landin.IR.Unit) return Boolean;
 
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
