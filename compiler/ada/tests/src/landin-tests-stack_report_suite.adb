@@ -205,22 +205,24 @@ package body Landin.Tests.Stack_Report_Suite is
      & "mut backing: [1024]u8 = zeroed" & LF
      & LF
      & "fibre: (argument: usize) -> noreturn =" & LF
-     & "    compiler.stack_switch(addr fibre_saved, main_saved, argument)"
-     & LF
+     & "    _ = argument" & LF
+     & "    compiler.stack_switch(addr fibre_saved, main_saved)" & LF
      & "    compiler.unreachable()" & LF
      & "end fibre" & LF
      & LF
      & "public main: () -> (code: i32) =" & LF
      & "    fibre_saved = compiler.stack_prepare(backing[0..<1024], fibre,"
      & " 0)" & LF
-     & "    compiler.stack_switch(addr main_saved, fibre_saved, 0)" & LF
+     & "    compiler.stack_switch(addr main_saved, fibre_saved)" & LF
      & "    code = 0" & LF
      & "end main" & LF;
 
    --  A switch is not a call into the context it resumes: it costs what
    --  the switch routine saves on the leaving stack.  The first frame a
    --  prepare lays, and where the entry starts below a stack's top, are
-   --  the target's, for whoever sizes a backing (D461).
+   --  the target's, for whoever sizes a backing (D461), as are the margin
+   --  a prepared stack's limit keeps above its base and the largest frame
+   --  or call area no check covers (D472).
    procedure A_Switch_Costs_Its_Frame
      (Item : in out Landin.Testing.Context);
 
@@ -228,10 +230,11 @@ package body Landin.Tests.Stack_Report_Suite is
      (Item : in out Landin.Testing.Context)
    is
       type Expected is record
-         Switch, Prepared, Entry_Below : Natural;
+         Switch, Prepared, Entry_Below, Margin, Unchecked : Natural;
       end record;
       Facts : constant array (Native'Range) of Expected :=
-        [(56, 72, 16), (160, 160, 0), (208, 208, 0), (40, 40, 0)];
+        [(64, 64, 0, 640, 64), (176, 176, 0, 640, 64),
+         (208, 208, 0, 768, 64), (48, 48, 0, 384, 64)];
    begin
       for Index in Native'Range loop
          declare
@@ -249,6 +252,12 @@ package body Landin.Tests.Stack_Report_Suite is
             Landin.Testing.Check_Equal
               (Item, Field (Text, "entry_bytes"), Want.Entry_Below,
                Target & ": where the entry starts below the top");
+            Landin.Testing.Check_Equal
+              (Item, Field (Text, "margin_bytes"), Want.Margin,
+               Target & ": the margin a prepared stack's limit keeps");
+            Landin.Testing.Check_Equal
+              (Item, Field (Text, "unchecked_bytes"), Want.Unchecked,
+               Target & ": the largest frame no check covers");
             Landin.Testing.Check
               (Item, Contains (Fibre, """switches"":true")
                  and then Contains (Fibre, """address_taken"":true")

@@ -1042,7 +1042,13 @@ package body Landin.Backend.Cortex_M is
       --  carries one switch routine and one start routine, emitted after
       --  its bodies; the block that emits them says what each does.  A
       --  context's saved frame is Stack_Frame bytes: the CONTROL word, r8
-      --  to r11, r4 to r7 and the address the switch returns to.  Both
+      --  to r11, a scratch word that keeps the frame eight-byte aligned,
+      --  the stack's limit (D472), r4 to r7 and the address the switch returns
+      --  to.  Stack_Limit is D471's cell: the current stack's limit, zero
+      --  on the main stack.  A program that prepares a stack checks it in
+      --  its routines' prologues and an interrupt handler keeps zero in it
+      --  while it runs on the main stack; one that uses a builtin keeps
+      --  it, and its switch saves and restores it.  Both
       --  routines are local function symbols, `landin.stack_switch` and
       --  `landin.stack_start` (D469), the names a debugger shows in a
       --  backtrace; no Landin routine is spelled with the dot, and an
@@ -1052,7 +1058,13 @@ package body Landin.Backend.Cortex_M is
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
       Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
       Stack_Start : constant String := Routine_Prefix & "stack_start";
-      Stack_Frame : constant := 40;
+      Stack_Frame : constant := 48;
+      Prepares : constant Boolean := Landin.Backend.Prepares_Stacks (Of_Unit);
+      Unchecked_Bytes : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Unchecked_Stack_Bytes (Facts);
+      Limit_Margin : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Stack_Limit_Margin (Facts);
+      Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
 
       procedure Put (Line : String) is
       begin
@@ -1429,6 +1441,21 @@ package body Landin.Backend.Cortex_M is
          Home_Line : Natural := 0;
          Home_Offset : Landin.Targets.Byte_Count := 0;
          Hard_Trap_Used : Boolean := False;
+         --  D471: whether a stack limit check branches to this routine's
+         --  own stack_exhausted trap, laid out after the others, and
+         --  whether this is an interrupt handler that keeps zero in the
+         --  limit's cell while it runs on the main stack.
+         Limit_Trapped : Boolean := False;
+         Limit_Trap : constant String := Label (Item, 1) & "_stack_limit";
+         Keeps_Limit : constant Boolean :=
+           Prepares and then not Ordinary
+           and then Landin.IR.Signature_Machine
+             (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+               /= Landin.Machine.Naked_Routine;
+         --  The bytes an interrupt handler pushes below its frame record
+         --  for that: the interrupted context's limit and a word that
+         --  keeps eight-byte alignment.
+         Kept : constant Natural := (if Keeps_Limit then 8 else 0);
 
          procedure Mark_Low (Assembly : String);
          function Call_Free (Assembly : String) return Boolean;
@@ -2026,7 +2053,8 @@ package body Landin.Backend.Cortex_M is
             Emit ("mov r6, r11");
             Emit ("mov sp, r6");
             if Debug /= null then
-               Emit (".cfi_def_cfa sp, 24");
+               Emit (".cfi_def_cfa sp, " & Trimmed (Integer'Image
+                 (24 + Kept)));
             end if;
             Emit ("ldr r7, [r6, #4]");
             Emit ("ldr r6, [r6]");
@@ -2040,14 +2068,24 @@ package body Landin.Backend.Cortex_M is
             end if;
             Emit ("add sp, #8");
             if Debug /= null then
-               Emit (".cfi_def_cfa_offset 16");
+               Emit (".cfi_def_cfa_offset " & Trimmed (Integer'Image
+                 (16 + Kept)));
             end if;
             Emit ("pop {r4, r5, r6, r7}");
             if Debug /= null then
-               Emit (".cfi_def_cfa_offset 0");
+               Emit (".cfi_def_cfa_offset " & Trimmed (Kept'Image));
                for Reg in 4 .. 7 loop
                   Emit (".cfi_restore r" & Trimmed (Reg'Image));
                end loop;
+            end if;
+            --  D471: the interrupted context's limit back in the cell.
+            if Keeps_Limit then
+               Emit ("pop {r0, r1}");
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset 0");
+               end if;
+               Address ("r1", Stack_Limit);
+               Emit ("str r0, [r1]");
             end if;
             Emit ("bx lr");
             if Debug /= null then
@@ -2066,6 +2104,28 @@ package body Landin.Backend.Cortex_M is
                Epilogue;
             end if;
          end Return_From_Routine;
+
+         --  D471: go to the limit trap when the stack pointer less Bytes
+         --  is below the current stack's limit, before anything is written
+         --  there.  r6 and r7 are free after a framed prologue's pushes and
+         --  wherever a call's area is reserved.
+         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count);
+
+         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
+         begin
+            Emit ("mov r6, sp");
+            if Bytes in 1 .. 255 then
+               Emit ("subs r6, #" & Trimmed (Bytes'Image));
+            elsif Bytes > 0 then
+               Immediate ("r7", Pattern (Bytes));
+               Emit ("subs r6, r6, r7");
+            end if;
+            Address ("r7", Stack_Limit);
+            Emit ("ldr r7, [r7]");
+            Emit ("cmp r6, r7");
+            Branch ("cc", Limit_Trap);
+            Limit_Trapped := True;
+         end Check_Limit;
          function Array_Length_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -4174,6 +4234,9 @@ package body Landin.Backend.Cortex_M is
                      Bytes : constant Landin.Targets.Byte_Count :=
                        Call.Stack_Bytes + Register_Bytes;
                   begin
+                     if Prepares and then Bytes > Unchecked_Bytes then
+                        Check_Limit (Bytes);
+                     end if;
                      Reserve (Bytes);
                      if Hidden > 0 then
                         Load_Value (Operand (Offset + 1));
@@ -4258,32 +4321,37 @@ package body Landin.Backend.Cortex_M is
                         --  laid below it as the switch routine's pops read
                         --  it: CONTROL with SPSEL set, so the stack runs on
                         --  PSP; r8 to r11 zero, r11 ending the frame chain;
-                        --  r4 the argument, r5 the entry, r6 and r7 zero;
-                        --  then the start routine, past its nop, as the
-                        --  return address.  A slice too short for those
-                        --  40 bytes traps stack_exhausted (D451), inside
-                        --  unchecked too; the difference is signed, since
-                        --  aligning a short slice's top may take it below
-                        --  the base.
+                        --  a zero word and the stack's limit, its base and
+                        --  the margin (D472); r4 the argument, r5 the
+                        --  entry, r6 and r7 zero; then the start routine,
+                        --  past its nop, as the return address.  A slice
+                        --  too short for those 48 bytes and the margin
+                        --  traps stack_exhausted (D451), inside unchecked
+                        --  too; the difference is signed, since aligning a
+                        --  short slice's top may take it below the base.
                         Load_Value (Operand (1), "r0");
                         Load_Value (Operand (2), "r1");
                         Emit ("adds r1, r1, r0");
                         Emit ("movs r2, #7");
                         Emit ("bics r1, r2");
                         Emit ("subs r1, r1, r0");
-                        Emit ("cmp r1, #" & Trimmed (Natural'Image
-                          (Stack_Frame)));
+                        Immediate ("r2", Pattern
+                          (Stack_Frame + Limit_Margin));
+                        Emit ("cmp r1, r2");
                         Branch ("lt", Trap);
+                        Immediate ("r2", Pattern (Limit_Margin));
+                        Emit ("adds r2, r2, r0");
                         Emit ("adds r0, r0, r1");
                         Emit ("subs r0, #" & Trimmed (Natural'Image
                           (Stack_Frame)));
+                        Emit ("str r2, [r0, #24]");
                         Load_Value (Operand (4), "r1");
-                        Emit ("str r1, [r0, #20]");
+                        Emit ("str r1, [r0, #28]");
                         Load_Value (Operand (3), "r1");
-                        Emit ("str r1, [r0, #24]");
+                        Emit ("str r1, [r0, #32]");
                         Emit ("movs r1, #0");
-                        for Offset in 1 .. 8 loop
-                           if Offset not in 5 .. 6 then
+                        for Offset in 1 .. 10 loop
+                           if Offset not in 6 .. 8 then
                               Emit ("str r1, [r0, #"
                                 & Trimmed (Natural'Image (4 * Offset))
                                 & "]");
@@ -4292,19 +4360,14 @@ package body Landin.Backend.Cortex_M is
                         Emit ("movs r1, #2");
                         Emit ("str r1, [r0]");
                         Address ("r1", Stack_Start & " + 2");
-                        Emit ("str r1, [r0, #36]");
+                        Emit ("str r1, [r0, #44]");
                         Stack_Used := True;
                         Store_Value (Value);
                      elsif M = Stack_Switch then
-                        --  D450/D447: the limit is checked here, against
-                        --  the leaving stack, so the trap is this call's
-                        --  own site; the switch itself is one call of the
+                        --  D450/D472: the switch is one call of the
                         --  program's switch routine, so the routine holding
-                        --  it is never call-free (Call_Free reads its bl).
-                        Load_Value (Operand (3), "r0");
-                        Emit ("mov r1, sp");
-                        Emit ("cmp r1, r0");
-                        Branch ("cc", Trap);
+                        --  it is never call-free (Call_Free reads its bl);
+                        --  it checked its frame (D471).
                         Load_Value (Operand (1), "r0");
                         Load_Value (Operand (2), "r1");
                         Emit ("bl " & Stack_Switcher);
@@ -4505,20 +4568,38 @@ package body Landin.Backend.Cortex_M is
                end;
             end if;
          else
+            --  D471: an interrupt handler runs on the main stack, which
+            --  no prepared stack's limit describes, so it keeps the
+            --  interrupted context's limit below its frame record and
+            --  zero in the cell until it returns.  r0 to r3 are the
+            --  exception frame's to restore.
+            if Keeps_Limit then
+               Address ("r0", Stack_Limit);
+               Emit ("ldr r1, [r0]");
+               Emit ("movs r2, #0");
+               Emit ("str r2, [r0]");
+               Emit ("push {r1, r2}");
+               if Debug /= null then
+                  Emit (".cfi_def_cfa_offset 8");
+               end if;
+            end if;
             Emit ("push {r4, r5, r6, r7}");
             if Debug /= null then
-               Emit (".cfi_def_cfa_offset 16");
+               Emit (".cfi_def_cfa_offset " & Trimmed (Integer'Image
+                 (16 + Kept)));
                for Reg in 4 .. 7 loop
                   Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
-                    & Trimmed (Integer'Image ((8 - Reg) * 4)));
+                    & Trimmed (Integer'Image ((8 - Reg) * 4 + Kept)));
                end loop;
             end if;
             Emit ("mov r4, r11");
             Emit ("mov r5, lr");
             Emit ("push {r4, r5}");
             if Debug /= null then
-               Emit (".cfi_def_cfa_offset 24");
-               Emit (".cfi_offset r11, -24");
+               Emit (".cfi_def_cfa_offset " & Trimmed (Integer'Image
+                 (24 + Kept)));
+               Emit (".cfi_offset r11, -" & Trimmed (Integer'Image
+                 (24 + Kept)));
                if Ordinary then
                   Emit (".cfi_offset lr, -20");
                end if;
@@ -4526,6 +4607,19 @@ package body Landin.Backend.Cortex_M is
             Emit ("mov r11, sp");
             if Debug /= null then
                Emit (".cfi_def_cfa_register r11");
+            end if;
+            --  D471: the frame is checked against the current stack's
+            --  limit before it is reserved.  A call-free leaf has no
+            --  frame record and is not checked: its frame is one the
+            --  margin pays for, or it is not a leaf.  The selected
+            --  handler stores zero in the cell instead, so that it and
+            --  what it calls run on what a failed check left, without a
+            --  check that would enter it again.
+            if Prepares and then Ordinary and then not Probe
+              and then (Panic = null
+                        or else Item /= Landin.Panics.Handler (Panic.all))
+            then
+               Check_Limit (Homes);
             end if;
          end if;
          Sp_Known := False;
@@ -4536,6 +4630,11 @@ package body Landin.Backend.Cortex_M is
          end if;
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
+            if Prepares then
+               Address ("r6", Stack_Limit);
+               Emit ("movs r7, #0");
+               Emit ("str r7, [r6]");
+            end if;
             Address ("r6", Local_Prefix & "landin_panic_active");
             Emit ("ldr r7, [r6]");
             Emit ("cmp r7, #0");
@@ -4697,6 +4796,29 @@ package body Landin.Backend.Cortex_M is
             Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
             Emit ("udf #1");
          end loop;
+         --  D471: a frame or an area that does not fit traps at the
+         --  routine's own site, from the frame record: nothing below it
+         --  was reserved for what did not fit, or what was is given back.
+         --  Without a handler the trap is the terminal instruction.
+         if Limit_Trapped then
+            Put (Limit_Trap & ":");
+            if Debug /= null then
+               Put (Dwarf.Source_Line
+                 (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
+            end if;
+            Emit ("mov sp, r11");
+            if Panic /= null and then Landin.Panics.Handler (Panic.all)
+              /= Landin.IR.No_Item
+            then
+               Immediate ("r0", Pattern (Landin.Panics.Code
+                 (Panic.all, Landin.Panics.Stack_Exhausted)));
+               Immediate ("r1", Pattern (Landin.Panics.Site
+                 (Panic.all, Landin.IR.Origin_Of (Of_Unit, Item),
+                  Landin.Panics.Stack_Exhausted)));
+               Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+            end if;
+            Emit ("udf #1");
+         end if;
          if Hard_Trap_Used then
             Put (Hard_Trap & ":");
             Emit ("udf #1");
@@ -4716,7 +4838,10 @@ package body Landin.Backend.Cortex_M is
             declare
                Text : constant String := Unbounded.Slice
                  (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
-               Eligible : Boolean := Ordinary and then Call_Free (Text);
+               --  D471: a call-free routine whose frame the margin does not
+               --  pay for keeps a frame record, which its check needs.
+               Eligible : Boolean := Ordinary and then Call_Free (Text)
+                 and then not (Prepares and then Homes + 16 > Unchecked_Bytes);
             begin
                for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
                   for Position in 1 .. Landin.IR.Length
@@ -4752,14 +4877,19 @@ package body Landin.Backend.Cortex_M is
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
              (Item => Item,
-              Frame_Bytes => Homes + (if Leaf then Save_Count else 24),
+              Frame_Bytes => Homes + (if Leaf then Save_Count else 24)
+                + Landin.Targets.Byte_Count (Kept),
               Spill_Bytes => Spill_Bytes (Layout),
-              Save_Bytes => (if Leaf then Save_Count else 24),
+              Save_Bytes => (if Leaf then Save_Count else 24)
+                + Landin.Targets.Byte_Count (Kept),
               Spill_Count => Spill_Count (Layout),
               Instructions => Instruction_Count - Before_Emit,
               Stack_Bytes => Homes + (if Leaf then Save_Count else 24)
-                + Deepest_Below,
-              Calls_Panic => not Edges.Is_Empty,
+                + Landin.Targets.Byte_Count (Kept) + Deepest_Below,
+              Calls_Panic => not Edges.Is_Empty
+                or else (Limit_Trapped and then Panic /= null
+                         and then Landin.Panics.Handler (Panic.all)
+                           /= Landin.IR.No_Item),
               Helper_Calls => Helpers_Called,
               others => <>));
       end Emit_Routine;
@@ -6032,14 +6162,15 @@ package body Landin.Backend.Cortex_M is
       --  D450, D447 and D460.  The switch routine is out of line, one per
       --  program, so that its unwind information is exact at every
       --  instruction.  It is called with the address to save through in r0
-      --  and the stack pointer to resume in r1, after the caller checked
-      --  the limit.  It pushes r4 to r7 and lr, then r8 to r11 through r4
-      --  to r7 with CONTROL below them, so the saved frame records which
-      --  stack pointer the leaving context ran on; stores sp; reads the
-      --  resumed frame's CONTROL word, writes the resumed stack pointer
-      --  into MSP or PSP as that word's SPSEL says, then CONTROL and an
-      --  ISB, which makes it the current sp; and pops the same frame.
-      --  Both frames have the same 40-byte layout, so one CFA rule, sp
+      --  and the stack pointer to resume in r1.  It pushes r4 to r7 and
+      --  lr, then a scratch word and the current stack's limit (D472),
+      --  then r8 to r11 through r4 to r7 with CONTROL below them, so the
+      --  saved frame records which stack pointer the leaving context ran
+      --  on; stores sp; reads the resumed frame's CONTROL word, writes the
+      --  resumed stack pointer into MSP or PSP as that word's SPSEL says,
+      --  then CONTROL and an ISB, which makes it the current sp; and pops
+      --  the same frame, the limit into the cell.
+      --  Both frames have the same 48-byte layout, so one CFA rule, sp
       --  plus what remains pushed, holds at every instruction: until
       --  CONTROL is written sp is still the leaving stack's, and after it
       --  the resumed one's.  Between the pop of r8 to r11 into r4 to r7
@@ -6080,6 +6211,12 @@ package body Landin.Backend.Cortex_M is
             end loop;
             Emit (".cfi_offset lr, -4");
          end if;
+         Emit ("ldr r2, =" & Stack_Limit);
+         Emit ("ldr r3, [r2]");
+         Emit ("push {r2, r3}");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 28");
+         end if;
          Emit ("mov r4, r8");
          Emit ("mov r5, r9");
          Emit ("mov r6, r10");
@@ -6087,10 +6224,10 @@ package body Landin.Backend.Cortex_M is
          Emit ("mrs r3, control");
          Emit ("push {r3, r4, r5, r6, r7}");
          if Debug /= null then
-            Emit (".cfi_def_cfa_offset 40");
+            Emit (".cfi_def_cfa_offset 48");
             for Reg in 8 .. 11 loop
                Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
-                 & Trimmed (Integer'Image ((17 - Reg) * 4)));
+                 & Trimmed (Integer'Image ((19 - Reg) * 4)));
             end loop;
          end if;
          Emit ("mov r2, sp");
@@ -6108,7 +6245,7 @@ package body Landin.Backend.Cortex_M is
          Emit ("isb sy");
          Emit ("pop {r3, r4, r5, r6, r7}");
          if Debug /= null then
-            Emit (".cfi_def_cfa_offset 20");
+            Emit (".cfi_def_cfa_offset 28");
             for Reg in 8 .. 11 loop
                Emit (".cfi_register r" & Trimmed (Reg'Image) & ", r"
                  & Trimmed (Integer'Image (Reg - 4)));
@@ -6121,7 +6258,14 @@ package body Landin.Backend.Cortex_M is
                Emit (".cfi_restore r" & Trimmed (Reg'Image));
             end if;
          end loop;
+         Emit ("pop {r2, r3}");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 20");
+         end if;
+         Emit ("ldr r2, =" & Stack_Limit);
+         Emit ("str r3, [r2]");
          Emit ("pop {r4, r5, r6, r7, pc}");
+         Emit (".ltorg");
          if Debug /= null then
             Emit (".cfi_endproc");
          end if;
@@ -6154,6 +6298,12 @@ package body Landin.Backend.Cortex_M is
             Emit (".cfi_endproc");
          end if;
          Emit (".size " & Stack_Start & ", . - " & Stack_Start);
+         --  D471's cell, zero until a switch resumes a prepared stack.
+         Emit (".pushsection .bss.landin_stack_limit,""aw"",%nobits");
+         Emit (".balign 4");
+         Put (Stack_Limit & ":");
+         Emit (".space 4");
+         Emit (".popsection");
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare

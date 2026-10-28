@@ -826,10 +826,10 @@ package body Landin.Diagnostics.Explanations is
                & " must support it, and an intrinsic cannot fail. `compile"
                & "r.stack_prepare` takes a `[]mut u8`, an ordinary `(argum"
                & "ent: usize) -> noreturn` entry and a `usize`; `compiler."
-               & "stack_switch` takes a `ptr mut usize` and two `usize`s; "
-               & "a target whose backend does not emit them yet refuses bo"
-               & "th by name. Use an ordering and operand the operation ad"
-               & "mits on this target.",
+               & "stack_switch` takes a `ptr mut usize` and a `usize` (D47"
+               & "2); a target whose backend does not emit them yet refuse"
+               & "s both by name. Use an ordering and operand the operatio"
+               & "n admits on this target.",
             when Catalogue.Machine_Entry_Contract =>
                "An interrupt or naked routine is used outside its machin"
                & "e-entry contract [1570]. The machine convention is Corte"

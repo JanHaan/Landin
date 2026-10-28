@@ -1,5 +1,5 @@
 class: runtime
-summary: D451 a selected panic handler receives stack_exhausted, with a nonzero site, from a fibre's switch past its limit, and resumes the context main saved
+summary: D451/D471 a selected panic handler receives stack_exhausted, with a nonzero site, from the prologue of a fibre's recursion past its stack's limit and resumes the context main saved, which finds the bytes below the fibre's stack unwritten
 program: main.ldn
 root: ../../../../..
 profiles: specialization

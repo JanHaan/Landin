@@ -1,0 +1,8 @@
+class: runtime
+summary: D471 a routine whose frame is larger than its prepared stack traps stack_exhausted in its own prologue, before anything of its frame is written below the stack: a selected handler resumes main, which finds the paint below the stack whole
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 0890, 1620, 1670
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

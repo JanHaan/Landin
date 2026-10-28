@@ -24107,8 +24107,8 @@ package body Landin.Stages.Checking is
                   --  by their own contract rather than by a memory scalar:
                   --  a `[]mut u8` stack, a `(argument: usize) -> noreturn`
                   --  entry and its usize argument for prepare, and a
-                  --  `ptr mut usize` to save through, the usize to resume
-                  --  and the usize limit for switch.  Each is checked before
+                  --  `ptr mut usize` to save through and the usize to
+                  --  resume for switch (D472).  Each is checked before
                   --  the target is, as the atomics' operands are.
                   function Check_Stack return Ty.Type_Kind;
                   function Check_Stack return Ty.Type_Kind is
@@ -24140,8 +24140,8 @@ package body Landin.Stages.Checking is
                                      & " type (argument: usize) -> noreturn"
                                      & " and its usize argument"
                                 else " takes a ptr mut usize to save"
-                                     & " through, the usize stack pointer to"
-                                     & " resume and the usize limit"),
+                                     & " through and the usize stack pointer"
+                                     & " to resume"),
                            Related => Syn.Origin (Of_Tree, Node),
                            Because => "this stack builtin", Into => Found);
                         return Kept (Ty.Ill_Typed);
@@ -24273,9 +24273,6 @@ package body Landin.Stages.Checking is
                         Require (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 2),
                                  Ty.Usize, Syn.Origin (Of_Tree, Node),
                                  "the stack pointer the switch resumes");
-                        Require (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 3),
-                                 Ty.Usize, Syn.Origin (Of_Tree, Node),
-                                 "the switch's stack limit");
                      end if;
                      if not Landin.Targets.Capabilities.Stack_Switching
                        (Facts)

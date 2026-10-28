@@ -5,9 +5,9 @@
 --  once from left to right, and a full compiler memory boundary.  In the
 --  IR, Stack_Prepare's slice is its base and its length, so it carries four
 --  usize operands (base, length, entry, argument) and gives the usize stack
---  pointer a later switch resumes; Stack_Switch carries three (the address
---  it saves through, the stack pointer it resumes and the limit) and gives
---  nothing.
+--  pointer a later switch resumes; Stack_Switch carries two (the address
+--  it saves through and the stack pointer it resumes) and gives nothing.
+--  The limit a switch once took is in the frames it saves (D472).
 
 package Landin.Memory is
    type Operation is

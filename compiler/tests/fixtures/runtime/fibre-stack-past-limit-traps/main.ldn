@@ -1,7 +1,8 @@
---  D447/D451: a task whose calls go deeper at every turn reaches its
---  stack's limit, and the switch of the first turn past it traps
---  `stack_exhausted` there, inside the provider, before the task has
---  written below its stack.
+--  D471: a task whose own recursion goes deeper than its stack between
+--  two switches traps `stack_exhausted` in the prologue of the first call
+--  whose frame would go below the stack's limit, at that routine's site,
+--  before it has written below its stack.  Before D471 the check was made
+--  only at a switch, and this task overwrote its own record first.
 import core/failure
 import core/fibre
 import core/fibre/stacks
@@ -10,15 +11,16 @@ deep: type = struct
     runs: any fibre.turns
 end deep
 
---  Each level takes a turn before it goes deeper, so a switch is made at
---  every depth and the first one past the stack's limit traps.
-descend: (runs: any fibre.turns, depth: u32) -> (reached: u32) =
-    runs.yield()
-    reached = descend(runs, depth + 1) + 1
+--  Goes on without end, and never switches.
+descend: (depth: u32) -> (reached: u32) =
+    reached = descend(depth + 1) + 1
 end descend
 
+--  One turn first, so the task runs on as a fibre that has been switched
+--  away from and back to.
 dive: (inout state: deep) -> none ! failure.reason =
-    _ = descend(state.runs, 0)
+    state.runs.yield()
+    _ = descend(0)
 end dive
 
 run_all: (runs: any fibre.turns) -> none ! failure.reason =

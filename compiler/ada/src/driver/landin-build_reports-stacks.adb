@@ -700,6 +700,8 @@ package body Landin.Build_Reports.Stacks is
            & ",""switch_bytes"":" & Image (Machine.Switch_Bytes)
            & ",""prepared_bytes"":" & Image (Machine.Prepared_Bytes)
            & ",""entry_bytes"":" & Image (Machine.Entry_Bytes)
+           & ",""margin_bytes"":" & Image (Machine.Limit_Margin)
+           & ",""unchecked_bytes"":" & Image (Machine.Unchecked)
            & "," & LF & """trap"":{""calls"":""" & Trap_Calls & """");
       if Handler /= IR.No_Item then
          Put (",""routine"":" & Landin.Json.Quoted (Name_Of (Handler)));

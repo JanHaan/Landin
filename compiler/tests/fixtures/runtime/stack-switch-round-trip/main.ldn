@@ -10,7 +10,6 @@
 mut backing: [2048]u8 = zeroed
 mut main_saved: usize = 0
 mut fibre_saved: usize = 0
-mut fibre_limit: usize = 0
 mut shared: u64 = 0
 mut trace: [8]u8 = zeroed
 mut steps: usize = 0
@@ -23,23 +22,22 @@ end note
 fibre: (argument: usize) -> noreturn =
     note(u8(argument))
     shared = shared * 10 + 2
-    compiler.stack_switch(addr fibre_saved, main_saved, fibre_limit)
+    compiler.stack_switch(addr fibre_saved, main_saved)
     note(u8(argument) + 2)
     shared = shared * 10 + 4
-    compiler.stack_switch(addr fibre_saved, main_saved, fibre_limit)
+    compiler.stack_switch(addr fibre_saved, main_saved)
     compiler.unreachable()
 end fibre
 
 public main: () -> (code: i32) =
     note(97)
     kept: u64 = u64(steps) * 1000 + 7
-    fibre_limit = usize(addr backing[0]) + 512
     fibre_saved = compiler.stack_prepare(backing[0..<2048], fibre, 98)
     shared = 1
-    compiler.stack_switch(addr main_saved, fibre_saved, 0)
+    compiler.stack_switch(addr main_saved, fibre_saved)
     note(99)
     shared = shared * 10 + 3
-    compiler.stack_switch(addr main_saved, fibre_saved, 0)
+    compiler.stack_switch(addr main_saved, fibre_saved)
     note(101)
     shared = shared * 10 + 5
     code = 0

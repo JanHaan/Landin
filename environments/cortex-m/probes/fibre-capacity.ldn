@@ -94,11 +94,12 @@ answer_requests: (inout state: turn) -> none ! failure.reason =
     end while
 end answer_requests
 
---  The fibres' backing: the group's ledger and two stacks, each with its
---  record at its base.  core/fibre's round wants 2 KiB below a stack's
---  first frame (D465), so each stack is that, its record, the task's
---  state and the first frame's words, rounded to the group's alignment.
-mut fibre_backing: [4400]u8 = zeroed
+--  The fibres' backing: the group's ledger and two stacks of 1,472 bytes,
+--  each with its record at its base.  A stack holds the deepest the task
+--  went, about 900 bytes painted, above its limit, which stands 384 bytes
+--  above the stack's base (D472), with room to spare; the rest is the
+--  record and the group's alignment.
+mut fibre_backing: [2992]u8 = zeroed
 mut round_entries: [3]usize = zeroed
 mut round_state: stacks.round_space = zeroed
 mut observed: u32 = 0

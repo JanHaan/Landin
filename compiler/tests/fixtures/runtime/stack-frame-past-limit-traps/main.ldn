@@ -1,0 +1,66 @@
+--  D471: a routine whose frame would go below its stack's limit traps
+--  `stack_exhausted` in its own prologue, before its frame is reserved,
+--  so nothing of it is written below the stack.  The fibre's stack is
+--  the top of `memory` and the bytes below it are painted; the frame of
+--  `large` is larger than the whole stack.  The selected handler records
+--  the kind and resumes main's context, and main, on its own stack again,
+--  finds the paint whole and ends with 42 (D462).  It imports no
+--  provider, so firmware runs the same source.
+import core/panic
+
+mut memory: [2048]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut seen: i32 = 6
+mut entered: u32 = 0
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    seen = match kind
+        panic.stack_exhausted: if site <> 0 then 42 else 5 end if
+        panic.out_of_range: 1
+        panic.overflow: 2
+        panic.bad_conversion: 3
+        panic.unreachable: 4
+    end match
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end panic_handler
+
+large: (seed: u8) -> (sum: u32) =
+    mut table: [2048]u8 = zeroed
+    table[usize(seed)] = seed
+    sum = u32(table[0]) + u32(table[2047]) + u32(table[usize(seed)])
+end large
+
+--  `large` is called through a function value, so no optimization copies
+--  its frame into this one's (D339).
+fibre: (argument: usize) -> noreturn =
+    entered = 1
+    grow := large
+    seen = i32(grow(u8(argument)))
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end fibre
+
+public main: () -> (code: i32) =
+    mut index: usize = 0
+    while index < 256 do
+        memory[index] = 90
+        inc index
+    end while
+    fibre_saved = compiler.stack_prepare(memory[256..<2048], fibre, 7)
+    compiler.stack_switch(addr main_saved, fibre_saved)
+    code = seen
+    index = 0
+    while index < 256 do
+        if memory[index] <> 90 then
+            code = 7
+        end if
+        inc index
+    end while
+    if entered <> 1 then
+        code = 8
+    end if
+end main

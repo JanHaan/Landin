@@ -33,8 +33,10 @@ take: (inout state: turn) -> none ! failure.reason =
 end take
 
 --  Module storage, so the two stacks are no frame's: on Cortex-M0 the
---  reset stack is 4 KiB, and an 8 KiB local would not fit it.
-mut backing: [2 * 4096]u8 = zeroed
+--  reset stack is 4 KiB, and a 10 KiB local would not fit it.  Each stack
+--  is 5 KiB: on RV64, which keeps a frame home for every scalar, a task
+--  here goes deeper than 4 KiB less its limit's margin (D472).
+mut backing: [2 * 5120]u8 = zeroed
 
 both: (runs: any fibre.turns) -> none ! failure.reason =
     mut tasks := try fibre.turns_over(runs, backing, 2)

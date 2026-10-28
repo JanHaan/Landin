@@ -1241,7 +1241,7 @@ stack builtin outside its own (D450, D453). Each operation takes the operand
 types, permissions and memory orderings its contract lists, the target must
 support it, and an intrinsic cannot fail. `compiler.stack_prepare` takes a
 `[]mut u8`, an ordinary `(argument: usize) -> noreturn` entry and a `usize`;
-`compiler.stack_switch` takes a `ptr mut usize` and two `usize`s; a target
+`compiler.stack_switch` takes a `ptr mut usize` and a `usize` (D472); a target
 whose backend does not emit them yet refuses both by name. Use an ordering and
 operand the operation admits on this target.
 

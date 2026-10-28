@@ -14,20 +14,20 @@ returns: (argument: usize) -> none =
 end returns
 
 save_is_not_a_usize: () -> none =
-    compiler.stack_switch(addr word, 0, 0)
+    compiler.stack_switch(addr word, 0)
 end save_is_not_a_usize
 
 save_is_not_mutable: (place: ptr usize) -> none =
-    compiler.stack_switch(place, 0, 0)
+    compiler.stack_switch(place, 0)
 end save_is_not_mutable
 
-limit_is_not_a_usize: () -> none =
-    compiler.stack_switch(addr saved, 0, true)
-end limit_is_not_a_usize
+resume_is_not_a_usize: () -> none =
+    compiler.stack_switch(addr saved, true)
+end resume_is_not_a_usize
 
-switch_without_a_limit: () -> none =
-    compiler.stack_switch(addr saved, 0)
-end switch_without_a_limit
+switch_with_a_limit: () -> none =
+    compiler.stack_switch(addr saved, 0, 0)
+end switch_with_a_limit
 
 stack_is_not_mutable: () -> (resume: usize) =
     resume = compiler.stack_prepare(frozen[0..<256], entry, 0)

@@ -17135,7 +17135,7 @@ The complete enabled check disposition is:
 | Volatile/atomic scalar address alignment; atom-domain validation; packed encoded membership, packed field-width fit or reserved-bit pattern validation | `bad_conversion` at the operation that validates the value. Raw packed copying still preserves every bit without extracting or validating fields. |
 | A callee returns despite `noreturn` | `unreachable` at the call, before any continuation. |
 | `compiler.unreachable()` [1560] | `unreachable` at the call, including inside `unchecked` (D278). |
-| `compiler.stack_switch` with the stack pointer below its limit; `compiler.stack_prepare` with a slice too small for its first frame (D450) | `stack_exhausted` (D451) at the call, including inside `unchecked`. |
+| In a program that prepares a stack, a routine's frame or a call's area that would go below the current stack's limit (D471); `compiler.stack_prepare` with a slice too small for its first frame and the margin (D450, D472) | `stack_exhausted` (D451) at the routine, or at the call to the builtin, including inside `unchecked`. |
 | Compiler-owned firmware entry returns | `unreachable`, synthetic site zero. Normal entry cleanup runs before an ordinary entry return reaches this guard. |
 | Recursive/concurrent panic entry, or a selected handler somehow returns | Terminal default instruction; no second handler invocation. |
 | Naked assembly fallthrough | Terminal default instruction: the programmer has not supplied the required machine transfer or a safe ordinary-call frame. |
@@ -18721,10 +18721,11 @@ never forecloses switching stacks. Prototype 5 found what a switch itself must
 then do: where a fibre's stack ends, where interrupts land on Cortex-M, and
 what a debugger sees (V9, V11, V12).
 
-**Chosen:** a fibre's record keeps the lowest address its stack may reach,
-and every switch checks the saved stack pointer against it, entering the
-program's [1670] handler past it; which panic kind that is, the switch's
-specification says. The compiler reports, for each routine a program admits
+**Chosen:** a stack's limit is checked by every routine that runs on it: in
+a program that prepares a stack, each routine compares its frame with the
+current stack's limit in its prologue and enters the program's [1670]
+handler past it (D471), and the limit travels in the frames a switch saves
+(D472); which panic kind that is, D451 says. The compiler reports, for each routine a program admits
 to a group, the deepest stack of the call graph it can close, and names where
 an `any` call, recursion or a foreign call opened it. On Cortex-M, fibres run
 on the process stack pointer and handlers on the main stack, so handlers'
@@ -18747,7 +18748,9 @@ and LLDB alike. All were declined.
 
 **Pinned by** the Cortex-M firmware lane's `fibre` case, which takes an
 interrupt in a fibre and steps a debugger through both switches (D460,
-D461); prototype 5's V9, V11 and V12 record the pressure. The `stack
+D461); prototype 5's V9, V11 and V12 record the pressure. A fibre's record
+kept the limit and only a switch checked it until D471 and D472, whose
+fixtures pin the check that replaced it. The `stack
 report` suite pins the depth report as D467 and D468 say it. The scripted
 debugger sessions of `runtime/stack-switch-frames` on every target (D469)
 pin the frames of a backtrace through a switch, and the capacity control of
@@ -18761,7 +18764,7 @@ compiler has to know it, which made the atomics builtins and left masking
 interrupts to assembly. D444 puts the switch under `core/fibre` and D446 and
 D447 require of it a full compiler memory boundary, the target's
 callee-saved set, the frame-pointer chain, unwind information that ends a
-fibre's chain, a stack-limit check and, on Cortex-M, the process stack. The
+fibre's chain, the stack's limit and, on Cortex-M, the process stack. The
 library has no assembly, a naked routine cannot be called from Landin, and
 an `assembler.block` sits inside a frame whose layout the compiler chooses, so
 a library `prepare` would have to guess that layout.
@@ -18774,14 +18777,16 @@ atomics, each evaluating its arguments once from left to right.
   returns the `usize` stack pointer a later switch resumes. It aligns the top
   of `stack` down to the target's call alignment and lays out a first frame
   that, when resumed, calls `entry(argument)` with the frame-pointer chain
-  and unwind information ending there. A slice too small for that frame
-  traps `stack_exhausted` (D451).
-- `compiler.stack_switch(save, resume, limit)` takes a `ptr mut usize` and two
-  `usize`s. It traps `stack_exhausted` when the current stack pointer is
-  below `limit`; otherwise it saves the callee-saved registers and the frame
-  pointer on the current stack, stores the stack pointer through `save`, and
-  resumes the context `resume` names, returning there. It is a full compiler
-  memory boundary.
+  and unwind information ending there, and the stack's limit, its base and
+  D472's margin. A slice too small for that frame and the margin traps
+  `stack_exhausted` (D451).
+- `compiler.stack_switch(save, resume)` takes a `ptr mut usize` and a
+  `usize`. It saves the callee-saved registers, the frame pointer and the
+  current stack's limit on the current stack, stores the stack pointer
+  through `save`, and resumes the context `resume` names, its limit
+  included, returning there. It is a full compiler memory boundary. It took
+  a third argument, the leaving stack's limit, which it checked the stack
+  pointer against, until D472 retired it.
 
 On Cortex-M a prepared stack runs on the process stack pointer, and a
 switch between the reset stack and a prepared one changes CONTROL's stack
@@ -18800,10 +18805,9 @@ library record, which would make the compiler know `core/fibre`'s types.
 All were declined.
 
 **Pinned by** `runtime/stack-switch-round-trip`, a prepared stack entered,
-left and re-entered, `runtime/stack-switch-past-limit-traps` and
-`runtime/stack-prepare-too-small-traps` on the targets whose backend emits
-the builtins (D453), and the backtrace through a switch by the sessions
-of `runtime/stack-switch-frames` (D469).
+left and re-entered, and `runtime/stack-prepare-too-small-traps` on the
+targets whose backend emits the builtins (D453), and the backtrace through
+a switch by the sessions of `runtime/stack-switch-frames` (D469).
 
 ### D451 — A stack past its limit is a fifth panic kind
 
@@ -18815,15 +18819,16 @@ left open which kind a stack past its limit is.
 union of five. D232's handler contract takes the five-atom domain; a handler
 written with `panic.panic_kind` accepts it unchanged, and one that matches the
 kind completely gains an arm. The hosted default handler reports it as it
-reports the others, and firmware keeps its bare instruction. Only the stack
-builtins (D450) raise it today.
+reports the others, and firmware keeps its bare instruction. A prepare too
+small for its first frame (D450) and a routine whose frame would go below its
+stack's limit (D471) raise it.
 
 **The alternatives:** `out_of_range`, which is true of the pointer but tells a
 handler nothing it can act on and leaves the site number to tell the two
 apart; and a separate handler for stacks, which would be a second hook with
 its own contract. Both were declined.
 
-**Pinned by** `runtime/stack-switch-past-limit-traps` and
+**Pinned by** `runtime/fibre-stack-past-limit-traps` and
 `runtime/stack-prepare-too-small-traps` for the hosted default's report,
 `runtime/stack-exhausted-reaches-the-handler` for a selected handler, and
 `negative/panic-handler-four-kinds` for the five-atom contract.
@@ -18869,12 +18874,11 @@ one contract family over two codes; and admitting them on every native
 target at once with a backend defect where they are not emitted, which
 breaks a program at emission that checking accepted. Both were declined.
 
-**Pinned by** `negative/stack-builtins-argument-contract`,
-`negative/stack-builtins-target-synthetic-32`, and the Cortex-M corpus's
-L0344 refusals of `runtime/stack-prepare-too-small-traps` and
-`runtime/stack-switch-past-limit-traps` for a backend that does not emit
-them yet. A negative fixture pinned the same refusal on linux-arm64 until
-the arm64 backend emitted the builtins, and was retired then.
+**Pinned by** `negative/stack-builtins-argument-contract` and
+`negative/stack-builtins-target-synthetic-32`. The Cortex-M corpus refused
+the stack fixtures with L0344, and a negative fixture refused them on
+linux-arm64, until each backend emitted the builtins; both were retired
+then.
 
 ### D460 — On Cortex-M0 a saved context records which stack pointer it uses
 
@@ -18885,19 +18889,20 @@ resumes.
 
 **Chosen:** the saved word is the stack pointer itself, and the frame it
 points at records the selection. A switch pushes r4 to r7 and the return
-address, then CONTROL's value with r8 to r11 above it: forty bytes, CONTROL
+address, then a scratch word and the current stack's limit (D472), then
+CONTROL's value with r8 to r11 above it: forty-eight bytes, CONTROL
 lowest. Resuming reads the CONTROL word at the resumed address, writes the
 address into PSP when that word's SPSEL bit is set and into MSP when it is
 clear, writes CONTROL, executes an ISB, which makes the written pointer the
 current one, and pops the frame. `compiler.stack_prepare` aligns the slice's
 top down to eight and lays a frame whose CONTROL word is two, SPSEL set and
 privileged, with the argument in r4, the entry in r5, zero in r11 and the
-other registers, and the start routine as the return address; a slice whose
-aligned top leaves less than forty bytes traps `stack_exhausted`. So a
+other registers, the stack's limit, and the start routine as the return
+address; a slice whose aligned top leaves less than those forty-eight bytes
+and D472's margin traps `stack_exhausted`. So a
 prepared stack always runs on PSP, and the reset context, saved by its first
 switch with CONTROL as reset left it, resumes on MSP. CONTROL's other bits
-travel with each context. The limit is compared with the leaving stack
-pointer in the caller, before the switch routine is called. A switch in
+travel with each context, as the limit does. A switch in
 handler mode, where the stack pointer is always MSP and SPSEL cannot be
 written, or in unprivileged thread mode, where neither CONTROL nor MSP can,
 is outside the contract and is not checked: D446 makes a provider's entries
@@ -18912,7 +18917,7 @@ which cannot resume the reset context unless the reset stack moves to PSP
 too, the one-stack design D447 declined. All were declined.
 
 **Pinned by** `runtime/stack-switch-round-trip`,
-`runtime/stack-switch-past-limit-traps`,
+`runtime/stack-frame-past-limit-traps`,
 `runtime/stack-prepare-too-small-traps` and
 `runtime/stack-exhausted-reaches-the-handler`, executed by the Cortex-M
 corpus at every profile, and the firmware lane's `fibre` case in
@@ -18931,7 +18936,7 @@ code was using, so an interrupt taken while a fibre runs stacks that frame
 on the fibre's PSP, and only then does the handler run on MSP.
 
 **Chosen:** a fibre's backing holds, beyond its own deepest calls and the
-forty-byte frame a switch saves (D460), one exception frame: thirty-two
+forty-eight-byte frame a switch saves (D460), one exception frame: thirty-two
 bytes, and four more when the core aligns the frame to eight bytes, which
 ARMv6-M always does, so thirty-six at most. It is paid once per fibre, not
 once per level of nesting: a nested exception is taken in handler mode and
@@ -18964,8 +18969,8 @@ Cortex-M corpus executes no fixture whose oracle is its output.
 trip's status says what its line said: the order the two stacks ran in, the
 module value folded on both and the local kept across both switches; its
 backing is two KiB, which the corpus's twelve KiB of static RAM holds. The
-handler fixture's fibre switches past its limit, and its handler records the
-kind and resumes the context `main` saved when it switched to the fibre, so
+handler fixture's fibre recurses past its stack's limit, and its handler
+records the kind and resumes the context `main` saved when it switched to the fibre, so
 `main` returns the stack_exhausted arm's code. A handler that switches away
 does not return, so D232's rule for a returning handler is not engaged; the
 panic latch stays claimed, and a later check in that image reaches the
@@ -19009,7 +19014,8 @@ frame. What `compiler.stack_prepare` lays at a stack's top and how far below
 the top the entry starts are the target's, reported once; on Cortex-M0 the
 exception frame is D461's. A report holds frames and depths and no backing
 arithmetic: alignment of the top, the `starting` record, D461's thirty-six
-bytes and the record's room are the consumer's sums. Calls are read from the
+bytes and the margin above a stack's base (D472) are the consumer's sums.
+Calls are read from the
 unit the backend was given, so a call it closed by inlining is not one.
 
 **The alternatives:** reporting only routines whose address is taken, which
@@ -19096,6 +19102,134 @@ x86-64 and arm64 in `compiler/tests/debugging/check.py`, on RV64 in
 `compiler/tests/debugging/darwin.py` and on FreeBSD in
 `compiler/tests/freebsd/check.py`, every one holding the frames to
 `compiler/tests/debugging/switch_frames.py`.
+
+### D471 — Every routine checks its frame against its stack's limit
+
+**The tour said** nothing. D447 had a fibre's record keep the lowest address
+its stack may reach and every switch check against it, and D465 kept a fixed
+1 KiB room above that address for what runs between two switches. The depth
+report (D467) then measured the round's own path from a yield to its switch
+at up to 2,384 bytes on RV64 and about 2,088 at `none` on x86-64 and arm64,
+and a task's own calls are bounded by nothing: a task whose recursion went
+past its stack between two switches overwrote its own record on RV64 and
+ended in a segmentation fault rather than `stack_exhausted`.
+
+**Chosen:** a program whose whole program holds a `compiler.stack_prepare`
+checks every ordinary routine's frame in its prologue. After the frame
+record and before the frame is reserved, the routine compares the stack
+pointer less its frame with one cell, the current stack's limit, and when it
+is below traps `stack_exhausted` at its own site, its declaration's: through
+the selected handler or the hosted default report, from its frame record,
+with nothing of its frame reserved or written. A call's argument area larger
+than the target's unchecked figure (D472) is checked the same way before it
+is reserved, at the routine's site. The cell holds zero on the stack the
+program started on, so routines running there never trap, and a switch
+installs the resumed context's limit (D472). These are not checked: a
+routine that makes no call and whose frame is no larger than the unchecked
+figure, which the margin pays for; a naked routine, whose text owns the
+stack; the selected handler, which instead stores zero in the cell, so that
+it and what it calls run on what a failed check left without a check that
+would enter it again, D232's latch still refusing a second entry; and on
+Cortex-M0 an interrupt handler, which runs on the main stack that no
+prepared stack's limit describes: it keeps the interrupted context's limit
+below its frame record, zero in the cell while it runs, and puts the limit
+back as it returns. On Cortex-M0 a call-free routine whose frame is larger
+than the unchecked figure keeps the frame record its check needs. A program
+with no `compiler.stack_prepare` has no check and no cell, and its code is
+byte for byte what it was. The cell is one per program because a program is
+one execution context today (D446); a thread, when one is admitted, needs a
+cell of its own. A check is one load, one compare and one branch, with the
+instructions that form the frame's address and the cell's: three
+instructions on x86-64, five on arm64, and eight on RV64 and on Cortex-M0,
+whose branch to the trap is a far one.
+
+**The alternatives:** the check at the switch alone, with a room sized per
+target from the depth report, which bounds the provider's path but not a
+task's own calls, and leaves an overflow writing below the stack before any
+check; a guard page, which D447 declined for caller-lent backing; a check in
+every routine of every program, which charges the many programs that never
+prepare a stack; checking after the frame is reserved, which on Cortex-M0
+lets an interrupt stack its exception frame below the limit before the
+check, and on the hosted targets lets a large frame's page probes write
+there; and the limit in a reserved register, which no backend keeps (D447).
+All were declined.
+
+**Pinned by** `runtime/fibre-stack-past-limit-traps`, a task's own recursion
+through `core/fibre`'s round trapped at `descend`'s site on every hosted
+target at every profile; `runtime/stack-frame-past-limit-traps`, a frame
+larger than its stack trapped before any of it is written, on every target,
+Cortex-M0 included; `runtime/stack-exhausted-reaches-the-handler`, the
+handler entered from a recursion's prologue, with the paint below the stack
+whole. A program that prepares no stack emits what it did: every fourth
+runtime fixture's assembly, for six targets at every profile, was compared
+before and after this decision, 3,949 files, and differed only for the
+fixture that prepares a stack and, in debug builds, in the hash of the
+library sources this decision edited.
+
+### D472 — A saved context carries its limit, a margin above its stack's base
+
+**The tour said** nothing. D450's switch took the leaving stack's limit as an
+argument and checked the stack pointer against it; D471 needs the current
+stack's limit in a cell every routine reads, which a switch must change.
+
+**Chosen:** `compiler.stack_switch(save, resume)` has two arguments. The
+switch saves the cell's value in the frame it pushes on the leaving stack
+and, once the resumed stack is current, loads the value saved in that frame
+into the cell: x86-64 pushes it as an eighth word, a 64-byte frame; arm64
+stores it at 160 in a 176-byte frame; RV64 in the frame's lowest word, which
+was unused, keeping 208; and Cortex-M0 pushes it with a scratch word between
+r4 to r7 and the rest of D460's frame, 48 bytes. The switch checks nothing:
+the routine that calls it checked its frame, and its save is inside the
+margin. `compiler.stack_prepare` lays the stack's limit in the same place of
+the first frame, the slice's base plus the target's margin, and traps
+`stack_exhausted` when the slice cannot hold the first frame and the margin.
+
+The margin pays for what runs below a checked frame with no check of its
+own: a call area or a call-free routine's frame, each up to the unchecked
+figure; the frame record a callee pushes before its check; the switch's
+save; and a failed check's call of the handler or the default report, and
+the handler's own depth; on Cortex-M0 also D461's thirty-six bytes, which an
+interrupt may stack at any instruction. The worst before a handler's own
+frames is two unchecked figures, a frame record and the call:
+
+| Target | Margin | Unchecked | Switch frame | Before the handler | Left for the handler |
+|---|---|---|---|---|---|
+| x86-64 | 640 | 64 | 64 | 152 | 488 |
+| arm64 | 640 | 64 | 176 | 144 | 496 |
+| RV64 | 768 | 64 | 208 | 144 | 624 |
+| Cortex-M0 | 384 | 64 | 48 | 188 | 196 |
+
+The default report needs 8 to 24 bytes of that. What is left is sized from
+the depth report's `trap` figure, which counts a handler's frame twice
+(D467), for the corpus's selected handlers that run on an overflowed
+stack, at every profile: those of `runtime/stack-exhausted-reaches-the-handler`
+and `runtime/stack-frame-past-limit-traps`, which match the kind and
+switch away, took at most 384 bytes on x86-64 and arm64 and 544 on RV64,
+at `none`, and 160 on Cortex-M0. A margin of 1 KiB, which covered handlers
+three times their size, made `runtime/fibre-turns-interleave`'s 4 KiB
+stacks too small at `none`, and so was declined. The report's
+`margin_bytes` and `unchecked_bytes` give the two figures beside the
+`trap` depth, so a reader sees whether a program's handler fits; one that
+does not runs below its stack's base. The default report always fits. A switch
+between two contexts that were never prepared, both on the stack the program
+started on, carries zero, as that stack's limit is.
+
+**The alternatives:** the limit an argument of the switch, as D450 had it,
+which every provider has to keep and pass correctly and which the cell would
+repeat; the limit in a fibre's record, which ties the builtins to a library
+type, as D450 declined; a margin computed for each program from its
+handler's measured depth, which makes a prepared stack's room depend on code
+anywhere in the program and is not known where the prepare is emitted; and
+one margin for every target, which charges Cortex-M0's small stacks for
+RV64's frames. All were declined.
+
+**Pinned by** the `stack report` suite's `a switch costs its frame`, the
+switch, first-frame, margin and unchecked figures on every target;
+`runtime/stack-switch-round-trip`, a limit restored across every switch,
+Cortex-M0 included; the debugger sessions of `runtime/stack-switch-frames`
+(D469) and the firmware lane's `fibre` case, which step through the changed
+switch at every instruction; and `negative/stack-builtins-argument-contract`,
+whose switch with a third argument is refused.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -23665,6 +23799,11 @@ and so cannot reach an event Io's state. All were declined.
 
 ### D465 — Where a record's limit stands
 
+**Superseded by D471, D472 and D473.** The prologue's check replaced the
+switch's, the limit moved into the frames a switch saves, and the record
+keeps no limit; the reasoning below is retained as history, and its fixture
+was reshaped by D471.
+
 **The tour said** nothing. D447 has a fibre's record keep the lowest address
 its stack may reach and every switch check against it; D450's switch checks
 the stack pointer before it saves anything. D444 keeps each record at the
@@ -23713,8 +23852,8 @@ peak and D461's thirty-six bytes lie within the stack above the record.
 The consumer fits the profile when its flash is at most 32 KiB, its
 reserved RAM at most 16 KiB, its main stack's painted peak within the
 reservation and every fibre fits. Paint is an observation of this
-consumer's run, not a bound on any stack (D447), and the record's limit
-1 KiB above the stack's base (D465) is a trap, not a measure of depth.
+consumer's run, not a bound on any stack (D447), and a stack's limit, its
+base and D472's margin, is a trap, not a measure of depth.
 
 **The alternatives:** the backing counted again beside static RAM, which
 double counts it; a stack's limit as its measure, which says where the
@@ -23727,3 +23866,43 @@ were declined.
 which builds `environments/cortex-m/probes/fibre-capacity.ldn` at every
 optimization profile, runs it to its end in the Cortex-M0 emulator, writes
 the report and fails when the consumer no longer fits.
+
+### D473 — What `core/fibre/stacks` keeps of a stack's limit
+
+**The tour said** nothing. D465 had `prepare` set a record's limit 1 KiB
+above its stack's lowest byte and refuse a stack smaller than 2 KiB,
+because the limit was checked only at a switch, after the provider's own
+calls on the way to it. D471 checks every frame and D472 keeps the limit
+in the frames a switch saves; this decision supersedes D465.
+
+**Chosen:** `fibre.space` keeps where its stack pointer was saved and its
+status, and no limit; `stacks.switch` names neither record's limit; and
+`stacks.prepare` keeps no room of its own. It fails `mem.out_of_memory` for
+a stack smaller than 128 words beside its `starting`, which holds the first
+frame and the margin of every target of that word size, 976 bytes at most
+of 1,024 on the 64-bit targets and 432 of 512 on Cortex-M0, so a stack too
+small is out of memory, as D464 has it, rather than the builtin's trap. How
+deep a task goes is the stack's business: a deeper one traps at the routine
+that overflows. `runtime/fibre-same-source-any-provider` keeps the 8 KiB
+stacks its task needs on RV64, where it takes 4.1 to 4.4 KiB at every
+profile: 4 KiB stacks would now trap `stack_exhausted` there instead of
+writing below the stack. For the same reason the 4 KiB stacks of
+`runtime/fibre-turns-interleave` and `runtime/fibre-join-first-failure`
+became 8 and 5 KiB: their tasks went deeper than 4 KiB less the margin on
+RV64, into D465's room, which the late check let them use. On the
+retained Cortex-M0 profile the measured
+consumer (D470) no longer needs D465's 2 KiB: its two fibres fit on
+backings of 1,472 bytes where they had 2,176, painted to at most 904 at
+every profile, and its reserved RAM fell from 8,576 to 7,168 bytes; the
+checks cost it 744 bytes of flash at `none` and 864 at `size`.
+
+**The alternatives:** the room and the late check kept beside the
+prologue's, which charges every stack 1 KiB for a check that no longer
+finds anything first; a least stack exactly the target's, which a library
+cannot ask the compiler for; and no least at all, which turns a backing too
+small into a trap where D464 has a failure. All were declined.
+
+**Pinned by** `runtime/fibre-stack-past-limit-traps`, a task trapped at the
+routine that overflows; `runtime/fibre-same-source-any-provider` on every
+hosted target; and the `capacity` control of
+`environments/cortex-m/evidence.py` (D470).

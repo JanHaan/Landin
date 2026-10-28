@@ -969,8 +969,20 @@ package body Landin.Backend.RiscV is
       --  first frame is the same frame, and returns to Stack_Entered, past
       --  the start routine's opening nop.  Both routines are local
       --  function symbols, `landin.stack_switch` and `landin.stack_start`
-      --  (D469), so that a debugger names them in a backtrace.
+      --  (D469), so that a debugger names them in a backtrace.  The word
+      --  at the frame's stack pointer, below every saved register, holds
+      --  the stack's limit (D472).  Stack_Limit is D471's cell: the
+      --  current stack's limit, zero on the stack the process started on.
+      --  A program that prepares a stack checks it in its routines'
+      --  prologues; one that uses a builtin keeps it, and its switch saves
+      --  and restores it.
       Stack_Used : Boolean := False;
+      Prepares : constant Boolean := Landin.Backend.Prepares_Stacks (Of_Unit);
+      Unchecked_Bytes : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Unchecked_Stack_Bytes (Facts);
+      Limit_Margin : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Stack_Limit_Margin (Facts);
+      Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
       Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
       Stack_Start : constant String := Routine_Prefix & "stack_start";
@@ -1308,6 +1320,39 @@ package body Landin.Backend.RiscV is
          Edges : Edge_Vectors.Vector;
          --  D467: the largest area the body reserves below its frame.
          Deepest_Area : Landin.Targets.Byte_Count := 0;
+         --  D471: whether a stack limit check branches to this routine's
+         --  own stack_exhausted trap, laid out after the others.
+         Limit_Trapped : Boolean := False;
+         Limit_Trap : constant String := Label (Item, 1) & "_stack_limit";
+
+         --  D471: go to the limit trap when the stack pointer less Bytes is
+         --  below the current stack's limit, before anything is written
+         --  there.  x5 to x7 are free wherever a frame or an area is
+         --  reserved.  The far jump goes through x7 rather than through the
+         --  private x26 a long branch uses, because a prologue's check
+         --  comes before x26 is saved.
+         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count);
+
+         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
+            Fits : constant String := Fresh;
+         begin
+            if Bytes = 0 then
+               Emit ("mv x5, sp");
+            elsif Bytes <= 2048 then
+               Emit ("addi x5, sp, -"
+                     & Trimmed (Landin.Targets.Byte_Count'Image (Bytes)));
+            else
+               Immediate ("x5", Pattern (Bytes));
+               Emit ("sub x5, sp, x5");
+            end if;
+            Emit ("lla x6, " & Stack_Limit);
+            Emit ("ld x6, 0(x6)");
+            Put (Character'Val (9) & "bgeu x5, x6, " & Fits);
+            Put (Character'Val (9) & "lla x7, " & Limit_Trap);
+            Put (Character'Val (9) & "jr x7");
+            Put (Fits & ":");
+            Limit_Trapped := True;
+         end Check_Limit;
 
          function Trap (Reason : Landin.Panics.Kind) return String;
          function Trap return String;
@@ -2151,6 +2196,9 @@ package body Landin.Backend.RiscV is
                end if;
             end loop;
             Bytes := Stack_Align (Bytes, 16, 16#7fff_ffff#);
+            if Prepares and then Bytes > Unchecked_Bytes then
+               Check_Limit (Bytes);
+            end if;
             Reserve (Bytes);
             Deepest_Area :=
               Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
@@ -2571,8 +2619,10 @@ package body Landin.Backend.RiscV is
                         --  frame laid below it as its loads read it: the
                         --  start routine as the return address, a zero
                         --  frame pointer, the entry in x9, its argument in
-                        --  x18 and every other saved register zero.  A
-                        --  slice that cannot hold the frame traps
+                        --  x18 and every other saved register zero, and the
+                        --  stack's limit, its base and the margin, in the
+                        --  word below them (D472).  A slice that cannot
+                        --  hold the frame and the margin traps
                         --  stack_exhausted (D451); the difference is
                         --  signed, since aligning a short slice's top may
                         --  take it below the base.
@@ -2581,13 +2631,22 @@ package body Landin.Backend.RiscV is
                         Emit ("add x6, x6, x5");
                         Emit ("andi x6, x6, -16");
                         Emit ("sub x6, x6, x5");
-                        Emit ("li x7, " & Image (Stack_Frame_Bytes));
+                        Emit ("li x7, " & Trimmed
+                          (Landin.Targets.Byte_Count'Image
+                             (Stack_Frame_Bytes + Limit_Margin)));
                         Emit ("blt x6, x7, " & Trap);
                         Emit ("add x5, x5, x6");
                         Emit ("addi x5, x5, -" & Image (Stack_Frame_Bytes));
-                        for Index in 0 .. Stack_Frame_Bytes / 8 - 1 loop
+                        for Index in 1 .. Stack_Frame_Bytes / 8 - 1 loop
                            Emit ("sd zero, " & Image (8 * Index) & "(x5)");
                         end loop;
+                        --  The base is the frame's top less the aligned
+                        --  length.
+                        Emit ("addi x7, x5, " & Image (Stack_Frame_Bytes));
+                        Emit ("sub x7, x7, x6");
+                        Emit ("addi x7, x7, " & Trimmed
+                          (Landin.Targets.Byte_Count'Image (Limit_Margin)));
+                        Emit ("sd x7, 0(x5)");
                         Load_Value (Operand (3), "x7");
                         Emit ("sd x7, " & Image (Stack_Save_Offset (3))
                               & "(x5)");
@@ -2600,14 +2659,11 @@ package body Landin.Backend.RiscV is
                         Stack_Used := True;
                         Store_Value (Value, "x5");
                      elsif M = Stack_Switch then
-                        --  D450/D447: the limit is checked here, against
-                        --  the leaving stack, so the trap is this call's
-                        --  own site; the switch itself is one call of the
-                        --  program's switch routine.  Every value here has
+                        --  D450/D472: the switch is one call of the
+                        --  program's switch routine; the routine making it
+                        --  checked its frame (D471).  Every value here has
                         --  a frame home, so nothing is kept in a register
                         --  across it, as across any call.
-                        Load_Value (Operand (3), "x5");
-                        Emit ("bltu sp, x5, " & Trap);
                         Load_Value (Operand (1), "x10");
                         Load_Value (Operand (2), "x11");
                         Emit ("call " & Stack_Switcher);
@@ -3441,6 +3497,9 @@ package body Landin.Backend.RiscV is
                         C_Call (Value);
                         return;
                      end if;
+                     if Prepares and then Bytes > Unchecked_Bytes then
+                        Check_Limit (Bytes);
+                     end if;
                      Reserve (Bytes);
                      Deepest_Area :=
                        Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
@@ -3640,6 +3699,23 @@ package body Landin.Backend.RiscV is
          if Item = Hosted_Entry and then Initializer /= Landin.IR.No_Item then
             Emit ("call " & Symbol (Initializer));
          end if;
+         --  D471: the frame is checked against the current stack's limit
+         --  before it is reserved, unless the routine calls nothing and
+         --  its frame is one the margin pays for.  The selected handler is
+         --  not checked: it stores zero in the cell, so that it and what
+         --  it calls run on what a failed check left, without a check
+         --  that would enter it again.
+         if Prepares then
+            if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
+            then
+               Emit ("lla x5, " & Stack_Limit);
+               Emit ("sd zero, 0(x5)");
+            elsif not Landin.Backend.Call_Free (Of_Unit, Item)
+              or else Extent (Layout) > Unchecked_Bytes
+            then
+               Check_Limit (Extent (Layout));
+            end if;
+         end if;
          Reserve (Extent (Layout));
          for Number in Saves'Range loop
             if Saves (Number) then
@@ -3832,6 +3908,40 @@ package body Landin.Backend.RiscV is
             end if;
             Emit ("unimp");
          end loop;
+         --  D471: a frame or an area that does not fit traps at the
+         --  routine's own site, from the frame record: nothing below it
+         --  was reserved for what did not fit, or what was is given back.
+         if Limit_Trapped then
+            Put (Limit_Trap & ":");
+            if Debug /= null then
+               Put (Dwarf.Source_Line
+                 (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
+            end if;
+            Emit ("addi sp, x8, -16");
+            if Panic = null or else not Landin.Panics.Calls_Out (Panic.all)
+            then
+               null;
+            elsif Landin.Panics.Handler (Panic.all) /= Landin.IR.No_Item
+            then
+               Immediate ("x10", Pattern (Landin.Panics.Code
+                 (Panic.all, Landin.Panics.Stack_Exhausted)));
+               Immediate ("x11", Pattern (Landin.Panics.Site
+                 (Panic.all, Landin.IR.Origin_Of (Of_Unit, Item),
+                  Landin.Panics.Stack_Exhausted)));
+               Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+            else
+               declare
+                  Line : constant String := Landin.Panics.Report
+                    (Panic.all, Landin.IR.Origin_Of (Of_Unit, Item),
+                     Landin.Panics.Stack_Exhausted);
+               begin
+                  Emit ("lla x10, " & Report_Label (Reports.Index_Of (Line)));
+                  Immediate ("x11", Pattern (Line'Length));
+                  Emit ("call " & Reporter);
+               end;
+            end if;
+            Emit ("unimp");
+         end if;
          Put (Hard_Trap & ":");
          Emit ("unimp");
          if Debug /= null then
@@ -3847,7 +3957,10 @@ package body Landin.Backend.RiscV is
               Register_Count => Save_Count (Plan.Saves),
               Spill_Count => Plan.Homes,
               Stack_Bytes => 16 + Extent (Layout) + Deepest_Area,
-              Calls_Panic => not Edges.Is_Empty, others => <>));
+              Calls_Panic => not Edges.Is_Empty
+                or else (Limit_Trapped and then Panic /= null
+                         and then Landin.Panics.Calls_Out (Panic.all)),
+              others => <>));
       end Emit_Routine;
 
       --  The value a datum's block describes.  [1460] says nothing runs
@@ -5320,13 +5433,14 @@ package body Landin.Backend.RiscV is
       --  program, so that its unwind information is exact at every
       --  instruction rather than threaded through a caller's frame.  It is
       --  called with the address to save through in a0 and the stack
-      --  pointer to resume in a1, after the caller has checked the limit.
-      --  It stores the return address, the frame pointer and the whole
-      --  LP64D callee-saved set, integer and float, in one frame on the
-      --  leaving stack, stores sp, loads the resumed one and loads the same
-      --  registers from the frame there before returning into the resumed
-      --  context.  Both stacks hold the same frame at the switch, so one CFA
-      --  rule, sp plus the frame, is right at every instruction: stopped
+      --  pointer to resume in a1.  It stores the return address, the frame
+      --  pointer and the whole LP64D callee-saved set, integer and float,
+      --  and the current stack's limit (D472) in one frame on the leaving
+      --  stack, stores sp, loads the resumed one, puts the limit saved
+      --  there back in the cell and loads the same registers from the
+      --  frame there before returning into the resumed context.  Both
+      --  stacks hold the same frame at the switch, so one CFA rule, sp
+      --  plus the frame, is right at every instruction: stopped
       --  before the store, a debugger unwinds into the leaving fibre's
       --  frames, and after the load into the resumed fibre's.  The float
       --  set is saved although this backend keeps nothing in it, because
@@ -5364,8 +5478,13 @@ package body Landin.Backend.RiscV is
                      & Image (8 * Index));
             end if;
          end loop;
+         Emit ("lla x5, " & Stack_Limit);
+         Emit ("ld x6, 0(x5)");
+         Emit ("sd x6, 0(sp)");
          Emit ("sd sp, 0(x10)");
          Emit ("mv sp, x11");
+         Emit ("ld x6, 0(sp)");
+         Emit ("sd x6, 0(x5)");
          for Index in reverse 1 .. Stack_Saved loop
             Emit ((if Stack_Float (Index) then "fld f" else "ld x")
                   & Image (Stack_Register (Index)) & ", "
@@ -5420,6 +5539,12 @@ package body Landin.Backend.RiscV is
             Emit (".cfi_endproc");
          end if;
          Platform_Directive (ELF_Spelling.Size_To_Here (Stack_Start));
+         --  D471's cell, zero until a switch resumes a prepared stack.
+         Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
+         Emit (".balign 8");
+         Put (Stack_Limit & ":");
+         Emit (".zero 8");
+         Emit (".popsection");
       end if;
       --  D361's writer: Linux's write system call to descriptor 2, with the
       --  line's address and length as a call's first two arguments.  It

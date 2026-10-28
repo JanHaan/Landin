@@ -1298,11 +1298,17 @@ When every unfinished fibre has yielded since anything last started or
 ended, the round calls its `stacks.idler` before it goes on: a device
 waits for an interrupt there, and `stacks.spin` returns at once.
 
-A switch checks the leaving stack against its record's limit, 1 KiB
-above the stack's lowest byte, and traps `stack_exhausted` past it. The
-check is made only at a switch, so a task that goes much deeper between
-two has already written below its stack. A prepared stack is at least
-2 KiB.
+In a program that prepares a stack, every routine checks its frame
+against the stack it runs on before it reserves the frame, and traps
+`stack_exhausted` at its own site when the frame would go below the
+stack's limit, so a task that goes too deep stops at the call that would
+have overflowed, between switches as at them. The limit stands a margin
+above the stack's lowest byte, room for a failed check's handler: 640
+bytes on x86-64 and arm64, 768 on RV64 and 384 on Cortex-M0, which
+`--stack-report` gives as `margin_bytes`. A switch carries each stack's
+limit with the registers it saves. A prepared stack is at least 128
+words, beside the few words its first frame keeps at its top; size it
+from the report's depth of the task's routine and the margin.
 
 Only the targets whose backend emits the stack builtins admit this
 module; a program over `fibre.whole` or the blocking host does not

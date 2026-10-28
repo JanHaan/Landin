@@ -37,7 +37,10 @@ package Landin.Backend.Dispatch is
    --  stack holds the larger of Prepared_Bytes and Entry_Bytes plus the
    --  entry's depth.  Report_Bytes is what D361's default report takes
    --  when a failed check calls it, and Report_Foreign that it calls the C
-   --  library's `write`, whose stack is not known here.  On Cortex-M0 a
+   --  library's `write`, whose stack is not known here.  Limit_Margin is
+   --  how far above a prepared stack's base its limit stands, and
+   --  Unchecked the largest call-free frame or call area no check covers
+   --  (D471, D472); both are Landin.Backend's.  On Cortex-M0 a
    --  failed check with no handler is an undefined instruction, whose
    --  exception frame D461 charges to every stack an exception can take.
    type Stack_Facts is record
@@ -46,6 +49,8 @@ package Landin.Backend.Dispatch is
       Entry_Bytes    : Landin.Targets.Byte_Count := 0;
       Report_Bytes   : Landin.Targets.Byte_Count := 0;
       Report_Foreign : Boolean := False;
+      Limit_Margin   : Landin.Targets.Byte_Count := 0;
+      Unchecked      : Landin.Targets.Byte_Count := 0;
    end record;
 
    function Stack_Facts_Of

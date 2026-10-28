@@ -13,14 +13,13 @@ import core/failure
 import core/mem
 
 --- The caller's record of one fibre: where its stack pointer was saved,
---- the lowest address its stack may reach, and whether a task runs on it.
---- A group keeps these at the base of the stacks it cuts, so an
---- application never declares one. `status` is zero when no task runs on
---- the record, before the first start and after a task has ended; a
---- provider makes it nonzero while one does.
+--- and whether a task runs on it. A group keeps these at the base of the
+--- stacks it cuts, so an application never declares one. `status` is zero
+--- when no task runs on the record, before the first start and after a
+--- task has ended; a provider makes it nonzero while one does. Where the
+--- stack ends is in the frames the switch saves, not here (D472).
 public space: type = struct
     saved: usize
-    limit: usize
     status: u8
 end space
 
@@ -192,7 +191,7 @@ cut: (backing: []mut u8, count: usize)
     mut index: usize = 0
     while index < count do
         record: ptr mut space = ptr(front + ledger_room + index * size)
-        record.val = (saved: 0, limit: 0, status: 0)
+        record.val = (saved: 0, status: 0)
         inc index
     end while
 end cut

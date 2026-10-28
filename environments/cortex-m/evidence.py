@@ -148,7 +148,8 @@ def fibre_capacity(run, refine, optimize, specialize):
     over core/fibre's round of turns, both on stacks cut from one fixed
     module buffer.  Its flash and static RAM come from the linked image,
     the buffer's extent from its symbol, each fibre's stack from the
-    group's own cut, which the records' limits confirm, and each fibre's
+    group's own cut, which the records' saved stack pointers confirm, and
+    each fibre's
     peak from paint: the main stack below the reset pointer and the whole
     buffer are painted at `start`, before the group cuts it, and read when
     the firmware returns.  Paint is the deepest observed write, not a
@@ -183,7 +184,7 @@ def fibre_capacity(run, refine, optimize, specialize):
         'assert v("$sp") == 0x20004000 and v("$control") & 2 == 0',
         'main=bytes(mem.read_memory(0x20003000, 4096))',
         'back=bytes(mem.read_memory(%d, %d))' % (backing,length),
-        'words=[[v("*(unsigned*)%%d" %% (r+4*i)) for i in range(3)] for r in %r]' % (records,),
+        'words=[[v("*(unsigned*)%%d" %% (r+4*i)) for i in range(2)] for r in %r]' % (records,),
         'json.dump({"main": main.hex(), "backing": back.hex(), "records": words},'
         ' open(%r, "w"))' % str(report_path),
         'print("R1420_FIBRE_CAPACITY_PASS")','end'],'R1420_FIBRE_CAPACITY_PASS')
@@ -193,10 +194,11 @@ def fibre_capacity(run, refine, optimize, specialize):
     main_peak=4096-next((i for i,b in enumerate(main) if b!=0xa5),4096)
     fibres=[]
     for index,(name,record) in enumerate(zip(FIBRES,records)):
-        saved,limit,status=paint['records'][index]
-        #  D465: prepare sets the limit 1 KiB above the stack's lowest
-        #  byte, which is just past the record: the cut is the group's.
-        require(limit==record+GROUP_RECORD+1024 and status & 255 == 0,
+        saved,status=paint['records'][index]
+        #  D473: the record keeps where its stack pointer was saved, last
+        #  as the task ended into the round, which lies in its own stack
+        #  above the record: the cut is the group's.
+        require(record+GROUP_RECORD<saved<record+stack and status & 255 == 0,
                 'fibre %s: its record is not where the cut puts it' % name)
         low,high=record+GROUP_RECORD-backing,record+stack-backing
         first=next((i for i,b in enumerate(back[low:high]) if b!=0xa5),high-low)

@@ -9,6 +9,6 @@ end entry
 
 public main: () -> (code: i32) =
     resume := compiler.stack_prepare(stack[0..<256], entry, 0)
-    compiler.stack_switch(addr saved, resume, 0)
+    compiler.stack_switch(addr saved, resume)
     code = 0
 end main

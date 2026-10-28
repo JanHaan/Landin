@@ -737,12 +737,15 @@ D450's two stack builtins are `Memory_Access` operations too, so they share
 its effects and its place in every pass. Their operands are all `usize`:
 `Stack_Prepare` carries the stack slice's base and length, the entry function
 value and its argument, and gives the stack pointer a switch resumes;
-`Stack_Switch` carries the address it saves through, the stack pointer it
-resumes and the limit, and gives nothing. The verifier admits them only
-where the target's backend emits them (D453). Their one check, the stack
-limit, is `stack_exhausted` (D451) and stays enabled inside unchecked
-regions. To a native allocator a switch is a call: it leaves every
-caller-saved register changed.
+`Stack_Switch` carries the address it saves through and the stack pointer
+it resumes, and gives nothing; the limit travels in the frames it saves
+(D472). The verifier admits them only where the target's backend emits
+them (D453). A prepare's one check, a slice too small, is
+`stack_exhausted` (D451) and stays enabled inside unchecked regions. To a
+native allocator a switch is a call: it leaves every caller-saved register
+changed. The stack-limit check of D471 is no IR operation: a backend adds
+it to the prologue of every routine of a program that prepares a stack,
+from the routine's frame, which only the backend knows.
 
 All memory primitives conservatively carry read/write/call/trap effects, so
 simplification retains discarded accesses. They cannot reach an eligible

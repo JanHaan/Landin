@@ -544,6 +544,29 @@ private
       Alignment : Landin.Targets.Byte_Alignment;
       Maximum : Landin.Targets.Byte_Count) return Landin.Targets.Byte_Count;
 
+   --  D471: a program that prepares a stack checks, in the prologue of
+   --  every ordinary routine it has, the stack pointer less the frame
+   --  against one cell holding the current stack's limit.  Whether the
+   --  unit holds a `compiler.stack_prepare`: no other program pays for a
+   --  check or a cell.
+   function Prepares_Stacks (Of_Unit : Landin.IR.Unit) return Boolean;
+
+   --  D471: whether Item's body makes no call of any kind: no direct or
+   --  indirect call, no stack builtin and no assembly, whose text may
+   --  call.  A trap's call of the handler is not counted; the margin
+   --  pays for it.
+   function Call_Free
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Boolean;
+
+   --  D471 and D472: what the limit `compiler.stack_prepare` lays keeps
+   --  above a prepared stack's lowest byte, and the largest frame of a
+   --  call-free routine, or call area, that is not checked, on Facts'
+   --  backend.  Zero for a target without a native backend.
+   function Stack_Limit_Margin
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
+   function Unchecked_Stack_Bytes
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
+
    package Offset_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Targets.Byte_Count,

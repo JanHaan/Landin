@@ -1,8 +1,0 @@
-class: runtime
-summary: D450/D451 a switch whose stack pointer is below its limit traps stack_exhausted at the switch, and the hosted default handler reports it
-program: main.ldn
-profiles: specialization
-traps: yes
-trap_report: main.ldn:9:5: trap: stack_exhausted
-constructs: 1620, 1670
-targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

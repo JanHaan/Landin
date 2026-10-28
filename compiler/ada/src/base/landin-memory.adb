@@ -51,8 +51,8 @@ package body Landin.Memory is
      (case Op is
          when Atomic_Load | Volatile_Load => 1,
          when Atomic_Store | Atomic_Exchange | Atomic_Add
-            | Volatile_Store => 2,
-         when Atomic_Compare_Exchange | Stack_Switch => 3,
+            | Volatile_Store | Stack_Switch => 2,
+         when Atomic_Compare_Exchange => 3,
          when Stack_Prepare => 4,
          when others => 0);
 

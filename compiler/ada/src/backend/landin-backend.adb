@@ -3,6 +3,8 @@ with Ada.Containers.Generic_Array_Sort;
 with Ada.Strings.Unbounded;
 with Landin.Backend.Work_Arrays;
 with Landin.Machine;
+with Landin.Memory;
+with Landin.Targets.Capabilities;
 
 package body Landin.Backend is
 
@@ -1540,5 +1542,118 @@ package body Landin.Backend is
       end;
       return (others => <>);
    end Carried;
+
+   function Prepares_Stacks (Of_Unit : Landin.IR.Unit) return Boolean is
+      use type Landin.IR.Item_Kind;
+      use type Landin.IR.Opcode;
+      use type Landin.Memory.Operation;
+   begin
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+         begin
+            if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+              and then not Landin.IR.Is_External (Of_Unit, Item)
+            then
+               for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+                  for Position in 1 .. Landin.IR.Length
+                    (Of_Unit, Item, Landin.IR.Block_Id (Block))
+                  loop
+                     declare
+                        Value : constant Landin.IR.Value_Id :=
+                          Landin.IR.Nth_Value
+                            (Of_Unit, Item, Landin.IR.Block_Id (Block),
+                             Position);
+                     begin
+                        if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                             = Landin.IR.Memory_Access
+                          and then Landin.IR.Memory_Operation
+                            (Of_Unit, Item, Value)
+                              = Landin.Memory.Stack_Prepare
+                        then
+                           return True;
+                        end if;
+                     end;
+                  end loop;
+               end loop;
+            end if;
+         end;
+      end loop;
+      return False;
+   end Prepares_Stacks;
+
+   function Call_Free
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Boolean
+   is
+   begin
+      for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+         for Position in 1 .. Landin.IR.Length
+           (Of_Unit, Item, Landin.IR.Block_Id (Block))
+         loop
+            declare
+               Value : constant Landin.IR.Value_Id := Landin.IR.Nth_Value
+                 (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+            begin
+               case Landin.IR.Op_Of (Of_Unit, Item, Value) is
+                  when Landin.IR.Call | Landin.IR.Indirect_Call
+                     | Landin.IR.Assembly =>
+                     return False;
+                  when Landin.IR.Memory_Access =>
+                     if Landin.IR.Memory_Operation (Of_Unit, Item, Value)
+                       in Landin.Memory.Stack_Operation
+                     then
+                        return False;
+                     end if;
+                  when others =>
+                     null;
+               end case;
+            end;
+         end loop;
+      end loop;
+      return True;
+   end Call_Free;
+
+   --  D472's figures.  The margin is what runs below a checked frame
+   --  without a check of its own: an unchecked call area or call-free
+   --  frame (Unchecked_Stack_Bytes each), the frame record a callee
+   --  pushes before its check, the switch's save, and a failed check's
+   --  call of the handler or the default report with what the handler
+   --  takes; on Cortex-M0 also the exception frame D461 charges.  Each
+   --  margin holds the depth report's `trap` figure for the corpus's
+   --  selected handlers that run on an overflowed stack, at every profile,
+   --  with what runs before them.
+   function Stack_Limit_Margin
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count
+   is
+   begin
+      case Landin.Targets.Capabilities.Backend_For (Facts) is
+         when Landin.Targets.Capabilities.X86_64_ELF
+            | Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+            | Landin.Targets.Capabilities.Arm64_ELF =>
+            return 640;
+         when Landin.Targets.Capabilities.RV64_ELF =>
+            return 768;
+         when Landin.Targets.Capabilities.Cortex_M0_ELF =>
+            return 384;
+         when Landin.Targets.Capabilities.No_Backend =>
+            return 0;
+      end case;
+   end Stack_Limit_Margin;
+
+   function Unchecked_Stack_Bytes
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count
+   is
+   begin
+      case Landin.Targets.Capabilities.Backend_For (Facts) is
+         when Landin.Targets.Capabilities.X86_64_ELF
+            | Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+            | Landin.Targets.Capabilities.Arm64_ELF
+            | Landin.Targets.Capabilities.RV64_ELF
+            | Landin.Targets.Capabilities.Cortex_M0_ELF =>
+            return 64;
+         when Landin.Targets.Capabilities.No_Backend =>
+            return 0;
+      end case;
+   end Unchecked_Stack_Bytes;
 
 end Landin.Backend;

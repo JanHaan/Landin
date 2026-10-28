@@ -1114,7 +1114,7 @@
     "runtime/fibre-stack-past-limit-traps": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "The fixture overruns a fibre's limit with a routine whose frame is larger than the selected profile's 4 KiB test stack reservation, so the image does not fit that map at any profile. runtime/stack-switch-past-limit-traps traps stack_exhausted at a switch on Cortex-M0 within the map; this image limit is not runtime evidence."
+      "reason": "The fixture cuts its fibres' stacks from a 16 KiB local backing, a frame larger than the selected profile's 4 KiB test stack reservation, so the image does not fit that map at any profile. runtime/stack-frame-past-limit-traps and runtime/stack-exhausted-reaches-the-handler trap stack_exhausted in a prologue on Cortex-M0 within the map; this image limit is not runtime evidence."
     },
     "runtime/fibre-turns-interleave": {
       "codes": [
@@ -2892,13 +2892,13 @@
     "runtime/stack-exhausted-reaches-the-handler": {
       "mode": "execute"
     },
+    "runtime/stack-frame-past-limit-traps": {
+      "mode": "execute"
+    },
     "runtime/stack-prepare-too-small-traps": {
       "mode": "execute"
     },
     "runtime/stack-switch-frames": {
-      "mode": "execute"
-    },
-    "runtime/stack-switch-past-limit-traps": {
       "mode": "execute"
     },
     "runtime/stack-switch-round-trip": {

@@ -375,13 +375,18 @@ This is the maintained inventory of what the compiler does today:
   `compiler.stack_switch`, run on every target with a native backend:
   Linux and FreeBSD x86-64, Linux, Darwin and FreeBSD arm64, Linux RV64 and
   Cortex-M0, where a prepared stack runs on the process stack pointer and
-  an interrupt in a fibre runs its handler on the main one (D460, D461). A
-  stack past its limit traps D451's fifth panic kind, `stack_exhausted`;
-  synthetic-32 refuses both. On the retained Cortex-M0 profile a consumer
-  of `core/fibre`'s round of turns, two fibres on 2,176-byte stacks cut
-  from fixed module storage, fits with its painted peaks and D461's
-  exception frame, and the Cortex-M lane reports its flash, static RAM,
-  backing and verdict at every profile (D470).
+  an interrupt in a fibre runs its handler on the main one (D460, D461).
+  In a program that prepares a stack every routine checks its frame
+  against the current stack's limit in its prologue and traps D451's fifth
+  panic kind, `stack_exhausted`, at its own site before it writes below the
+  stack, at any depth; a switch carries each stack's limit, which stands a
+  margin above its base for the handler (D471, D472). A program that
+  prepares no stack has no check. Synthetic-32 refuses both builtins. On
+  the retained Cortex-M0 profile a consumer of `core/fibre`'s round of
+  turns, two fibres on 1,472-byte stacks cut from fixed module storage,
+  fits with its painted peaks and D461's exception frame, and the Cortex-M
+  lane reports its flash, static RAM, backing and verdict at every profile
+  (D470).
   `--stack-report=PATH` writes, for every
   emitted routine on each of those targets, its frame and the deepest stack
   of the call graph it can close, and names each `any`, generic,

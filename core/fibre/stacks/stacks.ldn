@@ -20,16 +20,15 @@ starting: type = struct
     work: any fibre.task
 end starting
 
---  The room a record's limit keeps above its stack's lowest byte, and the
---  least a prepared stack holds beside it for the task's own calls.  The
---  switch checks the stack pointer when it is made, inside the provider,
---  so the limit stands above what the provider's own calls on the way to
---  it and the switch's save take, and a task whose calls go a little past
---  it between two switches traps at the next before it has written below
---  the stack.  The check is late (D447): a task that goes further than
---  the room between two switches has already written past its stack.
-switch_room: usize = 1024
-least_prepared: usize = 2048
+--  The least a prepared stack holds below its `starting`, in words: what
+--  `compiler.stack_prepare` lays at its top and the margin it keeps above
+--  its base for a failed check (D472), on every target, which is at most
+--  976 bytes on a 64-bit one and 432 on a 32-bit one.  A smaller stack
+--  is then out of memory here rather than a trap in the builtin.  Every
+--  routine checks its own frame against the limit in its prologue
+--  (D471), so how deep a task may go is the stack's business, not this
+--  module's.
+least_prepared_words: usize = 128
 
 --  A fibre's first frame: run the task, mark the record ended, and resume
 --  the record the provider named.  Nothing resumes it again.
@@ -47,12 +46,11 @@ end first_frame
 --- Lay out a first frame on `stack` that, when a switch resumes `record`,
 --- runs `work` to its end, makes the record's status zero and switches to
 --- `after`, which the provider keeps unfinished for as long as a fibre
---- can end into it. The record's limit is set 1 KiB above the stack's
---- lowest byte, so a switch made past it traps `stack_exhausted` (D447,
---- D451) before a task that went a little too deep has written below its
---- stack; one that went further has already, as the check is made only
---- at a switch. It fails `mem.out_of_memory` when `stack` is smaller than
---- 2 KiB and the few words the first frame keeps at its top.
+--- can end into it. A routine of the task, or of anything it calls, whose
+--- frame would go below the stack's limit traps `stack_exhausted` in its
+--- prologue (D451, D471), before it has written there. It fails
+--- `mem.out_of_memory` when `stack` is smaller than 128 words and the few
+--- words the first frame keeps at its top.
 public prepare: (escaping record: ptr mut fibre.space,
                  escaping stack: []mut u8, escaping work: any fibre.task,
                  escaping after: ptr mut fibre.space)
@@ -61,31 +59,29 @@ public prepare: (escaping record: ptr mut fibre.space,
     low: usize = usize(addr stack[0])
     high: usize = low + lenof stack
     extent: usize = sizeof starting
+    least: usize = least_prepared_words * sizeof usize
     fail mem.out_of_memory
-        when lenof stack < extent + alignof starting + least_prepared
+        when lenof stack < extent + alignof starting + least
     mut place: usize = high - extent
     place -= place % alignof starting
     --  [0810]: the `starting` is the stack's top bytes; the first frame
     --  is laid out below it.
     start: ptr mut starting = ptr(place)
     start.val = (record: usize(record), after: usize(after), work: work)
-    record.val.limit = low + switch_room
     record.val.status = 1
     record.val.saved = compiler.stack_prepare(stack[0..<place - low],
                                               first_frame, place)
 end prepare
 
---- Save the callee-saved registers and the frame pointer on the leaving
---- stack, keep its stack pointer in `leaving`, and resume `entering`,
---- returning when something switches back to `leaving`. The leaving
---- stack's pointer is checked against its record's limit first, and a
---- stack past it traps `stack_exhausted` (D451). A switch is a full
---- compiler memory boundary (D446). Pointers rather than two `inout`
---- records, because both commonly sit in one table.
+--- Save the callee-saved registers, the frame pointer and the leaving
+--- stack's limit on the leaving stack, keep its stack pointer in
+--- `leaving`, and resume `entering`, returning when something switches
+--- back to `leaving` (D472). A switch is a full compiler memory boundary
+--- (D446). Pointers rather than two `inout` records, because both
+--- commonly sit in one table.
 public switch: (leaving: ptr mut fibre.space, entering: ptr mut fibre.space)
                -> none =
-    compiler.stack_switch(addr leaving.val.saved, entering.val.saved,
-                          leaving.val.limit)
+    compiler.stack_switch(addr leaving.val.saved, entering.val.saved)
 end switch
 
 --- What a round does when every fibre has yielded since anything last
@@ -151,7 +147,7 @@ public round_over: (inout state: round_space, entries: []mut usize,
                    -> (handle: round from state, entries, when_idle)
                    ! mem.out_of_memory =
     fail mem.out_of_memory when lenof entries < 2
-    state = (home: (saved: 0, limit: 0, status: 1), current: 0, count: 1,
+    state = (home: (saved: 0, status: 1), current: 0, count: 1,
              quiet: 0, ended: 0)
     entries[0] = usize(addr state.home)
     handle = (state: addr state, entries: entries, when_idle: when_idle)

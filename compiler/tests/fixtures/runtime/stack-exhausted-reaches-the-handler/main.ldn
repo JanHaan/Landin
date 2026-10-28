@@ -1,16 +1,20 @@
---  D451: a selected handler receives the fifth kind.  Its match over
---  `panic.panic_kind` needs an arm for each of the five.  A fibre's switch
---  past its limit enters the handler, which records the kind and resumes
---  main's context, saved when main switched to the fibre; main then ends
---  with the stack_exhausted arm's code.  It imports no provider, so
---  firmware runs the same source, the fibre there on the process stack and
---  the handler entered on it (D460).
+--  D451/D471: a selected handler receives the fifth kind.  Its match over
+--  `panic.panic_kind` needs an arm for each of the five.  A fibre's own
+--  recursion goes deeper than its stack between switches, and the first
+--  call whose frame would go below the stack's limit traps in its
+--  prologue; the handler runs on what the limit's margin left, records the
+--  kind and resumes main's context, saved when main switched to the fibre.
+--  main, on its own stack again, finds the paint below the fibre's stack
+--  whole and ends with the stack_exhausted arm's code.  It imports no
+--  provider, so firmware runs the same source, the fibre there on the
+--  process stack and the handler entered on it (D460).
 import core/panic
 
-mut backing: [1024]u8 = zeroed
+mut memory: [4096]u8 = zeroed
 mut main_saved: usize = 0
 mut fibre_saved: usize = 0
 mut seen: i32 = 6
+mut depth: u32 = 0
 
 public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
     seen = match kind
@@ -20,22 +24,42 @@ public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
         panic.bad_conversion: 3
         panic.unreachable: 4
     end match
-    compiler.stack_switch(addr fibre_saved, main_saved, 0)
+    compiler.stack_switch(addr fibre_saved, main_saved)
     loop do
     end loop
 end panic_handler
 
+--  Each level keeps a few words of its own and goes on without end.
+descend: (level: u32) -> (reached: u32) =
+    mut words: [8]u32 = zeroed
+    words[usize(level % 8)] = level
+    depth = level
+    reached = descend(level + 1) + words[0]
+end descend
+
 fibre: (argument: usize) -> noreturn =
-    mut probe: u8 = u8(argument)
-    limit := usize(addr probe) + 65536
-    compiler.stack_switch(addr fibre_saved, main_saved, limit)
-    seen = i32(probe) + 7
+    seen = i32(descend(u32(argument)))
     loop do
     end loop
 end fibre
 
 public main: () -> (code: i32) =
-    fibre_saved = compiler.stack_prepare(backing[0..<1024], fibre, 0)
-    compiler.stack_switch(addr main_saved, fibre_saved, 0)
+    mut index: usize = 0
+    while index < 256 do
+        memory[index] = 90
+        inc index
+    end while
+    fibre_saved = compiler.stack_prepare(memory[256..<4096], fibre, 0)
+    compiler.stack_switch(addr main_saved, fibre_saved)
     code = seen
+    index = 0
+    while index < 256 do
+        if memory[index] <> 90 then
+            code = 7
+        end if
+        inc index
+    end while
+    if depth < 4 then
+        code = 8
+    end if
 end main

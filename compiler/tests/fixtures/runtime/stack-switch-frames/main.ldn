@@ -18,14 +18,11 @@ mut second_backing: [2048]u8 = zeroed
 mut main_saved: usize = 0
 mut first_saved: usize = 0
 mut second_saved: usize = 0
-mut first_limit: usize = 0
-mut second_limit: usize = 0
 mut trace: u32 = 0
 
-hand_over: (save: ptr mut usize, resume: usize, limit: usize, step: u32)
-           -> none =
+hand_over: (save: ptr mut usize, resume: usize, step: u32) -> none =
     trace = trace * 10 + step
-    compiler.stack_switch(save, resume, limit)
+    compiler.stack_switch(save, resume)
 end hand_over
 
 deepest: (depth: u32) -> (reached: u32) =
@@ -34,8 +31,8 @@ end deepest
 
 first_fibre: (argument: usize) -> noreturn =
     pass := hand_over
-    pass(addr first_saved, second_saved, first_limit, u32(argument))
-    pass(addr first_saved, main_saved, first_limit, 4)
+    pass(addr first_saved, second_saved, u32(argument))
+    pass(addr first_saved, main_saved, 4)
     compiler.unreachable()
 end first_fibre
 
@@ -43,19 +40,17 @@ second_fibre: (argument: usize) -> noreturn =
     descend := deepest
     reached: u32 = descend(u32(argument))
     pass := hand_over
-    pass(addr second_saved, first_saved, second_limit, reached)
+    pass(addr second_saved, first_saved, reached)
     compiler.unreachable()
 end second_fibre
 
 public main: () -> (code: i32) =
-    first_limit = usize(addr first_backing[0]) + 512
-    second_limit = usize(addr second_backing[0]) + 512
     first_saved = compiler.stack_prepare(first_backing[0..<2048],
                                          first_fibre, 2)
     second_saved = compiler.stack_prepare(second_backing[0..<2048],
                                           second_fibre, 2)
     pass := hand_over
-    pass(addr main_saved, first_saved, 0, 1)
+    pass(addr main_saved, first_saved, 1)
     code = 1
     if trace == 1234 then
         code = 42

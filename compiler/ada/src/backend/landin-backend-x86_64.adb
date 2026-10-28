@@ -763,14 +763,23 @@ package body Landin.Backend.X86_64 is
       --  so moves the prefix as it moves a local label's.  A prepared
       --  stack's first frame returns to Stack_Entered, past the start
       --  routine's opening nop, and is Stack_First_Frame bytes below its
-      --  aligned top.
+      --  aligned top.  Stack_Limit is D471's cell: the current stack's
+      --  limit, zero on the stack the process started on.  A program that
+      --  prepares a stack checks it in its routines' prologues; one that
+      --  uses a builtin keeps it, and its switch saves and restores it.
       Stack_Used : Boolean := False;
+      Prepares : constant Boolean := Landin.Backend.Prepares_Stacks (Of_Unit);
+      Unchecked_Bytes : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Unchecked_Stack_Bytes (Facts);
+      Limit_Margin : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Stack_Limit_Margin (Facts);
+      Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
       Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
       Stack_Start : constant String := Routine_Prefix & "stack_start";
       Stack_Entered : constant String :=
         Local_Prefix & "landin_stack_entered";
-      Stack_First_Frame : constant := 72;
+      Stack_First_Frame : constant := 64;
 
       function Float_Decode_Label
         (From : Landin.Types.Float_Name) return String
@@ -1546,6 +1555,16 @@ package body Landin.Backend.X86_64 is
          Deepest_Area : Landin.Targets.Byte_Count := 0;
          Calls_Panic : Boolean := False;
          Pushed_Arguments : Landin.Targets.Byte_Count := 0;
+         --  D471: whether a stack limit check branches to this routine's
+         --  own stack_exhausted trap, laid out after the others.
+         Limit_Trapped : Boolean := False;
+         Limit_Trap : constant String := Label (Item, 1) & "_stack_limit";
+
+         --  D471: branch to the limit trap when the stack pointer less
+         --  Bytes is below the current stack's limit, before anything is
+         --  written there.  %r11 is scratch wherever a frame or an area is
+         --  reserved.
+         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count);
 
          function Size_Of_Value
            (Value : Landin.IR.Value_Id) return Held_Size
@@ -2727,6 +2746,20 @@ package body Landin.Backend.X86_64 is
          --  Linux stack growth touches at most 4096 bytes apart.  R11 is
          --  scratch at each reservation boundary; argument banks, R10 failure
          --  state and allocated callee-saves remain live and untouched.
+         procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
+         begin
+            if Bytes = 0 then
+               Emit ("cmpq " & Stack_Limit & "(%rip), %rsp");
+            else
+               Emit ("leaq -" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Bytes))
+                     & "(%rsp), %r11");
+               Emit ("cmpq " & Stack_Limit & "(%rip), %r11");
+            end if;
+            Emit ("jb " & Limit_Trap);
+            Limit_Trapped := True;
+         end Check_Limit;
+
          procedure Reserve_Stack
            (Bytes : Landin.Targets.Byte_Count; Identity : String)
          is
@@ -2749,6 +2782,11 @@ package body Landin.Backend.X86_64 is
             if Identity /= "frame" then
                Deepest_Area :=
                  Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
+               --  D471: an area larger than the margin allows unchecked
+               --  is checked before it is reserved, as a frame is.
+               if Prepares and then Bytes > Unchecked_Bytes then
+                  Check_Limit (Bytes);
+               end if;
             end if;
             if Bytes = 0 then
                return;
@@ -2831,10 +2869,18 @@ package body Landin.Backend.X86_64 is
          --  site; the default handler is the trap instruction itself.
          procedure Emit_Panic
            (Value : Landin.IR.Value_Id; Reason : Landin.Panics.Kind);
+         procedure Emit_Panic_At
+           (Origin : Landin.Provenance.Origin; Reason : Landin.Panics.Kind);
          procedure Emit_Traps;
 
          procedure Emit_Panic
            (Value : Landin.IR.Value_Id; Reason : Landin.Panics.Kind) is
+         begin
+            Emit_Panic_At (Landin.IR.Origin_Of (Of_Unit, Item, Value), Reason);
+         end Emit_Panic;
+
+         procedure Emit_Panic_At
+           (Origin : Landin.Provenance.Origin; Reason : Landin.Panics.Kind) is
          begin
             if Panic /= null and then Landin.Panics.Handler (Panic.all)
               /= Landin.IR.No_Item
@@ -2842,8 +2888,8 @@ package body Landin.Backend.X86_64 is
                Emit ("movl $" & Trimmed (Positive'Image
                  (Landin.Panics.Code (Panic.all, Reason))) & ", %edi");
                Emit ("movl $" & Trimmed (Landin.Panics.Site_Number'Image
-                 (Landin.Panics.Site (Panic.all, Landin.IR.Origin_Of
-                   (Of_Unit, Item, Value), Reason))) & ", %esi");
+                 (Landin.Panics.Site (Panic.all, Origin, Reason)))
+                 & ", %esi");
                Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
                Calls_Panic := True;
             elsif Panic /= null and then Landin.Panics.Reports_Default
@@ -2853,8 +2899,7 @@ package body Landin.Backend.X86_64 is
                --  the routine that writes it and ends the process.
                declare
                   Line : constant String := Landin.Panics.Report
-                    (Panic.all, Landin.IR.Origin_Of (Of_Unit, Item, Value),
-                     Reason);
+                    (Panic.all, Origin, Reason);
                   Index : constant Positive :=
                     Reports.Index_Of (Line);
                begin
@@ -2866,7 +2911,7 @@ package body Landin.Backend.X86_64 is
                end;
             end if;
             Emit ("ud2");
-         end Emit_Panic;
+         end Emit_Panic_At;
 
          --  The queued traps follow the body with its frame unchanged.
          --  Each keeps its operation's line, and the debug labels around
@@ -4671,14 +4716,15 @@ package body Landin.Backend.X86_64 is
                         --  length, the entry and its argument.  The top is
                         --  aligned down to sixteen and the first frame laid
                         --  below it as the switch routine's pops read it:
-                        --  r15, r14, r13 (the argument), r12 (the entry),
-                        --  rbx, rbp (zero), then the start routine as the
-                        --  return address and sixteen bytes of padding, so
-                        --  the entry is called with the stack aligned.  A
-                        --  slice that cannot hold those 72 bytes traps
-                        --  stack_exhausted (D451); the difference is
-                        --  signed, since aligning a short slice's top may
-                        --  take it below the base.
+                        --  the stack's limit (D472), r15, r14, r13 (the
+                        --  argument), r12 (the entry), rbx, rbp (zero), then
+                        --  the start routine as the return address, so the
+                        --  entry is called with the stack aligned at the
+                        --  top.  The limit is the base and the margin.  A
+                        --  slice that cannot hold those 64 bytes and the
+                        --  margin traps stack_exhausted (D451); the
+                        --  difference is signed, since aligning a short
+                        --  slice's top may take it below the base.
                         Emit ("movq " & Value_Operand (Operand (1))
                               & ", %rax");
                         Emit ("movq " & Value_Operand (Operand (2))
@@ -4686,39 +4732,38 @@ package body Landin.Backend.X86_64 is
                         Emit ("addq %rax, %rcx");
                         Emit ("andq $-16, %rcx");
                         Emit ("subq %rax, %rcx");
-                        Emit ("cmpq $" & Trimmed (Natural'Image
-                          (Stack_First_Frame)) & ", %rcx");
+                        Emit ("cmpq $" & Trimmed
+                          (Landin.Targets.Byte_Count'Image
+                             (Stack_First_Frame + Limit_Margin))
+                          & ", %rcx");
                         Trap_On ("jl");
+                        Emit ("leaq " & Trimmed
+                          (Landin.Targets.Byte_Count'Image (Limit_Margin))
+                          & "(%rax), %r11");
                         Emit ("addq %rcx, %rax");
                         Emit ("subq $" & Trimmed (Natural'Image
                           (Stack_First_Frame)) & ", %rax");
+                        Emit ("movq %r11, (%rax)");
                         Emit ("movq " & Value_Operand (Operand (4))
                               & ", %rdx");
-                        Emit ("movq %rdx, 16(%rax)");
+                        Emit ("movq %rdx, 24(%rax)");
                         Emit ("movq " & Value_Operand (Operand (3))
                               & ", %rdx");
-                        Emit ("movq %rdx, 24(%rax)");
-                        Emit ("xorl %edx, %edx");
-                        Emit ("movq %rdx, (%rax)");
-                        Emit ("movq %rdx, 8(%rax)");
                         Emit ("movq %rdx, 32(%rax)");
+                        Emit ("xorl %edx, %edx");
+                        Emit ("movq %rdx, 8(%rax)");
+                        Emit ("movq %rdx, 16(%rax)");
                         Emit ("movq %rdx, 40(%rax)");
-                        Emit ("movq %rdx, 56(%rax)");
-                        Emit ("movq %rdx, 64(%rax)");
-                        Emit ("leaq " & Stack_Entered & "(%rip), %rdx");
                         Emit ("movq %rdx, 48(%rax)");
+                        Emit ("leaq " & Stack_Entered & "(%rip), %rdx");
+                        Emit ("movq %rdx, 56(%rax)");
                         Stack_Used := True;
                         Store_Value (Value, "%rax");
                      elsif M = Stack_Switch then
-                        --  D450/D447: the limit is checked here, against
-                        --  the leaving stack, so the trap is this call's
-                        --  own site; the switch itself is one call of the
+                        --  D450/D472: the switch is one call of the
                         --  program's switch routine, which the allocator
-                        --  treats as a call (Allocation.Is_Switch).
-                        Emit ("movq " & Value_Operand (Operand (3))
-                              & ", %rax");
-                        Emit ("cmpq %rax, %rsp");
-                        Trap_On ("jb");
+                        --  treats as a call (Allocation.Is_Switch); the
+                        --  routine making it checked its frame (D471).
                         Emit ("movq " & Value_Operand (Operand (1))
                               & ", %rdi");
                         Emit ("movq " & Value_Operand (Operand (2))
@@ -7063,6 +7108,22 @@ package body Landin.Backend.X86_64 is
             Emit ("call " & Symbol (Initializer));
          end if;
 
+         --  D471: the frame is checked against the current stack's limit
+         --  before it is reserved, unless the routine calls nothing and
+         --  its frame is one the margin pays for.  The selected handler is
+         --  not checked: it stores zero in the cell, so that it and what
+         --  it calls run on what a failed check left, without a check
+         --  that would enter it again.
+         if Prepares then
+            if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
+            then
+               Emit ("movq $0, " & Stack_Limit & "(%rip)");
+            elsif not Landin.Backend.Call_Free (Of_Unit, Item)
+              or else Extent (Layout) > Unchecked_Bytes
+            then
+               Check_Limit (Extent (Layout));
+            end if;
+         end if;
          Reserve_Stack (Extent (Layout), "frame");
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
@@ -7369,6 +7430,21 @@ package body Landin.Backend.X86_64 is
             end if;
          end if;
          Emit_Traps;
+         --  D471: a frame or an area that does not fit traps at the
+         --  routine's own site.  Nothing below the frame record has been
+         --  reserved or written for it, or what was is given back, so the
+         --  handler or the report runs from the frame record.
+         if Limit_Trapped then
+            Put (Limit_Trap & ":");
+            if Debug /= null then
+               Put (Dwarf.Source_Line
+                 (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
+            end if;
+            Emit ("movq %rbp, %rsp");
+            Emit_Panic_At
+              (Landin.IR.Origin_Of (Of_Unit, Item),
+               Landin.Panics.Stack_Exhausted);
+         end if;
 
          if Debug /= null then
             Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
@@ -8954,11 +9030,12 @@ package body Landin.Backend.X86_64 is
       --  program, so that its unwind information is exact at every
       --  instruction rather than threaded through a caller's frame.  It is
       --  called with the address to save through in %rdi and the stack
-      --  pointer to resume in %rsi, after the caller has checked the
-      --  limit.  It pushes %rbp and the callee-saved registers on the
-      --  leaving stack, stores %rsp, loads the resumed one and pops the
-      --  same six registers before returning into the resumed context.
-      --  Both stacks hold the same 56 bytes at the switch, so one CFA rule,
+      --  pointer to resume in %rsi.  It pushes %rbp, the callee-saved
+      --  registers and the current stack's limit (D472) on the leaving
+      --  stack, stores %rsp, loads the resumed one and pops the limit into
+      --  its cell and the same six registers before returning into the
+      --  resumed context.
+      --  Both stacks hold the same 64 bytes at the switch, so one CFA rule,
       --  %rsp plus what remains pushed, is right at every instruction:
       --  stopped before the store, a debugger unwinds into the leaving
       --  fibre's frames, and after the load into the resumed fibre's.
@@ -8996,8 +9073,16 @@ package body Landin.Backend.X86_64 is
                         & Trimmed (Natural'Image (8 + 8 * Index)));
                end if;
             end loop;
+            Emit ("pushq " & Stack_Limit & "(%rip)");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 64");
+            end if;
             Emit ("movq %rsp, (%rdi)");
             Emit ("movq %rsi, %rsp");
+            Emit ("popq " & Stack_Limit & "(%rip)");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 56");
+            end if;
             for Index in reverse Pushed'Range loop
                Emit ("popq " & Pushed (Index));
                if Debug /= null then
@@ -9302,6 +9387,13 @@ package body Landin.Backend.X86_64 is
             Cached_Frame'Access, Trapped'Access));
       end if;
       Put (Character'Val (9) & ELF.No_Executable_Stack);
+      if Stack_Used then
+         Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
+         Emit (".balign 8");
+         Put (Stack_Limit & ":");
+         Emit (".zero 8");
+         Emit (ELF.Pop_Section);
+      end if;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
         /= Landin.IR.No_Item
       then

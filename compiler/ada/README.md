@@ -421,6 +421,15 @@ tools. Complete mandatory runtime profiles and quantitative acceptance are
 recorded in `compiler/tests/README.md`, not inferred from the existence of
 these packages.
 
+D471's stack-limit check is each backend's own prologue code, asked for
+by `Landin.Backend.Prepares_Stacks`, a scan of the whole unit for a
+`compiler.stack_prepare`; `Landin.Backend.Call_Free` says which routines
+may go unchecked, and `Stack_Limit_Margin` and `Unchecked_Stack_Bytes`
+are D472's per-target figures, which `compiler.stack_prepare` and the
+depth report read from the same place. The cell, the switch's save of it
+and the trap after a routine's other traps are the backend's, beside its
+switch routine.
+
 `--stack-report=PATH` is D447's depth report (D467, D468), written after
 emitted assembly or a linked executable and refused without one. Each
 backend records, in the same `Routine_Statistics`, a routine's
@@ -430,11 +439,13 @@ included, and whether a failed check calls out, a runtime helper is called
 or the routine is naked. `Landin.Backend.Dispatch.Stack_Facts_Of` holds
 what the code outside the program's routines takes: the switch routine's
 frame on the leaving stack, the first frame `compiler.stack_prepare` lays,
-where the entry starts below a prepared top, and D361's report.
+where the entry starts below a prepared top, D361's report, and D472's
+margin above a prepared stack's base and largest unchecked frame.
 `Landin.Build_Reports.Stacks` reads the call graph from the unit the
 backend was given, closes it where a call names its routine, and renders
 `landin-stack-report-1`: the target, level and controls, `switch_bytes`,
-`prepared_bytes`, `entry_bytes`, a `trap` object, `openings` (`kind`,
+`prepared_bytes`, `entry_bytes`, `margin_bytes`, `unchecked_bytes`, a
+`trap` object, `openings` (`kind`,
 `routine`, `file`, `line`, `column`, `callee` when one is named) and one
 `routines` row per emitted routine with `frame_bytes`, `depth_bytes`,
 `closed`, `address_taken`, `switches`, `traps`, the deepest `path` and the

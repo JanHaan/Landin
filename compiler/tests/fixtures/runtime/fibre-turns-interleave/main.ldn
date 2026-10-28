@@ -36,7 +36,7 @@ thrice: (inout state: note) -> none ! failure.reason =
 end thrice
 
 both: (runs: any fibre.turns) -> none ! failure.reason =
-    mut stacks: [2 * 4096]u8 = zeroed
+    mut stacks: [2 * 8192]u8 = zeroed
     mut tasks := try fibre.turns_over(runs, stacks, 2)
     defer fibre.join(tasks) else none
     a := note_of(runs, u8('a'))

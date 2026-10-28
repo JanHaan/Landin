@@ -23,12 +23,12 @@ fibre: (argument: usize) -> noreturn =
         isb sy
         """)
     observed = handled + u32(argument)
-    compiler.stack_switch(addr fibre_saved, main_saved, usize(addr backing[0]) + 256)
+    compiler.stack_switch(addr fibre_saved, main_saved)
     loop do
     end loop
 end fibre
 start: () -> none =
     fibre_saved = compiler.stack_prepare(backing[0..<1024], fibre, 100)
-    compiler.stack_switch(addr main_saved, fibre_saved, 0)
+    compiler.stack_switch(addr main_saved, fibre_saved)
     finished = observed + 1000
 end start

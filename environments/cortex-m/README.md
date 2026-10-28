@@ -798,7 +798,7 @@ leaving context's until MSP, PSP or CONTROL is written and the resumed one's
 after. `capacity` measures `probes/fibre-capacity.ldn`, a taker and an
 answerer fibre admitted to a group over `core/fibre`'s round of turns, whose
 idler waits for an interrupt, exchanging six requests through a ring while
-SysTick counts ticks, their stacks cut from one fixed 4,400-byte module
+SysTick counts ticks, their stacks cut from one fixed 2,992-byte module
 buffer (D470). `accounting()` identifies that buffer and the round's state
 in static RAM from `nm -S`, the main stack below the reset pointer and the
 whole buffer are painted at `start`, and each fibre's peak is read below its
@@ -806,14 +806,15 @@ stack's top when the firmware returns. The control writes `capacity.json`
 and `capacity.txt` beside it and fails unless the consumer fits; the
 evidence directory's `capacity.json` and `capacity.txt` hold every
 profile's, and the gate's `cortex-m` job keeps them. At none/off it uses
-21,748 bytes of flash and 4,480 of static RAM, of which the fibre buffer is
-4,400; with the 4,096-byte main-stack reservation, painted to 1,464, that is
-8,576 bytes of reserved RAM, counted once. Each fibre's backing is 2,176
-bytes, a 32-byte record and a 2,144-byte stack, painted to 896, 932 with
-D461's exception frame; both are live at once, 4,352 bytes. The size and
-speed profiles use 19,052 to 19,080 bytes of flash and paint at most 840.
-Every profile fits the 32 KiB flash, 16 KiB RAM profile. Paint is this run's
-deepest write, not a bound.
+22,492 bytes of flash and 3,072 of static RAM, of which the fibre buffer is
+2,992; with the 4,096-byte main-stack reservation, painted to 1,472, that is
+7,168 bytes of reserved RAM, counted once. Each fibre's backing is 1,472
+bytes, a 32-byte record and a 1,440-byte stack whose limit stands 384 bytes
+above its base (D472), painted to 904, 940 with D461's exception frame;
+both are live at once, 2,944 bytes. The size and speed profiles use 19,916
+to 19,944 bytes of flash and paint at most 848. Every profile fits the
+32 KiB flash, 16 KiB RAM profile. Paint is this run's deepest write, not a
+bound.
 
 Artifacts under the `run.py` output's `evidence` directory retain sources,
 identities, commands/assertions/timeouts,
