@@ -26,6 +26,31 @@ package Landin.Backend.Dispatch is
       Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts) return Boolean;
 
+   --  D447's depth report (D467): what the code a backend emits outside
+   --  any routine of the program takes of a stack.  Switch_Bytes is what a
+   --  stack switch takes on the leaving stack below the switching
+   --  routine's own, the call to the switch routine included; the limit is
+   --  checked before it.  Prepared_Bytes is the first frame
+   --  `compiler.stack_prepare` lays at the top of a stack, which the first
+   --  switch onto it pops.  Entry_Bytes is how far below that top the
+   --  entry's caller stands when the start routine calls it, so a prepared
+   --  stack holds the larger of Prepared_Bytes and Entry_Bytes plus the
+   --  entry's depth.  Report_Bytes is what D361's default report takes
+   --  when a failed check calls it, and Report_Foreign that it calls the C
+   --  library's `write`, whose stack is not known here.  On Cortex-M0 a
+   --  failed check with no handler is an undefined instruction, whose
+   --  exception frame D461 charges to every stack an exception can take.
+   type Stack_Facts is record
+      Switch_Bytes   : Landin.Targets.Byte_Count := 0;
+      Prepared_Bytes : Landin.Targets.Byte_Count := 0;
+      Entry_Bytes    : Landin.Targets.Byte_Count := 0;
+      Report_Bytes   : Landin.Targets.Byte_Count := 0;
+      Report_Foreign : Boolean := False;
+   end record;
+
+   function Stack_Facts_Of
+     (Facts : Landin.Targets.Target_Facts) return Stack_Facts;
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;

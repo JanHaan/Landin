@@ -58,6 +58,7 @@ package body Landin.Commands.Catalogue is
          when Firmware_Entry => "--firmware-entry",
          when Build_Report => "--build-report",
          when Stage_Report => "--stage-report", when Dry_Run => "--dry-run",
+         when Stack_Report => "--stack-report",
          when Depfile => "--depfile", when Format_Check => "--check",
          when Format_Stdout => "--stdout",
          when Stdio => "--stdio", when JSON => "--json",
@@ -96,6 +97,8 @@ package body Landin.Commands.Catalogue is
          when Firmware_Entry => "Select the Cortex-M firmware entry routine",
          when Build_Report => "Write deterministic build evidence JSON",
          when Stage_Report => "Write stage CPU time and peak memory JSON",
+         when Stack_Report =>
+           "Write each emitted routine's frame and deepest stack JSON",
          when Dry_Run =>
            "Check and plan compilation; write and execute nothing",
          when Depfile =>

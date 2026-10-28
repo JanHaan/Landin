@@ -18747,7 +18747,8 @@ and LLDB alike. All were declined.
 
 **Pinned by** the Cortex-M firmware lane's `fibre` case, which takes an
 interrupt in a fibre and steps a debugger through both switches (D460,
-D461); prototype 5's V9, V11 and V12 record the pressure. The scripted
+D461); prototype 5's V9, V11 and V12 record the pressure. The `stack
+report` suite pins the depth report as D467 and D468 say it. The scripted
 debugger sessions of `runtime/stack-switch-frames` on every target (D469)
 pin the frames of a backtrace through a switch, and the capacity control of
 the Cortex-M lane's evidence (D470) the fibre's backing on the retained
@@ -18980,6 +18981,82 @@ execution. Both were declined.
 
 **Pinned by** the two fixtures, on the x86-64 targets they name and in
 the Cortex-M corpus.
+
+### D467 — The depth report covers every emitted routine, from its caller's stack pointer
+
+**The tour said** nothing. D447 has the compiler report, for each routine a
+program admits to a group, the deepest stack of the call graph it can close.
+What a group admits is a run-time fact: a task is an `any fibre.task` value,
+and `prepare` takes its entry as a function value, so no compile-time set of
+admitted routines exists to report on.
+
+**Chosen:** `--stack-report=PATH` writes, beside emitted assembly or an
+executable, one JSON row for every routine the backend emitted, with whether
+its address is taken, so whoever starts a fibre reads its entry's row.
+A routine's frame is the backend's own figure: how far its code takes the
+stack pointer below where its caller's stood before the call, so x86-64's
+return address, every frame record, the frame, and the largest area it
+reserves around one call or pushes for a moment. Its depth is its frame
+plus the deepest of its callees' depths, of what `compiler.stack_switch`
+saves on the leaving stack where it switches, and of a failed check's call
+where one calls out. A switch is not a call into the context it resumes. A
+selected handler runs on the stack that failed, and a check failing in its
+own calls enters it once more as far as its frame before trapping, so the
+handler is measured with its own frame as that cost and every other routine
+with what that measured; D361's report costs what its routine takes. The
+hosted entry's call to the argument initializer is counted from its whole
+frame. What `compiler.stack_prepare` lays at a stack's top and how far below
+the top the entry starts are the target's, reported once; on Cortex-M0 the
+exception frame is D461's. A report holds frames and depths and no backing
+arithmetic: alignment of the top, the `starting` record, D461's thirty-six
+bytes and the record's room are the consumer's sums. Calls are read from the
+unit the backend was given, so a call it closed by inlining is not one.
+
+**The alternatives:** reporting only routines whose address is taken, which
+leaves a fibre's callees to be found by hand and gives nothing to a program
+that starts no fibre; a per-call-site argument area, which the backends do
+not record and which the largest area bounds; frames from the build
+report's `frame_bytes`, which on three targets leaves out the frame record
+and every call area; and a section of the build report, which a check
+without emission also writes and which has no frames to give. All were
+declined.
+
+**Pinned by** the `stack report` suite: `a closed graph on every target`, `a
+switch costs its frame`, `a failed check counts`, `the same program gives
+the same report` and `a stack report needs emitted code`.
+
+### D468 — What opens a call graph
+
+**The tour said** nothing. D447 names three things that open a graph: an
+`any` call, recursion and a foreign call.
+
+**Chosen:** a report lists each opening once, with its kind, the routine it
+is in and where, and each routine the openings its calls reach; such a
+routine is not closed, and its depth is what the rest closes. The kinds are:
+`any`, a call through an erased table; `evidence`, a generic's call through
+a table a caller handed it; `function value`, a call through any other
+function value; `foreign`, a call to a declaration no emitted routine
+defines under its link name, or through a C function value; `recursion`,
+each call inside a cycle, whose depth is not followed; `helper`, a routine
+that calls the target toolchain's runtime, as Cortex-M0's `__aeabi_*`
+division does; and `assembly`, a naked routine, whose text owns the stack,
+or a [1630] block whose text pushes, pops, enters, leaves, calls or names a
+stack pointer. A call through a routine's address or a constant table
+computed in the same routine is a call to that routine; a value traced
+through slots names only the opening's kind, because a slot may be written
+through its address. A failed check's own openings are the report's
+`trap`: the handler's, or D361's report calling the C library's `write` off
+Linux.
+
+**The alternatives:** a bound that assumes some cost for an opening, such as
+the largest frame of a family's providers for an `any` call, which is a
+guess about what a run-time value holds; a recursion bound from source
+annotations, which the language has none of; and reading every assembly
+block as open, which would open every hosted program at its system calls.
+All were declined.
+
+**Pinned by** the `stack report` suite's `each opening is named` and `a
+helper opens the graph`.
 
 ### D469 — The switch and start routines have names a debugger shows
 
@@ -20975,10 +21052,11 @@ the same protection of an existing executable and of the operand itself. A
 file is assembly when its name ends in `.s`; it must be the one operand,
 without `--root`, and options that describe compiling Landin source
 (`--optimize`, `--specialize`, `--build-mode`, `--option`, `--build-report`,
-`--stage-report`, `--panic-map`, `--depfile`, `--firmware-entry` and
-`--keep-asm`) are refused with it. The operand is never read by the compiler
-and never removed. A program's `linker.library` archives are not recorded in
-its assembly, so an assembly file is linked without them.
+`--stage-report`, `--stack-report`, `--panic-map`, `--depfile`,
+`--firmware-entry` and `--keep-asm`) are refused with it. The operand is
+never read by the compiler and never removed. A program's `linker.library`
+archives are not recorded in its assembly, so an assembly file is linked
+without them.
 
 **The alternatives:** keeping the assembly and documenting it, which leaves
 every first compile a file the reader did not ask for; writing it to a

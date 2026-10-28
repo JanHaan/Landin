@@ -382,6 +382,11 @@ This is the maintained inventory of what the compiler does today:
   from fixed module storage, fits with its painted peaks and D461's
   exception frame, and the Cortex-M lane reports its flash, static RAM,
   backing and verdict at every profile (D470).
+  `--stack-report=PATH` writes, for every
+  emitted routine on each of those targets, its frame and the deepest stack
+  of the call graph it can close, and names each `any`, generic,
+  function-value or foreign call, recursion, runtime helper and
+  stack-moving assembly that opens it (D447, D467, D468).
   `compiler/tests/constructs.matrix` records every normative construct's
   state, targets and evidence, and `check.py` refuses a stale or unexplained
   row.

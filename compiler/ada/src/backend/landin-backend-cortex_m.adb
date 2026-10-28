@@ -445,6 +445,10 @@ package body Landin.Backend.Cortex_M is
       --  that names sp, push or pop forgets it until the next block.
       Sp_Depth : Landin.Targets.Byte_Count := 0;
       Sp_Known : Boolean := False;
+      --  D467: the deepest Sp_Depth a routine's body reaches, and how
+      --  many runtime helpers it calls.
+      Deepest_Below : Landin.Targets.Byte_Count := 0;
+      Helpers_Called : Natural := 0;
       type Low_Set is array (4 .. 7) of Boolean;
       type Literal_Entry is record
          Name : Unbounded.Unbounded_String;
@@ -496,6 +500,9 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit (Instruction : String) is
       begin
+         if Ada.Strings.Fixed.Index (Instruction, "bl __aeabi_") = 1 then
+            Helpers_Called := Helpers_Called + 1;
+         end if;
          --  Frame records emit no instructions. In particular, a record
          --  between a return and its trap label must not advance a pool
          --  flush ahead of that label in debug builds.
@@ -798,6 +805,8 @@ package body Landin.Backend.Cortex_M is
       procedure Reserve (Bytes : Landin.Targets.Byte_Count) is
       begin
          Sp_Depth := Sp_Depth + Bytes;
+         Deepest_Below :=
+           Landin.Targets.Byte_Count'Max (Deepest_Below, Sp_Depth);
          if Bytes in 1 .. 508 and then Bytes mod 4 = 0 then
             Emit ("sub sp, #" & Trimmed (Bytes'Image));
          elsif Bytes > 0 then
@@ -2912,6 +2921,8 @@ package body Landin.Backend.Cortex_M is
                else
                   Emit ("push {r2, r4}");
                   Sp_Depth := Sp_Depth + 8;
+                  Deepest_Below :=
+                    Landin.Targets.Byte_Count'Max (Deepest_Below, Sp_Depth);
                   Load_Value (Input);
                   if Size_Of_Value (Input) /= Landin.Targets.Byte_8 then
                      Emit ("movs r1, #0");
@@ -2927,6 +2938,8 @@ package body Landin.Backend.Cortex_M is
                   Shift_Pair (True);
                   Emit ("push {r0, r1}");
                   Sp_Depth := Sp_Depth + 8;
+                  Deepest_Below :=
+                    Landin.Targets.Byte_Count'Max (Deepest_Below, Sp_Depth);
                   Immediate ("r0", Bits and 16#FFFF_FFFF#);
                   Immediate ("r1", Bits / 2 ** 32);
                   Emit ("ldr r2, [sp, #12]");
@@ -3360,6 +3373,9 @@ package body Landin.Backend.Cortex_M is
                            Branch ("eq", Done & "_multiply");
                            Emit ("push {r0, r1, r2, r3}");
                            Sp_Depth := Sp_Depth + 16;
+                           Deepest_Below :=
+                             Landin.Targets.Byte_Count'Max
+                               (Deepest_Below, Sp_Depth);
                            if Signed then
                               Emit ("cmp r1, #0");
                               Branch ("ge", Done & "_left");
@@ -4462,7 +4478,7 @@ package body Landin.Backend.Cortex_M is
             Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
             Landin.Build_Reports.Append (Report,
               Landin.Build_Reports.Routine_Statistics'
-                (Item => Item, others => <>));
+                (Item => Item, Naked => True, others => <>));
             return;
          end if;
          Pool_Active := True;
@@ -4650,6 +4666,8 @@ package body Landin.Backend.Cortex_M is
          if Probe then
             Put (Body_Marker);
          end if;
+         Deepest_Below := 0;
+         Helpers_Called := 0;
          for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             Put (Label (Item, Landin.IR.Block_Id (Block)) & ":");
             --  Every block starts with sp at the bottom of the homes.
@@ -4739,6 +4757,10 @@ package body Landin.Backend.Cortex_M is
               Save_Bytes => (if Leaf then Save_Count else 24),
               Spill_Count => Spill_Count (Layout),
               Instructions => Instruction_Count - Before_Emit,
+              Stack_Bytes => Homes + (if Leaf then Save_Count else 24)
+                + Deepest_Below,
+              Calls_Panic => not Edges.Is_Empty,
+              Helper_Calls => Helpers_Called,
               others => <>));
       end Emit_Routine;
       --  The value a datum's block describes.  [1460] says nothing runs

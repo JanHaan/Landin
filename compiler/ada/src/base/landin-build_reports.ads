@@ -50,6 +50,20 @@ package Landin.Build_Reports is
       Stack_Stores      : Natural := 0;
       Direct_Calls      : Natural := 0;
       Indirect_Calls    : Natural := 0;
+      --  D447's depth report (D467).  The deepest this routine's own code
+      --  takes the stack pointer below where its caller's stood before the
+      --  call: a return address the call pushes, the frame record, the
+      --  frame, and the largest area it reserves around one call or pushes
+      --  for a moment.  No callee's frame is in it.  Zero for a naked
+      --  routine, whose text owns the stack.
+      Stack_Bytes       : Landin.Targets.Byte_Count := 0;
+      --  A failed check here calls the selected handler or D361's report
+      --  on this stack, rather than ending at a trap instruction.
+      Calls_Panic       : Boolean := False;
+      --  Calls into a runtime helper the target's toolchain supplies, such
+      --  as Cortex-M0's __aeabi_* division, whose stack is not known here.
+      Helper_Calls      : Natural := 0;
+      Naked             : Boolean := False;
    end record;
 
    type Report is tagged private;

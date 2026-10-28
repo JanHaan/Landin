@@ -154,6 +154,34 @@ package body Landin.Panics is
         + Site_Number (Kind'Pos (Reason));
    end Site;
 
+   function Displayed_Name
+     (Context : in out Landin.Stages.Compilation;
+      Source  : Landin.Source.Source_Id) return String
+   is
+      Modules : Landin.Modules.Table renames
+        Landin.Stages.Modules (Context).all;
+      Name : constant String := Landin.Source.Name
+        (Landin.Stages.Source (Context, Source));
+      Module : constant Landin.Modules.Module_Id :=
+        (if Natural (Source) <= Landin.Modules.Source_Count (Modules)
+         then Landin.Modules.Module_Of (Modules, Source)
+         else Landin.Modules.No_Module);
+      Base : Natural := Name'First;
+   begin
+      for Index in Name'Range loop
+         if Name (Index) = '/' then
+            Base := Index + 1;
+         end if;
+      end loop;
+      if Module = Landin.Modules.No_Module
+        or else Landin.Modules.Logical_Path (Modules, Module) = ""
+      then
+         return Name (Base .. Name'Last);
+      end if;
+      return Landin.Modules.Logical_Path (Modules, Module) & "/"
+        & Name (Base .. Name'Last);
+   end Displayed_Name;
+
    procedure Prepare
      (Context : in out Landin.Stages.Compilation;
       Into : out Plan; Problem : out US.Unbounded_String)
@@ -182,29 +210,8 @@ package body Landin.Panics is
       --  where the build ran enters the image, so the report says the
       --  same wherever the program and the library are, and equivalent
       --  closures emit the same bytes.
-      function Displayed (Source : Landin.Source.Source_Id) return String;
-      function Displayed (Source : Landin.Source.Source_Id) return String is
-         Name : constant String := Landin.Source.Name
-           (Landin.Stages.Source (Context, Source));
-         Module : constant Landin.Modules.Module_Id :=
-           (if Natural (Source) <= Landin.Modules.Source_Count (Modules)
-            then Landin.Modules.Module_Of (Modules, Source)
-            else Landin.Modules.No_Module);
-         Base : Natural := Name'First;
-      begin
-         for Index in Name'Range loop
-            if Name (Index) = '/' then
-               Base := Index + 1;
-            end if;
-         end loop;
-         if Module = Landin.Modules.No_Module
-           or else Landin.Modules.Logical_Path (Modules, Module) = ""
-         then
-            return Name (Base .. Name'Last);
-         end if;
-         return Landin.Modules.Logical_Path (Modules, Module) & "/"
-           & Name (Base .. Name'Last);
-      end Displayed;
+      function Displayed (Source : Landin.Source.Source_Id) return String
+        is (Displayed_Name (Context, Source));
 
       function Valid return Boolean;
       function Valid return Boolean is

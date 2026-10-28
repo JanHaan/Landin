@@ -11,6 +11,7 @@ with Landin.Backend.Dispatch;
 with Landin.Build_Reports;
 with Landin.Build_Reports.Firmware;
 with Landin.Build_Reports.Sources;
+with Landin.Build_Reports.Stacks;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Debugging;
@@ -191,6 +192,8 @@ package body Landin.Driver is
       & "  --build-report=PATH write deterministic build evidence JSON" & LF
       & "  --stage-report=PATH write each stage's measured time and memory"
       & LF
+      & "  --stack-report=PATH write each emitted routine's frame and"
+      & " deepest stack" & LF
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --library=DIR       find core, hosted and platform under DIR" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
@@ -782,6 +785,8 @@ package body Landin.Driver is
       Build_Report_Path : Unbounded.Unbounded_String;
       Stage_Report_Path : Unbounded.Unbounded_String;
       Stage_Report_Seen : Boolean := False;
+      Stack_Report_Path : Unbounded.Unbounded_String;
+      Stack_Report_Seen : Boolean := False;
       Optimization : Landin.Optimization.Options :=
         Landin.Optimization.Default_Options;
       Optimize_Seen, Specialize_Seen, Report_Seen : Boolean := False;
@@ -935,6 +940,17 @@ package body Landin.Driver is
                Stage_Report_Path := Unbounded.To_Unbounded_String
                  (After (Argument, "--stage-report="));
 
+            elsif Starts_With (Argument, "--stack-report=") then
+               if Stack_Report_Seen
+                 or else After (Argument, "--stack-report=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Stack_Report_Seen := True;
+               Stack_Report_Path := Unbounded.To_Unbounded_String
+                 (After (Argument, "--stack-report="));
+
             elsif Starts_With (Argument, "--root=") then
                Roots.Append (After (Argument, "--root="));
 
@@ -1067,14 +1083,17 @@ package body Landin.Driver is
       end loop;
 
       --  Compilation controls do not modify informational actions, and
-      --  debug information and a panic map describe an emitted artifact;
-      --  a build report may describe a check (D383).
+      --  debug information, a panic map and a stack report describe an
+      --  emitted artifact; a build report may describe a check (D383).
       if ((Optimize_Seen or Specialize_Seen or Report_Seen
            or Debug_Seen or Panic_Map or Stage_Report_Seen
+           or Stack_Report_Seen
            or Toolchain_Seen or Linker_Seen or Link_Seen or Firmware_Seen)
           and then (Wants_Usage or Wants_Identity))
         or else ((Debug_Seen or Panic_Map) and then Emit = Emit_Nothing)
         or else ((Debug_Seen or Panic_Map) and then Emit = Emit_IR)
+        or else (Stack_Report_Seen
+                 and then Emit in Emit_Nothing | Emit_IR)
         or else (Keep_Assembly and then Emit /= Emit_Executable)
         or else ((Optimize_Seen or Specialize_Seen or Report_Seen
                   or Firmware_Seen or Link_Seen)
@@ -1225,7 +1244,8 @@ package body Landin.Driver is
            is (Stem in "--help" | "--identify" | "--target" | "--level"
                      | "--option" | "--build-mode" | "--optimize"
                      | "--specialize" | "--panic-map" | "--debug"
-                     | "--build-report" | "--stage-report" | "--root"
+                     | "--build-report" | "--stage-report"
+                     | "--stack-report" | "--root"
                      | "--library" | "--emit" | "-o" | "--toolchain"
                      | "--linker" | "--link" | "--firmware-entry"
                      | "--keep-asm");
@@ -1273,6 +1293,7 @@ package body Landin.Driver is
               new String'("--optimize"), new String'("--specialize"),
               new String'("--panic-map"), new String'("--debug"),
               new String'("--build-report"), new String'("--stage-report"),
+              new String'("--stack-report"),
               new String'("--root"), new String'("--library"),
               new String'("--emit"),
               new String'("--toolchain"), new String'("--linker"),
@@ -1283,6 +1304,7 @@ package body Landin.Driver is
          function Incompatible_Action return String
            is (if (Optimize_Seen or Specialize_Seen or Report_Seen
                    or Debug_Seen or Panic_Map or Stage_Report_Seen
+                   or Stack_Report_Seen
                    or Toolchain_Seen or Linker_Seen or Link_Seen
                    or Firmware_Seen)
                   and then (Wants_Usage or Wants_Identity)
@@ -1295,6 +1317,10 @@ package body Landin.Driver is
                elsif (Debug_Seen or Panic_Map) and then Emit = Emit_IR
                then "--debug and --panic-map describe machine code, and"
                     & " --emit=ir writes the IR before any is chosen"
+               elsif Stack_Report_Seen
+                 and then Emit in Emit_Nothing | Emit_IR
+               then "--stack-report measures the frames of emitted machine"
+                    & " code: add --emit=asm or --emit=exe"
                elsif Keep_Assembly and then Emit /= Emit_Executable
                then "--keep-asm keeps an executable's assembly beside it;"
                     & " --emit=asm writes the assembly alone"
@@ -2221,6 +2247,8 @@ package body Landin.Driver is
               Unbounded.To_String (Build_Report_Path);
             Stage_Path : constant String :=
               Unbounded.To_String (Stage_Report_Path);
+            Stack_Path : constant String :=
+              Unbounded.To_String (Stack_Report_Path);
             Emit_Map : constant Boolean := Emit /= Emit_IR
               and then (Debug_Enabled or else Panic_Map
                 or else Landin.IR.Caller_Source_Count
@@ -2234,6 +2262,33 @@ package body Landin.Driver is
 
             function Conflicts_With (Path : String) return Boolean is
               (Host.Paths_Overlap (Report_Path, Path));
+
+            procedure Write_Stack_Report;
+
+            --  D447: written after the emitted output, as the build report
+            --  is, from the frames the backend reported (D467).
+            procedure Write_Stack_Report is
+               Stack_Written : Landin.Platform.Write_Status;
+            begin
+               if Stack_Report_Seen
+                 and then not Landin.Stages.Failed (Context)
+               then
+                  Host.Write_File
+                    (Stack_Path,
+                     Landin.Build_Reports.Stacks.JSON
+                       (Evidence, Context, Optimization, Panic,
+                        Landin.Backend.Entry_Point.Hosted_Main
+                          (Landin.Stages.Code (Context).all,
+                           Landin.Stages.Meanings (Context).all,
+                           Landin.Stages.Modules (Context).all,
+                           Landin.Stages.Identities (Context).all)),
+                     Stack_Written);
+                  if Stack_Written /= Landin.Platform.Write_Ok then
+                     Note_Failure
+                       (Code_Unwritable, "cannot write: " & Stack_Path);
+                  end if;
+               end if;
+            end Write_Stack_Report;
 
             procedure Write_Build_Report;
 
@@ -2330,6 +2385,25 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Unknown_Option,
                      "build report collides with source: " & Report_Path);
+                  return;
+               end if;
+            end if;
+            if Stack_Report_Seen then
+               for Path of Destinations loop
+                  if Host.Paths_Overlap (Stack_Path, Path) then
+                     Bad_Use := True;
+                     Note_Failure
+                       (Code_Unknown_Option,
+                        "stack report collides with an artifact: "
+                        & Stack_Path);
+                     return;
+                  end if;
+               end loop;
+               if Host.Paths_Overlap_Any (Stack_Path, Source_Paths) then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "stack report collides with source: " & Stack_Path);
                   return;
                end if;
             end if;
@@ -2686,6 +2760,10 @@ package body Landin.Driver is
                      Unbounded.Append (Result.Output,
                        "write " & Landin.Json.Quoted (Stage_Path) & LF);
                   end if;
+                  if Stack_Report_Seen then
+                     Unbounded.Append (Result.Output,
+                       "write " & Landin.Json.Quoted (Stack_Path) & LF);
+                  end if;
                   if Emit = Emit_Executable then
                      declare
                         Driver : constant String := Planned_Driver;
@@ -2777,6 +2855,7 @@ package body Landin.Driver is
 
             if Emit /= Emit_Executable then
                Write_Build_Report;
+               Write_Stack_Report;
                return;
             end if;
 
@@ -2784,6 +2863,7 @@ package body Landin.Driver is
               (Assembly_Path, Product_Path, Unbounded.To_String (Map_Id),
                Destinations);
             Write_Build_Report;
+            Write_Stack_Report;
          end Emit_Requested;
 
          --  D383: what a check says beyond the program's acceptance when
@@ -2973,6 +3053,7 @@ package body Landin.Driver is
                Described : constant String :=
                  (if Report_Seen then "--build-report"
                   elsif Stage_Report_Seen then "--stage-report"
+                  elsif Stack_Report_Seen then "--stack-report"
                   elsif Panic_Map then "--panic-map"
                   elsif Depfile /= "" then "--depfile"
                   elsif Firmware_Seen then "--firmware-entry"
@@ -2995,6 +3076,7 @@ package body Landin.Driver is
          Check_Dependency_Path (Unbounded.To_String (Output));
          Check_Dependency_Path (Unbounded.To_String (Build_Report_Path));
          Check_Dependency_Path (Unbounded.To_String (Stage_Report_Path));
+         Check_Dependency_Path (Unbounded.To_String (Stack_Report_Path));
          for Path of Inputs loop
             Check_Dependency_Path (Path);
          end loop;
@@ -3170,6 +3252,31 @@ package body Landin.Driver is
               (Code_Unknown_Option,
                "stage report collides with another output: "
                & Unbounded.To_String (Stage_Report_Path));
+         end if;
+
+         if Stack_Report_Seen
+           and then
+             ((Report_Seen
+               and then Host.Paths_Overlap
+                 (Unbounded.To_String (Stack_Report_Path),
+                  Unbounded.To_String (Build_Report_Path)))
+              or else (Stage_Report_Seen
+                and then Host.Paths_Overlap
+                  (Unbounded.To_String (Stack_Report_Path),
+                   Unbounded.To_String (Stage_Report_Path)))
+              or else (Emit /= Emit_Nothing
+                and then Host.Paths_Overlap
+                  (Unbounded.To_String (Stack_Report_Path),
+                   (if Unbounded.Length (Output) > 0
+                    then Unbounded.To_String (Output)
+                    elsif Emit = Emit_Executable then Default_Executable
+                    else Default_Assembly))))
+         then
+            Bad_Use := True;
+            Note_Failure
+              (Code_Unknown_Option,
+               "stack report collides with another output: "
+               & Unbounded.To_String (Stack_Report_Path));
          end if;
 
          --  D383: with roots, the operand is the entry module's directory
