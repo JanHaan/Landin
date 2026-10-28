@@ -32,8 +32,11 @@ take: (inout state: turn) -> none ! failure.reason =
     fail io.io_failed
 end take
 
+--  Module storage, so the two stacks are no frame's: on Cortex-M0 the
+--  reset stack is 4 KiB, and an 8 KiB local would not fit it.
+mut backing: [2 * 4096]u8 = zeroed
+
 both: (runs: any fibre.turns) -> none ! failure.reason =
-    mut backing: [2 * 4096]u8 = zeroed
     mut tasks := try fibre.turns_over(runs, backing, 2)
     defer fibre.join(tasks) else none
     a := turn_of(runs, 1, 1)
