@@ -76,6 +76,8 @@ package body Landin.Backend.Dispatch is
         Landin.Backend.Stack_Limit_Margin (Facts);
       Unchecked : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Unchecked_Stack_Bytes (Facts);
+      Before : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Handler_Entry_Bytes (Facts);
    begin
       case Landin.Targets.Capabilities.Backend_For (Facts) is
          when Landin.Targets.Capabilities.X86_64_ELF =>
@@ -83,27 +85,34 @@ package body Landin.Backend.Dispatch is
                     Entry_Bytes => 0,
                     Report_Bytes => (if Linux then 8 else 24),
                     Report_Foreign => not Linux,
-                    Limit_Margin => Margin, Unchecked => Unchecked);
+                    Limit_Margin => Margin, Unchecked => Unchecked,
+                    Handler_Entry => Before);
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
            | Landin.Targets.Capabilities.Arm64_ELF =>
             return (Switch_Bytes => 176, Prepared_Bytes => 176,
                     Entry_Bytes => 0, Report_Bytes => 16,
                     Report_Foreign => not Linux,
-                    Limit_Margin => Margin, Unchecked => Unchecked);
+                    Limit_Margin => Margin, Unchecked => Unchecked,
+                    Handler_Entry => Before);
          when Landin.Targets.Capabilities.RV64_ELF =>
             return (Switch_Bytes => 208, Prepared_Bytes => 208,
                     Entry_Bytes => 0, Report_Bytes => 16,
                     Report_Foreign => False,
-                    Limit_Margin => Margin, Unchecked => Unchecked);
+                    Limit_Margin => Margin, Unchecked => Unchecked,
+                    Handler_Entry => Before);
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             return (Switch_Bytes => 48, Prepared_Bytes => 48,
                     Entry_Bytes => 0, Report_Bytes => 0,
                     Report_Foreign => False,
-                    Limit_Margin => Margin, Unchecked => Unchecked);
+                    Limit_Margin => Margin, Unchecked => Unchecked,
+                    Handler_Entry => Before);
          when Landin.Targets.Capabilities.No_Backend =>
             return (others => <>);
       end case;
    end Stack_Facts_Of;
+
+   function Prepares_Stacks (Of_Unit : Landin.IR.Unit) return Boolean
+     is (Landin.Backend.Prepares_Stacks (Of_Unit));
 
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;

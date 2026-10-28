@@ -19256,7 +19256,7 @@ three times their size, made `runtime/fibre-turns-interleave`'s 4 KiB
 stacks too small at `none`, and so was declined. The report's
 `margin_bytes` and `unchecked_bytes` give the two figures beside the
 `trap` depth, so a reader sees whether a program's handler fits; one that
-does not runs below its stack's base. The default report always fits. A switch
+does not is refused (D474). The default report always fits. A switch
 between two contexts that were never prepared, both on the stack the program
 started on, carries zero, as that stack's limit is.
 
@@ -19276,6 +19276,65 @@ Cortex-M0 included; the debugger sessions of `runtime/stack-switch-frames`
 (D469) and the firmware lane's `fibre` case, which step through the changed
 switch at every instruction; and `negative/stack-builtins-argument-contract`,
 whose switch with a third argument is refused.
+
+### D474 — A selected handler must fit a prepared stack's margin
+
+**The tour said** at [1670] that a program may select its own handler, and
+nothing about the stack it runs on. D471 enters the selected handler on the
+stack whose check failed, and D472 sized each target's margin for the
+corpus's handlers and said that one which does not fit runs below its
+stack's base, where it overwrites whatever the backing's owner keeps there.
+
+**Chosen:** a program whose whole program holds a `compiler.stack_prepare`
+and whose entry module selects a `panic_handler` (D232) is refused with
+`L0508` when the handler does not fit the target's margin. What it needs is
+D472's worst before the handler, 152 bytes on x86-64, 144 on arm64 and
+RV64 and 188 on Cortex-M0, which the report gives as `handler_entry_bytes`,
+and the depth report's `trap` figure, which counts the handler's frame
+twice for a check failing in its own calls (D467); the margin is 640, 640,
+768 and 384 bytes. The refusal gives both, the margin and the target, and
+the handler's deepest path, at the handler. A handler whose calls reach an
+opening of D468, `any`, `evidence`, `function value`, `foreign`,
+`recursion`, `helper` or `assembly`, has no depth to compare and is refused
+too, naming the first opening's kind and routine and pointing at it, with
+how many more there are. The depth is the emitted code's, on the target and
+profile being compiled, so the rule is decided after emission and before
+anything is written, for `--emit=asm` and `--emit=exe` alike, a dry run
+included; `--emit=ir` and `refine check` have no frames and do not raise
+it, so a program `refine check` accepts may be refused when it is compiled,
+and a handler that fits at one profile may not at another. A program that
+prepares no stack is not refused, however large its handler: no fibre can
+exist there, and its handler runs on the stack the program started on. A
+program that selects no handler is never refused: D361's report takes 8 to
+24 bytes and Cortex-M0's trap instruction none beyond D461's exception
+frame, which the figure before the handler holds, so the default fits every
+margin with at least 464 bytes to spare on the hosted targets and 196 on
+Cortex-M0. Off Linux the default report calls the C library's `write`,
+whose stack the compiler does not know; it is accepted by this rule, as
+D472 sized the margin for it. The handlers of
+`runtime/stack-exhausted-reaches-the-handler` and
+`runtime/stack-frame-past-limit-traps`, which match the kind and switch
+away, need at most 536 bytes on x86-64, 528 on arm64, 688 on RV64 and 348
+on Cortex-M0, at `none`.
+
+**The alternatives:** a warning, which leaves the overwrite in a program
+that compiled; measuring the handler in `refine check`, which has no
+frames and would have to guess the backend's; a margin computed for each
+program from its handler, which D472 declined; refusing an open handler's
+program only where the opening is reached on the trap's path, which is
+every path the handler takes; and the rule in every program, which refuses
+handlers that never run on a prepared stack. All were declined.
+
+**Pinned by** the `stack report` suite's `a handler that fits is emitted`,
+a handler that switches away and the default report on every target with
+a native backend, each within its margin; `a handler past the margin is
+refused`, a handler with a 512-byte frame refused on every one of those
+targets with its own figures; `an open handler is refused`, a handler that
+calls through an `any` value, named where the call is; and `without a
+prepared stack any handler is emitted`, both handlers accepted with no
+`compiler.stack_prepare`; `negative/stack-handler-exceeds-margin` and
+`negative/stack-handler-opens-its-graph` on Linux x86-64; and the two
+runtime fixtures above, which run on every target and fit.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

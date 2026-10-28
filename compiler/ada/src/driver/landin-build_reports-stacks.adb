@@ -3,13 +3,11 @@ with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Hash;
-with Ada.Strings.Unbounded;
 with Landin.Backend;
 with Landin.Backend.Dispatch;
 with Landin.Backend.Entry_Point;
 with Landin.Json;
 with Landin.Memory;
-with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
@@ -126,12 +124,27 @@ package body Landin.Build_Reports.Stacks is
       return False;
    end Moves_Stack;
 
-   function JSON
+   --  The report's measure, and D474's verdict on the selected handler
+   --  from the same figures; the text only when Write_Text says.
+   procedure Measure_Program
      (Of_Report    : Report;
       Context      : in out Landin.Stages.Compilation;
       Options      : Landin.Optimization.Options;
       Panic        : Landin.Panics.Plan;
-      Hosted_Entry : Landin.IR.Item_Id) return String
+      Hosted_Entry : Landin.IR.Item_Id;
+      Write_Text   : Boolean;
+      Result       : out US.Unbounded_String;
+      Fit          : out Handler_Fit);
+
+   procedure Measure_Program
+     (Of_Report    : Report;
+      Context      : in out Landin.Stages.Compilation;
+      Options      : Landin.Optimization.Options;
+      Panic        : Landin.Panics.Plan;
+      Hosted_Entry : Landin.IR.Item_Id;
+      Write_Text   : Boolean;
+      Result       : out US.Unbounded_String;
+      Fit          : out Handler_Fit)
    is
       Unit : IR.Unit renames Landin.Stages.Code (Context).all;
       Meanings : Landin.Resolution.Table renames
@@ -175,8 +188,6 @@ package body Landin.Build_Reports.Stacks is
       Ends_At : array (1 .. Count) of Ending := [others => Here];
 
       Trap_Bytes : Bytes := 0;
-
-      Result : US.Unbounded_String;
 
       --  Each link name a routine the backend emitted defines, so a call
       --  to an external declaration of it is a call to that routine, as
@@ -585,7 +596,84 @@ package body Landin.Build_Reports.Stacks is
         (if Handler /= IR.No_Item then "handler"
          elsif Landin.Panics.Reports_Default (Panic) then "report"
          else "none");
+
+      --  D474: the handler's `trap` depth, with what the margin pays
+      --  before it, against the margin, once the first measure has the
+      --  handler's depth and its deepest path; an open graph is refused
+      --  at its first opening.
+      procedure Judge_Handler;
+
+      procedure Judge_Handler is
+         Target : constant String := Landin.Targets.Name (Facts);
+         Handler_Name : constant String := Name_Of (Handler);
+         Needed : constant Bytes := Machine.Handler_Entry + Trap_Bytes;
+      begin
+         Fit := (others => <>);
+         if not Trap_Openings.Is_Empty then
+            declare
+               First : constant Opening :=
+                 Openings (Trap_Openings.First_Element);
+               More : constant Natural :=
+                 Natural (Trap_Openings.Length) - 1;
+            begin
+               Fit.Refused := True;
+               Fit.Site :=
+                 (if First.Site.Source /= Landin.Source.No_Source
+                  then First.Site else IR.Origin_Of (Unit, Handler));
+               Fit.Message := US.To_Unbounded_String
+                 ("the panic handler `" & Handler_Name & "` runs on the"
+                  & " margin of a stack it overflowed, " & Image
+                    (Machine.Limit_Margin)
+                  & " bytes on " & Target & ", and its depth cannot be"
+                  & " known: its calls reach an opening of kind `"
+                  & Spelling (First.Kind) & "` in `"
+                  & Name_Of (First.Within) & "`"
+                  & (if First.Callee /= IR.No_Item
+                     then " calling `" & Name_Of (First.Callee) & "`"
+                     else "")
+                  & (if More = 0 then ""
+                     elsif More = 1 then " and one more"
+                     else " and " & Image (More) & " more")
+                  & " (D474)");
+            end;
+         elsif Needed > Machine.Limit_Margin then
+            declare
+               Path : US.Unbounded_String :=
+                 US.To_Unbounded_String (Handler_Name);
+               Step : Positive := Positive (Handler);
+            begin
+               loop
+                  if Next (Step) /= IR.No_Item then
+                     Step := Positive (Next (Step));
+                     US.Append (Path, " -> " & Name_Of (IR.Item_Id (Step)));
+                  else
+                     case Ends_At (Step) is
+                        when At_Switch =>
+                           US.Append (Path, " -> (switch)");
+                        when At_Trap =>
+                           US.Append (Path, " -> (trap)");
+                        when Here =>
+                           null;
+                     end case;
+                     exit;
+                  end if;
+               end loop;
+               Fit.Refused := True;
+               Fit.Site := IR.Origin_Of (Unit, Handler);
+               Fit.Message := US.To_Unbounded_String
+                 ("the panic handler `" & Handler_Name & "` needs "
+                  & Image (Needed) & " bytes below a failed check, more"
+                  & " than the " & Image (Machine.Limit_Margin)
+                  & "-byte margin of a prepared stack on " & Target & ": "
+                  & Image (Machine.Handler_Entry) & " before it and "
+                  & Image (Trap_Bytes) & " for it, by "
+                  & US.To_String (Path) & " (D474)");
+            end;
+         end if;
+      end Judge_Handler;
    begin
+      Result := US.Null_Unbounded_String;
+      Fit := (others => <>);
       for Index in 1 .. Routine_Count (Of_Report) loop
          declare
             Id : constant IR.Item_Id := Nth_Routine (Of_Report, Index).Item;
@@ -684,8 +772,12 @@ package body Landin.Build_Reports.Stacks is
          Measure;
          Trap_Bytes := Depth (Positive (Handler));
          Trap_Openings := Reached (Positive (Handler));
+         Judge_Handler;
       elsif Landin.Panics.Reports_Default (Panic) then
          Trap_Bytes := Machine.Report_Bytes;
+      end if;
+      if not Write_Text then
+         return;
       end if;
       Measure;
 
@@ -702,6 +794,7 @@ package body Landin.Build_Reports.Stacks is
            & ",""entry_bytes"":" & Image (Machine.Entry_Bytes)
            & ",""margin_bytes"":" & Image (Machine.Limit_Margin)
            & ",""unchecked_bytes"":" & Image (Machine.Unchecked)
+           & ",""handler_entry_bytes"":" & Image (Machine.Handler_Entry)
            & "," & LF & """trap"":{""calls"":""" & Trap_Calls & """");
       if Handler /= IR.No_Item then
          Put (",""routine"":" & Landin.Json.Quoted (Name_Of (Handler)));
@@ -788,7 +881,44 @@ package body Landin.Build_Reports.Stacks is
          end loop;
       end;
       Put ("]}" & LF);
-      return US.To_String (Result);
+   end Measure_Program;
+
+   function JSON
+     (Of_Report    : Report;
+      Context      : in out Landin.Stages.Compilation;
+      Options      : Landin.Optimization.Options;
+      Panic        : Landin.Panics.Plan;
+      Hosted_Entry : Landin.IR.Item_Id) return String
+   is
+      Text : US.Unbounded_String;
+      Fit : Handler_Fit;
+   begin
+      Measure_Program
+        (Of_Report, Context, Options, Panic, Hosted_Entry,
+         Write_Text => True, Result => Text, Fit => Fit);
+      return US.To_String (Text);
    end JSON;
+
+   function Fit_Handler
+     (Of_Report    : Report;
+      Context      : in out Landin.Stages.Compilation;
+      Options      : Landin.Optimization.Options;
+      Panic        : Landin.Panics.Plan;
+      Hosted_Entry : Landin.IR.Item_Id) return Handler_Fit
+   is
+      Text : US.Unbounded_String;
+      Fit : Handler_Fit;
+   begin
+      if Landin.Panics.Handler (Panic) = IR.No_Item
+        or else not Landin.Backend.Dispatch.Prepares_Stacks
+          (Landin.Stages.Code (Context).all)
+      then
+         return Fit;
+      end if;
+      Measure_Program
+        (Of_Report, Context, Options, Panic, Hosted_Entry,
+         Write_Text => False, Result => Text, Fit => Fit);
+      return Fit;
+   end Fit_Handler;
 
 end Landin.Build_Reports.Stacks;

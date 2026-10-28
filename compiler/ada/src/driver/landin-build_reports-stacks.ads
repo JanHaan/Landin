@@ -1,5 +1,7 @@
+with Ada.Strings.Unbounded;
 with Landin.Optimization;
 with Landin.Panics;
+with Landin.Provenance;
 with Landin.Stages;
 
 --  D447's stack-depth report (D467, D468): for every routine the emitted
@@ -20,5 +22,25 @@ package Landin.Build_Reports.Stacks is
       Options      : Landin.Optimization.Options;
       Panic        : Landin.Panics.Plan;
       Hosted_Entry : Landin.IR.Item_Id) return String;
+
+   --  D474: in a program that prepares a stack, whether the selected
+   --  handler fits the target's margin.  Refused when its `trap` depth,
+   --  with what the margin pays before the handler, exceeds the margin,
+   --  or when its graph is open; Message then says why, with the numbers
+   --  or the opening, and Site is where: the handler, or the opening.
+   --  Not refused when the program prepares no stack, nor when it
+   --  selects no handler, whose default report always fits.
+   type Handler_Fit is record
+      Refused : Boolean := False;
+      Message : Ada.Strings.Unbounded.Unbounded_String;
+      Site    : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+   end record;
+
+   function Fit_Handler
+     (Of_Report    : Report;
+      Context      : in out Landin.Stages.Compilation;
+      Options      : Landin.Optimization.Options;
+      Panic        : Landin.Panics.Plan;
+      Hosted_Entry : Landin.IR.Item_Id) return Handler_Fit;
 
 end Landin.Build_Reports.Stacks;

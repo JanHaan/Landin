@@ -2509,7 +2509,7 @@ has no derivation yet, so it has no row in the prototype registers.
 
 ### R14.20 — Stackful fibres
 
-Status: active
+Status: complete
 Depends on: R14.10
 
 A stack switch on every target, specified with a register decision. The caller
@@ -2532,7 +2532,8 @@ process stack and the debugger's view. D448's single-core answer is the one
 this item specifies. D450 makes the switch two compiler builtins and D451
 adds `stack_exhausted` to `core/panic`'s kinds. D471 to D473 move the limit
 check from the switch into every routine's prologue in a program that
-prepares a stack, with the limit carried in the frames a switch saves.
+prepares a stack, with the limit carried in the frames a switch saves. D474
+refuses a panic handler deeper than the margin that check leaves.
 
 Exit evidence: fibres switching on every target with debugger backtraces
 through a switch, and the single-core freestanding answer specified. On the
@@ -2544,6 +2545,24 @@ backing, plus the total reserved RAM without double counting and the fit
 verdict against that profile. A switch that only fits a larger device profile
 does not complete this item; the measurement is for this consumer, not a
 general bound on stack depth.
+
+Done: `compiler.stack_prepare` and `compiler.stack_switch` run on every
+native target, and `core/fibre` builds a group, `whole`, a round of fixed
+turns and the blocking host as a scheduler on them. Every routine of a
+program that prepares a stack checks its frame against the running
+stack's limit, so an overflow traps `stack_exhausted` at the routine that
+overflows, and a program with no prepared stack emits the code it did
+before. `refine --stack-report` gives each routine's frame and the deepest
+stack it can close, naming what opens it. `escaping into` lets a group
+keep state its caller lent, and an `any` made in any position from a
+parameterized provider now dispatches. A scripted session through a switch
+names `landin.stack_switch` and `landin.stack_start` and checks the frames
+on each side with GDB on Linux x86-64, arm64 and RV64 and on Cortex-M0, and
+with LLDB on Darwin and FreeBSD. On the retained Cortex-M0 profile two
+fibres of `core/fibre`'s round, each on 1,472 bytes of module storage, fit
+at every profile: 22,492 bytes of flash at none, 7,168 of 16,384 bytes of
+RAM reserved with the 4 KiB main stack, a painted peak of 904 bytes per
+fibre, and the Cortex-M lane reports the figures and the verdict (D470).
 
 ### R14.25 — Run the firmware counterpart
 
@@ -2977,6 +2996,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-351 | Usability | Nothing says how deep a fibre's task goes on a target, and the depth differs by a factor of four between targets: `runtime/fibre-same-source-any-provider`'s first task took 4.1 to 4.4 KiB of its stack on RV64 at every profile (4448 bytes at `none`, 4072 at `size`, 4344 at `speed`), against 3.8 KiB on x86-64 at `none` and 1 KiB at `speed`, because RV64 keeps every scalar in a frame home of its own. Its 4 KiB stacks fitted on x86-64 and arm64 and failed on RV64 as a segmentation fault with no output, not `stack_exhausted`: the round's `yield` sweeps through `sweep`, `running` and `entry_record` beside its switch, and on RV64 that chain reaches 1.1 KiB below the switch's frame, more than D465's 1 KiB room, so a software watchpoint saw it overwrite the fibre's own record below its stack before any check (in `runtime/fibre-stack-past-limit-traps` too, which then ends in `bad_conversion` at `size`). Writing the sweep out in `yield`'s body moved the check deeper on RV64, whose larger frame then trapped `runtime/fibre-turns-interleave` and `runtime/fibre-join-first-failure`, so it was not kept. Met fixing the fixture on the RV64 lane in R14.20. Since D471 to D473 the overflow traps `stack_exhausted` at the routine that overflows, on every target, so it no longer writes below the stack; RV64's frame homes remain. | D447's stack-depth report, or the next change to D465's room or to RV64's frame homes. | The depth report giving each admitted routine's deepest stack per target, so that a stack is sized from a number; the provider's own path to its switch going no deeper than the switch or inside the room on every target; and RV64 reusing scalar homes so that its frames shrink at `size` and `speed` as the other backends' do. | open |
 | SR-352 | Usability | The Cortex-M lane's fibre `capacity` control (D470) cannot be run on its own: `environments/cortex-m/evidence.py` has no command line and `run.py` takes no selector, so re-measuring the consumer after changing its backing meant the whole lane or a hand-written script that imports `run.Run` and calls `evidence.fibre_capacity`, found by reading both. Met re-measuring the consumer for D473 in R14.20. | The next change to the Cortex-M lane's drivers. | `run.py` or `evidence.py` taking the control and profile to run, as `freestanding.py --case` does. | open |
 | SR-356 | Usability | Adding a construct to `tour.md` or `spec.md` takes four steps nothing names in one place: a row in `compiler/tests/registers.md`'s construct inventory, fixtures whose `constructs:` claim it, the construct in at least one guarantee row of D148's register in `spec.md` (`check.py` says only "implemented construct [NNNN] has no guarantee row"), and a regenerated `constructs.matrix`. `docs/documents.md`'s "Where a new rule goes" names the grammar and the register entry only. Every multiple of ten is also taken up to [2000], so a new construct has to be inserted, as [1795] and [1975] were, which nothing says is the practice. Met writing the tour's [1675] and spec [1995] in R14.20. | The next construct added to either document, or the next change to `docs/documents.md`. | `docs/documents.md` naming every place a new construct is held, and how an id is chosen once the tens are used. | open |
+| SR-353 | Usability | `refine check`, and so `refine lsp` in an editor, accepts a program that `refine compile` then refuses with `L0508`: whether a selected panic handler fits a prepared stack's margin is decided from the emitted frames (D474), which a check does not have, and it can differ between optimization profiles of one program. Met implementing D474 in R14.20. | The next change to the depth report, to `refine check`'s request, or to the server's diagnostics. | A check that can say, from the frames a backend would emit, whether the handler fits, or that says it has not decided it; or a handler bound a check can state without emitting. | open |
 | R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on each full gate run, subject to the R8 gate's explanatory-only reuse exception, with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
 | R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence was a run, not a record the coverage readers read. | — | — | retired: R8.30 runs end-to-end fixtures in Darwin's diagnostics runner, which the gate runs, places their Darwin claims from it, and has `check.py` refuse any fixture whose named product target no record places |
 

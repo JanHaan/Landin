@@ -99,6 +99,8 @@ package body Landin.Driver is
      Rows.Code (Rows.Frame_Not_Addressable);
    Code_Firmware_Frame : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Firmware_Frame_Exceeds_Stack);
+   Code_Handler_Margin : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Handler_Exceeds_Stack_Margin);
 
    procedure Keep_Locations
      (Result : in out Outcome;
@@ -2734,6 +2736,34 @@ package body Landin.Driver is
                      Landin.Stages.Identities (Context).all),
                   Debug => (if Debug_Enabled then Debug'Access else null),
                   Firmware_Entry => Firmware_Entry, Panic => Panic'Access);
+               --  D474: a selected handler runs on the margin of the
+               --  stack that overflowed, which only the emitted frames
+               --  measure; one that does not fit is refused before
+               --  anything is written.
+               declare
+                  Fit : constant
+                    Landin.Build_Reports.Stacks.Handler_Fit :=
+                      Landin.Build_Reports.Stacks.Fit_Handler
+                        (Evidence, Context, Optimization, Panic,
+                         Landin.Backend.Entry_Point.Hosted_Main
+                           (Landin.Stages.Code (Context).all,
+                            Landin.Stages.Meanings (Context).all,
+                            Landin.Stages.Modules (Context).all,
+                            Landin.Stages.Identities (Context).all));
+               begin
+                  if Fit.Refused then
+                     Landin.Stages.Report
+                       (Context,
+                        Landin.Diagnostics.Make
+                          (Code    => Code_Handler_Margin,
+                           Level   => Landin.Diagnostics.Error,
+                           Source  => Fit.Site.Source,
+                           Where   => Fit.Site.Where,
+                           Message => Unbounded.To_String
+                             (Fit.Message)));
+                     return;
+                  end if;
+               end;
                if Emit_Map then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=

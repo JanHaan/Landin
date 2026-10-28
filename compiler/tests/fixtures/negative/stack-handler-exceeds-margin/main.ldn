@@ -1,0 +1,39 @@
+--  D474: a program that prepares a stack selects a handler whose own
+--  frame, a 512-byte scratch array, is larger than the margin a prepared
+--  stack keeps above its base on every target.  A failed check enters the
+--  handler on the stack that overflowed, so the handler could not run
+--  there, and the compiler refuses it with the two numbers.
+import core/panic
+
+mut memory: [2048]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut seen: i32 = 0
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    mut notes: [512]u8 = zeroed
+    mut index: usize = 0
+    while index < 512 do
+        notes[index] = 7
+        inc index
+    end while
+    seen = i32(notes[index - 1])
+    _ = kind
+    _ = site
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end panic_handler
+
+fibre: (argument: usize) -> noreturn =
+    seen = i32(argument)
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end fibre
+
+public main: () -> (code: i32) =
+    fibre_saved = compiler.stack_prepare(memory[0..<2048], fibre, 3)
+    compiler.stack_switch(addr main_saved, fibre_saved)
+    code = seen
+end main

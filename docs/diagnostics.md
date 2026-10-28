@@ -1457,3 +1457,22 @@ identifier space holds [1670].
 One routine's saved registers and local frame exceed the selected 4 KiB firmware
 stack reservation [1990]. Move large local storage elsewhere or make it smaller.
 This check does not bound calls or interrupt nesting.
+
+### L0508
+
+A program that prepares a stack selects a panic handler that does not fit
+the target's stack margin [1670]. A failed check enters the handler on the
+stack that overflowed, so the handler and everything it calls run in the
+margin a prepared stack keeps above its base (D472): 640 bytes on x86-64 and
+arm64, 768 on RV64 and 384 on Cortex-M0. The message gives what the handler
+needs, the margin and the target: what the margin pays before the handler,
+and the handler's depth from the stack report's `trap` figure, by its
+deepest path. When the handler's calls reach an `any` call, a call through a
+generic's table or a function value, a foreign call, recursion, a runtime
+helper or assembly that moves the stack, its depth cannot be known, and the
+message names the opening's kind and points at it. Make the handler's frame
+smaller, call less from it, or call through nothing that opens its graph; a
+handler that only records the kind and switches away fits on every target.
+A program with no `compiler.stack_prepare`, and one that selects no
+handler, is not refused: the default report always fits. The rule is
+decided from emitted frames, so `refine check` does not raise it (D474).

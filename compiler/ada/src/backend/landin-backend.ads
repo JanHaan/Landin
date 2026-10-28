@@ -567,6 +567,15 @@ private
    function Unchecked_Stack_Bytes
      (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
 
+   --  D472's worst before a selected handler's own frames, which the
+   --  margin pays first: two unchecked figures, the frame record a callee
+   --  pushes before its check and the call of the handler, and on
+   --  Cortex-M0 D461's exception frame.  What the margin leaves after it
+   --  is what a handler and its calls may take (D474).  Zero for a target
+   --  without a native backend.
+   function Handler_Entry_Bytes
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
+
    package Offset_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Targets.Byte_Count,

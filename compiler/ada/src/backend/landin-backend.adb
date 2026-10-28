@@ -1656,4 +1656,25 @@ package body Landin.Backend is
       end case;
    end Unchecked_Stack_Bytes;
 
+   --  D472's table: x86-64's frame pointer and return address, arm64's
+   --  and RV64's frame record with a call that pushes nothing, and
+   --  Cortex-M0's pushed registers with D461's thirty-six bytes.
+   function Handler_Entry_Bytes
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count
+   is
+   begin
+      case Landin.Targets.Capabilities.Backend_For (Facts) is
+         when Landin.Targets.Capabilities.X86_64_ELF =>
+            return 152;
+         when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+            | Landin.Targets.Capabilities.Arm64_ELF
+            | Landin.Targets.Capabilities.RV64_ELF =>
+            return 144;
+         when Landin.Targets.Capabilities.Cortex_M0_ELF =>
+            return 188;
+         when Landin.Targets.Capabilities.No_Backend =>
+            return 0;
+      end case;
+   end Handler_Entry_Bytes;
+
 end Landin.Backend;

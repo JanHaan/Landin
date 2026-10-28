@@ -251,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Current roadmap work: R14.20 — Stackful fibres.**
+**Next roadmap item: R14.30 — A second Io (planned).**
 
 ## Versions
 
