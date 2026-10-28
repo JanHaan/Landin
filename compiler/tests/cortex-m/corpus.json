@@ -2895,6 +2895,9 @@
     "runtime/stack-prepare-too-small-traps": {
       "mode": "execute"
     },
+    "runtime/stack-switch-frames": {
+      "mode": "execute"
+    },
     "runtime/stack-switch-past-limit-traps": {
       "mode": "execute"
     },

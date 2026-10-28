@@ -18747,9 +18747,11 @@ and LLDB alike. All were declined.
 
 **Pinned by** the Cortex-M firmware lane's `fibre` case, which takes an
 interrupt in a fibre and steps a debugger through both switches (D460,
-D461); prototype 5's V9, V11 and V12 record the pressure, and the switch's
-measurements and scripted debugger sessions on the other targets will pin
-the rest.
+D461); prototype 5's V9, V11 and V12 record the pressure. The scripted
+debugger sessions of `runtime/stack-switch-frames` on every target (D469)
+pin the frames of a backtrace through a switch, and the capacity control of
+the Cortex-M lane's evidence (D470) the fibre's backing on the retained
+profile.
 
 ### D450 — The stack switch is two compiler builtins
 
@@ -18799,8 +18801,8 @@ All were declined.
 **Pinned by** `runtime/stack-switch-round-trip`, a prepared stack entered,
 left and re-entered, `runtime/stack-switch-past-limit-traps` and
 `runtime/stack-prepare-too-small-traps` on the targets whose backend emits
-the builtins (D453); each further backend's fixtures and the backtrace
-through a switch will pin the rest.
+the builtins (D453), and the backtrace through a switch by the sessions
+of `runtime/stack-switch-frames` (D469).
 
 ### D451 — A stack past its limit is a fifth panic kind
 
@@ -18978,6 +18980,45 @@ execution. Both were declined.
 
 **Pinned by** the two fixtures, on the x86-64 targets they name and in
 the Cortex-M corpus.
+
+### D469 — The switch and start routines have names a debugger shows
+
+**The tour said** nothing. D447 has a debugger's walk pass through a
+switch and end at a fibre's first frame, and D450's backends emitted the
+two routines that carry it, one switch routine and one start routine per
+program, under local labels: an ELF `.L` label, which no symbol table
+keeps, and on Mach-O a linker-private `l` name, which the link drops. A
+backtrace through a switch therefore showed `??` for both, on every
+target but Cortex-M0, whose label prefix happened to be kept.
+
+**Chosen:** both are local function symbols with their sizes,
+`landin.stack_switch` and `landin.stack_start`, which Mach-O spells with
+its underscore and LLDB shows without it. No Landin routine can be spelled
+with the dot, so no routine of a program takes either name; an explicit
+link name beginning `landin.` moves the prefix, as one beginning with a
+local label's prefix moves that. On Mach-O each still begins an atom of its
+own. The start routine's symbol begins at its opening nop, and a prepared
+first frame returns past the nop, so the return address less one that a
+debugger looks up lies in the start routine's symbol as well as in its
+unwind description. Neither routine has a DWARF subprogram, as no routine
+the compiler writes for itself has: a debugger names the frame from the
+symbol and shows no line or variables for it. Their unwind information is
+D447's, unchanged.
+
+**The alternatives:** names spelled as a Landin routine could be, such as
+`landin_stack_switch`, which a program's own routine of that name would
+collide with in the one object a program assembles to; global symbols,
+which a program linked with C would export; and DWARF subprograms, which
+would claim source lines the routines do not have. All were declined.
+
+**Pinned by** `runtime/stack-switch-frames`, the scripted debugger
+sessions' workload on every target with a native backend: GDB on Linux
+x86-64 and arm64 in `compiler/tests/debugging/check.py`, on RV64 in
+`compiler/tests/rv64/check.py` and on Cortex-M0 in
+`environments/cortex-m/source_debug.py`, and LLDB on Darwin in
+`compiler/tests/debugging/darwin.py` and on FreeBSD in
+`compiler/tests/freebsd/check.py`, every one holding the frames to
+`compiler/tests/debugging/switch_frames.py`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -23571,3 +23612,40 @@ to be measured from. All were declined.
 
 **Pinned by** `runtime/fibre-stack-past-limit-traps`, a task taking a turn at
 every depth, trapped at the round's switch at every optimization profile.
+
+### D470 — What a fibre consumer's capacity on Cortex-M0 counts
+
+**The tour said** nothing. The roadmap's stackful fibres ask for a consumer
+measured on the retained Cortex-M0 profile, 32 KiB of flash and 16 KiB of
+RAM with a 4 KiB main-stack reservation, with its fibre buffers
+identified and the reserved RAM counted without double counting, and left
+open what each figure is.
+
+**Chosen:** flash is the highest end of the image's flash load, and static
+RAM the highest end of its RAM load, alignment and zero fill included; a
+fibre's backing that the program declares as module storage is static RAM,
+identified by its symbol's extent, and is counted there once. The reserved
+RAM is static RAM and the main-stack reservation. A fibre's backing is the
+stack a group cuts for it, its record at its base included; the peak
+simultaneous backing is the sum of the backings live at once, which for a
+group is every stack it cut from admission to join. A fibre's peak is the
+deepest byte written below its stack's top in a run of the consumer, read
+from paint laid before the group cuts the backing, and it fits when that
+peak and D461's thirty-six bytes lie within the stack above the record.
+The consumer fits the profile when its flash is at most 32 KiB, its
+reserved RAM at most 16 KiB, its main stack's painted peak within the
+reservation and every fibre fits. Paint is an observation of this
+consumer's run, not a bound on any stack (D447), and the record's limit
+1 KiB above the stack's base (D465) is a trap, not a measure of depth.
+
+**The alternatives:** the backing counted again beside static RAM, which
+double counts it; a stack's limit as its measure, which says where the
+late check stands and nothing about what the fibre used; and the lane's
+stack-pointer observer, which samples the main stack's reservation and
+refuses a pointer outside it, as a fibre's on the process stack is. All
+were declined.
+
+**Pinned by** the `capacity` control of `environments/cortex-m/evidence.py`,
+which builds `environments/cortex-m/probes/fibre-capacity.ldn` at every
+optimization profile, runs it to its end in the Cortex-M0 emulator, writes
+the report and fails when the consumer no longer fits.

@@ -1,0 +1,140 @@
+--  The measured stack-switch consumer (D470), in the shape of prototype 5's
+--  firmware counterpart: two fibres, a taker and an answerer, admitted to
+--  a group over core/fibre's round of turns, whose idler waits for an
+--  interrupt, exchange requests through a ring, and SysTick's handler
+--  counts the ticks the taker waits for.  The fibres' stacks are cut from
+--  `fibre_backing`, fixed module storage the caller supplies; nothing
+--  allocates.  evidence.py measures it on the retained 32 KiB flash,
+--  16 KiB RAM profile: flash, static RAM with this buffer identified, each
+--  fibre's backing and its painted peak.
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import platform/cortex_m
+
+--  The requests the taker receives, one a tick, and what the answerer
+--  makes of them.
+requests: u32 = 6
+
+--  Time from an interrupt: one writer, the handler, which loads and
+--  stores, as Cortex-M0 has no read-modify-write (prototype 5's V10).
+mut ticks: u32 = 0
+
+link(vector: 15)
+extern(interrupt) system_tick: () -> none =
+    now := compiler.atomic_load(addr ticks, compiler.relaxed)
+    compiler.atomic_store(addr ticks, now +% 1, compiler.release)
+end system_tick
+
+now_ticks: () -> (count: u32) =
+    count = compiler.atomic_load(addr ticks, compiler.acquire)
+end now_ticks
+
+--  The round's idler: when every fibre has yielded since anything last
+--  started or ended, nothing changes before an interrupt.
+waiter: type = struct
+    reserved: u32
+end waiter
+
+waiter_idle: (self: waiter) -> none =
+    _ = self
+    cortex_m.wait_for_interrupt()
+end waiter_idle
+
+waiter is stacks.idler (idle: waiter_idle)
+
+--  Requests waiting to be answered, written by one fibre and read by the
+--  other; both are one context, and neither switches inside a push or a
+--  take.
+mut ring: [4]u32 = zeroed
+mut ring_head: usize = 0
+mut ring_count: usize = 0
+mut answered: u32 = 0
+mut answer_sum: u32 = 0
+
+turn: type = struct
+    runs: any fibre.turns
+end turn
+
+turn_of: (runs: any fibre.turns) -> (made: turn from runs) =
+    made = (runs: runs)
+end turn_of
+
+--  Take one request a tick into the ring, yielding while no tick has come
+--  or the ring is full.
+take_requests: (inout state: turn) -> none ! failure.reason =
+    mut taken: u32 = 0
+    mut seen: u32 = now_ticks()
+    while taken < requests do
+        current: u32 = now_ticks()
+        if current == seen or ring_count == 4 then
+            state.runs.yield()
+        else
+            seen = current
+            inc taken
+            ring[(ring_head + ring_count) % 4] = taken
+            inc ring_count
+        end if
+    end while
+end take_requests
+
+--  Answer each request in the order it was taken, yielding while none
+--  waits.
+answer_requests: (inout state: turn) -> none ! failure.reason =
+    while answered < requests do
+        if ring_count == 0 then
+            state.runs.yield()
+        else
+            request: u32 = ring[ring_head]
+            ring_head = (ring_head + 1) % 4
+            ring_count -= 1
+            answer_sum += request * 3 + 1
+            inc answered
+        end if
+    end while
+end answer_requests
+
+--  The fibres' backing: the group's ledger and two stacks, each with its
+--  record at its base.  core/fibre's round wants 2 KiB below a stack's
+--  first frame (D465), so each stack is that, its record, the task's
+--  state and the first frame's words, rounded to the group's alignment.
+mut fibre_backing: [4400]u8 = zeroed
+mut round_entries: [3]usize = zeroed
+mut round_state: stacks.round_space = zeroed
+mut observed: u32 = 0
+
+serve: (runs: any fibre.turns) -> none ! failure.reason =
+    mut tasks := try fibre.turns_over(runs, fibre_backing, 2)
+    taker := turn_of(runs)
+    try fibre.admit(tasks, take_requests, taker)
+    answerer := turn_of(runs)
+    try fibre.admit(tasks, answer_requests, answerer)
+    try fibre.join(tasks)
+end serve
+
+start: () -> none =
+    --  SysTick from the core clock, every 2000 cycles, with its interrupt.
+    assembler.block("""
+        ldr r0, =0xe000e010
+        movs r1, #0
+        str r1, [r0]
+        ldr r1, =1999
+        str r1, [r0, #4]
+        movs r1, #0
+        str r1, [r0, #8]
+        movs r1, #7
+        str r1, [r0]
+        """)
+    idler: waiter = (reserved: 0)
+    round := stacks.round_over(round_state, round_entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    serve(any(addr round)) else (problem)
+        _ = problem
+        return
+    end
+    if answered == requests and answer_sum == 69 then
+        observed = 42
+    end if
+end start

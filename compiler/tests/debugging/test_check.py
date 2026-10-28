@@ -624,6 +624,103 @@ class WorkloadFrames(unittest.TestCase):
         self.assertEqual(declared["w"]["leaf"], "b/b.ldn")
 
 
+import switch_frames as SWITCH  # noqa: E402  (the module beside check.py)
+
+
+def gdb_switch(names=None, swap_at=3, beneath_start=(), short=False) -> str:
+    """A GDB transcript of the stack switch session, as gdb_commands makes
+    it: a fibre stop, then each switch stepped from its first instruction
+    to the first past its return, the stack pointer moving at `swap_at`."""
+    switch = (names or {}).get("switch", SWITCH.SWITCH)
+    start = (names or {}).get("start", SWITCH.START)
+
+    def bt(frames):
+        return "".join(f"#{i}  0x0000000000401000 in {name} ()\n"
+                       for i, name in enumerate(frames))
+
+    def fix(frames):
+        return [start if name == SWITCH.START else name for name in frames]
+
+    fibre = fix(SWITCH.STOPS["fibre"] + [SWITCH.START]) + list(beneath_start)
+    text = ["LANDIN-SWITCH-BEGIN fibre", bt(fibre).rstrip("\n")]
+    if short:
+        text.append("Backtrace stopped: previous frame inner to this frame")
+    text.append("LANDIN-SWITCH-END fibre")
+    instructions = ["push %rbp", "push %rbx", "mov %rsp,(%rdi)",
+                    "mov %rsi,%rsp", "pop %rbx", "pop %rbp", "ret"]
+    for each in SWITCH.SWITCHES:
+        text.append("LANDIN-SWITCH-BEGIN " + each["name"])
+        for offset, instruction in enumerate(instructions):
+            above = fix(each["leaving"] if offset <= swap_at else each["resumed"])
+            text += ["LANDIN-SWITCH-STEP",
+                     f"=> 0x401{offset:03x} <{switch}+{offset}>:\t{instruction}",
+                     bt([switch] + above).rstrip("\n")]
+        text += ["LANDIN-SWITCH-STEP", "=> 0x400200 <hand_over+40>:\tmov $0,%eax",
+                 bt(fix(each["resumed"])).rstrip("\n"),
+                 "LANDIN-SWITCH-END " + each["name"]]
+    return "\n".join(text) + "\n"
+
+
+class SwitchFramesTests(unittest.TestCase):
+    """The stack switch session's verdict, without a debugger."""
+
+    def check(self, text: str) -> dict:
+        return SWITCH.check(SWITCH.gdb_stops(text), "x86-64")
+
+    def test_the_expected_frames_pass(self) -> None:
+        shown = self.check(gdb_switch())
+        self.assertEqual(shown["second-to-first"]["turn"], 4)
+        self.assertEqual(shown["first-to-main"]["swap"], "mov %rsi,%rsp")
+
+    def test_an_unnamed_switch_routine_is_refused(self) -> None:
+        with self.assertRaises(SWITCH.Mismatch):
+            self.check(gdb_switch({"switch": "??"}))
+
+    def test_an_unnamed_start_routine_is_refused(self) -> None:
+        with self.assertRaisesRegex(SWITCH.Mismatch, "inside the fibre"):
+            self.check(gdb_switch({"start": "??"}))
+
+    def test_frames_beneath_the_start_routine_are_refused(self) -> None:
+        with self.assertRaisesRegex(SWITCH.Mismatch, "nothing beneath"):
+            self.check(gdb_switch(beneath_start=("main",)))
+
+    def test_a_backtrace_stopped_short_is_refused(self) -> None:
+        with self.assertRaisesRegex(SWITCH.Mismatch, "short"):
+            self.check(gdb_switch(short=True))
+
+    def test_frames_that_change_off_the_swap_are_refused(self) -> None:
+        with self.assertRaisesRegex(SWITCH.Mismatch, "does not load"):
+            self.check(gdb_switch(swap_at=1))
+
+    def test_frames_that_never_change_are_refused(self) -> None:
+        with self.assertRaisesRegex(SWITCH.Mismatch, "every instruction"):
+            self.check(gdb_switch(swap_at=10))
+
+    def test_an_lldb_transcript_reads_the_same(self) -> None:
+        def bt(frames):
+            return "".join(f"  frame #{i}: 0x0000000000401000 program`{name}"
+                           + ("(save=0x1) at main.ldn:28:5" if name == "hand_over"
+                              else " + 7" if name == SWITCH.START else "")
+                           + "\n" for i, name in enumerate(frames))
+        lines = ["(lldb) run", "(lldb) thread backtrace",
+                 bt(SWITCH.STOPS["fibre"] + [SWITCH.START]),
+                 "(lldb) breakpoint delete --force"]
+        instructions = ["pushq %rbp", "movq %rsp, (%rdi)", "movq %rsi, %rsp",
+                        "popq %rbp", "retq"]
+        for each in SWITCH.SWITCHES:
+            for offset, instruction in enumerate(instructions + [None]):
+                lines.append("(lldb) " + ("continue" if offset == 0
+                                          else "thread step-inst"))
+                if instruction is None:
+                    lines += ["(lldb) thread backtrace", bt(each["resumed"])]
+                    continue
+                lines.append(f"->  0x401{offset:03x} <+{offset}>: {instruction}")
+                above = each["leaving"] if offset <= 2 else each["resumed"]
+                lines += ["(lldb) thread backtrace", bt([SWITCH.SWITCH] + above)]
+        stops = SWITCH.lldb_stops("\n".join(lines))
+        self.assertEqual(SWITCH.check(stops, "x86-64")["second-to-first"]["turn"], 3)
+
+
 class BuildSourceTests(unittest.TestCase):
     """A copied compiler reaches its library through a symlinked prefix."""
 

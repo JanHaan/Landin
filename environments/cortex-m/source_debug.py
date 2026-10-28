@@ -277,3 +277,37 @@ def leaf(run, elf):
         'assert v("*(unsigned*)&interrupted") == 1',
         'assert v("$sp") == 0x20004000 and v("$r11") == 0',
         'print("CORTEX_LEAF_SOURCE_PASS")', 'end'], 'CORTEX_LEAF_SOURCE_PASS')
+
+
+def switch(run, refine, optimize, specialize):
+    """The backtrace through a stack switch (D469), on Cortex-M0 as on every
+    target: runtime/stack-switch-frames unchanged, entered from a firmware
+    `start` as the freestanding lane enters a fixture's main, stopped in a
+    fibre and stepped through two switches (D447, D460, D469).
+    switch_frames.py says what is held; its frames beneath main are this
+    firmware's `start` and reset routine."""
+    sys.path.insert(0, str(HERE.parents[1] / 'compiler/tests/debugging'))
+    import switch_frames
+    from firmware import build as firmware_build
+    program = switch_frames.SOURCE.read_text() + '''
+mut observed: u32 = 0
+start: () -> none = observed = u32(main()) end start
+'''
+    elf = firmware_build(run, refine, program, optimize, specialize, 'lines')
+    symbols = run.command('switch-extent', [run.bin/'arm-none-eabi-nm', '-S', elf])
+    low, high = switch_frames.symbol_extent(symbols)
+    low, high = low & ~1, high & ~1
+    location = 'boot.ldn:%d' % switch_frames.fibre_line()
+    execute(run, elf, [
+        *switch_frames.gdb_commands(location, low, high, ['continue']),
+        'break _landin_firmware_returned', 'continue', 'python',
+        'assert v("*(unsigned*)&observed") == %d' % switch_frames.STATUS,
+        'assert v("$control") & 2 == 0 and v("$sp") == 0x20004000',
+        'print("R1420_SWITCH_FRAMES_PASS")', 'end'], 'R1420_SWITCH_FRAMES_PASS')
+    transcript = (run.out / 'gdb-firmware.log').read_text(errors='replace')
+    try:
+        shown = switch_frames.check(switch_frames.gdb_stops(transcript), 'cortex-m0')
+    except switch_frames.Mismatch as error:
+        raise RuntimeError('stack switch frames: ' + str(error)) from None
+    (run.out / 'switch-frames.json').write_text(json.dumps(shown, indent=2) + '\n')
+    return shown

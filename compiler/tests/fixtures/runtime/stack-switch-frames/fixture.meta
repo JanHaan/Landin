@@ -1,0 +1,7 @@
+class: runtime
+summary: D447/D469 the debugger workload for the stack switch: two prepared stacks and main hand the core round, so a backtrace inside a fibre ends at landin.stack_start and one inside the switch names the leaving context's frames before the stack pointer moves and the resumed one's after
+program: main.ldn
+profiles: standard
+status: 42
+constructs: 1620
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

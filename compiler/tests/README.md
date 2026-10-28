@@ -475,6 +475,29 @@ before `bt`; the panic sessions in `debugging/panic.py` do, and assert
 leave the default, because the frames they hold are the program's own.
 LLDB shows every frame without a setting.
 
+The stack switch has one debugger workload on every target:
+`runtime/stack-switch-frames`, which imports nothing, so firmware runs it
+too. Its stops are `workload-frames.json`'s `switch` entry, which also
+names the two routines the compiler writes for a switch,
+`landin.stack_switch` and `landin.stack_start` (D469), and
+`debugging/switch_frames.py` makes each lane's commands and holds what the
+debugger showed: in the second fibre, after two switches, the backtrace is
+`deepest`, `second_fibre` and the start routine with nothing beneath it;
+and stepping each of two switches an instruction at a time, from the
+switch routine's first instruction past its return, the frames above it
+are the leaving context's until the instruction that loads the resumed
+stack pointer has run and the resumed context's from the next one on.
+`debugging/check.py` runs it with GDB at the three workload profiles on
+this host's own Linux target, or under QEMU's stub on the other
+(`--workload=switch` alone is a filtered run); `rv64/check.py
+--kind=debugger` on RV64, physically or with `--qemu=qemu-riscv64`;
+`darwin.py` through LLDB's SB API in `debugging/lldb_switch.py`;
+`freebsd/check.py --kind=debugger` with plain LLDB commands, which step a
+switch by the count of its instructions in the image, since FreeBSD's LLDB
+has no Python; and the Cortex-M lane's evidence, `switch` among its
+controls. `debugging/test_check.py` holds the verdict to refusals without a
+debugger.
+
 Debug information and source maps record a library file as
 `/landin-library/` and its module path (D422). The GDB sessions map that
 prefix to this checkout with `set substitute-path`, the Cortex-M sessions to

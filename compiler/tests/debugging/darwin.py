@@ -72,6 +72,33 @@ def main():
             return
     panic_evidence = panic.measure(args.refine, output / 'panic',
         debugger=tools['lldb']['path'], profile=args.profile)
+    #  The stack switch's session (D469): the backtrace in a fibre
+    #  and through each instruction of two switches, as on every target.
+    import switch_frames
+    switch_results = []
+    for opt, spec in PROFILES:
+        key = 'switch-' + opt + '-' + spec
+        if args.profile and args.profile != opt + '-' + spec:
+            continue
+        executable = output / key
+        run(key + '-compile', [args.refine.resolve(), str(switch_frames.FIXTURE.relative_to(ROOT)),
+            '--root=.', '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', executable,
+            '--optimize=' + opt, '--specialize=' + spec])
+        run(key + '-execute', [executable], switch_frames.STATUS)
+        config = {'executable': str(executable), 'cwd': str(ROOT),
+                  'result': str(output / (key + '-stops.json'))}
+        config_path = output / (key + '-config.json')
+        config_path.write_text(json.dumps(config, indent=2) + '\n')
+        script = output / (key + '.lldb')
+        script.write_text('command script import ' + json.dumps(str(HERE / 'lldb_switch.py')) + '\n'
+                          + 'script lldb_switch.run(lldb.debugger, ' + repr(str(config_path)) + ')\nquit\n')
+        transcript = run(key + '-lldb', [tools['lldb']['path'], '--no-lldbinit', '-b', '-s', script])
+        assert 'LANDIN SWITCH LLDB STOPPED' in transcript, transcript[-6000:]
+        recorded = json.loads(Path(config['result']).read_text())
+        assert recorded['state'] and recorded['exit_status'] == switch_frames.STATUS, recorded
+        shown = switch_frames.check(switch_frames.recorded_stops(recorded), 'arm64')
+        switch_results.append({'profile': key, 'status': 'passed', 'frames': shown})
+        print('Darwin stack switch debugger: ' + key + ' passed', flush=True)
     for opt, spec in PROFILES:
         key = opt + '-' + spec
         if args.profile and args.profile != key:
@@ -255,6 +282,7 @@ def main():
                'refine_sha256': digest(args.refine), 'tools': tools, 'results': results,
                'registers': register_results,
                'panic': panic_evidence,
+               'switch': switch_results,
                'sources': {str(s.relative_to(ROOT)): digest(s) for s in all_sources}}
     (output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
 

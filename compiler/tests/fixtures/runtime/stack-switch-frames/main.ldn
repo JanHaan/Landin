@@ -1,0 +1,63 @@
+--  The scripted debugger sessions' stack-switch workload (D447,
+--  D469), the same source on every target, firmware included, so it
+--  imports nothing.  main prepares two stacks from module storage and
+--  hands the core to the first; the first hands it to the second, which
+--  calls `deepest`, where a session stops after two switches; the second
+--  hands it back to the first, and the first back to main.  Every switch
+--  is made in `hand_over`, so a session that stops in the switch routine
+--  at the third switch sees `hand_over` and `second_fibre` above it
+--  before the stack pointer moves and `hand_over` and `first_fibre`
+--  after, and at the fourth `first_fibre`'s and then main's.  A fibre's
+--  frames end at the start routine.  `hand_over` and `deepest` are called
+--  through function values, so no optimization copies them into their
+--  callers and each keeps a frame of its own at every profile (D339).
+--  `trace` records the order: one digit per hand-over, and the depth
+--  `deepest` returned.
+mut first_backing: [2048]u8 = zeroed
+mut second_backing: [2048]u8 = zeroed
+mut main_saved: usize = 0
+mut first_saved: usize = 0
+mut second_saved: usize = 0
+mut first_limit: usize = 0
+mut second_limit: usize = 0
+mut trace: u32 = 0
+
+hand_over: (save: ptr mut usize, resume: usize, limit: usize, step: u32)
+           -> none =
+    trace = trace * 10 + step
+    compiler.stack_switch(save, resume, limit)
+end hand_over
+
+deepest: (depth: u32) -> (reached: u32) =
+    reached = depth + 1
+end deepest
+
+first_fibre: (argument: usize) -> noreturn =
+    pass := hand_over
+    pass(addr first_saved, second_saved, first_limit, u32(argument))
+    pass(addr first_saved, main_saved, first_limit, 4)
+    compiler.unreachable()
+end first_fibre
+
+second_fibre: (argument: usize) -> noreturn =
+    descend := deepest
+    reached: u32 = descend(u32(argument))
+    pass := hand_over
+    pass(addr second_saved, first_saved, second_limit, reached)
+    compiler.unreachable()
+end second_fibre
+
+public main: () -> (code: i32) =
+    first_limit = usize(addr first_backing[0]) + 512
+    second_limit = usize(addr second_backing[0]) + 512
+    first_saved = compiler.stack_prepare(first_backing[0..<2048],
+                                         first_fibre, 2)
+    second_saved = compiler.stack_prepare(second_backing[0..<2048],
+                                          second_fibre, 2)
+    pass := hand_over
+    pass(addr main_saved, first_saved, 0, 1)
+    code = 1
+    if trace == 1234 then
+        code = 42
+    end if
+end main

@@ -377,7 +377,11 @@ This is the maintained inventory of what the compiler does today:
   Cortex-M0, where a prepared stack runs on the process stack pointer and
   an interrupt in a fibre runs its handler on the main one (D460, D461). A
   stack past its limit traps D451's fifth panic kind, `stack_exhausted`;
-  synthetic-32 refuses both.
+  synthetic-32 refuses both. On the retained Cortex-M0 profile a consumer
+  of `core/fibre`'s round of turns, two fibres on 2,176-byte stacks cut
+  from fixed module storage, fits with its painted peaks and D461's
+  exception frame, and the Cortex-M lane reports its flash, static RAM,
+  backing and verdict at every profile (D470).
   `compiler/tests/constructs.matrix` records every normative construct's
   state, targets and evidence, and `check.py` refuses a stale or unexplained
   row.
@@ -489,8 +493,8 @@ This is the maintained inventory of what the compiler does today:
   FreeBSD x86-64 and arm64 build hosted executables; FreeBSD is emitted on Linux and runs
   in [architecture-specific VMs](environments/freebsd/README.md) with separate
   runtime, C ABI and debugger gate verdicts. RV64 uses LP64D; the gate runs
-  its whole test program under QEMU's user emulation, and its
-  [physical RISE lanes](compiler/tests/rv64/README.md), with separate
+  its whole test program and its GDB sessions under QEMU's user emulation,
+  and its [physical RISE lanes](compiler/tests/rv64/README.md), with separate
   runtime, native GDB, C ABI and ISA-level verdicts, are suspended from the
   gate until they are dependable.
   Darwin checks a host-dependent large-image loader limitation against a native
@@ -527,7 +531,11 @@ This is the maintained inventory of what the compiler does today:
   identity on Darwin, and line and function debugging on Cortex-M0. At speed
   a local held in a register is described past its last use until the
   register is written over, and the GDB and LLDB sessions read such locals
-  there. An atom set is described as an enumeration, so a debugger prints
+  there. A backtrace through a stack switch names the switch and start
+  routines, `landin.stack_switch` and `landin.stack_start` (D469), and a
+  scripted session on every target with a native backend steps two
+  switches and holds the leaving and resumed fibres' frames at every
+  instruction. An atom set is described as an enumeration, so a debugger prints
   an atom's name; a generic instance is a symbol named after its routine;
   and a library file is recorded as `/landin-library/` and its module path,
   never where the library was installed, which a session maps to the

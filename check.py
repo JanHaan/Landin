@@ -8803,9 +8803,10 @@ def check_debugger_contract(full_run):
             out.append((paths[2], 1, "debugger source inventory: " + str(exc)))
             return out
         if (not isinstance(inventory, dict)
-                or set(inventory) != {"parser", "containers", "hosted"}):
+                or set(inventory) != {"parser", "containers", "hosted",
+                                      "switch"}):
             out.append((paths[2], 1, "debugger source inventories must cover "
-                        "parser, containers and hosted"))
+                        "parser, containers, hosted and switch"))
             return out
         for workload, names in inventory.items():
             if (not isinstance(names, list) or not names

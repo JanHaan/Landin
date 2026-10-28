@@ -905,12 +905,14 @@ package body Landin.Backend.RiscV is
       --  Pick a disjoint prefix for generated local labels. External source
       --  identities receive the object format's prefix at the rendering
       --  seam, where an explicit ELF spelling may begin with `.L`.
-      function Unused_Local_Prefix return String;
+      function Unused_Local_Prefix
+        (Seed : String := ELF_Spelling.Local_Prefix) return String;
 
-      function Unused_Local_Prefix return String is
+      function Unused_Local_Prefix
+        (Seed : String := ELF_Spelling.Local_Prefix) return String
+      is
          Candidate : Unbounded.Unbounded_String :=
-           Unbounded.To_Unbounded_String
-             (ELF_Spelling.Local_Prefix);
+           Unbounded.To_Unbounded_String (Seed);
          Collides : Boolean;
       begin
          loop
@@ -964,11 +966,16 @@ package body Landin.Backend.RiscV is
       --  the LP64D float callee-saved set f8, f9 and f18 to f27, the Nth at
       --  Stack_Save_Offset (N) above the stack pointer and so at that many
       --  bytes less Stack_Frame_Bytes below the CFA.  A prepared stack's
-      --  first frame is the same frame.
+      --  first frame is the same frame, and returns to Stack_Entered, past
+      --  the start routine's opening nop.  Both routines are local
+      --  function symbols, `landin.stack_switch` and `landin.stack_start`
+      --  (D469), so that a debugger names them in a backtrace.
       Stack_Used : Boolean := False;
-      Stack_Switcher : constant String :=
-        Local_Prefix & "landin_stack_switch";
-      Stack_Start : constant String := Local_Prefix & "landin_stack_start";
+      Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
+      Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
+      Stack_Start : constant String := Routine_Prefix & "stack_start";
+      Stack_Entered : constant String :=
+        Local_Prefix & "landin_stack_entered";
       Stack_Saved : constant := 25;
       Stack_Frame_Bytes : constant := 208;
 
@@ -2583,7 +2590,7 @@ package body Landin.Backend.RiscV is
                         Load_Value (Operand (4), "x7");
                         Emit ("sd x7, " & Image (Stack_Save_Offset (4))
                               & "(x5)");
-                        Emit ("lla x7, " & Stack_Start);
+                        Emit ("lla x7, " & Stack_Entered);
                         Emit ("sd x7, " & Image (Stack_Save_Offset (1))
                               & "(x5)");
                         Stack_Used := True;
@@ -5323,8 +5330,9 @@ package body Landin.Backend.RiscV is
       --  argument in x18 and zero in x8, so the frame-pointer chain ends at
       --  the entry's first frame, and its unwind information says the
       --  return address is undefined, which ends a debugger's walk there.
-      --  Its description opens one instruction before the label, because
-      --  a debugger looks up a return address less one.  An entry is
+      --  A first frame returns past the routine's opening nop, never run,
+      --  because a debugger looks up a return address less one and must
+      --  find it inside this description and this symbol.  An entry is
       --  `-> noreturn`; if it returns anyway, that is D232's `unreachable`
       --  at site zero, as a firmware entry's return is.
       if Stack_Used then
@@ -5370,12 +5378,13 @@ package body Landin.Backend.RiscV is
 
          Emit (".p2align 2");
          Platform_Directive (ELF_Spelling.Function_Type (Stack_Start));
+         Put (Stack_Start & ":");
          if Debug /= null then
             Emit (".cfi_startproc");
             Emit (".cfi_undefined ra");
          end if;
          Emit ("nop");
-         Put (Stack_Start & ":");
+         Put (Stack_Entered & ":");
          Emit ("mv x10, x18");
          Emit ("jalr ra, 0(x9)");
          if Panic /= null and then Landin.Panics.Handler (Panic.all)

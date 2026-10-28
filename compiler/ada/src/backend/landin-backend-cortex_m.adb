@@ -1033,11 +1033,16 @@ package body Landin.Backend.Cortex_M is
       --  carries one switch routine and one start routine, emitted after
       --  its bodies; the block that emits them says what each does.  A
       --  context's saved frame is Stack_Frame bytes: the CONTROL word, r8
-      --  to r11, r4 to r7 and the address the switch returns to.
+      --  to r11, r4 to r7 and the address the switch returns to.  Both
+      --  routines are local function symbols, `landin.stack_switch` and
+      --  `landin.stack_start` (D469), the names a debugger shows in a
+      --  backtrace; no Landin routine is spelled with the dot, and an
+      --  explicit link name that starts so moves the prefix as it moves a
+      --  local label's.
       Stack_Used : Boolean := False;
-      Stack_Switcher : constant String :=
-        Local_Prefix & "landin_stack_switch";
-      Stack_Start : constant String := Local_Prefix & "landin_stack_start";
+      Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
+      Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
+      Stack_Start : constant String := Routine_Prefix & "stack_start";
       Stack_Frame : constant := 40;
 
       procedure Put (Line : String) is
@@ -5773,9 +5778,13 @@ package body Landin.Backend.Cortex_M is
             Emit (".globl " & Symbol (Item));
          end if;
          Emit (".balign " & Trimmed (Alignment'Image));
+         --  Typed and sized as the other ELF backends' data, so that the
+         --  image's symbol table says each buffer's extent: the Cortex-M
+         --  lane identifies fibre backing in static RAM by it (D470).
+         Emit (".type " & Symbol (Item) & ", %object");
          Put (Symbol (Item) & ":");
          Emit (".zero " & Trimmed (Size'Image));
-
+         Emit (".size " & Symbol (Item) & ", " & Trimmed (Size'Image));
       end Emit_Reserved;
 
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id) is

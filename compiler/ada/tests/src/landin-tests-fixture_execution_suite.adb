@@ -9,6 +9,7 @@ with Ada.Strings;
 with Ada.Characters.Handling;
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Containers.Vectors;
+with Ada.Directories;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Environment_Variables;
@@ -3596,12 +3597,21 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Inventory : Landin.Json.Document;
 
       --  The path a report names, from compiler/ada where the harness
-      --  runs, as the record writes it: from the repository root.
+      --  runs, as the record writes it: from the repository root.  The
+      --  hosted entry's platform module, which the compiler adds to a
+      --  program that imports nothing, is found in the library, which the
+      --  report names absolutely.
+      Root : constant String := Ada.Directories.Full_Name ("../..") & "/";
+
       function Repository_Path (Path : String) return String;
 
       function Repository_Path (Path : String) return String is
       begin
-         if Path'Length > 6
+         if Path'Length > Root'Length
+           and then Path (Path'First .. Path'First + Root'Length - 1) = Root
+         then
+            return Path (Path'First + Root'Length .. Path'Last);
+         elsif Path'Length > 6
            and then Path (Path'First .. Path'First + 5) = "../../"
          then
             return Path (Path'First + 6 .. Path'Last);
@@ -3637,7 +3647,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Fixture_Name : constant String :=
            (if Workload = "parser" then "derived-parser"
             elsif Workload = "containers" then "derived-containers"
-            elsif Workload = "hosted" then "derived-hosted-memory" else "");
+            elsif Workload = "hosted" then "derived-hosted-memory"
+            elsif Workload = "switch" then "stack-switch-frames" else "");
          Assembly : constant String :=
            Output_Directory & "workload-" & Workload & ".s";
          Report_Path : constant String :=
@@ -3737,8 +3748,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
       Landin.Testing.Check_Equal
         (Item,
-         Landin.Json.Length (Inventory, Landin.Json.Root (Inventory)), 3,
-         "the record names the three debugger workloads");
+         Landin.Json.Length (Inventory, Landin.Json.Root (Inventory)), 4,
+         "the record names the four debugger workloads");
       for Position in 1 ..
         Landin.Json.Length (Inventory, Landin.Json.Root (Inventory))
       loop
@@ -3772,7 +3783,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
         "python3 compiler/tests/debugging/workload_frames.py --write";
       Sessions     : constant String :=
         "GDB in compiler/tests/debugging/check.py, LLDB in"
-        & " compiler/tests/debugging/darwin_workloads.py";
+        & " compiler/tests/debugging/darwin_workloads.py, and the switch"
+        & " workload's on every target through"
+        & " compiler/tests/debugging/switch_frames.py";
       Host    : Landin.Platform.Native.Native_Filesystem;
       Frames  : Landin.Json.Document;
       Sources : Landin.Json.Document;
@@ -3911,8 +3924,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
       Landin.Testing.Check_Equal
-        (Item, Landin.Json.Length (Frames, Landin.Json.Root (Frames)), 3,
-         "the frames name the three debugger workloads");
+        (Item, Landin.Json.Length (Frames, Landin.Json.Root (Frames)), 4,
+         "the frames name the four debugger workloads");
       for Position in
         1 .. Landin.Json.Length (Frames, Landin.Json.Root (Frames))
       loop

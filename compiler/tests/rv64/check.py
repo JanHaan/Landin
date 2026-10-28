@@ -14,6 +14,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
@@ -28,6 +29,8 @@ ABI_REQUIRED = SHARED.ABI_REQUIRED | {'lp64d-varargs', 'lp64d-integer-extension'
 TARGET = 'linux-rv64'
 LEVELS = ('rv64gc', 'rv64gc_xtheadba')
 ISA_REQUIRED = {'rv64-feature-fact', 'rv64-indexed-address', 'rv64-assembly-level'}
+sys.path.insert(0, str(ROOT / 'compiler/tests/debugging'))
+import switch_frames  # noqa: E402
 
 
 def require(condition, message):
@@ -143,6 +146,19 @@ class Lane(SHARED.Lane):
                           '--optimize=' + optimize, '--specialize=' + specialize,
                           source, '-o', executable], label + '-build')
             results.append({'label': label, 'lines': lines, 'executable_sha256': sha(executable)})
+        #  The stack switch's session (D469): the workload every
+        #  target debugs, its switch routine's extent read from the image.
+        for optimize, specialize in PROFILES:
+            label = 'switch-' + optimize + '-' + specialize
+            executable = self.bundle / label
+            self.command([self.args.refine.resolve(), '--target=' + TARGET,
+                          '--toolchain=' + str(self.driver), '--debug=full', '--emit=exe',
+                          '--optimize=' + optimize, '--specialize=' + specialize,
+                          '--root=' + str(ROOT), switch_frames.FIXTURE, '-o', executable],
+                         label + '-build')
+            symbols = self.command([self.args.nm, '-S', executable], label + '-symbols').decode()
+            results.append({'label': label, 'switch': switch_frames.symbol_extent(symbols),
+                            'executable_sha256': sha(executable)})
         return results
 
     def instructions(self, results):
@@ -193,7 +209,7 @@ class Lane(SHARED.Lane):
 
 def expected_results(args):
     if args.kind == 'debugger':
-        return {'debug-' + o + '-' + s for o, s in PROFILES}
+        return {kind + '-' + o + '-' + s for o, s in PROFILES for kind in ('debug', 'switch')}
     return {(str(p.relative_to(ROOT / 'compiler/tests/fixtures')), o, s, level)
             for p, _, o, s, level in work_items(args)}
 
@@ -293,23 +309,86 @@ def execute(args, manifest):
         print(TARGET + ': ' + label + ' passed', flush=True)
 
 
+class Transport:
+    """How a session reaches its inferior: GDB's own `run` on the physical
+    machine, or, with --qemu, QEMU's user-mode GDB stub on another host,
+    which is evidence about the emitted code and the debugger's reading of
+    it, and none about RV64 hardware."""
+
+    def __init__(self, args):
+        self.qemu = getattr(args, 'qemu', None)
+
+    def __call__(self, executable):
+        if self.qemu is None:
+            return None, ['run']
+        #  A Unix socket, as the Linux lane's: its file appears once the
+        #  stub listens, and nothing has to connect to learn that.
+        stub = Path(str(executable) + '.gdb.sock')
+        stub.unlink(missing_ok=True)
+        process = subprocess.Popen([self.qemu, '-g', str(stub), str(executable)],
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        deadline = time.monotonic() + 15
+        while not stub.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        require(process.poll() is None and stub.exists(), 'qemu did not open its GDB socket')
+        return process, ['target remote ' + str(stub), 'continue']
+
+
+def gdb_session(args, label, commands, process):
+    script = args.output / (label + '.gdb')
+    script.write_text('\n'.join(commands) + '\n')
+    try:
+        completed = subprocess.run([args.gdb, '-q', '-batch', '-x', str(script),
+                                    str(args.output / 'bundle' / label)], capture_output=True, timeout=180)
+    finally:
+        if process is not None:
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+    text = (completed.stdout + completed.stderr).decode(errors='replace')
+    (args.output / (label + '-session.log')).write_text(text)
+    require(completed.returncode == 0, label + ': GDB failed\n' + text[-4000:])
+    return text
+
+
+def switch_session(args, manifest, result, transport):
+    """The backtrace through a stack switch (D469), held by switch_frames.py."""
+    label = result['label']
+    low, high = result['switch']
+    process, start = transport(args.output / 'bundle' / label)
+    location = switch_frames.SOURCE.name + ':' + str(switch_frames.fibre_line())
+    text = gdb_session(args, label, [
+        'set substitute-path ' + shlex.quote(manifest['source_root']) + ' ' + shlex.quote(str(ROOT)),
+        *switch_frames.gdb_commands(location, low, high, start),
+        'continue', 'printf "LANDIN-SWITCH-EXIT %d\\n", $_exitcode', 'quit'], process)
+    require('LANDIN-SWITCH-EXIT ' + str(switch_frames.STATUS) + '\n' in text,
+            label + ': the workload did not exit ' + str(switch_frames.STATUS))
+    try:
+        result['frames'] = switch_frames.check(switch_frames.gdb_stops(text), 'rv64')
+    except switch_frames.Mismatch as error:
+        raise ValueError(label + ': ' + str(error)) from None
+    result['status'] = 'passed'
+    print(TARGET + ': ' + label + ' backtraces through the stack switch passed', flush=True)
+
+
 def debugger(args, manifest):
+    transport = Transport(args)
     for result in manifest['results']:
+        if 'switch' in result:
+            switch_session(args, manifest, result, transport)
+            continue
         label, lines = result['label'], result['lines']
+        process, start = transport(args.output / 'bundle' / label)
         commands = ['set pagination off', 'set confirm off', 'set disable-randomization off',
                     'set substitute-path ' + shlex.quote(manifest['source_root']) + ' ' + shlex.quote(str(ROOT)),
-                    'break debug.ldn:' + str(lines['result = local + 1']), 'run',
+                    'break debug.ldn:' + str(lines['result = local + 1']), *start,
                     'frame', 'info args', 'info locals', 'bt', 'frame 1', 'info args', 'info locals',
                     'frame 2', 'frame', 'frame 0', 'echo BEGIN_UNWIND\\n', 'finish', 'frame', 'echo END_UNWIND\\n',
                     'break debug.ldn:' + str(lines['result = ready']), 'continue', 'info locals',
                     'delete breakpoints', 'continue', 'quit']
-        script = args.output / (label + '.gdb')
-        script.write_text('\n'.join(commands) + '\n')
-        completed = subprocess.run([args.gdb, '-q', '-batch', '-x', str(script),
-                                    str(args.output / 'bundle' / label)], capture_output=True, timeout=180)
-        text = (completed.stdout + completed.stderr).decode(errors='replace')
-        (args.output / (label + '-session.log')).write_text(text)
-        require(completed.returncode == 0, label + ': native GDB failed\n' + text[-4000:])
+        text = gdb_session(args, label, commands, process)
         require(re.search(r'debug.ldn:' + str(lines['result = local + 1']) + r'\b', text), label + ': source-line stop missing')
         for index, name in ((0, 'inner'), (1, 'outer'), (2, 'main')):
             require(re.search(r'#' + str(index) + r'\s+.*\b' + name + r'\b', text), label + ': missing frame ' + name)
@@ -344,6 +423,10 @@ def main():
     parser.add_argument('--cc', default='riscv64-linux-gnu-gcc')
     parser.add_argument('--objdump', default='riscv64-linux-gnu-objdump')
     parser.add_argument('--gdb', default='gdb')
+    parser.add_argument('--nm', default='riscv64-linux-gnu-nm')
+    parser.add_argument('--qemu', metavar='PATH',
+                        help='debugger kind only: run the sessions under this qemu-riscv64'
+                             " user-mode GDB stub, cross evidence that is not the physical lane's")
     parser.add_argument('--case', action='append', help='exact case, development only')
     args = parser.parse_args()
     #  A rebuild of this build waits for the lane, rather than replace
@@ -369,7 +452,13 @@ def main():
         else:
             manifest = load_prepared(args)
             summary.update({k: manifest[k] for k in ('scope', 'revision', 'refine_sha256', 'results')})
-            summary['hardware'] = native_identity(args.output)
+            if args.qemu:
+                require(args.kind == 'debugger', '--qemu runs the debugger kind only')
+                args.qemu = shutil.which(args.qemu) or args.qemu
+                version = subprocess.run([args.qemu, '--version'], capture_output=True, text=True)
+                summary['runner'] = {'qemu': args.qemu, 'version': version.stdout.splitlines()[0]}
+            else:
+                summary['hardware'] = native_identity(args.output)
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             if args.kind == 'debugger':
                 debugger(args, manifest)

@@ -697,11 +697,14 @@ package body Landin.Backend.X86_64 is
       --  prefix for every generated local label (blocks, evidence and
       --  anonymous data), rather than reserving a new source-language
       --  namespace.  Most units retain exactly the original `.L` spelling.
-      function Unused_Local_Prefix return String;
+      function Unused_Local_Prefix
+        (Seed : String := ELF.Local_Prefix) return String;
 
-      function Unused_Local_Prefix return String is
+      function Unused_Local_Prefix
+        (Seed : String := ELF.Local_Prefix) return String
+      is
          Candidate : Unbounded.Unbounded_String :=
-           Unbounded.To_Unbounded_String (ELF.Local_Prefix);
+           Unbounded.To_Unbounded_String (Seed);
          Collides : Boolean;
       begin
          loop
@@ -753,12 +756,20 @@ package body Landin.Backend.X86_64 is
 
       --  D450: a program that prepares or switches a stack carries one
       --  switch routine and one start routine, emitted after its bodies;
-      --  Emit_Stack_Routines says what each does.  A prepared stack's
-      --  first frame is Stack_First_Frame bytes below its aligned top.
+      --  the comment there says what each does.  Both are local function
+      --  symbols, `landin.stack_switch` and `landin.stack_start` (D469),
+      --  so that a debugger names them in a backtrace: no Landin routine
+      --  is spelled with the dot, and an explicit link name that starts
+      --  so moves the prefix as it moves a local label's.  A prepared
+      --  stack's first frame returns to Stack_Entered, past the start
+      --  routine's opening nop, and is Stack_First_Frame bytes below its
+      --  aligned top.
       Stack_Used : Boolean := False;
-      Stack_Switcher : constant String :=
-        Local_Prefix & "landin_stack_switch";
-      Stack_Start : constant String := Local_Prefix & "landin_stack_start";
+      Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
+      Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
+      Stack_Start : constant String := Routine_Prefix & "stack_start";
+      Stack_Entered : constant String :=
+        Local_Prefix & "landin_stack_entered";
       Stack_First_Frame : constant := 72;
 
       function Float_Decode_Label
@@ -4680,7 +4691,7 @@ package body Landin.Backend.X86_64 is
                         Emit ("movq %rdx, 40(%rax)");
                         Emit ("movq %rdx, 56(%rax)");
                         Emit ("movq %rdx, 64(%rax)");
-                        Emit ("leaq " & Stack_Start & "(%rip), %rdx");
+                        Emit ("leaq " & Stack_Entered & "(%rip), %rdx");
                         Emit ("movq %rdx, 48(%rax)");
                         Stack_Used := True;
                         Store_Value (Value, "%rax");
@@ -8938,8 +8949,9 @@ package body Landin.Backend.X86_64 is
       --  argument in %r13 and zero in %rbp, so the frame-pointer chain ends
       --  at the entry's first frame, and its unwind information says the
       --  return address is undefined, which ends a debugger's walk there.
-      --  Its description opens one instruction before the label, because
-      --  a debugger looks up a return address less one.  An entry is
+      --  A first frame returns past the routine's opening nop, never run,
+      --  because a debugger looks up a return address less one and must
+      --  find it inside this description and this symbol.  An entry is
       --  `-> noreturn`; if it returns anyway, that is D232's `unreachable`
       --  at site zero, as a firmware entry's return is.
       if Stack_Used then
@@ -8982,12 +8994,13 @@ package body Landin.Backend.X86_64 is
 
             Put (Character'Val (9) & ".type " & Stack_Start
                  & ", @function");
+            Put (Stack_Start & ":");
             if Debug /= null then
                Emit (".cfi_startproc");
                Emit (".cfi_undefined %rip");
             end if;
             Emit ("nop");
-            Put (Stack_Start & ":");
+            Put (Stack_Entered & ":");
             Emit ("movq %r13, %rdi");
             Emit ("call *%r12");
             if Panic /= null and then Landin.Panics.Handler (Panic.all)
