@@ -2,5 +2,5 @@ class: negative
 summary: D450 each stack builtin refuses a save that is not a ptr mut usize, a resumed pointer that is not a usize, the limit D472 retired, an immutable or non-slice stack and an entry that returns
 program: main.ldn
 codes: L0344, L0344, L0301, L0344, L0344, L0344, L0344
-constructs: 1620
+constructs: 1620, 1995
 targets: linux-x86-64, freebsd-x86-64

@@ -5,5 +5,5 @@ root: ../../../../..
 profiles: specialization
 traps: yes
 trap_report: main.ldn:15:1: trap: stack_exhausted
-constructs: 1380, 1620, 1670, 1910
+constructs: 1380, 1620, 1670, 1675, 1910, 1995
 targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

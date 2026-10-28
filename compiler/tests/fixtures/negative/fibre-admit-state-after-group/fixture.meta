@@ -4,5 +4,5 @@ program: main.ldn
 root: ../../../../..
 status: 1
 codes: L0314
-constructs: 0770, 0780, 1910
+constructs: 0770, 0780, 1675, 1910
 targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

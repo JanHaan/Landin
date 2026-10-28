@@ -1310,9 +1310,9 @@ limit with the registers it saves. A prepared stack is at least 128
 words, beside the few words its first frame keeps at its top; size it
 from the report's depth of the task's routine and the margin.
 
-Only the targets whose backend emits the stack builtins admit this
-module; a program over `fibre.whole` or the blocking host does not
-import it, and runs on every target.
+Every target with a native backend admits this module, and
+synthetic-32 does not; a program over `fibre.whole` or the blocking host
+does not import it, and runs on every target.
 
 [Executable example](../compiler/tests/fixtures/runtime/fibre-turns-interleave/main.ldn)
 

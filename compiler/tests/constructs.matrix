@@ -17,8 +17,8 @@
 #  transferred, as their [1830] note says.  State, targets,
 #  gaps and owner come from the inventory, whose
 #  disposition column explains every row.
-#  202 constructs, 196 with fixture evidence, 6 with none.
-#  States: 191 executed, 5 compiled, 2 transferred, 4 advisory.
+#  204 constructs, 198 with fixture evidence, 6 with none.
+#  States: 193 executed, 5 compiled, 2 transferred, 4 advisory.
 #  8 rows name an open owner; 0 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | linux-arm64 | darwin-arm64 | freebsd-x86-64 | freebsd-arm64 | linux-rv64 | cortex-m0 | refusals | state | targets | gaps | owner | title
@@ -189,6 +189,7 @@
 1650 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Where a program starts
 1660 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | Where capabilities come from
 1670 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | When a check fails
+1675 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Two things in flight: fibres
 1680 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | Pass the capability, don't track the effect
 1690 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | One mechanism, read two ways
 1700 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Atoms are the same idea wherever they appear
@@ -223,4 +224,5 @@
 1975 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | The selected hosted C boundaries
 1980 | spec | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Declared errors are an orthogonal payload-free atom outcome
 1990 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | cortex-m | none | none | Firmware and machine directives have explicit target contracts
+1995 | spec | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | A stack switch resumes another stack, and every frame checks its stack
 2000 | spec | - | - | - | - | - | - | - | - | - | advisory | none | none | none | What a doc comment is about

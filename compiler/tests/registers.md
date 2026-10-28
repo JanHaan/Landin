@@ -209,6 +209,7 @@ with every named refusal and the wording of its [1830] note.
 | `[1650]` | executed | all | none | none | matrix evidence |
 | `[1660]` | executed | hosted | none | none | matrix evidence; the freestanding root is [0460]'s address literal |
 | `[1670]` | executed | all | none | none | matrix evidence |
+| `[1675]` | executed | all | none | none | Groups over `fibre.whole` and a round of turns, the first failure kept for `join` and a task's own overflow trapped are matrix evidence. The blocking host as a scheduler and a round that answers `b` first are hosted, and Cortex-M0's group over the round runs in the corpus and the lane's capacity control. `turns_over` refused for a scheduler alone is `negative/fibre-turns-over-scheduler-only`. |
 | `[1680]` | executed | hosted | none | none | Matrix evidence covers passing entry-minted capabilities and substituting the in-memory I/O provider. `runtime/derived-hosted-memory` also has an ordinary parameterless `long_lines` helper that calls `heap.new()`: D258 and `capabilities.host-root-exclusion` record that a parameter list cannot exclude an independent host root. The freestanding root is [0460]'s address literal. The language-evolution record remains open for a trusted-code need for checkable host exclusion or unaudited provider substitution, as well as for untrusted code; no such static boundary is claimed by these fixtures. |
 | `[1690]` | executed | all | none | none | matrix evidence |
 | `[1700]` | executed | all | none | none | matrix evidence |
@@ -243,6 +244,7 @@ with every named refusal and the wording of its [1830] note.
 | `[1975]` | executed | hosted | none | none | matrix evidence; Cortex-M C boundaries are restricted |
 | `[1980]` | executed | all | none | none | matrix evidence |
 | `[1990]` | executed | cortex-m | none | none | D229 and D230 firmware and machine directives execute through compiler-owned firmware and the derived driver; hosted targets select them away. |
+| `[1995]` | executed | all | none | none | The stack builtins' round trip, a frame past its limit and a selected handler entered from a prologue execute on every target, Cortex-M0 included; a prepare too small is hosted; their refusals are `negative/stack-builtins-argument-contract` and `negative/stack-builtins-target-synthetic-32`. |
 | `[2000]` | advisory | none | none | none | A doc comment gives a program no meaning, so no fixture can discriminate it; D254 records the attachment a tool shows, and the `server` suite's doc-comment case and `hover` session pin it. |
 
 ## Hosted compile-time evidence

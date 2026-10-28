@@ -3,5 +3,5 @@ summary: D447/D469 the debugger workload for the stack switch: two prepared stac
 program: main.ldn
 profiles: standard
 status: 42
-constructs: 1620
+constructs: 1620, 1995
 targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

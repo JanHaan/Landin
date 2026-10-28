@@ -4,5 +4,5 @@ program: main.ldn
 root: ../../../../..
 profiles: specialization
 status: 42
-constructs: 0890, 1620, 1670
+constructs: 0890, 1620, 1670, 1995
 targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

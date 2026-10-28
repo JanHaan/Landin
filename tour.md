@@ -4136,7 +4136,7 @@ without an import, which is why nobody else can use their bare names.
 
 | module | what it reaches |
 | --- | --- |
-| `compiler` | target, word size, byte order, build mode, CPU features, the atomic, volatile and register intrinsics, and `compiler.unreachable()`, a call that never returns and stops the program as a failed check does |
+| `compiler` | target, word size, byte order, build mode, CPU features, the atomic, volatile and register intrinsics, the two stack builtins under fibres ([1675]), and `compiler.unreachable()`, a call that never returns and stops the program as a failed check does |
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 
@@ -4917,7 +4917,8 @@ spec [1975].
 ### [1670] When a check fails
 
 When a check fails — an index out of range, an overflow, a bad conversion,
-an `unreachable` — the program calls a fixed handler that never returns.
+an `unreachable`, a fibre's stack run out ([1675]) — the program calls a
+fixed handler that never returns.
 With none of your own, a hosted program writes one line,
 `FILE:LINE:COLUMN: trap: KIND`, to standard error and stops; firmware just
 stops.
@@ -4935,7 +4936,8 @@ end panic_handler
 ```
 
 It gets two scalars and no strings. `kind` is one of `core/panic`'s
-`out_of_range`, `overflow`, `bad_conversion` and `unreachable`. `site` is
+`out_of_range`, `overflow`, `bad_conversion`, `unreachable` and
+`stack_exhausted`. `site` is
 a plain `u32`, not [1040]'s `site` struct: a number the compiler gives the
 failing operation and its check family. File and line live in an optional
 table outside the target, so a small firmware image carries no file names.
@@ -4954,6 +4956,153 @@ build.
 - Hardware faults and naked assembly keep their machine obligations.
 
 Exact rules: spec [1960].
+
+### [1675] Two things in flight: fibres
+
+Concurrency is a capability, like an allocator or the host ([1660],
+[1680]). There is no `async`, no second calling convention and no
+coloured function type. A routine that wants two things in flight asks
+for something that runs them, and whether they really overlap is that
+provider's answer, not the routine's. Each one runs on a stack of its own,
+a fibre.
+
+A task is an ordinary routine. It takes its state `inout` and fails with
+`core/failure`'s set, and nothing in it knows it runs on a fibre:
+
+```landin
+answers: type = struct
+    order: [2]u8
+    count: usize
+end answers
+
+asking: type = struct
+    clock: any time.clock
+    wait: u64
+    tag: u8
+    heard: ptr mut answers
+end asking
+
+ask: (inout self: asking) -> none ! failure.reason =
+    if self.wait > 0 then
+        self.clock.sleep(time.milliseconds(self.wait))
+    end if
+    self.heard.val.order[self.heard.val.count] = self.tag
+    self.heard.val.count += 1
+end ask
+```
+
+A routine starts tasks as a group, over storage it lends, and waits for
+them before it goes on, so whatever they borrow from it outlives them:
+
+```landin
+ask_both: (runs: any fibre.scheduler, clock: any time.clock,
+           inout heard: answers) -> none ! failure.reason =
+    mut stacks: [2 * 8192]u8 = zeroed
+    mut asks := try fibre.group_over(runs, stacks, 2)
+    defer fibre.join(asks) else none
+    a: asking = (clock: clock, wait: 20, tag: u8('a'), heard: addr heard)
+    try fibre.admit(asks, ask, a)
+    b: asking = (clock: clock, wait: 0, tag: u8('b'), heard: addr heard)
+    try fibre.admit(asks, ask, b)
+    try fibre.join(asks)
+end ask_both
+```
+
+- `group_over` cuts the backing into two equal stacks. Nothing is
+  allocated: the stacks are the caller's bytes, and the group comes `from`
+  the provider and the backing ([0790]).
+- `admit` waits for a free stack, copies the state onto it as a call
+  passes an argument, and starts a fibre that calls `ask` with the copy.
+  One group can hold tasks with different state types.
+- `join` waits until every task has ended, then fails with the first
+  failure any of them had. Nothing cancels a fibre, so the others run to
+  their own ends first.
+- A group must be joined before its backing goes. The `defer` does that
+  on every way out, as it releases a region ([1660]); the compiler does
+  not check that you wrote it.
+- The state is kept in the group until its task ends, so `admit` takes it
+  `escaping into` the group ([0780]). `a` may point at `heard`, a
+  parameter of the routine that made the group; a local declared after
+  the group is refused.
+
+Two concepts say what a provider is. A `fibre.scheduler` may run each task
+to its end inside `admit`, before returning. A `fibre.turns` is a
+scheduler with `yield`, and promises more: a fibre that yields lets every
+other unfinished fibre of its provider run before it goes on.
+
+The blocking host and `fibre.whole` are schedulers. Over either of them,
+`a` sleeps its 20 milliseconds and is answered first. `stacks.round`, a
+round of fixed turns from `core/fibre/stacks`, provides `turns`. Give it
+a clock whose sleep takes a turn for each millisecond, and `b` is answered
+while `a` waits:
+
+```landin
+turning_sleep: (self: turning, span: time.duration) -> none =
+    deadline: u64 = self.reading.val + u64(span)
+    while self.reading.val < deadline do
+        self.runs.yield()
+        self.reading.val += u64(time.milliseconds(1))
+    end while
+end turning_sleep
+```
+
+One `ask_both`, three providers, and the answers are `ab`, `ab` and `ba`.
+So a program written against `scheduler` must be right when every task
+runs to its end as it is admitted. A program that needs turns says so:
+`fibre.turns_over` takes an `any fibre.turns`, and handing it the host or
+`whole` is refused where the group is made, not when a task waits for
+ever.
+
+Fibres are cooperative. A fibre gives the core away only inside a call to
+its provider, a `yield` or a call that waits, and nothing preempts it. The
+fibres of one provider are one execution context: between two such calls
+no other fibre of it runs, so a module counter or the last error a call
+left is not raced for. A switch is a full compiler memory boundary, and a
+fibre never moves to another thread.
+
+A fibre's stack does not grow. In a program that prepares a stack, a
+routine compares its frame with the current stack's limit before it
+reserves the frame; the few that skip the check, small ones that call
+nothing, fit in a margin kept for them. Past the limit, the routine traps
+`stack_exhausted` at its own declaration, before it has written below the
+stack ([1670]):
+
+```text
+main.ldn:15:1: trap: stack_exhausted
+```
+
+The limit stands a margin above the stack's lowest byte, room for the
+handler to run in: 640 bytes on x86-64 and arm64, 768 on RV64, 384 on
+Cortex-M0. A program that prepares no stack has no check, and its code is
+what it would be without fibres. How deep a task goes depends on the
+target: `ask` takes up to 4.4 KiB of its stack on RV64 and less on the
+others, which is why its stacks are 8 KiB. `refine --stack-report=PATH`
+writes each routine's frame and the deepest stack its calls can reach, and
+names the `any` calls, recursion and foreign calls that leave that open.
+Size a stack from its task's row and the margin. A backing too small for
+its stacks fails `mem.out_of_memory`, where the group is made or when a
+task is admitted.
+
+On one core, nothing runs at once, and fibres there are for structure:
+taking the next request while answering this one. A device answers
+requests one at a time, in the order they arrived, and says `busy` when
+its queue is full; two answers are never in flight together. On Cortex-M0
+a fibre runs on the process stack and interrupt handlers on the main one,
+so a fibre's backing pays for one exception frame, 36 bytes, and the
+handlers' own frames are the main stack's. A handler never switches: it
+records what happened, and the provider looks before it waits.
+
+An application makes a group, and at most a provider, as the round above.
+`core/fibre/stacks` also holds the switch, `prepare` and `switch` over
+records a provider keeps, for whoever writes a provider of their own,
+built on two `compiler` builtins.
+A program over `whole` or the blocking host imports no switch and runs on
+every target; the switch runs on every target with a native backend. A
+debugger's backtrace through a switch shows `landin.stack_switch`, and a
+fibre's frames end at `landin.stack_start`. The library reference
+describes `core/fibre` and `core/fibre/stacks`.
+
+Exact rules: spec [1995].
 
 ## THE PRINCIPLES BEHIND THE DECISIONS
 
@@ -5176,7 +5325,8 @@ what it refused.
   into a state machine is a compiler project of its own, and it
   colours every function type that reaches one — the same
   objection that removed the ambient environment above [1680].
-  Stackful fibres are the route to take instead, and the design
+  Stackful fibres are the route to take instead, since taken [1675],
+  and the design
   already pays for them: the frame pointer is always present, the
   callee-saved discipline is explicit, and nothing rides in a
   reserved register.

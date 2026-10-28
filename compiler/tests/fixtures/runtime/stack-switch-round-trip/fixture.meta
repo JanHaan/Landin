@@ -3,5 +3,5 @@ summary: D450 a prepared stack is entered, left, re-entered and left again, in o
 program: main.ldn
 profiles: specialization
 status: 0
-constructs: 1620
+constructs: 1620, 1995
 targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

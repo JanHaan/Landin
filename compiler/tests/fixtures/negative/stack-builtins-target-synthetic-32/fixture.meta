@@ -5,5 +5,5 @@ expect: expected.txt
 args: --target=synthetic-32 ../tests/fixtures/negative/stack-builtins-target-synthetic-32/program.ldn
 codes: L0344, L0344
 status: 1
-constructs: 1620
+constructs: 1620, 1995
 targets: synthetic-32

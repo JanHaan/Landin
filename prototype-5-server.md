@@ -5,19 +5,21 @@
 > that has to answer the same requests on one core, written before the
 > compiler had fibres to find where the specification was silent,
 > ambiguous or wrong. It is not a program you can compile: it leaves bodies
-> out with `...` and uses a fibre interface that does not exist yet. Its
-> findings at the end are the point. No derived program runs yet; the
-> roadmap names the items that derive one. To learn Landin, read [the
-> tour](tour.md).
+> out with `...`, and its fibre interface is the sketch `core/fibre` was
+> written from, in spellings that have since changed. Its findings at the
+> end are the point. No derived program runs yet; the roadmap names the
+> items that derive one. To learn Landin, read [the tour](tour.md), whose
+> [1675] teaches fibres.
 >
 > The sketch itself begins at its first module heading, `core/fibre`. The
-> notes between this banner and that heading say what it presses on, and a
-> reader can skip them.
+> notes between this banner and that heading say what it presses on and
+> reconcile the sketch with the library, and a reader can skip them.
 
 Current with specification 0.2.8. Its own findings V1-V15 are all
 resolved below: V15 while it was written, the rest by D444-D449. The fibres
-themselves do not exist yet, and the decisions are pinned by the fixtures
-that will implement them.
+exist now, in `core/fibre` and its submodule `core/fibre/stacks`, and the
+runtime fixtures those decisions name pin them; D448's single-core answer
+and D449's promises wait for the derived programs.
 
 A server that answers two kinds of request, one line each:
 
@@ -84,6 +86,36 @@ concepts, never a kernel inside `core`.
 
 The first draft of this file started fibres the way C starts threads, and
 read like it. What it was, and why it went, is V15.
+
+---
+
+D464 changed five of the sketch's spellings when the switch was written,
+each because the sketch's would not compile or would not hold. `task`'s
+entry is `run: (self: ptr mut task_type) -> none`, since an `inout self`
+has no erased table and a provider is handed `any task`. The switch's, the
+providers' and the group's failure is `mem.out_of_memory`, not
+`stack_too_small | stack_misaligned`: a stack is never misaligned, and
+lent backing too small for its use is out of memory, as an arena's is.
+`prepare` takes a fourth record, `after`, the one a fibre resumes when its
+task has ended, because "whoever started it" is not the round's next turn.
+A round's wait when nobody can run is the concept `stacks.idler`, given to
+`round_over`. And a group made over `turns` keeps its provider as
+`any turns`, beside an unused `any scheduler`, because the one does not
+convert to the other.
+
+D463 put the switch, `prepare` and `switch`, in the submodule
+`core/fibre/stacks` with the library's round of fixed turns, `stacks.round`,
+so a program over `whole` or the blocking host carries no switch. D471 to
+D473 replaced the check `space.limit` was kept for: the record keeps no
+limit, every routine of a program that prepares a stack checks its own
+frame against the current stack's limit in its prologue, a switch carries
+each stack's limit in the frames it saves, and `prepare` keeps no room
+above it. D447 and D461 replaced V11's sentence that every fibre's stack
+carries the deepest interrupt nesting: on Cortex-M0 a fibre runs on the
+process stack, and its backing holds the one exception frame the core
+pushes. The sketch below keeps its own spellings, and its findings their
+wording. Deriving the firmware counterpart belongs to the roadmap's item
+that runs it.
 
 ## core/fibre  —  the capability this sketch had to invent
 
