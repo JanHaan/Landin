@@ -1112,7 +1112,9 @@
       "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations; runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0."
     },
     "runtime/fibre-stack-past-limit-traps": {
-      "mode": "execute"
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The fixture overruns a fibre's limit with a routine whose frame is larger than the selected profile's 4 KiB test stack reservation, so the image does not fit that map at any profile. runtime/stack-switch-past-limit-traps traps stack_exhausted at a switch on Cortex-M0 within the map; this image limit is not runtime evidence."
     },
     "runtime/fibre-turns-interleave": {
       "codes": [
