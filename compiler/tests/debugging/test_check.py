@@ -696,6 +696,44 @@ class SwitchFramesTests(unittest.TestCase):
         with self.assertRaisesRegex(SWITCH.Mismatch, "every instruction"):
             self.check(gdb_switch(swap_at=10))
 
+    #  D475: the symbol tables of gate run 40697578977's FreeBSD image,
+    #  where LLDB named the switch `.Ldebug_end_11_0`, and of its fix.
+    SHADOWED = ("00000000002023d4 t .L11_1_stack_limit\n"
+                "00000000002023ea 0000000000000027 t landin.stack_switch\n"
+                "00000000002023ea t .Ldebug_end_11_0\n"
+                "0000000000202411 0000000000000040 t landin.stack_start\n"
+                "0000000000202412 t .Llandin_stack_entered\n"
+                "                 U write\n")
+    CLEAN = ("00000000002116f0 t $x\n"
+             "00000000002116f0 0000000000000078 t landin.stack_switch\n"
+             "0000000000211768 0000000000000020 t landin.stack_start\n"
+             "0000000000211788 t $x\n"
+             "00000000002108b0 T .L_1_1\n")
+
+    def test_a_label_at_the_switch_routine_is_refused(self) -> None:
+        shadows = SWITCH.shadowing_symbols(self.SHADOWED)
+        self.assertIn(".Ldebug_end_11_0 at landin.stack_switch's address"
+                      " 0x2023ea", shadows)
+        self.assertIn("2 private labels at code addresses", shadows[-1])
+
+    def test_a_discarded_image_passes_with_mapping_and_global_dot_names(self) -> None:
+        self.assertEqual(SWITCH.shadowing_symbols(self.CLEAN), [])
+
+    def test_a_missing_routine_symbol_is_refused(self) -> None:
+        self.assertEqual(SWITCH.shadowing_symbols("0000000000001000 T main\n"),
+                         ["the image has no symbol landin.stack_start",
+                          "the image has no symbol landin.stack_switch"])
+
+    def test_mach_o_names_take_the_underscore_and_private_prefixes(self) -> None:
+        image = ("00000001000007b0 t _landin.stack_switch\n"
+                 "0000000100000828 t _landin.stack_start\n"
+                 "0000000100000848 t llandin_trap_report\n")
+        self.assertEqual(SWITCH.shadowing_symbols(image, "mach-o"),
+                         ["1 private labels at code addresses, such as"
+                          " llandin_trap_report at 0x100000848"])
+        self.assertEqual(SWITCH.shadowing_symbols(image.rsplit("0000000100000848", 1)[0],
+                                                  "mach-o"), [])
+
     def test_an_lldb_transcript_reads_the_same(self) -> None:
         def bt(frames):
             return "".join(f"  frame #{i}: 0x0000000000401000 program`{name}"

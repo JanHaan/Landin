@@ -85,6 +85,10 @@ def main():
             '--root=.', '--target=darwin-arm64', '--debug=full', '--emit=exe', '-o', executable,
             '--optimize=' + opt, '--specialize=' + spec])
         run(key + '-execute', [executable], switch_frames.STATUS)
+        #  Nothing else in the image may name the routines' addresses (D475).
+        shadows = switch_frames.shadowing_symbols(
+            run(key + '-symbols', ['xcrun', 'nm', '-n', executable]), 'mach-o')
+        assert not shadows, (key, shadows)
         config = {'executable': str(executable), 'cwd': str(ROOT),
                   'result': str(output / (key + '-stops.json'))}
         config_path = output / (key + '-config.json')

@@ -49,7 +49,12 @@ stopped in a fibre and stepped through two switches: the guest's LLDB has no
 Python, so its commands step a switch by the count of the switch routine's
 instructions, which emission reads from the image with the LLVM object
 tools, and `compiler/tests/debugging/switch_frames.py` holds the
-transcript.
+transcript. Before the VM starts, emission also holds each switch image's
+symbol table to naming the two routines' addresses by the routines alone
+(D475): the lane's driver passes `-Wa,-L` to every compilation, the C peers
+and the x86 GNU as included, which keeps the private `.L` labels, and every
+link discards them again with `-Wl,--discard-locals`, as `refine`'s own
+FreeBSD link does.
 
 For a complete local lane, install Clang 19, LLD, LLVM object tools, GNU as,
 QEMU system emulators, arm64 UEFI firmware, the iPXE ROMs QEMU's virtio network
@@ -63,8 +68,9 @@ python3 compiler/tests/freebsd/check.py --arch=amd64 --kind=runtime \
 ```
 
 On Linux, `nix develop` provides what emission needs, so `--prepare-only` runs
-there with the lane's defaults: `clang-19`, `ld.lld-19` and `llvm-objdump-19`
-from the flake's LLVM 19 under Ubuntu's names, GNU as and bsdtar. Its
+there with the lane's defaults: `clang-19`, `ld.lld-19`, `llvm-objdump-19`
+and `llvm-nm-19` from the flake's LLVM 19 under Ubuntu's names, GNU as and
+bsdtar. Its
 `clang-19` takes the bare compiler, with the wrapper's resource directory, for
 a command that names a target or a sysroot, as every FreeBSD compilation does,
 because nixpkgs' wrapper adds the host's glibc to a FreeBSD build; a host

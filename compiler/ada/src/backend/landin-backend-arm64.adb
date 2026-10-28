@@ -2186,13 +2186,14 @@ package body Landin.Backend.Arm64 is
       --  Mach-O.  No Landin routine is spelled with the dot, and an
       --  explicit link name that starts so moves the prefix as it moves a
       --  local label's.  A prepared stack's first frame, and every
-      --  switched stack's saved one, is Stack_Frame bytes: x29 and x30,
-      --  x19-x28, d8-d15, then the stack's limit (D472) and a word that
-      --  keeps the frame sixteen-byte aligned.  Stack_Limit is D471's
-      --  cell: the current stack's limit, zero on the stack the process
-      --  started on.  A program that prepares a stack checks it in its
-      --  routines' prologues; one that uses a builtin keeps it, and its
-      --  switch saves and restores it.
+      --  switched stack's saved one, is Stack_Frame bytes: x19-x28 and
+      --  d8-d15 from its bottom, then the stack's limit (D472) and a word
+      --  that keeps the frame sixteen-byte aligned, and at its top the
+      --  frame record, x29 and x30, as every routine's (D475).
+      --  Stack_Limit is D471's cell: the current stack's limit, zero on
+      --  the stack the process started on.  A program that prepares a
+      --  stack checks it in its routines' prologues; one that uses a
+      --  builtin keeps it, and its switch saves and restores it.
       Stack_Used : Boolean := False;
       Prepares : constant Boolean := Landin.Backend.Prepares_Stacks (Of_Unit);
       Unchecked_Bytes : constant Landin.Targets.Byte_Count :=
@@ -2200,7 +2201,8 @@ package body Landin.Backend.Arm64 is
       Limit_Margin : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Stack_Limit_Margin (Facts);
       Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
-      Stack_Limit_Slot : constant := 160;
+      Stack_Limit_Slot : constant := 144;
+      Stack_Record_Slot : constant := 160;
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
       Stack_Switcher : constant String :=
         Landin.Targets.Capabilities.Link_Symbol
@@ -4973,10 +4975,11 @@ package body Landin.Backend.Arm64 is
                         --  length, the entry and its argument.  The top is
                         --  aligned down to sixteen and the first frame laid
                         --  below it as the switch routine's restore reads
-                        --  it: x29 zero, x30 past the start routine's nop,
-                        --  x19 the entry, x20 its argument, then zero for
-                        --  x21-x28 and d8-d15, and the stack's limit, its
-                        --  base and the margin (D472).  A slice that
+                        --  it: x19 the entry, x20 its argument, then zero
+                        --  for x21-x28 and d8-d15, the stack's limit, its
+                        --  base and the margin (D472), and the frame
+                        --  record, x29 zero and x30 past the start
+                        --  routine's nop.  A slice that
                         --  cannot hold those 176 bytes and the margin traps
                         --  stack_exhausted (D451); the difference is
                         --  signed, since aligning a short slice's top may
@@ -4997,9 +5000,11 @@ package body Landin.Backend.Arm64 is
                         Load_Value (Operand (4), "x13");
                         Address ("x14", Stack_Start);
                         Emit ("add x14, x14, #4");
-                        Emit ("stp xzr, x14, [x10]");
-                        Emit ("stp x12, x13, [x10, #16]");
-                        for Pair in 2 .. Stack_Frame / 16 - 1 loop
+                        Emit ("stp xzr, x14, [x10, #"
+                              & Trimmed (Natural'Image (Stack_Record_Slot))
+                              & "]");
+                        Emit ("stp x12, x13, [x10]");
+                        for Pair in 1 .. Stack_Record_Slot / 16 - 1 loop
                            Emit ("stp xzr, xzr, [x10, #"
                                  & Trimmed (Natural'Image (16 * Pair))
                                  & "]");
@@ -8093,17 +8098,20 @@ package body Landin.Backend.Arm64 is
       --  program, so that its unwind information is exact at every
       --  instruction rather than threaded through a caller's frame.  It is
       --  called with the address to save through in x9 and the stack
-      --  pointer to resume in x10.  It stores x29, x30, x19-x28, d8-d15
-      --  and the current stack's limit (D472) on the leaving stack,
-      --  stores sp through x9, loads the resumed one, puts the limit it
-      --  saved back in the cell and restores the same
-      --  registers before returning into the resumed context.  Both stacks
-      --  hold the same Stack_Frame bytes at the switch, so one CFA rule, sp
-      --  plus what remains stored, is right at every instruction: stopped
-      --  before the store, a debugger unwinds into the leaving fibre's
-      --  frames, and after the load into the resumed fibre's.  x29 is only
-      --  stored and restored, and x18 is never named.  Every caller-saved
-      --  register is left changed, as by a call.
+      --  pointer to resume in x10.  It opens with the frame record every
+      --  routine has (D475), stores x19-x28, d8-d15 and the current
+      --  stack's limit (D472) below it on the leaving stack, stores sp
+      --  through x9, points x29 at the resumed stack's frame record and
+      --  then loads its sp, puts the limit it saved back in the cell and
+      --  restores the same registers before returning into the resumed
+      --  context.  Both stacks hold the same Stack_Frame bytes at the
+      --  switch, so one CFA rule, x29 plus the record, is right from the
+      --  record's opening to the restore of sp past the saved registers:
+      --  stopped before x29 moves, a debugger unwinds into the leaving
+      --  fibre's frames, and after it into the resumed fibre's, whether
+      --  it reads the unwind information or follows the frame record.
+      --  x18 is never named.  Every caller-saved register is left
+      --  changed, as by a call.
       --
       --  The start routine is the return address of a prepared stack's
       --  first frame: the restore leaves the entry in x19, its argument in
@@ -8125,8 +8133,6 @@ package body Landin.Backend.Arm64 is
               [["w19", "w20"], ["w21", "w22"], ["w23", "w24"],
                ["w25", "w26"], ["w27", "w28"], ["d8 ", "d9 "],
                ["d10", "d11"], ["d12", "d13"], ["d14", "d15"]];
-            Frame_Text : constant String :=
-              Trimmed (Natural'Image (Stack_Frame));
 
             function Image (Number : Integer) return String
               is (Trimmed (Integer'Image (Number)));
@@ -8141,20 +8147,26 @@ package body Landin.Backend.Arm64 is
             if Debug /= null then
                Emit (".cfi_startproc");
             end if;
-            Emit ("stp x29, x30, [sp, #-" & Frame_Text & "]!");
+            Emit ("stp x29, x30, [sp, #-16]!");
             if Debug /= null then
-               Emit (".cfi_def_cfa_offset " & Frame_Text);
-               Emit (".cfi_offset w29, -" & Frame_Text);
-               Emit (".cfi_offset w30, -" & Image (Stack_Frame - 8));
+               Emit (".cfi_def_cfa_offset 16");
+               Emit (".cfi_offset w29, -16");
+               Emit (".cfi_offset w30, -8");
             end if;
+            Emit ("mov x29, sp");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_register w29");
+            end if;
+            Emit ("sub sp, sp, #" & Image (Stack_Record_Slot));
             for Index in Pairs'Range loop
                Emit ("stp " & Trimmed (Pairs (Index)) & ", [sp, #"
-                     & Image (16 * Index) & "]");
+                     & Image (16 * (Index - 1)) & "]");
                if Debug /= null then
                   for Half in 1 .. 2 loop
                      Emit (".cfi_offset " & Trimmed (Names (Index, Half))
                            & ", -" & Image
-                             (Stack_Frame - 16 * Index - 8 * (Half - 1)));
+                             (Stack_Frame - 16 * (Index - 1)
+                              - 8 * (Half - 1)));
                   end loop;
                end if;
             end loop;
@@ -8165,19 +8177,24 @@ package body Landin.Backend.Arm64 is
             Emit ("str x11, [sp, #" & Image (Stack_Limit_Slot) & "]");
             Emit ("mov x11, sp");
             Emit ("str x11, [x9]");
+            Emit ("add x29, x10, #" & Image (Stack_Record_Slot));
             Emit ("mov sp, x10");
             Emit ("ldr x11, [sp, #" & Image (Stack_Limit_Slot) & "]");
             Emit ("str x11, [x12]");
             for Index in reverse Pairs'Range loop
                Emit ("ldp " & Trimmed (Pairs (Index)) & ", [sp, #"
-                     & Image (16 * Index) & "]");
+                     & Image (16 * (Index - 1)) & "]");
                if Debug /= null then
                   for Half in 1 .. 2 loop
                      Emit (".cfi_restore " & Trimmed (Names (Index, Half)));
                   end loop;
                end if;
             end loop;
-            Emit ("ldp x29, x30, [sp], #" & Frame_Text);
+            Emit ("add sp, sp, #" & Image (Stack_Record_Slot));
+            if Debug /= null then
+               Emit (".cfi_def_cfa sp, 16");
+            end if;
+            Emit ("ldp x29, x30, [sp], #16");
             if Debug /= null then
                Emit (".cfi_def_cfa_offset 0");
                Emit (".cfi_restore w29");

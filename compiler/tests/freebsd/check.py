@@ -191,7 +191,10 @@ class Lane:
                 peers.append({'source': name.strip(), 'source_sha256': sha(base / name.strip()),
                               'object_sha256': sha(obj)})
             assembler = ['-fno-integrated-as', '-Wa,-march=generic64'] if self.args.arch == 'amd64' else ['-march=' + (level or 'armv8-a')]
-            self.command([self.driver, *assembler, assembly, *objects, *cargs, '-o', executable], label + '-link')
+            # The link discards the private labels -Wa,-L kept, as refine's
+            # own does (D475).
+            self.command([self.driver, *assembler, assembly, *objects, *cargs,
+                          '-Wl,--discard-locals', '-o', executable], label + '-link')
         # `c-shared:` sources become shared objects the program loads, which
         # the bundle carries beside it; their guest paths are its first
         # arguments (compiler/tests/README.md).
@@ -391,6 +394,12 @@ class Lane:
                                     '--disassemble-symbols=' + switch_frames.SWITCH, executable],
                                    label + '-switch-disassembly').decode()
             count = switch_frames.instruction_count(listing)
+            #  Nothing else in the image may name the two routines'
+            #  addresses, which LLDB would show in their place (D475).
+            symbols = self.command([self.args.nm, '-n', executable],
+                                   label + '-symbols').decode()
+            shadows = switch_frames.shadowing_symbols(symbols)
+            require(not shadows, f'{label}: ' + '; '.join(shadows))
             commands = switch_frames.lldb_commands(switch_frames.fibre_line(), count)
             (self.bundle / (label + '.lldb')).write_text('\n'.join(commands) + '\n')
             results.append({'label': label, 'switch_instructions': count,
@@ -589,6 +598,7 @@ def main():
     parser.add_argument('--lld', default='ld.lld-19')
     parser.add_argument('--assembler', default='as')
     parser.add_argument('--objdump', default='llvm-objdump-19')
+    parser.add_argument('--nm', default='llvm-nm-19')
     parser.add_argument('--ssh-port', type=int, help='development VM already running')
     parser.add_argument('--runner-ssh', help='existing Linux-hosted VM SSH argv; uses guest sudo')
     parser.add_argument('--prepare-only', action='store_true', help='emit and inspect a transferable Linux payload')

@@ -91,11 +91,17 @@ def large_image_outcome(meta, status, stdout, stderr, expected,
 
 
 FUNCTION_LABEL = r"_[A-Za-z0-9_.$]+:"
+#  The one routine that opens no frame record: a prepared stack's first
+#  frame returns into the start routine, whose return address is undefined
+#  so that a debugger's walk ends there (D447, D469).  A record would give
+#  the walk a frame beneath it.  The switch routine has one (D475).
+UNFRAMED = {"_landin.stack_start:"}
 
 
 def assembly_contract(text):
     """Check function frames and the reserved register.  Every routine is
-    Landin's own, the hosted library's included, so each keeps a frame."""
+    Landin's own, the hosted library's included, so each keeps a frame,
+    but for the start routine of a stack that ends the chain."""
     require(not re.search(r"\b[wx]18\b", text), "reserved x18 used")
     in_code = False
     lines = text.splitlines()
@@ -105,7 +111,7 @@ def assembly_contract(text):
             in_code = True
         elif line.strip() == ".data" or line.strip().startswith(".section"):
             in_code = False
-        if in_code and re.fullmatch(FUNCTION_LABEL, line):
+        if in_code and re.fullmatch(FUNCTION_LABEL, line) and line not in UNFRAMED:
             require([entry.strip() for entry in lines[index + 1:index + 3]] ==
                     ["stp x29, x30, [sp, #-16]!", "mov x29, sp"],
                     "missing frame record: " + line)

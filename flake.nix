@@ -410,6 +410,7 @@
               chmod +x "$out/bin/clang-19"
               ln -s ${llvm19.lld}/bin/ld.lld "$out/bin/ld.lld-19"
               ln -s ${llvm19.llvm}/bin/llvm-objdump "$out/bin/llvm-objdump-19"
+              ln -s ${llvm19.llvm}/bin/llvm-nm "$out/bin/llvm-nm-19"
             '';
 
           crossTools = lib.optionals pkgs.stdenv.hostPlatform.isLinux (

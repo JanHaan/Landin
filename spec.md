@@ -19115,10 +19115,11 @@ helper opens the graph`.
 **The tour said** nothing. D447 has a debugger's walk pass through a
 switch and end at a fibre's first frame, and D450's backends emitted the
 two routines that carry it, one switch routine and one start routine per
-program, under local labels: an ELF `.L` label, which no symbol table
-keeps, and on Mach-O a linker-private `l` name, which the link drops. A
-backtrace through a switch therefore showed `??` for both, on every
-target but Cortex-M0, whose label prefix happened to be kept.
+program, under local labels: an ELF `.L` label, which no Linux symbol
+table keeps (FreeBSD's kept them until D475), and on Mach-O a
+linker-private `l` name, which the link drops. A backtrace through a
+switch therefore showed `??` for both, on every target but Cortex-M0,
+whose label prefix happened to be kept.
 
 **Chosen:** both are local function symbols with their sizes,
 `landin.stack_switch` and `landin.stack_start`, which Mach-O spells with
@@ -19222,7 +19223,7 @@ stack's limit in a cell every routine reads, which a switch must change.
 switch saves the cell's value in the frame it pushes on the leaving stack
 and, once the resumed stack is current, loads the value saved in that frame
 into the cell: x86-64 pushes it as an eighth word, a 64-byte frame; arm64
-stores it at 160 in a 176-byte frame; RV64 in the frame's lowest word, which
+stores it at 144 in a 176-byte frame, below its frame record (D475); RV64 in the frame's lowest word, which
 was unused, keeping 208; and Cortex-M0 pushes it with a scratch word between
 r4 to r7 and the rest of D460's frame, 48 bytes. The switch checks nothing:
 the routine that calls it checked its frame, and its save is inside the
@@ -19335,6 +19336,67 @@ prepared stack any handler is emitted`, both handlers accepted with no
 `compiler.stack_prepare`; `negative/stack-handler-exceeds-margin` and
 `negative/stack-handler-opens-its-graph` on Linux x86-64; and the two
 runtime fixtures above, which run on every target and fit.
+
+### D475 — The switch routines' names stand alone, and the switch keeps a frame record
+
+**The tour said** nothing. D469 named the switch and start routines with
+local function symbols on the reasoning that an ELF `.L` label is in no
+symbol table. On FreeBSD it was in every one: Clang's integrated assembler
+treats a name beginning `.L` as its own temporary and drops a definition
+or refuses a reference so spelled, so FreeBSD arm64 assembles with `-Wa,-L`
+to keep the explicit link names of `abi/r440-native-link-namespace`, and
+the FreeBSD lanes' driver passed it on x86-64 too. That keeps every
+private label the compiler writes, and LLD kept them in the image. The
+debug range of the last body ends where the switch routine begins, so
+FreeBSD's LLDB named every frame inside the switch `.Ldebug_end_11_0 + N`
+on both architectures, and the debugger lanes refused the session. The
+same names made the routines visible to the Darwin lane's assembly
+contract, which holds every routine to opening with the frame record
+`stp x29, x30, [sp, #-16]!` and `mov x29, sp`: the arm64 switch routine
+opened by pushing its whole 176-byte frame, and the start routine has no
+record at all.
+
+**Chosen:** every FreeBSD link passes `-Wl,--discard-locals`, which drops
+the local symbols whose names begin `.L` from the image and keeps the
+global ones, so an explicit `.L` link name still resolves and a
+debugger finds only the routines' own names at their addresses. The
+objects keep their labels, as `-L` asks; the image is what a debugger
+reads. Linux assembles with GNU as without `-L` and its output is
+unchanged; on Mach-O no `L` label reaches an object and the link drops
+every linker-private `l` name.
+
+The arm64 switch routine opens with the frame record, then lowers sp by
+160 and stores x19-x28 and d8-d15 from the frame's bottom, the stack's
+limit at 144 and a pad word; the frame stays 176 bytes, and a prepared
+first frame lays the same bytes, its record x29 zero and x30 past the
+start routine's nop. Its unwind rule is x29 plus 16 from the record's
+opening, and the switch points x29 at the resumed stack's record before
+loading that stack's sp, so the debugger's frames become the resumed
+context's at that instruction, whether it reads the unwind information
+or the frame record; the rule returns to sp once the saved registers are
+released. The start routine alone is exempt from the contract, by its
+name: its return address is undefined so that a walk ends there (D447),
+which a record would contradict.
+
+**The alternatives:** dropping `-Wa,-L`, which loses the explicit `.L`
+names Clang's assembler cannot otherwise express; refusing such names on
+FreeBSD, which makes a link name's legality depend on the target's
+assembler; placing the routines where no debug range ends, which leaves
+hundreds of labels in the image for the next routine to meet; and DWARF
+subprograms for the two routines, which D469 declined; for the frame
+record, an sp-based unwind rule kept beside it, which a debugger that
+follows the record instead would turn one instruction late, and exempting
+the switch routine from the contract too. All were declined.
+
+**Pinned by** the toolchain suite's FreeBSD link arguments,
+`compiler/tests/debugging/switch_frames.py`'s `shadowing_symbols`, which
+the FreeBSD lanes, the Linux GDB session and the Darwin LLDB session apply
+to every switch image before a debugger starts, and the unit tests beside
+it, which carry the shadowed table this was found in; for the record,
+`compiler/tests/darwin/check.py`'s `assembly_contract` over every Darwin
+runtime fixture, `scripts/tests/test_darwin_assembly.py`'s
+`test_only_the_start_routine_opens_no_frame`, and the switch sessions on
+arm64, whose turn `switch_frames.py` now expects at `add x29, x10, #160`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

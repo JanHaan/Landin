@@ -60,13 +60,15 @@ SWITCHES = (
 )
 #  The instruction after which the resumed context's frames are the ones
 #  above the switch routine, as GDB and LLDB print it: the one that loads
-#  the resumed stack pointer.  On Cortex-M0 that is the write of MSP or
-#  PSP when the selection does not change, and of CONTROL when it does
-#  (D460); the ISB after CONTROL makes it architecturally current, which
+#  the resumed stack pointer.  On arm64 it is the one that points x29 at
+#  the resumed stack's frame record, just before sp follows, since the
+#  switch's unwind rule follows its frame record (D475).  On Cortex-M0
+#  that is the write of MSP or PSP when the selection does not change,
+#  and of CONTROL when it does (D460); the ISB after CONTROL makes it architecturally current, which
 #  an emulator may already have.
 SWAP = {
     "x86-64": r"\bmov[a-z]*\s+%rsi,\s*%rsp\b",
-    "arm64": r"\bmov\s+sp,\s*x10\b",
+    "arm64": r"\badd\s+x29,\s*x10,\s*#(?:160|0xa0)\b",
     "rv64": r"\bmv\s+sp,\s*(?:a1|x11)\b",
     "cortex-m0": r"\b(?:msr\s+(?:msp|psp|control|MSP|PSP|CONTROL)\b|isb\b)",
 }
@@ -274,7 +276,10 @@ def check(stops: dict, arch: str) -> dict:
         require(len(steps) >= 3 and steps[:len(inside)] == inside
                 and len(inside) == len(steps) - 1,
                 f"{name}: the session did not step from {SWITCH}'s first"
-                " instruction through its return")
+                " instruction through its return; the debugger named its"
+                " stops "
+                + ", ".join(dict.fromkeys(s.frames[0] if s.frames else "??"
+                                          for s in steps)))
         require(inside[0].offset == 0,
                 f"{name}: the first stop is at {SWITCH}+{inside[0].offset}"
                 ", not at its first instruction")
@@ -328,6 +333,52 @@ def symbol_extent(listing: str, name: str = SWITCH) -> tuple[int, int]:
             low = int(fields[0], 16)
             return low, low + int(fields[1], 16)
     raise Mismatch(f"the image has no sized symbol {name}")
+
+
+#  An assembler's private label prefix in each object format.  A label so
+#  spelled is no symbol of the image unless an assembler was told to keep
+#  it (`-L`); FreeBSD's links keep none (D475).  On Mach-O, `L` is the
+#  assembler's and `l` the linker's, and every external name starts `_`.
+PRIVATE = {"elf": (".L",), "mach-o": ("L", "l")}
+#  Arm's mapping symbols mark code and data, and name nothing.
+MAPPING = re.compile(r"^\$[adtx](?:\.\S*)?$")
+
+
+def shadowing_symbols(listing: str, object_format: str = "elf") -> list[str]:
+    """What in an image's symbol table could name a routine's address
+    instead of the routine, from `nm` output with or without `-S`: any
+    other symbol at the switch or start routine's address, and any private
+    label at the address of a code symbol.  Empty when nothing does."""
+    underscore = "_" if object_format == "mach-o" else ""
+    routines = {underscore + SWITCH, underscore + START}
+    at: dict[int, list[tuple[str, str]]] = {}
+    for line in listing.splitlines():
+        fields = line.split()
+        if len(fields) not in (3, 4) or not re.fullmatch(r"[0-9a-fA-F]+", fields[0]):
+            continue
+        kind, name = fields[-2], fields[-1]
+        if MAPPING.match(name):
+            continue
+        at.setdefault(int(fields[0], 16), []).append((kind, name))
+    missing = [name for name in routines
+               if not any(name == each for names in at.values() for _, each in names)]
+    problems = [f"the image has no symbol {name}" for name in sorted(missing)]
+    private: list[str] = []
+    for address, names in sorted(at.items()):
+        spelled = [name for _, name in names]
+        for routine in sorted(routines & set(spelled)):
+            others = [name for name in spelled if name != routine]
+            if others:
+                problems.append(f"{', '.join(others)} at {routine}'s address"
+                                f" {address:#x}")
+        if any(kind in "tT" for kind, _ in names) and not routines & set(spelled):
+            private += [f"{name} at {address:#x}" for kind, name in names
+                        if kind.islower()
+                        and name.startswith(PRIVATE[object_format])]
+    if private:
+        problems.append(f"{len(private)} private labels at code addresses,"
+                        f" such as {', '.join(private[:3])}")
+    return problems
 
 
 def instruction_count(listing: str) -> int:

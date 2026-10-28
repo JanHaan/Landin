@@ -1817,6 +1817,8 @@ def measure_switch(refine: Path, tools: dict[str, str], gdb: str,
     symbols = run([tools["nm"], "-S", str(executable)])
     (retained / f"{key}.nm.txt").write_text(symbols)
     low, high = switch_frames.symbol_extent(symbols)
+    shadows = switch_frames.shadowing_symbols(symbols)
+    require(not shadows, f"{key}: " + "; ".join(shadows))
     run(guest_command(executable, runner, qemu), cwd=scratch,
         expected_status=switch_frames.STATUS, empty_output=True)
     debugger_cwd = scratch / f"debugger-cwd-{key}"

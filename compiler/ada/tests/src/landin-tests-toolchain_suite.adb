@@ -382,11 +382,13 @@ package body Landin.Tests.Toolchain_Suite is
                  (Landin.Targets.FreeBSD_X86_64, "x86-64-v3"))),
          "main.s" & LF & "-l:libsupport.a" & LF & "-l:libsupport.a" & LF
          & "-o" & LF & "main" & LF & "-Wl,--build-id=0xa1b2" & LF
-         & "-fno-integrated-as" & LF & "-Wl,--gc-sections" & LF
+         & "-Wl,--discard-locals" & LF & "-fno-integrated-as" & LF
+         & "-Wl,--gc-sections" & LF
          & "-Wa,-march=generic64+cx16+lahf_sahf+popcnt+sse3+ssse3"
          & "+sse4.1+sse4.2+avx+avx2+bmi+bmi2+f16c+fma+lzcnt+movbe"
          & "+xsave" & LF,
-         "FreeBSD x86 uses GNU as without a Linux loader level promise");
+         "FreeBSD x86 uses GNU as, discards local labels and makes"
+         & " no Linux loader level promise");
       Landin.Testing.Check_Equal
         (Item, Landin.Platform.Joined
            (Landin.Backend.Toolchain.Link_Arguments
@@ -396,9 +398,11 @@ package body Landin.Tests.Toolchain_Suite is
                  (Landin.Targets.FreeBSD_Arm64, "armv8.1-a"))),
          "main.s" & LF & "-l:libsupport.a" & LF & "-l:libsupport.a" & LF
          & "-o" & LF & "main" & LF & "-Wl,--build-id=0xa1b2" & LF
+         & "-Wl,--discard-locals" & LF
          & "-Wl,--gc-sections" & LF & "-march=armv8.1-a" & LF & "-Wa,-L"
          & LF,
-         "FreeBSD arm64 preserves public dot names and constrains Clang");
+         "FreeBSD arm64 preserves public dot names, discards local labels"
+         & " and constrains Clang");
    end File_Operands_Keep_Their_Identity;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

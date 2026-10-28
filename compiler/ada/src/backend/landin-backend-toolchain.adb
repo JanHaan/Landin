@@ -497,6 +497,17 @@ package body Landin.Backend.Toolchain is
          Landin.Platform.Add (List, "-Wl,--build-id=0x" & Build_Id);
       end if;
 
+      --  D475: FreeBSD's assembly keeps its private `.L` labels as local
+      --  symbols, for the explicit link names spelled so (`-Wa,-L` below,
+      --  and a driver's own), and its link discards every one of them, so
+      --  that none sits at a routine's address in the image a debugger
+      --  names frames from.  An explicit `.L` link name is global and kept.
+      if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+        = Landin.Targets.Capabilities.FreeBSD
+      then
+         Landin.Platform.Add (List, "-Wl,--discard-locals");
+      end if;
+
       --  The assembler refuses what the level lacks, at every level, the
       --  baseline included, so an assembly block cannot use more than the
       --  build assumed.  On Linux, above baseline the linker also marks the

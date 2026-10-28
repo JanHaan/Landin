@@ -43,6 +43,14 @@ class DarwinAssemblyTests(unittest.TestCase):
             with self.subTest(body=body), self.assertRaisesRegex(ValueError, "missing frame record"):
                 CHECK.assembly_contract(assembly("_ordinary", body))
 
+    def test_only_the_start_routine_opens_no_frame(self):
+        start = ["nop", "mov x0, x20", "blr x19", "brk #1"]
+        CHECK.assembly_contract(assembly("_landin.stack_start", start))
+        CHECK.assembly_contract(assembly("_landin.stack_switch", FRAME))
+        for name in ("_landin.stack_switch", "_landin.stack_start_", "_stack_start"):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "missing frame record"):
+                CHECK.assembly_contract(assembly(name, start))
+
     def test_reserved_register_still_refused(self):
         for register in ("w18", "x18"):
             with self.subTest(register=register), self.assertRaisesRegex(ValueError, "reserved x18"):

@@ -271,7 +271,10 @@ integrated x86 assembler does not restrict every instruction by `-march`, so
 Landin's x86 driver requests GNU as and supplies the selected feature
 whitelist. Arm64 selects the architecture in both assembly and Clang's
 `-march=` and preserves public dot-prefixed foreign symbols with `-Wa,-L`.
-FreeBSD emits no CPU-level loader-refusal contract.
+That keeps every private `.L` label as a local symbol too, so every FreeBSD
+link passes `-Wl,--discard-locals`, which drops the local ones and keeps the
+global; without it LLDB named a routine after a label at its address
+(D475). FreeBSD emits no CPU-level loader-refusal contract.
 
 [The FreeBSD lanes](../compiler/tests/freebsd/README.md) emit on Linux and
 execute in official, checksum-locked FreeBSD VMs. Each architecture has
