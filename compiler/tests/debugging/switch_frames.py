@@ -72,6 +72,15 @@ SWAP = {
     "rv64": r"\bmv\s+sp,\s*(?:a1|x11)\b",
     "cortex-m0": r"\b(?:msr\s+(?:msp|psp|control|MSP|PSP|CONTROL)\b|isb\b)",
 }
+#  The debuggers whose own unwinder misreads the switch routine's final
+#  `ret`, which that one stop is therefore not held to.  FreeBSD 14.4's base
+#  LLDB, 19.1.7, ignores CFI in frame 0 on arm64 and emulates the routine's
+#  instructions instead; its emulator loses the stack at `mov sp, x10`, so
+#  at the `ret` it still reads the return address through x29 and skips a
+#  frame.  A clang-built switch with clang's CFI fails the same way, every
+#  other instruction of ours unwinds right, and the CFI there is the
+#  standard epilogue's; the roadmap's register watches it.
+UNRELIABLE_RETURN = {"freebsd-arm64": "LLDB 19.1.7's arm64 frame-0 emulation"}
 #  How many instructions a session may step inside one switch before it
 #  says the routine never returned.
 STEP_LIMIT = 200
@@ -257,8 +266,11 @@ def recorded_stops(recorded: dict) -> dict:
 
 #  The verdict, the same for every debugger.
 
-def check(stops: dict, arch: str) -> dict:
-    """Hold one session's stops to the record; return what it showed."""
+def check(stops: dict, arch: str, target: str | None = None) -> dict:
+    """Hold one session's stops to the record; return what it showed.
+
+    On a target in UNRELIABLE_RETURN the switch routine's final stop, its
+    `ret`, is recorded and not judged; every other stop is."""
     fibre = stops["fibre"]
     expected = STOPS["fibre"] + [START]
     require(fibre.frames == expected,
@@ -289,6 +301,11 @@ def check(stops: dict, arch: str) -> dict:
                     else frames == wanted)
 
         phases = []
+        exempt = None
+        if (target in UNRELIABLE_RETURN and inside
+                and re.search(r"\bret\b", inside[-1].instruction)):
+            exempt = inside[-1]
+            inside = inside[:-1]
         for step in inside:
             above = step.frames[1:]
             where = f"{SWITCH}+{step.offset} ({step.instruction})"
@@ -322,6 +339,11 @@ def check(stops: dict, arch: str) -> dict:
                          "swap": moved.instruction,
                          "leaving": switch["leaving"],
                          "resumed": returned.frames}
+        if exempt is not None:
+            summary[name]["not judged"] = {
+                "at": f"{SWITCH}+{exempt.offset} ({exempt.instruction})",
+                "frames": exempt.frames[1:],
+                "because": UNRELIABLE_RETURN[target]}
     return summary
 
 

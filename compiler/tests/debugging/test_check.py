@@ -692,6 +692,27 @@ class SwitchFramesTests(unittest.TestCase):
         with self.assertRaisesRegex(SWITCH.Mismatch, "does not load"):
             self.check(gdb_switch(swap_at=1))
 
+    def test_a_misread_return_is_refused_where_debuggers_read_it(self) -> None:
+        #  LLDB 19.1.7 on FreeBSD arm64 at the switch's `ret`: one frame
+        #  skipped, the resumed fibre's routine where hand_over should be.
+        text = gdb_switch()
+        ret = text.index(":\tret\n")
+        end = text.index("LANDIN-SWITCH-STEP", ret)
+        skipped = [SWITCH.SWITCH] + SWITCH.SWITCHES[0]["resumed"][1:]
+        text = (text[:ret] + ":\tret\n"
+                + "".join(f"#{i}  0x0000000000401000 in {name} ()\n"
+                          for i, name in enumerate(skipped))
+                + text[end:])
+        with self.assertRaisesRegex(SWITCH.Mismatch, "ret"):
+            SWITCH.check(SWITCH.gdb_stops(text), "x86-64", "linux-x86-64")
+        shown = SWITCH.check(SWITCH.gdb_stops(text), "x86-64", "freebsd-arm64")
+        self.assertIn("not judged", shown[SWITCH.SWITCHES[0]["name"]])
+
+    def test_only_the_final_return_is_exempt(self) -> None:
+        with self.assertRaisesRegex(SWITCH.Mismatch, "does not load"):
+            SWITCH.check(SWITCH.gdb_stops(gdb_switch(swap_at=1)),
+                         "x86-64", "freebsd-arm64")
+
     def test_frames_that_never_change_are_refused(self) -> None:
         with self.assertRaisesRegex(SWITCH.Mismatch, "every instruction"):
             self.check(gdb_switch(swap_at=10))

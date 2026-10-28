@@ -419,7 +419,8 @@ class Lane:
                 label + ': the workload did not exit ' + str(switch_frames.STATUS))
         try:
             result['frames'] = switch_frames.check(switch_frames.lldb_stops(text),
-                                                   switch_frames.ARCH[self.target])
+                                                   switch_frames.ARCH[self.target],
+                                                   self.target)
         except switch_frames.Mismatch as error:
             raise ValueError(label + ': ' + str(error)) from None
         print(self.target + ': ' + label + ' backtraces through the stack switch passed', flush=True)
