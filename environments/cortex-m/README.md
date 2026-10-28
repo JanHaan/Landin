@@ -788,6 +788,33 @@ every other scenario, the helper and veneer controls and the independent
 calibration run under the observer. The fixed Cortex profile and firmware
 bytes are unchanged. Every process has a bounded timeout and failure record.
 
+Two controls at every profile serve the stack switch. `switch` builds
+`runtime/stack-switch-frames` as firmware, its `main` entered from a
+`start`, and runs the session every target runs
+(`compiler/tests/debugging/switch_frames.py`, D469): stopped in a fibre the
+backtrace ends at `landin.stack_start`, and stepping two switches an
+instruction at a time the frames above `landin.stack_switch` are the
+leaving context's until MSP, PSP or CONTROL is written and the resumed one's
+after. `capacity` measures `probes/fibre-capacity.ldn`, a taker and an
+answerer fibre admitted to a group over `core/fibre`'s round of turns, whose
+idler waits for an interrupt, exchanging six requests through a ring while
+SysTick counts ticks, their stacks cut from one fixed 4,400-byte module
+buffer (D470). `accounting()` identifies that buffer and the round's state
+in static RAM from `nm -S`, the main stack below the reset pointer and the
+whole buffer are painted at `start`, and each fibre's peak is read below its
+stack's top when the firmware returns. The control writes `capacity.json`
+and `capacity.txt` beside it and fails unless the consumer fits; the
+evidence directory's `capacity.json` and `capacity.txt` hold every
+profile's, and the gate's `cortex-m` job keeps them. At none/off it uses
+21,748 bytes of flash and 4,480 of static RAM, of which the fibre buffer is
+4,400; with the 4,096-byte main-stack reservation, painted to 1,464, that is
+8,576 bytes of reserved RAM, counted once. Each fibre's backing is 2,176
+bytes, a 32-byte record and a 2,144-byte stack, painted to 896, 932 with
+D461's exception frame; both are live at once, 4,352 bytes. The size and
+speed profiles use 19,052 to 19,080 bytes of flash and paint at most 840.
+Every profile fits the 32 KiB flash, 16 KiB RAM profile. Paint is this run's
+deepest write, not a bound.
+
 Artifacts under the `run.py` output's `evidence` directory retain sources,
 identities, commands/assertions/timeouts,
 ELF/object/assembly/linker/map/disassembly/debug records, closure and resource

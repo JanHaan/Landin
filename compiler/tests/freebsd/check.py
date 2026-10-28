@@ -19,6 +19,8 @@ sys.path.insert(0, str(ROOT / 'environments/freebsd'))
 sys.path.insert(0, str(ROOT / 'compiler/tests'))
 from vm import Guest, LOCK, boot, prepare, require, sha
 import fixture_meta
+sys.path.insert(0, str(ROOT / 'compiler/tests/debugging'))
+import switch_frames  # noqa: E402
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
 SPECIALIZED = [('none', 'all'), ('speed', 'all')]
@@ -374,10 +376,51 @@ class Lane:
                         'breakpoint delete --force', 'continue']
             (self.bundle / (label + '.lldb')).write_text('\n'.join(commands) + '\n')
             results.append({'label': label, 'lines': lines, 'executable_sha256': sha(executable)})
+        #  The stack switch's session (D469).  The guest's LLDB has
+        #  no Python, so it steps a switch by a count, the instructions of
+        #  the straight-line switch routine, counted here in the image.
+        for optimize, specialize in PROFILES:
+            label = 'switch-' + optimize + '-' + specialize
+            executable = self.bundle / label
+            self.command([self.args.refine.resolve(), '--target=' + self.target,
+                          '--toolchain=' + str(self.driver), '--debug=full', '--emit=exe',
+                          '--optimize=' + optimize, '--specialize=' + specialize,
+                          '--root=' + str(ROOT), switch_frames.FIXTURE, '-o', executable],
+                         label + '-build')
+            listing = self.command([self.args.objdump, '-d',
+                                    '--disassemble-symbols=' + switch_frames.SWITCH, executable],
+                                   label + '-switch-disassembly').decode()
+            count = switch_frames.instruction_count(listing)
+            commands = switch_frames.lldb_commands(switch_frames.fibre_line(), count)
+            (self.bundle / (label + '.lldb')).write_text('\n'.join(commands) + '\n')
+            results.append({'label': label, 'switch_instructions': count,
+                            'executable_sha256': sha(executable)})
         return results
+
+    def switch_session(self, guest, result):
+        """The backtrace through a stack switch (D469), held by switch_frames.py."""
+        label = result['label']
+        completed = guest.run('cd ' + shlex.quote(str(self.source_root)) + '; lldb --batch -s '
+                              + shlex.quote(str(self.remote_bundle / (label + '.lldb'))) + ' '
+                              + shlex.quote(str(self.remote_bundle / label)), timeout=300)
+        text = (completed.stdout + completed.stderr).decode(errors='replace')
+        (self.output / (label + '-session.log')).write_text(text)
+        require(completed.returncode == 0, label + ': LLDB failed\n' + text[-4000:])
+        require(re.search(r'exited with status = ' + str(switch_frames.STATUS) + r'\b', text),
+                label + ': the workload did not exit ' + str(switch_frames.STATUS))
+        try:
+            result['frames'] = switch_frames.check(switch_frames.lldb_stops(text),
+                                                   switch_frames.ARCH[self.target])
+        except switch_frames.Mismatch as error:
+            raise ValueError(label + ': ' + str(error)) from None
+        print(self.target + ': ' + label + ' backtraces through the stack switch passed', flush=True)
+        result['status'] = 'passed'
 
     def debugger(self, guest, results):
         for result in results:
+            if 'switch_instructions' in result:
+                self.switch_session(guest, result)
+                continue
             label, lines = result['label'], result['lines']
             completed = guest.run('cd ' + shlex.quote(str(self.source_root)) + '; lldb --batch -s '
                                   + shlex.quote(str(self.remote_bundle / (label + '.lldb'))) + ' '
@@ -460,8 +503,9 @@ def load_prepared(args):
     if manifest['scope'] == 'complete':
         if args.kind == 'debugger':
             require({r['label'] for r in manifest['results']} ==
-                    {'debug-' + o + '-' + s for o, s in PROFILES}
-                    and len(manifest['results']) == len(PROFILES), 'prepared debugger profiles incomplete')
+                    {kind + '-' + o + '-' + s for o, s in PROFILES for kind in ('debug', 'switch')}
+                    and len(manifest['results']) == 2 * len(PROFILES),
+                    'prepared debugger profiles incomplete')
         else:
             expected = {(str(p.relative_to(ROOT / 'compiler/tests/fixtures')), o, s, level)
                         for p, _, o, s, level in work_items(args)}

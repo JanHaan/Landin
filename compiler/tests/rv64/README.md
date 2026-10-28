@@ -60,6 +60,9 @@ caller at its call source line, and the caller's result value at a subsequent
 source stop, followed by the expected final exit status. The shared DWARF
 describes Landin's native result carriers through source locals; it does not
 declare a C return type that makes GDB's `finish` print a return value.
+The debugger kind also runs the stack switch's session (D469) at the
+same four profiles: `runtime/stack-switch-frames`, stopped in a fibre and
+stepped through two switches, held by `compiler/tests/debugging/switch_frames.py`.
 
 For local cross-emission on a supported Linux compiler host:
 
@@ -74,3 +77,19 @@ Linux, then select `--prepared=/tmp/rv64-payload --output=/tmp/rv64-evidence`
 and the same `--kind`. The other kinds are `debugger`, `abi` and `isa`.
 `--case=NAME` is an exact development filter. This evidence is the recurring
 gate's safety net, not revision acceptance.
+
+The debugger kind's prepared payload also runs under QEMU's user-mode GDB
+stub on another Linux host, with `--qemu=qemu-riscv64` and a multi-target
+GDB, which `nix develop` provides:
+
+```sh
+QEMU_CPU=max python3 compiler/tests/rv64/check.py --kind=debugger \
+    --prepared=/tmp/rv64-payload --output=/tmp/rv64-debugger \
+    --qemu=qemu-riscv64 --gdb=gdb-multiarch
+```
+
+That is evidence about the emitted code and GDB's reading of it, and none
+about RV64 hardware; the summary names the emulator in place of the
+hardware identity. The gate's first `rv64-qemu` shard runs it, so the RV64
+GDB sessions, the stack switch's among them, have a lane while the physical
+jobs are suspended.

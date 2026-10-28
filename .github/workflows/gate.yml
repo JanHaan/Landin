@@ -585,6 +585,21 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/cortex-m-evidence"
 
+      #  D470's retained-profile measurement: the stack-switch consumer's
+      #  flash, static RAM with its fibre backing, main-stack reservation,
+      #  each fibre's backing and painted peak, and the fit verdict, at
+      #  every profile.
+      - name: Keep the stack-switch consumer's capacity report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cortex-m-fibre-capacity
+          path: |
+            ${{ runner.temp }}/cortex-m-evidence/evidence/capacity.json
+            ${{ runner.temp }}/cortex-m-evidence/evidence/capacity.txt
+          if-no-files-found: ignore
+          retention-days: 90
+
       #  If a failed job produced Cortex-M output, upload its logs to help
       #  explain what the emulator or debugger said.
       - name: Keep the evidence of a failed lane
@@ -1287,7 +1302,8 @@ jobs:
           nix build --out-link "$RUNNER_TEMP/qemu-user" .#qemu-user
           echo "$RUNNER_TEMP/qemu-user/bin" >> "$GITHUB_PATH"
           ./scripts/ci_packages.sh \
-            gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu libc6-dev-riscv64-cross
+            gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu libc6-dev-riscv64-cross \
+            gdb-multiarch
           . ./environments/pins.sh
           version=$("$RUNNER_TEMP/qemu-user/bin/qemu-riscv64" --version | sed -n '1p')
           echo "$version"
@@ -1308,6 +1324,20 @@ jobs:
           LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1
           ./scripts/test.sh --target=linux-rv64 --runner=qemu-riscv64
           --shard=${{ matrix.shard }}/2
+
+      #  The RV64 GDB sessions, the stack switch's backtraces among them
+      #  (D469), through the same emulator's GDB stub rather than on the
+      #  suspended physical runners; once, on the first shard.
+      - name: The RV64 GDB sessions under QEMU's GDB stub
+        if: matrix.shard == 1
+        run: |
+          python3 compiler/tests/rv64/check.py --prepare-only --kind=debugger \
+            --refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --output="$RUNNER_TEMP/rv64-debugger-payload"
+          QEMU_CPU=max,xtheadba=true python3 compiler/tests/rv64/check.py \
+            --kind=debugger --prepared="$RUNNER_TEMP/rv64-debugger-payload" \
+            --output="$RUNNER_TEMP/rv64-debugger" \
+            --qemu=qemu-riscv64 --gdb=gdb-multiarch
 
   # Checked Linux compiler cross-emits; RISE runs the transferred payloads on
   # physical RV64. ISA execution probes hardware before extended code runs.

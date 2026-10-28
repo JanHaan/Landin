@@ -110,6 +110,41 @@ class RV64Controls(unittest.TestCase):
                 LANE.debugger(args, {'source_root': str(ROOT), 'results': [result]})
             self.assertEqual(result['status'], 'passed')
 
+    def switch_trace(self, swap='mv\tsp,a1'):
+        """A GDB transcript of the stack switch's session on RV64."""
+        frames = LANE.switch_frames
+        def bt(names):
+            return ''.join('#%d  0x10000 in %s ()\n' % (i, n) for i, n in enumerate(names))
+        lines = ['LANDIN-SWITCH-BEGIN fibre', bt(frames.STOPS['fibre'] + [frames.START]),
+                 'LANDIN-SWITCH-END fibre']
+        for each in frames.SWITCHES:
+            lines.append('LANDIN-SWITCH-BEGIN ' + each['name'])
+            for offset, text in enumerate(['addi\tsp,sp,-208', 'sd\tsp,0(a0)', swap,
+                                           'addi\tsp,sp,208', 'ret']):
+                above = each['leaving'] if offset <= 2 else each['resumed']
+                lines += ['LANDIN-SWITCH-STEP', '=> 0x%x <%s+%d>:\t%s'
+                          % (0x10000 + 4 * offset, frames.SWITCH, 4 * offset, text),
+                          bt([frames.SWITCH] + above)]
+            lines += ['LANDIN-SWITCH-STEP', '=> 0x20000 <hand_over+8>:\tli\ta0,0',
+                      bt(each['resumed']), 'LANDIN-SWITCH-END ' + each['name']]
+        return '\n'.join(lines) + '\nLANDIN-SWITCH-EXIT 42\n'
+
+    def run_switch_trace(self, trace):
+        with tempfile.TemporaryDirectory() as tmp:
+            args = SimpleNamespace(output=Path(tmp), gdb='gdb')
+            result = {'label': 'switch-control', 'switch': [0x10000, 0x10014]}
+            completed = SimpleNamespace(returncode=0, stdout=trace.encode(), stderr=b'')
+            with patch.object(LANE.subprocess, 'run', return_value=completed):
+                LANE.debugger(args, {'source_root': str(ROOT), 'results': [result]})
+            return result
+
+    def test_the_switch_session_holds_the_frames_through_a_switch(self):
+        result = self.run_switch_trace(self.switch_trace())
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(result['frames']['second-to-first']['turn'], 3)
+        with self.assertRaisesRegex(ValueError, 'does not load'):
+            self.run_switch_trace(self.switch_trace(swap='ld\tra,0(sp)'))
+
     def test_native_unwind_trace_does_not_require_a_c_return_type(self):
         self.assertNotIn('Value returned is', GDB_TRACE)
         self.run_debugger_trace(GDB_TRACE)

@@ -2117,12 +2117,16 @@ package body Landin.Backend.Arm64 is
       --  identities receive the object format's prefix at the rendering
       --  seam: none on ELF, where an explicit spelling may begin with `.L`,
       --  and Darwin's underscore on Mach-O, where none can begin with `L`.
-      function Unused_Local_Prefix return String;
+      function Unused_Local_Prefix
+        (Seed : String := Platform.Local_Prefix_Seed (Format))
+        return String;
 
-      function Unused_Local_Prefix return String is
+      function Unused_Local_Prefix
+        (Seed : String := Platform.Local_Prefix_Seed (Format))
+        return String
+      is
          Candidate : Unbounded.Unbounded_String :=
-           Unbounded.To_Unbounded_String
-             (Platform.Local_Prefix_Seed (Format));
+           Unbounded.To_Unbounded_String (Seed);
          Collides : Boolean;
       begin
          loop
@@ -2172,15 +2176,26 @@ package body Landin.Backend.Arm64 is
       Reporter : constant String := Private_Prefix & "landin_trap_report";
 
       --  D450: a program that prepares or switches a stack carries one
-      --  switch routine and one start routine, emitted after its bodies
-      --  under linker-private names as the reporter is; the comment at
-      --  their emission says what each does.  A prepared stack's first
-      --  frame, and every switched stack's saved one, is Stack_Frame bytes:
-      --  x29 and x30, x19-x28, then d8-d15.
+      --  switch routine and one start routine, emitted after its bodies;
+      --  the comment at their emission says what each does.  Both are
+      --  local function symbols, `landin.stack_switch` and
+      --  `landin.stack_start` with the object format's prefix (D469), so
+      --  that a debugger names them in a backtrace: a linker-private `l`
+      --  name is gone from a linked Mach-O image, and an ELF `.L` label
+      --  was never in one.  Each still starts an atom of its own on
+      --  Mach-O.  No Landin routine is spelled with the dot, and an
+      --  explicit link name that starts so moves the prefix as it moves a
+      --  local label's.  A prepared stack's first frame, and every
+      --  switched stack's saved one, is Stack_Frame bytes: x29 and x30,
+      --  x19-x28, then d8-d15.
       Stack_Used : Boolean := False;
+      Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
       Stack_Switcher : constant String :=
-        Private_Prefix & "landin_stack_switch";
-      Stack_Start : constant String := Private_Prefix & "landin_stack_start";
+        Landin.Targets.Capabilities.Link_Symbol
+          (Facts, Routine_Prefix & "stack_switch");
+      Stack_Start : constant String :=
+        Landin.Targets.Capabilities.Link_Symbol
+          (Facts, Routine_Prefix & "stack_start");
       Stack_Frame : constant := 160;
       --  A linker-private `l` name on Mach-O, as Apple's compilers give a
       --  string literal, so the link sees each line as an atom of its own.

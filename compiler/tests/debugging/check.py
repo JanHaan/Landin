@@ -1792,6 +1792,69 @@ def measure_registers(refine: Path, tools: dict[str, str], gdb: str,
     }
 
 
+def measure_switch(refine: Path, tools: dict[str, str], gdb: str,
+                   runner: str, qemu: str | None, retained: Path,
+                   scratch: Path, profile: tuple[str, str, str]) -> dict:
+    """The stack switch's session (D447, D469): a backtrace in a
+    fibre ends at the start routine, and stepping each instruction of two
+    switches shows the leaving context's frames until the stack pointer
+    moves and the resumed one's after.  switch_frames.py says what is
+    held; this lane runs it under its own transport."""
+    import switch_frames
+    key, optimize, specialize = profile
+    key = "switch-" + key
+    executable = scratch / f"debug-{key}"
+    toolchain = ([f"--toolchain={tools['gcc']}"]
+                 if tools.get("gcc") else [])
+    compiler_args = [str(refine), "--target=" + LANE["target"],
+                     "--debug=full", os.path.relpath(switch_frames.FIXTURE, ROOT),
+                     "--root=.", "--emit=exe", "-o", str(executable),
+                     f"--optimize={optimize}", f"--specialize={specialize}",
+                     *toolchain]
+    run(compiler_args, cwd=ROOT)
+    require(executable.is_file(), f"compiler did not create {executable.name}")
+    shutil.copy2(executable, retained / f"{key}.elf")
+    symbols = run([tools["nm"], "-S", str(executable)])
+    (retained / f"{key}.nm.txt").write_text(symbols)
+    low, high = switch_frames.symbol_extent(symbols)
+    run(guest_command(executable, runner, qemu), cwd=scratch,
+        expected_status=switch_frames.STATUS, empty_output=True)
+    debugger_cwd = scratch / f"debugger-cwd-{key}"
+    debugger_cwd.mkdir()
+    script_path = retained / f"{key}.gdb"
+    transcript_path = retained / f"{key}.gdb.txt"
+    location = f"{switch_frames.SOURCE.name}:{switch_frames.fibre_line()}"
+    with tempfile.TemporaryDirectory(prefix="landin-gdb-") as tmp:
+        transcript = run_gdb(gdb, executable, script_path, transcript_path,
+                             debugger_cwd, runner, qemu, Path(tmp),
+                             lambda start: "\n".join([
+                                 *switch_frames.gdb_commands(
+                                     location, low, high, start),
+                                 "continue",
+                                 'printf "LANDIN-SWITCH-EXIT %d\\n", $_exitcode',
+                                 ""]))
+    require(f"LANDIN-SWITCH-EXIT {switch_frames.STATUS}\n" in transcript,
+            f"{key}: the workload did not exit {switch_frames.STATUS}"
+            " under the debugger")
+    try:
+        shown = switch_frames.check(switch_frames.gdb_stops(transcript),
+                                    switch_frames.ARCH[LANE["target"]])
+    except switch_frames.Mismatch as error:
+        raise ValueError(f"{key}: {error}; see {transcript_path}") from None
+    print(f"stack switch debugger: {LANE['target']}/{profile[0]} passed",
+          flush=True)
+    return {
+        "profile": {"optimize": optimize, "specialize": specialize},
+        "compiler_request": compiler_args[1:],
+        "executable_sha256": hashlib.sha256(
+            executable.read_bytes()).hexdigest(),
+        "switch_routine": [low, high],
+        "frames": shown,
+        "gdb_script": script_path.read_text(),
+        "gdb_transcript": transcript,
+    }
+
+
 def measure_workloads(measurement: Callable[[str, tuple[str, str, str]], dict],
                       selected: str | None = None) -> dict[str, dict]:
     require(selected is None or selected in WORKLOADS, "unknown debugger workload")
@@ -1821,7 +1884,7 @@ def main() -> None:
     parser.add_argument("--driver", metavar="DRIVER",
                         help="the C driver that links a cross target's"
                              " executables; default the toolchain's own")
-    parser.add_argument("--workload", choices=WORKLOADS,
+    parser.add_argument("--workload", choices=(*WORKLOADS, "switch"),
                         help="exact developer workload; FILTERED, not acceptance")
     args = parser.parse_args()
     global LANE
@@ -1845,7 +1908,8 @@ def main() -> None:
                 " no skip is a pass")
     refine = args.refine.resolve(strict=True)
     home = args.toolchain.resolve(strict=True)
-    tools = {name: tool(home, name, cross) for name in ("readelf", "strip")}
+    tools = {name: tool(home, name, cross)
+             for name in ("readelf", "strip", "nm")}
     if args.driver:
         tools["gcc"] = command(args.driver)
     #  The pinned GNAT's GDB is first on PATH and reads only its own
@@ -1887,6 +1951,12 @@ def main() -> None:
                     measurements[profile[0]] = measure(
                         refine, tools, gdb, runner, qemu,
                         args.output, scratch, profile)
+            switch_measurements = {}
+            if args.workload in (None, "switch"):
+                for profile in WORKLOAD_PROFILES:
+                    switch_measurements[profile[0]] = measure_switch(
+                        refine, tools, gdb, runner, qemu, args.output,
+                        scratch, profile)
             panic_evidence = None
             if args.workload is None and runner == "native":
                 import panic
@@ -1897,7 +1967,8 @@ def main() -> None:
                 lambda name, profile: measure(
                     refine, tools, gdb, runner, qemu, args.output, scratch, profile,
                     containers=name == "containers", hosted=name == "hosted",
-                    parser_workload=name == "parser"), args.workload)
+                    parser_workload=name == "parser"),
+                args.workload) if args.workload != "switch" else {}
     except Exception as error:
         failure_path.write_text(f"{type(error).__name__}: {error}\n")
         raise
@@ -1914,6 +1985,7 @@ def main() -> None:
         "measurements": measurements,
         "register_measurements": register_measurements,
         "panic": panic_evidence,
+        "switch_measurements": switch_measurements,
         "parser_measurements": workloads.get("parser", {}),
         "container_measurements": workloads.get("containers", {}),
         "hosted_measurements": workloads.get("hosted", {}),

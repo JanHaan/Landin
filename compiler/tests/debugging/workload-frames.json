@@ -108,5 +108,34 @@
       "main": "compiler/tests/fixtures/runtime/derived-hosted-memory/main.ldn",
       "text_emit": "examples/derived_hosted/app/dest.ldn"
     }
+  },
+  "switch": {
+    "stops": {
+      "fibre": [
+        "deepest",
+        "second_fibre"
+      ],
+      "second-switching": [
+        "hand_over",
+        "second_fibre"
+      ],
+      "first-switching": [
+        "hand_over",
+        "first_fibre"
+      ],
+      "main-switching": [
+        "hand_over",
+        "main"
+      ]
+    },
+    "switch": "landin.stack_switch",
+    "start": "landin.stack_start",
+    "declared": {
+      "deepest": "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",
+      "second_fibre": "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",
+      "hand_over": "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",
+      "first_fibre": "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",
+      "main": "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn"
+    }
   }
 }

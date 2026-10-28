@@ -43,7 +43,13 @@ linkage with Landin assembly. Required sets cover scalar and floating values,
 exhaustion. LLDB runs natively inside each VM at four profiles and checks source
 stops, nested frames, callee and caller locals, step-out unwinding and final
 status. The FreeBSD startup objects contribute debug ranges before Landin's
-object, exercising section-relocated lexical ranges.
+object, exercising section-relocated lexical ranges. At the same profiles it
+runs the stack switch's session (D469), `runtime/stack-switch-frames`
+stopped in a fibre and stepped through two switches: the guest's LLDB has no
+Python, so its commands step a switch by the count of the switch routine's
+instructions, which emission reads from the image with the LLVM object
+tools, and `compiler/tests/debugging/switch_frames.py` holds the
+transcript.
 
 For a complete local lane, install Clang 19, LLD, LLVM object tools, GNU as,
 QEMU system emulators, arm64 UEFI firmware, the iPXE ROMs QEMU's virtio network

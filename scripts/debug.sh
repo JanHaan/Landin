@@ -19,8 +19,9 @@ for Argument do
             echo "landin: debug.sh has no linux-rv64 lane; RV64 GDB runs on a" >&2
             echo "landin: physical RISC-V Linux machine, through" >&2
             echo "landin:   compiler/tests/rv64/check.py --kind=debugger --prepare-only --refine=REFINE --output=DIR" >&2
-            echo "landin: here, then --kind=debugger --prepared=DIR --output=DIR2 on that machine" >&2
-            echo "landin: (compiler/tests/rv64/README.md); its gate lanes are suspended" >&2
+            echo "landin: here, then --kind=debugger --prepared=DIR --output=DIR2 on that machine," >&2
+            echo "landin: or on this host with --qemu=qemu-riscv64 --gdb=gdb-multiarch added, which" >&2
+            echo "landin: the gate's first rv64-qemu shard runs (compiler/tests/rv64/README.md)" >&2
             exit 2 ;;
         --target=freebsd-x86-64 | --target=freebsd-arm64)
             echo "landin: debug.sh has no FreeBSD lane; FreeBSD's LLDB sessions run in its VM," >&2

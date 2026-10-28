@@ -35,6 +35,7 @@ WORKLOADS = {
     "parser": "compiler/tests/fixtures/runtime/derived-parser",
     "containers": "compiler/tests/fixtures/runtime/derived-containers",
     "hosted": "compiler/tests/fixtures/runtime/derived-hosted-memory",
+    "switch": "compiler/tests/fixtures/runtime/stack-switch-frames",
 }
 
 
@@ -51,8 +52,20 @@ def closure(refine: Path, workload: str, scratch: Path) -> list[str]:
         raise SystemExit(f"the {workload} workload did not compile:\n"
                          + completed.stdout)
     sources = json.loads(report.read_text())["sources"]
-    return sorted(os.path.normpath(os.fsdecode(bytes.fromhex(entry["path_hex"])))
+    return sorted(repository_path(os.fsdecode(bytes.fromhex(entry["path_hex"])))
                   for entry in sources)
+
+
+def repository_path(path: str) -> str:
+    """A reported source from the repository root.  A module the program
+    imports through its root is named as the root spells it; one the
+    compiler adds itself, the hosted entry's platform module in a program
+    that imports nothing, is found in the library, which a build names
+    absolutely."""
+    path = os.path.normpath(path)
+    if os.path.isabs(path) and Path(path).is_relative_to(ROOT):
+        return str(Path(path).relative_to(ROOT))
+    return path
 
 
 def main() -> int:

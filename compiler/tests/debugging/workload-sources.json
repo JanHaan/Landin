@@ -183,5 +183,10 @@
     "platform/posix/sockets.ldn",
     "platform/posix/terminals.ldn",
     "platform/posix/time.ldn"
+  ],
+  "switch": [
+    "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",
+    "platform/linux/linux.ldn",
+    "platform/linux/wrapped.ldn"
   ]
 }
