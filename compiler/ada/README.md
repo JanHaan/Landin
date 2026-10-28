@@ -232,6 +232,7 @@ different responsibilities.
 | `Landin.Server.Navigation` | what is at a byte of a checked module: the name it is in, where that is declared, its type as the checker spells one, its written header and its doc comment [2000] | answer where the stages decided nothing, or inside a held body |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
 | `Landin.Build_Reports.Firmware` | post-link Cortex ELF load extents and selected libgcc members for build evidence | infer bytes from instruction counts or include toolchain paths in the report |
+| `Landin.Build_Reports.Stacks` | D447's depth report: each emitted routine's backend frame, the deepest stack its call graph closes, and where that graph is opened, rendered from the compilation and the backends' routine statistics | read the host, guess an opening's cost or size a backing |
 | `Landin.Source_Digests` | per-emission memoization of immutable source snapshot hashes shared by maps and reports | retain digests beyond one emission or read source files from the host |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |
@@ -419,6 +420,29 @@ assembled bytes. `scripts/quality.sh` obtains those from pinned Linux object
 tools. Complete mandatory runtime profiles and quantitative acceptance are
 recorded in `compiler/tests/README.md`, not inferred from the existence of
 these packages.
+
+`--stack-report=PATH` is D447's depth report (D467, D468), written after
+emitted assembly or a linked executable and refused without one. Each
+backend records, in the same `Routine_Statistics`, a routine's
+`Stack_Bytes`: how far its code takes the stack pointer below its caller's,
+the return address, frame record, frame and largest call or push area
+included, and whether a failed check calls out, a runtime helper is called
+or the routine is naked. `Landin.Backend.Dispatch.Stack_Facts_Of` holds
+what the code outside the program's routines takes: the switch routine's
+frame on the leaving stack, the first frame `compiler.stack_prepare` lays,
+where the entry starts below a prepared top, and D361's report.
+`Landin.Build_Reports.Stacks` reads the call graph from the unit the
+backend was given, closes it where a call names its routine, and renders
+`landin-stack-report-1`: the target, level and controls, `switch_bytes`,
+`prepared_bytes`, `entry_bytes`, a `trap` object, `openings` (`kind`,
+`routine`, `file`, `line`, `column`, `callee` when one is named) and one
+`routines` row per emitted routine with `frame_bytes`, `depth_bytes`,
+`closed`, `address_taken`, `switches`, `traps`, the deepest `path` and the
+`openings` it reaches. Files are named relative to their module's root, as
+D361's report names them, so the bytes do not depend on where the program
+was read or written. The report is frames and depths; sizing a fibre's
+backing from them, alignment of the top and D461's exception frame
+included, is its reader's arithmetic.
 
 `--debug=full` requests Linux or Darwin source-debugger metadata; `--debug=none` is the
 default. This control is independent of `--build-mode`, `--optimize` and

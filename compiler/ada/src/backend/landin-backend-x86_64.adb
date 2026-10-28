@@ -1530,6 +1530,11 @@ package body Landin.Backend.X86_64 is
 
          --  Each failed check's trap, laid out after the body.
          Traps : Trap_Vectors.Vector;
+         --  D467: the largest area the body reserves or pushes below its
+         --  frame, and whether a failed check calls out on this stack.
+         Deepest_Area : Landin.Targets.Byte_Count := 0;
+         Calls_Panic : Boolean := False;
+         Pushed_Arguments : Landin.Targets.Byte_Count := 0;
 
          function Size_Of_Value
            (Value : Landin.IR.Value_Id) return Held_Size
@@ -2730,6 +2735,10 @@ package body Landin.Backend.X86_64 is
             then
                Emit ("orq $0, (%rsp)");
             end if;
+            if Identity /= "frame" then
+               Deepest_Area :=
+                 Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
+            end if;
             if Bytes = 0 then
                return;
             elsif Pages = 0 then
@@ -2825,6 +2834,7 @@ package body Landin.Backend.X86_64 is
                  (Landin.Panics.Site (Panic.all, Landin.IR.Origin_Of
                    (Of_Unit, Item, Value), Reason))) & ", %esi");
                Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+               Calls_Panic := True;
             elsif Panic /= null and then Landin.Panics.Reports_Default
               (Panic.all)
             then
@@ -2841,6 +2851,7 @@ package body Landin.Backend.X86_64 is
                   Emit ("movl $" & Trimmed (Natural'Image (Line'Length))
                         & ", %esi");
                   Emit ("call " & Reporter);
+                  Calls_Panic := True;
                end;
             end if;
             Emit ("ud2");
@@ -4192,6 +4203,9 @@ package body Landin.Backend.X86_64 is
                            if Options.Optimize = Landin.Optimization.Size
                            then
                               Float_Decode_Used (From) := True;
+                              --  The helper is a leaf: its return address.
+                              Deepest_Area := Landin.Targets.Byte_Count'Max
+                                (Deepest_Area, 8);
                               Emit ("call " & Float_Decode_Label (From));
                               Emit ("jc " & Trap);
                            else
@@ -7012,7 +7026,8 @@ package body Landin.Backend.X86_64 is
                Emit (".cfi_endproc");
             end if;
             Capturing := Landin.IR.No_Item;
-            Statistics (Positive (Item)) := (Item => Item, others => <>);
+            Statistics (Positive (Item)) :=
+              (Item => Item, Naked => True, others => <>);
             Put (Character'Val (9) & ELF.Size_To_Here (Symbol (Item)));
             return;
          end if;
@@ -7120,6 +7135,9 @@ package body Landin.Backend.X86_64 is
                   if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
                     or else Landin.IR.Is_Array (Of_Unit, Item, Slot)
                   then
+                     Pushed_Arguments := Pushed_Arguments + 8;
+                     Deepest_Area := Landin.Targets.Byte_Count'Max
+                       (Deepest_Area, Pushed_Arguments);
                      if Index <= Register_Arguments then
                         Emit
                           ("pushq "
@@ -7362,6 +7380,8 @@ package body Landin.Backend.X86_64 is
             Counts.Register_Count := Allocation.Save_Count (Allocation_Plan)
               + Allocation.SSE_Count (Allocation_Plan);
             Counts.Spill_Count := Allocation_Plan.Spill_Homes;
+            Counts.Stack_Bytes := 16 + Extent (Layout) + Deepest_Area;
+            Counts.Calls_Panic := Calls_Panic;
          end;
          Put (Character'Val (9) & ELF.Size_To_Here (Symbol (Item)));
       end Emit_Routine;

@@ -1299,6 +1299,8 @@ package body Landin.Backend.RiscV is
          package Edge_Vectors is new Ada.Containers.Vectors
            (Positive, Panic_Edge);
          Edges : Edge_Vectors.Vector;
+         --  D467: the largest area the body reserves below its frame.
+         Deepest_Area : Landin.Targets.Byte_Count := 0;
 
          function Trap (Reason : Landin.Panics.Kind) return String;
          function Trap return String;
@@ -2143,6 +2145,8 @@ package body Landin.Backend.RiscV is
             end loop;
             Bytes := Stack_Align (Bytes, 16, 16#7fff_ffff#);
             Reserve (Bytes);
+            Deepest_Area :=
+              Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
             for Index in Plan.Arguments'Range loop
                declare
                   Place : RiscV_ABI.Location renames Plan.Arguments (Index);
@@ -3431,6 +3435,8 @@ package body Landin.Backend.RiscV is
                         return;
                      end if;
                      Reserve (Bytes);
+                     Deepest_Area :=
+                       Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
                      for Index in 1 .. Count loop
                         if Index <= 8 then
                            Load_Value (Operand (Index + Offset), "x"
@@ -3607,7 +3613,7 @@ package body Landin.Backend.RiscV is
             Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
             Landin.Build_Reports.Append (Report,
               Landin.Build_Reports.Routine_Statistics'
-                (Item => Item, others => <>));
+                (Item => Item, Naked => True, others => <>));
             return;
          end if;
          Emit ("addi sp, sp, -16");
@@ -3832,7 +3838,9 @@ package body Landin.Backend.RiscV is
               Spill_Bytes => Spill_Bytes (Layout),
               Save_Bytes => Save_Bytes (Layout),
               Register_Count => Save_Count (Plan.Saves),
-              Spill_Count => Plan.Homes, others => <>));
+              Spill_Count => Plan.Homes,
+              Stack_Bytes => 16 + Extent (Layout) + Deepest_Area,
+              Calls_Panic => not Edges.Is_Empty, others => <>));
       end Emit_Routine;
 
       --  The value a datum's block describes.  [1460] says nothing runs

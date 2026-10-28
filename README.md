@@ -377,7 +377,11 @@ This is the maintained inventory of what the compiler does today:
   Cortex-M0, where a prepared stack runs on the process stack pointer and
   an interrupt in a fibre runs its handler on the main one (D460, D461). A
   stack past its limit traps D451's fifth panic kind, `stack_exhausted`;
-  synthetic-32 refuses both.
+  synthetic-32 refuses both. `--stack-report=PATH` writes, for every
+  emitted routine on each of those targets, its frame and the deepest stack
+  of the call graph it can close, and names each `any`, generic,
+  function-value or foreign call, recursion, runtime helper and
+  stack-moving assembly that opens it (D447, D467, D468).
   `compiler/tests/constructs.matrix` records every normative construct's
   state, targets and evidence, and `check.py` refuses a stale or unexplained
   row.

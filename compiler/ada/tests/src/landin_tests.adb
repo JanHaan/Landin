@@ -48,6 +48,7 @@ with Landin.Tests.Platform_Suite;
 with Landin.Tests.Resolution_Suite;
 with Landin.Tests.Server_Suite;
 with Landin.Tests.Source_Suite;
+with Landin.Tests.Stack_Report_Suite;
 with Landin.Tests.Stages_Suite;
 with Landin.Tests.Targets_Suite;
 with Landin.Tests.Cortex_Suite;
@@ -122,6 +123,7 @@ procedure Landin_Tests is
       "resolution       ",
       "server           ",
       "source           ",
+      "stack report     ",
       "stages           ",
       "targets          ",
       "cortex ABI       ",
@@ -539,6 +541,7 @@ begin
    Landin.Tests.Resolution_Suite.Register (Cases);
    Landin.Tests.Server_Suite.Register (Cases);
    Landin.Tests.Source_Suite.Register (Cases);
+   Landin.Tests.Stack_Report_Suite.Register (Cases);
    Landin.Tests.Stages_Suite.Register (Cases);
    Landin.Tests.Targets_Suite.Register (Cases);
    Landin.Tests.Cortex_Suite.Register (Cases);

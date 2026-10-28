@@ -26,6 +26,13 @@ package Landin.Panics is
       Into : out Plan;
       Problem : out Ada.Strings.Unbounded.Unbounded_String);
 
+   --  A source file named by its path relative to its module's root, as
+   --  D361's report names it: `core/vec/vec.ldn` for a library module's,
+   --  `main.ldn` for the entry module's, whatever path it was read from.
+   function Displayed_Name
+     (Context : in out Landin.Stages.Compilation;
+      Source  : Landin.Source.Source_Id) return String;
+
    function Handler (Of_Plan : Plan) return Landin.IR.Item_Id;
    function Code (Of_Plan : Plan; Reason : Kind) return Positive;
    function For_Value
