@@ -220,7 +220,7 @@ buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
 [`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
 
-**Current roadmap work: R14.30 — A second Io.**
+**Next roadmap item: R14.40 — Threads and the atomic wrapper (planned).**
 
 ## Questions, bugs and ideas
 

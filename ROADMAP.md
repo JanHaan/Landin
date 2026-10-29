@@ -2584,7 +2584,7 @@ missing answer, overlap, trap or timeout fails the run.
 
 ### R14.30 — A second Io
 
-Status: active
+Status: complete
 Depends on: R14.20, R13.33
 
 An event-driven Io that runs fibres over epoll on Linux and kqueue on
@@ -2605,6 +2605,26 @@ event mechanism (D479).
 
 Exit evidence: prototype 5's derived server running on the hosted targets over
 both implementations of Io, unchanged.
+
+Done: `hosted/system` keeps the services that do not wait, and two
+providers wait over it: `hosted/blocking`, which blocks the thread, and
+`hosted/events`, which runs fibres on a round whose wait is the system's
+event mechanism, epoll and a signalfd on Linux and kqueue on Darwin and
+FreeBSD, through `platform/linux`'s new wrappers and `platform/kqueue`
+(D476-D481). A wait is submitted on the waiting fibre's own stack and
+answered by the loop, so a completion interface can implement the same Io
+(D485-D488). Signals are events of `core/io/signal`, which only a provider
+of turns supplies (D477, D482); a child's pipes and end wait in the
+providers (D479), and a closed or shut descriptor wakes its waiters with a
+failure. The fake network takes turns and waits for a fake clock's sleepers
+(D483, D493), an `any C` is a provider of C (D492), and lowering keeps only
+the evidence entries a program selects (D484). Prototype 5's derived server,
+`examples/derived_server`, runs from one source as a process of its own
+over both providers on every hosted target: one request at a time and
+ended by SIGTERM over `hosted/blocking`, two in flight and stopped cleanly
+by its signal waiter over `hosted/events` (D489, D490). Off Linux a trap
+report writes on a stack of its own, since lazy binding overran a fibre's
+(D491).
 
 ### R14.40 — Threads and the atomic wrapper
 
