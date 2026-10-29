@@ -157,8 +157,9 @@ launch: type (state_type: type) = struct
 end launch
 
 --  Run the task; the first failure of the group's tasks takes the claim,
---  and only it writes the ledger.  The rest of the ledger is read only
---  after `join` has waited for every thread, whose end orders the write.
+--  and only it writes the failure, beside the count `admit` writes, whose
+--  bytes it never touches.  The failure is read only after `join` has
+--  waited for every thread, whose end orders the write.
 launch_run: (state_type: type, self: ptr mut launch(state_type)) -> none =
     self.val.work(self.val.state) else (problem)
         kept: ptr mut ledger = ptr(self.val.kept)
@@ -166,8 +167,8 @@ launch_run: (state_type: type, self: ptr mut launch(state_type)) -> none =
             addr kept.val.claimed, u32(0), u32(1), compiler.acq_rel,
             compiler.acquire)
         if seen == 0 then
-            kept.val = (claimed: 1, failed: true, problem: problem,
-                        admitted: kept.val.admitted)
+            kept.val.problem = problem
+            kept.val.failed = true
         end if
     end
 end launch_run
@@ -249,8 +250,8 @@ end note_start
 --- thread whose task has ended, or else the one that started first;
 --- copy `state` onto the top of that stack's own part, as a call passes
 --- an argument; prepare the stack; and start a thread whose first frame
---- calls `work` with the copy. The thread begins with every signal
---- blocked. Because each task's state lives on its own stack, one group
+--- calls `work` with the copy. The thread begins with every
+--- asynchronous signal blocked, and only a fault's own unblocked (D521). Because each task's state lives on its own stack, one group
 --- holds tasks of different state types. The thread runs in parallel with
 --- the caller: everything sequenced before `admit` happens before the
 --- task's first action, and nothing after it does unless the two

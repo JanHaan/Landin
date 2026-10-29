@@ -60,3 +60,8 @@ public extern(c) pthread_sigmask: (how: i32, set: signals_given,
 
 --- Make `set` hold every signal: 0, or -1 with the reason in errno.
 public extern(c) sigfillset: (set: ptr mut signal_set) -> (status: i32)
+
+--- Take `signal` out of `set`: 0, or -1 with the reason in errno, EINVAL
+--- for a number that is no signal.
+public extern(c) sigdelset: (set: ptr mut signal_set, signal: i32)
+                            -> (status: i32)

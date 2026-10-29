@@ -129,8 +129,8 @@ fixed if compiler.os == linux then
     --- aligned, is `stack`, and the kernel writes its thread ID to
     --- `parent` before this returns and clears `child` when it ends. The
     --- new thread's ID, or minus the errno. The new thread starts with the
-    --- creator's signal mask, so a creator that blocks every signal around
-    --- this call starts a thread that receives none.
+    --- creator's signal mask, so a creator that blocks a signal around this
+    --- call starts a thread that does not receive it.
     public extern(c) link(symbol: "_landin_linux_clone") clone_thread:
         (flags: u64, stack: usize, parent: ptr mut u32, child: ptr mut u32,
          tls: usize, argument: usize, entry: thread_entry)

@@ -350,8 +350,8 @@ process ignores SIGPIPE and gives its children the default back.
 - `hosted/thread` starts threads as a group a routine joins, made over a
   `hosted/system` handle, a backing the caller lends and a count, as
   `core/fibre` starts fibres: each task's stack is prepared and checked,
-  the group keeps the first failure, a thread begins with every signal
-  blocked, and creation and join are the only edges it supplies (D494,
+  the group keeps the first failure, a thread begins with every asynchronous
+  signal blocked, and creation and join are the only edges it supplies (D494,
   D495). A static Linux program starts a thread with `clone` and waits on
   the word the kernel clears; under `--link=libc`, on Darwin and on
   FreeBSD the C library starts it on the caller's stack area and joins it

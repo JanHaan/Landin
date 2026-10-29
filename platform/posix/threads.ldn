@@ -4,8 +4,8 @@
 --  kernel clears when it ends; under --link=libc, on Darwin and on FreeBSD
 --  the C library starts it with `pthread_create` on the area, given with
 --  `pthread_attr_setstack`, and `pthread_join` waits.  Either way the
---  thread starts with every signal blocked, so a signal the process is
---  sent reaches a thread that reads it, through a signalfd or kqueue, and
+--  thread starts with every asynchronous signal blocked, so a signal the
+--  process is sent reaches a thread that reads it, through a signalfd or kqueue, and
 --  never a new thread's default disposition.  Nothing here allocates; the
 --  C library, where it starts the thread, keeps its own record of it as it
 --  chooses (D518).
@@ -30,11 +30,32 @@ public thread: type = struct
     argument: usize
 end thread
 
+--  The signals a thread starts with blocked are the asynchronous ones,
+--  every signal but the six a fault raises in the thread that made it:
+--  SIGILL, SIGTRAP, SIGBUS, SIGFPE, SIGSEGV and SIGSYS (D521).  Linux
+--  delivers a fault's signal even while it is blocked, but Darwin leaves
+--  it pending and the faulting instruction runs again, so a trap report's
+--  terminal instruction in a thread would never end the process.
+fixed if compiler.os == linux then
+    synchronous_signals: [6]i32 = [4, 5, 7, 8, 11, 31]
+else
+    synchronous_signals: [6]i32 = [4, 5, 8, 10, 11, 12]
+end if
+
 fixed if compiler.os == linux and not compiler.c_runtime then
     --  What runs on the area besides the thread's routine: this routine's
     --  frame, and above it, at the area's top, the two words
     --  `clone_thread` lays.
     area_least: usize = 2048
+
+    --  Every signal but the synchronous ones, in the kernel's mask, whose
+    --  bit N - 1 is signal N.
+    asynchronous: () -> (mask: u64) =
+        mask = 0 -% 1
+        for synchronous in synchronous_signals do
+            mask = mask & ~(u64(1) << u64(synchronous - 1))
+        end for
+    end asynchronous
 
     --- The bytes a thread's start area takes: its thread-local block and
     --- 2 KiB for the frames that start it.
@@ -72,7 +93,7 @@ fixed if compiler.os == linux and not compiler.c_runtime then
         mut flags: u64 = linux.clone_thread_flags
         if tls <> 0 then flags = flags | linux.clone_settls end if
         top: usize = (low + lenof area) - (low + lenof area) % 16
-        every: u64 = 0 -% 1
+        every: u64 = asynchronous()
         mut kept: u64 = 0
         blocked: i32 = linux.rt_sigprocmask(linux.sig_setmask, addr every,
                                             addr kept)
@@ -133,6 +154,9 @@ else
             mut every: libc.signal_set = zeroed
             mut kept: libc.signal_set = zeroed
             _ = libc.sigfillset(addr every)
+            for synchronous in synchronous_signals do
+                _ = libc.sigdelset(addr every, synchronous)
+            end for
             status = libc.pthread_sigmask(libc.sig_setmask, addr every,
                                           addr kept)
             if status == 0 then
@@ -157,12 +181,13 @@ end if
 --- Start a thread that calls `routine(argument)` on `area`, its stack,
 --- which holds `thread_start_bytes()` from a byte at
 --- `thread_start_alignment()`, keeping its record in `record` until
---- `join_thread`. Every signal is blocked while it starts, and the
---- thread begins with them all blocked; the caller's own mask is as it
---- was. It fails `einval` for an area too small or not aligned, and with
---- the errno the system refused the thread with, `eagain` when it lacks
---- what another thread needs; a failed start starts nothing. A successful
---- start synchronizes with the thread's first action (D227).
+--- `join_thread`. Every asynchronous signal is blocked while it starts,
+--- and the thread begins with them blocked, a fault's own alone not;
+--- the caller's own mask is as it was. It fails `einval` for an area too
+--- small or not aligned, and with the errno the system refused the thread
+--- with, `eagain` when it lacks what another thread needs; a failed start
+--- starts nothing. A successful start synchronizes with the thread's first
+--- action (D227).
 public start_thread:
     (area: []mut u8, record: ptr mut thread, routine: thread_routine,
      argument: usize) -> none ! errno =

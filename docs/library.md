@@ -1875,8 +1875,8 @@ and `join` is the atomic wrapper's or a lock's.
 - `join` blocks the calling thread, so a fibre that joins holds its
   round. A thread may run a round of fibres of its own; a fibre never
   moves between threads.
-- A thread starts with every signal blocked, so a signal the process is
-  sent reaches the provider that reads it, through a signalfd or kqueue,
+- A thread starts with every asynchronous signal blocked, so a signal the
+  process is sent reaches the provider that reads it, through a signalfd or kqueue,
   and never a thread's default disposition.
 - Every stack is prepared as a fibre's is, so a task that goes too deep
   traps `stack_exhausted` at the routine whose frame would not fit.
@@ -2075,7 +2075,7 @@ A static Linux program starts the thread with `platform/linux`'s
 `clone_thread` and waits on the word the kernel clears when it ends;
 elsewhere, and under `--link=libc`, the C library starts it with
 `pthread_create` and `pthread_join` waits. The thread begins with every
-signal blocked, and the caller's mask is as it was. A start the system
+asynchronous signal blocked, and the caller's mask is as it was. A start the system
 refuses fails with its errno, `eagain` when it lacks what another thread
 needs, and starts nothing. `hosted/thread` is written over these.
 

@@ -25384,9 +25384,9 @@ library is given the area with `pthread_attr_setstack` and the routine
 with `pthread_create`, and `pthread_join` waits. On the area,
 `hosted/thread`'s routine switches with `compiler.stack_switch` to the
 prepared stack, whose first frame runs the task and switches back; the
-routine then marks the record ended and returns. Every signal is blocked
-around the start and the caller's mask put back after it, so the thread
-begins with all of them blocked.
+routine then marks the record ended and returns. Every asynchronous signal is
+blocked around the start and the caller's mask put back after it, so the
+thread begins with them blocked (D521).
 
 **The alternatives:** starting the thread on the prepared stack itself,
 which needs the first frame's layout outside the compiler (D450); and
@@ -25472,3 +25472,31 @@ were declined.
 **Pinned by** `runtime/thread-start-refused`, whose RLIMIT_NPROC of zero
 makes Linux refuse the thread with EAGAIN, and `runtime/thread-join-first-failure`,
 whose one stack makes each `admit` join the task before it.
+
+### D521 — A thread starts with the asynchronous signals blocked, and a fault's own not
+
+**The tour said** nothing. D494 has a thread begin with every signal
+blocked, so that a signal the process is sent reaches the provider that
+reads it. A fault's signal is the faulting thread's own, raised by the
+instruction that faulted, and the systems differ on one that is blocked:
+Linux delivers it whatever the mask, while Darwin leaves it pending and
+returns to the instruction, which faults again. A trap report in a thread
+ends with `brk #1` on Darwin arm64, so `runtime/thread-stack-past-limit-traps`
+wrote its line and then ran that instruction for ever while the routine
+waited in `pthread_join`.
+
+**Chosen:** this amends D494's "every signal". A new thread begins with
+every signal blocked but the six a fault raises in the thread that made
+it: SIGILL, SIGTRAP, SIGBUS, SIGFPE, SIGSEGV and SIGSYS, which keep the
+disposition the process gives them, so a trap's terminal instruction ends
+the process on every system alike. Every other signal is blocked while
+the thread starts and in the thread, as D494 has it; the caller's mask is
+put back after the start.
+
+**The alternatives:** every signal blocked on Linux alone, where a
+blocked fault is still delivered, which makes the mask differ by system
+for no gain; and a terminal instruction the mask cannot hold off, which
+no hosted architecture has. Both were declined.
+
+**Pinned by** `runtime/thread-stack-past-limit-traps` on Darwin, whose
+report ends the process from the thread, and on every other hosted target.
