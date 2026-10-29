@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D494 a thread of hosted/thread, started before anything blocks SIGTERM, sends SIGTERM to its own process once a fibre of hosted/events watches it; the thread began with every signal blocked, so the signal does not end the process in the thread but reaches the event loop, through signalfd or kqueue, and the fibre's next_signal returns it after the thread is joined
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1660, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

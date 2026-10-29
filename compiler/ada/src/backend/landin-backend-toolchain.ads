@@ -109,6 +109,9 @@ package Landin.Backend.Toolchain is
    --  object or library, no dynamic loader and no position independence,
    --  starting at platform/linux's `_landin_start`.
    --
+   --  `Threads` (FreeBSD only) links libthr, which holds FreeBSD's
+   --  `pthread_create`: its libc has only stubs of the rest (D518).
+   --
    --  `Linker` is a pass-through and not a second driver.  mold, the linker
    --  this exists for, documents three ways to be used and every one of
    --  them goes *through* a compiler driver, for the reason the header
@@ -140,7 +143,8 @@ package Landin.Backend.Toolchain is
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False;
       Level : Landin.Targets.Levels.Feature_Level;
-      Static : Boolean := False)
+      Static : Boolean := False;
+      Threads : Boolean := False)
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
 

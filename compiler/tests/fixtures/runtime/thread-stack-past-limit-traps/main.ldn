@@ -1,0 +1,39 @@
+--  D495: a thread's task runs on a stack `compiler.stack_prepare` laid
+--  out in the group's backing, so every routine checks its frame against
+--  the thread's own limit.  A task that recurses past its stack traps
+--  `stack_exhausted` in the prologue of the routine whose frame would not
+--  fit, at that routine's site, before it has written below the limit,
+--  and the report ends the process from the thread.
+import core/failure
+import hosted/system
+import hosted/thread
+
+deep: type = struct
+    depth: u32
+end deep
+
+--  Goes on without end.
+descend: (depth: u32) -> (reached: u32) =
+    reached = descend(depth + 1) + 1
+end descend
+
+dive: (inout state: deep) -> none ! failure.reason =
+    _ = descend(state.depth)
+end dive
+
+--  One stack, with room for Darwin's whole 16 KiB pages.
+mut backing: [2 * 32768]u8 = zeroed
+
+run: (host: system.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(host, backing, 1)
+    defer thread.join(workers) else none
+    task: deep = (depth: 0)
+    try thread.admit(workers, dive, task)
+    try thread.join(workers)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    run(system.new()) else none
+    code = 0
+end main

@@ -382,7 +382,8 @@ package body Landin.Backend.Toolchain is
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False;
       Level : Landin.Targets.Levels.Feature_Level;
-      Static : Boolean := False)
+      Static : Boolean := False;
+      Threads : Boolean := False)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -482,6 +483,12 @@ package body Landin.Backend.Toolchain is
                    then "-l:lib" & Library & ".a"
                    else File_Operand (Library)));
       end loop;
+      if Threads
+        and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+          = Landin.Targets.Capabilities.FreeBSD
+      then
+         Landin.Platform.Add (List, "-lthr");
+      end if;
       Landin.Platform.Add (List, "-o");
       Landin.Platform.Add (List, File_Operand (Output));
 

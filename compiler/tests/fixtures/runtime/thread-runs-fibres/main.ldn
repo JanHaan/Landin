@@ -1,0 +1,89 @@
+--  D494: a thread may run a round of fibres of its own.  A task of a
+--  hosted/thread group makes a round of turns on its own stack and a
+--  fibre group over it, whose two tasks yield in turn, so their letters
+--  interleave; the fibres switch between stacks of the round's own
+--  backing and never leave the thread.  The routine that started the
+--  thread reads the letters after `join`, whose edge orders them.
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import hosted/system
+import hosted/thread
+
+mut order: [16]u8 = zeroed
+mut steps: usize = 0
+
+note: type = struct
+    runs: any fibre.turns
+    letter: u8
+end note
+
+note_of: (runs: any fibre.turns, letter: u8) -> (made: note from runs) =
+    made = (runs: runs, letter: letter)
+end note_of
+
+mark: (letter: u8) -> none =
+    order[steps] = letter
+    steps += 1
+end mark
+
+--  Three letters, with a turn after each of the first two.
+thrice: (inout state: note) -> none ! failure.reason =
+    mark(state.letter)
+    state.runs.yield()
+    mark(state.letter)
+    state.runs.yield()
+    mark(state.letter)
+end thrice
+
+--  The fibres' stacks, which only the thread's round switches to.
+mut fibre_backing: [2 * 8192]u8 = zeroed
+
+both: (runs: any fibre.turns) -> none ! failure.reason =
+    mut tasks := try fibre.turns_over(runs, fibre_backing, 2)
+    defer fibre.join(tasks) else none
+    a := note_of(runs, u8('a'))
+    try fibre.admit(tasks, thrice, a)
+    b := note_of(runs, u8('b'))
+    try fibre.admit(tasks, thrice, b)
+    mark(u8('h'))
+    try fibre.join(tasks)
+    mark(u8('j'))
+end both
+
+round_trip: type = struct
+    reserved: u32
+end round_trip
+
+--  The thread's task: a round of its own, on its own stack.
+in_thread: (inout state: round_trip) -> none ! failure.reason =
+    _ = state
+    mut space: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := try stacks.round_over(space, entries, any(addr idler))
+    try both(any(addr round))
+end in_thread
+
+--  One stack, with room for Darwin's whole 16 KiB pages.
+mut backing: [2 * 65536]u8 = zeroed
+
+run: (host: system.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(host, backing, 1)
+    defer thread.join(workers) else none
+    task: round_trip = (reserved: 0)
+    try thread.admit(workers, in_thread, task)
+    try thread.join(workers)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    run(system.new()) else none
+    code = 2
+    expected: []u8 = "habababj"
+    return when steps <> lenof expected
+    for index in usize(0)..<steps do
+        return when order[index] <> expected[index]
+    end for
+    code = 42
+end main

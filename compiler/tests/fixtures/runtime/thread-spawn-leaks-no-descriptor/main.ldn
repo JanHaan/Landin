@@ -1,0 +1,142 @@
+--  D503, SR-121: a descriptor another thread makes is never inherited by
+--  a program `io.spawn` starts.  Darwin has no pipe2, so platform/posix's
+--  pipe there is marked closed on exec only after it is made, and a
+--  program executed in between could inherit it; but Darwin's spawn asks
+--  for POSIX_SPAWN_CLOEXEC_DEFAULT, Linux's marks every descriptor above
+--  the streams closed on exec in the child and FreeBSD's closes them, so
+--  none reaches the child however it was made.  A thread makes four pipes
+--  with no close-on-exec flag at all and holds them, then makes and closes
+--  pipes through platform/posix for as long as the routine spawns; each
+--  child, a shell, names every descriptor above its streams that it finds
+--  open, and none may.
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+import hosted/system
+import hosted/thread
+import platform/libc
+import platform/linux
+import platform/posix
+
+--  Set when the thread holds its four pipes; set when the routine has
+--  spawned every child.
+mut holding: u32 = 0
+mut finished: u32 = 0
+
+--  How many pipes the thread made and closed while the children started.
+mut made: u64 = 0
+
+--  Make a pipe with no close-on-exec flag at either end.
+fixed if compiler.os == linux then
+    open_pipe: (ends: ptr mut i32) -> (done: bool) =
+        done = linux.pipe2(ends, 0) == 0
+    end open_pipe
+
+    close_end: (end_of: i32) -> none =
+        _ = linux.close(end_of)
+    end close_end
+else
+    open_pipe: (ends: ptr mut i32) -> (done: bool) =
+        done = libc.pipe(ends) == 0
+    end open_pipe
+
+    close_end: (end_of: i32) -> none =
+        _ = libc.close(end_of)
+    end close_end
+end if
+
+maker: type = struct
+    reserved: u32
+end maker
+
+--  Hold four inheritable pipes, and make pipes until told to stop.
+make_pipes: (inout state: maker) -> none ! failure.reason =
+    _ = state
+    mut held: [8]i32 = zeroed
+    for pair in usize(0)..<4 do
+        fail io.io_failed when not open_pipe(addr held[2 * pair])
+    end for
+    compiler.atomic_store(addr holding, u32(1), compiler.release)
+    while compiler.atomic_load(addr finished, compiler.acquire) == 0 do
+        ends: posix.pipe_ends = posix.pipe() else (problem)
+            _ = problem
+            fail io.io_failed
+        end
+        posix.close(ends.reading) else none
+        posix.close(ends.writing) else none
+        inc made
+    end while
+    for index in usize(0)..<8 do
+        close_end(held[index])
+    end for
+end make_pipes
+
+--  Each descriptor from 3 to 31 the shell finds open, one a line.  Each
+--  is tried in a subshell of its own, since a shell keeps the stream a
+--  redirection replaces in a descriptor of its own while it runs, bash
+--  at 10.
+script: []u8 = """
+    fd=3
+    while [ "$fd" -lt 32 ]; do
+        if (true >&"$fd") 2>/dev/null; then echo "$fd"; fi
+        fd=$((fd + 1))
+    done
+    """
+
+--  Run the shell and return whether it found nothing open.
+nothing_inherited: (host: blocking.host) -> (clean: bool) ! failure.reason =
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: []io.variable = []
+    mut running: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                         arguments, variables, io.capturing)
+    mut buffer: [256]u8 = zeroed
+    mut said: usize = 0
+    loop do
+        part: io.child_read = try io.read_child(host, running, buffer)
+        break when part.finished
+        said += part.count
+    end loop
+    ended: io.ending = try io.wait(host, running)
+    clean = false
+    match ended.how
+        io.exited(status): clean = said == 0 and status == 0
+        io.signalled: clean = false
+    end match
+end nothing_inherited
+
+--  One thread's stack, with room for Darwin's whole 16 KiB pages.
+mut backing: [2 * 32768]u8 = zeroed
+
+--  How many children came back clean.
+mut clean_children: u32 = 0
+
+run: (host: blocking.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(system.new(), backing, 1)
+    defer thread.join(workers) else none
+    task: maker = (reserved: 0)
+    try thread.admit(workers, make_pipes, task)
+    mut spins: u64 = 0
+    while compiler.atomic_load(addr holding, compiler.acquire) == 0 do
+        inc spins
+    end while
+    for child in usize(0)..<8 do
+        _ = child
+        clean: bool = nothing_inherited(host) else (problem)
+            compiler.atomic_store(addr finished, u32(1), compiler.release)
+            fail problem
+        end
+        if clean then inc clean_children end if
+    end for
+    compiler.atomic_store(addr finished, u32(1), compiler.release)
+    try thread.join(workers)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    run(blocking.new()) else none
+    code = 2
+    return when clean_children <> 8
+    code = 42
+end main

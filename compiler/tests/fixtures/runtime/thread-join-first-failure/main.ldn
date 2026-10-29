@@ -1,0 +1,58 @@
+--  D494: nothing cancels a thread, and a group keeps the first failure.
+--  The group has one stack, so `admit` waits for each task's thread to
+--  end before it starts the next: the order in which they fail is the
+--  order they were admitted.  The first fails, the second succeeds and
+--  the third fails another way; `join` fails with the first failure only
+--  once all three have run, and hands it on once, so the join after it
+--  succeeds.
+import core/failure
+import core/io
+import core/mem
+import core/net
+import hosted/system
+import hosted/thread
+
+--  The digit of each task that ran, in the order they ran.
+mut ended: u32 = 0
+
+step: type = struct
+    digit: u32
+end step
+
+--  Note that it ran, and fail as its digit says.
+take: (inout state: step) -> none ! failure.reason =
+    ended = ended * 10 + state.digit
+    fail net.refused when state.digit == 1
+    fail io.io_failed when state.digit == 3
+end take
+
+--  One stack, with room for Darwin's whole 16 KiB pages.
+mut backing: [2 * 32768]u8 = zeroed
+
+run: (host: system.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(host, backing, 1)
+    defer thread.join(workers) else none
+    first: step = (digit: 1)
+    try thread.admit(workers, take, first)
+    second: step = (digit: 2)
+    try thread.admit(workers, take, second)
+    third: step = (digit: 3)
+    try thread.admit(workers, take, third)
+    thread.join(workers) else (problem)
+        thread.join(workers) else (again)
+            _ = again
+            fail mem.full
+        end
+        fail problem
+    end
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    run(system.new()) else (problem)
+        code = 2
+        return when problem <> net.refused or ended <> 123
+        code = 42
+        return
+    end
+end main
