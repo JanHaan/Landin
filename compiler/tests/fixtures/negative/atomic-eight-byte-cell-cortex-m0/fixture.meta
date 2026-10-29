@@ -1,0 +1,9 @@
+class: negative
+summary: D500 D510 Cortex-M0 has no eight-byte atomic access, so a u64 cell is refused where the program writes it, in a module binding and in a made local alike, each refusal naming the smaller cell and platform/cortex_m's critical section, and its operations draw no second report
+program: main.ldn
+root: ../../../../..
+args: --target=cortex-m0
+expect: expected.txt
+codes: L0344, L0344
+constructs: 1290, 1620
+targets: cortex-m0

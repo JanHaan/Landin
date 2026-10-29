@@ -1,0 +1,102 @@
+--  The lock threads share state behind, and the process's one record of
+--  whether a thread has been started (D501, D502).  It is a module of its
+--  own, beneath hosted/thread, so that the heap can take a lock without
+--  importing the thread facility that allocates its own stacks from the
+--  caller: hosted/heap imports this module, hosted/thread imports this
+--  module, and hosted/thread never imports the heap.
+--
+--  A lock is one u32 cell of core/atomic: free, taken, or taken with a
+--  thread waiting.  Taking a free lock and giving one nobody waits for are
+--  one read-modify-write each; a thread that finds it taken sleeps in the
+--  system's wait on the cell's address, platform/posix's `wait_on`, and
+--  the thread that gives it wakes one waiter.  This is the three-state
+--  lock of Drepper's "Futexes Are Tricky", on every hosted system alike.
+--
+--  On Cortex-M0 there is no lock: a context there excludes the interrupt
+--  handlers that share its state with platform/cortex_m's critical
+--  section, `disable_interrupts` to `restore_interrupts`, and that is its
+--  lock (D501).  This module is hosted only.
+
+import core/atomic
+import platform/posix
+
+--  What a lock's cell holds.
+free: u32 = 0
+taken: u32 = 1
+contended: u32 = 2
+
+lock_value: type = struct
+    word: atomic.cell(u32)
+end lock_value
+
+--- A lock: one thread at a time holds it, between `take` and `give`.  A
+--- zeroed lock is free, so module storage starts one `zeroed` and `new`
+--- makes one for a local or a field.  It is not reentrant: a thread that
+--- takes a lock it holds waits for itself forever.  It keeps no owner, so
+--- nothing stops a thread giving a lock another holds; do not.  Waiting
+--- blocks the thread, so a fibre that holds a lock across a switch can
+--- hold every other fibre of its round that wants it.  Share it by
+--- pointer, never by copy.
+public lock: type = lock_value
+
+--- A free lock.
+public new: () -> (made: lock) =
+    made = (word: atomic.new(free))
+end new
+
+--- Take `held`, waiting while another thread holds it.  What the thread
+--- that gave it last did before giving it is visible after this returns.
+public take: (held: ptr mut lock) -> none =
+    word: ptr mut atomic.cell(u32) = addr held.val.word
+    mut seen: u32 = atomic.compare_exchange(word, free, taken)
+    return when seen == free
+    --  Say that someone waits, then sleep while that is still so: whoever
+    --  gives the lock sees `contended` and wakes a sleeper, and the one it
+    --  wakes takes the lock as contended, since it cannot know it was the
+    --  last.
+    if seen <> contended then
+        seen = atomic.exchange(word, contended)
+    end if
+    while seen <> free do
+        posix.wait_on(word, contended)
+        seen = atomic.exchange(word, contended)
+    end while
+end take
+
+--- Take `held` if no thread holds it, and say whether it did, without
+--- waiting.
+public take_if_free: (held: ptr mut lock) -> (took: bool) =
+    took = atomic.compare_exchange(addr held.val.word, free, taken) == free
+end take_if_free
+
+--- Give `held`, which this thread took, back, and wake one thread waiting
+--- for it, if any is.  What this thread did while it held the lock is
+--- visible to the thread that takes it next.
+public give: (held: ptr mut lock) -> none =
+    word: ptr mut atomic.cell(u32) = addr held.val.word
+    if atomic.exchange(word, free) == contended then
+        posix.wake_one(word)
+    end if
+end give
+
+--  Whether the program has started a thread: zero until `note_start`, and
+--  one for the rest of the process.  Relaxed, since the thread's creation
+--  orders what the program did before it, and nothing is ever unwritten.
+mut started: atomic.cell(u32) = zeroed
+
+--- Record that the program is about to start a thread.  The thread
+--- facility calls it before it starts its first thread, on the thread that
+--- starts it, and the creation's happens-before edge gives the new thread
+--- the record.  State that is shared only once there are threads, the
+--- heap's among it, then takes its lock; until then it skips it.
+public note_start: () -> none =
+    atomic.store_relaxed(addr started, 1)
+end note_start
+
+--- Whether `note_start` has been called: whether a thread other than the
+--- one the program started on may be running.  A C thread calling into
+--- Landin under `--link=libc` is none of the program's and is not
+--- counted.
+public threads_started: () -> (yes: bool) =
+    yes = atomic.load_relaxed(addr started) <> 0
+end threads_started

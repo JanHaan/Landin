@@ -4416,10 +4416,27 @@ bump: (p: ptr mut u32) -> none =
 end bump
 ```
 
-There is no atomic wrapper type in `core`. Cortex-M0 has no
-read-modify-write atomics at all, so what a portable wrapper should offer
-is a library question. It is planned (Broader standard library, in
-[the roadmap](ROADMAP.md)).
+`core/atomic` wraps one `u8`, `u16`, `u32` or `u64` in a cell whose
+operations carry their orderings in their names: `load` acquires, `store`
+releases, `exchange`, `add` and `compare_exchange` do both, and
+`load_relaxed`, `store_relaxed` and `add_relaxed` order nothing else.
+
+```landin
+import core/atomic
+
+mut ticks: atomic.cell(u32) = zeroed
+
+count_tick: () -> none =
+    _ = atomic.sole_add(addr ticks, 1)
+end count_tick
+```
+
+Cortex-M0 has no read-modify-write atomics at all, so there a cell has no
+`exchange`, `add` or `compare_exchange`, and no `u64` cell, and the
+compiler says so where you call one. What it has is the single writer's
+add, `sole_add`: a load and a store, correct while one context alone, an
+interrupt handler say, writes the cell. State several contexts write takes
+`platform/cortex_m`'s critical section instead.
 
 Each tool for shared memory does one thing:
 

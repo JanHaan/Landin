@@ -1,0 +1,83 @@
+--  The system's wait on an address, on the one thread a program starts
+--  with: Linux's futex, FreeBSD's _umtx_op and Darwin's
+--  os_sync_wait_on_address.  Nothing else can wake this thread, so every
+--  wait here either finds the cell changed and returns at once or times
+--  out.  A wake that ends another thread's wait needs a second thread.
+import core/atomic
+import platform/posix
+
+mut word: atomic.cell(u32) = zeroed
+
+--  Ten milliseconds.
+span: posix.time_value = (seconds: 0, nanoseconds: 10000000)
+
+--  Nanoseconds on the monotonic clock, or zero when it cannot be read.
+now: () -> (nanoseconds: u64) =
+    time: posix.time_value = posix.clock_time(posix.monotonic_clock)
+        else (problem)
+        _ = problem
+        nanoseconds = 0
+        return
+    end
+    nanoseconds = u64(time.seconds) * 1000000000 + u64(time.nanoseconds)
+end now
+
+--  Each check returns its own status, so a failure says which one.
+mismatches: () -> (status: i32) =
+    status = 2
+    atomic.store(addr word, 7)
+    --  The cell holds 7, not 3: the wait returns rather than sleeping for
+    --  ever, which would leave the program to its lane's timeout.
+    posix.wait_on(addr word, 3)
+    status = 3
+    posix.wait_on_within(addr word, 3, span) else (problem)
+        _ = problem
+        return
+    end
+    status = 0
+end mismatches
+
+timeouts: () -> (status: i32) =
+    status = 4
+    started: u64 = now()
+    return when started == 0
+    mut timed_out: bool = false
+    posix.wait_on_within(addr word, 7, span) else (problem)
+        timed_out = problem == posix.etimedout
+    end
+    return when not timed_out
+    status = 5
+    return when now() - started < u64(span.nanoseconds)
+    status = 0
+end timeouts
+
+refusals: () -> (status: i32) =
+    status = 6
+    long: posix.time_value = (seconds: 0, nanoseconds: 1000000000)
+    mut refused: bool = false
+    posix.wait_on_within(addr word, 7, long) else (problem)
+        refused = problem == posix.einval
+    end
+    return when not refused
+    status = 7
+    before: posix.time_value = (seconds: -1, nanoseconds: 0)
+    refused = false
+    posix.wait_on_within(addr word, 7, before) else (problem)
+        refused = problem == posix.einval
+    end
+    return when not refused
+    status = 0
+end refusals
+
+public main: () -> (code: i32) =
+    code = mismatches()
+    return when code <> 0
+    code = timeouts()
+    return when code <> 0
+    code = refusals()
+    return when code <> 0
+    --  Nobody waits on the cell, so each wake finds nobody and returns.
+    posix.wake_one(addr word)
+    posix.wake_all(addr word)
+    code = 42
+end main

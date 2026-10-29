@@ -1,0 +1,20 @@
+error[L0344]: cortex-m0 has no atomic access of eight bytes, so it has no u64 cell
+  --> ../tests/fixtures/negative/atomic-eight-byte-cell-cortex-m0/main.ldn:3:13
+  |
+3 | mut uptime: atomic.cell(u64) = zeroed
+  |             ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atomic-eight-byte-cell-cortex-m0/../../../../../core/atomic/atomic.ldn:206:34
+    |
+206 | public cell: type (item: type is scalar) = cell_value(item)
+    |                                  ^^^^^^ the cell's constraint
+  = note: D500: keep the value in a cell of four bytes or fewer, or keep it in plain storage that every writer and reader reaches inside platform/cortex_m's critical section, disable_interrupts to restore_interrupts
+error[L0344]: cortex-m0 has no atomic access of eight bytes, so it has no u64 cell
+  --> ../tests/fixtures/negative/atomic-eight-byte-cell-cortex-m0/main.ldn:6:18
+  |
+6 |     mut local := atomic.new(u64(1))
+  |                  ^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atomic-eight-byte-cell-cortex-m0/../../../../../core/atomic/atomic.ldn:211:28
+    |
+211 | public new: (item: type is scalar, value: item) -> (made: cell(item)) =
+    |                            ^^^^^^ the cell's constraint
+  = note: D500: keep the value in a cell of four bytes or fewer, or keep it in plain storage that every writer and reader reaches inside platform/cortex_m's critical section, disable_interrupts to restore_interrupts

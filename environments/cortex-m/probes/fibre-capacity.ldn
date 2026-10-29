@@ -7,6 +7,7 @@
 --  allocates.  evidence.py measures it on the retained 32 KiB flash,
 --  16 KiB RAM profile: flash, static RAM with this buffer identified, each
 --  fibre's backing and its painted peak.
+import core/atomic
 import core/failure
 import core/fibre
 import core/fibre/stacks
@@ -16,18 +17,18 @@ import platform/cortex_m
 --  makes of them.
 requests: u32 = 6
 
---  Time from an interrupt: one writer, the handler, which loads and
---  stores, as Cortex-M0 has no read-modify-write (prototype 5's V10).
-mut ticks: u32 = 0
+--  Time from an interrupt: one writer, the handler, which adds with
+--  core/atomic's sole_add, a relaxed load and a release store, as
+--  Cortex-M0 has no read-modify-write (prototype 5's V10, D511).
+mut ticks: atomic.cell(u32) = zeroed
 
 link(vector: 15)
 extern(interrupt) system_tick: () -> none =
-    now := compiler.atomic_load(addr ticks, compiler.relaxed)
-    compiler.atomic_store(addr ticks, now +% 1, compiler.release)
+    _ = atomic.sole_add(addr ticks, 1)
 end system_tick
 
 now_ticks: () -> (count: u32) =
-    count = compiler.atomic_load(addr ticks, compiler.acquire)
+    count = atomic.load(addr ticks)
 end now_ticks
 
 --  The round's idler: when every fibre has yielded since anything last

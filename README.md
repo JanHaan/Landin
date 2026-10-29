@@ -196,10 +196,10 @@ short:
   with static or `any` dispatch, local origin and escape checks, directory
   modules, atomics, volatile access and packed register images, and
   stackful fibres on every native target.
-- **The library:** nineteen `core` modules of allocators, containers, text,
-  I/O, time, networking and random numbers, each service with a fake for
-  testing; `hosted` services over POSIX; and Linux executables with no C
-  library by default.
+- **The library:** twenty `core` modules of allocators, containers, text,
+  I/O, time, networking, random numbers and atomic cells, each service
+  with a fake for testing; `hosted` services over POSIX; and Linux
+  executables with no C library by default.
 - **The C boundary:** each hosted target's C ABI, packed and flexible
   records, callbacks and variadic calls, and a binding generator over Clang.
 - **Code generation:** byte-identical output on every target whatever the

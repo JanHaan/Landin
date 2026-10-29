@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D500 D511 prototype 5's firmware/tick over core/atomic on every target, Cortex-M0 included: the tick's one writer counts with sole_add, a relaxed load and a release store, and a reader acquiring the count sees each tick, three of them in three waits; the Cortex-M fibre-capacity probe runs the same writer as SysTick's handler
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+constructs: 0900, 1620

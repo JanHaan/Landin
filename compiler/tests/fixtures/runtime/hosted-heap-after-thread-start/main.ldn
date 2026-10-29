@@ -1,0 +1,86 @@
+--  The heap behind its lock.  The program says a thread has started, as
+--  the thread facility does before its first, and then allocates and
+--  frees as a program with threads would, on its one thread.  Every slot
+--  taken or given takes the lock and gives it back; one left taken would
+--  make the next allocation wait for a give that never comes, which the
+--  lane's time limit turns into a failure.
+import core/mem
+import hosted/heap
+import hosted/thread/lock
+
+mut blocks: [600]usize
+
+take: (inout state: heap.heap, size: usize) -> (address: usize) =
+    block: ptr mut u8 = mem.allocate(state, size, 8) else (problem)
+        _ = problem
+        address = 0
+        return
+    end
+    address = usize(block)
+end take
+
+give: (inout state: heap.heap, address: usize, size: usize) -> none =
+    block: ptr mut u8 = ptr(address)
+    mem.free(state, block, size)
+end give
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: heap.heap = heap.new()
+    --  One slot before the flag, freed after it: the lists are the same
+    --  lists either side of it.
+    before: usize = take(state, 24)
+    return when before == 0
+    lock.note_start()
+    return when not lock.threads_started()
+    give(state, before, 24)
+    code = 2
+    return when take(state, 24) <> before
+    give(state, before, 24)
+
+    --  More slots of one class than a chunk holds, so a chunk is mapped
+    --  with the lock held, each freed and then handed out again.
+    code = 3
+    for index in usize(0)..<lenof blocks do
+        blocks[index] = take(state, 200)
+        return when blocks[index] == 0
+    end for
+    for index in usize(0)..<lenof blocks do
+        give(state, blocks[index], 200)
+    end for
+    code = 4
+    last: usize = blocks[lenof blocks - 1]
+    return when take(state, 200) <> last
+    give(state, last, 200)
+
+    --  A large block is a mapping of its own and takes no lock; growing
+    --  and resizing it keeps its bytes.
+    code = 5
+    large: ptr mut u8 = mem.allocate(state, 100000, 16) else (problem)
+        _ = problem
+        return
+    end
+    large.val = 42
+    moved: ptr mut u8 = mem.resize(state, large, 100000, 300000, 16)
+        else (problem)
+        _ = problem
+        return
+    end
+    return when moved.val <> 42
+    mem.free(state, moved, 300000)
+
+    --  And a slot made larger leaves its class through the lock too.
+    code = 6
+    small: ptr mut u8 = mem.allocate(state, 16, 8) else (problem)
+        _ = problem
+        return
+    end
+    small.val = 7
+    bigger: ptr mut u8 = mem.resize(state, small, 16, 5000, 8) else (problem)
+        _ = problem
+        return
+    end
+    return when bigger.val <> 7
+    mem.free(state, bigger, 5000)
+    code = 42
+end main

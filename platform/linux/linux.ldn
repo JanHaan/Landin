@@ -507,6 +507,40 @@ fixed if compiler.os == linux then
                                  i64(usize(remaining)), 0, 0))
     end clock_nanosleep
 
+    --  `futex` operations on a word only this process maps: FUTEX_WAIT and
+    --  FUTEX_WAKE with FUTEX_PRIVATE_FLAG.  The same on every architecture.
+    futex_wait_private: i64 = 128
+    futex_wake_private: i64 = 129
+
+    --- A `futex_wait` time limit: `no_limit`, or the span to wait at most,
+    --- measured on the monotonic clock.
+    public futex_limit: type = no_limit | ptr timespec
+
+    --- Sleep while the word at `word`, which only this process maps, holds
+    --- `expected`, until `futex_wake` wakes it, a signal comes or `limit`
+    --- passes: zero when woken, which may be spuriously, or minus the
+    --- errno, EAGAIN at once when the word does not hold `expected`,
+    --- ETIMEDOUT when the limit passed and EINTR for a signal.  The kernel
+    --- compares and sleeps in one step, so a wake after the word changed
+    --- is never lost.
+    public futex_wait:
+        (word: ptr u32, expected: u32, limit: futex_limit) -> (result: i32) =
+        address: usize = match limit
+            no_limit: usize(0)
+            ptr (given): usize(given)
+        end match
+        result = i32(system_call(futex_number, i64(usize(word)),
+                                 futex_wait_private, i64(expected),
+                                 i64(address), 0, 0))
+    end futex_wait
+
+    --- Wake at most `count` of the threads `futex_wait` holds asleep on the
+    --- word at `word`: the number woken, or minus the errno.
+    public futex_wake: (word: ptr u32, count: i32) -> (result: i32) =
+        result = i32(system_call(futex_number, i64(usize(word)),
+                                 futex_wake_private, i64(count), 0, 0, 0))
+    end futex_wake
+
     --- `getrandom` flag: fail with EAGAIN rather than wait while the
     --- kernel's random pool is not yet ready, which it is only early in
     --- boot.

@@ -1,0 +1,9 @@
+class: negative
+summary: D500 D510 Cortex-M0 refuses core/atomic's exchange, add, add_relaxed and compare_exchange at the caller's use, each refusal naming sole_add for a cell one context writes and platform/cortex_m's critical section for one several write, while the single writer's operations beside them are accepted
+program: main.ldn
+root: ../../../../..
+args: --target=cortex-m0
+expect: expected.txt
+codes: L0344, L0344, L0344, L0344
+constructs: 1290, 1620
+targets: cortex-m0

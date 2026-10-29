@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D500 core/atomic's read-modify-writes and its eight-byte cell on every hosted target: exchange, add and its relaxed form return what each of u8, u16, u32 and u64 held and wrap at its width, a compare-exchange stores only when the cell held what it expected and returns what it saw either way, and a u64 cell loads, stores and adds as its one writer; Cortex-M0 refuses each at its use
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+constructs: 0150, 1290, 1620

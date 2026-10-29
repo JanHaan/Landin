@@ -1,0 +1,14 @@
+import core/atomic
+
+--  A count an interrupt handler and the program both write: Cortex-M0 has
+--  no read-modify-write, so each of these is refused here, where it is
+--  used, and the single writer's sole_add beside them is not.
+mut events: atomic.cell(u32) = zeroed
+
+public main: () -> (code: i32) =
+    _ = atomic.sole_add(addr events, 1)
+    _ = atomic.add(addr events, 1)
+    _ = atomic.exchange(addr events, 0)
+    _ = atomic.add_relaxed(addr events, 1)
+    code = i32(atomic.compare_exchange(addr events, 0, 1))
+end main

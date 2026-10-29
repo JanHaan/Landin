@@ -2,6 +2,7 @@
   "parser": [
     "compiler/tests/fixtures/runtime/derived-parser/main.ldn",
     "core/arena/arena.ldn",
+    "core/atomic/atomic.ldn",
     "core/cmp/cmp.ldn",
     "core/diag/diag.ldn",
     "core/failure/failure.ldn",
@@ -62,11 +63,13 @@
     "platform/posix/random.ldn",
     "platform/posix/sockets.ldn",
     "platform/posix/terminals.ldn",
-    "platform/posix/time.ldn"
+    "platform/posix/time.ldn",
+    "platform/posix/waits.ldn"
   ],
   "containers": [
     "compiler/tests/fixtures/runtime/derived-containers/main.ldn",
     "core/arena/arena.ldn",
+    "core/atomic/atomic.ldn",
     "core/cmp/cmp.ldn",
     "core/fault/fault.ldn",
     "core/io/buffered.ldn",
@@ -96,6 +99,7 @@
     "core/vec/vec.ldn",
     "examples/derived_containers/workload/workload.ldn",
     "hosted/heap/heap.ldn",
+    "hosted/thread/lock/lock.ldn",
     "platform/libc/darwin.ldn",
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
@@ -116,11 +120,13 @@
     "platform/posix/random.ldn",
     "platform/posix/sockets.ldn",
     "platform/posix/terminals.ldn",
-    "platform/posix/time.ldn"
+    "platform/posix/time.ldn",
+    "platform/posix/waits.ldn"
   ],
   "hosted": [
     "compiler/tests/fixtures/runtime/derived-hosted-memory/main.ldn",
     "core/arena/arena.ldn",
+    "core/atomic/atomic.ldn",
     "core/cmp/cmp.ldn",
     "core/diag/diag.ldn",
     "core/failure/failure.ldn",
@@ -175,6 +181,7 @@
     "hosted/system/programs.ldn",
     "hosted/system/system.ldn",
     "hosted/system/time.ldn",
+    "hosted/thread/lock/lock.ldn",
     "platform/libc/darwin.ldn",
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
@@ -195,7 +202,8 @@
     "platform/posix/random.ldn",
     "platform/posix/sockets.ldn",
     "platform/posix/terminals.ldn",
-    "platform/posix/time.ldn"
+    "platform/posix/time.ldn",
+    "platform/posix/waits.ldn"
   ],
   "switch": [
     "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",

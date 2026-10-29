@@ -834,7 +834,16 @@ package body Landin.Diagnostics.Explanations is
                & "stack_switch` takes a `ptr mut usize` and a `usize` (D47"
                & "2); a target whose backend does not emit them yet refuse"
                & "s both by name. Use an ordering and operand the operatio"
-               & "n admits on this target.",
+               & "n admits on this target."
+               & LF
+               & LF
+               & "A `core/atomic` cell the target's atomics cannot carry i"
+               & "s refused the same way where the program uses it (D510):"
+               & " on Cortex-M0 a `u64` cell, and a cell's `exchange`, `ad"
+               & "d`, `add_relaxed` and `compare_exchange`. A cell one con"
+               & "text alone writes adds with `atomic.sole_add`, a load an"
+               & "d a store; state several contexts write takes `platform/"
+               & "cortex_m`'s critical section.",
             when Catalogue.Machine_Entry_Contract =>
                "An interrupt or naked routine is used outside its machin"
                & "e-entry contract [1570]. The machine convention is Corte"

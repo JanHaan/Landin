@@ -5020,9 +5020,8 @@ INVENTORY_STATES = ("executed", "compiled", "deferred", "transferred",
 CLAIM_RANK = {"refused": 1, "compiled": 2, "executed": 3}
 #  A transfer out of this roadmap is legitimate only where the tour already
 #  says who owns the transferred part [1480]; the roadmap cannot overrule it.
-#  Two more successors are named by amended paragraphs: [0150] and
-#  [0170] leave u128, i128 and f16 to Language evolution, and [1620] leaves
-#  the atomic wrapper type to the Broader standard library.
+#  One more successor is named by amended paragraphs: [0150] and [0170]
+#  leave u128, i128 and f16 to Language evolution.
 TRANSFER_MARKERS = {"Companion tool and ecosystem": r"companion[ -]tool",
                     "Language evolution": r"language evolution",
                     "Broader standard library": r"broader standard library"}

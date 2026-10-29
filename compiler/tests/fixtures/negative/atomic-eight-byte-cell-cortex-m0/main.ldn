@@ -1,0 +1,8 @@
+import core/atomic
+
+mut uptime: atomic.cell(u64) = zeroed
+
+public main: () -> (code: i32) =
+    mut local := atomic.new(u64(1))
+    code = i32(atomic.load(addr uptime) + atomic.load(addr local))
+end main

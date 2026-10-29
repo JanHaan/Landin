@@ -1,0 +1,283 @@
+--  A cell that holds one u8, u16, u32 or u64 and is read and written only
+--  atomically, over the compiler's memory builtins (D227, D500).  Each
+--  operation carries its ordering in its name, because an ordering is a
+--  compiler atom a call cannot pass on: a load acquires and a store
+--  releases, an exchange, an add and a compare-exchange acquire and
+--  release, and the relaxed family is for counters and caches whose value
+--  orders nothing else.  Sequential consistency stays with the builtins.
+--
+--  The cell is an ordinary struct: module storage starts it `zeroed`, and
+--  `new` makes one for a local or a field.  Every access after it is
+--  shared goes through the operations here and the cell's address, so
+--  pass a cell by pointer and never copy one that another context uses.
+--
+--  Cortex-M0 has no atomic read-modify-write and no eight-byte atomic
+--  access (D227), so on it `u64` has no conformance to `scalar` and no
+--  scalar one to `exchangeable`, and the compiler refuses a cell over u64,
+--  and an exchange, add or compare-exchange, at the caller's use (D510).
+--  What it has instead is `sole_add`, a relaxed load and a release store,
+--  correct while one context alone writes the cell, which every target
+--  has; and platform/cortex_m's critical section for state several
+--  contexts write.
+
+--- The scalars a cell can hold, with the accesses every target admits for
+--- them: u8, u16 and u32 everywhere, and u64 where the target has eight-byte
+--- atomics, which Cortex-M0 has not.  The entries are the cell's
+--- operations' own, over the scalar's address; use the operations below.
+public scalar: type = concept (item: type)
+    load: (cell: ptr item) -> (value: item)
+    load_relaxed: (cell: ptr item) -> (value: item)
+    store: (cell: ptr mut item, value: item) -> none
+    store_relaxed: (cell: ptr mut item, value: item) -> none
+    sole_add: (cell: ptr mut item, value: item) -> (previous: item)
+end scalar
+
+--- The scalars whose cells also take a read-modify-write: each of u8, u16,
+--- u32 and u64 where the target has atomic read-modify-write, which
+--- Cortex-M0 has not.
+public exchangeable: type = concept (item: type) is scalar
+    exchange: (cell: ptr mut item, value: item) -> (previous: item)
+    add: (cell: ptr mut item, value: item) -> (previous: item)
+    add_relaxed: (cell: ptr mut item, value: item) -> (previous: item)
+    compare_exchange: (cell: ptr mut item, expected: item, desired: item)
+                      -> (observed: item)
+end exchangeable
+
+load_u8: (cell: ptr u8) -> (value: u8) =
+    value = compiler.atomic_load(cell, compiler.acquire)
+end load_u8
+load_relaxed_u8: (cell: ptr u8) -> (value: u8) =
+    value = compiler.atomic_load(cell, compiler.relaxed)
+end load_relaxed_u8
+store_u8: (cell: ptr mut u8, value: u8) -> none =
+    compiler.atomic_store(cell, value, compiler.release)
+end store_u8
+store_relaxed_u8: (cell: ptr mut u8, value: u8) -> none =
+    compiler.atomic_store(cell, value, compiler.relaxed)
+end store_relaxed_u8
+sole_add_u8: (cell: ptr mut u8, value: u8) -> (previous: u8) =
+    previous = compiler.atomic_load(cell, compiler.relaxed)
+    compiler.atomic_store(cell, previous +% value, compiler.release)
+end sole_add_u8
+load_u16: (cell: ptr u16) -> (value: u16) =
+    value = compiler.atomic_load(cell, compiler.acquire)
+end load_u16
+load_relaxed_u16: (cell: ptr u16) -> (value: u16) =
+    value = compiler.atomic_load(cell, compiler.relaxed)
+end load_relaxed_u16
+store_u16: (cell: ptr mut u16, value: u16) -> none =
+    compiler.atomic_store(cell, value, compiler.release)
+end store_u16
+store_relaxed_u16: (cell: ptr mut u16, value: u16) -> none =
+    compiler.atomic_store(cell, value, compiler.relaxed)
+end store_relaxed_u16
+sole_add_u16: (cell: ptr mut u16, value: u16) -> (previous: u16) =
+    previous = compiler.atomic_load(cell, compiler.relaxed)
+    compiler.atomic_store(cell, previous +% value, compiler.release)
+end sole_add_u16
+load_u32: (cell: ptr u32) -> (value: u32) =
+    value = compiler.atomic_load(cell, compiler.acquire)
+end load_u32
+load_relaxed_u32: (cell: ptr u32) -> (value: u32) =
+    value = compiler.atomic_load(cell, compiler.relaxed)
+end load_relaxed_u32
+store_u32: (cell: ptr mut u32, value: u32) -> none =
+    compiler.atomic_store(cell, value, compiler.release)
+end store_u32
+store_relaxed_u32: (cell: ptr mut u32, value: u32) -> none =
+    compiler.atomic_store(cell, value, compiler.relaxed)
+end store_relaxed_u32
+sole_add_u32: (cell: ptr mut u32, value: u32) -> (previous: u32) =
+    previous = compiler.atomic_load(cell, compiler.relaxed)
+    compiler.atomic_store(cell, previous +% value, compiler.release)
+end sole_add_u32
+u8 is scalar (load: load_u8, load_relaxed: load_relaxed_u8,
+              store: store_u8, store_relaxed: store_relaxed_u8,
+              sole_add: sole_add_u8)
+u16 is scalar (load: load_u16, load_relaxed: load_relaxed_u16,
+               store: store_u16, store_relaxed: store_relaxed_u16,
+               sole_add: sole_add_u16)
+u32 is scalar (load: load_u32, load_relaxed: load_relaxed_u32,
+               store: store_u32, store_relaxed: store_relaxed_u32,
+               sole_add: sole_add_u32)
+
+--  Cortex-M0 has neither the eight-byte accesses nor any read-modify-write
+--  (D227): what it lacks has no conformance there, and D510 refuses its use.
+fixed if compiler.arch <> cortex_m0 then
+    load_u64: (cell: ptr u64) -> (value: u64) =
+        value = compiler.atomic_load(cell, compiler.acquire)
+    end load_u64
+    load_relaxed_u64: (cell: ptr u64) -> (value: u64) =
+        value = compiler.atomic_load(cell, compiler.relaxed)
+    end load_relaxed_u64
+    store_u64: (cell: ptr mut u64, value: u64) -> none =
+        compiler.atomic_store(cell, value, compiler.release)
+    end store_u64
+    store_relaxed_u64: (cell: ptr mut u64, value: u64) -> none =
+        compiler.atomic_store(cell, value, compiler.relaxed)
+    end store_relaxed_u64
+    sole_add_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
+        previous = compiler.atomic_load(cell, compiler.relaxed)
+        compiler.atomic_store(cell, previous +% value, compiler.release)
+    end sole_add_u64
+    u64 is scalar (load: load_u64, load_relaxed: load_relaxed_u64,
+                   store: store_u64, store_relaxed: store_relaxed_u64,
+                   sole_add: sole_add_u64)
+    exchange_u8: (cell: ptr mut u8, value: u8) -> (previous: u8) =
+        previous = compiler.atomic_exchange(cell, value, compiler.acq_rel)
+    end exchange_u8
+    add_u8: (cell: ptr mut u8, value: u8) -> (previous: u8) =
+        previous = compiler.atomic_add(cell, value, compiler.acq_rel)
+    end add_u8
+    add_relaxed_u8: (cell: ptr mut u8, value: u8) -> (previous: u8) =
+        previous = compiler.atomic_add(cell, value, compiler.relaxed)
+    end add_relaxed_u8
+    compare_exchange_u8: (cell: ptr mut u8, expected: u8, desired: u8)
+                         -> (observed: u8) =
+        observed = compiler.atomic_compare_exchange(cell, expected, desired,
+                                                    compiler.acq_rel,
+                                                    compiler.acquire)
+    end compare_exchange_u8
+    exchange_u16: (cell: ptr mut u16, value: u16) -> (previous: u16) =
+        previous = compiler.atomic_exchange(cell, value, compiler.acq_rel)
+    end exchange_u16
+    add_u16: (cell: ptr mut u16, value: u16) -> (previous: u16) =
+        previous = compiler.atomic_add(cell, value, compiler.acq_rel)
+    end add_u16
+    add_relaxed_u16: (cell: ptr mut u16, value: u16) -> (previous: u16) =
+        previous = compiler.atomic_add(cell, value, compiler.relaxed)
+    end add_relaxed_u16
+    compare_exchange_u16: (cell: ptr mut u16, expected: u16, desired: u16)
+                          -> (observed: u16) =
+        observed = compiler.atomic_compare_exchange(cell, expected, desired,
+                                                    compiler.acq_rel,
+                                                    compiler.acquire)
+    end compare_exchange_u16
+    exchange_u32: (cell: ptr mut u32, value: u32) -> (previous: u32) =
+        previous = compiler.atomic_exchange(cell, value, compiler.acq_rel)
+    end exchange_u32
+    add_u32: (cell: ptr mut u32, value: u32) -> (previous: u32) =
+        previous = compiler.atomic_add(cell, value, compiler.acq_rel)
+    end add_u32
+    add_relaxed_u32: (cell: ptr mut u32, value: u32) -> (previous: u32) =
+        previous = compiler.atomic_add(cell, value, compiler.relaxed)
+    end add_relaxed_u32
+    compare_exchange_u32: (cell: ptr mut u32, expected: u32, desired: u32)
+                          -> (observed: u32) =
+        observed = compiler.atomic_compare_exchange(cell, expected, desired,
+                                                    compiler.acq_rel,
+                                                    compiler.acquire)
+    end compare_exchange_u32
+    exchange_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
+        previous = compiler.atomic_exchange(cell, value, compiler.acq_rel)
+    end exchange_u64
+    add_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
+        previous = compiler.atomic_add(cell, value, compiler.acq_rel)
+    end add_u64
+    add_relaxed_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
+        previous = compiler.atomic_add(cell, value, compiler.relaxed)
+    end add_relaxed_u64
+    compare_exchange_u64: (cell: ptr mut u64, expected: u64, desired: u64)
+                          -> (observed: u64) =
+        observed = compiler.atomic_compare_exchange(cell, expected, desired,
+                                                    compiler.acq_rel,
+                                                    compiler.acquire)
+    end compare_exchange_u64
+    u8 is exchangeable (exchange: exchange_u8, add: add_u8,
+                        add_relaxed: add_relaxed_u8,
+                        compare_exchange: compare_exchange_u8)
+    u16 is exchangeable (exchange: exchange_u16, add: add_u16,
+                         add_relaxed: add_relaxed_u16,
+                         compare_exchange: compare_exchange_u16)
+    u32 is exchangeable (exchange: exchange_u32, add: add_u32,
+                         add_relaxed: add_relaxed_u32,
+                         compare_exchange: compare_exchange_u32)
+    u64 is exchangeable (exchange: exchange_u64, add: add_u64,
+                         add_relaxed: add_relaxed_u64,
+                         compare_exchange: compare_exchange_u64)
+end if
+
+cell_value: type (item: type) = struct
+    value: item
+end cell_value
+
+--- One u8, u16, u32 or u64 read and written atomically.  A zeroed cell holds
+--- zero.
+public cell: type (item: type is scalar) = cell_value(item)
+
+--- A cell holding `value`, for a local or a field; module storage writes
+--- `zeroed` instead.  Making it is not atomic: make it before another
+--- context can reach it.
+public new: (item: type is scalar, value: item) -> (made: cell(item)) =
+    made = (value: value)
+end new
+
+--- The value `at` holds, with acquire ordering: what the store that wrote
+--- it released is visible after it.
+public load: (item: type is scalar, at: ptr cell(item)) -> (value: item) =
+    value = item.load(addr at.val.value)
+end load
+
+--- The value `at` holds, with no ordering beyond the cell's own.
+public load_relaxed: (item: type is scalar, at: ptr cell(item))
+                     -> (value: item) =
+    value = item.load_relaxed(addr at.val.value)
+end load_relaxed
+
+--- Store `value` into `at`, with release ordering: whatever this context
+--- wrote before it is visible to a load that acquires this value.
+public store: (item: type is scalar, at: ptr mut cell(item), value: item)
+              -> none =
+    item.store(addr at.val.value, value)
+end store
+
+--- Store `value` into `at`, with no ordering beyond the cell's own.
+public store_relaxed: (item: type is scalar, at: ptr mut cell(item),
+                       value: item) -> none =
+    item.store_relaxed(addr at.val.value, value)
+end store_relaxed
+
+--- Add `value` to `at`, wrapping, as the cell's one writer, and return what
+--- it held: a relaxed load and a release store, so a reader that acquires
+--- the sum sees what the writer did before.  It is correct only while one
+--- context alone writes the cell, an interrupt handler or a thread, since a
+--- second writer's store between the two is lost; then it needs no
+--- read-modify-write, and every target has it, Cortex-M0 included.  Where
+--- several contexts write, use `add`.
+public sole_add: (item: type is scalar, at: ptr mut cell(item), value: item)
+                 -> (previous: item) =
+    previous = item.sole_add(addr at.val.value, value)
+end sole_add
+
+--- Store `value` into `at` and return what it held, in one indivisible
+--- step that acquires and releases.  Refused on Cortex-M0.
+public exchange: (item: type is exchangeable, at: ptr mut cell(item),
+                  value: item) -> (previous: item) =
+    previous = item.exchange(addr at.val.value, value)
+end exchange
+
+--- Add `value` to `at`, wrapping, and return what it held, in one
+--- indivisible step that acquires and releases.  Refused on Cortex-M0.
+public add: (item: type is exchangeable, at: ptr mut cell(item), value: item)
+            -> (previous: item) =
+    previous = item.add(addr at.val.value, value)
+end add
+
+--- Add `value` to `at`, wrapping, and return what it held, in one
+--- indivisible step with no ordering beyond the cell's own: a counter
+--- several contexts bump.  Refused on Cortex-M0.
+public add_relaxed: (item: type is exchangeable, at: ptr mut cell(item),
+                     value: item) -> (previous: item) =
+    previous = item.add_relaxed(addr at.val.value, value)
+end add_relaxed
+
+--- Store `desired` into `at` if it holds `expected`, and return what it
+--- held, in one indivisible step: the store happened exactly when the
+--- result equals `expected`, and never fails spuriously.  A store acquires
+--- and releases; a comparison that fails only acquires.  Refused on
+--- Cortex-M0.
+public compare_exchange: (item: type is exchangeable, at: ptr mut cell(item),
+                          expected: item, desired: item)
+                         -> (observed: item) =
+    observed = item.compare_exchange(addr at.val.value, expected, desired)
+end compare_exchange

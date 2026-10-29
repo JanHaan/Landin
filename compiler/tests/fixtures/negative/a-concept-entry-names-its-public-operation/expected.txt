@@ -3,8 +3,8 @@ error[L0202]: `alloc` is an entry of a concept this type conforms to, and the ty
   |
 9 |     block := memory.alloc(64, 1) else (problem) return end
   |                     ^^^^^
-  --> ../../hosted/heap/heap.ldn:13:1
+  --> ../../hosted/heap/heap.ldn:15:1
    |
-13 | system_value: type = struct
+15 | system_value: type = struct
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
   = note: [1240]: a concept's entry is reached through the operations its module makes public; call `mem.allocate(memory, ...)`

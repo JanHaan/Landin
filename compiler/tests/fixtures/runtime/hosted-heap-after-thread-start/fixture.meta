@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D502 hosted/heap once the started flag is set takes its classes' lock around every slot it hands out and takes back, and gives it back each time: a freed slot is still the next its class hands out, a fresh chunk is mapped under the lock, a large block is a mapping of its own that takes none, and a block grows and is resized, all on one thread, where a lock left taken would hold the next allocation for ever
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1360, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

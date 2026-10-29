@@ -1,0 +1,42 @@
+--  The lock and the started flag on the one thread a program starts
+--  with.  Nothing here can contend, so every take finds the lock free or
+--  is a take_if_free that does not wait; a take that waits, and the give
+--  that wakes it, need a second thread.
+import hosted/thread/lock
+
+mut shared: lock.lock = zeroed
+
+--  Each check returns its own status, so a failure says which one.
+cycle: (held: ptr mut lock.lock, first: i32) -> (status: i32) =
+    status = first
+    return when not lock.take_if_free(held)
+    status = first + 1
+    return when lock.take_if_free(held)
+    lock.give(held)
+    status = first + 2
+    lock.take(held)
+    return when lock.take_if_free(held)
+    lock.give(held)
+    status = first + 3
+    return when not lock.take_if_free(held)
+    lock.give(held)
+    status = 0
+end cycle
+
+public main: () -> (code: i32) =
+    code = 2
+    return when lock.threads_started()
+    code = cycle(addr shared, 10)
+    return when code <> 0
+    mut local: lock.lock = lock.new()
+    code = cycle(addr local, 20)
+    return when code <> 0
+    lock.note_start()
+    code = 3
+    return when not lock.threads_started()
+    lock.note_start()
+    return when not lock.threads_started()
+    code = cycle(addr shared, 30)
+    return when code <> 0
+    code = 42
+end main

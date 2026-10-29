@@ -1,0 +1,72 @@
+import core/atomic
+
+--  Module cells start zeroed, which a zeroed cell holds as zero.
+mut small: atomic.cell(u8) = zeroed
+mut middle: atomic.cell(u16) = zeroed
+mut word: atomic.cell(u32) = zeroed
+
+--  Each check returns its own status, so a failure says which one.
+module_cells: () -> (status: i32) =
+    status = 2
+    return when atomic.load(addr small) <> 0 or atomic.load(addr middle) <> 0
+      or atomic.load_relaxed(addr word) <> 0
+    status = 3
+    atomic.store(addr small, 200)
+    atomic.store(addr middle, 60000)
+    atomic.store(addr word, 4000000000)
+    return when atomic.load(addr small) <> 200
+      or atomic.load(addr middle) <> 60000
+      or atomic.load(addr word) <> 4000000000
+    status = 4
+    atomic.store_relaxed(addr small, 7)
+    atomic.store_relaxed(addr word, 9)
+    return when atomic.load_relaxed(addr small) <> 7
+      or atomic.load(addr word) <> 9
+    status = 0
+end module_cells
+
+--  The single writer's add returns what the cell held, and wraps at the
+--  cell's width rather than trapping.
+sole_writer: () -> (status: i32) =
+    status = 5
+    mut count := atomic.new(u8(250))
+    return when atomic.sole_add(addr count, 10) <> 250
+      or atomic.load(addr count) <> 4
+    status = 6
+    mut halves := atomic.new(u16(65535))
+    return when atomic.sole_add(addr halves, 2) <> 65535
+      or atomic.load_relaxed(addr halves) <> 1
+    status = 7
+    mut ticks := atomic.new(u32(0))
+    for round in u32(0)..<5 do
+        return when atomic.sole_add(addr ticks, 1) <> round
+    end for
+    return when atomic.load(addr ticks) <> 5
+    status = 0
+end sole_writer
+
+--  A cell reached through a field, as shared state is.
+counters: type = struct
+    seen: atomic.cell(u32)
+    flags: atomic.cell(u8)
+end counters
+
+through_fields: () -> (status: i32) =
+    status = 8
+    mut state: counters = (seen: atomic.new(u32(41)), flags: zeroed)
+    _ = atomic.sole_add(addr state.seen, 1)
+    atomic.store(addr state.flags, 1)
+    return when atomic.load(addr state.seen) <> 42
+      or atomic.load(addr state.flags) <> 1
+    status = 0
+end through_fields
+
+public main: () -> (code: i32) =
+    code = module_cells()
+    return when code <> 0
+    code = sole_writer()
+    return when code <> 0
+    code = through_fields()
+    return when code <> 0
+    code = 42
+end main

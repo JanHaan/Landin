@@ -3,9 +3,11 @@
 --  memory it maps itself through platform/posix, written once for every
 --  hosted system.  It over-allocates so that every usize alignment is
 --  honoured, not only the powers of two posix_memalign and aligned_alloc
---  admit.
+--  admit.  Its classes are behind one lock once the program has started a
+--  thread (D502).
 
 import core/mem
+import hosted/thread/lock
 import platform/posix
 
 --  The state carries no information; it is opaque so that only `host` makes
@@ -20,8 +22,12 @@ end system_value
 --- in place when its slot or mapping holds the new extent or its mapping
 --- can grow where it is, and a resize that cannot moves a mapping's pages
 --- with Linux's `mremap` or otherwise copies the block.  Available only on
---- hosted targets.  It is single-threaded: two threads may not use it at
---- once.
+--- hosted targets.  Threads share it: once the program has started a
+--- thread through hosted/thread, its size classes are behind one lock,
+--- which a program that has started none never takes, and a block larger
+--- than the largest class is a mapping of its own that needs none.  A C
+--- thread calling in under `--link=libc` is no thread of the program's,
+--- and two of them may not use it at once.
 ---
 --- Every usize alignment is accepted.  Zero and one mean no stricter than
 --- byte alignment.  A zero-byte request still returns a distinct, non-null,
@@ -88,9 +94,30 @@ smallest_class: usize = 32
 largest_class: usize = 4096
 chunk: usize = 65536
 
---  The first free slot of each class, or zero.  Single-threaded: the lists
---  are plain module storage and nothing serialises them.
+--  The first free slot of each class, or zero.  The lists are plain module
+--  storage, which `class_lock` serialises once a thread has started.
 mut free_slots: [8]usize
+
+--  The lock over every class's list and over mapping a class's chunk
+--  (D502).  A program that has started no thread skips it: the thread
+--  facility records the start before it makes the thread, and the
+--  creation orders everything this thread did to the lists before.
+mut class_lock: lock.lock = zeroed
+
+--  Take the classes' lock if a thread has started, and say whether it was
+--  taken, for `give_classes` to give it back alike.
+take_classes: () -> (locked: bool) =
+    locked = lock.threads_started()
+    if locked then
+        lock.take(addr class_lock)
+    end if
+end take_classes
+
+give_classes: (locked: bool) -> none =
+    if locked then
+        lock.give(addr class_lock)
+    end if
+end give_classes
 
 --  The smallest class holding `extent` bytes, which is at most the largest
 --  class: its index and its size.
@@ -147,7 +174,9 @@ host_alloc: (size: usize, unit: usize) -> (block: usize) =
     mut held: usize = 0
     if extent <= largest_class then
         (index, size: class_size) := class_of(extent)
+        locked: bool = take_classes()
         origin = take_slot(index, class_size)
+        give_classes(locked)
         held = class_size
     else
         page: usize = posix.page_size()
@@ -170,9 +199,11 @@ host_free: (block: usize) -> none =
     held: usize = load_word(at + word)
     if held <= largest_class then
         (index, size: _) := class_of(held)
+        locked: bool = take_classes()
         link: ptr mut usize = ptr(origin)
         link.val = free_slots[index]
         free_slots[index] = origin
+        give_classes(locked)
     else
         --  A refusal means the header no longer holds a mapping of this
         --  heap's, and free has no failure to report it by: the pages, if

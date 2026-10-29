@@ -469,6 +469,17 @@
     "runtime/atom-values-cross-the-abi": {
       "mode": "execute"
     },
+    "runtime/atomic-read-modify-write": {
+      "codes": [
+        "L0300",
+        "L0344"
+      ],
+      "mode": "refuse",
+      "reason": "D510: Cortex-M0 has no atomic read-modify-write and no eight-byte atomic access, so the u64 cells and every exchange, add and compare-exchange are refused at their use, naming sole_add and platform/cortex_m's critical section; the L0300 is the u64 cell's refusal leaving its literal argument typed as i32, a cascade the register records."
+    },
+    "runtime/atomic-tick-firmware": {
+      "mode": "execute"
+    },
     "runtime/benchmark-game-binary-trees": {
       "codes": [
         "L0015"
@@ -1404,6 +1415,13 @@
       "mode": "refuse",
       "reason": "Cortex-M0 retains refusal of the general C source surface, and this program's C import is what a static hosted link would refuse; runtime/region-bounded-pool pins the same pruning on Cortex-M0 by image size."
     },
+    "runtime/hosted-heap-after-thread-start": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/heap and hosted/thread/lock on the freestanding target before checking declarations."
+    },
     "runtime/hosted-heap-provider": {
       "codes": [
         "L0015"
@@ -1589,6 +1607,9 @@
       "mode": "execute"
     },
     "runtime/library-shared-arena": {
+      "mode": "execute"
+    },
+    "runtime/library-shared-atomic": {
       "mode": "execute"
     },
     "runtime/library-shared-cmp": {
@@ -2171,6 +2192,13 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations. Firmware maps no memory and has no descriptors to transfer through."
+    },
+    "runtime/posix-wait-on-address": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
     },
     "runtime/private-alias-of-constrained-template": {
       "mode": "execute"
@@ -3126,6 +3154,13 @@
     },
     "runtime/text-range-slicing": {
       "mode": "execute"
+    },
+    "runtime/thread-lock-one-thread": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread/lock on the freestanding target before checking declarations."
     },
     "runtime/trapping-arm-leaves-a-statement": {
       "mode": "execute"

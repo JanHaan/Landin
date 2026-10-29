@@ -21749,7 +21749,8 @@ are aligned whatever the block's alignment and every `usize` alignment works,
 a power of two or not; a zero-byte request is a distinct token. An addition that would
 overflow, or an extent above `PTRDIFF_MAX` less the page rounding, is
 `mem.out_of_memory` before any state changes, as is a failed mapping. The
-provider is single-threaded. D300 makes it the heap of every hosted system.
+provider was single-threaded; D502 puts its classes behind a lock once a
+thread has started. D300 makes it the heap of every hosted system.
 
 **The alternatives:** one mapping per allocation, which spends a page on
 every small object; a general-purpose allocator with coalescing, more code
@@ -22314,7 +22315,7 @@ Linux size classes over its own mappings.
 **Chosen:** D282's size-class heap is the heap of every hosted system, over
 `platform/posix`'s `map` and `unmap`, so `hosted/heap` has no code of its own
 for any system. It is single-threaded everywhere; a heap that threads share
-is the threads item's, on every system alike.
+is the threads item's, on every system alike, which D502 and D514 give it.
 
 **The alternatives:** keeping `malloc` on Darwin and FreeBSD, which keeps
 per-system code in `hosted/heap` and a thread-safe heap on two systems only.
@@ -22673,7 +22674,7 @@ name alone where there are no version tables. Every offset is held inside the
 image before it is read, by arithmetic that cannot overflow, and the image is
 bounded by its first page for the headers and its first load segment, at most
 a mebibyte. The function's address is cached in a plain module word on first
-use, single-threaded state like the heap's, and called through D335's
+use, a relaxed `u64` cell of `core/atomic` since D502, and called through D335's
 conversion of that address to a C function value. A missing symbol, a malformed
 image or a nonzero answer falls back to the system call. Since D279's
 adoption it serves `--link=libc` too, and `time.now` costs about 116 ns either
@@ -22681,7 +22682,9 @@ way.
 
 **The alternatives:** the system call alone; resolving the vDSO in every static
 program's entry, which carries its 17 KB into every image; and relaxed atomics
-for the cache, which cost about 50 ns a read until threads need them.
+for the cache, which cost about 50 ns a read until threads need them. The
+cache was a plain module word until threads needed it; D502 made it a relaxed
+atomic, which D499 lowers to a plain move.
 
 **Pinned by** `runtime/linux-vdso`, which also forces the fallback, and
 `runtime/clock-system-libc`, which requires the vDSO under `--link=libc`.
@@ -24192,9 +24195,11 @@ target, Cortex-M0 included (D482, D483); `runtime/events-close-wakes-waiter`,
 a receive under `hosted/events` woken with `io_failed` when another fibre
 closes its socket and another when one shuts it, and
 `runtime/events-signal-stops-server`, the same stopping as the fake's over a
-real listener and a signal the process sends itself (D485, D488). The
-wrapper's fixtures will pin the rest; prototype 5's V7, V10 and V14 record
-the pressure.
+real listener and a signal the process sends itself (D485, D488); and the
+wrapper's `runtime/atomic-tick-firmware`, whose single writer adds with
+`atomic.sole_add` on every target, and
+`negative/atomic-read-modify-write-cortex-m0`, its refusal naming the critical
+section (D510, D511). Prototype 5's V7, V10 and V14 record the pressure.
 
 ### D463 — The switch is a module beneath `core/fibre`
 
@@ -25068,7 +25073,11 @@ critical section, as are the eight-byte cell's operations there.
 every store; and every legal ordering in an entry's name, about fifteen
 entries. Both were declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `runtime/library-shared-atomic` on every target, Cortex-M0
+included, `runtime/atomic-read-modify-write` on every hosted target,
+`runtime/atomic-tick-firmware`, prototype 5's tick on every target, the
+Cortex-M fibre-capacity probe, whose single writer is SysTick's handler, and
+the refusals D510 lists.
 
 ### D501 — A lock waits on its word through the system
 
@@ -25088,7 +25097,9 @@ holder is descheduled; `pthread_mutex`, which a static Linux program does
 not have; and Darwin's `os_unfair_lock` beside a futex elsewhere, which keeps
 per-system code above `platform/posix`. All were declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `runtime/posix-wait-on-address` and
+`runtime/thread-lock-one-thread` on every hosted target, on one thread
+(D512, D513); a lock contended between threads is the threads fixtures'.
 
 ### D502 — The heap is shared, and the vDSO cache is relaxed
 
@@ -25108,7 +25119,10 @@ read-modify-write per allocation and free in a program with one thread; and
 a cache per thread now, more code than one lock before a consumer contends.
 Both were declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `runtime/hosted-heap-after-thread-start` with the flag set,
+`runtime/hosted-heap-provider` and `runtime/linux-heap-size-classes` with it
+clear, and `runtime/linux-vdso` and `runtime/clock-system-libc` over the
+relaxed cache; D514 records what the lock costs.
 
 ### D503 — The process's own state beside threads
 
@@ -25134,3 +25148,168 @@ program Landin starts; what remains is a C library's own `exec`.
 declined. It was declined again.
 
 **Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D510 — Cortex-M0's missing atomics are refused at the caller's use
+
+**The tour said** at [1620] that Cortex-M0 has no read-modify-write; D227
+refuses the builtins there with L0344 inside whatever body calls them, and
+D500 requires the wrapper's refusal at the caller's use, naming the
+single-writer update and `platform/cortex_m`'s critical section.
+
+**Chosen:** `core/atomic` gives each of `u8`, `u16`, `u32` and `u64` a
+conformance to its concept `scalar` and to `exchangeable`, which refines it,
+only where the target carries those accesses: under `fixed if compiler.arch
+<> cortex_m0` for `u64` and for every `exchangeable`. A cell's type is
+constrained by `scalar`, and its exchange, add, relaxed add and
+compare-exchange by `exchangeable`, so on Cortex-M0 the missing conformance
+is found where the program writes the cell's type or calls the operation,
+not in the library's bodies, which the target never checks. The checker
+says such a missing conformance of one of `core/atomic`'s concepts for one
+of the four scalars as the target's refusal, L0344, at that use: when the
+target has no atomic access of the scalar's width, that it has no cell of
+it, naming a cell of four bytes or fewer and the critical section; when it
+has the accesses but no read-modify-write, that a cell has no exchange, add
+or compare-exchange there, naming `atomic.sole_add` and the critical
+section. Which refusal it is comes from the target's own admission of the
+builtins (D227), not from a list of targets. Any other type is L0318 at its
+use, its note saying a cell holds a `u8`, `u16`, `u32` or `u64`. The
+concept is recognized by the module that declares it, as [0610]'s
+`core/text.position` is.
+
+**The alternatives:** declaring the operations only off Cortex-M0, which
+leaves an ordinary unresolved name that says nothing of what to use
+instead; a body that traps on Cortex-M0, which turns a static refusal into
+a runtime one; letting the builtin's L0344 stand in the library's body,
+which names a line the caller never wrote; and a general language form
+for a declaration a target refuses with a message of the library's own,
+more mechanism than one module needs. All were declined.
+
+**Pinned by** `negative/atomic-read-modify-write-cortex-m0`, four
+read-modify-writes refused beside an accepted `sole_add`;
+`negative/atomic-eight-byte-cell-cortex-m0`, a module and a local `u64`
+cell refused once each; `negative/atomic-cell-holds-unsigned-scalars`, a
+signed, a bool and a `usize` cell refused on Linux x86-64; and the
+Cortex-M corpus's refusal of `runtime/atomic-read-modify-write` with
+L0344 at every use.
+
+### D511 — The cell's operations, and the single writer's add
+
+**The tour said** nothing; D500 fixes the orderings and leaves the
+single-writer update's name to the item that implements it.
+
+**Chosen:** `atomic.cell(T)` is a struct of one field, opaque outside the
+module, which module storage starts `zeroed` and `atomic.new(value)` makes
+for a local or a field. Its operations take the cell's address: `load` and
+`store`, acquiring and releasing; `load_relaxed`, `store_relaxed` and
+`add_relaxed`; `exchange`, `add` and `compare_exchange`, which return what
+the cell held, an add wrapping at the scalar's width. The single-writer
+update is `atomic.sole_add(cell, value)`: a relaxed load, a release store
+of the wrapping sum, and what the cell held, correct while one context
+alone writes the cell, and on every target. Each operation calls its
+concept's entry, which `--specialize` makes a direct call, so a cell
+operation costs a call more than the builtin until the inliner takes it.
+The name is provisional: `sole_add` was chosen to say in the operation's
+own name that it has one writer, which `advance` would not, and its shape,
+an add rather than an update taking a routine, because the consumer it
+serves is a count and a handler should not call through a function value.
+
+**The alternatives:** `writer_add`, which reads as adding a writer;
+`update(cell, change)` taking a routine for any single-writer change, an
+indirect call in every interrupt handler for a form a load and a store
+already spell; and a cell passed `inout`, which a cell in shared storage
+reached through a pointer cannot be. All were declined.
+
+**Pinned by** `runtime/library-shared-atomic` on every target, Cortex-M0
+included, `runtime/atomic-read-modify-write` on every hosted target and
+`runtime/atomic-tick-firmware`, prototype 5's firmware/tick on every target;
+the Cortex-M fibre-capacity probe (D470) runs the same writer as SysTick's
+handler.
+
+### D512 — A wait on an address takes a `u32` cell, and may return early
+
+**The tour said** nothing; D501 names the systems' waits and puts them in
+`platform/posix`.
+
+**Chosen:** `posix.wait_on(word, expected)` sleeps while the
+`atomic.cell(u32)` at `word` holds `expected`, and
+`posix.wait_on_within(word, expected, span)` does for at most a span on the
+monotonic clock, failing `etimedout` after it and `einval` for a span no
+`time_value` may be; `posix.wake_one(word)` and `posix.wake_all(word)` wake
+one or every waiter. The word is four bytes, the one width all three
+systems wait on, and private to the process. Either wait returns at once
+when the cell does not hold `expected`, and may return with nobody having
+woken it, so a waiter reads the cell again; neither has any other failure,
+since the systems' others are an address the cell's type rules out. On
+Linux they are `platform/linux`'s `futex_wait` and `futex_wake` over
+`FUTEX_WAIT_PRIVATE` and `FUTEX_WAKE_PRIVATE`, the operations private to
+the module; on FreeBSD `_umtx_op` with `UMTX_OP_WAIT_UINT_PRIVATE` and
+`UMTX_OP_WAKE_PRIVATE`, a span given as a `struct _umtx_time` on
+`CLOCK_MONOTONIC`; on Darwin `os_sync_wait_on_address`, its
+`_with_timeout` form on `OS_CLOCK_MACH_ABSOLUTE_TIME`, and
+`os_sync_wake_by_address_any` and `_all`, which macOS 14.4 added.
+
+**The alternatives:** a wait over any width, which only Darwin has; a
+wait that fails `eintr` and `eagain`, which every caller treats as the
+early return it already handles; and Darwin's older private `__ulock_wait`,
+which Apple does not support. All were declined.
+
+**Pinned by** `runtime/posix-wait-on-address` on every hosted target: a
+mismatched wait returning at once, timed or not, a timed wait failing
+`etimedout` no sooner than its span, both refused spans, and wakes with
+nobody waiting. A wake that ends another thread's wait is the threads
+fixtures'.
+
+### D513 — The lock is three states over one cell, and the start is a flag beside it
+
+**The tour said** nothing; D501 gives the lock one read-modify-write each
+way uncontended, and D502 a relaxed flag the thread facility sets.
+
+**Chosen:** `hosted/thread/lock` is a module beneath `hosted/thread`, so
+that the heap can import it without importing the facility, which never
+imports the heap. A `lock.lock` is one `u32` cell, free, taken, or taken
+with a thread waiting, as Drepper's "Futexes Are Tricky" gives it:
+`lock.take` takes a free lock with one compare-exchange, and otherwise
+marks it waited for with an exchange and waits on the cell until an
+exchange finds it free; `lock.give` frees it with one exchange and wakes
+one waiter when it was waited for; `lock.take_if_free` never waits. A
+zeroed lock is free. It is neither reentrant nor owned. The flag is a
+relaxed `u32` cell of the module's, set by `lock.note_start()`, which the
+thread facility calls before its first start, and read by
+`lock.threads_started()`. On Cortex-M0 there is no lock: the critical
+section is one.
+
+**The alternatives:** the flag in `hosted/thread` itself, which would make
+the heap import the facility that takes its stacks from the caller; a
+two-state lock, which makes every give a system call while anybody ever
+waited; and a lock that records its owner to refuse a foreign give, a
+second word for a mistake no fixture makes. All were declined.
+
+**Pinned by** `runtime/thread-lock-one-thread` on every hosted target and
+`runtime/hosted-heap-after-thread-start`. A take that waits for another
+thread's give is the threads fixtures'.
+
+### D514 — What the heap's lock costs a program with one thread
+
+**The tour said** nothing; D502 skips the lock until a thread starts.
+
+**Chosen:** `hosted/heap` reads the flag once for each slot it takes or
+gives, and takes the lock around the class's list, mapping a chunk under
+it; a block larger than the largest class takes none. Measured on Linux
+x86-64 with the debug compiler, twenty million allocations and frees of 24
+bytes, each pair: at `--optimize size` 78 ns before, 197 ns with the flag
+clear and 460 ns with it set; at `--optimize speed` 28 ns, 145 ns and
+367 ns. Until D499 every atomic is fenced before and after, so the flag's
+relaxed load costs two `mfence`s and is most of the difference; with D499's
+lowering the flag is a plain load, and the integration of the two
+measures it again. The vDSO cache is a relaxed `u64` cell and costs a
+clock read the same until then (D317), and `child_defaults` is a `u64` cell
+a compare-exchange adds a signal to and a spawn reads once with an
+acquiring load.
+
+**The alternatives:** a heap that takes the lock in every program, which
+D502 declined; and reading the flag once per heap handle, which a handle
+made before the first start would keep for ever. Both were declined.
+
+**Pinned by** `runtime/hosted-heap-after-thread-start`,
+`runtime/hosted-heap-provider` and `runtime/linux-heap-size-classes`,
+unchanged.

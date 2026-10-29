@@ -244,9 +244,9 @@ class Inventory(unittest.TestCase):
             "[0170]'s refusal transfers it and the row hands work to no"
             " successor")
 
-        row = self.row("1620")
+        row = self.row("0150")
         self.refused(self.problems({row: row.replace(
-            "| Broader standard library |", "| Somebody |")}),
+            "| Language evolution |", "| Somebody |")}),
             "unknown owner")
 
     def test_owners_are_explained_in_the_row(self):

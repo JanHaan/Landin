@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D501 platform/posix's wait on an address on one thread: a wait whose cell does not hold the value it names returns at once, timed or not, a timed wait whose cell holds it fails etimedout no sooner than its span on the monotonic clock, a span of a second's nanoseconds or more or a negative one is einval, and waking a cell nobody waits on returns; a wake that ends another thread's wait is the threads fixtures'
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1620, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

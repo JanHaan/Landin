@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D500 core/atomic's operations every target has, Cortex-M0 included: zeroed and made cells of u8, u16 and u32 load and store with acquire and release and relaxed, and sole_add returns what the cell held and wraps at its width
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+constructs: 0150, 1290, 1620

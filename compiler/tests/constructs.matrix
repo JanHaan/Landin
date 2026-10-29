@@ -19,7 +19,7 @@
 #  disposition column explains every row.
 #  204 constructs, 198 with fixture evidence, 6 with none.
 #  States: 193 executed, 5 compiled, 2 transferred, 4 advisory.
-#  8 rows name an open owner; 0 have target gaps.
+#  7 rows name an open owner; 0 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | linux-arm64 | darwin-arm64 | freebsd-x86-64 | freebsd-arm64 | linux-rv64 | cortex-m0 | refusals | state | targets | gaps | owner | title
 0010 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Line comments
@@ -183,7 +183,7 @@
 1590 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | refused | - | executed | hosted | none | none | Linking a static library
 1600 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | - | - | executed | hosted | none | none | Exporting to C
 1610 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Choosing a symbol's linker name
-1620 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | Broader standard library | Atomics
+1620 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Atomics
 1630 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | transferred | executed | all | none | Language evolution | Inline assembly, for what has no builtin
 1640 | tour | accepted emitted refused | compiled | compiled | compiled | compiled | compiled | compiled | executed | - | executed | cortex-m | none | none | Placing code and data on a microcontroller
 1650 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Where a program starts
