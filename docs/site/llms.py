@@ -392,6 +392,8 @@ def index(pages, site_url, release, sizes):
                  "programs in full. %s, most of it the register of "
                  "decisions, which says why a rule is what it is rather "
                  "than what to write." % (site_url, sizes["full"])),
+            ("capabilities", "what the compiler, its library and its "
+                             "tooling do today, target by target."),
             ("handoff", "the design in one page, and which decisions must "
                         "not be quietly reversed."),
             ("roadmap", "the sole authority for open work: its phases, "
