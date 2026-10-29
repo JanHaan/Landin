@@ -8,8 +8,10 @@ import platform/libc
 --  SIGUSR1, ignored, is sent to the process itself: the queue records it
 --  all the same.  `sigprocmask` blocks SIGUSR2 and puts the mask back.  The
 --  failure oracles: removing an event never added is reported as an event
---  with `ev_error` and ENOENT, a change to a closed descriptor as one with
---  EBADF, and a wait with nothing ready reports nothing.
+--  with `ev_error` and ENOENT, adding an event for a closed descriptor as
+--  one with EBADF, and a wait with nothing ready reports nothing.  Removing
+--  one from a closed descriptor is no oracle: closing removed it, and
+--  Darwin reports ENOENT where FreeBSD reports EBADF.
 
 --  `struct kevent`: FreeBSD's carries four extension words.
 on_darwin: bool = compiler.os == darwin
@@ -68,7 +70,7 @@ public main: () -> (code: i32) =
       or ended.identifier <> usize(ends[0])
 
     --  Removing an event never added is an error event, ENOENT, and so is
-    --  any change to a descriptor once it is closed, EBADF.
+    --  adding one for a descriptor once it is closed, EBADF, on both systems.
     code = 6
     never: kqueue.event_record =
         kqueue.change(usize(ends[0]), kqueue.evfilt_write, kqueue.ev_delete,
@@ -79,10 +81,10 @@ public main: () -> (code: i32) =
     return when (refused.flags & kqueue.ev_error) == 0
       or refused.data <> no_entry
     return when libc.close(ends[0]) <> 0
-    removal: kqueue.event_record =
-        kqueue.change(usize(ends[0]), kqueue.evfilt_read, kqueue.ev_delete,
+    addition: kqueue.event_record =
+        kqueue.change(usize(ends[0]), kqueue.evfilt_read, kqueue.ev_add,
                       0, 0)
-    return when kqueue.kevent(queue, addr removal, 1, addr reports[0], 4,
+    return when kqueue.kevent(queue, addr addition, 1, addr reports[0], 4,
                               addr no_wait) <> 1
     closed: kqueue.event_record = reports[0]
     return when (closed.flags & kqueue.ev_error) == 0
