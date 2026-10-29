@@ -3155,12 +3155,68 @@
     "runtime/text-range-slicing": {
       "mode": "execute"
     },
+    "runtime/thread-creation-and-join-order-writes": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
+    },
+    "runtime/thread-creation-and-join-order-writes-libc": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
+    },
+    "runtime/thread-join-first-failure": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
+    },
     "runtime/thread-lock-one-thread": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/thread/lock on the freestanding target before checking declarations."
+    },
+    "runtime/thread-runs-fibres": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
+    },
+    "runtime/thread-signal-reaches-events": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
+    },
+    "runtime/thread-spawn-leaks-no-descriptor": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
+    },
+    "runtime/thread-stack-past-limit-traps": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
+    },
+    "runtime/thread-start-refused": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/thread and hosted/system, the hosted threads and system services, on the freestanding target before checking declarations: firmware has no threads."
     },
     "runtime/trapping-arm-leaves-a-statement": {
       "mode": "execute"

@@ -19704,7 +19704,10 @@ code calls the naked text through the import's C signature, and the text
 owns honouring it. The checker admits the pair beside each other, as it
 admits C's view of `main` (D279), and the verified IR's agreement of a
 symbol's declarations takes the pair as one; any other pairing of a
-naked definition and a declaration of its symbol is still L0347.
+naked definition and a declaration of its symbol is still L0347. The
+naked routine is reached through the import, rather than kept as every
+machine-convention definition is, so a program that never calls the
+import carries neither.
 `platform/linux`'s `clone_thread` is such an import, and its text has
 no label: the creator and the new thread run the same instructions
 after the call and each picks its next step with a conditional move, or

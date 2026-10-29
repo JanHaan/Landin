@@ -1,4 +1,4 @@
---  D503, SR-121: a descriptor another thread makes is never inherited by
+--  D503: a descriptor another thread makes is never inherited by
 --  a program `io.spawn` starts.  Darwin has no pipe2, so platform/posix's
 --  pipe there is marked closed on exec only after it is made, and a
 --  program executed in between could inherit it; but Darwin's spawn asks
