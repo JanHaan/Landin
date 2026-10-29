@@ -1,0 +1,42 @@
+--  D496: four C threads enter these exports at once, and each counts in
+--  its own `link(thread)` instances: its counter and its record start
+--  zeroed in it, hold only its own writes, and live at an address no other
+--  thread's do.  The thread that runs `main` keeps its own instance, which
+--  none of them changes.
+
+extern(c) r1440_run_counting_threads: () -> (result: i32)
+
+tally: type = struct
+    count: u32
+    last: [8]u64
+end tally
+
+link(thread) mut counter: u64
+link(thread) mut record: tally
+
+public extern(c) link(symbol: "r1440_thread_count")
+thread_count: (rounds: u32, mark: u64) -> (result: u64) =
+    result = 0
+    return when counter <> 0 or record.count <> 0
+    for round in u32(0)..<rounds do
+        counter += 1
+        record.count += 1
+        record.last[usize(round % 8)] = mark
+    end for
+    return when u64(record.count) <> counter
+    result = counter + record.last[7]
+end thread_count
+
+public extern(c) link(symbol: "r1440_thread_counter_address")
+thread_counter_address: () -> (place: usize) =
+    place = usize(addr counter)
+end thread_counter_address
+
+public main: () -> (code: i32) =
+    counter = 7
+    code = r1440_run_counting_threads()
+    return when code <> 42
+    code = 1
+    return when counter <> 7 or record.count <> 0
+    code = 42
+end main

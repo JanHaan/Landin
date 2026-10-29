@@ -1,0 +1,24 @@
+--  D496: `link(thread)` gives a module `mut` binding an instance in every
+--  thread, zeroed and with no value, of any type with a zero image; one
+--  annotation places every name of a shared binding, and a public one is
+--  read through its module as any module binding is.
+point: type = struct
+    x: i32
+    y: [4]u16
+end point
+
+link(thread) mut counter: u32
+link(thread) mut first, second: i64
+link(thread) public mut place: point
+link(thread) mut recent: [16]u8
+link(thread) mut ready: bool
+
+public main: () -> (code: i32) =
+    counter += 1
+    first = 2
+    second = first + 1
+    place.y[3] = 4
+    recent[15] = u8(counter)
+    ready = true
+    code = i32(counter) + i32(second) + i32(place.y[3]) + i32(recent[15])
+end main

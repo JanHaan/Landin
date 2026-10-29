@@ -1,0 +1,50 @@
+--  D496: under `--link=libc` the C library lays the first thread's
+--  storage, and a `link(thread)` instance starts zeroed and holds what
+--  the thread writes, as it does when `_landin_start` lays it.  Each wrong
+--  value ends with a status of its own and every right one with 42.
+point: type = struct
+    x: i32
+    y: [4]u16
+end point
+
+link(thread) mut counter: u32
+link(thread) mut place: point
+link(thread) mut recent: [64]u64
+link(thread) mut ratio: f64
+mut shared: u32 = 0
+
+bump: (inout value: u32) -> none =
+    value += 10
+end bump
+
+store: (into: ptr mut u64, value: u64) -> none =
+    into.val = value
+end store
+
+public main: () -> (code: i32) =
+    code = 1
+    return when counter <> 0 or place.x <> 0 or place.y[3] <> 0
+      or recent[63] <> 0 or ratio <> 0.0
+    code = 2
+    counter = 5
+    bump(counter)
+    return when counter <> 15
+    code = 3
+    place.x = -7
+    place.y[2] = 9
+    return when place.x <> -7 or place.y[2] <> 9 or place.y[1] <> 0
+    code = 4
+    for index in usize(0)..<64 do
+        recent[index] = u64(index) * 3
+    end for
+    store(addr recent[40], 1000)
+    return when recent[39] <> 117 or recent[40] <> 1000 or recent[63] <> 189
+    code = 5
+    ratio = 1.5
+    ratio = ratio * 2.0
+    return when ratio <> 3.0
+    code = 6
+    shared = counter
+    return when shared <> 15
+    code = 42
+end main

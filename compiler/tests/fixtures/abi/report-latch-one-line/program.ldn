@@ -1,0 +1,32 @@
+--  D498: two C threads each run a task on a prepared stack of their own
+--  whose recursion goes past it, and both fail their checks together.
+--  Off Linux the default report moves to the one report stack after it
+--  claims a latch, so exactly one line is written and the other thread
+--  waits, writing nothing, until that report ends the process.
+
+extern(c) r1440_run_overflowing_threads: () -> (result: i32)
+
+mut stacks: [2][16384]u8 = zeroed
+link(thread) mut saved: usize
+
+descend: (depth: u32) -> (reached: u32) =
+    mut pad: [64]u8 = zeroed
+    pad[usize(depth % 64)] = u8(depth % 251)
+    reached = descend(depth + 1) + u32(pad[usize(depth % 64)])
+end descend
+
+task: (argument: usize) -> noreturn =
+    _ = descend(u32(argument))
+    compiler.unreachable()
+end task
+
+public extern(c) link(symbol: "r1440_overflow")
+overflow: (which: i32) -> none =
+    resumed: usize = compiler.stack_prepare(stacks[usize(which)][0..<16384],
+                                            task, 1)
+    compiler.stack_switch(addr saved, resumed)
+end overflow
+
+public main: () -> (code: i32) =
+    code = r1440_run_overflowing_threads()
+end main

@@ -1,0 +1,8 @@
+class: runtime
+summary: D496 under --link=libc the C library lays the first thread's storage, and its link(thread) instance starts zeroed and holds what the thread writes
+program: main.ldn
+profiles: standard
+link: libc
+status: 42
+constructs: 1790, 1996
+targets: linux-x86-64, linux-arm64, linux-rv64

@@ -602,8 +602,17 @@
                   "content": {
                     "type": "ALIAS",
                     "content": {
-                      "type": "STRING",
-                      "value": "keep"
+                      "type": "CHOICE",
+                      "members": [
+                        {
+                          "type": "STRING",
+                          "value": "keep"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "thread"
+                        }
+                      ]
                     },
                     "named": true,
                     "value": "identifier"
@@ -712,8 +721,17 @@
                         "content": {
                           "type": "ALIAS",
                           "content": {
-                            "type": "STRING",
-                            "value": "keep"
+                            "type": "CHOICE",
+                            "members": [
+                              {
+                                "type": "STRING",
+                                "value": "keep"
+                              },
+                              {
+                                "type": "STRING",
+                                "value": "thread"
+                              }
+                            ]
                           },
                           "named": true,
                           "value": "identifier"

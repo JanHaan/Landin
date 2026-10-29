@@ -1,0 +1,11 @@
+class: abi
+profiles: standard
+summary: D498 two threads past their prepared stacks at once off Linux write one report line between them, the latch's winner's, and the process ends by its trap
+program: program.ldn
+c-sources: threads.c
+c-args: -pthread
+traps: yes
+trap_report: program.ldn:12:1: trap: stack_exhausted
+run_expect: expected.txt
+constructs: 1600, 1610, 1670, 1995, 1996
+targets: darwin-arm64, freebsd-x86-64, freebsd-arm64

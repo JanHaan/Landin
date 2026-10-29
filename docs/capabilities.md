@@ -242,7 +242,19 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   which stands a margin above its base for the handler (D471, D472). A
   selected handler that does not fit that margin, or whose calls the
   compiler cannot measure, is refused when the program is compiled (D474).
-  A program that prepares no stack has no check.
+  A program that prepares no stack has no check. The limit is the running
+  thread's own: ELF thread storage on Linux and FreeBSD, a pthread key's
+  slot read directly on Darwin (D497, D506). Off Linux the default report
+  claims a latch before it uses the one report stack, so two threads
+  failing at once write one line (D498, D507).
+- **Thread storage.** `link(thread) mut cell: T` gives every thread its own
+  zeroed instance of a module binding: ELF local-exec thread storage on
+  Linux and FreeBSD, which a static Linux program's start lays itself and
+  `--link=libc` leaves to the C library, Darwin's thread-local variables,
+  and ordinary module storage on Cortex-M0 (D496, D504). `hosted/system`
+  keeps each thread's last errno and last signal so, and a handle from
+  `system.new()` records into the calling thread's (D503, D509).
+  platform/linux lays the block a new thread's `clone` takes (D504).
 - **Fibres on Cortex-M0.** On the retained Cortex-M0 profile a consumer of
   `core/fibre`'s round of turns, two fibres on 1,472-byte stacks cut from
   fixed module storage, fits with its painted peaks and D461's exception

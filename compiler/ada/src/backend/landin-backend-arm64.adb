@@ -2245,6 +2245,33 @@ package body Landin.Backend.Arm64 is
          end case;
       end Limit_Address;
 
+      --  D497: the running thread's limit loaded into Register, with the
+      --  last addition folded into the load: on ELF the low twelve bits of
+      --  the offset, on Darwin the slot's offset in Scratch.
+      procedure Limit_Load (Register, Scratch : String);
+      procedure Limit_Load (Register, Scratch : String) is
+      begin
+         case Format is
+            when Landin.Targets.Capabilities.ELF =>
+               Emit ("mrs " & Register & ", tpidr_el0");
+               Emit ("add " & Register & ", " & Register
+                     & ", #:tprel_hi12:" & Stack_Limit & ", lsl #12");
+               Emit ("ldr " & Register & ", [" & Register
+                     & ", #:tprel_lo12_nc:" & Stack_Limit & "]");
+            when Landin.Targets.Capabilities.Mach_O =>
+               Emit ("mrs " & Register & ", tpidrro_el0");
+               Emit ("and " & Register & ", " & Register
+                     & ", #0xfffffffffffffff8");
+               Emit ("adrp " & Scratch & ", "
+                     & Platform.Page (Format, Limit_Slot, False));
+               Emit ("ldr " & Scratch & ", [" & Scratch & ", "
+                     & Platform.Page_Offset (Format, Limit_Slot, False)
+                     & "]");
+               Emit ("ldr " & Register & ", [" & Register & ", " & Scratch
+                     & "]");
+         end case;
+      end Limit_Load;
+
       --  D496: the template a Mach-O thread-local variable's instances are
       --  laid from, named after the variable as Apple's compilers name it.
       function Template_Of (Name : String) return String
@@ -2348,8 +2375,7 @@ package body Landin.Backend.Arm64 is
          Emit ("mov x1, x29");
          Emit ("bl " & C ("pthread_setspecific"));
          Emit ("cbnz w0, " & Refused);
-         Limit_Address ("x9", "x10");
-         Emit ("ldr x9, [x9]");
+         Limit_Load ("x9", "x10");
          Emit ("str x9, [sp]");
          Key ("x0");
          Emit ("bl " & C ("pthread_getspecific"));
@@ -2763,8 +2789,7 @@ package body Landin.Backend.Arm64 is
          begin
             --  D497: the running thread's cell, loaded first so that
             --  Darwin's slot offset can pass through x16.
-            Limit_Address ("x17", "x16");
-            Emit ("ldr x17, [x17]");
+            Limit_Load ("x17", "x16");
             if Bytes = 0 then
                Emit ("mov x16, sp");
             elsif Bytes < 4096 then

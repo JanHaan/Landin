@@ -1,0 +1,5 @@
+link(thread) mut counter: u32 = 1
+
+public main: () -> (code: i32) =
+    code = i32(counter)
+end main

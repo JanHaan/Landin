@@ -27,7 +27,7 @@ system_open_directory: (self: host, path: text.host_string,
                         buffer: []mut u8)
                        -> (opened: io.directory from buffer)
                        ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     --  Every name a hosted system gives fits a buffer this large, record
     --  and all, so a read never meets one that cannot fit.
     fail io.io_failed when lenof buffer < io.directory_buffer
@@ -84,7 +84,7 @@ end kind_at
 
 system_read_entry: (self: host, inout opened: io.directory)
                    -> (item: io.entry from opened) ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     loop do
         mut stream: posix.directory_stream = stream_of(opened)
         next: posix.directory_entry =
@@ -117,7 +117,7 @@ end system_read_entry
 system_entry_size: (self: host, opened: io.directory,
                     name: text.host_string)
                    -> (size: u64) ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     size = 0
     --  No hosted system gives a name this long, or one with a `/` or a
     --  NUL, so no entry has one, and the system is not asked.
@@ -138,7 +138,7 @@ end system_entry_size
 
 system_close_directory: (self: host, sink opened: io.directory)
                         -> none ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     --  The descriptor may already be released, as with close, so a
     --  failure is terminal and never retried.
     posix.close_directory(stream_of(opened)) else (problem)
@@ -151,7 +151,7 @@ system_make_directory: (self: host, path: text.host_string)
                        -> none
                        ! io.already_exists | io.not_found | io.no_access
                        | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     --  Not retried on EINTR: a directory made before the interruption
     --  would then report EEXIST.
     posix.make_directory_at(posix.working_directory, path,
@@ -174,7 +174,7 @@ end removed
 
 remove: (self: host, path: text.host_string, directory: bool)
         -> none ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     removed(path, directory) else (problem)
         try path_failure(self, problem)
         fail io.io_failed

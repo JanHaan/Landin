@@ -1,0 +1,41 @@
+--  D503: two C threads call through one handle from `blocking.new()`, and
+--  each records into its own thread's last-error cell.  Each fails an open
+--  with an errno of its own, both wait until both have failed, and each
+--  then reads its own errno back through the shared handle.  The thread
+--  that runs `main`, which made the handle and failed nothing, reads zero.
+
+import core/io
+import core/text
+import hosted/blocking
+
+extern(c) r1440_run_failing_threads: (shared: ptr blocking.host)
+                                     -> (result: i32)
+
+absent_path: []u8 = "/landin-r1440-absent/file"
+under_a_file: []u8 = "/dev/null/file"
+
+public extern(c) link(symbol: "r1440_fail_open")
+fail_open: (shared: ptr blocking.host, which: i32) -> (failed: i32) =
+    failed = 0
+    path: []u8 = if which == 0 then absent_path else under_a_file end if
+    opened: io.file = io.open_read(shared.val, text.host_over(path))
+        else (problem)
+        if problem == io.not_found then failed = 1 end if
+        return
+    end
+    io.close(shared.val, opened) else none
+end fail_open
+
+public extern(c) link(symbol: "r1440_last_errno")
+last_errno: (shared: ptr blocking.host) -> (number: i32) =
+    number = blocking.last_errno(shared.val)
+end last_errno
+
+public main: () -> (code: i32) =
+    shared: blocking.host = blocking.new()
+    code = r1440_run_failing_threads(addr shared)
+    return when code <> 42
+    code = 1
+    return when blocking.last_errno(shared) <> 0
+    code = 42
+end main

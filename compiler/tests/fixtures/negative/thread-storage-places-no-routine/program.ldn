@@ -1,0 +1,7 @@
+link(thread) helper: () -> (value: u32) =
+    value = 1
+end helper
+
+public main: () -> (code: i32) =
+    code = i32(helper())
+end main

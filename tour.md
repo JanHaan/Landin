@@ -4348,6 +4348,34 @@ twice.
 
 Exact rules: spec [1975].
 
+### [1615] Storage each thread has its own of
+
+`link(thread)` before a module `mut` binding gives every thread its own
+instance of it. A thread reads and writes only its own, and each one
+starts at zero when its thread starts.
+
+```landin
+link(thread) mut last_failure: i32
+
+note_failure: (number: i32) -> none =
+    last_failure = number
+end note_failure
+```
+
+Two threads calling `note_failure` at once each keep their own number, so
+this needs no lock. `hosted/system` keeps each thread's last errno this way.
+
+- There is no initial value: write none, and use a type that has a zero,
+  so not a pointer or a slice.
+- It takes no `symbol` or `section`, so a C thread-local is not named this
+  way; use the binding generator ([1580]).
+- On a microcontroller, which runs one thread, it is ordinary module
+  storage.
+- Its address is good while its thread runs. Do not hand it to a thread
+  that may outlive the one it belongs to.
+
+Exact rules: spec [1996].
+
 ### [1590] Linking a static library
 
 `linker.library` asks the linker for a static archive. Write it next to the

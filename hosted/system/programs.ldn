@@ -132,7 +132,7 @@ public start: (handle: host, path: text.host_string,
                streams: io.child_streams)
               -> (started: io.child)
               ! io.not_found | io.no_access | io.io_failed =
-    handle.failure.val = 0
+    keep_failure(handle, 0)
     started = launched(path, arguments, environment, streams) else (problem)
         try path_failure(handle, problem)
         fail io.io_failed
@@ -152,11 +152,11 @@ public ended: (handle: host, status: posix.child_status)
               -> (result: io.ending) =
     match status.how
         posix.exited(code): begin
-            handle.signal.val = 0
+            keep_signal(handle, 0)
             result = (how: io.exited(code: code))
         end
         posix.signalled(number): begin
-            handle.signal.val = number
+            keep_signal(handle, number)
             result = (how: io.signalled)
         end
     end match

@@ -1,0 +1,5 @@
+link(thread, symbol: "landin_counter") mut counter: u32
+
+public main: () -> (code: i32) =
+    code = i32(counter)
+end main

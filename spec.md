@@ -66,7 +66,7 @@ keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'offsetof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
 'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
-'align', 'section', 'keep', 'vector', 'interrupt', 'naked', 'noreturn',
+'align', 'section', 'keep', 'thread', 'vector', 'interrupt', 'naked', 'noreturn',
 'distinct', 'out' and 'into' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
@@ -509,7 +509,7 @@ machine_convention ::= "extern" "(" ("interrupt" | "naked") ")"
 link_symbol        ::= "link" "(" "symbol" ":" text ")"
 link_attributes    ::= "link" "(" link_attribute ("," link_attribute)* ")"
 link_attribute     ::= ("symbol" | "section") ":" text
-                     | ("align" | "vector") ":" integer | "keep"
+                     | ("align" | "vector") ":" integer | "keep" | "thread"
 c_signature        ::= "(" (parameters ("," "...")?)? ")" "->" returns errors?
 c_declared_signature ::= "(" (routine_formals ("," "...")?)? ")"
                          "->" returns errors?
@@ -2428,6 +2428,41 @@ interrupt handler are not checked; the margin pays for what runs below a
 checked frame (D471, D472). A program with no `compiler.stack_prepare` has
 no check, and its code is unchanged. `stack_exhausted` is `core/panic`'s
 fifth kind, and D232's handler takes the five-atom domain (D451).
+
+The current stack's limit is the running thread's: on Linux and FreeBSD a
+word of its thread storage [1996], on Darwin the slot of a pthread key the
+program makes before Landin code runs and reads directly, and on firmware
+one cell (D497, D506). A thread whose limit is zero, the one the program
+started on and a C thread calling into Landin, never traps until a switch
+installs a prepared stack's. On static Linux the routines that make the
+first thread's storage, platform/linux's `_landin_start...`, run before the
+thread has a thread pointer and are not checked (D504). Off Linux, the
+default report claims one latch before it moves to the report stack that
+every thread shares, and a thread that finds the latch claimed writes
+nothing and waits for the process to end (D498, D507).
+
+### [1996] Each thread has its own instance of thread storage
+
+[1610] and [1640] say what a link annotation names and places, and nothing
+of threads. `link(thread)` before a module binding gives it one instance in
+every thread (D496). A thread's reads and writes, its `addr` and its
+`inout` arguments reach that thread's instance and no other; the instance
+begins zeroed when its thread begins, so the binding is `mut`, takes no
+value and has a type with a zero image (L0347, L0328). It places no
+routine and takes no `symbol` or `section`, which would name or place one
+instance for every thread (L0347). Every name of a shared binding is
+placed. On a hosted target the instance is in the system's thread storage:
+ELF thread-local storage in the local-exec model on Linux and FreeBSD, laid
+by platform/linux's start in a static Linux program and by the C library
+otherwise, and Darwin's thread-local variables. On firmware it is ordinary
+module storage, which interrupt handlers share as they share any.
+
+An instance's address is valid while its thread runs, which is as long as
+any frame of that thread lives, and the origin rules treat it as a module
+binding's: it may be passed, returned and kept in the thread's frames and
+thread storage. Keeping it where another thread reads it after the thread
+has ended is the program's to avoid, as for any pointer a thread hands
+another (D505).
 
 ## THE DECISIONS THIS DOCUMENT TOOK
 
@@ -16472,7 +16507,49 @@ builtin, which keeps a storage class out of the source that declares it; and
 keeping the last error by ownership, which leaves a `system.new()` handle
 shared by two threads racing on its cell. All were declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `positive/thread-storage-declarations`; the negative
+fixtures D505 names; `runtime/thread-storage-holds-its-instance` on every
+target, firmware's ordinary storage included, and
+`runtime/thread-storage-under-libc`; and `abi/thread-storage-per-thread`,
+four C threads counting at once in instances of their own on every hosted
+target.
+
+### D505 — A thread's instance lives as long as its thread, and is tracked as module storage
+
+**The tour said** nothing. D496 leaves what an instance's address may
+outlive, since the instance ends with its thread, to the item that
+implements the form.
+
+**Chosen:** an instance's address is valid while its thread runs, and every
+frame of that thread is inside that time, so the origin rules treat it as a
+module binding's: `addr`, an `inout` argument, a pointer kept in a local or
+in another of the thread's instances, and a result that returns it are all
+admitted as they are for module storage, and no new refusal applies. What
+outlives the thread is another thread's storage or memory a thread hands
+another, and a pointer there is the program's to keep valid, as D446 leaves
+every reference shared with a thread to the program. A module binding can
+hold such a pointer only through a pointer union or an integer, since a
+module image holds no address and a module pointer has no zero image
+(L0328). The refusals of the declaration are L0347's, which already says
+what a link annotation may place, and L0328's, whose zero-image rule a
+binding with no value already meets; neither takes a code of its own.
+
+**The alternatives:** refusing `addr` of thread storage, which also refuses
+every `inout` argument and so `system.over` of a thread's own space;
+tracking the instance as the outermost frame of its thread, which refuses
+returning its address from the routine that names it; and refusing a store
+of it into a module binding without `link(thread)`, which the reference
+facts could carry beside D375's external alternative but which meets only
+a pointer union written at module level. All were declined; the last waits
+for a program that needs it.
+
+**Pinned by** `positive/thread-storage-declarations`, the forms D496
+admits; `runtime/thread-storage-holds-its-instance`, whose instance is
+written through an `inout` argument and through a pointer `addr` made, on
+every target; and the negative fixtures `thread-storage-takes-no-value`,
+`thread-storage-is-mutable`, `thread-storage-takes-no-link-symbol`,
+`thread-storage-takes-no-section`, `thread-storage-places-no-routine` and
+`thread-storage-needs-a-zero-image`.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
@@ -16657,12 +16734,13 @@ that has to go through a generated adapter instead.
 
 D288 keeps the remembered value in a cell the handle names rather than in the
 provider value, which a callee could only change in its own copy. Handles
-from `system.new()` share the process's cell; `system.over` gives a caller,
-such as a C thread calling into Landin, a cell of its own in a declared
-`system.space`. The thread-local meaning the alternatives below protect is
-therefore kept by ownership, until thread-local storage exists: a thread that
-owns its cell reads only its own failures, and code that shares the
-process's cell shares its last error as it shares its descriptors.
+from `system.new()` record into the calling thread's cell, a `link(thread)`
+binding of `hosted/system`'s (D503, D509); `system.over` gives a caller a
+cell of its own in a declared `system.space`. The thread-local meaning the
+alternatives below protect is therefore kept for every handle: a thread
+reads only its own failures, whichever handle it calls through. Until
+thread storage existed it was kept by ownership, and code that shared the
+process's one cell shared its last error as it shared its descriptors.
 
 **The tour said** at [0950] to represent foreseeable conditions directly and
 at [1660] to pass host authority explicitly. Prototype 2's diagnostic sink and
@@ -19340,12 +19418,12 @@ below its frame record, zero in the cell while it runs, and puts the limit
 back as it returns. On Cortex-M0 a call-free routine whose frame is larger
 than the unchecked figure keeps the frame record its check needs. A program
 with no `compiler.stack_prepare` has no check and no cell, and its code is
-byte for byte what it was. The cell is one per program because a program is
-one execution context today (D446); a thread, when one is admitted, needs a
-cell of its own. A check is one load, one compare and one branch, with the
-instructions that form the frame's address and the cell's: three
-instructions on x86-64, five on arm64, and eight on RV64 and on Cortex-M0,
-whose branch to the trap is a far one.
+byte for byte what it was. The cell is the running thread's (D497). A check
+is one load, one compare and one branch, with the instructions that form
+the frame's address and the cell's: three instructions on x86-64, whose
+load is `%fs`-relative; six on Linux and FreeBSD arm64 and eight on
+Darwin, which read the thread pointer first (D506); and eight on RV64 and
+on Cortex-M0, whose branch to the trap is a far one.
 
 **The alternatives:** the check at the switch alone, with a room sized per
 target from the depth report, which bounds the provider's path but not a
@@ -19589,8 +19667,7 @@ the stack it is called on, which is the one the program started on, and
 its `trap` stays open, as D468 has it. Linux's report is a system call,
 which needs no stack, and is unchanged, as are Cortex-M0's bare
 instruction and every program that prepares no stack. The storage is one
-per program, as D471's cell is, because a program is one execution
-context (D446); a thread, when one is admitted, needs its own. 16 KiB is
+per program, which a thread claims before it uses it (D498). 16 KiB is
 ten times what either FreeBSD guest measured and holds the largest vector
 state x86-64 saves.
 
@@ -19639,7 +19716,12 @@ call the loader's accessor in every checked prologue; a register reserved
 for the cell, which the execution model refuses; and one cell per program
 with threads refused beside a prepared stack. All were declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** every runtime fixture that prepares a stack, whose checks
+read the cell of the thread they run on, `runtime/stack-switch-round-trip`,
+`runtime/fibre-stack-past-limit-traps` and
+`runtime/stack-frame-past-limit-traps` among them, on every hosted target;
+and `abi/report-latch-one-line`, two C threads that begin with zero cells
+and trap on stacks of their own, each against its own limit (D504, D506).
 
 ### D498 — One report stack serves every thread, claimed before it is used
 
@@ -19661,7 +19743,8 @@ and is unchanged.
 which costs every thread 16 KiB for a report that ends the process. It was
 declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `abi/report-latch-one-line`, which writes one line where
+two threads fail at once on Darwin and FreeBSD (D507).
 
 ### D499 — An atomic is fenced as its ordering asks
 
@@ -19686,6 +19769,135 @@ fenced until the optimization phase. It was declined.
 
 **Pinned by** nothing that runs yet: the threads item's fixtures and instruction
 checks will pin it.
+
+### D504 — A static Linux program lays its first thread's storage before anything is checked
+
+**The tour said** nothing. D497 has a static Linux program set up its own
+thread pointer and block for the first thread, and every routine of a
+program that prepares a stack reads the running thread's cell through the
+thread pointer, which the kernel starts at zero.
+
+**Chosen:** platform/linux's naked `_landin_start` calls
+`_landin_start_thread` with the initial stack before anything else. That
+routine walks the auxiliary vector to the program headers, keeps what the
+TLS segment says (its image, the bytes of it that are initialized, its
+size rounded up to its alignment, and where in a block the image and the
+thread pointer go on this architecture), maps a block for the first
+thread with `_landin_start_map`, and returns its thread pointer; an
+executable with no TLS segment gets its control words in 48 bytes of
+module storage and maps nothing. The entry makes the pointer the
+thread's: `arch_prctl(ARCH_SET_FS)` on x86-64, `msr tpidr_el0` on arm64
+and `mv tp` on RV64, the last of which only a naked routine may write.
+`_landin_start_main` then lays the block, zeroing it, copying the
+initialized image and, on x86-64, storing the pointer in the word it
+names, before it holds the processor to its level and calls `main`. A
+routine whose symbol begins `_landin_start` runs before the pointer exists
+and is not checked against a stack's limit, which on Linux are exactly
+these; `_landin_start_thread` therefore calls nothing but the map routine,
+whose system call it makes itself. For the threads the program starts, the
+module gives `thread_block_bytes`, the bytes a block and room to align it
+take, `thread_block_alignment`, and `thread_block_lay(block)`, which lays
+a block in the caller's memory and returns the value `clone` takes with
+`CLONE_SETTLS`. Under `--link=libc` none of this runs: the C library lays
+every thread's storage and `thread_block_bytes` is zero.
+
+**The alternatives:** the whole setup in each architecture's naked entry,
+three copies of the header walk and the layout in assembly; a first block
+the compiler emits sized from its own thread storage, which a C object's
+would overrun and which changes every static program's entry; a source
+attribute exempting a routine from the check, a language form for one
+library's start; and a provisional thread pointer at a zeroed block of a
+fixed size, which a segment larger than that block reads past. All were
+declined.
+
+**Pinned by** `runtime/thread-storage-holds-its-instance` on Linux x86-64,
+arm64 and RV64, statically linked; every runtime fixture that prepares a
+stack on those targets, `runtime/stack-switch-round-trip` and
+`runtime/fibre-stack-past-limit-traps` among them, whose prologues read
+the cell from the first thread's block; and
+`runtime/thread-storage-under-libc`, the same instances laid by glibc.
+
+### D506 — Darwin's cell is a key the image's initializer makes and checks
+
+**The tour said** nothing. D497 puts Darwin's cell in a pthread key's slot
+the program creates before Landin code runs, read inline through
+`tpidrro_el0`, and has the start compare that read with
+`pthread_getspecific`.
+
+**Chosen:** a program that uses the stack builtins on Darwin carries a
+compiler-owned routine, `landin.thread_start`, in its image's initializers
+(`__mod_init_func`), which the loader runs before `main`. It makes the key
+with `pthread_key_create`, keeps eight times the key, the slot's offset
+from the slots' base, in a word of module storage, stores a probe, its own
+frame address, with `pthread_setspecific`, requires the inline read and
+`pthread_getspecific` both to give the probe, and stores zero again. A
+read is `mrs` of `tpidrro_el0`, its low three bits cleared, as the
+system's own accessor clears them, plus the offset word: a check is
+eight instructions, against six on Linux and FreeBSD arm64. A key that
+cannot be made, or a read that disagrees, ends the process with status 127
+and one line on standard error, as a processor below the executable's
+level does on Linux. A thread a C library starts begins with its slot
+zero, and so with no limit.
+
+**The alternatives:** making the key in the entry's prologue, which is
+itself checked; a key number fixed in advance, which the system does not
+promise is free; and trusting the low bits of `tpidrro_el0` to be zero,
+which the system's own code does not. All were declined.
+
+**Pinned by** every Darwin runtime fixture that prepares a stack,
+`runtime/stack-switch-round-trip`, `runtime/stack-frame-past-limit-traps`
+and `runtime/fibre-stack-past-limit-traps` among them, in which the check
+reads the slot the initializer made; and `abi/report-latch-one-line`,
+whose C threads start with their slots zero.
+
+### D507 — The report's latch is one exchanged word, and the loser spins
+
+**The tour said** nothing. D498 has the default report off Linux claim a
+latch with an atomic exchange before it moves to the report stack, and a
+thread that finds it claimed wait without writing or returning.
+
+**Chosen:** the latch is one zeroed 32-bit word beside the report stack,
+in exactly the programs that have that stack: those that prepare a stack,
+on Darwin and FreeBSD. The report exchanges one into it, with `xchg` on
+x86-64 and an acquire-release exclusive pair on arm64, whose baseline has
+no LSE, and moves to the report stack when it read zero. A thread that read
+one spins on `pause` or `wfe`, writing nothing, until the claimant's trap
+ends the process. The frame record is pushed on the failed stack first, as
+D491 has it, so a debugger stopped in either thread unwinds to its failed
+check.
+
+**The alternatives:** waiting through the system's wait on an address,
+which needs a stack the loser does not have; ending the process from the
+loser with `_exit`, which can end it before the claimant's line is
+written; and a latch in every program, which D498 declined. All were
+declined.
+
+**Pinned by** `abi/report-latch-one-line`, two threads past their prepared
+stacks at once on Darwin and FreeBSD writing exactly one line between
+them; and the `stack report` suite's `the default report writes on its own
+stack`, which still holds every other target to no such stack.
+
+### D508 — A thread's instance is described where the target's assembler can spell it
+
+**The tour said** nothing. A module datum's DWARF location is its address,
+and a thread's instance has none of its own.
+
+**Chosen:** a `link(thread)` datum's location is its offset in its
+module's thread block and `DW_OP_form_tls_address`, which a debugger
+resolves for the thread it has selected: `x@dtpoff` on x86-64,
+`.dtpreldword` on RV64 and the variable's descriptor on Darwin. arm64 ELF
+has no directive for the offset in GNU as, and its datum is described with
+no location, as GCC describes one. GDB resolves the offset through the C
+library's thread descriptors, so under `--link=libc` it prints the selected
+thread's instance and in a static Linux program, which has none, it says
+it cannot find the thread's storage.
+
+**The alternatives:** the instance's address in the first thread, which
+names the wrong storage in every other thread; and no description at all,
+which hides the binding from every debugger. Both were declined.
+
+**Pinned by** nothing that runs yet: a scripted session that prints a
+thread's instance is a register row of its own.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -25133,4 +25345,30 @@ program Landin starts; what remains is a C library's own `exec`.
 **The alternatives:** a last error shared by every thread, which D207
 declined. It was declined again.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `abi/system-new-records-per-thread` for the cells (D509);
+the rest of it by nothing that runs yet: the threads item's fixtures will
+pin it.
+
+### D509 — A handle from `system.new()` names the calling thread, not a cell
+
+**The tour said** nothing. D503 has a `system.new()` handle record into the
+cell of the thread making the call rather than of the thread that made the
+handle.
+
+**Chosen:** `hosted/system`'s handle holds, for each of its two cells,
+D189's one-atom pointer union of `calling_thread` and the caller's cell.
+`new` stores the atom, and every record and read through the handle
+matches it, reaching the `link(thread)` cells `thread_errno` and
+`thread_signal` of whichever thread runs; `over` stores the caller's own
+cells, as before. The handle stays two words, and copies share what they
+were made with.
+
+**The alternatives:** the creating thread's instance's address in the
+handle, which is D503's very race and outlives that thread; and one
+`link(thread)` handle per thread instead of cells, which leaves a handle
+passed between threads naming another thread's. Both were declined.
+
+**Pinned by** `abi/system-new-records-per-thread`, two C threads failing
+through one shared `blocking.new()` handle and each reading its own errno,
+while the thread that made it reads zero, on every hosted target; and
+`abi/r440-errno-thread-local`, unchanged.

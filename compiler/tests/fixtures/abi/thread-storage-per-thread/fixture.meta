@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: D496 four C threads counting at once each reach only their own link(thread) instances, at distinct addresses, and the main thread's instance keeps its own value
+program: program.ldn
+c-sources: threads.c
+c-args: -pthread
+status: 42
+constructs: 1600, 1610, 1996
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
