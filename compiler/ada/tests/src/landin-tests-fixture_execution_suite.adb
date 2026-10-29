@@ -1642,6 +1642,17 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return Unbounded.To_String (Result);
    end ISA_Extensions;
 
+   --  Darwin's sysctl for each Armv8.1-A feature, under hw.optional.arm,
+   --  and the Linux flag Host_Has_Level knows it by.
+   subtype Darwin_Feature is Positive range 1 .. 3;
+   function Darwin_Key (Each : Darwin_Feature) return String
+     is (case Each is
+            when 1 => "FEAT_LSE", when 2 => "FEAT_CRC32",
+            when 3 => "FEAT_RDM");
+   function Darwin_Flag (Each : Darwin_Feature) return String
+     is (case Each is
+            when 1 => "atomics", when 2 => "crc32", when 3 => "asimdrdm");
+
    procedure Ask_Lane_Processor (Host : Landin.Platform.Filesystem'Class) is
       Line : constant String :=
         (case Landin.Targets.Architecture_Of (Lanes.Target) is
@@ -1662,6 +1673,37 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
       Processor_Asked := True;
       if Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
+        = Landin.Targets.Capabilities.Darwin and then Lanes.Is_Native
+      then
+         --  A Mac has no /proc/cpuinfo; its kernel names each feature in
+         --  a sysctl, which compiler/tests/darwin/check.py asks too.  Each
+         --  that answers 1 becomes the flag Host_Has_Level reads.
+         Processor_Source := Unbounded.To_Unbounded_String
+           ("this Mac's hw.optional.arm sysctls");
+         Processor_Flags := Unbounded.To_Unbounded_String (" ");
+         for Each in Darwin_Feature loop
+            declare
+               Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+               Args : Landin.Platform.Path_List;
+               Asked : Landin.Platform.Tool_Result;
+            begin
+               Args.Append ("-n");
+               Args.Append ("hw.optional.arm." & Darwin_Key (Each));
+               Runner.Run
+                 ("/usr/sbin/sysctl", Args, Asked,
+                  Landin.Platform.Output_Only);
+               if Asked.Ended = Landin.Platform.Exited
+                 and then Asked.Exit_Code = 0
+                 and then Ada.Strings.Fixed.Trim
+                   (Unbounded.To_String (Asked.Output), Ada.Strings.Both)
+                   = "1"
+               then
+                  Unbounded.Append (Processor_Flags, Darwin_Flag (Each) & " ");
+               end if;
+            end;
+         end loop;
+         return;
+      elsif Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
         /= Landin.Targets.Capabilities.Linux
       then
          Refuse ("the " & Lanes.Target_Name & " lane has no /proc/cpuinfo"

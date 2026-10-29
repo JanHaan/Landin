@@ -10,8 +10,12 @@
 --  same rounds read both old values in about one round in twenty on an
 --  x86-64 host, which a seq_cst store lowered as a plain MOV would too.
 --  Nothing here can show that a weaker ordering would have let a
---  forbidden outcome happen, only that none was seen.  Each check that
---  fails returns its own code.
+--  forbidden outcome happen, only that none was seen.  FreeBSD arm64 is
+--  not a target: its only lane is QEMU's system emulation on an x86-64
+--  host, which does not keep a `stlr` before a later `ldar`, so its
+--  store-buffering rounds fail there as they do under QEMU's user
+--  emulation; Linux and Darwin arm64 run the same backend's code on
+--  hardware.  Each check that fails returns its own code.
 import platform/libc
 import platform/linux
 import platform/posix

@@ -243,7 +243,8 @@ that runs the lane confirms every feature of it. A native Linux lane reads
 its host's `/proc/cpuinfo`; a cross Linux lane asks its runner rather than
 assuming an emulator has everything, because QEMU's `-cpu cortex-a53` has
 no LSE, so a C program the lane's driver links copies `/proc/cpuinfo` as the
-runner presents it; Darwin asks `hw.optional.arm.FEAT_LSE`. A level nothing
+runner presents it; on a Mac the test program asks the `hw.optional.arm`
+sysctls `FEAT_LSE`, `FEAT_CRC32` and `FEAT_RDM`, and the Darwin lane `FEAT_LSE`. A level nothing
 confirmed fails as `UNVERIFIED` rather than being skipped, and is never
 inferred from the default's run or from another target's lane. The test
 program says on standard error which levels were confirmed and by what.

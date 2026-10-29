@@ -19745,9 +19745,10 @@ word, in a loop of 10^8 reads at `--optimize speed` on an AMD EPYC 7302.
 `runtime/atomic-orderings-between-processes`, whose store-buffering rounds
 read both old values in about one round in twenty when their seq_cst stores
 and loads are made relaxed on that host, as a seq_cst store lowered as a
-plain `mov` would. Under QEMU's user emulation on an x86-64 host the arm64
-rounds can read both old values, because QEMU does not keep a `stlr` before
-a later `ldar`; `compiler/tests/cross-lanes.json` lists it.
+plain `mov` would. Under QEMU on an x86-64 host the arm64 rounds can read
+both old values, because QEMU does not keep a `stlr` before a later `ldar`:
+`compiler/tests/cross-lanes.json` lists its user emulation, and the fixture
+does not target FreeBSD arm64, whose only lane is its system emulation.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
