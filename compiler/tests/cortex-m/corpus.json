@@ -885,6 +885,20 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
+    "runtime/derived-server-fake-turns": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: the in-process server prints its two lines through the blocking host, and its sessions' and client's stacks, 64 KiB of frames, would not fit 16 KiB of RAM. Prototype 5's firmware counterpart is the derived program the device runs."
+    },
+    "runtime/derived-server-two-process": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/blocking, hosted/system, platform/libc, platform/linux, platform/linux/numbers and platform/posix on the freestanding target before checking declarations: firmware starts no process and sends no signal."
+    },
     "runtime/derived-storage-address-origin": {
       "mode": "execute"
     },

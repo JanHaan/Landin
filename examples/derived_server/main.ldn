@@ -1,0 +1,5 @@
+import examples/derived_server/app
+
+public main: () -> (code: i32) =
+    code = app.entry(0)
+end main

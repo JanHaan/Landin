@@ -17,6 +17,13 @@
       "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
     },
     {
+      "fixture": "runtime/derived-server-two-process",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "needs_binfmt": true,
+      "failures": ["the program's own exit status (expected 42, actual 2)"],
+      "reason": "the program starts itself again by its own name as the server, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+    },
+    {
       "fixture": "runtime/run-no-descriptor-leak",
       "runners": ["qemu-aarch64", "qemu-riscv64"],
       "needs_binfmt": true,

@@ -1,0 +1,117 @@
+--  Prototype 5's derived server and its client in one process, over
+--  core/io/fake's network and signals on a round of turns, with a clock
+--  that takes a turn for each millisecond it sleeps.  The server is
+--  examples/derived_server's own `serve_until_terminated`, the routine
+--  `--io=events` serves with, and the client is its `ask_both`: a
+--  fibre sends `WAIT 200 a` and another `NOW b`, and `b` is answered
+--  while `a` waits.  When both answers are in, the client raises SIGTERM;
+--  the server's signal waiter closes the listener, the accept fails and
+--  the server ends cleanly, having served two requests.  Nothing in the
+--  server knows its providers are fakes.
+import core/cmp
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/io/fake
+import core/io/signal
+import core/net
+import core/time
+import hosted/blocking
+import examples/derived_server/app/server
+import examples/derived_server/app/session
+
+--  A clock that takes a turn for each millisecond it sleeps: its reading
+--  moves on only while a sleeper waits, and the round's other fibres run
+--  meanwhile.
+turning: type = struct
+    reading: ptr mut u64
+    runs: any fibre.turns
+end turning
+
+turning_now: (self: turning) -> (at: time.instant) =
+    at = time.instant(self.reading.val)
+end turning_now
+
+turning_sleep: (self: turning, span: time.duration) -> none =
+    deadline: u64 = self.reading.val + u64(span)
+    while self.reading.val < deadline do
+        self.runs.yield()
+        self.reading.val += u64(time.milliseconds(1))
+    end while
+end turning_sleep
+
+turning is time.clock (now: turning_now, sleep: turning_sleep)
+
+--  The client fibre: both requests, then SIGTERM to the server.
+client_state: type = struct
+    runs: any fibre.turns
+    network: any net.network
+    to: net.address
+    signals: fake.signals
+    heard: ptr mut server.answers
+end client_state
+
+client: (inout self: client_state) -> none ! failure.reason =
+    mut heard: server.answers = zeroed
+    try server.ask_both(self.runs, self.network, self.to, heard)
+    self.heard.val = heard
+    fake.raise(self.signals, signal.terminate)
+end client
+
+--  Module storage for the client fibre's stack, which holds `ask_both`'s
+--  two stacks in its frame.
+mut backing: [64 * 1024]u8 = zeroed
+
+run: (signals: fake.signals, runs: any fibre.turns, host: blocking.host)
+     -> none ! failure.reason =
+    mut space: fake.network_space = zeroed
+    mut b0: [256]u8 = zeroed
+    mut b1: [256]u8 = zeroed
+    mut b2: [256]u8 = zeroed
+    mut b3: [256]u8 = zeroed
+    mut b4: [256]u8 = zeroed
+    mut sockets: [5]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2),
+         fake.socket_over(b3), fake.socket_over(b4)]
+    network := fake.network_over_turns(space, sockets, runs)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(network, listener)
+    mut reading: u64 = 0
+    taking: turning = (reading: addr reading, runs: runs)
+    mut heard: server.answers = zeroed
+    mut clients := try fibre.turns_over(runs, backing, 1)
+    defer fibre.join(clients) else none
+    asking: client_state = (runs: runs, network: any(addr network), to: at,
+                            signals: signals, heard: addr heard)
+    try fibre.admit(clients, client, asking)
+    try server.serve_until_terminated(runs, any(addr signals),
+                                      any(addr signals), any(addr network),
+                                      any(addr taking), any(addr host),
+                                      listener)
+    try fibre.join(clients)
+    fail io.io_failed when heard.count <> 2
+      or cmp.compare(heard.order[0..<2], "ba") <> cmp.equal
+    fail io.io_failed when session.served_count() <> 2
+    fail io.io_failed when reading <> u64(time.milliseconds(200))
+    fail io.io_failed when space.connections <> 2
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    host := blocking.new()
+    mut state: stacks.round_space = zeroed
+    mut entries: [8]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    mut space: fake.signals_space = zeroed
+    signals := fake.signals_over(space, any(addr round))
+    run(signals, any(addr round), host) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

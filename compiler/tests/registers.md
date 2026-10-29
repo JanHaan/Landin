@@ -305,6 +305,8 @@ fixture's own record rather than asserted here.
 | `runtime/generic-composed-evidence` | P4 | W4 | a narrow concept composes rather than widening |
 | `runtime/any-heterogeneous-dispatch` | P4 | W6 | erased state retains mutable permission and dispatch identity |
 | `negative/any-frame-origin-escape` | P4 | W6 | erased state retains pointee origin |
+| `runtime/derived-server-two-process` | P5 | V1, V4, V7 | the complete derived server in a process of its own, started through `io.programs` and asked two requests by a client in another; over the blocking provider one is answered at a time and SIGTERM's default disposition ends it, and its derivation manifest says what the event provider's half changes |
+| `runtime/derived-server-fake-turns` | P5 | V1, V2, V3, V4, V5, V6, V7, V8, V9, V14, V15 | the complete derived server's stopping routine and the prototype's client in one process over the fake network and signals on a round of turns: two requests in flight, the second answered first, and SIGTERM read as an event stopping the server cleanly |
 
 ## Target applicability coverage
 

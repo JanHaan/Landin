@@ -571,7 +571,12 @@ This is the maintained inventory of what the compiler does today:
   [derived driver](compiler/tests/driver/DERIVATION.md) on the Cortex-M0
   emulators, each against a generated oracle. The driver and its
   application run with compiler-owned startup within the recorded 32 KiB
-  capacity and source-debugging limits.
+  capacity and source-debugging limits. The server derived from prototype
+  5's hosted half runs on every hosted target over `hosted/blocking`, in a
+  process of its own that a client in another asks and SIGTERM ends, and
+  in one process over the fake network on a round of turns, where two
+  requests are in flight and SIGTERM stops it cleanly; the event-driven
+  provider's half and the firmware counterpart are not derived yet.
 - **Example programs.** Every program in [`examples.md`](examples.md) runs
   on every hosted target against its recorded output: everyday tools, the
   printing and failure lessons, the classic exercises from FizzBuzz to merge
@@ -665,6 +670,7 @@ designation changes automatically.
 | `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
 | `examples/derived_containers/` | the complete prototype-3-derived client of the ordinary `core` containers and allocator capabilities; `compiler/tests/fixtures/runtime/derived-containers` supplies its host, status oracle and derivation manifest. |
 | `examples/derived_hosted/` | the complete prototype-4-derived log filter, with runtime-selected filters and destinations, complete line reading, retained arguments and explicit delivery retry; its derivation and memory-world oracle live in `compiler/tests/fixtures/runtime/derived-hosted-memory`. |
+| `examples/derived_server/` | the prototype-5-derived line server, whose provider is chosen where it is minted: one request at a time over the blocking provider, two in flight and a clean stop on SIGTERM over a provider of turns; its derivation and its two-process and in-process oracles live in `compiler/tests/fixtures/runtime/derived-server-two-process` and `runtime/derived-server-fake-turns`. |
 | `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
 | `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
 | `flake.nix` | `nix develop`, for people who work that way: a shell holding the same pinned toolchain, read from `environments/pins.sh` rather than from nixpkgs. |
@@ -694,7 +700,7 @@ findings stay true. What runs is derived from them:
 | `prototype-2-parser.md` | a parser that recovers from errors rather than stopping at the first | `examples/config_parser/` |
 | `prototype-3-containers.md` | generic containers, allocators, escape rules | the `core` containers and `examples/derived_containers/` |
 | `prototype-4-app.md` | a hosted application chosen by its command line: runtime dispatch | `examples/derived_hosted/` |
-| `prototype-5-server.md` | a server with two requests in flight, and a Cortex-M0 counterpart answering them on one core: fibres, started as a group | nothing yet |
+| `prototype-5-server.md` | a server with two requests in flight, and a Cortex-M0 counterpart answering them on one core: fibres, started as a group | `examples/derived_server/`; the firmware counterpart is not derived yet |
 
 To learn the language, read [the tour](tour.md) and
 [the examples](examples.md) instead.

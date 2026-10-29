@@ -1,0 +1,220 @@
+--  Prototype 5's derived server in a process of its own, and a client in
+--  another.  Run without arguments, this program is the harness:
+--  it starts itself again through `io.programs` as the server, with
+--  `serve`, the provider's `--io=` and `--port=0`, reads the first line
+--  of the server's output to learn its port, and asks it `WAIT 1000 a` on
+--  one connection and then `NOW b` on another.  The harness needs no
+--  turns to see which answer came first: it waits for `b` for half the
+--  time `a` waits, so `b` heard within that time came before `a`, and
+--  `b` not heard by then comes after it.  Then it sends the server SIGTERM
+--  and checks how the server ended.
+--
+--  Over `--io=blocking`, one request at a time: `a` is answered first, and
+--  SIGTERM ends the server by its default disposition (D477).  Over
+--  `--io=events`, the server says now that this build has no
+--  `hosted/events`, ends with status 3 and serves nothing; once it does
+--  have it, `exchange(host, "--io=events", "ba", true)` replaces
+--  `refused_events(host)` below: `b` is answered first, and the server's
+--  signal waiter stops it cleanly, status 0 and `stopped after 2 requests`.
+import core/cmp
+import core/failure
+import core/io
+import core/net
+import core/text
+import core/time
+import hosted/blocking
+import hosted/system
+import platform/libc
+import platform/linux
+import platform/linux/numbers
+import platform/posix
+import examples/derived_server/app
+
+--  The step the harness reached, the status it ends with when that step
+--  fails.
+mut step: i32 = 1
+
+--  Send SIGTERM to the child CHILD, and say whether the system took it.
+fixed if compiler.os == linux then
+    terminate: (child: posix.process_id) -> (sent: bool) =
+        sent = linux.system_call(numbers.kill_number, i64(i32(child)),
+                                 i64(linux.sigterm), 0, 0, 0, 0) == 0
+    end terminate
+else
+    terminate: (child: posix.process_id) -> (sent: bool) =
+        sent = libc.kill(i32(child), libc.sigterm) == 0
+    end terminate
+end if
+
+--  Start this program again as the server, over the provider IO_WORD
+--  names, its output piped to the harness.
+start_server: (host: blocking.host, io_word: []u8)
+              -> (started: io.child) ! failure.reason =
+    arguments: [3]text.host_string = [text.host_over("serve"),
+                                      text.host_over(io_word),
+                                      text.host_over("--port=0")]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    streams: io.child_streams = (input: io.discarded, output: io.piped,
+                                 errors: io.inherited)
+    started = try io.spawn(host, posix.program_name(), arguments[0..<3],
+                           variables[0..<0], streams)
+end start_server
+
+--  Read the child's output into INTO until a line has ended, or until the
+--  child's output has, with UNTIL_END; the count read.
+output_of: (host: blocking.host, inout started: io.child, into: []mut u8,
+            until_end: bool) -> (count: usize) ! failure.reason =
+    count = 0
+    loop do
+        fail io.io_failed when count == lenof into
+        taken: io.child_read = try io.read_child(host, started,
+                                                 into[count..<lenof into])
+        return when taken.finished
+        if taken.stream == io.child_output then
+            count += taken.count
+        end if
+        return when not until_end and count > 0 and into[count - 1] == u8('\n')
+    end loop
+end output_of
+
+--  Where the server says it listens, from its first line.
+listening_at: (line: []u8) -> (at: net.address) ! failure.reason =
+    prefix: []u8 = "listening on "
+    fail io.io_failed when lenof line < lenof prefix + 1
+      or cmp.compare(line[0..<lenof prefix], prefix) <> cmp.equal
+      or line[lenof line - 1] <> u8('\n')
+    at = try net.parse_address(line[lenof prefix..<lenof line - 1])
+end listening_at
+
+--  Read one answer from CONNECTION, and fail unless it is `<tag> done`.
+answer: (host: blocking.host, connection: io.file, tag: u8)
+        -> none ! failure.reason =
+    mut reply: [16]u8 = zeroed
+    mut got: usize = 0
+    loop do
+        fail io.io_failed when got == lenof reply
+        count: usize = try net.receive(host, connection,
+                                       reply[got..<lenof reply])
+        fail net.disconnected when count == 0
+        got += count
+        break when reply[got - 1] == u8('\n')
+    end loop
+    fail io.io_failed when got < 2 or reply[0] <> tag
+      or cmp.compare(reply[1..<got], " done\n") <> cmp.equal
+end answer
+
+--  Ask `WAIT 1000 a` on one connection and then `NOW b` on another, and
+--  say in which order the answers came.  `b` heard within 500
+--  milliseconds came before `a`, which the server answers no sooner than
+--  1000 milliseconds after it was asked; `b` not heard by then comes
+--  after it.
+asked_both: (host: blocking.host, to: net.address)
+            -> (order: [2]u8) ! failure.reason =
+    first: io.file = try net.connect(host, to)
+    try net.send(host, first, "WAIT 1000 a\n")
+    second: io.file = try net.connect(host, to)
+    try net.send(host, second, "NOW b\n")
+    try net.set_timeouts(host, second, time.milliseconds(500),
+                         time.milliseconds(0))
+    mut early: bool = true
+    answer(host, second, u8('b')) else (problem)
+        fail problem when problem <> net.timed_out
+        early = false
+    end
+    if early then
+        order = [u8('b'), u8('a')]
+        try net.close_socket(host, second)
+        try answer(host, first, u8('a'))
+        try net.close_socket(host, first)
+    else
+        order = [u8('a'), u8('b')]
+        --  A server that answers one connection at a time serves the
+        --  second once the first has ended.
+        try answer(host, first, u8('a'))
+        try net.close_socket(host, first)
+        try net.set_timeouts(host, second, time.milliseconds(0),
+                             time.milliseconds(0))
+        try answer(host, second, u8('b'))
+        try net.close_socket(host, second)
+    end if
+end asked_both
+
+--  Start the server over IO_WORD, ask it both requests and check the
+--  order EXPECTED, stop it with SIGTERM and check how it ended: cleanly,
+--  with status 0 and the line saying it served two requests, when CLEAN,
+--  and by SIGTERM's default disposition otherwise.
+exchange: (host: blocking.host, io_word: []u8, expected: []u8, clean: bool)
+          -> none ! failure.reason =
+    step = 2
+    mut started: io.child = try start_server(host, io_word)
+    step = 3
+    mut room: [128]u8 = zeroed
+    count: usize = try output_of(host, started, room, false)
+    at: net.address = try listening_at(room[0..<count])
+    step = 4
+    order: [2]u8 = try asked_both(host, at)
+    step = 5
+    fail io.io_failed when cmp.compare(order[0..<2], expected) <> cmp.equal
+    step = 6
+    fail io.io_failed when not terminate(system.process_of(started))
+    step = 7
+    rest: usize = try output_of(host, started, room, true)
+    ended: io.ending = try io.wait(host, started)
+    step = 8
+    if clean then
+        fail io.io_failed
+            when cmp.compare(room[0..<rest], "stopped after 2 requests\n")
+              <> cmp.equal
+        match ended.how
+            io.exited(given): fail io.io_failed when given <> 0
+            io.signalled: fail io.io_failed
+        end match
+    else
+        fail io.io_failed when rest <> 0
+        match ended.how
+            io.exited(given): begin
+                _ = given
+                fail io.io_failed
+            end
+            io.signalled: fail io.io_failed when blocking.last_signal(host) <> 15
+        end match
+    end if
+end exchange
+
+--  Start the server over `--io=events`, which this build does not have:
+--  it serves nothing, writes nothing on its output, and ends with
+--  status 3.
+refused_events: (host: blocking.host) -> none ! failure.reason =
+    step = 9
+    mut started: io.child = try start_server(host, "--io=events")
+    mut room: [16]u8 = zeroed
+    count: usize = try output_of(host, started, room, true)
+    ended: io.ending = try io.wait(host, started)
+    step = 10
+    fail io.io_failed when count <> 0
+    match ended.how
+        io.exited(given): fail io.io_failed when given <> 3
+        io.signalled: fail io.io_failed
+    end match
+end refused_events
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    if io.argument_count(host) > 0 then
+        code = app.entry(1)
+        return
+    end if
+    code = 1
+    exchange(host, "--io=blocking", "ab", false) else (problem)
+        _ = problem
+        code = step
+        return
+    end
+    refused_events(host) else (problem)
+        _ = problem
+        code = step
+        return
+    end
+    code = 42
+end main

@@ -1,0 +1,141 @@
+--  Prototype 5's app: the hosted program.  The roots are minted here and
+--  lent down, as [1660] makes them, and this is the only place that knows
+--  which provider it got: everything below takes `any` capabilities.  The
+--  provider is chosen by the command line, `--io=blocking` or
+--  `--io=events`, and the port by `--port=N`, 7070 when it is not given
+--  and 0 for one the system picks.
+
+import core/cmp
+import core/failure
+import core/fibre
+import core/io
+import core/net
+import core/text
+import core/time
+import hosted/blocking
+import hosted/system
+import examples/derived_server/app/server
+
+--  The command line did not say what to run.
+bad_option: atom
+
+--  Which provider to serve over.
+blocking_io: atom
+events_io: atom
+provider_choice: type = blocking_io | events_io
+
+--  What the command line asked for.
+choice: type = struct
+    over: provider_choice
+    port: u16
+end choice
+
+--  Whether ARGUMENT begins with PREFIX, and what follows it.
+after: (argument: []u8, prefix: []u8) -> (found: bool, rest: []u8 from argument) =
+    found = false
+    rest = argument[0..<0]
+    return when lenof argument < lenof prefix
+    for index in usize(0)..<lenof prefix do
+        return when argument[index] <> prefix[index]
+    end for
+    found = true
+    rest = argument[lenof prefix..<lenof argument]
+end after
+
+--  Read the options from argument FIRST on: `--io=blocking`, the default,
+--  or `--io=events`, and `--port=N`.
+options: (services: system.host, first: usize) -> (asked: choice) ! bad_option =
+    asked = (over: blocking_io, port: 7070)
+    mut index: usize = first
+    while index < io.argument_count(services) do
+        given: text.host_string = io.argument_at(services, index) else (problem)
+            _ = problem
+            fail bad_option
+        end
+        word: []u8 = text.host_bytes(given)
+        (found: is_io, rest: provider) := after(word, "--io=")
+        (found: is_port, rest: port) := after(word, "--port=")
+        if is_io and cmp.compare(provider, "blocking") == cmp.equal then
+            asked.over = blocking_io
+        elsif is_io and cmp.compare(provider, "events") == cmp.equal then
+            asked.over = events_io
+        elsif is_port then
+            asked.port = text.parse_u16(port) else (problem)
+                _ = problem
+                fail bad_option
+            end
+        else
+            fail bad_option
+        end if
+        inc index
+    end while
+end options
+
+--  Say on standard error what went wrong, after `derived server: `.
+complain: (world: any io.world, what: []u8) -> none =
+    world.write(world.err(), "derived server: ") else none
+    world.write(world.err(), what) else none
+    world.write(world.err(), "\n") else none
+end complain
+
+--  Listen on the loopback address at PORT, saying so on failure.
+listening: (world: any io.world, network: any net.network, port: u16)
+           -> (listener: io.file) ! failure.reason =
+    listener = network.listen(net.loopback(net.ipv4, port)) else (problem)
+        complain(world, failure.words(problem))
+        fail problem
+    end
+end listening
+
+--  Over the provider whose waits block the thread: each connection is
+--  served to its end before the next is accepted, and nothing waits for a
+--  signal, so SIGTERM ends the process by its default disposition (D477).
+over_blocking: (port: u16) -> (code: i32) =
+    code = 1
+    host := blocking.new()
+    runs: any fibre.scheduler = any(addr host)
+    network: any net.network = any(addr host)
+    clock: any time.clock = any(addr host)
+    world: any io.world = any(addr host)
+    listener: io.file = listening(world, network, port) else (problem)
+        _ = problem
+        return
+    end
+    server.serve(runs, network, clock, world, listener) else (problem)
+        complain(world, failure.words(problem))
+        return
+    end
+    code = 0
+end over_blocking
+
+--  Over the provider whose waits switch fibres, `hosted/events`,
+--  which mints `turning`, `signals`, `runs`, `network`, `clock` and `world`
+--  from one handle and serves with `server.serve_until_terminated`.  This
+--  build does not have that provider, so the choice is refused, with its
+--  own status, rather than served over another.
+over_events: (port: u16) -> (code: i32) =
+    _ = port
+    host := blocking.new()
+    world: any io.world = any(addr host)
+    complain(world, "--io=events needs hosted/events, which this build does not have")
+    code = 3
+end over_events
+
+--- Run the server with the options from argument `first` on: the code the
+--- process ends with, 0 when it stopped cleanly, 1 when it failed, 2 for a
+--- command line it could not read and 3 for a provider it does not have.
+public entry: (first: usize) -> (code: i32) =
+    services := system.new()
+    asked: choice = options(services, first) else (problem)
+        _ = problem
+        host := blocking.new()
+        world: any io.world = any(addr host)
+        complain(world, "usage: [--io=blocking|--io=events] [--port=N]")
+        code = 2
+        return
+    end
+    code = match asked.over
+        blocking_io: over_blocking(asked.port)
+        events_io: over_events(asked.port)
+    end match
+end entry
