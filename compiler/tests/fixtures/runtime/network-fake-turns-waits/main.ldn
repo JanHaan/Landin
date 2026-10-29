@@ -1,0 +1,190 @@
+--  D449: what ends a wait on core/io/fake's network.  Made by
+--  `network_over`, it waits for nothing, as before: a receive and an
+--  accept that would wait time out at once, taking no turn.  Made by
+--  `network_over_turns`, a call that would wait takes turns: two fibres
+--  each receiving what the other never sends both wait a whole round,
+--  after which the first to look again times out, and its close is what
+--  the second then sees, the end of the stream; an accept whose listener
+--  another fibre closes, and a receive whose socket another fibre shuts
+--  for receiving, fail `io_failed` when they wake.
+import core/cmp
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/io/fake
+import core/net
+
+--  `t` a receive timed out, `e` a receive read the end, `w` a woken
+--  accept failed, `s` a woken receive failed, and `k` the fibre that
+--  closed or shut a socket did so.
+mut trace: [8]u8 = zeroed
+mut marks: usize = 0
+
+mark: (letter: u8) -> none =
+    trace[marks] = letter
+    inc marks
+end mark
+
+held: type = struct
+    network: fake.network
+    socket: io.file
+end held
+
+--  Receive on a connection that never hears anything, then close it.
+listen_quietly: (inout state: held) -> none ! failure.reason =
+    mut buffer: [8]u8 = zeroed
+    got: usize = net.receive(state.network, state.socket, buffer)
+        else (problem)
+        if problem == net.timed_out then mark(u8('t')) end if
+        0
+    end
+    if got == 0 then
+        closing: io.file = state.socket
+        try net.close_socket(state.network, closing)
+    end if
+end listen_quietly
+
+--  Receive until the stream ends.
+until_end: (inout state: held) -> none ! failure.reason =
+    mut buffer: [8]u8 = zeroed
+    got: usize = try net.receive(state.network, state.socket, buffer)
+    if got == 0 then mark(u8('e')) end if
+end until_end
+
+--  Wait for a connection nobody makes.
+accept_nothing: (inout state: held) -> none ! failure.reason =
+    accepted: io.file = net.accept(state.network, state.socket)
+        else (problem)
+        if problem == io.io_failed then mark(u8('w')) end if
+        return
+    end
+    _ = accepted
+end accept_nothing
+
+--  Wait for bytes nobody sends.
+receive_nothing: (inout state: held) -> none ! failure.reason =
+    mut buffer: [8]u8 = zeroed
+    got: usize = net.receive(state.network, state.socket, buffer)
+        else (problem)
+        if problem == io.io_failed then mark(u8('s')) end if
+        return
+    end
+    _ = got
+end receive_nothing
+
+--  Close the listener another fibre waits on.
+close_it: (inout state: held) -> none ! failure.reason =
+    closing: io.file = state.socket
+    try net.close_socket(state.network, closing)
+    mark(u8('k'))
+end close_it
+
+--  Shut for receiving the connection another fibre waits on.
+shut_it: (inout state: held) -> none ! failure.reason =
+    try net.shutdown(state.network, state.socket, net.receiving)
+    mark(u8('k'))
+end shut_it
+
+--  Module storage, so the stacks are no frame's: Cortex-M0's reset stack
+--  is 4 KiB, and its 12 KiB of RAM below that hold two stacks of 4 KiB.
+--  A 64-bit target's frames are deeper, and RV64's, which keep a home
+--  for every scalar, deepest: a task here takes more than 8 KiB there.
+fixed if compiler.word_size == 32 then
+    mut backing: [2 * 4096]u8 = zeroed
+else
+    mut backing: [2 * 12288]u8 = zeroed
+end if
+
+--  Without turns, a call that would wait times out at once.
+alone: () -> (yes: bool) ! failure.reason =
+    mut space: fake.network_space = zeroed
+    mut b0: [16]u8 = zeroed
+    mut b1: [16]u8 = zeroed
+    mut b2: [16]u8 = zeroed
+    mut sockets: [3]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2)]
+    network := fake.network_over(space, sockets)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(network, listener)
+    mut none_waiting: bool = false
+    again: io.file = net.accept(network, listener) else (problem)
+        none_waiting = problem == net.timed_out
+        io.file(0)
+    end
+    _ = again
+    client: io.file = try net.connect(network, at)
+    mut buffer: [8]u8 = zeroed
+    mut waited: bool = false
+    got: usize = net.receive(network, client, buffer) else (problem)
+        waited = problem == net.timed_out
+        0
+    end
+    _ = got
+    yes = none_waiting and waited and space.turns == 0
+end alone
+
+--  Over turns, the three waits.
+turning: (runs: any fibre.turns) -> (turns: usize) ! failure.reason =
+    mut space: fake.network_space = zeroed
+    mut b0: [16]u8 = zeroed
+    mut b1: [16]u8 = zeroed
+    mut b2: [16]u8 = zeroed
+    mut b3: [16]u8 = zeroed
+    mut b4: [16]u8 = zeroed
+    mut sockets: [5]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2),
+         fake.socket_over(b3), fake.socket_over(b4)]
+    network := fake.network_over_turns(space, sockets, runs)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(network, listener)
+    client: io.file = try net.connect(network, at)
+    server: io.file = try net.accept(network, listener)
+    mut tasks := try fibre.turns_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    quiet: held = (network: network, socket: client)
+    try fibre.admit(tasks, listen_quietly, quiet)
+    hearing: held = (network: network, socket: server)
+    try fibre.admit(tasks, until_end, hearing)
+    try fibre.join(tasks)
+    listening: held = (network: network, socket: listener)
+    try fibre.admit(tasks, accept_nothing, listening)
+    try fibre.admit(tasks, close_it, listening)
+    try fibre.join(tasks)
+    try net.close_socket(network, server)
+    second: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    defer net.close_socket(network, second) else none
+    again: net.address = try net.local_address(network, second)
+    caller: io.file = try net.connect(network, again)
+    defer net.close_socket(network, caller) else none
+    answerer: io.file = try net.accept(network, second)
+    defer net.close_socket(network, answerer) else none
+    answering: held = (network: network, socket: answerer)
+    try fibre.admit(tasks, receive_nothing, answering)
+    try fibre.admit(tasks, shut_it, answering)
+    try fibre.join(tasks)
+    turns = space.turns
+end turning
+
+public main: () -> (code: i32) =
+    code = 1
+    quick: bool = alone() else false
+    return when not quick
+    code = 2
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    turns: usize = turning(any(addr round)) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when cmp.compare(trace[0..<marks], "tekwks") <> cmp.equal
+    code = 4
+    return when turns <> 4
+    code = 42
+end main

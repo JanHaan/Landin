@@ -1,0 +1,8 @@
+class: runtime
+summary: D449 core/io/fake's network made by network_over still times out at once and takes no turn, while over a round of turns two fibres each receiving what the other never sends wait one whole round before the first times out and its close ends the other's stream, and an accept whose listener another fibre closes and a receive whose socket another fibre shuts for receiving fail io_failed when they wake
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1380, 1620, 1680, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

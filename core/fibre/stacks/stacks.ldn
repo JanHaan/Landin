@@ -131,8 +131,8 @@ end round_value
 --- turn. `yield` moves to the next unfinished entry after the current
 --- one, round the table, and after a whole round in which every
 --- unfinished entry yielded and nothing started or ended it calls the
---- idler first. A provider of `fibre.turns`. Every entry may switch
---- except `finished`.
+--- idler first. A provider of `fibre.turns`. `yield` and `wait` switch;
+--- `start` prepares a fibre and returns, and `finished` only reads.
 public round: type = round_value
 
 --- Fill `state` for a round over `entries`, the caller's table of the

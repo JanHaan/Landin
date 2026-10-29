@@ -1,0 +1,8 @@
+class: runtime
+summary: D449 D477 core/io/fake's signals over a round of turns within a 32 KiB firmware image: a fibre written against any signal.signals hears SIGUSR1 and then SIGTERM raised by another fibre, with the fake's numbers, a signal nobody watches is dropped and a signal raised while it waits to be read is one event with it; stop_watching wakes a waiting fibre with io_failed
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1240, 1310, 1380, 1620, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

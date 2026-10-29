@@ -15005,9 +15005,10 @@ and independent of use.
 `negative/parameterized-conformance-collision`,
 `negative/constraint-not-satisfied`,
 `negative/conformance-entry-signature-mismatch`,
-`negative/composed-conformance-missing-parent`, and
-`negative/concept-composition-cycle`, plus parser, resolution and
-checker register cases.
+`negative/composed-conformance-missing-parent`,
+`negative/signals-provider-without-turns`, whose missing parent is named
+through its module, and `negative/concept-composition-cycle`, plus
+parser, resolution and checker register cases.
 
 ### D143 — `zeroable` is one closed compiler concept family
 
@@ -23886,9 +23887,18 @@ program's back, which D227 already refuses; and a fake that answers
 `timed_out` regardless, which fails every test of a program with two fibres.
 All were declined.
 
-**Pinned by** nothing that runs yet: prototype 5's V7, V10 and V14 record the
-pressure, and the second Io's, the wrapper's and the fake network's fixtures
-will pin it.
+**Pinned by** `runtime/network-fake-turns-exchange`, a server fibre and a
+client fibre exchanging over the fake network under a round of turns in
+both orders of start; `runtime/network-fake-turns-waits`, the fake network
+without a scheduler timing out at once and with one timing out only after a
+round in which nothing moved, and an accept and a receive woken with
+`io_failed` when another fibre closes or shuts their socket;
+`runtime/signals-fake-stop-server`, a signal read as an event stopping a
+server by closing its listener, which fails the server's accept; and
+`runtime/signals-fake-firmware`, signals waited for like a receive on every
+target, Cortex-M0 included (D482, D483). The second Io's wake on a
+descriptor and its signals, and the wrapper's fixtures, will pin the rest;
+prototype 5's V7, V10 and V14 record the pressure.
 
 ### D463 — The switch is a module beneath `core/fibre`
 
@@ -24124,5 +24134,101 @@ made where the providers are minted.
 nothing over the blocking host; and a polling entry that never waits there,
 which gives one entry two meanings. Both were declined.
 
-**Pinned by** nothing that runs yet: the event Io's signal fixtures will pin
-it.
+**Pinned by** `negative/signals-provider-without-turns`, a provider of
+`fibre.scheduler` alone refused as a provider of `signal.signals`;
+`runtime/signals-fake-firmware` and `runtime/signals-fake-stop-server`,
+signals waited for over a provider of turns (D482). The event Io's signal
+fixtures will pin signalfd and kqueue.
+
+### D482 — Signals are a module beneath `core/io`, and an arrival names its signal portably
+
+**The tour said** nothing. D449 makes a signal an event read by an entry that
+waits like a receive, and D477 calls the concept `core/io`'s and lets only a
+provider of `fibre.turns` supply it, which the concept can say only by naming
+`fibre.turns` as its parent. `core/failure` imports `core/io`, and
+`core/fibre` imports `core/failure`, so `core/io` importing `core/fibre`
+closes a cycle, which [1420] allows, and puts `core/fibre`, `core/failure`
+and what `core/failure` names atoms from into the closure of every program
+that imports `core/io`.
+
+**Chosen:** the concept is `signals` in `core/io/signal`, a module beneath
+`core/io` as `core/io/fake` is, which imports `core/fibre` and `core/io`:
+`signals: type = concept (provider: type) is fibre.turns`. Its entries are
+`watch`, which takes one signal from the system's default disposition and
+delivers it as an event from then on; `next_signal`, which waits, taking
+turns, for the next arrival; and `stop_watching`, which gives every watched
+signal back to its default disposition and wakes every waiter, whose call
+fails `io_failed`, as D449 stops a fibre by failing what it waits on. Only
+`next_signal` switches. A signal is named by the atom set `kind`:
+`interrupt`, `terminate`, `hangup`, `child`, `user1` and `user2`, the six a
+server cares about, and an arrival is an `event` of its `kind` and the
+system's own number. One signal at a time is watched, so both mechanisms
+implement it directly: signalfd adds it to the blocked mask and the
+descriptor's set, kqueue ignores it and adds an `EVFILT_SIGNAL` filter. Two
+arrivals before a read may be one event, as both systems keep them. The
+fake, `fake.signals`, is given the turns it waits on and passes `fibre.turns`'
+entries to them, so it is a provider of both; `raise` delivers a signal into
+it, one nobody watches is counted and dropped, and it numbers signals as
+Linux does on x86-64 and arm64.
+
+Writing this found that the checker counted only a parent concept written
+as a bare name: a parent named through its module, `fibre.turns` here,
+`io.reader` beneath `net.network`, was skipped, so a conformance to the
+child was accepted without one to the parent. The concept body's parents
+now include a qualified reference, as its accessor's postcondition already
+said.
+
+**The alternatives:** the concept in `core/io` over the import cycle, which
+charges every `core/io` program the fibre modules' closure; in `core/fibre`,
+which makes signals a scheduling concept and their atoms `fibre`'s; a
+concept with no parent and a comment, which D477 would then leave unsaid in
+the types; a set of signals watched at once, which needs a set type for six
+atoms and gives nothing either mechanism needs; signals by their numbers
+only, which differ between Linux and the BSDs for `child`, `user1` and
+`user2`; and a `next_signal` that fails `timed_out` after a quiet round in
+the fake, which a server waiting for SIGTERM while it serves would meet at
+once. All were declined.
+
+**Pinned by** `runtime/signals-fake-firmware`, a fibre written against
+`any signal.signals` hearing two signals another fibre raised, a third
+dropped and a fourth folded into one event, and a waiter woken by
+`stop_watching`, on every target Cortex-M0 included;
+`runtime/signals-fake-stop-server`, the same stopping a server over the
+fake network; and `negative/signals-provider-without-turns`.
+
+### D483 — The fake network is given its turns by a second constructor
+
+**The tour said** nothing. D449 makes the fake network yield where a call
+would wait when it is given a scheduler that takes turns, and answer
+`timed_out` only after a whole round in which nothing it waits for arrived,
+and behave as before without one. It did not say how the network is given
+the scheduler, nor what a round in which nothing arrived is to a call that
+cannot see the other fibres.
+
+**Chosen:** `network_over_turns(state, sockets, runs)` makes the network
+over a `fibre.turns` it borrows for as long as it is used, beside
+`network_over`, which keeps a scheduler that is never called and waits for
+nothing. A call that would wait, `accept`, `send`, `receive`,
+`receive_from` and the reader and writer entries over them, yields and
+looks again. The network counts in `moves` each change something could
+wait for: a connection made or taken, bytes or a datagram delivered or
+taken, a shutdown and a close. A call that yielded and finds `moves`
+unchanged has seen a whole round of every other fibre in which nothing
+moved, and so nothing it waits for arrived, and fails `timed_out`; one that
+finds it changed looks again. A call whose socket was closed, or shut for
+receiving, while it waited fails `io_failed` when it wakes, as D449 asks
+of an Io that runs fibres. `turns` counts the turns its calls took.
+
+**The alternatives:** an optional scheduler in `network_space`, which a
+test declares `zeroed` and so cannot hold an erased provider until it is
+filled; timing out after one turn whatever happened, which fails a call
+whose peer is itself waiting on a third fibre that answers in the same
+round; and counting changes only to the waiting socket, which needs every
+socket to know its waiters and gains nothing a deterministic test needs.
+All were declined.
+
+**Pinned by** `runtime/network-fake-turns-exchange`, with the server first
+two turns and with the client first one; and
+`runtime/network-fake-turns-waits`, `network_over` taking no turn, two
+fibres waiting on each other timing out after one quiet round, and woken
+waiters failing `io_failed`.

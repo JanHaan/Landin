@@ -1,0 +1,8 @@
+class: runtime
+summary: D449 core/io/fake's network over a round of turns: a server fibre accepting and a client fibre connecting exchange a request and its answer in either order of start, each call that would wait taking a turn instead of timing out, two turns with the server started first and one with the client first
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1380, 1620, 1680, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
