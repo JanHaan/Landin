@@ -428,7 +428,9 @@ This is the maintained inventory of what the compiler does today:
   from and written to their text, time limits whose passing is an atom,
   and a connection read and written as a file, a line reader and a
   buffered writer among them; a memory network of loopback addresses in
-  the caller's buffers is its fake. A write to a peer that has gone is an
+  the caller's buffers is its fake, whose calls take turns where they would
+  wait when it is given a `fibre.turns`, so a client fibre and a server
+  fibre talk over it (D449, D483). A write to a peer that has gone is an
   error atom, since a hosted process ignores SIGPIPE and gives its children
   the default back. The rest of the file system is another: opening with
   options, appending and exclusive creation among them, renaming that
@@ -441,7 +443,11 @@ This is the maintained inventory of what the compiler does today:
   terminals the terminals. Time is the module `core/time`, the network
   `core/net`, and the fakes of a system's providers are `core/io/fake`'s,
   each named for what it fakes: `fake.volume`, `fake.network`,
-  `fake.clock`, `fake.entropy` and `fake.terminals`.
+  `fake.clock`, `fake.entropy`, `fake.terminals` and `fake.signals`.
+  Signals are events: `core/io/signal`'s `signals` refines `fibre.turns`,
+  so only a provider whose fibres take turns delivers them, and a fibre
+  waits for the next one as for a receive; `fake.signals` takes those a
+  test raises, on Cortex-M0 too (D477, D482).
   `core/random` is a deterministic generator, xoshiro256**, seeded from a
   fixed seed or from entropy, which draws the same sequence on every target,
   Cortex-M0 included, with unbiased bounded draws and shuffles; a buffered

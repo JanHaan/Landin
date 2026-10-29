@@ -1,7 +1,9 @@
 --  A network in memory, beside the memory world: a provider of `net.network`
 --  whose sockets are the caller's records, for a test that runs a client
---  and a server in one thread and wants the same answer every run.
+--  and a server in one thread, or in fibres that take turns, and wants the
+--  same answer every run.
 
+import core/fibre
 import core/io
 import core/mem
 import core/net
@@ -15,7 +17,10 @@ import core/time
 --- `address_unavailable`; `fail_at` makes the network's call of that
 --- number, counted from one in `calls`, fail `io_failed`, and zero never.
 --- `connections` counts connections made, `datagrams` datagrams
---- delivered and `losses` datagrams no socket took.
+--- delivered and `losses` datagrams no socket took.  `moves` counts what
+--- changed something a call may wait for: a connection made or taken,
+--- bytes or a datagram delivered or taken, a shutdown and a close; and
+--- `turns` the turns its calls took while they waited.
 public network_space: type = struct
     next_port: usize
     arrivals: usize
@@ -25,6 +30,8 @@ public network_space: type = struct
     connections: usize
     datagrams: usize
     losses: usize
+    moves: usize
+    turns: usize
 end network_space
 
 --  What a socket record is: free for the network to open, a listener, one
@@ -77,6 +84,8 @@ end socket_over
 network_value: type = struct
     state: ptr mut network_space
     sockets: []mut network_socket
+    runs: any fibre.turns
+    takes_turns: bool
 end network_value
 
 --- A network of one machine in memory, a provider of `network`, `reader`
@@ -93,15 +102,54 @@ end network_value
 --- a datagram sent to a port no socket holds, or larger than the room its
 --- socket has left, is lost, as UDP's may be.
 ---
---- Nothing in it waits, since in one thread nothing else could ever end
---- the wait: where a real socket would wait, for a connection to accept,
---- for bytes to receive or for room to send into, it fails `timed_out` at
---- once, whether or not a limit was set, after a send has delivered what
---- fits.  A send to a connection whose peer has closed is `disconnected`
---- at once, where a real one may take one send before it says so.  It
---- does not model loss on a connection, a peer's reset, partial reads, a
---- port held after its socket closed, nor a zone.
+--- Made by `network_over`, nothing in it waits, since in one thread nothing
+--- else could end the wait: where a real socket would wait, for a
+--- connection to accept, for bytes to receive or for room to send into,
+--- it fails `timed_out` at once, whether or not a limit was set, after a
+--- send has delivered what fits.  Made by `network_over_turns`, a call
+--- that would wait takes a turn of the scheduler it was given instead, so
+--- that the other fibres run, and looks again; it fails `timed_out` only
+--- after a whole round in which nothing moved anywhere in the network, so
+--- nothing it waits for arrived, and a call whose socket was shut for
+--- what it waits for, or closed, while it waited fails `io_failed` (D449,
+--- D483).  `accept`, `send`, `receive`, `receive_from`, `read`, `write`
+--- and `write_some` are the calls that may wait and so switch; the others
+--- never do.  A send to a connection whose peer has closed is
+--- `disconnected` at once, where a real one may take one send before it
+--- says so.  It does not model loss on a connection, a peer's reset,
+--- partial reads, a port held after its socket closed, nor a zone.
 public network: type = network_value
+
+--  The scheduler of a network that does not take turns: it runs nothing
+--  and is never called.
+alone: type = struct
+    reserved: u32
+end alone
+
+alone_start: (self: alone, escaping record: ptr mut fibre.space,
+              escaping stack: []mut u8, escaping work: any fibre.task)
+             -> none ! mem.out_of_memory =
+    _ = self
+    _ = record
+    _ = stack
+    _ = work
+end alone_start
+
+alone_finished: (self: alone, record: fibre.space) -> (yes: bool) =
+    _ = self
+    _ = record
+    yes = true
+end alone_finished
+
+alone_wait: (self: alone) -> none =
+    _ = self
+end alone_wait
+
+alone is fibre.scheduler (start: alone_start, finished: alone_finished,
+                          wait: alone_wait)
+alone is fibre.turns (yield: alone_wait)
+
+nobody: alone = zeroed
 
 --- Fill `state` for a memory network over `sockets`, every one of them
 --- free, and return its handle.  Ports bound to port 0 are given from
@@ -109,15 +157,55 @@ public network: type = network_value
 public network_over: (inout state: network_space,
                       sockets: []mut network_socket)
                      -> (host: network from state, sockets) =
+    freed(state, sockets)
+    host = (state: addr state, sockets: sockets, runs: any(addr nobody),
+            takes_turns: false)
+end network_over
+
+--- Fill `state` for a memory network over `sockets` whose calls take
+--- turns on `runs` where they would wait, and return its handle.  The
+--- fibres that use it are `runs`'s, and the network borrows the
+--- scheduler for as long as it is used.
+public network_over_turns: (inout state: network_space,
+                            sockets: []mut network_socket,
+                            runs: any fibre.turns)
+                           -> (host: network from state, sockets, runs) =
+    freed(state, sockets)
+    host = (state: addr state, sockets: sockets, runs: runs,
+            takes_turns: true)
+end network_over_turns
+
+--  Fill `state` and free every socket.
+freed: (inout state: network_space, sockets: []mut network_socket)
+       -> none =
     state = (next_port: 49152, arrivals: 0, calls: 0, fail_at: 0,
-             without_ipv6: false, connections: 0, datagrams: 0, losses: 0)
+             without_ipv6: false, connections: 0, datagrams: 0, losses: 0,
+             moves: 0, turns: 0)
     for index in usize(0)..<lenof sockets do
         sockets[index].role = free_slot
         sockets[index].start = 0
         sockets[index].filled = 0
     end for
-    host = (state: addr state, sockets: sockets)
-end network_over
+end freed
+
+--  Note that something a call may wait for changed.
+moved: (self: network) -> none =
+    state: ptr mut network_space = self.state
+    inc state.val.moves
+end moved
+
+--  Where a call would wait: over turns, take a turn and say whether
+--  anything moved in the network meanwhile, so the call looks again;
+--  otherwise, or after a whole round in which nothing moved, no.
+waited: (self: network) -> (again: bool) =
+    again = false
+    return when not self.takes_turns
+    state: ptr mut network_space = self.state
+    before: usize = state.val.moves
+    inc state.val.turns
+    self.runs.yield()
+    again = state.val.moves <> before
+end waited
 
 --  Count a call, failing the one the test chose.
 counted: (self: network) -> none ! io.io_failed =
@@ -302,25 +390,31 @@ network_connect: (self: network, to: net.address) -> (connected: io.file)
     self.sockets[server].order = state.val.arrivals
     inc state.val.arrivals
     inc state.val.connections
+    moved(self)
     connected = io.file(client)
 end network_connect
 
 network_accept: (self: network, listener: io.file) -> (accepted: io.file)
                 ! net.timed_out | io.io_failed =
     try counted(self)
-    _ = try slot_of(self, listener, listening_slot)
     mut found: usize = lenof self.sockets
-    for index in usize(0)..<lenof self.sockets do
-        candidate: ptr network_socket = addr self.sockets[index]
-        if candidate.val.pending
-          and candidate.val.listener == usize(listener)
-          and (found == lenof self.sockets
-               or candidate.val.order < self.sockets[found].order) then
-            found = index
-        end if
-    end for
-    fail net.timed_out when found == lenof self.sockets
+    loop do
+        --  A listener closed while the call waited fails it here.
+        _ = try slot_of(self, listener, listening_slot)
+        for index in usize(0)..<lenof self.sockets do
+            candidate: ptr network_socket = addr self.sockets[index]
+            if candidate.val.pending
+              and candidate.val.listener == usize(listener)
+              and (found == lenof self.sockets
+                   or candidate.val.order < self.sockets[found].order) then
+                found = index
+            end if
+        end for
+        break when found < lenof self.sockets
+        fail net.timed_out when not waited(self)
+    end loop
     self.sockets[found].pending = false
+    moved(self)
     accepted = io.file(found)
 end network_accept
 
@@ -347,37 +441,59 @@ delivered: (self: network, sender: ptr mut network_socket,
     ends: usize = to.val.filled + count
     mem.copy(to.val.buffer[to.val.filled..<ends], bytes[0..<count]) else none
     to.val.filled = ends
+    if count > 0 then moved(self) end if
 end delivered
 
 --  Send what fits of `bytes` on a connection: how much.
 sent_part: (self: network, connection: io.file, bytes: []u8)
            -> (count: usize) ! net.disconnected | io.io_failed =
-    try counted(self)
     slot: ptr mut network_socket = try slot_of(self, connection,
                                                connection_slot)
     fail net.disconnected when slot.val.sending_closed or slot.val.peer_gone
     count = delivered(self, slot, bytes)
 end sent_part
 
+--  Send what fits of `bytes`, and over turns wait for room until some
+--  comes: how much, nothing only when `bytes` is empty or no room came.
+sent_some: (self: network, connection: io.file, bytes: []u8)
+           -> (count: usize) ! net.disconnected | io.io_failed =
+    try counted(self)
+    loop do
+        count = try sent_part(self, connection, bytes)
+        return when count > 0 or lenof bytes == 0 or not waited(self)
+    end loop
+end sent_some
+
 network_send: (self: network, connection: io.file, bytes: []u8)
               -> none ! net.disconnected | net.timed_out | io.io_failed =
-    count: usize = try sent_part(self, connection, bytes)
-    fail net.timed_out when count < lenof bytes
+    try counted(self)
+    mut sent: usize = try sent_part(self, connection, bytes)
+    while sent < lenof bytes do
+        fail net.timed_out when not waited(self)
+        sent += try sent_part(self, connection, bytes[sent..<lenof bytes])
+    end while
 end network_send
 
 network_receive: (self: network, connection: io.file, into: []mut u8)
                  -> (count: usize)
                  ! net.disconnected | net.timed_out | io.io_failed =
     try counted(self)
-    slot: ptr mut network_socket = try slot_of(self, connection,
-                                               connection_slot)
     count = 0
-    return when slot.val.receiving_closed or lenof into == 0
-    waiting: usize = slot.val.filled - slot.val.start
-    if waiting == 0 then
-        return when slot.val.peer_finished
-        fail net.timed_out
-    end if
+    mut waits: bool = false
+    mut waiting: usize = 0
+    loop do
+        held: ptr mut network_socket = try slot_of(self, connection,
+                                                   connection_slot)
+        --  Shut for receiving while the call waited (D449).
+        fail io.io_failed when waits and held.val.receiving_closed
+        return when held.val.receiving_closed or lenof into == 0
+        waiting = held.val.filled - held.val.start
+        break when waiting > 0
+        return when held.val.peer_finished
+        fail net.timed_out when not waited(self)
+        waits = true
+    end loop
+    slot: ptr mut network_socket = addr self.sockets[usize(connection)]
     count = if waiting < lenof into then waiting else lenof into end if
     ends: usize = slot.val.start + count
     mem.copy(into[0..<count], slot.val.buffer[slot.val.start..<ends])
@@ -386,6 +502,7 @@ network_receive: (self: network, connection: io.file, into: []mut u8)
         fail io.io_failed
     end
     slot.val.start = ends
+    moved(self)
 end network_receive
 
 --  A datagram's record in its receiver's buffer: the sender's family,
@@ -423,6 +540,7 @@ queued: (self: network, receiver: ptr mut network_socket,
     end
     receiver.val.filled = at + needed
     inc state.val.datagrams
+    moved(self)
 end queued
 
 network_send_to: (self: network, socket: io.file, bytes: []u8,
@@ -449,8 +567,14 @@ network_receive_from: (self: network, socket: io.file,
                        into: []mut u8)
                       -> (received: net.datagram) ! net.timed_out | io.io_failed =
     try counted(self)
-    slot: ptr mut network_socket = try slot_of(self, socket, datagram_slot)
-    fail net.timed_out when slot.val.filled - slot.val.start < datagram_header
+    loop do
+        --  A socket closed while the call waited fails it here.
+        held: ptr mut network_socket = try slot_of(self, socket,
+                                                   datagram_slot)
+        break when held.val.filled - held.val.start >= datagram_header
+        fail net.timed_out when not waited(self)
+    end loop
+    slot: ptr mut network_socket = addr self.sockets[usize(socket)]
     at: usize = slot.val.start
     family: net.address_family = if slot.val.buffer[at] == 4 then net.ipv4
                                  else net.ipv6 end if
@@ -470,6 +594,7 @@ network_receive_from: (self: network, socket: io.file,
         fail io.io_failed
     end
     slot.val.start = begins + length
+    moved(self)
     received = (count: count, sender: sender)
 end network_receive_from
 
@@ -487,6 +612,7 @@ network_shutdown: (self: network, connection: io.file,
         slot.val.sending_closed = true
         self.sockets[slot.val.partner].peer_finished = true
     end if
+    moved(self)
 end network_shutdown
 
 network_local_address: (self: network, socket: io.file)
@@ -550,6 +676,7 @@ network_close_socket: (self: network, sink socket: io.file)
     slot.val.role = free_slot
     slot.val.start = 0
     slot.val.filled = 0
+    moved(self)
 end network_close_socket
 
 network_read: (self: network, opened: io.file, into: []mut u8)
@@ -569,10 +696,11 @@ network_write: (self: network, opened: io.file, bytes: []u8)
 end network_write
 
 --  What fits, or `io_failed` when nothing does, since a write that makes
---  no progress breaks the writer's contract.
+--  no progress breaks the writer's contract; over turns, it waits for
+--  room first.
 network_write_some: (self: network, opened: io.file, bytes: []u8)
                     -> (count: usize) ! io.io_failed =
-    count = sent_part(self, opened, bytes) else (problem)
+    count = sent_some(self, opened, bytes) else (problem)
         _ = problem
         fail io.io_failed
     end

@@ -1,0 +1,150 @@
+--  D449, D477: prototype 5's stopping in miniature, over core/io/fake's
+--  signals and network.  The source of signals is a provider of
+--  `fibre.turns` over a round, and everything here takes its turns: a
+--  fibre written against `any signal.signals` watches SIGTERM and waits
+--  for it; a server fibre answers connections until its accept fails;
+--  and the home stack is the client.  When the client has its answer it
+--  raises SIGUSR1, which nobody watches and which is dropped, and then
+--  SIGTERM: the waiting fibre wakes with it and closes the listener, the
+--  server's accept fails `io_failed` and the server ends, so the group's
+--  join returns.  Nothing cancels a fibre: its I/O failing stops it.
+--  Last, a fibre waiting for a signal is woken by `stop_watching`, its
+--  wait failing `io_failed`.
+import core/cmp
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/io/fake
+import core/io/signal
+import core/net
+
+--  `p` the server answered, `t` SIGTERM arrived and `x` the server ended
+--  because its accept failed; `s` a wait for a signal failed when
+--  watching stopped.
+mut trace: [8]u8 = zeroed
+mut marks: usize = 0
+
+mark: (letter: u8) -> none =
+    trace[marks] = letter
+    inc marks
+end mark
+
+stopping: type = struct
+    signals: any signal.signals
+    network: fake.network
+    listener: io.file
+end stopping
+
+--  Wait for SIGTERM and stop the server by closing its listener.  Nothing
+--  in it knows the source is a fake.
+stop_on_terminate: (inout state: stopping) -> none ! failure.reason =
+    try state.signals.watch(signal.terminate)
+    received: signal.event = try state.signals.next_signal()
+    fail io.io_failed when received.which <> signal.terminate
+      or received.number <> 15
+    mark(u8('t'))
+    closing: io.file = state.listener
+    try net.close_socket(state.network, closing)
+end stop_on_terminate
+
+serving: type = struct
+    network: fake.network
+    listener: io.file
+end serving
+
+--  Answer each connection's request until accepting fails.
+serve: (inout state: serving) -> none ! failure.reason =
+    loop do
+        connection: io.file = net.accept(state.network, state.listener)
+            else (problem)
+            if problem == io.io_failed then mark(u8('x')) end if
+            return
+        end
+        mut buffer: [8]u8 = zeroed
+        got: usize = try net.receive(state.network, connection, buffer)
+        try net.send(state.network, connection, buffer[0..<got])
+        try net.close_socket(state.network, connection)
+        mark(u8('p'))
+    end loop
+end serve
+
+waiting: type = struct
+    signals: any signal.signals
+end waiting
+
+--  Wait for a signal that never comes.
+wait_in_vain: (inout state: waiting) -> none ! failure.reason =
+    try state.signals.watch(signal.hangup)
+    received: signal.event = state.signals.next_signal() else (problem)
+        if problem == io.io_failed then mark(u8('s')) end if
+        return
+    end
+    _ = received
+end wait_in_vain
+
+--  Module storage, so the stacks are no frame's: Cortex-M0's reset stack
+--  is 4 KiB, and its 12 KiB of RAM below that hold two stacks of 4 KiB.
+--  A 64-bit target's frames are deeper, and RV64's, which keep a home
+--  for every scalar, deepest: a task here takes more than 8 KiB there.
+fixed if compiler.word_size == 32 then
+    mut backing: [2 * 4096]u8 = zeroed
+else
+    mut backing: [2 * 12288]u8 = zeroed
+end if
+
+run: (signals: fake.signals, counts: ptr fake.signals_space)
+     -> none ! failure.reason =
+    runs: any fibre.turns = any(addr signals)
+    mut net_space: fake.network_space = zeroed
+    mut b0: [16]u8 = zeroed
+    mut b1: [16]u8 = zeroed
+    mut b2: [16]u8 = zeroed
+    mut sockets: [3]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2)]
+    network := fake.network_over_turns(net_space, sockets, runs)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(network, listener)
+    mut tasks := try fibre.turns_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    stopper: stopping = (signals: any(addr signals), network: network,
+                         listener: listener)
+    try fibre.admit(tasks, stop_on_terminate, stopper)
+    server: serving = (network: network, listener: listener)
+    try fibre.admit(tasks, serve, server)
+    client: io.file = try net.connect(network, at)
+    try net.send(network, client, "ping")
+    mut buffer: [8]u8 = zeroed
+    got: usize = try net.receive(network, client, buffer)
+    fail io.io_failed when cmp.compare(buffer[0..<got], "ping") <> cmp.equal
+    try net.close_socket(network, client)
+    fake.raise(signals, signal.user1)
+    fake.raise(signals, signal.terminate)
+    try fibre.join(tasks)
+    fail io.io_failed when counts.val.ignored <> 1 or counts.val.delivered <> 1
+    vain: waiting = (signals: any(addr signals))
+    try fibre.admit(tasks, wait_in_vain, vain)
+    fibre.yield(signals)
+    try signal.stop_watching(signals)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    mut space: fake.signals_space = zeroed
+    signals := fake.signals_over(space, any(addr round))
+    run(signals, addr space) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when cmp.compare(trace[0..<marks], "ptxs") <> cmp.equal
+    code = 42
+end main

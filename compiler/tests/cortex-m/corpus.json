@@ -1901,6 +1901,16 @@
       "profile_limit": "selected-image",
       "reason": "The network consumer's routines over core/io's memory network beside a memory world, with its line reader, buffered writer, format and every oracle of the memory network, need 123,520 bytes of flash at size/auto, overflowing the 32 KiB profile by 90,752. A table keeps only the entries something projects (D374), so what remains is the program's and the oracles' own direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/run-shell-memory's limit records. Each profile still attempts execution; runtime/network-addresses-firmware runs the network's address code within the image and requires execution; this image limit is not runtime evidence."
     },
+    "runtime/network-fake-turns-exchange": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Two fibres exchanging over core/io's memory network under a round of turns need 60,408 bytes of flash at size/auto, overflowing the 32 KiB profile by 27,640. A table keeps only the entries something projects (D374), so what remains is the program's direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake's signals over a round of turns within the image and requires execution; this image limit is not runtime evidence."
+    },
+    "runtime/network-fake-turns-waits": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "The memory network's waits over a round of turns and at once, with its accept, receive, shutdown and close, need 65,216 bytes of flash at size/auto, overflowing the 32 KiB profile by 32,448. A table keeps only the entries something projects (D374), so what remains is the program's direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake's signals over a round of turns within the image and requires execution; this image limit is not runtime evidence."
+    },
     "runtime/network-listen-beside-accepted": {
       "codes": [
         "L0015"
@@ -2889,6 +2899,14 @@
     },
     "runtime/sieve-of-eratosthenes": {
       "mode": "execute"
+    },
+    "runtime/signals-fake-firmware": {
+      "mode": "execute"
+    },
+    "runtime/signals-fake-stop-server": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "A server over core/io's memory network stopped by a fake signal needs 72,080 bytes of flash at size/auto, overflowing the 32 KiB profile by 39,312. A table keeps only the entries something projects (D374), so what remains is the program's direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake's signals over a round of turns within the image and requires execution; this image limit is not runtime evidence."
     },
     "runtime/signed-division-overflow-traps": {
       "mode": "execute"

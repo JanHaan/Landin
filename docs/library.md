@@ -877,7 +877,7 @@ When the file cannot be read it says why on standard error, in
 
 ## core/io/fake
 
-Fakes of a system's providers for tests that must give the same answer every run and on every target: a file system, a network, a clock, entropy and terminals, each over the caller's records.
+Fakes of a system's providers for tests that must give the same answer every run and on every target: a file system, a network, a clock, entropy, terminals and signals, each over the caller's records.
 
 Each fake is named one way:
 
@@ -887,11 +887,11 @@ Each fake is named one way:
 | its caller-owned state, declared `zeroed` | the name with `_space` | `fake.volume_space` |
 | its constructor, which fills the state and returns the handle | the name with `_over` | `fake.volume_over` |
 
-The fakes are `fake.volume`, `fake.network`, `fake.clock`, `fake.entropy`
-and `fake.terminals`. The clock and entropy are described with
-`core/time`, and the network with `core/net`. The memory world, which is
-firmware's own world rather than a fake of a system's, stays in `core/io`
-as `io.memory`.
+The fakes are `fake.volume`, `fake.network`, `fake.clock`, `fake.entropy`,
+`fake.terminals` and `fake.signals`. The clock and entropy are described
+with `core/time`, the network with `core/net` and the signals with
+`core/io/signal`. The memory world, which is firmware's own world rather
+than a fake of a system's, stays in `core/io` as `io.memory`.
 
 ### The volume
 
@@ -922,6 +922,58 @@ there.
 records, each a file of a size, and every other file is no terminal.
 
 [Executable example](../compiler/tests/fixtures/runtime/volume-memory/main.ldn)
+
+## core/io/signal
+
+Signals as events: the concept a provider that takes turns supplies when it delivers the system's signals to a fibre that waits for them.
+
+| Call | What it does |
+|---|---|
+| `signal.watch(host, which)` | Take a signal from the system's default disposition and deliver it as an event from then on. |
+| `signal.next_signal(host)` | Wait, taking turns, for the next arrival of a watched signal: a `signal.event`. |
+| `signal.stop_watching(host)` | Give every watched signal back to its default disposition, and wake every waiting fibre, whose wait fails `io_failed`. |
+
+A signal is named portably by a `signal.kind`, and an arrival says which
+one came and the number the system gave it:
+
+| Kind | Signal |
+|---|---|
+| `signal.interrupt` | SIGINT, the terminal's Ctrl-C |
+| `signal.terminate` | SIGTERM, a request to end |
+| `signal.hangup` | SIGHUP, the terminal gone, or a daemon's cue to reload |
+| `signal.child` | SIGCHLD, a child ended, stopped or went on |
+| `signal.user1`, `signal.user2` | SIGUSR1 and SIGUSR2 |
+
+- A signal never runs a handler of Landin code. The provider reads it as
+  it reads any other event, through signalfd on Linux and kqueue's
+  signal filter on Darwin and FreeBSD, and wakes the fibre that waits.
+- `signals` refines `fibre.turns`: only a provider whose fibres take
+  turns supplies it, so a fibre waiting for a signal lets the others run.
+  Over the blocking host a program cannot ask for it, and a signal there
+  keeps the system's default disposition: SIGTERM ends the process.
+- Each arrival is read once, by one waiter. Two arrivals of one signal
+  before it is read may be one event, as the systems keep them.
+- A fibre waiting for a signal is stopped as any waiting fibre is, by
+  failing its wait: `stop_watching` does that.
+
+### The fake
+
+`signals_over` makes a `fake.signals` over the caller's `signals_space`
+and a `fibre.turns` it waits on, whose `start`, `finished`, `wait` and
+`yield` it passes on, so it is a provider of turns as the concept asks.
+A test raises a signal into it with `fake.raise(host, which)`, and the
+fibre waiting in `next_signal` receives it after its next turn.
+
+- A raised signal nobody watches is counted in `ignored` and dropped,
+  where a system would act on it.
+- A signal raised again while it waits to be read is one event.
+- The fake numbers each signal as Linux does on x86-64 and arm64.
+- `raised`, `delivered` and `turns`, the turns its waits took, count the
+  rest.
+
+The fake runs on Cortex-M0, over a round of turns.
+
+[Executable example](../compiler/tests/fixtures/runtime/signals-fake-firmware/main.ldn)
 
 ## core/time
 
@@ -1054,11 +1106,28 @@ machine of loopback addresses:
 
 - a connection and a datagram arrive at once, whole and in order;
 - a datagram no socket takes is lost and counted;
-- a call that would wait answers `timed_out` at once, since nothing in one
-  thread could ever end the wait.
+- a call that would wait answers `timed_out` at once, since in one thread
+  with no scheduler nothing else runs that could end the wait.
+
+`network_over_turns` makes the same network over a `fibre.turns` the
+caller gives it, for a test whose client and server are fibres:
+
+- a call that would wait takes a turn instead, so the other fibres run,
+  and looks again;
+- it answers `timed_out` only after a whole round in which nothing moved
+  anywhere in the network, so nothing it waits for arrived;
+- a call whose socket another fibre closed, or shut for what it waits
+  for, while it waited fails `io_failed` when it wakes.
+
+`accept`, `send`, `receive`, `receive_from`, `read`, `write` and
+`write_some` are its calls that may wait, and so switch; the others never
+do. `moves` counts what changed something a call may wait for, and
+`turns` the turns its calls took.
 
 A test may take IPv6 away with `without_ipv6` and fail a call with
 `fail_at`.
+
+[Executable example](../compiler/tests/fixtures/runtime/network-fake-turns-exchange/main.ldn)
 
 Addresses are read and written on Cortex-M0 as on a hosted system.
 
@@ -1278,6 +1347,43 @@ Two concepts say what runs the tasks:
   program's `defer fibre.join(group) else none` makes sure it is.
 - Each stack is at least 512 bytes after its record; a smaller backing
   fails `mem.out_of_memory`.
+
+### Which calls may switch
+
+A fibre loses the core only inside a call to an entry of the provider
+that runs it, and a provider says which of its entries may switch. A
+provider of `turns`, the event-driven host among them, may switch in the
+entries that wait, and only in those:
+
+| Concept | May switch | Never switch |
+|---|---|---|
+| `fibre.scheduler`, `fibre.turns` | `wait`, `yield`, and `start` where the provider runs a new fibre at once | `finished` |
+| `io.reader`, `io.writer` | `read`, `write`, `write_some`, which wait for input or for room | none |
+| `io.programs` | `wait`, for a child to end, and the child's `read_child` and `write_child` | `spawn`, `close_input` |
+| `time.clock` | `sleep` | `now` |
+| `net.network` | `connect`, `accept`, `send`, `receive`, `send_to`, `receive_from` | `listen`, `open_datagram`, `shutdown`, `local_address`, `peer_address`, `set_timeouts`, `set_no_delay`, `close_socket` |
+| `signal.signals` | `next_signal` | `watch`, `stop_watching` |
+
+Every other entry of `core/io`, `core/time` and `core/net` never
+switches: `files`, `process`, `environment`, `directories`,
+`file_system`, `terminals`, `entropy` and `wall_clock`, whose calls do
+not wait for another fibre, and a provider's own queries, its last errno
+among them. Shutting or closing a socket wakes the fibres waiting on it,
+whose calls fail `io_failed`, and does not itself switch. A program reads
+this table to know where another fibre may have run; between two such
+calls nothing else of the provider's has.
+
+The library's own providers of turns switch in fewer:
+
+| Provider | Switches in |
+|---|---|
+| `stacks.round` | `yield` and `wait`; its `start` prepares the fibre and returns |
+| `fake.network` over turns | `accept`, `send`, `receive`, `receive_from`, `read`, `write` and `write_some`, and only where the call would wait |
+| `fake.signals` | `next_signal` when nothing waits to be read, and its round's `yield` and `wait` |
+
+`fake.clock`'s `sleep` advances the clock and returns, and switches
+nowhere; a test whose sleeps must take turns gives its fibres a clock
+that yields, as the example below does.
 
 [Executable example](../compiler/tests/fixtures/runtime/fibre-same-source-any-provider/main.ldn)
 

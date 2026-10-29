@@ -1,0 +1,119 @@
+--  D449: core/io/fake's network over a round of turns.  A server fibre
+--  accepts a connection and answers what it receives, and a client fibre
+--  connects, sends and receives the answer, each written as it would be
+--  over a real network.  Where a call would wait it takes a turn instead,
+--  so the exchange completes in either order of start: with the server
+--  first, its accept and the client's receive each wait one turn; with the
+--  client first, only the client's receive does.
+import core/cmp
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/io/fake
+import core/net
+
+--  The order things happened in: `a` the server accepted, `r` it received
+--  the request, `c` the client connected and `d` the client read the
+--  answer.
+mut trace: [8]u8 = zeroed
+mut marks: usize = 0
+
+mark: (letter: u8) -> none =
+    trace[marks] = letter
+    inc marks
+end mark
+
+party: type = struct
+    network: fake.network
+    listener: io.file
+    to: net.address
+end party
+
+serve: (inout state: party) -> none ! failure.reason =
+    connection: io.file = try net.accept(state.network, state.listener)
+    defer net.close_socket(state.network, connection) else none
+    mark(u8('a'))
+    mut buffer: [8]u8 = zeroed
+    got: usize = try net.receive(state.network, connection, buffer)
+    fail io.io_failed when cmp.compare(buffer[0..<got], "ping") <> cmp.equal
+    mark(u8('r'))
+    try net.send(state.network, connection, "pong")
+end serve
+
+call: (inout state: party) -> none ! failure.reason =
+    connection: io.file = try net.connect(state.network, state.to)
+    defer net.close_socket(state.network, connection) else none
+    mark(u8('c'))
+    try net.send(state.network, connection, "ping")
+    mut buffer: [8]u8 = zeroed
+    got: usize = try net.receive(state.network, connection, buffer)
+    fail io.io_failed when cmp.compare(buffer[0..<got], "pong") <> cmp.equal
+    mark(u8('d'))
+end call
+
+--  Module storage, so the stacks are no frame's: Cortex-M0's reset stack
+--  is 4 KiB, and its 12 KiB of RAM below that hold two stacks of 4 KiB.
+--  A 64-bit target's frames are deeper, and RV64's, which keep a home
+--  for every scalar, deepest: a task here takes more than 8 KiB there.
+fixed if compiler.word_size == 32 then
+    mut backing: [2 * 4096]u8 = zeroed
+else
+    mut backing: [2 * 12288]u8 = zeroed
+end if
+
+--  One exchange over a fresh network, the server's fibre started first
+--  or the client's; how many turns its calls took.
+exchange: (runs: any fibre.turns, server_first: bool)
+          -> (turns: usize) ! failure.reason =
+    mut space: fake.network_space = zeroed
+    mut b0: [16]u8 = zeroed
+    mut b1: [16]u8 = zeroed
+    mut b2: [16]u8 = zeroed
+    mut sockets: [3]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2)]
+    network := fake.network_over_turns(space, sockets, runs)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    defer net.close_socket(network, listener) else none
+    at: net.address = try net.local_address(network, listener)
+    shared: party = (network: network, listener: listener, to: at)
+    mut tasks := try fibre.turns_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    if server_first then
+        try fibre.admit(tasks, serve, shared)
+        try fibre.admit(tasks, call, shared)
+    else
+        try fibre.admit(tasks, call, shared)
+        try fibre.admit(tasks, serve, shared)
+    end if
+    try fibre.join(tasks)
+    turns = space.turns
+end exchange
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    first: usize = exchange(any(addr round), true) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when cmp.compare(trace[0..<marks], "card") <> cmp.equal
+      or first <> 2
+    code = 3
+    marks = 0
+    second: usize = exchange(any(addr round), false) else (problem)
+        _ = problem
+        return
+    end
+    code = 4
+    return when cmp.compare(trace[0..<marks], "card") <> cmp.equal
+      or second <> 1
+    code = 42
+end main

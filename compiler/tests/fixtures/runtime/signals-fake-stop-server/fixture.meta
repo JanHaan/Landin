@@ -1,0 +1,8 @@
+class: runtime
+summary: D449 D477 a fibre written against any signal.signals waits for SIGTERM from core/io/fake's signals, a provider of fibre.turns over a round, and stops a server fibre over the fake network by closing its listener, whose accept fails io_failed; a signal nobody watches is dropped, and stop_watching wakes a waiting fibre with io_failed
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1240, 1310, 1380, 1620, 1680, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

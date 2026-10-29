@@ -17,7 +17,8 @@ executes them on Cortex-M0.
 
 The shared freestanding modules are `core/arena`, `core/cmp`, `core/diag`,
 `core/failure`, `core/fault`, `core/fibre` with its submodule
-`core/fibre/stacks`, `core/io` with its submodule `core/io/fake`,
+`core/fibre/stacks`, `core/io` with its submodules `core/io/fake` and
+`core/io/signal`,
 `core/map`, `core/mem`,
 `core/net`, `core/panic`, `core/pool`, `core/random`, `core/region`,
 `core/sort`, `core/spill`, `core/text`, `core/time`, `core/tree` and
@@ -221,9 +222,18 @@ nothing here resolves a name. A refused connection, an address in use and
 an address this system does not have are atoms of their own. The fake is a
 `fake.network`, a machine of loopback addresses over the caller's socket
 records and their buffers: a connection and a datagram arrive at once and
-in order, a datagram no socket takes is lost, and since nothing in one
-thread could ever end a wait, a call that would wait answers `timed_out`
-at once. A test can take IPv6 away from it and inject a failure.
+in order, a datagram no socket takes is lost, and, made with no scheduler,
+a call that would wait answers `timed_out` at once, since nothing else in
+one thread could end the wait. Made over a `fibre.turns`, a call that
+would wait takes turns instead and times out only after a whole round in
+which nothing in the network moved, so a client fibre and a server fibre
+talk over it as over a real one (D449). A test can take IPv6 away from it
+and inject a failure.
+Signals reach a program as events, never as handlers: `core/io/signal`'s
+`signals` concept refines `fibre.turns`, so only a provider whose fibres
+take turns delivers them (D477), and a fibre waits for the next watched
+signal as it waits for a receive. Its fake, `fake.signals`, takes the
+signals a test raises, over the turns it is given.
 The rest of the file system is one more concept outside `world`,
 `file_system`, beside `files` and `directories` rather than widening
 either, so a sink or a firmware world that only lists or only reads

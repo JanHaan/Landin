@@ -1,0 +1,8 @@
+class: negative
+summary: D477 a provider of fibre.scheduler alone, as the blocking host is, is refused as a provider of core/io/signal's signals, whose parent fibre.turns is named through its module and is required where the conformance is declared
+program: main.ldn
+root: ../../../../..
+status: 1
+codes: L0318
+constructs: 1240, 1340, 1380
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

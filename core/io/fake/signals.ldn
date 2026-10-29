@@ -1,0 +1,156 @@
+--  Signals a test raises, the fake of core/io/signal's `signals`, over a
+--  round of turns the test gives it.
+
+import core/fibre
+import core/io
+import core/io/signal
+import core/mem
+
+--  How many signals `signal.kind` names.
+kinds: usize = 6
+
+--  The number the fake gives each signal, in `slot`'s order: Linux's own
+--  on x86-64 and arm64.
+numbers: [6]u32 = [2, 15, 1, 17, 10, 12]
+
+--- Caller-owned state of a fake source of signals: which are watched,
+--- what was raised and not yet read, in the order it was raised, and its
+--- counts. Declare it `zeroed` and give it to `signals_over`, which fills
+--- it; it must outlive the handle. `raised` counts the raises, `ignored`
+--- those of a signal nobody watched, `delivered` the events read, and
+--- `turns` the turns `next_signal` took while it waited.
+public signals_space: type = struct
+    watched: [6]bool
+    waiting: [6]u8
+    queued: usize
+    stopped: bool
+    raised: usize
+    ignored: usize
+    delivered: usize
+    turns: usize
+end signals_space
+
+signals_value: type = struct
+    state: ptr mut signals_space
+    runs: any fibre.turns
+end signals_value
+
+--- A source of signals a test raises, a provider of `signal.signals`
+--- over the round of turns it is given, which it is also a provider of
+--- `fibre.turns` through, as the concept asks: its `start`, `finished`,
+--- `wait` and `yield` are the round's. `raise` delivers a signal as the
+--- system would, and `next_signal` waits for one by taking turns, so a
+--- fibre that waits for a signal lets the test's other fibres run until
+--- one of them raises it. A raised signal nobody watches is counted and
+--- dropped, where a system would act on it. A signal raised again before
+--- it is read is one event, as the systems keep it. The fake numbers
+--- each signal as Linux does on x86-64 and arm64. Copies share the
+--- state.
+public signals: type = signals_value
+
+--- Fill `state` for a source of signals whose waits take turns on
+--- `runs`, watching nothing, and return its handle.
+public signals_over: (inout state: signals_space, runs: any fibre.turns)
+                     -> (host: signals from state, runs) =
+    state = (watched: [false, false, false, false, false, false],
+             waiting: [0, 0, 0, 0, 0, 0], queued: 0, stopped: false,
+             raised: 0, ignored: 0, delivered: 0, turns: 0)
+    host = (state: addr state, runs: runs)
+end signals_over
+
+--  Where a signal sits in `numbers` and `watched`.
+slot: (which: signal.kind) -> (index: usize) =
+    index = match which
+        signal.interrupt: 0
+        signal.terminate: 1
+        signal.hangup: 2
+        signal.child: 3
+        signal.user1: 4
+        signal.user2: 5
+    end match
+end slot
+
+--  The signal at `index`, `slot`'s inverse.
+kind_at: (index: usize) -> (which: signal.kind) =
+    which = if index == 0 then signal.interrupt
+            elsif index == 1 then signal.terminate
+            elsif index == 2 then signal.hangup
+            elsif index == 3 then signal.child
+            elsif index == 4 then signal.user1
+            else signal.user2 end if
+end kind_at
+
+--- Raise `which` as the system would deliver it: a watched signal waits
+--- to be read, after any raised before it, unless it already waits; one
+--- nobody watches is counted in `ignored` and dropped.
+public raise: (host: signals, which: signal.kind) -> none =
+    state: ptr mut signals_space = host.state
+    inc state.val.raised
+    index: usize = slot(which)
+    if not state.val.watched[index] or state.val.stopped then
+        inc state.val.ignored
+        return
+    end if
+    for at in usize(0)..<state.val.queued do
+        return when usize(state.val.waiting[at]) == index
+    end for
+    state.val.waiting[state.val.queued] = u8(index)
+    inc state.val.queued
+end raise
+
+fake_watch: (self: signals, which: signal.kind) -> none ! io.io_failed =
+    state: ptr mut signals_space = self.state
+    state.val.watched[slot(which)] = true
+    state.val.stopped = false
+end fake_watch
+
+fake_next_signal: (self: signals) -> (received: signal.event)
+                  ! io.io_failed =
+    state: ptr mut signals_space = self.state
+    while state.val.queued == 0 do
+        fail io.io_failed when state.val.stopped
+        inc state.val.turns
+        self.runs.yield()
+    end while
+    fail io.io_failed when state.val.stopped
+    index: usize = usize(state.val.waiting[0])
+    dec state.val.queued
+    for at in usize(0)..<state.val.queued do
+        state.val.waiting[at] = state.val.waiting[at + 1]
+    end for
+    inc state.val.delivered
+    received = (which: kind_at(index), number: numbers[index])
+end fake_next_signal
+
+fake_stop_watching: (self: signals) -> none ! io.io_failed =
+    state: ptr mut signals_space = self.state
+    for index in usize(0)..<kinds do
+        state.val.watched[index] = false
+    end for
+    state.val.queued = 0
+    state.val.stopped = true
+end fake_stop_watching
+
+fake_start: (self: signals, escaping record: ptr mut fibre.space,
+             escaping stack: []mut u8, escaping work: any fibre.task)
+            -> none ! mem.out_of_memory =
+    try self.runs.start(record, stack, work)
+end fake_start
+
+fake_finished: (self: signals, record: fibre.space) -> (yes: bool) =
+    yes = self.runs.finished(record)
+end fake_finished
+
+fake_wait: (self: signals) -> none =
+    self.runs.wait()
+end fake_wait
+
+fake_yield: (self: signals) -> none =
+    self.runs.yield()
+end fake_yield
+
+signals is fibre.scheduler (start: fake_start, finished: fake_finished,
+                            wait: fake_wait)
+signals is fibre.turns (yield: fake_yield)
+signals is signal.signals (watch: fake_watch, next_signal: fake_next_signal,
+                           stop_watching: fake_stop_watching)

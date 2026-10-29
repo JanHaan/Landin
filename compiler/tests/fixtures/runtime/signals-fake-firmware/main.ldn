@@ -1,0 +1,110 @@
+--  D449, D477: core/io/fake's signals over a round of turns, within a
+--  32 KiB firmware image.  A fibre written against `any signal.signals`
+--  watches SIGUSR1 and SIGTERM and waits for each in turn; another fibre
+--  takes a turn and then raises SIGUSR1, SIGHUP, which nobody watches and
+--  is dropped, and SIGTERM twice, the second while the first waits to be
+--  read and so one event with it.  The waiter hears SIGUSR1 and then
+--  SIGTERM, each with the number the fake gives it.  Last, a fibre
+--  waiting for a signal is woken by `stop_watching`, its wait failing
+--  `io_failed`.
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/io/fake
+import core/io/signal
+
+--  What the waiter heard: each signal's number, in order, and `s` when a
+--  wait failed because watching stopped.
+mut heard: [8]u32 = zeroed
+mut count: usize = 0
+
+note: (number: u32) -> none =
+    heard[count] = number
+    inc count
+end note
+
+--  Every task's state, one type so the group's `admit` is one routine in
+--  the image: the source as any provider of signals, and as the fake a
+--  test raises signals into.
+waiting: type = struct
+    signals: any signal.signals
+    source: fake.signals
+end waiting
+
+--  Hear signals until SIGTERM.  Nothing in it knows the source is a fake.
+until_terminate: (inout state: waiting) -> none ! failure.reason =
+    try state.signals.watch(signal.user1)
+    try state.signals.watch(signal.terminate)
+    loop do
+        received: signal.event = try state.signals.next_signal()
+        note(received.number)
+        break when received.which == signal.terminate
+    end loop
+end until_terminate
+
+--  Take a turn, so the waiter waits first, and raise four signals.
+raise_four: (inout state: waiting) -> none ! failure.reason =
+    fibre.yield(state.source)
+    fake.raise(state.source, signal.user1)
+    fake.raise(state.source, signal.hangup)
+    fake.raise(state.source, signal.terminate)
+    fake.raise(state.source, signal.terminate)
+end raise_four
+
+--  Wait for a signal that never comes.
+wait_in_vain: (inout state: waiting) -> none ! failure.reason =
+    try state.signals.watch(signal.hangup)
+    received: signal.event = state.signals.next_signal() else (problem)
+        if problem == io.io_failed then note(0) end if
+        return
+    end
+    _ = received
+end wait_in_vain
+
+--  Module storage, so the stacks are no frame's: Cortex-M0's reset stack
+--  is 4 KiB, and its 12 KiB of RAM below that hold two stacks of 4 KiB.
+fixed if compiler.word_size == 32 then
+    mut backing: [2 * 4096]u8 = zeroed
+else
+    mut backing: [2 * 8192]u8 = zeroed
+end if
+
+run: (signals: fake.signals, counts: ptr fake.signals_space)
+     -> none ! failure.reason =
+    runs: any fibre.turns = any(addr signals)
+    mut tasks := try fibre.turns_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    parts: waiting = (signals: any(addr signals), source: signals)
+    try fibre.admit(tasks, until_terminate, parts)
+    try fibre.admit(tasks, raise_four, parts)
+    try fibre.join(tasks)
+    fail io.io_failed when counts.val.raised <> 4
+      or counts.val.ignored <> 1 or counts.val.delivered <> 2
+      or counts.val.turns == 0
+    try fibre.admit(tasks, wait_in_vain, parts)
+    fibre.yield(signals)
+    try signal.stop_watching(signals)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    mut space: fake.signals_space = zeroed
+    signals := fake.signals_over(space, any(addr round))
+    run(signals, addr space) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when count <> 3 or heard[0] <> 10 or heard[1] <> 15
+      or heard[2] <> 0
+    code = 42
+end main
