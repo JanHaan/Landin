@@ -2904,6 +2904,12 @@ package body Landin.Stages.Checking is
       function Is_Text_Position
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
+      --  D510: one of core/atomic's concepts, whose missing conformance
+      --  for a scalar the target's atomics do not carry is refused as the
+      --  target's, at the caller's use.
+      function Is_Atomic_Concept
+        (Concept : Landin.Checking.Concept_Id) return Boolean;
+
       --  D249: an index whose source is a utf8 view decodes a scalar value
       --  and is not storage, so neither `addr` nor a write can reach it.
       --  Ask only after the source is typed; this answers from the note.
@@ -2947,6 +2953,25 @@ package body Landin.Stages.Checking is
             Reference => Reference,
             others => <>);
       end Text_Descriptor;
+
+      function Is_Atomic_Concept
+        (Concept : Landin.Checking.Concept_Id) return Boolean
+      is
+         Declaration : Res.Declaration_Id;
+      begin
+         if Concept = Landin.Checking.No_Concept
+           or else Landin.Checking.Is_Compiler_Concept (Types.all, Concept)
+         then
+            return False;
+         end if;
+         Declaration :=
+           Landin.Checking.Concept_Declaration (Types.all, Concept);
+         return Landin.Modules.Logical_Path
+           (Grouped.all,
+            Landin.Modules.Module_Of
+              (Grouped.all, Res.Source_Of (Meanings.all, Declaration)))
+           = "core/atomic";
+      end Is_Atomic_Concept;
 
       --  [0610]'s O(1) overload takes the repository-owned opaque
       --  core/text.position identity.  Match the public alias rather than
@@ -20601,6 +20626,86 @@ package body Landin.Stages.Checking is
                return False;
             end if;
          end loop;
+
+         --  D510: core/atomic's two concepts have a conformance for each
+         --  of u8, u16, u32 and u64 that the target's atomics carry, so a
+         --  scalar cell missing one is a target refusal of the caller's
+         --  use, said there with what the target offers instead, rather
+         --  than at the constraint inside the library.
+         if Is_Atomic_Concept (Concept) then
+            if Actual.Kind in Ty.U8 | Ty.U16 | Ty.U32 | Ty.U64 then
+               declare
+                  Atomic_Required : constant Landin.Provenance.Origin :=
+                    (if Required_At.Source = Landin.Source.No_Source
+                     then Syn.Origin (Of_Tree, Constraint)
+                     else Required_At);
+                  use all type Landin.Memory.Operation;
+                  Width : constant Landin.Targets.Scalar_Size :=
+                    Ty.Storage_Size (Actual.Kind, Facts);
+                  Target : constant String := Landin.Targets.Name (Facts);
+               begin
+                  if not Landin.Targets.Capabilities.Memory_Access
+                    (Facts, Atomic_Load, Width)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Memory_Contract,
+                        Source  => Application.Source,
+                        Where   => Application.Where,
+                        Message => Target & " has no atomic access of"
+                                   & " eight bytes, so it has no u64 cell",
+                        Note    => "D500: keep the value in a cell of four"
+                                   & " bytes or fewer, or keep it in plain"
+                                   & " storage that every writer and reader"
+                                   & " reaches inside platform/cortex_m's"
+                                   & " critical section,"
+                                   & " disable_interrupts to"
+                                   & " restore_interrupts",
+                        Related => Atomic_Required,
+                        Because => "the cell's constraint",
+                        Into    => Found);
+                     return False;
+                  elsif not Landin.Targets.Capabilities.Memory_Access
+                    (Facts, Atomic_Exchange, Width)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Memory_Contract,
+                        Source  => Application.Source,
+                        Where   => Application.Where,
+                        Message => Target & " has no atomic read-modify-"
+                                   & "write, so a cell has no exchange, add"
+                                   & " or compare_exchange there",
+                        Note    => "D500: while one context alone writes"
+                                   & " the cell, atomic.sole_add is a"
+                                   & " relaxed load and a release store;"
+                                   & " where several write it, update"
+                                   & " plain storage inside platform/"
+                                   & "cortex_m's critical section,"
+                                   & " disable_interrupts to"
+                                   & " restore_interrupts",
+                        Related => Atomic_Required,
+                        Because => "the cell's constraint",
+                        Into    => Found);
+                     return False;
+                  end if;
+               end;
+            end if;
+            Bad.Report
+              (Item    => Bad.Unsatisfied_Constraint,
+               Source  => Application.Source,
+               Where   => Application.Where,
+               Message => "this concrete type has no conformance to `"
+                          & Spelled (Syn.Name (Of_Tree, Constraint)) & "`",
+               Note    => "D500: an atomic cell holds a u8, u16, u32 or"
+                          & " u64",
+               Related => (if Required_At.Source = Landin.Source.No_Source
+                           then Syn.Origin (Of_Tree, Constraint)
+                           else Required_At),
+               Because => (if Required_At.Source = Landin.Source.No_Source
+                           then "the constraint declared here"
+                           else "the required type"),
+               Into    => Found);
+            return False;
+         end if;
 
          Bad.Report
            (Item    => Bad.Unsatisfied_Constraint,

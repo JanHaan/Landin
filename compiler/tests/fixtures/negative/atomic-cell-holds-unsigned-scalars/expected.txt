@@ -1,0 +1,50 @@
+error[L0318]: this concrete type has no conformance to `scalar`
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:3:13
+  |
+3 | mut signed: atomic.cell(i32) = zeroed
+  |             ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/../../../../../core/atomic/atomic.ldn:206:34
+    |
+206 | public cell: type (item: type is scalar) = cell_value(item)
+    |                                  ^^^^^^ the constraint declared here
+  = note: D500: an atomic cell holds a u8, u16, u32 or u64
+error[L0318]: this concrete type has no conformance to `scalar`
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:4:11
+  |
+4 | mut flag: atomic.cell(bool) = zeroed
+  |           ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/../../../../../core/atomic/atomic.ldn:206:34
+    |
+206 | public cell: type (item: type is scalar) = cell_value(item)
+    |                                  ^^^^^^ the constraint declared here
+  = note: D500: an atomic cell holds a u8, u16, u32 or u64
+error[L0318]: this concrete type has no conformance to `scalar`
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:5:11
+  |
+5 | mut size: atomic.cell(usize) = zeroed
+  |           ^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/../../../../../core/atomic/atomic.ldn:206:34
+    |
+206 | public cell: type (item: type is scalar) = cell_value(item)
+    |                                  ^^^^^^ the constraint declared here
+  = note: D500: an atomic cell holds a u8, u16, u32 or u64
+error[L0340]: this makes `item` `u64`, but it is already `u32`
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:10:29
+   |
+10 |     atomic.store(addr word, wide)
+   |                             ^^^^
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:10:18
+   |
+10 |     atomic.store(addr word, wide)
+   |                  ^^^^^^^^^ this decided it first
+  = note: D138: every argument that decides `item` must decide the same
+error[L0340]: this argument has a different reference permission or view from its parameter pattern
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:12:18
+   |
+12 |     atomic.store(shared, 1)
+   |                  ^^^^^^
+  --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/../../../../../core/atomic/atomic.ldn:229:42
+    |
+229 | public store: (item: type is scalar, at: ptr mut cell(item), value: item)
+    |                                          ^^^^^^^^^^^^^^^^^^ the parameter's type, as written
+  = note: D138: an argument to a generic routine is typed on its own, before the parameter is known, and must match the type written for it; only `mut` may relax to read-only

@@ -1,0 +1,14 @@
+import core/atomic
+
+mut signed: atomic.cell(i32) = zeroed
+mut flag: atomic.cell(bool) = zeroed
+mut size: atomic.cell(usize) = zeroed
+mut word: atomic.cell(u32) = zeroed
+
+public main: () -> (code: i32) =
+    wide: u64 = 1
+    atomic.store(addr word, wide)
+    shared: ptr atomic.cell(u32) = addr word
+    atomic.store(shared, 1)
+    code = 0
+end main

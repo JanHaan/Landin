@@ -1,0 +1,9 @@
+class: negative
+summary: D500 a core/atomic cell holds a u8, u16, u32 or u64 and nothing else, on every target: a signed, a bool and a usize cell are each refused where they are written, and a value of the wrong width and a store through a read-only pointer are refused as any call's are
+program: main.ldn
+root: ../../../../..
+args: --target=linux-x86-64
+expect: expected.txt
+codes: L0318, L0318, L0318, L0340, L0340
+constructs: 1290, 1620
+targets: linux-x86-64

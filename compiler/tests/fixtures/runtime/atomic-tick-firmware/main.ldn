@@ -1,0 +1,35 @@
+--  Prototype 5's firmware/tick: time from an interrupt, with one writer,
+--  the handler, and any number of readers.  The writer needs no
+--  read-modify-write, which Cortex-M0 has not: sole_add is a relaxed load
+--  and a release store, and a reader's load acquires.  A runtime fixture
+--  places no vector, so the program is the writer here and counts where
+--  it would wait; environments/cortex-m/probes/fibre-capacity.ldn runs the
+--  same writer as SysTick's handler on Cortex-M0.
+import core/atomic
+
+mut ticks: atomic.cell(u32) = zeroed
+
+count_tick: () -> none =
+    _ = atomic.sole_add(addr ticks, 1)
+end count_tick
+
+now_ticks: () -> (count: u32) =
+    count = atomic.load(addr ticks)
+end now_ticks
+
+--  Wait for three ticks after the first reading, as a fibre waiting on the
+--  clock does, with a bound so that a count that never moves fails.
+public main: () -> (code: i32) =
+    code = 1
+    first: u32 = now_ticks()
+    mut seen: u32 = first
+    mut waits: u32 = 0
+    while seen - first < 3 and waits < 1000 do
+        count_tick()
+        seen = now_ticks()
+        inc waits
+    end while
+    if seen - first == 3 and waits == 3 then
+        code = 42
+    end if
+end main

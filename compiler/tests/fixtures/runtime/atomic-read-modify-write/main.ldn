@@ -1,0 +1,97 @@
+import core/atomic
+
+--  Shared counters, which several contexts may write.
+mut total: atomic.cell(u64) = zeroed
+mut hits: atomic.cell(u32) = zeroed
+
+--  Each check returns its own status, so a failure says which one.
+exchanges: () -> (status: i32) =
+    status = 2
+    mut small := atomic.new(u8(5))
+    return when atomic.exchange(addr small, 9) <> 5
+      or atomic.load(addr small) <> 9
+    status = 3
+    mut middle := atomic.new(u16(1))
+    return when atomic.exchange(addr middle, 65535) <> 1
+      or atomic.load(addr middle) <> 65535
+    status = 4
+    return when atomic.exchange(addr hits, 7) <> 0
+      or atomic.load(addr hits) <> 7
+    status = 5
+    return when atomic.exchange(addr total, 18446744073709551615) <> 0
+      or atomic.load(addr total) <> 18446744073709551615
+    status = 0
+end exchanges
+
+--  Each add returns what the cell held, and the sum wraps at its width.
+adds: () -> (status: i32) =
+    status = 6
+    mut small := atomic.new(u8(255))
+    return when atomic.add(addr small, 2) <> 255
+      or atomic.load(addr small) <> 1
+    status = 7
+    mut middle := atomic.new(u16(65534))
+    return when atomic.add_relaxed(addr middle, 3) <> 65534
+      or atomic.load_relaxed(addr middle) <> 1
+    status = 8
+    for round in u32(0)..<4 do
+        return when atomic.add_relaxed(addr hits, 1) <> 7 + round
+    end for
+    return when atomic.add(addr hits, 0) <> 11
+    status = 9
+    return when atomic.add(addr total, 2) <> 18446744073709551615
+      or atomic.load(addr total) <> 1
+    status = 0
+end adds
+
+--  A compare-exchange stores exactly when the cell held what it expected,
+--  and returns what it saw whether or not it stored.
+compare_exchanges: () -> (status: i32) =
+    status = 10
+    mut small := atomic.new(u8(3))
+    return when atomic.compare_exchange(addr small, 3, 4) <> 3
+      or atomic.load(addr small) <> 4
+    status = 11
+    return when atomic.compare_exchange(addr small, 3, 5) <> 4
+      or atomic.load(addr small) <> 4
+    status = 12
+    mut middle := atomic.new(u16(500))
+    return when atomic.compare_exchange(addr middle, 499, 1) <> 500
+      or atomic.compare_exchange(addr middle, 500, 1) <> 500
+      or atomic.load(addr middle) <> 1
+    status = 13
+    return when atomic.compare_exchange(addr hits, 0, 1) <> 11
+      or atomic.compare_exchange(addr hits, 11, 0) <> 11
+      or atomic.load(addr hits) <> 0
+    status = 14
+    big: u64 = 4294967296
+    return when atomic.compare_exchange(addr total, 1, big) <> 1
+      or atomic.compare_exchange(addr total, 1, 2) <> big
+      or atomic.load(addr total) <> big
+    status = 0
+end compare_exchanges
+
+--  The eight-byte cell's own accesses, which Cortex-M0 has not either.
+wide_cell: () -> (status: i32) =
+    status = 15
+    mut count := atomic.new(u64(4294967295))
+    return when atomic.sole_add(addr count, 1) <> 4294967295
+      or atomic.load(addr count) <> 4294967296
+    status = 16
+    atomic.store_relaxed(addr count, 3)
+    atomic.store(addr count, atomic.load_relaxed(addr count) * 2)
+    return when atomic.load(addr count) <> 6
+    status = 0
+end wide_cell
+
+public main: () -> (code: i32) =
+    code = exchanges()
+    return when code <> 0
+    code = adds()
+    return when code <> 0
+    code = compare_exchanges()
+    return when code <> 0
+    code = wide_cell()
+    return when code <> 0
+    code = 42
+end main
