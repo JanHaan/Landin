@@ -2,6 +2,8 @@
 --  storage, and a `link(thread)` instance starts zeroed and holds what
 --  the thread writes, as it does when `_landin_start` lays it.  Each wrong
 --  value ends with a status of its own and every right one with 42.
+
+compiler.assert(compiler.c_runtime)
 point: type = struct
     x: i32
     y: [4]u16

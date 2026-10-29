@@ -1835,7 +1835,7 @@ fixed if compiler.os == linux then
     --- callee's check would read the pointer.  `_landin_start_main` lays
     --- the block once the pointer is the thread's.
     public extern(c) _landin_start_thread: (stack: ptr usize)
-        -> (pointer: usize) =
+                                           -> (pointer: usize) =
         pointer = 0
         count: usize = stack.val
         mut at: usize = usize(stack) + word + (count + 1) * word
@@ -1889,7 +1889,7 @@ fixed if compiler.os == linux then
             thread_block_extent = thread_memory_bytes + thread_control_bytes
         else
             thread_block_offset =
-              (thread_control_bytes + alignment - 1) & (0 -% alignment)
+                (thread_control_bytes + alignment - 1) & (0 -% alignment)
             thread_pointer_offset = 0
             thread_block_extent = thread_block_offset + thread_memory_bytes
         end if
@@ -1901,7 +1901,7 @@ fixed if compiler.os == linux then
             first = usize(mapped)
         end if
         thread_first_block =
-          (first + thread_alignment - 1) & (0 -% thread_alignment)
+            (first + thread_alignment - 1) & (0 -% thread_alignment)
         pointer = thread_first_block + thread_pointer_offset
     end _landin_start_thread
 

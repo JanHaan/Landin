@@ -3,4 +3,4 @@ summary: D496 thread storage begins zeroed, so a pointer, which has no zero imag
 program: program.ldn
 codes: L0328
 constructs: 0540, 1996
-targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

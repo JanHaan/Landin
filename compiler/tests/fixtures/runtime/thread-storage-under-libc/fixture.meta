@@ -4,5 +4,5 @@ program: main.ldn
 profiles: standard
 link: libc
 status: 42
-constructs: 1790, 1996
+constructs: 1615, 1790, 1996
 targets: linux-x86-64, linux-arm64, linux-rv64

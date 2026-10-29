@@ -1,6 +1,9 @@
 class: negative
 summary: D496 thread storage takes no section on firmware, where it is ordinary module storage the program cannot place apart from each thread's
 program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/thread-storage-takes-no-section/program.ldn
 codes: L0347
 constructs: 1640, 1996
 targets: cortex-m0
+status: 1

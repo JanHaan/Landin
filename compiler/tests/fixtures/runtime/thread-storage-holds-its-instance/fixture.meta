@@ -3,5 +3,5 @@ summary: D496 a thread's link(thread) instance starts zeroed and holds whole, fi
 program: main.ldn
 profiles: standard
 status: 42
-constructs: 1790, 1996
+constructs: 1615, 1790, 1996
 targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
