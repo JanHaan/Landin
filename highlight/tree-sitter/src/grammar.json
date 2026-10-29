@@ -915,6 +915,15 @@
           },
           "named": true,
           "value": "identifier"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "STRING",
+            "value": "caller"
+          },
+          "named": true,
+          "value": "identifier"
         }
       ]
     },
@@ -2943,36 +2952,6 @@
               "content": {
                 "type": "SYMBOL",
                 "name": "identifier_list"
-              }
-            },
-            {
-              "type": "STRING",
-              "value": ":"
-            },
-            {
-              "type": "FIELD",
-              "name": "type",
-              "content": {
-                "type": "SYMBOL",
-                "name": "_declared_type"
-              }
-            }
-          ]
-        },
-        {
-          "type": "SEQ",
-          "members": [
-            {
-              "type": "FIELD",
-              "name": "name",
-              "content": {
-                "type": "ALIAS",
-                "content": {
-                  "type": "STRING",
-                  "value": "caller"
-                },
-                "named": true,
-                "value": "identifier"
               }
             },
             {
@@ -6392,22 +6371,8 @@
           "type": "FIELD",
           "name": "name",
           "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "_declaration_name"
-              },
-              {
-                "type": "ALIAS",
-                "content": {
-                  "type": "STRING",
-                  "value": "caller"
-                },
-                "named": true,
-                "value": "identifier"
-              }
-            ]
+            "type": "SYMBOL",
+            "name": "_declaration_name"
           }
         },
         {
@@ -6573,22 +6538,8 @@
           "type": "FIELD",
           "name": "name",
           "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "_declaration_name"
-              },
-              {
-                "type": "ALIAS",
-                "content": {
-                  "type": "STRING",
-                  "value": "caller"
-                },
-                "named": true,
-                "value": "identifier"
-              }
-            ]
+            "type": "SYMBOL",
+            "name": "_declaration_name"
           }
         },
         {
@@ -6921,6 +6872,15 @@
               "content": {
                 "type": "STRING",
                 "value": "distinct"
+              },
+              "named": true,
+              "value": "identifier"
+            },
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "STRING",
+                "value": "caller"
               },
               "named": true,
               "value": "identifier"

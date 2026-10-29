@@ -28,7 +28,6 @@
 (option_declaration name: (identifier) @constant)
 (tool_directive module: _ @module.builtin member: (identifier) @function.builtin)
 (parameter name: (identifier_list (identifier) @variable.parameter))
-(parameter name: (identifier) @variable.parameter)
 (parameter target: (identifier) @variable.parameter)
 (named_return name: (identifier_list (identifier) @variable.parameter))
 (type_formal name: (identifier) @type.parameter)

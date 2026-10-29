@@ -7,7 +7,6 @@
 
 (binding name: (identifier_list (identifier) @local.definition))
 (parameter name: (identifier_list (identifier) @local.definition))
-(parameter name: (identifier) @local.definition)
 (named_return name: (identifier_list (identifier) @local.definition))
 (type_formal name: (identifier) @local.definition)
 (identifier) @local.reference

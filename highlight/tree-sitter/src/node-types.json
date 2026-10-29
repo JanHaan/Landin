@@ -2467,10 +2467,6 @@
         "required": true,
         "types": [
           {
-            "type": "identifier",
-            "named": true
-          },
-          {
             "type": "identifier_list",
             "named": true
           }

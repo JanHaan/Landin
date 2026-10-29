@@ -30,7 +30,8 @@ end link
               (identifier))
             (scalar_type))
           (parameter
-            (identifier)
+            (identifier_list
+              (identifier))
             (scalar_type)))
         (arrow)
         (returns
@@ -396,4 +397,121 @@ end keep
             (scalar_type)))
         (arrow)
         (returns))
+      (identifier))))
+
+==================
+Caller names a binding and a type, and still marks a site parameter
+==================
+
+caller is lender (lend: caller_lend)
+
+open : (caller where: site) -> (code: i32) =
+  caller: i32 = try connect(where)
+  caller := 1
+  (caller, other) := pair
+end open
+
+---
+
+(source_file
+  (conformance_declaration
+    (conformance_target
+      (declaration_reference
+        (identifier)))
+    (declaration_reference
+      (identifier))
+    (conformance_argument
+      (identifier)
+      (argument_rhs
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (indexed_expression
+                              (identifier)))))))))))))))
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier_list
+              (identifier))
+            (declaration_reference
+              (identifier))))
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (scalar_type))))
+      (block
+        (binding
+          (identifier_list
+            (identifier))
+          (scalar_type)
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (try_expression
+                                (call_expression
+                                  (indexed_expression
+                                    (identifier))
+                                  (arguments
+                                    (logical_or_expression
+                                      (logical_and_expression
+                                        (comparison_expression
+                                          (alternation_expression
+                                            (exclusion_expression
+                                              (conjunction_expression
+                                                (shift_expression
+                                                  (sum_expression
+                                                    (product_expression
+                                                      (unary_expression
+                                                        (indexed_expression
+                                                          (identifier))))))))))))))))))))))))))
+        (binding
+          (identifier)
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (literal
+                                (integer_literal)))))))))))))
+        (destructuring_binding
+          (destructured_field
+            (identifier))
+          (destructured_field
+            (identifier))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
       (identifier))))

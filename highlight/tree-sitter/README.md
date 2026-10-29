@@ -8,7 +8,7 @@ useful; its C-boundary rules keep `c`, `layout`, `link`, and `symbol` as
 identifiers outside their annotated positions. Where the lexer may offer a
 contextual word as its own token, because a declaration, a label or a
 parameter list could begin there, `distinct`, `link`, `option`, `as` and
-`caller` are still read as names: in an expression, as a statement's label,
+`caller` are still read as names: in an expression, as a declaration's name, as a statement's label,
 after `end` and as a field's or an argument's label. Refine reserves only
 [1760]'s fifty words. The compiler and normative grammar decide legality.
 

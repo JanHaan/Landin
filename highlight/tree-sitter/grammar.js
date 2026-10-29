@@ -41,12 +41,6 @@ function endName($) {
   return choice($.identifier, contextualName($));
 }
 
-// A field's or an argument's label, which `caller` may be where a
-// parameter list could also begin.
-function labelName($) {
-  return choice($._declaration_name, alias('caller', $.identifier));
-}
-
 module.exports = grammar({
   name: 'landin',
 
@@ -218,13 +212,15 @@ module.exports = grammar({
     atom_declaration: $ => seq(field('name', $.identifier_list), ':', 'atom'),
     identifier_list: $ => seq($._declaration_name, repeat(seq(',', $.identifier))),
     // At a declaration start the lexer may also admit contextual import or
-    // option syntax. Keep the ordinary name until the next token decides.
+    // option syntax, and where a parameter list could begin D192's `caller`
+    // marker. Keep the ordinary name until the next token decides.
     _declaration_name: $ => choice(
       $.identifier,
       alias('option', $.identifier),
       alias('as', $.identifier),
       alias('link', $.identifier),
       alias('distinct', $.identifier),
+      alias('caller', $.identifier),
     ),
 
     // D233: several names may share one binding, with one written type.
@@ -416,11 +412,11 @@ module.exports = grammar({
     routine_formals: $ => commaSep1(choice($.parameter, $.type_formal)),
     parameters: $ => commaSep1($.parameter),
     // `caller` marks D192's site parameter and is not reserved, so a
-    // parameter may also be named caller.
+    // parameter may also be named caller: `caller:` is the name, `caller x:`
+    // the marker.
     // D233: several parameter names may share one convention and type.
     parameter: $ => choice(
       seq('caller', field('name', $.identifier_list), ':', field('type', $._declared_type)),
-      seq(field('name', alias('caller', $.identifier)), ':', field('type', $._declared_type)),
       seq(
         optional('escaping'),
         optional($.parameter_convention),
@@ -684,7 +680,7 @@ module.exports = grammar({
     struct_literal: $ => prec(50, seq(
       '(', commaSep1($.field_value), optional(seq(',', $.of_keyword, $._expression)), ')',
     )),
-    field_value: $ => seq(field('name', labelName($)), ':', field('value', $._expression)),
+    field_value: $ => seq(field('name', $._declaration_name), ':', field('value', $._expression)),
 
     labeled_application: $ => choice(
       prec(PREC.call, seq(
@@ -700,7 +696,7 @@ module.exports = grammar({
       commaSep1($.labeled_argument),
       optional(seq(',', $.of_keyword, $._expression)),
     ),
-    labeled_argument: $ => seq(field('name', labelName($)), ':', field('value', $.argument_rhs)),
+    labeled_argument: $ => seq(field('name', $._declaration_name), ':', field('value', $.argument_rhs)),
     argument_rhs: $ => choice($._expression, $._type),
 
     // [1630]'s operands follow a block's text.  The grammar lets any
@@ -747,9 +743,12 @@ module.exports = grammar({
       ']',
     ),
     // 'distinct' remains an identifier everywhere `distinct_body` does not
-    // meet it, including a bare reference to a type named `distinct`.
+    // meet it, including a bare reference to a type named `distinct`, and
+    // so does `caller` where a declaration could begin, as a conformance's
+    // target type does.
     declaration_reference: $ => seq(
-      choice($.identifier, alias('distinct', $.identifier)), repeat($.member_selection),
+      choice($.identifier, alias('distinct', $.identifier), alias('caller', $.identifier)),
+      repeat($.member_selection),
     ),
 
     call_expression: $ => choice(
