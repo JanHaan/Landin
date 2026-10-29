@@ -388,9 +388,11 @@ package body Landin.Syntax is
       for Position in 1 .. Slot_Count
         (Of_Tree, Concept_Body_Of (Of_Tree, Id))
       loop
+         --  A parent named through its module, `fibre.turns`, is the
+         --  selection the qualified reference parsed to.
          if Kind
            (Of_Tree, Slot (Of_Tree, Concept_Body_Of (Of_Tree, Id), Position))
-              = Concept_Reference
+              in Concept_Reference | Member_Selection
          then
             Count := Count + 1;
          end if;
@@ -410,7 +412,9 @@ package body Landin.Syntax is
             Candidate : constant Node_Id := Slot
               (Of_Tree, Concept_Body_Of (Of_Tree, Id), Position);
          begin
-            if Kind (Of_Tree, Candidate) = Concept_Reference then
+            if Kind (Of_Tree, Candidate)
+              in Concept_Reference | Member_Selection
+            then
                Seen := Seen + 1;
                if Seen = Index then
                   return Candidate;

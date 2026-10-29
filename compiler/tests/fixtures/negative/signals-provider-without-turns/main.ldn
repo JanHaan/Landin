@@ -1,0 +1,54 @@
+--  D477: only a provider of `fibre.turns` provides `signal.signals`.  A
+--  provider that runs each task to its end, as the blocking host does, is
+--  a `fibre.scheduler` and no more, and its conformance to `signals` is
+--  refused where it is declared, before any fibre could wait on it.
+import core/fibre
+import core/io
+import core/io/signal
+import core/mem
+
+ends: type = struct
+    reserved: u32
+end ends
+
+ends_start: (self: ends, escaping record: ptr mut fibre.space,
+             escaping stack: []mut u8, escaping work: any fibre.task)
+            -> none ! mem.out_of_memory =
+    _ = self
+    _ = stack
+    record.val.status = 1
+    work.run()
+    record.val.status = 0
+end ends_start
+
+ends_finished: (self: ends, record: fibre.space) -> (yes: bool) =
+    _ = self
+    yes = record.status == 0
+end ends_finished
+
+ends_wait: (self: ends) -> none =
+    _ = self
+end ends_wait
+
+ends_watch: (self: ends, which: signal.kind) -> none ! io.io_failed =
+    _ = self
+    _ = which
+end ends_watch
+
+ends_next: (self: ends) -> (received: signal.event) ! io.io_failed =
+    _ = self
+    fail io.io_failed
+end ends_next
+
+ends_stop: (self: ends) -> none ! io.io_failed =
+    _ = self
+end ends_stop
+
+ends is fibre.scheduler (start: ends_start, finished: ends_finished,
+                         wait: ends_wait)
+ends is signal.signals (watch: ends_watch, next_signal: ends_next,
+                        stop_watching: ends_stop)
+
+public main: () -> (code: i32) =
+    code = 0
+end main

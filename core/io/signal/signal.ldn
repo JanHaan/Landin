@@ -1,0 +1,86 @@
+--  Signals as events (D449, D477): the concept a provider that takes
+--  turns supplies when it delivers the system's signals to a fibre that
+--  waits for them, the portable names of the signals a server cares
+--  about, and what one arrival is.  A signal never runs a handler of
+--  Landin code: the provider reads it, through signalfd on Linux and an
+--  EVFILT_SIGNAL filter of kqueue on Darwin and FreeBSD, as it reads any
+--  other event, and wakes the fibre that waits.  It is a module beneath
+--  core/io, as core/io/fake is, because the concept refines
+--  `fibre.turns` and core/fibre already reaches core/io through
+--  core/failure (D482).
+
+import core/fibre
+import core/io
+
+--- The terminal's interrupt, SIGINT: someone pressed Ctrl-C.
+public interrupt: atom
+--- A request to end, SIGTERM: what a service manager sends to stop a
+--- server, and what `kill` sends when it is not told otherwise.
+public terminate: atom
+--- The controlling terminal has gone, SIGHUP; a daemon, which has none,
+--- commonly takes it to read its configuration again.
+public hangup: atom
+--- A child process ended, stopped or went on, SIGCHLD.
+public child: atom
+--- The first signal left to programs, SIGUSR1.
+public user1: atom
+--- The second signal left to programs, SIGUSR2.
+public user2: atom
+
+--- The signals a provider of `signals` delivers, by portable names: each
+--- system numbers them its own way, and a program that names one here
+--- means the same signal on every system.
+public kind: type = interrupt | terminate | hangup | child | user1 | user2
+
+--- One arrival of a watched signal: its portable name and the number the
+--- system gave it, as a log or `kill` would show it.
+public event: type = struct
+    which: kind
+    number: u32
+end event
+
+--- A provider that delivers signals to a fibre as events (D449). Only a
+--- provider of `fibre.turns` supplies it (D477): a fibre waiting for a
+--- signal lets the provider's other fibres run, where over a provider that
+--- runs each task to its end it would hold the program before it served
+--- anything. A program that waits for a signal asks for `signals`, and
+--- over the blocking host it cannot be written, so a signal there keeps
+--- the system's default disposition: SIGTERM ends the process.
+---
+--- `watch` takes a signal from the system's default disposition and
+--- delivers it as an event from then on. `next_signal` waits as a receive
+--- does, taking turns, for the next arrival of a watched signal; each
+--- arrival is read once, by one waiter, and two arrivals of one signal
+--- before it is read may be one event, as the systems' own queues keep
+--- them. `stop_watching` gives every watched signal back to its default
+--- disposition and wakes every fibre waiting in `next_signal`, whose call
+--- fails `io_failed`, which is how a program stops the fibre that waits
+--- (D449). `next_signal` is the only entry that may switch.
+public signals: type = concept (provider: type) is fibre.turns
+    --- Deliver `which` as an event from now on.
+    watch: (self: provider, which: kind) -> none ! io.io_failed
+    --- Wait, taking turns, for the next arrival of a watched signal.
+    next_signal: (self: provider) -> (received: event) ! io.io_failed
+    --- Give every watched signal back to its default disposition, and
+    --- wake every waiter, failing its call.
+    stop_watching: (self: provider) -> none ! io.io_failed
+end signals
+
+--- Deliver `which` as an event through `signals` evidence.
+public watch: (provider: type is signals, host: provider, which: kind)
+              -> none ! io.io_failed =
+    try provider.watch(host, which)
+end watch
+
+--- Wait, taking turns, for the next arrival of a watched signal.
+public next_signal: (provider: type is signals, host: provider)
+                    -> (received: event) ! io.io_failed =
+    received = try provider.next_signal(host)
+end next_signal
+
+--- Stop delivering signals as events, and wake every fibre waiting for
+--- one, whose call fails `io_failed`.
+public stop_watching: (provider: type is signals, host: provider)
+                      -> none ! io.io_failed =
+    try provider.stop_watching(host)
+end stop_watching
