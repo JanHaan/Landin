@@ -43,6 +43,7 @@ fixed if compiler.os == linux then
         getgid_number: i64 = 104
         geteuid_number: i64 = 107
         getegid_number: i64 = 108
+        futex_number: i64 = 202
         getdents64_number: i64 = 217
         clock_gettime_number: i64 = 228
         clock_nanosleep_number: i64 = 230
@@ -101,6 +102,7 @@ fixed if compiler.os == linux then
         fdatasync_number: i64 = 83
         utimensat_number: i64 = 88
         exit_group_number: i64 = 94
+        futex_number: i64 = 98
         clock_gettime_number: i64 = 113
         clock_nanosleep_number: i64 = 115
         rt_sigaction_number: i64 = 134
@@ -165,6 +167,7 @@ fixed if compiler.os == linux then
         fdatasync_number: i64 = 83
         utimensat_number: i64 = 88
         exit_group_number: i64 = 94
+        futex_number: i64 = 98
         clock_gettime_number: i64 = 113
         clock_nanosleep_number: i64 = 115
         rt_sigaction_number: i64 = 134

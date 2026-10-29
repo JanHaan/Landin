@@ -541,6 +541,7 @@ followed it. [V4]
 ## firmware/tick  —  time from an interrupt
 
 ```landin
+import core/atomic
 import core/time
 import platform/cortex_m
 
@@ -550,18 +551,19 @@ with `ticks +%= 1` in the handler and read the count with an atomic load,
 which D227 calls a race: an ordinary read-modify-write is not an access to
 the atomic object the readers load. A single writer needs no
 read-modify-write at all, so the handler loads and stores, both of which
-Cortex-M0 has. [V10]
+Cortex-M0 has: `core/atomic`'s `sole_add` is that load and that store, and
+the `add` that would need a read-modify-write is refused here, where it
+would be called. [V10]
 ```landin
-mut ticks: u32 = 0
+mut ticks: atomic.cell(u32) = zeroed
 
 link(vector: 15)
 extern(interrupt) system_tick: () -> none =
-    now := compiler.atomic_load(addr ticks, compiler.relaxed)
-    compiler.atomic_store(addr ticks, now +% 1, compiler.release)
+    _ = atomic.sole_add(addr ticks, 1)
 end system_tick
 
 public now_ticks: () -> (count: u32) =
-    count = compiler.atomic_load(addr ticks, compiler.acquire)
+    count = atomic.load(addr ticks)
 end now_ticks
 
 ```
@@ -1047,7 +1049,9 @@ make one. `admit` refuses a state that leaves less than a stated minimum
 of its stack. Which panic kind a stack past its limit is, is part of the
 answer.
 
-V10  RESOLVED by D449: as proposed, and half found while writing.
+V10  RESOLVED by D449: as proposed, and half found while writing. D510 and D511
+implement it: `atomic.sole_add` is the single-writer case, and Cortex-M0 refuses
+a cell's read-modify-write where it is called, naming the critical section.
 
 The original finding, for the record.
 

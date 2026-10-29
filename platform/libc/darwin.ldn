@@ -382,6 +382,39 @@ fixed if compiler.os == darwin then
     public extern(c) ptsname_r: (descriptor: i32, into: ptr mut u8,
                                  length: usize) -> (status: i32)
 
+    --- `os_sync_wait_on_address` and `os_sync_wake_by_address_*` flags:
+    --- the word is one only this process maps.
+    public os_sync_none: u32 = 0
+    --- The clock `os_sync_wait_on_address_with_timeout` measures its span
+    --- on: `OS_CLOCK_MACH_ABSOLUTE_TIME`, which counts while the system is
+    --- awake.
+    public os_clock_mach_absolute_time: u32 = 32
+
+    --- Sleep while the `size` bytes at `address`, four or eight, hold
+    --- `value`, until a wake or a signal: the number of threads still
+    --- waiting there, and at once when the bytes do not hold `value`, or
+    --- -1 with the reason in errno, EINTR for a signal.  A return may be
+    --- spurious.  Darwin's since macOS 14.4.
+    public extern(c) os_sync_wait_on_address:
+        (address: usize, value: u64, size: usize, flags: u32)
+        -> (result: i32)
+
+    --- The same with a limit: at most `timeout` nanoseconds on the clock
+    --- `clock`, after which it is -1 with ETIMEDOUT in errno.
+    public extern(c) os_sync_wait_on_address_with_timeout:
+        (address: usize, value: u64, size: usize, flags: u32, clock: u32,
+         timeout: u64) -> (result: i32)
+
+    --- Wake one of the threads waiting on the `size` bytes at `address`: 0,
+    --- or -1 with the reason in errno, ENOENT when none was waiting.
+    public extern(c) os_sync_wake_by_address_any:
+        (address: usize, size: usize, flags: u32) -> (result: i32)
+
+    --- Wake every thread waiting on the `size` bytes at `address`: 0, or -1
+    --- with the reason in errno, ENOENT when none was waiting.
+    public extern(c) os_sync_wake_by_address_all:
+        (address: usize, size: usize, flags: u32) -> (result: i32)
+
     --- `dlopen` mode: the object's symbols resolve no other object's
     --- references.  Darwin's default is `rtld_global`, so it is always
     --- given.

@@ -1,6 +1,7 @@
 --  The system's two clocks, the monotonic one and the wall clock, read
 --  as seconds and nanoseconds, and sleeping on the monotonic one.
 
+import core/atomic
 import platform/libc
 import platform/linux
 import platform/linux/vdso
@@ -53,23 +54,23 @@ end sleep
 fixed if compiler.os == linux then
     --  The vDSO's `clock_gettime`, found the first time a clock is read:
     --  zero before then, one when there is none, its address otherwise.
-    --  Process state of a single thread, as the heap's classes are: a C
-    --  thread calling in under --link=libc, the only other thread there
-    --  can be, finds the same vDSO and stores the same answer.  Threads of
-    --  the program's own are the threads item's.
-    mut vdso_clock: u64
+    --  Every thread that reads a clock first finds the same vDSO and stores
+    --  the same answer, a C thread calling in under --link=libc among
+    --  them, so the cell is relaxed: whichever store a thread sees, or none
+    --  and it looks for itself, it calls the same function (D502).
+    mut vdso_clock: atomic.cell(u64) = zeroed
 
     no_vdso_clock: u64 = 1
 
     --  The vDSO's clock function, found once and kept.
     vdso_clock_address: () -> (address: u64) =
-        address = vdso_clock
+        address = atomic.load_relaxed(addr vdso_clock)
         return when address <> 0
         (found, address: at) := vdso.symbol(vdso.clock_symbol,
                                             vdso.clock_version)
         address = if found and u64(at) > no_vdso_clock then u64(at)
                   else no_vdso_clock end if
-        vdso_clock = address
+        atomic.store_relaxed(addr vdso_clock, address)
     end vdso_clock_address
 
     clock_number: (clock: clock_kind) -> (number: i32) =

@@ -2,6 +2,7 @@
 --  as the entry found them, SIGPIPE's disposition, pipes, spawning a
 --  program and waiting for it, and ending at once.
 
+import core/atomic
 import core/io
 import core/mem
 import core/text
@@ -281,8 +282,10 @@ public inherited_streams: standard_streams = (input: standard_input,
 
 --  The signals besides SIGPIPE whose default disposition every child
 --  `spawn` starts is given, signal N at bit N - 1: those a provider took
---  and named to `default_in_children`.
-mut child_defaults: u64 = 0
+--  and named to `default_in_children`.  Any thread may name one while
+--  another spawns, so the set is an atomic cell, a bit added by a
+--  compare-exchange and the whole set read by an acquiring load (D503).
+mut child_defaults: atomic.cell(u64) = zeroed
 
 --- Give `signal` its default disposition in every child `spawn` starts
 --- from now on, as SIGPIPE's always is.  A provider that takes a signal
@@ -297,7 +300,14 @@ mut child_defaults: u64 = 0
 public default_in_children: (signal: i32) -> none ! errno =
     fail einval when signal < 1 or signal > signal_limit or signal == 9
       or signal == stop_signal
-    child_defaults = child_defaults | (u64(1) << u64(signal - 1))
+    bit: u64 = u64(1) << u64(signal - 1)
+    mut seen: u64 = atomic.load_relaxed(addr child_defaults)
+    loop do
+        observed: u64 = atomic.compare_exchange(addr child_defaults, seen,
+                                                seen | bit)
+        break when observed == seen
+        seen = observed
+    end loop
 end default_in_children
 
 --- Start the program at `path` in a child process, POSIX's `posix_spawn`:
@@ -542,9 +552,10 @@ fixed if compiler.os == linux then
             restored.handler = linux.sig_dfl
             result = linux.rt_sigaction(linux.sigpipe, addr restored,
                                         linux.no_action)
+            defaults: u64 = atomic.load(addr child_defaults)
             mut number: i32 = 1
             while result >= 0 and number <= signal_limit do
-                if (child_defaults & (u64(1) << u64(number - 1))) <> 0 then
+                if (defaults & (u64(1) << u64(number - 1))) <> 0 then
                     result = linux.rt_sigaction(number, addr restored,
                                                 linux.no_action)
                 end if
@@ -768,9 +779,10 @@ elsif compiler.os == darwin or compiler.os == freebsd then
                      -> (error: i32) =
         mut signals: libc.signal_set = zeroed
         signals.bits[0] = u32(1) << u32(libc.sigpipe - 1)
+        defaults: u64 = atomic.load(addr child_defaults)
         mut number: i32 = 1
         while number <= signal_limit do
-            if (child_defaults & (u64(1) << u64(number - 1))) <> 0 then
+            if (defaults & (u64(1) << u64(number - 1))) <> 0 then
                 index: usize = usize((number - 1) / 32)
                 signals.bits[index] = signals.bits[index]
                                       | (u32(1) << u32((number - 1) % 32))

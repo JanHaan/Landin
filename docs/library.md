@@ -1323,6 +1323,53 @@ a password comes from `io.fill_random` directly.
 
 [Executable example](../compiler/tests/fixtures/runtime/random-sequence/main.ldn)
 
+## core/atomic
+
+A cell holding one `u8`, `u16`, `u32` or `u64`, read and written only
+atomically, its operations' orderings in their names.
+
+| Call | What it does |
+|---|---|
+| `atomic.new` | Make a cell holding a value, for a local or a field; module storage starts one `zeroed`. |
+| `atomic.load`, `atomic.store` | Read with acquire ordering, write with release ordering. |
+| `atomic.load_relaxed`, `atomic.store_relaxed` | The same, ordering nothing else: for a cache or a count. |
+| `atomic.sole_add` | Add as the cell's one writer, wrapping, and return what it held: a relaxed load and a release store. |
+| `atomic.exchange` | Store a value and return what the cell held, in one step that acquires and releases. |
+| `atomic.add`, `atomic.add_relaxed` | Add, wrapping, and return what the cell held, in one step; the relaxed form orders nothing else. |
+| `atomic.compare_exchange` | Store a value if the cell holds the one expected, and return what it held: equal to the expected exactly when it stored. |
+
+Every operation takes the cell's address, `addr cell`, so a cell lives in
+module storage or a field others reach by pointer, and is never copied
+while another context uses it. Sequential consistency is not offered;
+the compiler's builtins have it ([1620]).
+
+`sole_add` is correct only while one context alone writes the cell, an
+interrupt handler or one thread, since a second writer's store between
+its load and its store is lost; it needs no read-modify-write, so every
+target has it. Prototype 5's tick is one: the handler counts with it and
+any reader loads.
+
+```landin
+mut ticks: atomic.cell(u32) = zeroed
+
+count_tick: () -> none =
+    _ = atomic.sole_add(addr ticks, 1)
+end count_tick
+
+now_ticks: () -> (count: u32) =
+    count = atomic.load(addr ticks)
+end now_ticks
+```
+
+Cortex-M0 has no atomic read-modify-write and no eight-byte atomic
+access. There a `u64` cell, `exchange`, `add`, `add_relaxed` and
+`compare_exchange` are refused with L0344 where the program writes them,
+the refusal naming `sole_add` and `platform/cortex_m`'s critical section,
+`disable_interrupts` to `restore_interrupts`, which state several contexts
+write takes instead. A cell of any other type is refused on every target.
+
+[Executable example](../compiler/tests/fixtures/runtime/atomic-tick-firmware/main.ldn)
+
 ## core/fibre
 
 Fibres: tasks a routine starts as a group and waits for before it goes on.
@@ -1464,9 +1511,44 @@ Linux moves a mapping's pages with `mremap`, and anything else is copied.
 Every `usize` alignment is honoured by over-allocating and keeping a
 header before the block.
 
-It is single-threaded. A refusal comes before any state changes.
+Threads share it. Once the program has started a thread, the size
+classes are behind one lock of `hosted/thread/lock`; a program that has
+started none never takes it, and a mapping of its own takes none. A C
+thread calling in under `--link=libc` is none of the program's, and two
+of them may not use the heap at once. A refusal comes before any state
+changes.
 
 [Executable example](../compiler/tests/fixtures/runtime/hosted-heap-provider/main.ldn)
+
+## hosted/thread/lock
+
+A lock that threads share state behind, and the record that a thread has
+started.
+
+| Call | What it does |
+|---|---|
+| `lock.new` | Make a free lock for a local or a field; module storage starts one `zeroed`. |
+| `lock.take` | Take the lock, waiting while another thread holds it. |
+| `lock.take_if_free` | Take it if it is free, and say whether it did, without waiting. |
+| `lock.give` | Give back a lock this thread took, waking one thread that waits for it. |
+| `lock.note_start` | Record that the program is about to start a thread. The thread facility calls it. |
+| `lock.threads_started` | Whether `note_start` has been called. |
+
+A lock is one `u32` cell of `core/atomic`. Taking a free lock and giving
+one nobody waits for are one read-modify-write each; a thread that finds
+it held sleeps in `platform/posix`'s wait on the cell's address, and the
+give wakes it. What the thread that gave it did while it held it is
+visible to the thread that takes it next.
+
+It is not reentrant and keeps no owner: a thread that takes a lock it
+holds waits for ever. A fibre that holds a lock across a switch holds the
+whole thread, and every other fibre of its round that wants the lock.
+
+It is a module beneath `hosted/thread` so that `hosted/heap` can take a
+lock without the thread facility, which never imports the heap. On
+Cortex-M0 there is no lock: `platform/cortex_m`'s critical section is one.
+
+[Executable example](../compiler/tests/fixtures/runtime/thread-lock-one-thread/main.ldn)
 
 ## hosted/blocking
 
@@ -1867,6 +1949,14 @@ is or moves its pages.
 mode belongs to the open file, so every duplicate of the descriptor shares
 it. A program that waits for readiness sets it and then waits with `poll`,
 or with epoll or kqueue for many descriptors.
+
+### Waiting on an address
+
+`wait_on` sleeps while a `core/atomic` cell of a `u32` holds a value, and
+`wait_on_within` for at most a span, failing `etimedout`; `wake_one` and
+`wake_all` wake its waiters. A wait returns at once when the cell differs,
+and may return unwoken, so a waiter reads the cell again. It is the futex,
+`_umtx_op` and `os_sync_wait_on_address`.
 
 ### Processes
 

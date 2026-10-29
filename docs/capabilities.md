@@ -267,7 +267,7 @@ search, source links and examples taken directly from runtime fixtures.
 
 ### `core`
 
-The nineteen shared `core/*` modules thread arena and pool allocators and a
+The twenty shared `core/*` modules thread arena and pool allocators and a
 failure injector as capabilities.
 
 - **Memory and containers.** Raw memory, vectors, inline-prefix spill lists,
@@ -295,6 +295,12 @@ failure injector as capabilities.
   xoshiro256**, seeded from a fixed seed or from entropy, which draws the
   same sequence on every target, Cortex-M0 included, with unbiased bounded
   draws and shuffles.
+- **Atomic cells.** `core/atomic` holds a `u8`, `u16`, `u32` or `u64` in a
+  cell whose operations carry their orderings in their names, with a
+  relaxed family and the single writer's `sole_add`, a load and a store,
+  on every target. Cortex-M0 refuses a `u64` cell and a read-modify-write
+  where the program uses it, naming `sole_add` and the critical section
+  (D500, D510, D511).
 
 ### Services
 
@@ -324,6 +330,9 @@ process ignores SIGPIPE and gives its children the default back.
 
 ### `hosted` and `platform`
 
+- `hosted/thread/lock` is a lock that waits through the system's wait on
+  an address, beside the flag that a thread has started, and `hosted/heap`
+  keeps its size classes behind it once one has (D501, D502, D513).
 - `hosted/heap`, `hosted/system`, `hosted/blocking` and `hosted/events`
   supply the hosted heap, the system's services that do not wait, the I/O
   provider that blocks the thread while it waits and the one that switches
@@ -347,6 +356,8 @@ process ignores SIGPIPE and gives its children the default back.
   databases, read from /etc/passwd and /etc/group by a static Linux program
   and through the C library elsewhere; and shared objects loaded with the
   system's own loader, on Darwin, FreeBSD and Linux under `--link=libc`.
+  It waits on and wakes an address, through the futex, `_umtx_op` and
+  `os_sync_wait_on_address` (D512).
   Every descriptor is closed on exec, with a descriptor handle type and
   errno atoms that keep their numbers. It sits over `platform/libc` on
   Darwin and FreeBSD and `platform/linux` on Linux.

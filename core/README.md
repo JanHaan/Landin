@@ -15,7 +15,8 @@ executes them on Cortex-M0.
 
 ## Availability inventory
 
-The shared freestanding modules are `core/arena`, `core/cmp`, `core/diag`,
+The shared freestanding modules are `core/arena`, `core/atomic`, `core/cmp`,
+`core/diag`,
 `core/failure`, `core/fault`, `core/fibre` with its submodule
 `core/fibre/stacks`, `core/io` with its submodules `core/io/fake` and
 `core/io/signal`,
@@ -27,10 +28,14 @@ available on every target, but for `core/fibre/stacks`, which switches
 stacks through the compiler's stack builtins and is admitted only where the
 target's backend emits them (D453); `core/fibre` itself, its groups over
 `fibre.whole` and over the blocking host, needs no switch and serves every
-target. Their providers retain caller-supplied authority.
+target. `core/atomic`'s cells serve every target too, but for a `u64`
+cell and the read-modify-writes, which Cortex-M0 has not and refuses where
+a program uses them (D510). Their providers retain caller-supplied
+authority.
 
-`hosted/heap`, `hosted/system`, `hosted/blocking` and `hosted/events`
-require a hosted system. Import the I/O provider, `blocking`, or `events`
+`hosted/heap`, `hosted/system`, `hosted/blocking`, `hosted/events` and
+`hosted/thread/lock`, the lock threads share state behind, require a hosted
+system. Import the I/O provider, `blocking`, or `events`
 for one whose fibres take turns over the system's event mechanism,
 beside the shared `core/io` protocol it implements, with no alias; each
 is built over `system`, which keeps the services that do not wait (D476,

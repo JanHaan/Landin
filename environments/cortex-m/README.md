@@ -805,14 +805,21 @@ whole buffer are painted at `start`, and each fibre's peak is read below its
 stack's top when the firmware returns. The control writes `capacity.json`
 and `capacity.txt` beside it and fails unless the consumer fits; the
 evidence directory's `capacity.json` and `capacity.txt` hold every
-profile's, and the gate's `cortex-m` job keeps them. At none/off it uses
-22,492 bytes of flash and 3,072 of static RAM, of which the fibre buffer is
-2,992; with the 4,096-byte main-stack reservation, painted to 1,472, that is
+profile's, and the gate's `cortex-m` job keeps them. Its tick is
+`core/atomic`'s `sole_add` in SysTick's handler (D511). At none/off it uses
+23,268 bytes of flash and 3,072 of static RAM, of which the fibre buffer is
+2,992; with the 4,096-byte main-stack reservation, painted to 1,644, that is
 7,168 bytes of reserved RAM, counted once. Each fibre's backing is 1,472
 bytes, a 32-byte record and a 1,440-byte stack whose limit stands 384 bytes
 above its base (D472), painted to 904, 940 with D461's exception frame;
-both are live at once, 2,944 bytes. The size and speed profiles use 19,916
-to 19,944 bytes of flash and paint at most 848. Every profile fits the
+both are live at once, 2,944 bytes. The size and speed profiles use 20,632
+to 20,660 bytes of flash and paint at most 848 in a fibre and 1,396 on the
+main stack. With the tick written over the builtins directly, as it was
+before the wrapper, the same compiler used 22,492 and 19,916 to 19,944
+bytes of flash and painted the main stack to 1,472 and 1,248: a firmware
+image keeps every scalar's cell entries, since a program without a public
+`main` keeps everything (D296), and the handler's two calls deepen the
+main stack. Every profile fits the
 32 KiB flash, 16 KiB RAM profile. Paint is this run's deepest write, not a
 bound.
 

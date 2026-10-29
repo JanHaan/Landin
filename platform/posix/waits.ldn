@@ -1,0 +1,133 @@
+--  Waiting on an address and waking whoever waits there: the system's own
+--  sleep on a word of memory, which a lock waits through when it is
+--  taken (D501).  The word is a `core/atomic` cell of a `u32`, so whoever
+--  changes it does so atomically, and only this process maps it.  It is
+--  Linux's futex, FreeBSD's `_umtx_op` and Darwin's
+--  `os_sync_wait_on_address`; POSIX itself names none, so each system's
+--  own is here under one name.
+
+import core/atomic
+import platform/libc
+import platform/linux
+
+--- Sleep while the cell at `word` holds `expected`, until `wake_one` or
+--- `wake_all` wakes this thread.  The system compares and sleeps in one
+--- step, so a wake that follows a change to the cell is never lost; it
+--- returns at once when the cell does not hold `expected`.  It may also
+--- return with nobody having woken it, for a signal or for nothing, so
+--- whoever waits reads the cell again and waits again while what it
+--- waits for has not happened.  Waiting blocks the whole thread, and with
+--- it every fibre of its round.
+public wait_on:
+    (word: ptr atomic.cell(u32), expected: u32) -> none =
+    address_wait(word, expected)
+end wait_on
+
+--- `wait_on`, for at most `span`, measured on the monotonic clock: it
+--- fails `etimedout` when the span passed with the cell still holding
+--- `expected`, as far as the system saw, and `einval` for nanoseconds of a
+--- second or more or a negative span.  Any other return is `wait_on`'s.
+public wait_on_within:
+    (word: ptr atomic.cell(u32), expected: u32, span: time_value)
+    -> none ! errno =
+    fail einval when span.seconds < 0 or span.nanoseconds >= 1000000000
+    try address_wait_within(word, expected, span)
+end wait_on_within
+
+--- Wake one of the threads waiting on the cell at `word`, if any is.
+--- Change the cell first: a thread that has not yet begun to wait then
+--- finds it changed and does not sleep.
+public wake_one:
+    (word: ptr atomic.cell(u32)) -> none =
+    address_wake(word, false)
+end wake_one
+
+--- Wake every thread waiting on the cell at `word`.
+public wake_all:
+    (word: ptr atomic.cell(u32)) -> none =
+    address_wake(word, true)
+end wake_all
+
+--  The cell's one field is its first, so its address is the word's.
+
+fixed if compiler.os == linux then
+    address_wait: (word: ptr atomic.cell(u32), expected: u32) -> none =
+        at: ptr u32 = ptr(usize(word))
+        _ = linux.futex_wait(at, expected, linux.no_limit)
+    end address_wait
+
+    address_wait_within:
+        (word: ptr atomic.cell(u32), expected: u32, span: time_value)
+        -> none ! errno =
+        at: ptr u32 = ptr(usize(word))
+        limit: linux.timespec = (seconds: span.seconds,
+                                 nanoseconds: i64(span.nanoseconds))
+        result: i32 = linux.futex_wait(at, expected, addr limit)
+        fail etimedout when result < 0 and errno_of(-result) == etimedout
+    end address_wait_within
+
+    address_wake: (word: ptr atomic.cell(u32), every: bool) -> none =
+        at: ptr u32 = ptr(usize(word))
+        count: i32 = if every then 2147483647 else 1 end if
+        _ = linux.futex_wake(at, count)
+    end address_wake
+elsif compiler.os == freebsd then
+    address_wait: (word: ptr atomic.cell(u32), expected: u32) -> none =
+        _ = libc._umtx_op(usize(word), libc.umtx_op_wait_uint_private,
+                          u64(expected), 0, 0)
+    end address_wait
+
+    address_wait_within:
+        (word: ptr atomic.cell(u32), expected: u32, span: time_value)
+        -> none ! errno =
+        limit: libc.umtx_time = (timeout: (seconds: span.seconds,
+                                           nanoseconds:
+                                           i64(span.nanoseconds)),
+                                 flags: 0, clock: u32(libc.clock_monotonic))
+        status: i32 = libc._umtx_op(usize(word),
+                                    libc.umtx_op_wait_uint_private,
+                                    u64(expected), sizeof libc.umtx_time,
+                                    usize(addr limit))
+        return when status == 0
+        problem: errno = failure()
+        fail etimedout when problem == etimedout
+    end address_wait_within
+
+    address_wake: (word: ptr atomic.cell(u32), every: bool) -> none =
+        count: u64 = if every then 2147483647 else 1 end if
+        _ = libc._umtx_op(usize(word), libc.umtx_op_wake_private, count, 0,
+                          0)
+    end address_wake
+elsif compiler.os == darwin then
+    address_wait: (word: ptr atomic.cell(u32), expected: u32) -> none =
+        _ = libc.os_sync_wait_on_address(usize(word), u64(expected), 4,
+                                         libc.os_sync_none)
+    end address_wait
+
+    --  The span in nanoseconds, as long as a u64 holds.
+    address_wait_within:
+        (word: ptr atomic.cell(u32), expected: u32, span: time_value)
+        -> none ! errno =
+        whole: u64 = u64(span.seconds)
+        most: u64 = 18446744073
+        nanoseconds: u64 = if whole >= most then 0 -% u64(1)
+                           else whole * 1000000000 + u64(span.nanoseconds)
+                           end if
+        result: i32 = libc.os_sync_wait_on_address_with_timeout(
+            usize(word), u64(expected), 4, libc.os_sync_none,
+            libc.os_clock_mach_absolute_time, nanoseconds)
+        return when result >= 0
+        problem: errno = failure()
+        fail etimedout when problem == etimedout
+    end address_wait_within
+
+    address_wake: (word: ptr atomic.cell(u32), every: bool) -> none =
+        if every then
+            _ = libc.os_sync_wake_by_address_all(usize(word), 4,
+                                                 libc.os_sync_none)
+        else
+            _ = libc.os_sync_wake_by_address_any(usize(word), 4,
+                                                 libc.os_sync_none)
+        end if
+    end address_wake
+end if

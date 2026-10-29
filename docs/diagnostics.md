@@ -1250,6 +1250,12 @@ support it, and an intrinsic cannot fail. `compiler.stack_prepare` takes a
 whose backend does not emit them yet refuses both by name. Use an ordering and
 operand the operation admits on this target.
 
+A `core/atomic` cell the target's atomics cannot carry is refused the same
+way where the program uses it (D510): on Cortex-M0 a `u64` cell, and a
+cell's `exchange`, `add`, `add_relaxed` and `compare_exchange`. A cell one
+context alone writes adds with `atomic.sole_add`, a load and a store; state
+several contexts write takes `platform/cortex_m`'s critical section.
+
 ### L0345
 
 An interrupt or naked routine is used outside its machine-entry contract

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D501 hosted/thread/lock on one thread: a zeroed and a made lock are free, take_if_free takes a free lock and not a held one, give frees it for take and take_if_free again, and the started flag is clear until note_start and set after it; a take that waits for another thread's give is the threads fixtures'
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 1620, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

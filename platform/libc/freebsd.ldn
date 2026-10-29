@@ -393,6 +393,36 @@ fixed if compiler.os == freebsd then
     public extern(c) ptsname_r: (descriptor: i32, into: ptr mut u8,
                                  length: usize) -> (status: i32)
 
+    --- `_umtx_op` operation on a word only this process maps: wait while
+    --- an unsigned int holds a value.
+    public umtx_op_wait_uint_private: i32 = 15
+    --- `_umtx_op` operation on a word only this process maps: wake those
+    --- waiting on it.
+    public umtx_op_wake_private: i32 = 16
+
+    --- A `_umtx_op` time limit, `struct _umtx_time`: the span or the time
+    --- to wait until, whether it is absolute, and the clock it is measured
+    --- on.  A zero `flags` makes it a span.
+    public umtx_time: type = struct
+        timeout: timespec
+        flags: u32
+        clock: u32
+    end umtx_time
+
+    --- FreeBSD's own synchronisation call, `_umtx_op(obj, op, val, uaddr,
+    --- uaddr2)`, whose arguments each operation reads its own way.  With
+    --- `umtx_op_wait_uint_private` it sleeps while the unsigned int at
+    --- `object` holds `value`, until a wake, a signal or the limit at
+    --- `second`, a `umtx_time` whose size `first` gives, or none for zero:
+    --- 0 when woken, which may be spuriously, and at once when the word
+    --- does not hold `value`, or -1 with the reason in errno, ETIMEDOUT
+    --- when the limit passed and EINTR for a signal.  With
+    --- `umtx_op_wake_private` it wakes at most `value` of those waiting on
+    --- the word at `object`: 0, or -1 with the reason in errno.
+    public extern(c) _umtx_op: (object: usize, operation: i32, value: u64,
+                                first: usize, second: usize)
+                               -> (status: i32)
+
     --- `dlopen` mode: the object's symbols resolve no other object's
     --- references.  Darwin's default is `rtld_global`, so it is always
     --- given.
