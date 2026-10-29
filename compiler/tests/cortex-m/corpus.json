@@ -476,6 +476,13 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/libc, platform/linux and platform/posix on the freestanding target before checking declarations: firmware has no second process and no shared mapping. backend-memory.ldn executes each admitted load and store ordering, and the backend case holds each ordering's DMB."
     },
+    "runtime/atomic-store-buffering-between-processes": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/libc, platform/linux and platform/posix on the freestanding target before checking declarations: firmware has no second process and no shared mapping. backend-memory.ldn executes each admitted load and store ordering, and the backend case holds each ordering's DMB."
+    },
     "runtime/benchmark-game-binary-trees": {
       "codes": [
         "L0015"

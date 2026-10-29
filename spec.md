@@ -19686,9 +19686,11 @@ fenced until the optimization phase. It was declined.
 
 **Pinned by** the backend case `atomics are fenced as their orderings ask`,
 which holds every operation at every ordering to its instructions on each
-backend, and `runtime/atomic-orderings-between-processes`, which runs message
-passing and store buffering between a process and its copy; D522 gives each
-architecture's mapping.
+backend, `runtime/atomic-orderings-between-processes`, which passes messages
+between a process and its copy through release and acquire, and
+`runtime/atomic-store-buffering-between-processes`, which runs store
+buffering between them through seq_cst; D522 gives each architecture's
+mapping.
 
 ### D522 — Each backend's ordering mapping is its architecture's published one
 
@@ -19741,14 +19743,16 @@ on x86-64 measured 0.9 ns a read against 49.5 before, and 0.6 for a plain
 word, in a loop of 10^8 reads at `--optimize speed` on an AMD EPYC 7302.
 
 **Pinned by** `backend/atomics are fenced as their orderings ask`,
-`backend/a level selects its instructions`, and
-`runtime/atomic-orderings-between-processes`, whose store-buffering rounds
-read both old values in about one round in twenty when their seq_cst stores
-and loads are made relaxed on that host, as a seq_cst store lowered as a
-plain `mov` would. Under QEMU on an x86-64 host the arm64 rounds can read
-both old values, because QEMU does not keep a `stlr` before a later `ldar`:
-`compiler/tests/cross-lanes.json` lists its user emulation, and the fixture
-does not target FreeBSD arm64, whose only lane is its system emulation.
+`backend/a level selects its instructions`,
+`runtime/atomic-orderings-between-processes`, and
+`runtime/atomic-store-buffering-between-processes`, whose rounds read both
+old values in about one round in twenty when their seq_cst stores and loads
+are made relaxed on that host, as a seq_cst store lowered as a plain `mov`
+would. QEMU on an x86-64 host does not keep an arm64 `stlr` before a later
+`ldar`, as the register records, so the store-buffering fixture does not
+target FreeBSD arm64, whose only lane is QEMU's system emulation, and
+`compiler/tests/cross-lanes.json` lists it under QEMU's user emulation;
+RV64's mapping fences a seq_cst load fully, which QEMU keeps.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

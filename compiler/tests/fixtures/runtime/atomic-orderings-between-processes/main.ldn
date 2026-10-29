@@ -1,42 +1,19 @@
---  D227's orderings between two CPU contexts as each backend lowers them
---  (D499): this process and a copy of it, sharing one page.  Each round
---  passes a message, an ordinary write published by a release store and
---  read after an acquire load sees it, and then runs a store-buffering
---  test, in which each side stores seq_cst to its own word and loads
---  seq_cst the other's: the two loads never both read the round before.
---  The sides start each store-buffering round from a common gate, each
---  after a delay stepping through its own range, so the two stores'
---  distance in time sweeps past zero.  With relaxed stores and loads the
---  same rounds read both old values in about one round in twenty on an
---  x86-64 host, which a seq_cst store lowered as a plain MOV would too.
---  Nothing here can show that a weaker ordering would have let a
---  forbidden outcome happen, only that none was seen.  FreeBSD arm64 is
---  not a target: its only lane is QEMU's system emulation on an x86-64
---  host, which does not keep a `stlr` before a later `ldar`, so its
---  store-buffering rounds fail there as they do under QEMU's user
---  emulation; Linux and Darwin arm64 run the same backend's code on
---  hardware.  Each check that fails returns its own code.
+--  D227's release and acquire between two CPU contexts as each backend
+--  lowers them (D499): this process and a copy of it, sharing one page.
+--  Each round this process writes an ordinary word and publishes it with
+--  a release store; the copy reads it once an acquire load sees the
+--  release, and must find the round's value, never an older one.  The
+--  copy's release of its acknowledgement orders the next round.  Nothing
+--  here can show that a weaker ordering would have let an older value be
+--  read, only that none was; runtime/atomic-store-buffering-between-processes
+--  holds seq_cst.  Each check that fails returns its own code.
 import platform/libc
 import platform/linux
 import platform/posix
 
---  How many rounds of each test run.
-rounds: u64 = 20000
-
 --  How long a side spins waiting for the other before it gives up, so a
 --  copy that died ends the run rather than hanging it.
 patience: u64 = 1000000000
-
---  Where each word lives in the shared page, a cache line apart.
-x_at: usize = 0
-y_at: usize = 64
-data_at: usize = 128
-flag_at: usize = 192
-ack_at: usize = 256
-arrived_at: usize = 320
-seen_at: usize = 384
-done_at: usize = 448
-pad_at: usize = 512
 
 fixed if compiler.os == linux then
     --  A zeroed page this process and its copies share, or zero.
@@ -83,36 +60,39 @@ waited: (at: ptr mut u64, value: u64) -> (yes: bool) =
     yes = false
 end waited
 
---  Spin COUNT times reading a word nobody writes: a delay no optimizer
---  removes.
-delayed: (page: usize, count: u64) -> none =
-    for spin in u64(0)..<count do
-        _ = spin
-        _ = compiler.atomic_load(cell(page, pad_at), compiler.relaxed)
-    end for
-end delayed
+--  The code the copy STARTED ended with, 7 for its own zero, or 6 when it
+--  could not be waited for.
+joined: (started: i64) -> (code: i32) =
+    code = 6
+    ended: posix.child_status =
+        posix.wait(posix.process_id(i32(started))) else (problem)
+            _ = problem
+            return
+        end
+    match ended.how
+        posix.exited(status): begin
+            code = if status == 0 then 7 else status end if
+        end
+        posix.signalled(signal): _ = signal
+    end match
+end joined
 
---  Meet the other side at round K's gate: each adds one to the arrival
---  count and waits until both have.
-met: (page: usize, k: u64) -> (yes: bool) =
-    _ = compiler.atomic_add(cell(page, arrived_at), 1, compiler.acq_rel)
-    yes = waited(cell(page, arrived_at), 2 * k)
-end met
+--  How many messages are passed.
+rounds: u64 = 20000
+
+--  Where each word lives in the shared page, a cache line apart.
+data_at: usize = 0
+flag_at: usize = 64
+ack_at: usize = 128
 
 --  The copy's side of every round, ending the copy with its code.
 copy: (page: usize) -> noreturn =
     mut code: i32 = 0
+    data: ptr mut u64 = cell(page, data_at)
     for k in u64(1)..<rounds + 1 do
         if not waited(cell(page, flag_at), k) then posix.exit(20) end if
-        data: ptr mut u64 = cell(page, data_at)
         if data.val <> k then code = 21 end if
         compiler.atomic_store(cell(page, ack_at), k, compiler.release)
-        if not met(page, k) then posix.exit(22) end if
-        delayed(page, (k / 64) % 128)
-        compiler.atomic_store(cell(page, y_at), k, compiler.seq_cst)
-        seen: u64 = compiler.atomic_load(cell(page, x_at), compiler.seq_cst)
-        compiler.atomic_store(cell(page, seen_at), seen, compiler.relaxed)
-        compiler.atomic_store(cell(page, done_at), k, compiler.release)
     end for
     posix.exit(code)
 end copy
@@ -127,38 +107,14 @@ public main: () -> (code: i32) =
         copy(page)
     end if
     return when started < 0
-    mut forbidden: u64 = 0
+    data: ptr mut u64 = cell(page, data_at)
+    code = 3
     for k in u64(1)..<rounds + 1 do
-        code = 3
-        data: ptr mut u64 = cell(page, data_at)
         data.val = k
         compiler.atomic_store(cell(page, flag_at), k, compiler.release)
         return when not waited(cell(page, ack_at), k)
-        code = 4
-        return when not met(page, k)
-        delayed(page, k % 128)
-        compiler.atomic_store(cell(page, x_at), k, compiler.seq_cst)
-        mine: u64 = compiler.atomic_load(cell(page, y_at), compiler.seq_cst)
-        code = 5
-        return when not waited(cell(page, done_at), k)
-        theirs: u64 = compiler.atomic_load(cell(page, seen_at),
-                                           compiler.relaxed)
-        if mine < k and theirs < k then forbidden = forbidden + 1 end if
     end for
-    code = 6
-    ended: posix.child_status =
-        posix.wait(posix.process_id(i32(started))) else (problem)
-            _ = problem
-            return
-        end
-    match ended.how
-        posix.exited(status): begin
-            code = if status == 0 then 7 else status end if
-        end
-        posix.signalled(signal): _ = signal
-    end match
+    code = joined(started)
     return when code <> 7
-    code = 8
-    return when forbidden <> 0
     code = 42
 end main

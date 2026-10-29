@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D227's seq_cst between two CPU contexts, a process and its copy over a shared page, as each backend lowers it (D499): two seq_cst stores each followed by a seq_cst load of the other's word never both read the old values, in rounds whose starts are staggered; targeted where it runs on hardware or under an emulator that keeps seq_cst order, since QEMU does not keep arm64's stlr before ldar; it cannot show that the forbidden outcome would occur without the orderings, only that it was not seen
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 1620
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, linux-rv64
