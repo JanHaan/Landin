@@ -903,7 +903,7 @@ class DocumentForm(unittest.TestCase):
     def test_a_spaced_ascii_dash_in_prose_is_reported(self):
         self.assertTrue(self.broken(
             checker.check_ascii_dashes, "README.md",
-            "## Checking", "## Checking -- and why\n"))
+            "## License", "## License -- and why\n"))
 
     def test_landin_outside_a_fence_is_reported(self):
         self.assertTrue(self.broken(
@@ -914,8 +914,8 @@ class DocumentForm(unittest.TestCase):
     def test_a_table_row_with_an_extra_cell_is_reported(self):
         self.assertTrue(self.broken(
             checker.check_table_shape, "README.md",
-            "## Checking",
-            "| a | b |\n|---|---|\n| one | two | three |\n\n## Checking"))
+            "## License",
+            "| a | b |\n|---|---|\n| one | two | three |\n\n## License"))
 
     def test_a_comment_opener_the_tour_stops_showing_is_reported(self):
         #  The markers are the demonstration: [0010]'s marker IS a line

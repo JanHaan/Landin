@@ -223,7 +223,7 @@ back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 
 The current compiler capabilities, targets, execution coverage and recorded
-limits are maintained in [the README](README.md#current-compiler-capabilities).
+limits are maintained in [what refine does today](docs/capabilities.md).
 The [construct matrix](compiler/tests/constructs.matrix) records each
 normative construct's state and evidence; completed roadmap items record
 what landed and where its exit evidence is.

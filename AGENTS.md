@@ -7,10 +7,13 @@ see the same text; edit this one.
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler.
-The [README's current compiler capabilities](README.md#current-compiler-capabilities)
-are the maintained inventory of language, library, targets, execution and
-debugging coverage. Update that inventory when a capability changes; this
-file describes the repository and the commands used to work on it.
+[What refine does today](docs/capabilities.md) is the maintained inventory
+of language, library, targets, execution and debugging coverage, and the
+[README's current compiler capabilities](README.md#current-compiler-capabilities)
+summarise it. Update the inventory when a capability changes, editing the
+entry it changes rather than appending to it, and the summary when the
+change is one a newcomer would notice; this file describes the repository
+and the commands used to work on it.
 
 Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
 executable, source and diagnostic foundations, host adapters, target facts,
@@ -480,7 +483,7 @@ What each item contributed is not re-narrated here, and the current roadmap
 does not narrate either: the first one grew to thirteen thousand lines doing
 it. A completed item gets a short `Done:` paragraph, and the reasoning goes in
 the commit and in `spec.md`'s register of decisions. For current compiler
-capabilities, see [the README](README.md#current-compiler-capabilities).
+capabilities, see [what refine does today](docs/capabilities.md).
 
 The current roadmap covers a frontend that scales, assembly with
 operands, a frontend for an editor, more hosted targets, microcontrollers,

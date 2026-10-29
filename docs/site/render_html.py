@@ -1355,6 +1355,12 @@ GUIDES = [
          nav="the project", group="the project",
          blurb="What Landin is, what is in the repository, and how to build "
                "the part of it that exists."),
+    dict(key="capabilities", src="docs/capabilities.md",
+         out="capabilities.html",
+         nav="what refine does today", group="the project",
+         blurb="The inventory of the compiler, its library and its "
+               "tooling: every target, language form, library service, "
+               "command and debugger the gate holds it to."),
     dict(key="roadmap", src="ROADMAP.md", out="roadmap.html",
          nav="the roadmap", group="the project",
          blurb="The sole authority for open work: phases, dependencies, "
@@ -2334,7 +2340,7 @@ def render_guide(text, links, targets, hl, captions=False, lead_paras=1,
 NAV_GROUPS = [
     ("the language", ["tour", "spec", "examples", "from-c", "library",
                       "documents"]),
-    ("the project", ["readme", "roadmap", "handoff"]),
+    ("the project", ["readme", "capabilities", "roadmap", "handoff"]),
     ("the compiler", ["compiler", "ir", "diagnostics", "format", "server",
                       "targets", "core", "toolchain", "editors"]),
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
