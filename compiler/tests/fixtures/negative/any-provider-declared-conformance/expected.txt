@@ -1,0 +1,6 @@
+error[L0319]: `any counter` already provides `counter` through its own table
+  --> ../tests/fixtures/negative/any-provider-declared-conformance/main.ldn:24:1
+   |
+24 | erased_counter is counter (total: any_total)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D492: the compiler supplies the conformance by which an erased value provides its concept and the concepts it refines

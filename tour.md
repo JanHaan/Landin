@@ -3835,6 +3835,26 @@ works.
 The pair does carry its pointee's origin ([0770]), so an `any` over a
 local cannot go into a list that outlives the frame.
 
+An `any C` is itself a provider of C and of every concept C builds on
+([1340]), so a generic function ([1290]) takes one, and each entry it
+calls goes through the value's own table. Here an `any widget` is handed
+to a function that wants a `drawable`:
+
+```landin
+draw_on: (provider: type is drawable, item: ptr provider,
+          target: ptr mut canvas) -> none =
+    provider.draw(item, target)
+end draw_on
+
+paint_one: (item: any widget, target: ptr mut canvas) -> none =
+    draw_on(addr item, target)
+end paint_one
+```
+
+It provides no other concept, and the compiler, not the program, declares
+these conformances. An `any` is not erased again: where an `any C` is
+wanted, pass the one you have rather than its address.
+
 ### [1380] Building one with `any(...)`
 
 You build an `any` explicitly from a pointer. The concept comes from
@@ -4911,7 +4931,9 @@ of the world: `directories`, `environment`, `programs`, `file_system`,
 implements `writer` and nothing else. A diagnostics log asks for
 `any io.writer`, which is why `entry` builds one from the same `host`: an
 erased world is not an erased writer, and the two do not convert. A routine
-holding only the world lends its writer with `io.writer_of(world)`.
+holding only the world passes it to a routine generic over a writer as it
+is, and lends a writer to erase as an `any io.writer` with
+`io.writer_of(world)`.
 
 Both providers lend each argument and path as a `text.host_string`: the
 bytes the system gave, unconverted and uncopied, so an argument passed on

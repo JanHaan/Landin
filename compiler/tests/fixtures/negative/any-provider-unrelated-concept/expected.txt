@@ -1,0 +1,10 @@
+error[L0318]: `any counter` provides `counter` and the concepts it refines, not `named`
+  --> ../tests/fixtures/negative/any-provider-unrelated-concept/main.ldn:34:16
+   |
+34 |     code = i32(labelled(erased))
+   |                ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-provider-unrelated-concept/main.ldn:27:30
+   |
+27 | labelled: (provider: type is named, host: provider) -> (code: u32) =
+   |                              ^^^^^ the constraint declared here
+  = note: D492: an erased value provides its own concept's closure; erase the provider as `any named` where it is made

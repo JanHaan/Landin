@@ -1059,6 +1059,19 @@ package body Landin.Stages.Lowering is
         return Ty.Type_Kind
         is (Landin.Checking.Type_Of (Types.all, Of_Tree, Node));
 
+      --  A member selection called through an erased table: an entry of
+      --  an `any` value, or (D492) an entry a generic body selects through
+      --  a type formal standing for one, in the current view.
+      function Is_Erased_Selection
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+            and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) /= Res.Bound
+            and then
+              (Type_At (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                 = Ty.Any_Value
+               or else Landin.Checking.Is_Erased_Forward
+                 (Types.all, Of_Tree, Node)));
+
       function Is_Utf8_Index
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -5613,10 +5626,16 @@ package body Landin.Stages.Lowering is
              /= Res.Bound
            and then Type_At
              (Of_Tree, Syn.Target_Of (Of_Tree, Callee)) = Ty.Any_Value;
+         --  D492: a generic body's entry selected through a type formal
+         --  that stands for an `any` is an erased call through its first
+         --  argument, the value or a pointer to it, rather than its own.
+         Forwarded : constant Boolean :=
+           not Erased_Self and then Is_Erased_Selection (Of_Tree, Callee);
+         Dispatched : constant Boolean := Erased_Self or else Forwarded;
          --  D377: an erased call of a concept no conformance answers has
          --  no table to dispatch through, because no value of it exists.
          Unanswered : constant Boolean :=
-           Erased_Self
+           Dispatched
            and then Landin.Checking.Evidence_Of (Types.all, Of_Tree, Callee)
              = Landin.Checking.No_Conformance;
          Parameter_Offset : constant Natural :=
@@ -5630,16 +5649,16 @@ package body Landin.Stages.Lowering is
             else Landin.Checking.Signature_Of
               (Types.all, Of_Tree, Callee));
          Dispatch_Evidence : constant IR.Evidence_Id :=
-           (if Erased_Self and then not Unanswered then Any_Evidence_For
+           (if Dispatched and then not Unanswered then Any_Evidence_For
               (Landin.Checking.Evidence_Of (Types.all, Of_Tree, Callee))
             else IR.No_Evidence);
          Dispatch_Entry : constant Natural :=
-           (if Erased_Self and then not Unanswered
+           (if Dispatched and then not Unanswered
             then Landin.Checking.Evidence_Entry_Of
               (Types.all, Of_Tree, Callee) else 0);
          Signature : constant IR.Signature_Id :=
            (if Unanswered then IR.No_Signature
-            elsif Erased_Self then IR.Evidence_Entry_Dispatch_Signature
+            elsif Dispatched then IR.Evidence_Entry_Dispatch_Signature
               (Unit.all, Dispatch_Evidence, Positive (Dispatch_Entry))
             elsif Source_Signature = Landin.Checking.No_Signature
             then IR.No_Signature
@@ -6022,7 +6041,7 @@ package body Landin.Stages.Lowering is
             if Current = IR.No_Block then
                return IR.No_Value;
             end if;
-         elsif Indirect then
+         elsif Indirect and then not Forwarded then
             Callee_Saved := IR.Add_Slot
               (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site,
                Signature => Signature);
@@ -6484,7 +6503,7 @@ package body Landin.Stages.Lowering is
                Nested => Destination_Steps);
          end if;
 
-         if Indirect and then not Erased_Self then
+         if Indirect and then not Dispatched then
             Callee_Value :=
               IR.Emit_Load (Unit.all, Filling, Callee_Saved, Site);
          end if;
@@ -6504,6 +6523,25 @@ package body Landin.Stages.Lowering is
                Receiver : constant IR.Value_Id := IR.Emit_Storage_Address
                  (Unit.all, Filling,
                   (Kind => IR.Frame_Slot, Slot => Receiver_Saved), Site);
+            begin
+               Callee_Value := IR.Emit_Erased_Evidence_Function
+                 (Unit.all, Filling, Receiver, Dispatch_Evidence,
+                  Positive (Dispatch_Entry), Site);
+               Given (1) := IR.Emit_Evidence_Self
+                 (Unit.all, Filling, Callee_Value, Site);
+            end;
+         elsif Forwarded then
+            --  D492: the first argument carries the pair: by value, the
+            --  address of its copy; as `self: ptr [mut] t`, a pointer to
+            --  it, read when the call is made as a provider would read it.
+            declare
+               Receiver : constant IR.Value_Id :=
+                 (if Landin.Checking.Nth_Signature_Parameter
+                       (Types.all, Source_Signature, 1).Kind
+                     = Ty.Pointer_Value
+                  then IR.Emit_Pointer_Address
+                    (Unit.all, Filling, Given (1), Site)
+                  else Given (1));
             begin
                Callee_Value := IR.Emit_Erased_Evidence_Function
                  (Unit.all, Filling, Receiver, Dispatch_Evidence,
@@ -9599,9 +9637,8 @@ package body Landin.Stages.Lowering is
                      Slot : constant IR.Slot_Id :=
                        (if Run_Position = 0 then IR.No_Slot
                         else Evidence_Slots (Run_Position));
-                     Dynamic : constant Boolean := Type_At
-                       (Of_Tree, Syn.Target_Of (Of_Tree, Node))
-                         = Ty.Any_Value;
+                     Dynamic : constant Boolean :=
+                       Is_Erased_Selection (Of_Tree, Node);
                      Table : IR.Value_Id;
                   begin
                      if Dynamic then
@@ -16600,10 +16637,20 @@ package body Landin.Stages.Lowering is
             for Index in 1 .. Landin.Checking.Routine_Evidence_Count
               (Types.all, Instance)
             loop
-               Reach_Conformance
-                 (Landin.Checking.Nth_Routine_Evidence
-                    (Types.all, Instance, Index),
-                  Erased => False, Which => Table_Only);
+               --  D492: an `any`'s own conformance has no table; the
+               --  body's selections through it are erased calls.
+               if Landin.Checking."/="
+                    (Landin.Checking.Conformance_Origin_Of
+                       (Types.all,
+                        Landin.Checking.Nth_Routine_Evidence
+                          (Types.all, Instance, Index)),
+                     Landin.Checking.Compiler_Erased_Conformance)
+               then
+                  Reach_Conformance
+                    (Landin.Checking.Nth_Routine_Evidence
+                       (Types.all, Instance, Index),
+                     Erased => False, Which => Table_Only);
+               end if;
             end loop;
          end Reach_Instance;
 
@@ -16713,12 +16760,7 @@ package body Landin.Stages.Lowering is
                Reach_Conformance
                  (Selected,
                   Erased => Syn.Kind (Of_Tree, Node) = Syn.Any_Construction
-                    or else
-                      (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
-                       and then not Bound
-                       and then Landin.Checking.Type_Of
-                         (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
-                           = Ty.Any_Value),
+                    or else Is_Erased_Selection (Of_Tree, Node),
                   Which => Landin.Checking.Evidence_Entry_Of
                     (Types.all, Of_Tree, Node));
             end if;
@@ -17205,9 +17247,7 @@ package body Landin.Stages.Lowering is
                      if Syn.Kind (Of_Tree.all, Node) = Syn.Member_Selection
                        and then Res.Verdict_Of
                          (Meanings.all, Of_Tree.all, Node) /= Res.Bound
-                       and then Type_At
-                         (Of_Tree.all, Syn.Target_Of (Of_Tree.all, Node))
-                           /= Ty.Any_Value
+                       and then not Is_Erased_Selection (Of_Tree.all, Node)
                      then
                         declare
                            Source : constant Landin.Checking.Conformance_Id :=
@@ -17492,13 +17532,7 @@ package body Landin.Stages.Lowering is
                --  selections carry the exact evidence erased lowering uses.
                --  A selection's shape witness need not itself be constructed.
                if Syn.Kind (Of_Tree, Node) = Syn.Any_Construction
-                 or else
-                   (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
-                    and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
-                      /= Res.Bound
-                    and then Landin.Checking.Type_Of
-                      (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
-                        = Ty.Any_Value)
+                 or else Is_Erased_Selection (Of_Tree, Node)
                then
                   declare
                      Source : constant Landin.Checking.Conformance_Id :=

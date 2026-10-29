@@ -15168,7 +15168,8 @@ conformance solely so lowering can form a static table address; later copies
 carry no static concrete type fact. The enabled construction forms runtime
 storage; a module static image cannot yet carry the two relocations and is
 refused rather than fabricated. An erased call of a concept no conformance answers is
-D377's, which amends this decision.
+D377's, which amends this decision, and an `any C` handed to a
+routine generic over a provider of C is D492's.
 
 **The alternatives:** erasing a by-value object would either copy an unknown
 size or create hidden storage. Choosing the first conformance by declaration
@@ -15484,6 +15485,83 @@ conformances. All are declined.
 `negative/core-io-world-readonly-receiver`,
 `runtime/io-handle-beside-erased-view` and
 `runtime/diagnostic-loggers-dispatch`.
+
+### D492 — An `any C` is a provider of C and of the concepts C refines
+
+**The tour said** at [1370] that `any C` holds a value of some type that
+satisfies C, and at [1290] that every constrained type actual has one
+whole-program conformance. D145 gave `any C` the identity of C alone, with
+no conversion to a parent's `any`, and nothing conformed `any C` to
+anything, so a routine generic over a provider refused an erased capability
+as L0318. Prototype 4's `io.lines_over(network, ...)` over an
+`any net.network`, prototype 5's session and [1660]'s roots handed on
+assumed it was accepted; a program wrote an adapter that held the `any` and
+forwarded each entry, as `io.writer_of` does for a world.
+
+**Chosen:** an `any C` is a provider of C and of every concept C's erased
+table flattens (D147): its represented formal's constraint and its parents,
+transitively, compiler concepts excepted. The conformance is the
+compiler's, interned in the whole-program register with the key
+(concept, `any C`) when a constraint first asks for it, and a program that
+declares one is refused as L0319, as one declaring a `zeroable` conformance
+is. It provides no other concept, not even one every provider of C happens
+to conform to: that is L0318, whose note says to erase the provider as an
+`any` of the wanted concept where it is made. A conformance a program
+declares for `any C` to a concept outside that closure stays the program's.
+
+The conformance has no provider routines and no table. In an instance whose
+type formal stands for `any C`, a selection `t.entry(first, ...)` is an
+erased call through its first argument: D146 makes `self` an entry's first
+parameter, so with `t` the pair it is `self: any C`, the pair itself, or
+`self: ptr any C` or `ptr mut any C`, a pointer to it, read when the call
+is made, as a provider called through a table would read it. The call
+dispatches through C's flattened erased table at the entry's flattened
+position, described by the first conformance of C as an erased call's own
+dispatch is, and is answered late (D377) when C has none yet; a concept no
+conformance answers traps there as D377 says. No hidden table is passed for
+the formal, so its selections reach no direct table (D484). The lowering,
+the IR, the verifier and every backend see the erased call they already
+had.
+
+Permission and origin are the pair's own, as a value's. A `ptr mut`
+provider parameter wants a writable pointer to the pair, so the address of
+an immutable `any` binding is refused as L0340, whatever write authority
+its data pointer carries (D146): writing through that pointer may replace
+the pair. A result `from host` carries the pair's origin (D146), so a line
+reader over an erased network made from a local does not outlive its frame.
+An entry that is not object-safe is refused where it is selected, as an
+erased call's is.
+
+Optimization is honest by construction (D211): the call is erased, never an
+evidence call, so dispatch specialization never makes it direct, and a
+build report lists it in `left_indirect` as a call through `any`. An
+instance at `any C` is one instance whichever provider the value holds.
+
+An `any C` is already its own provider, so it is not erased again:
+`any(pointer)` whose pointee is an `any` is refused as L0318. A pair over a
+pair would dispatch twice through two tables, and an `any P` made from a
+pointer to an `any C`, P a parent of C, would be the conversion D145
+declines.
+
+**The alternatives:** compiler-generated forwarding routines filling a
+direct table per concept, which give every backend, the debugger and the
+build report routines with no source and add a second calling path;
+an adapter per concept in the library, which every consumer of a new
+concept repeats; converting `any C` to `any P`, which D145 declined;
+letting a program declare the forwarding conformance, two forms for one
+meaning and a forwarder that may dispatch elsewhere; and refusing the
+generic actual, as L0318 did, which left the sketches unwritable. All are
+declined.
+
+**Pinned by** `runtime/any-generic-provider-entries`,
+`runtime/any-generic-provider-network`,
+`runtime/any-generic-provider-world`,
+`negative/any-provider-declared-conformance`,
+`negative/any-provider-unrelated-concept`,
+`negative/any-provider-pair-permission`,
+`negative/any-provider-erased-again`, and
+`examples/derived_server`'s session, which hands its erased network to the
+line reader and the buffered writer.
 
 ### D372 — A generic call types a literal from its parameter and lends an array
 
@@ -24696,9 +24774,10 @@ closes the listener; the accept and every receive fail `io_failed`
 (D449), and the server ends cleanly, with the count of requests it
 answered, only when the waiter stopped it. Such a provider is lent three
 ways, as `fibre.turns`, `signal.signals` and `fibre.scheduler`, since the
-three do not convert (D464). An `any C` is no provider of `C` [1290], so
-the server calls erased entries, the session gives the line reader and
-the buffered writer an adapter that holds the erased network, and
+three do not convert (D464). An `any C` is a provider of C and of the
+concepts C refines (D492), so the session hands its erased network to
+`io.lines_over`, `io.buffered_over` and `net`'s routines as the sketch
+did, with no adapter; the server calls erased entries, and
 `protocol.answer` takes its clock as `any time.clock`, which the firmware
 counterpart makes from its board. The protocol separates words by one
 space, takes a tag of at least one byte and no space, and refuses a wait
@@ -24711,8 +24790,9 @@ signals, which an `any` cannot answer and which D477 put at the mint site;
 one serving routine taking a waiter that may be absent, which an erased
 capability has no empty value for; closing only the listener, which leaves
 a session waiting on an idle connection and its group's `join` with it;
-the sketch's generic `answer`, which neither the session's erased clock nor
-an adapter for each consumer serves better than one erased parameter; and
+the sketch's generic `answer`, which the session's erased clock could not
+reach before D492 and which still buys nothing over one erased parameter
+while every caller holds an erased clock; and
 failing a session on a line too long, which drops a connection for one
 line. All were declined.
 

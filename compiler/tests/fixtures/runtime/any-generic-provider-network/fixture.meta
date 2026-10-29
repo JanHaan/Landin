@@ -1,0 +1,8 @@
+class: runtime
+profiles: specialization
+summary: D492 prototype 5's session as sketched: an erased network is handed to io.lines_over and io.buffered_over as a reader and a writer, to routines generic over a network and to io.read, and an erased memory world to io.buffered_over and io.out, with no adapter, over core/io/fake's memory network
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1290, 1340, 1370, 1380, 1390, 1660, 1680
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

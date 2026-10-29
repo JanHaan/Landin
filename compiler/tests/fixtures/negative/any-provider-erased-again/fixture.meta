@@ -1,0 +1,9 @@
+class: negative
+summary: D492 an `any C` is its own concept's provider and is not erased again: its address does not make another `any C`
+program: main.ldn
+codes: L0318
+constructs: 0440, 1370, 1380
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/any-provider-erased-again/main.ldn
+status: 1

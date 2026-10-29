@@ -1,0 +1,23 @@
+--  D492: an `any counter` is already a provider of `counter`, so it is
+--  not erased again: the pair itself is passed where an `any counter` is
+--  wanted, and its address is not made one.
+counter: type = concept (provider: type)
+    total: (self: ptr provider) -> (sum: u32)
+end counter
+
+thing: type = struct
+    n: u32
+end thing
+
+thing_total: (self: ptr thing) -> (sum: u32) =
+    sum = self.val.n
+end thing_total
+
+thing is counter (total: thing_total)
+
+public main: () -> (code: i32) =
+    item: thing = (n: 4)
+    erased: any counter = any(addr item)
+    again: any counter = any(addr erased)
+    code = i32(again.total())
+end main

@@ -344,6 +344,17 @@
     "runtime/any-expression-result": {
       "mode": "execute"
     },
+    "runtime/any-generic-provider-entries": {
+      "mode": "execute"
+    },
+    "runtime/any-generic-provider-network": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "An erased memory network and an erased memory world reach every entry of their erased tables (D484), so every provider of the network and of the world is lowered: 63,200 bytes of flash at size/auto, overflowing the 32 KiB profile by 30,432. Each profile still attempts execution; runtime/any-generic-provider-world hands an erased world to the same generic writer routines within the image, and runtime/any-generic-provider-entries every entry kind, and both require execution; this image limit is not runtime evidence."
+    },
+    "runtime/any-generic-provider-world": {
+      "mode": "execute"
+    },
     "runtime/any-generic-storage": {
       "mode": "execute"
     },

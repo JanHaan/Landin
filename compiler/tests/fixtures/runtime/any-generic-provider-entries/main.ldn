@@ -1,0 +1,166 @@
+--  D492: an `any C` is a provider of C and of every concept C refines, so
+--  a routine generic over a provider takes an erased value, and each entry
+--  it calls is an erased call through the value's own table.  Every entry
+--  kind goes through: `self` by value, `ptr mut self` and `ptr self`, a
+--  fallible entry recovered with `else` and one propagated with `try`, an
+--  entry of a parent concept, and a generic routine handing the provider
+--  on to another.  A concept no conformance answers still builds (D377).
+too_big: atom
+
+named: type = concept (provider: type)
+    label: (self: provider) -> (code: u32)
+end named
+
+counter: type = concept (provider: type) is named
+    add: (self: provider, value: u32) -> none
+    bump: (self: ptr mut provider) -> none
+    total: (self: ptr provider) -> (sum: u32)
+    checked: (self: provider, value: u32) -> (got: u32) ! too_big
+end counter
+
+tally: type = struct
+    count: u32
+    sum: u32
+end tally
+
+--  Two providers, so the erased value's table is chosen at run time.
+plain: type = struct
+    state: ptr mut tally
+end plain
+
+doubled: type = struct
+    state: ptr mut tally
+end doubled
+
+plain_label: (self: plain) -> (code: u32) =
+    _ = self
+    code = 1
+end plain_label
+
+plain_add: (self: plain, value: u32) -> none =
+    self.state.val.sum += value
+end plain_add
+
+plain_bump: (self: ptr mut plain) -> none =
+    inc self.val.state.val.count
+end plain_bump
+
+plain_total: (self: ptr plain) -> (sum: u32) =
+    sum = self.val.state.val.sum + self.val.state.val.count
+end plain_total
+
+plain_checked: (self: plain, value: u32) -> (got: u32) ! too_big =
+    _ = self
+    fail too_big when value > 100
+    got = value
+end plain_checked
+
+doubled_label: (self: doubled) -> (code: u32) =
+    _ = self
+    code = 2
+end doubled_label
+
+doubled_add: (self: doubled, value: u32) -> none =
+    self.state.val.sum += 2 * value
+end doubled_add
+
+doubled_bump: (self: ptr mut doubled) -> none =
+    self.val.state.val.count += 2
+end doubled_bump
+
+doubled_total: (self: ptr doubled) -> (sum: u32) =
+    sum = self.val.state.val.sum + self.val.state.val.count
+end doubled_total
+
+doubled_checked: (self: doubled, value: u32) -> (got: u32) ! too_big =
+    _ = self
+    fail too_big when value > 50
+    got = value
+end doubled_checked
+
+plain is named (label: plain_label)
+plain is counter (add: plain_add, bump: plain_bump, total: plain_total,
+                  checked: plain_checked)
+doubled is named (label: doubled_label)
+doubled is counter (add: doubled_add, bump: doubled_bump,
+                    total: doubled_total, checked: doubled_checked)
+
+--  A parent concept's entry, reached from a provider of the parent.
+labelled: (provider: type is named, host: provider) -> (code: u32) =
+    code = provider.label(host)
+end labelled
+
+--  Each entry kind.  `bump` writes through a pointer to the provider, here
+--  a copy of the erased pair, which reaches the same state.
+feed: (provider: type is counter, host: provider, value: u32)
+      -> (sum: u32) =
+    mut copy := host
+    provider.add(host, value)
+    provider.bump(addr copy)
+    got := provider.checked(host, value * 20) else (problem)
+        _ = problem
+        provider.add(host, 3)
+        0
+    end
+    sum = provider.total(addr copy) + got + 10 * labelled(host)
+end feed
+
+--  A fallible entry propagated with `try`, through a routine handing the
+--  provider on.
+strict: (provider: type is counter, host: provider, value: u32)
+        -> (got: u32) ! too_big =
+    got = try provider.checked(host, value)
+end strict
+
+handed: (provider: type is counter, host: provider, value: u32)
+        -> (got: u32) ! too_big =
+    got = try strict(host, value)
+end handed
+
+--  D377: nothing conforms to `outlet`, so no `any outlet` exists; the
+--  generic routine's calls through one still build, as traps nothing
+--  reaches.
+outlet: type = concept (target: type)
+    put: (self: ptr mut target, byte: u8) -> none
+end outlet
+
+poured: (provider: type is outlet, host: ptr mut provider) -> none =
+    provider.put(host, u8('x'))
+end poured
+
+pour: (into: any outlet) -> none =
+    mut copy := into
+    poured(addr copy)
+end pour
+
+mut kept: (into: any outlet) -> none = pour
+
+public main: () -> (code: i32) =
+    code = 1
+    mut first_state: tally = (count: 0, sum: 0)
+    mut second_state: tally = (count: 0, sum: 0)
+    mut first: plain = (state: addr first_state)
+    mut second: doubled = (state: addr second_state)
+    erased: [2]any counter = [any(addr first), any(addr second)]
+    --  plain: 5 added, one bump, 100 passes: 5 + 1 + 100 + 10.
+    return when feed(erased[0], 5) <> 116
+    --  doubled: 10 added, two bumps, 100 is too big, 3 more doubled:
+    --  16 + 2 + 0 + 20.
+    return when feed(erased[1], 5) <> 38
+    code = 2
+    return when first_state.sum <> 5 or second_state.count <> 2
+    code = 3
+    mut refused: bool = false
+    got := handed(erased[1], 60) else (problem)
+        refused = problem == too_big
+        0
+    end
+    return when not refused or got <> 0
+    code = 4
+    passed := handed(erased[0], 60) else (problem)
+        _ = problem
+        0
+    end
+    return when passed <> 60
+    code = 42
+end main

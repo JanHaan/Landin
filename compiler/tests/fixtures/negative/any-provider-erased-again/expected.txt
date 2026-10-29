@@ -1,0 +1,10 @@
+error[L0318]: this addresses an `any` value, which is not erased again
+  --> ../tests/fixtures/negative/any-provider-erased-again/main.ldn:21:30
+   |
+21 |     again: any counter = any(addr erased)
+   |                              ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-provider-erased-again/main.ldn:21:12
+   |
+21 |     again: any counter = any(addr erased)
+   |            ^^^^^^^^^^^ the runtime-dispatch type written here
+  = note: D492: an `any` is already a provider of its concept; pass the value itself where an `any` of that concept is wanted

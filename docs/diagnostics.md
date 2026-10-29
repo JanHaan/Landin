@@ -800,6 +800,9 @@ i32 is ordered ()
 ### L0318
 
 A type given for a formal lacks a conformance the formal requires [1290].
+An `any C` provides C and every concept C refines, and no other (D492):
+erase the provider as an `any` of the wanted concept where it is made.
+Its address is not erased again; pass the `any C` itself.
 
 ```landin
 cell: type (t: type is zeroable) = struct
@@ -811,7 +814,9 @@ bad: type = cell(ptr i32)
 
 ### L0319
 
-The compiler owns `zeroable` and its conformances; a program declares neither.
+The compiler owns `zeroable` and its conformances, and the conformance by
+which an `any C` provides C and the concepts it refines (D492); a program
+declares none of them.
 
 ```landin
 i32 is zeroable ()
