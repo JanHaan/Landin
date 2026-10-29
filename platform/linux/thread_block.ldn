@@ -1,0 +1,30 @@
+--  Interim, until platform/linux lays a thread's own storage (D496,
+--  D497): the thread-local block a thread `clone_thread` starts is given
+--  for `clone_settls`.  A static program has no block of its own yet, so
+--  there is none to lay, and a new thread shares its creator's thread
+--  pointer, as it shares the one limit cell (D471).  The per-thread
+--  storage replaces these three with its own, of the same shapes.
+
+fixed if compiler.os == linux then
+    --- The bytes a new thread's block takes: zero while a static program
+    --- has none.
+    public thread_block_bytes:
+        () -> (bytes: usize) =
+        bytes = 0
+    end thread_block_bytes
+
+    --- The alignment a new thread's block needs.
+    public thread_block_alignment:
+        () -> (bytes: usize) =
+        bytes = 16
+    end thread_block_alignment
+
+    --- Lay a new thread's block in `memory`, which holds
+    --- `thread_block_bytes` at `thread_block_alignment`, and return the
+    --- thread pointer `clone_thread` gives it: zero, for no block.
+    public lay_thread_block:
+        (memory: []mut u8) -> (pointer: usize) =
+        _ = memory
+        pointer = 0
+    end lay_thread_block
+end if

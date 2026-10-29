@@ -1,0 +1,186 @@
+--  Threads: starting one on a stack area its caller lends and waiting for
+--  its end (D494, D517, D518).  A static Linux program makes the thread
+--  itself, with platform/linux's `clone_thread`, and waits on the word the
+--  kernel clears when it ends; under --link=libc, on Darwin and on FreeBSD
+--  the C library starts it with `pthread_create` on the area, given with
+--  `pthread_attr_setstack`, and `pthread_join` waits.  Either way the
+--  thread starts with every signal blocked, so a signal the process is
+--  sent reaches a thread that reads it, through a signalfd or kqueue, and
+--  never a new thread's default disposition.  Nothing here allocates; the
+--  C library, where it starts the thread, keeps its own record of it as it
+--  chooses (D518).
+
+import platform/libc
+import platform/linux
+
+--- The routine a started thread runs, as the C library's threads run
+--- one: called with the argument `start_thread` was given, on the area's
+--- stack. Its result is discarded.
+public thread_routine: type = libc.thread_routine
+
+--- The caller's record of one started thread, from `start_thread` until
+--- `join_thread` returns: the word a static Linux program's kernel clears
+--- when the thread ends, the C library's handle, and what the thread is
+--- to run. Declare it `zeroed`; it must stay where it is meanwhile.
+public thread: type = struct
+    word: u32
+    reserved: u32
+    handle: usize
+    routine: thread_routine
+    argument: usize
+end thread
+
+fixed if compiler.os == linux and not compiler.c_runtime then
+    --  What runs on the area besides the thread's routine: this routine's
+    --  frame, and above it, at the area's top, the two words
+    --  `clone_thread` lays.
+    area_least: usize = 2048
+
+    --- The bytes a thread's start area takes: its thread-local block and
+    --- 2 KiB for the frames that start it.
+    public thread_start_bytes:
+        () -> (bytes: usize) =
+        alignment: usize = linux.thread_block_alignment()
+        block: usize = linux.thread_block_bytes()
+        bytes = area_least + block + (alignment - block % alignment) % alignment
+    end thread_start_bytes
+
+    --- The alignment a start area's lowest byte and its length keep.
+    public thread_start_alignment:
+        () -> (bytes: usize) =
+        bytes = 16
+    end thread_start_alignment
+
+    --  The new thread's first routine: run the caller's, then end the
+    --  thread, which clears the record's word.
+    extern(c) begin_thread: (argument: usize) -> none =
+        --  [0810]: the argument is the record `start_thread` was given.
+        record: ptr mut thread = ptr(argument)
+        _ = record.val.routine(record.val.argument)
+        linux.exit_thread(0)
+    end begin_thread
+
+    system_start: (area: []mut u8, record: ptr mut thread) -> none ! errno =
+        low: usize = usize(addr area[0])
+        alignment: usize = linux.thread_block_alignment()
+        block: usize = linux.thread_block_bytes()
+        skip: usize = (alignment - low % alignment) % alignment
+        mut tls: usize = 0
+        if block > 0 then
+            tls = linux.lay_thread_block(area[skip..<skip + block])
+        end if
+        mut flags: u64 = linux.clone_thread_flags
+        if tls <> 0 then flags = flags | linux.clone_settls end if
+        top: usize = (low + lenof area) - (low + lenof area) % 16
+        every: u64 = 0 -% 1
+        mut kept: u64 = 0
+        blocked: i32 = linux.rt_sigprocmask(linux.sig_setmask, addr every,
+                                            addr kept)
+        fail errno_of(-blocked) when blocked < 0
+        result: i64 = linux.clone_thread(flags, top, addr record.val.word,
+                                         addr record.val.word, tls,
+                                         usize(record), begin_thread)
+        _ = linux.rt_sigprocmask(linux.sig_setmask, addr kept, linux.no_mask)
+        fail errno_of(i32(-result)) when result < 0
+    end system_start
+
+    system_join: (record: ptr mut thread) -> none ! errno =
+        linux.wait_until_cleared(addr record.val.word)
+    end system_join
+else
+    fixed if compiler.os == linux and compiler.arch == arm64 then
+        --  glibc's PTHREAD_STACK_MIN on arm64, whose pages may be 64 KiB.
+        area_least: usize = 131072
+    else
+        --  PTHREAD_STACK_MIN is 16 KiB under glibc on x86-64 and RV64 and
+        --  on Darwin; FreeBSD's, 2 KiB on x86-64 and 4 KiB on arm64, is
+        --  too little for libthr's own start and end, whose calls the
+        --  run-time linker binds lazily on this stack (D491), so FreeBSD
+        --  takes 16 KiB too.
+        area_least: usize = 16384
+    end if
+
+    fixed if compiler.os == darwin then
+        --  Darwin takes a stack only at a page boundary and in whole
+        --  pages, of 16 KiB on arm64.
+        area_alignment: usize = 16384
+    else
+        area_alignment: usize = 16
+    end if
+
+    --- The bytes a thread's start area takes: the C library's least
+    --- stack, which holds its own start frames and, under glibc, the
+    --- thread's block.
+    public thread_start_bytes:
+        () -> (bytes: usize) =
+        bytes = area_least
+    end thread_start_bytes
+
+    --- The alignment a start area's lowest byte and its length keep:
+    --- Darwin's page, 16 bytes elsewhere.
+    public thread_start_alignment:
+        () -> (bytes: usize) =
+        bytes = area_alignment
+    end thread_start_alignment
+
+    system_start: (area: []mut u8, record: ptr mut thread) -> none ! errno =
+        mut attributes: libc.thread_attributes = zeroed
+        made: i32 = libc.pthread_attr_init(addr attributes)
+        fail errno_of(made) when made <> 0
+        mut status: i32 = libc.pthread_attr_setstack(
+            addr attributes, usize(addr area[0]), lenof area)
+        if status == 0 then
+            mut every: libc.signal_set = zeroed
+            mut kept: libc.signal_set = zeroed
+            _ = libc.sigfillset(addr every)
+            status = libc.pthread_sigmask(libc.sig_setmask, addr every,
+                                          addr kept)
+            if status == 0 then
+                status = libc.pthread_create(addr record.val.handle,
+                                             addr attributes,
+                                             record.val.routine,
+                                             record.val.argument)
+                _ = libc.pthread_sigmask(libc.sig_setmask, addr kept,
+                                         libc.no_address)
+            end if
+        end if
+        _ = libc.pthread_attr_destroy(addr attributes)
+        fail errno_of(status) when status <> 0
+    end system_start
+
+    system_join: (record: ptr mut thread) -> none ! errno =
+        status: i32 = libc.pthread_join(record.val.handle, libc.no_address)
+        fail errno_of(status) when status <> 0
+    end system_join
+end if
+
+--- Start a thread that calls `routine(argument)` on `area`, its stack,
+--- which holds `thread_start_bytes()` from a byte at
+--- `thread_start_alignment()`, keeping its record in `record` until
+--- `join_thread`. Every signal is blocked while it starts, and the
+--- thread begins with them all blocked; the caller's own mask is as it
+--- was. It fails `einval` for an area too small or not aligned, and with
+--- the errno the system refused the thread with, `eagain` when it lacks
+--- what another thread needs; a failed start starts nothing. A successful
+--- start synchronizes with the thread's first action (D227).
+public start_thread:
+    (area: []mut u8, record: ptr mut thread, routine: thread_routine,
+     argument: usize) -> none ! errno =
+    fail einval when lenof area < thread_start_bytes()
+    alignment: usize = thread_start_alignment()
+    fail einval when usize(addr area[0]) % alignment <> 0
+      or lenof area % alignment <> 0
+    record.val = (word: 0, reserved: 0, handle: 0, routine: routine,
+                  argument: argument)
+    try system_start(area, record)
+end start_thread
+
+--- Wait until the thread `record` was started for has ended, blocking the
+--- calling thread. Its end synchronizes with this return (D227), after
+--- which nothing of the thread runs and its area may be used again. A
+--- thread is joined once; a record no thread was started for fails
+--- `einval` or `esrch` under a C library and is never waited for.
+public join_thread:
+    (record: ptr mut thread) -> none ! errno =
+    try system_join(record)
+end join_thread

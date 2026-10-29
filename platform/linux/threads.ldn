@@ -1,0 +1,168 @@
+--  A thread of a static Linux program, raw (D494, D516, D517): `clone`
+--  makes it, sharing the address space, the descriptors, the signal
+--  actions and the thread group, and it ends with the thread's own `exit`,
+--  which clears a word of its creator's that a futex wait is woken on.
+--  Under --link=libc the C library owns its threads and this is not used:
+--  platform/posix starts them with `pthread_create` there.
+--
+--  The `clone` call is a naked routine, because the thread it makes
+--  returns from the system call on a stack that is not its creator's, into
+--  no frame of a Landin routine.  Its text has no label and no branch: the
+--  creator and the new thread run the same instructions after the call,
+--  and each picks its own next step from the call's result with a
+--  conditional move, the creator returning to its caller and the new
+--  thread entering the routine it was given.  Ordinary code reaches the
+--  text through `clone_thread`, the bodyless C view of the routine's
+--  symbol (D516).  Declared on Linux only, as the module is.
+
+fixed if compiler.os == linux then
+    --- `clone` flags for a thread: the address space, the file-system
+    --- information, the descriptor table, the signal actions, the thread
+    --- group and System V semaphore adjustments shared with the creator;
+    --- the new thread's ID written to the parent's word before the call
+    --- returns, and the child's word cleared, with a futex wake, when the
+    --- thread ends.  CLONE_VM, CLONE_FS, CLONE_FILES, CLONE_SIGHAND,
+    --- CLONE_THREAD, CLONE_SYSVSEM, CLONE_PARENT_SETTID and
+    --- CLONE_CHILD_CLEARTID; no exit signal.  The same on every
+    --- architecture.
+    public clone_thread_flags: u64 = 3477248
+
+    --- `clone` flag: the new thread's thread pointer is the call's `tls`
+    --- argument, CLONE_SETTLS.
+    public clone_settls: u64 = 524288
+
+    --- What a thread `clone_thread` makes runs first: a C routine called
+    --- with the argument it was given, on the stack it was given, with no
+    --- frame below it. It never returns: it ends with `exit_thread`.
+    public thread_entry: type = extern(c) (argument: usize) -> none
+
+    fixed if compiler.arch == x86_64 then
+        --  The clone itself.  The C call's arguments are rdi, rsi, rdx,
+        --  rcx, r8 and r9, and the seventh, the entry, is above the
+        --  return address; the system call takes rdi, rsi, rdx, r10 and
+        --  r8, `clone`'s flags, stack, parent word, child word and thread
+        --  pointer.  The new thread's stack is laid out first, 16 bytes
+        --  below its top: the entry, which its `ret` takes, and a zero
+        --  return address above it, so the entry is called as C calls a
+        --  routine, and a backtrace ends there.  After the call, rax is
+        --  zero in the new thread alone: it clears its frame pointer, takes
+        --  the argument from r9, which the call keeps, and returns into
+        --  the entry; the creator keeps its own and returns to its caller.
+        link(symbol: "_landin_linux_clone")
+        extern(naked) clone_text: () -> none =
+            assembler.block("""
+                movq 8(%rsp), %rax
+                subq $16, %rsi
+                movq %rax, (%rsi)
+                movq $0, 8(%rsi)
+                movq %rcx, %r10
+                movl $56, %eax
+                syscall
+                xorl %ecx, %ecx
+                testq %rax, %rax
+                cmovzq %rcx, %rbp
+                cmovzq %r9, %rdi
+                ret
+                """)
+        end clone_text
+    elsif compiler.arch == arm64 then
+        --  The clone itself.  The C call's arguments are x0 to x6; the
+        --  system call takes x0 to x4, `clone`'s flags, stack, parent
+        --  word, thread pointer and child word, the last two in the
+        --  other order from the C view's.  After the call, x0 is zero in
+        --  the new thread alone: it clears its frame pointer and link
+        --  register, takes the argument from x5 and branches to the entry
+        --  in x6, both of which the call keeps; the creator keeps its own
+        --  and branches back to its caller.
+        link(symbol: "_landin_linux_clone")
+        extern(naked) clone_text: () -> none =
+            assembler.block("""
+                mov x9, x3
+                mov x3, x4
+                mov x4, x9
+                mov x8, #220
+                svc #0
+                cmp x0, #0
+                csel x16, x6, x30, eq
+                csel x30, xzr, x30, eq
+                csel x29, xzr, x29, eq
+                csel x0, x5, x0, eq
+                br x16
+                """)
+        end clone_text
+    else
+        --  The clone itself.  The C call's arguments are a0 to a6; the
+        --  system call takes a0 to a4, `clone`'s flags, stack, parent
+        --  word, thread pointer and child word, the last two in the
+        --  other order from the C view's.  RV64 has no conditional move,
+        --  so a mask chooses: all ones in the new thread, whose a0 is
+        --  zero, and zero in the creator.  The new thread clears its frame
+        --  pointer and return address, takes the argument from a5 and
+        --  jumps to the entry in a6, both of which the call keeps; the
+        --  creator jumps back to its caller.
+        link(symbol: "_landin_linux_clone")
+        extern(naked) clone_text: () -> none =
+            assembler.block("""
+                mv t0, a3
+                mv a3, a4
+                mv a4, t0
+                li a7, 220
+                ecall
+                seqz t0, a0
+                neg t0, t0
+                not t2, t0
+                and t1, a6, t0
+                and t3, ra, t2
+                or t1, t1, t3
+                and t4, a5, t0
+                or a0, a0, t4
+                and s0, s0, t2
+                and ra, ra, t2
+                jr t1
+                """)
+        end clone_text
+    end if
+
+    --- Start a thread with `clone`: `flags` are `clone_thread_flags`, with
+    --- `clone_settls` when `tls` is the new thread's thread pointer; the
+    --- thread runs `entry(argument)` on the stack whose top, sixteen-byte
+    --- aligned, is `stack`, and the kernel writes its thread ID to
+    --- `parent` before this returns and clears `child` when it ends. The
+    --- new thread's ID, or minus the errno. The new thread starts with the
+    --- creator's signal mask, so a creator that blocks every signal around
+    --- this call starts a thread that receives none.
+    public extern(c) link(symbol: "_landin_linux_clone") clone_thread:
+        (flags: u64, stack: usize, parent: ptr mut u32, child: ptr mut u32,
+         tls: usize, argument: usize, entry: thread_entry)
+        -> (result: i64)
+
+    --- End the calling thread alone, the `exit` call: the kernel clears the
+    --- word `clone_thread` was given as `child` and wakes a futex waiter
+    --- on it, after which nothing of the thread runs. The process goes on
+    --- while another thread does; `exit_group` ends it.
+    public exit_thread:
+        (status: i32) -> noreturn =
+        _ = system_call(exit_number, i64(status), 0, 0, 0, 0, 0)
+        compiler.unreachable()
+    end exit_thread
+
+    --  futex operation: wait while the word holds the value, FUTEX_WAIT,
+    --  not private: the kernel's wake when a thread ends is not.
+    futex_wait: i64 = 0
+
+    --- Wait until the thread whose `child` word is `word` has ended: until
+    --- the kernel has cleared the word, as it does once nothing of that
+    --- thread runs. The word's acquire load that reads zero is the join's
+    --- edge with everything the thread did (D227).
+    public wait_until_cleared:
+        (word: ptr mut u32) -> none =
+        loop do
+            seen: u32 = compiler.atomic_load(word, compiler.acquire)
+            break when seen == 0
+            --  EAGAIN when the word changed first, EINTR for a signal:
+            --  both go round again.
+            _ = system_call(futex_number, i64(usize(word)), futex_wait,
+                            i64(seen), 0, 0, 0)
+        end loop
+    end wait_until_cleared
+end if

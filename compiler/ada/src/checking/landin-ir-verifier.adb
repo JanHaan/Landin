@@ -296,6 +296,20 @@ package body Landin.IR.Verifier is
       return Storage_Count (Count) * Width;
    end Checked_Scratch_Bytes;
 
+   --  D516: Import is a bodyless C routine and Definition the naked
+   --  routine that defines its symbol, whose text owns the convention the
+   --  import states.
+   function Naked_View
+     (Of_Unit : Unit; Import, Definition : Item_Id) return Boolean
+   is (Is_External (Of_Unit, Import)
+       and then Kind_Of (Of_Unit, Definition) = Routine
+       and then not Is_External (Of_Unit, Definition)
+       and then Holds (Of_Unit, Signature_Of (Of_Unit, Import))
+       and then Holds (Of_Unit, Signature_Of (Of_Unit, Definition))
+       and then Signature_Uses_C_ABI (Of_Unit, Signature_Of (Of_Unit, Import))
+       and then Signature_Machine (Of_Unit, Signature_Of (Of_Unit, Definition))
+         = Landin.Machine.Naked_Routine);
+
    function Check
      (Of_Unit    : Unit;
       Facts      : Landin.Targets.Target_Facts;
@@ -4478,9 +4492,14 @@ package body Landin.IR.Verifier is
                      begin
                         if (not Is_External (Of_Unit, Id)
                               and then Earlier.Has_Definition)
-                          or else not Signatures_Agree
-                            (Of_Unit, Signature_Of (Of_Unit, Id),
-                             Signature_Of (Of_Unit, Earlier.First))
+                          or else not
+                            (Signatures_Agree
+                               (Of_Unit, Signature_Of (Of_Unit, Id),
+                                Signature_Of (Of_Unit, Earlier.First))
+                             or else Naked_View
+                               (Of_Unit, Id, Earlier.First)
+                             or else Naked_View
+                               (Of_Unit, Earlier.First, Id))
                         then
                            return (Kind => Routine_Signature_Disagrees,
                                    Item => Id, others => <>);
