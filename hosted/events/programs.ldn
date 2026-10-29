@@ -1,0 +1,230 @@
+--  The event provider's `io.programs` (D479, D487): a child is started by
+--  the system handle this provider is built over, which does not wait,
+--  and the parent's ends of its pipes are made non-blocking.  Reading and
+--  writing them park the fibre on the loop as any other file's do, and
+--  waiting for the child's end parks it too: on a pidfd on Linux, and on
+--  kqueue's EVFILT_PROC with `note_exit` on Darwin and FreeBSD.  The child
+--  is then reaped with POSIX's `waitpid`, which no longer waits.
+
+import core/io
+import core/text
+import hosted/system
+import platform/linux
+import platform/linux/numbers
+import platform/posix
+
+events_spawn: (self: host, path: text.host_string,
+               arguments: []text.host_string, environment: []io.variable,
+               streams: io.child_streams)
+              -> (started: io.child)
+              ! io.not_found | io.no_access | io.io_failed =
+    started = try system.start(services(self), path, arguments, environment,
+                               streams)
+    --  A pipe left blocking still works, since every read and write waits
+    --  for readiness first; a non-blocking one never holds the thread.
+    if started.input_open then
+        posix.set_non_blocking(system.descriptor_of(started.input), true)
+            else none
+    end if
+    if started.output_open then
+        posix.set_non_blocking(system.descriptor_of(started.output), true)
+            else none
+    end if
+    if started.errors_open then
+        posix.set_non_blocking(system.descriptor_of(started.errors), true)
+            else none
+    end if
+end events_spawn
+
+--  Close one of a child's pipes, waking whoever waits on it first; it is
+--  closed even when the system reports a failure.
+close_pipe: (self: host, opened: io.file) -> none ! io.io_failed =
+    closing: posix.descriptor = system.descriptor_of(opened)
+    forget(self, closing)
+    posix.close(closing) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end close_pipe
+
+events_write_child: (self: host, inout started: io.child, bytes: []u8)
+                    -> none ! io.io_failed =
+    cleared(self)
+    fail io.io_failed when not started.input_open
+    try write_all(self, started.input, bytes)
+end events_write_child
+
+events_close_input: (self: host, inout started: io.child)
+                    -> none ! io.io_failed =
+    cleared(self)
+    fail io.io_failed when not started.input_open
+    started.input_open = false
+    try close_pipe(self, started.input)
+end events_close_input
+
+--  One read of `opened` that does not wait: `waits` when nothing is ready
+--  yet, else the count, zero at its end.
+read_now: (self: host, opened: io.file, into: []mut u8)
+          -> (count: usize, waits: bool) ! io.io_failed =
+    descriptor: posix.descriptor = system.descriptor_of(opened)
+    count = 0
+    waits = true
+    return when not ready_now(descriptor, false)
+    loop do
+        got: usize = posix.read(descriptor, into) else (problem)
+            continue when problem == posix.eintr
+            return when problem == posix.eagain
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when got > lenof into
+        count = got
+        waits = false
+        return
+    end loop
+end read_now
+
+--  The output when it has anything, its end included, and the errors when
+--  they do; when neither has, the fibre waits for whichever is ready
+--  first, as hosted/blocking's poll of both does.
+events_read_child: (self: host, inout started: io.child, into: []mut u8)
+                   -> (taken: io.child_read) ! io.io_failed =
+    cleared(self)
+    taken = (count: 0, stream: io.child_output,
+             finished: not started.output_open and not started.errors_open)
+    return when lenof into == 0
+    loop do
+        if not started.output_open and not started.errors_open then
+            taken = (count: 0, stream: io.child_output, finished: true)
+            return
+        end if
+        if started.output_open then
+            (count, waits) := try read_now(self, started.output, into)
+            if not waits then
+                if count > 0 then
+                    taken = (count: count, stream: io.child_output,
+                             finished: false)
+                    return
+                end if
+                started.output_open = false
+                try close_pipe(self, started.output)
+                continue
+            end if
+        end if
+        if started.errors_open then
+            (count, waits) := try read_now(self, started.errors, into)
+            if not waits then
+                if count > 0 then
+                    taken = (count: count, stream: io.child_errors,
+                             finished: false)
+                    return
+                end if
+                started.errors_open = false
+                try close_pipe(self, started.errors)
+                continue
+            end if
+        end if
+        mut output: waiting = on_descriptor(-1, false, 0)
+        mut errors: waiting = on_descriptor(-1, false, 0)
+        if started.output_open then
+            output.descriptor = i32(system.descriptor_of(started.output))
+        end if
+        if started.errors_open then
+            errors.descriptor = i32(system.descriptor_of(started.errors))
+        end if
+        answer: u8 = park_either(self, addr output, addr errors)
+            else (problem)
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when answer == failed
+    end loop
+end events_read_child
+
+--  Close every pipe the child still has, keeping the first failure.
+close_pipes: (self: host, started: io.child) -> (closed: bool) =
+    closed = true
+    if started.input_open then
+        close_pipe(self, started.input) else (problem)
+            _ = problem
+            closed = false
+        end
+    end if
+    if started.output_open then
+        close_pipe(self, started.output) else (problem)
+            _ = problem
+            closed = false
+        end
+    end if
+    if started.errors_open then
+        close_pipe(self, started.errors) else (problem)
+            _ = problem
+            closed = false
+        end
+    end if
+end close_pipes
+
+--  Reap the child, which has ended, again when a signal interrupts it.
+waited: (self: host, child: posix.process_id)
+        -> (status: posix.child_status) ! io.io_failed =
+    loop do
+        status = posix.wait(child) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        return
+    end loop
+end waited
+
+--  The pipes are closed before the wait, so a child still writing to one
+--  meets a closed pipe rather than waiting for a reader that never comes.
+events_wait_child: (self: host, sink started: io.child)
+                   -> (ended: io.ending) ! io.io_failed =
+    cleared(self)
+    closed: bool = close_pipes(self, started)
+    child: posix.process_id = system.process_of(started)
+    try child_ended(self, child)
+    status: posix.child_status = try waited(self, child)
+    ended = system.ended(services(self), status)
+    fail io.io_failed when not closed
+end events_wait_child
+
+host is io.programs
+    (spawn: events_spawn, write_child: events_write_child,
+     close_input: events_close_input, read_child: events_read_child,
+     wait: events_wait_child)
+
+fixed if compiler.os == linux then
+    --  Wait for the child's end on a pidfd, which is readable once the
+    --  child has ended.  A system without `pidfd_open`, before Linux 5.3,
+    --  leaves the reaping to wait the thread.
+    child_ended: (self: host, child: posix.process_id) -> none ! io.io_failed =
+        made: i64 = linux.system_call(numbers.pidfd_open_number,
+                                      i64(i32(child)), 0, 0, 0, 0, 0)
+        return when made < 0
+        descriptor: posix.descriptor = posix.descriptor(i32(made))
+        answer: u8 = await(self, descriptor, false, 0) else (problem)
+            posix.close(descriptor) else none
+            record(self, problem)
+            fail io.io_failed
+        end
+        forget(self, descriptor)
+        posix.close(descriptor) else none
+        fail io.io_failed when answer == failed
+    end child_ended
+elsif compiler.os == darwin or compiler.os == freebsd then
+    --  Wait for the child's end on kqueue; one that has ended already, which
+    --  the queue refuses with ESRCH, is reaped at once.
+    child_ended: (self: host, child: posix.process_id) -> none ! io.io_failed =
+        mut entry: waiting = (next: 0, descriptor: -1, output: false,
+                              child: i32(child), signalled: false,
+                              deadline: 0, answer: pending)
+        answer: u8 = park(self, addr entry) else (problem)
+            return when problem == posix.esrch
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when answer == failed
+    end child_ended
+end if

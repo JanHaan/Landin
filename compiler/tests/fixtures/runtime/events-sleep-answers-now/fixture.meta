@@ -1,0 +1,10 @@
+class: runtime
+summary: D480 D485 prototype 5's two requests from one source over hosted/events, one task sleeping 20 ms on the provider's clock in the loop's wait and the other answering at once, answered b before a, with the sleep no shorter than asked
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0780, 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

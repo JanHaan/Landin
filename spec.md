@@ -23946,9 +23946,13 @@ round in which nothing moved, and an accept and a receive woken with
 `runtime/signals-fake-stop-server`, a signal read as an event stopping a
 server by closing its listener, which fails the server's accept; and
 `runtime/signals-fake-firmware`, signals waited for like a receive on every
-target, Cortex-M0 included (D482, D483). The second Io's wake on a
-descriptor and its signals, and the wrapper's fixtures, will pin the rest;
-prototype 5's V7, V10 and V14 record the pressure.
+target, Cortex-M0 included (D482, D483); `runtime/events-close-wakes-waiter`,
+a receive under `hosted/events` woken with `io_failed` when another fibre
+closes its socket and another when one shuts it, and
+`runtime/events-signal-stops-server`, the same stopping as the fake's over a
+real listener and a signal the process sends itself (D485, D488). The
+wrapper's fixtures will pin the rest; prototype 5's V7, V10 and V14 record
+the pressure.
 
 ### D463 — The switch is a module beneath `core/fibre`
 
@@ -24193,8 +24197,9 @@ which gives one entry two meanings. Both were declined.
 **Pinned by** `negative/signals-provider-without-turns`, a provider of
 `fibre.scheduler` alone refused as a provider of `signal.signals`;
 `runtime/signals-fake-firmware` and `runtime/signals-fake-stop-server`,
-signals waited for over a provider of turns (D482). The event Io's signal
-fixtures will pin signalfd and kqueue.
+signals waited for over a provider of turns (D482); and
+`runtime/events-signal-stops-server`, signalfd and kqueue under
+`hosted/events` (D488).
 
 ### D478 — Which side of the split each hosted concept is on
 
@@ -24254,8 +24259,8 @@ also pass that mask and that ignore to every program it ran, since an exec
 keeps both: a child of a server that blocks SIGTERM could not be stopped.
 
 **Chosen:** `io.programs` keeps its one shape, and the providers that wait
-supply it, as they supply reading and writing: `hosted/blocking` in its
-`programs.ldn`, and the event provider later. `write_child`, `read_child`
+supply it, as they supply reading and writing: `hosted/blocking` and
+`hosted/events`, each in its `programs.ldn`. `write_child`, `read_child`
 and `wait` are the entries that wait; `spawn` and `close_input` do not.
 Starting a child stays in `hosted/system`, as the public routine
 `system.start(handle, path, arguments, environment, streams)`, which makes
@@ -24267,10 +24272,10 @@ for the provider to wait for, and `system.ended` turns the status it waited
 for into `io.ending`, keeping the signal in the handle's last-signal cell.
 `hosted/system` is no provider of `io.programs`. The blocking provider polls
 both output pipes and reads with its `read`, as before; the event provider
-will set the parent's ends non-blocking and wait on them as on any file, and
-wait for the end of a child through `pidfd_open` or a signalfd for SIGCHLD
-on Linux, and kqueue's `EVFILT_PROC` with `NOTE_EXIT`, which
-`platform/kqueue` names as `note_exit`, on Darwin and FreeBSD, before
+sets the parent's ends non-blocking and waits on them as on any file, and
+waits for the end of a child through `pidfd_open` on Linux (D487), and
+kqueue's `EVFILT_PROC` with `NOTE_EXIT`, which `platform/kqueue` names as
+`note_exit`, on Darwin and FreeBSD, before
 reaping it with a `wait` that does not block. This amends D476's list of the
 system's services and D478's placement of `programs`.
 
@@ -24465,3 +24470,144 @@ two turns and with the client first one; and
 `runtime/network-fake-turns-waits`, `network_over` taking no turn, two
 fibres waiting on each other timing out after one quiet round, and woken
 waiters failing `io_failed`.
+
+### D485 — The event provider is made over its caller's round and loop, and a wait is kept on its fibre's stack
+
+**The tour said** nothing, and D476 named the constructor `events.new(...)`
+and left its arguments open. D444 has a provider of `turns` run fibres on
+records the caller keeps, D464 gives the round of turns an idler for the
+wait when nobody can run, and the provider must allocate nothing.
+
+**Chosen:** `events.new(state, entries)` fills an `events.space` the caller
+declares `zeroed`, the round's state and the event loop's, and returns a
+handle `from state, entries`, where `entries` is the round's table, one more
+than the fibres that may be unfinished at once. It fails `mem.out_of_memory`
+for a table of fewer than two and `io_failed` when the system makes no
+queue. The handle runs its fibres on core/fibre/stacks' `round`, whose idler
+is the loop, and passes the round's entries on through their evidence, so
+it is a `fibre.turns`. An operation that waits fills a record on its own
+fibre's stack, links it into the loop's list and takes turns until the loop
+answers it: the fibre does not return from the call before then, so the
+list never holds a record whose frame has gone, and the provider needs no
+table of waits for the caller to size. The hosted/system handle beneath is
+the process's, `system.new()`, as `blocking.new()`'s is, so `last_errno`
+reads the process's cell. The queue is closed on exec and stays open until
+the process ends; there is no call that closes it.
+
+**The alternatives:** a table of waiting records the caller sizes, which is
+a second count to get right and a failure when it is full, for records
+whose lifetime is already the call's; the last-error cells in the space,
+over `system.over`, which a handle `from` the state cannot carry beside the
+round, since both are filled through `inout` from one state and the
+checker sees the second fill while the first handle views it; a round of
+the provider's own beside `stacks.round`, which duplicates the one the
+library carries; and a call that closes the queue, which nothing that ends
+with the process needs and a program could then call while a fibre waits.
+All were declined.
+
+**Pinned by** `runtime/events-tcp-exchange`, two fibres over one handle
+exchanging over a loopback connection with their steps interleaved;
+`runtime/events-sleep-answers-now`, prototype 5's two requests from one
+source answered `b` before `a`; `runtime/events-stack-past-limit-traps`, a
+task that waited in the loop trapping `stack_exhausted` (D471); and the
+driver's namespace case, which refuses `hosted/events` on Cortex-M0.
+
+### D486 — A wait is submitted and answered, and the loop sleeps only when every fibre waits
+
+**The tour said** nothing. The roadmap asks that the event provider's operations
+be completion-shaped, so that a completion interface can later implement
+the same Io, while readiness stays in `platform/posix`'s `poll` and the
+systems' own modules; D480 makes the loop's sleep its wait's time limit.
+
+**Chosen:** a waiting record names a descriptor and a direction, a child
+(kqueue's), a signal or a deadline on the monotonic clock, and the loop
+answers it `ready`, `expired` or `failed`; the operation then makes its call
+again. Submitting arms the descriptor once, `EPOLLONESHOT` for the union of
+the directions every record on it waits for and kqueue's `EV_ONESHOT` per
+filter, and after a report the loop arms it again for the records still
+waiting. The round calls the loop when every fibre has taken a turn since
+anything last started or ended. The loop then waits without a limit, until
+the earliest deadline, or not at all when a fibre took a turn of its own
+through `yield`, which is runnable work; with no record waiting and no such
+turn it returns at once. Closing a file, a socket or a child's pipe through
+the provider answers every record on its descriptor `failed` and removes it
+from epoll before the descriptor closes; shutting a socket's side answers
+that side's records. The provider's sockets and a child's pipes are
+non-blocking; a file it did not make, a standard stream or a file opened
+by path, is polled with no limit first and read or written once ready, so a
+regular file, always ready, is read at once, and the program's terminal is
+never made non-blocking behind its shell. A socket's limits are kept as the
+system's own time limits, which a non-blocking socket never waits on, and
+each wait reads them back, `platform/posix`'s `send_timeout` beside
+`receive_timeout`; a limit the system does not give back, as QEMU's user
+emulation does not, is none. A connect has no limit.
+
+**The alternatives:** level-triggered registrations, which report a
+descriptor whose waiter has gone on every wait until it is removed; one
+registration per waiting record, which epoll refuses for a descriptor
+watched twice; a table of limits per socket, which the provider has no
+storage for; setting every file the provider is handed non-blocking, which
+changes the open file the shell shares; and the loop sleeping whenever the
+round is quiet, which holds a fibre that only yields. All were declined.
+
+**Pinned by** `runtime/events-tcp-exchange`; `runtime/events-close-wakes-waiter`,
+a receive woken `io_failed` by a close and by a shutdown; and
+`runtime/events-child-wait`, a child's two pipes waited on together.
+
+### D487 — A child's end is a pidfd on Linux and kqueue's process filter elsewhere
+
+**The tour said** nothing. D479 lets the event provider wait for a child
+through `pidfd_open` or a signalfd for SIGCHLD on Linux and kqueue's
+`EVFILT_PROC` with `note_exit` on Darwin and FreeBSD, and reap it with a
+`wait` that no longer waits.
+
+**Chosen:** on Linux the provider opens a pidfd for the child, waits for it
+to be readable as for any descriptor, closes it and reaps the child with
+`posix.wait`; a kernel without `pidfd_open`, before 5.3, has the reap wait
+the thread instead. On Darwin and FreeBSD it adds a one-shot `EVFILT_PROC`
+filter for `note_exit`, and a child the queue refuses with ESRCH has ended
+already and is reaped at once. `spawn` starts the child through the system
+handle and sets the parent's pipe ends non-blocking; `read_child` reads the
+output when it has anything, its end included, then the errors, and when
+neither is ready waits for both and goes on with whichever the loop
+answers first.
+
+**The alternatives:** a signalfd for SIGCHLD, which takes a signal from its
+disposition for every child at once, shares its mask with the program's own
+`watch` and leaves the provider to find which child ended; and
+`waitpid` with `WNOHANG` after each round, which polls. Both were declined.
+
+**Pinned by** `runtime/events-child-wait`, a shell child whose output, its
+errors and its end are waited for by one fibre while another ticks on the
+clock and then writes the child the line it waits for.
+
+### D488 — The event provider reads every watched signal through one descriptor, and stopping reads what came
+
+**The tour said** nothing. D482 has `watch` take a signal from its default
+disposition, signalfd adding it to the blocked mask and kqueue ignoring it,
+and `stop_watching` give every watched signal back and wake every waiter.
+
+**Chosen:** on Linux one signalfd reads every watched signal, its mask
+growing with each `watch`, and the loop watches it from the first. On
+Darwin and FreeBSD each watched signal is ignored and reported by an
+`EVFILT_SIGNAL` filter, except SIGCHLD, whose default already ignores it:
+an ignored SIGCHLD reaps every child before `wait` could. Each signal is
+named to `posix.default_in_children` before it is taken, so no child keeps
+the block or the ignore. The loop keeps each arrival in order of arrival,
+two of one signal before a read being one, until a fibre reads it with
+`next_signal`, which waits as a receive does. `stop_watching` first reads
+what arrived, so that unblocking a signal that came while it was watched
+does not deliver it with its default, then closes the signalfd, unblocks
+or restores every watched signal, forgets the arrivals and fails every
+waiter `io_failed`; a later `next_signal` fails at once until `watch` is
+called again.
+
+**The alternatives:** a signalfd per signal, which costs a descriptor each
+for what one mask holds; ignoring SIGCHLD as every other signal, which
+breaks `io.wait`; and unblocking without reading first, which ends a
+server for the SIGTERM that asked it to stop. All were declined.
+
+**Pinned by** `runtime/events-signal-stops-server`, SIGTERM sent to the
+process itself waking a fibre in `next_signal` while another waits in
+`accept`, the listener closed and the accept failed `io_failed`, and a
+waiter for SIGHUP woken by `stop_watching`.

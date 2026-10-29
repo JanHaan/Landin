@@ -1,0 +1,189 @@
+--  What does not wait, handed to the hosted/system handle this provider
+--  is built over: the environment, directories, the rest of the file
+--  system and terminals, entropy and the wall clock.  Each entry is the
+--  system's, so a program over this provider meets the same behaviour,
+--  errno and all, as one over the system alone.  Running programs is
+--  programs.ldn's, which only starts a child through the system (D479).
+
+import core/io
+import core/text
+import core/time
+
+events_variable_count: (self: host) -> (count: usize) =
+    count = io.variable_count(services(self))
+end events_variable_count
+
+events_variable_at: (self: host, index: usize)
+                    -> (item: io.variable from self) ! io.no_variable =
+    item = try io.variable_at(services(self), index)
+end events_variable_at
+
+events_variable_named: (self: host, name: text.host_string)
+                       -> (value: text.host_string from self)
+                       ! io.no_variable =
+    value = try io.variable_named(services(self), name)
+end events_variable_named
+
+host is io.environment
+    (variable_count: events_variable_count,
+     variable_at: events_variable_at,
+     variable_named: events_variable_named)
+
+events_open_directory: (self: host, path: text.host_string,
+                        buffer: []mut u8)
+                       -> (opened: io.directory from buffer)
+                       ! io.not_found | io.no_access | io.io_failed =
+    opened = try io.open_directory(services(self), path, buffer)
+end events_open_directory
+
+events_read_entry: (self: host, inout opened: io.directory)
+                   -> (item: io.entry from opened) ! io.io_failed =
+    item = try io.read_entry(services(self), opened)
+end events_read_entry
+
+events_entry_size: (self: host, opened: io.directory,
+                    name: text.host_string)
+                   -> (size: u64)
+                   ! io.not_found | io.no_access | io.io_failed =
+    size = try io.entry_size(services(self), opened, name)
+end events_entry_size
+
+events_close_directory: (self: host, sink opened: io.directory)
+                        -> none ! io.io_failed =
+    try io.close_directory(services(self), opened)
+end events_close_directory
+
+events_make_directory: (self: host, path: text.host_string)
+                       -> none ! io.already_exists | io.not_found
+                               | io.no_access | io.io_failed =
+    try io.make_directory(services(self), path)
+end events_make_directory
+
+events_remove_file: (self: host, path: text.host_string)
+                    -> none ! io.not_found | io.no_access | io.io_failed =
+    try io.remove_file(services(self), path)
+end events_remove_file
+
+events_remove_directory: (self: host, path: text.host_string)
+                         -> none
+                         ! io.not_found | io.no_access | io.io_failed =
+    try io.remove_directory(services(self), path)
+end events_remove_directory
+
+host is io.directories
+    (open_directory: events_open_directory,
+     read_entry: events_read_entry, entry_size: events_entry_size,
+     close_directory: events_close_directory,
+     make_directory: events_make_directory,
+     remove_file: events_remove_file,
+     remove_directory: events_remove_directory)
+
+events_open_file: (self: host, path: text.host_string,
+                   options: io.open_options)
+                  -> (opened: io.file)
+                  ! io.already_exists | io.not_found | io.no_access
+                  | io.io_failed =
+    opened = try io.open_file(services(self), path, options)
+end events_open_file
+
+events_rename: (self: host, old: text.host_string, new: text.host_string)
+               -> none ! io.not_found | io.no_access | io.io_failed =
+    try io.rename(services(self), old, new)
+end events_rename
+
+events_status_of: (self: host, path: text.host_string,
+                   links: io.link_handling)
+                  -> (found: io.status)
+                  ! io.not_found | io.no_access | io.io_failed =
+    found = try io.status_of(services(self), path, links)
+end events_status_of
+
+events_status_of_file: (self: host, opened: io.file)
+                       -> (found: io.status) ! io.io_failed =
+    found = try io.status_of_file(services(self), opened)
+end events_status_of_file
+
+events_set_read_only: (self: host, path: text.host_string,
+                       read_only: bool)
+                      -> none ! io.not_found | io.no_access | io.io_failed =
+    try io.set_read_only(services(self), path, read_only)
+end events_set_read_only
+
+events_synchronize: (self: host, opened: io.file,
+                     writing: io.synchronizing) -> none ! io.io_failed =
+    try io.synchronize(services(self), opened, writing)
+end events_synchronize
+
+events_truncate: (self: host, opened: io.file, size: u64)
+                 -> none ! io.io_failed =
+    try io.truncate(services(self), opened, size)
+end events_truncate
+
+--  A regular file's data is read and written at an offset at once on
+--  every hosted system, which no readiness says otherwise of, so these are
+--  the system's too.
+events_read_at: (self: host, opened: io.file, offset: u64,
+                 into: []mut u8) -> (count: usize) ! io.io_failed =
+    count = try io.read_at(services(self), opened, offset, into)
+end events_read_at
+
+events_write_at: (self: host, opened: io.file, offset: u64, bytes: []u8)
+                 -> none ! io.io_failed =
+    try io.write_at(services(self), opened, offset, bytes)
+end events_write_at
+
+--  core/io's own `make_temporary` erases a concrete source of names, and
+--  this one has an erased source already, which it hands on as it is.
+temporary_over: (provider: type is io.file_system, services: provider,
+                 directory: text.host_string, names: any io.entropy,
+                 into: []mut u8)
+                -> (made: io.temporary from into)
+                ! io.not_found | io.no_access | io.io_failed =
+    made = try provider.make_temporary(services, directory, names, into)
+end temporary_over
+
+events_make_temporary: (self: host, directory: text.host_string,
+                        names: any io.entropy, into: []mut u8)
+                       -> (made: io.temporary from into)
+                       ! io.not_found | io.no_access | io.io_failed =
+    made = try temporary_over(services(self), directory, names, into)
+end events_make_temporary
+
+events_current_directory: (self: host, into: []mut u8)
+                          -> (path: text.host_string from into)
+                          ! io.io_failed =
+    path = try io.current_directory(services(self), into)
+end events_current_directory
+
+host is io.file_system
+    (open_file: events_open_file, rename: events_rename,
+     status_of: events_status_of, status_of_file: events_status_of_file,
+     set_read_only: events_set_read_only,
+     synchronize: events_synchronize, truncate: events_truncate,
+     read_at: events_read_at, write_at: events_write_at,
+     make_temporary: events_make_temporary,
+     current_directory: events_current_directory)
+
+events_is_terminal: (self: host, stream: io.file) -> (yes: bool) =
+    yes = io.is_terminal(services(self), stream)
+end events_is_terminal
+
+events_window_size: (self: host, stream: io.file) -> (size: io.window)
+                    ! io.not_a_terminal | io.io_failed =
+    size = try io.window_size(services(self), stream)
+end events_window_size
+
+host is io.terminals
+    (is_terminal: events_is_terminal, window_size: events_window_size)
+
+events_fill_random: (self: host, into: []mut u8) -> none ! io.io_failed =
+    try io.fill_random(services(self), into)
+end events_fill_random
+
+host is io.entropy (fill_random: events_fill_random)
+
+events_wall_now: (self: host) -> (at: time.wall_time) =
+    at = time.wall_now(services(self))
+end events_wall_now
+
+host is time.wall_clock (wall_now: events_wall_now)

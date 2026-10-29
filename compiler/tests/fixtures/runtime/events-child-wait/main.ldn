@@ -1,0 +1,123 @@
+--  D479, D487: a child process under hosted/events.  The shell
+--  writes a line, then waits to read one from its input, writes it back
+--  to its errors and exits 3.  One fibre reads the child's output and
+--  errors and then waits for its end; the other ticks on the provider's
+--  clock three times and only then writes the child its line.  The
+--  reader's wait for the child's errors cannot be answered before the
+--  ticker has written, so the program ends only if waiting on the
+--  child's pipes and its end let the other fibre run.
+import core/cmp
+import core/failure
+import core/fibre
+import core/io
+import core/text
+import core/time
+import hosted/events
+
+script: []u8 = "echo out; read line; echo \"got $line\" >&2; exit 3"
+
+shared: type = struct
+    child: io.child
+    output: [32]u8
+    taken: usize
+    errors: [32]u8
+    complained: usize
+    ticks: usize
+    ticks_at_errors: usize
+    code: i32
+end shared
+
+reading: type = struct
+    host: events.host
+    shared: ptr mut shared
+end reading
+
+--  Read everything the child writes, then wait for its end.
+read_all: (inout state: reading) -> none ! failure.reason =
+    seen: ptr mut shared = state.shared
+    mut buffer: [16]u8 = zeroed
+    loop do
+        got: io.child_read = try io.read_child(state.host, seen.val.child,
+                                               buffer)
+        break when got.finished
+        if got.stream == io.child_output then
+            for at in usize(0)..<got.count do
+                seen.val.output[seen.val.taken] = buffer[at]
+                inc seen.val.taken
+            end for
+        else
+            seen.val.ticks_at_errors = seen.val.ticks
+            for at in usize(0)..<got.count do
+                seen.val.errors[seen.val.complained] = buffer[at]
+                inc seen.val.complained
+            end for
+        end if
+    end loop
+    done: io.child = seen.val.child
+    ended: io.ending = try io.wait(state.host, done)
+    match ended.how
+        io.exited(status): seen.val.code = status
+        io.signalled: seen.val.code = -1
+    end match
+end read_all
+
+ticking: type = struct
+    host: events.host
+    shared: ptr mut shared
+end ticking
+
+--  Tick three times, then give the child its line and close its input.
+tick: (inout state: ticking) -> none ! failure.reason =
+    seen: ptr mut shared = state.shared
+    for round in usize(0)..<3 do
+        time.sleep(state.host, time.milliseconds(10))
+        inc seen.val.ticks
+        _ = round
+    end for
+    try io.write_child(state.host, seen.val.child, "hi\n")
+    try io.close_input(state.host, seen.val.child)
+end tick
+
+mut backing: [2 * 32768]u8 = zeroed
+
+run: (host: events.host, inout seen: shared) -> none ! failure.reason =
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    nothing: []io.variable = []
+    seen.child = try io.spawn(host, text.host_over("/bin/sh"), arguments,
+                              nothing,
+                              (input: io.piped, output: io.piped,
+                               errors: io.piped))
+    mut tasks := try fibre.turns_over(any(addr host), backing, 2)
+    defer fibre.join(tasks) else none
+    reader: reading = (host: host, shared: addr seen)
+    try fibre.admit(tasks, read_all, reader)
+    ticker: ticking = (host: host, shared: addr seen)
+    try fibre.admit(tasks, tick, ticker)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    mut seen: shared = zeroed
+    run(host, seen) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when cmp.compare(seen.output[0..<seen.taken], "out\n")
+      <> cmp.equal
+    code = 4
+    return when cmp.compare(seen.errors[0..<seen.complained], "got hi\n")
+      <> cmp.equal
+    code = 5
+    return when seen.ticks_at_errors <> 3 or seen.code <> 3
+    code = 42
+end main

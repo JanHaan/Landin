@@ -1,0 +1,72 @@
+--  D480, D485: prototype 5's two requests in miniature over
+--  hosted/events.  One task sleeps on the provider's clock and the other
+--  answers at once, from one source written against `any time.clock` and
+--  `any fibre.scheduler`.  The sleeping fibre waits in the loop with a
+--  deadline, so `b` is answered while `a` waits, and the sleep lasted no
+--  less than it asked.
+import core/failure
+import core/fibre
+import core/io
+import core/time
+import hosted/events
+
+answers: type = struct
+    order: [2]u8
+    count: usize
+end answers
+
+asking: type = struct
+    clock: any time.clock
+    wait: u64
+    tag: u8
+    heard: ptr mut answers
+end asking
+
+--  Nothing in it knows it runs on a fibre.
+ask: (inout self: asking) -> none ! failure.reason =
+    if self.wait > 0 then
+        self.clock.sleep(time.milliseconds(self.wait))
+    end if
+    self.heard.val.order[self.heard.val.count] = self.tag
+    self.heard.val.count += 1
+end ask
+
+ask_both: (runs: any fibre.scheduler, clock: any time.clock,
+           inout heard: answers) -> none ! failure.reason =
+    mut stacks: [2 * 16384]u8 = zeroed
+    mut asks := try fibre.group_over(runs, stacks, 2)
+    defer fibre.join(asks) else none
+    a: asking = (clock: clock, wait: 20, tag: u8('a'), heard: addr heard)
+    try fibre.admit(asks, ask, a)
+    b: asking = (clock: clock, wait: 0, tag: u8('b'), heard: addr heard)
+    try fibre.admit(asks, ask, b)
+    try fibre.join(asks)
+end ask_both
+
+run: (host: events.host) -> none ! failure.reason =
+    before: time.instant = time.now(host)
+    mut heard: answers = zeroed
+    try ask_both(any(addr host), any(addr host), heard)
+    after: time.instant = time.now(host)
+    try io.write(host, io.out(host), "events: ")
+    try io.write(host, io.out(host), heard.order[0..<heard.count])
+    try io.write(host, io.out(host), "\n")
+    fail io.io_failed
+        when u64(after) - u64(before) < u64(time.milliseconds(20))
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main

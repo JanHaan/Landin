@@ -1,0 +1,44 @@
+--  D471 under hosted/events: a task that has waited in the loop once,
+--  and so runs on as a fibre switched away from and back to, recurses
+--  past its stack and traps `stack_exhausted` in the prologue of the
+--  routine whose frame would not fit, at that routine's site.
+import core/failure
+import core/fibre
+import core/time
+import hosted/events
+
+deep: type = struct
+    host: events.host
+end deep
+
+--  Goes on without end, and never switches.
+descend: (depth: u32) -> (reached: u32) =
+    reached = descend(depth + 1) + 1
+end descend
+
+--  One wait in the loop first.
+dive: (inout state: deep) -> none ! failure.reason =
+    time.sleep(state.host, time.milliseconds(1))
+    _ = descend(0)
+end dive
+
+run: (host: events.host) -> none ! failure.reason =
+    mut backing: [2 * 16384]u8 = zeroed
+    mut tasks := try fibre.turns_over(any(addr host), backing, 2)
+    defer fibre.join(tasks) else none
+    task: deep = (host: host)
+    try fibre.admit(tasks, dive, task)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    run(host) else none
+    code = 0
+end main

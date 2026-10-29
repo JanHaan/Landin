@@ -1,0 +1,9 @@
+class: runtime
+summary: D471 under hosted/events a task that has waited once in the provider's loop recurses past its stack and traps stack_exhausted in the prologue of the routine whose frame would not fit, at that routine's site
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+traps: yes
+trap_report: main.ldn:15:1: trap: stack_exhausted
+constructs: 1380, 1620, 1670, 1675, 1910, 1995
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

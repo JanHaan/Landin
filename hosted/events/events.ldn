@@ -1,0 +1,883 @@
+--  The hosted provider whose waiting operations switch fibres over the
+--  system's event mechanism (D476), `host`: epoll and signalfd on Linux,
+--  kqueue on Darwin and FreeBSD (D481).  It runs its fibres on a round of
+--  turns, core/fibre/stacks' `round`, whose wait when nobody can run is
+--  this module's: a wait for events whose time limit is the earliest
+--  deadline any fibre waits for (D480).  Reading and writing are here,
+--  running programs in programs.ldn, core/net's network in network.ldn,
+--  the monotonic clock and its sleep in time.ldn, core/io/signal's
+--  signals in signals.ldn, and what does not wait is the hosted/system
+--  handle's, in delegated.ldn, as hosted/blocking hands it.
+--
+--  Every operation that waits is completion-shaped (D486): it fills a
+--  `waiting` record on its own stack, submits it, and its fibre takes
+--  turns until the loop answers it, ready, expired or failed; then it
+--  makes the call again.  Readiness is how the loop answers today; a
+--  completion interface would answer with the call's own result, behind
+--  the same entries.  Nothing here allocates: the round's records and
+--  table, the loop's state and the last-error cells are the caller's.
+--  Import this module only at a hosted authority root.
+
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/mem
+import core/text
+import hosted/system
+import platform/kqueue
+import platform/libc
+import platform/linux
+import platform/posix
+
+--  What the loop answered a waiting record: nothing yet, its descriptor,
+--  child or signal is ready, its deadline passed, or what it waited on
+--  was shut or closed through the provider, or its signals stopped.
+pending: u8 = 0
+ready: u8 = 1
+expired: u8 = 2
+failed: u8 = 3
+
+--  One operation waiting, kept on the stack of the fibre that waits, which
+--  does not return from its call until the loop has answered it: what it
+--  waits for, a descriptor in a direction, a child process (kqueue's), a
+--  signal, a deadline on the monotonic clock in nanoseconds, or several,
+--  and the answer.  `next` links the loop's list of them by address.
+waiting: type = struct
+    next: usize
+    descriptor: i32
+    output: bool
+    child: i32
+    signalled: bool
+    deadline: u64
+    answer: u8
+end waiting
+
+--  A record waiting for `descriptor` in one direction until `deadline`,
+--  zero for none.
+on_descriptor: (descriptor: i32, output: bool, deadline: u64)
+               -> (entry: waiting) =
+    entry = (next: 0, descriptor: descriptor, output: output, child: 0,
+             signalled: false, deadline: deadline, answer: pending)
+end on_descriptor
+
+--  How many reports one wait takes at most; the rest wait for the next.
+report_count: usize = 16
+
+--  How many signals `signal.kind` names.
+kinds: usize = 6
+
+--  The loop: its queue, the list of waiting records, whether a fibre took
+--  a turn of its own since the last wait, and the signals: Linux's
+--  signalfd, the watched numbers as a mask, whether watching stopped, and
+--  the arrivals not yet read, by `signal.kind`'s index, in arrival order.
+loop_state: type = struct
+    queue: i32
+    first: usize
+    turned: bool
+    reader: i32
+    watched: u64
+    stopped: bool
+    arrived: [6]u8
+    queued: usize
+    reports: [16]report
+end loop_state
+
+--  The round's idler, the wait for events, which keeps the address of
+--  the loop's state beside it in the caller's `space`.
+idle_value: type = struct
+    address: usize
+end idle_value
+
+--- Caller-owned state of an event provider: the round of turns its
+--- fibres take, and its event loop. Declare it `zeroed` and give it to
+--- `new`, which fills it; it must outlive the handle.
+public space: type = struct
+    round: stacks.round_space
+    events: loop_state
+    idling: idle_value
+end space
+
+events_value: type = struct
+    state: ptr mut loop_state
+    round: stacks.round
+end events_value
+
+--- The hosted provider whose waiting operations switch fibres: `io.world`,
+--- `io.programs`, `net.network`, the monotonic `time.clock`,
+--- `fibre.scheduler` and `fibre.turns`, and `signal.signals`, each of whose
+--- waits lets the provider's other fibres run, and every concept
+--- `hosted/system` supplies, which it hands the system's handle it is
+--- built over: `io.directories`, `io.environment`, `io.file_system`,
+--- `io.terminals`, `io.entropy` and `time.wall_clock`. A handle: copies
+--- share one round and one loop. Its files are the system's, as
+--- `hosted/system`'s `descriptor_of`, `file_of` and `socket_of` give
+--- them. Its entries that may switch are `docs/library.md`'s list (D446).
+public host: type = events_value
+
+--- Return errno captured for the terminal failing provider call, as
+--- `hosted/system`'s `last_errno` does: the cell is the process's, which
+--- this provider's own calls report through too.
+public last_errno: (handle: host) -> (number: i32) =
+    number = system.last_errno(services(handle))
+end last_errno
+
+--- Return the number of the signal that ended the child this handle last
+--- saw end through `io.wait`, as `hosted/system`'s `last_signal` does.
+public last_signal: (handle: host) -> (number: i32) =
+    number = system.last_signal(services(handle))
+end last_signal
+
+--- Fill `state` and return a handle to the event provider over it and
+--- over `entries`: a round of turns over that table of the fibres that
+--- may be unfinished at once, one more than a group's count, an event
+--- queue, closed on exec, and the process's `hosted/system` handle, whose
+--- last-error and last-signal cells it reports through. Fails
+--- `mem.out_of_memory` when `entries` holds fewer than two,
+--- and `io.io_failed` when the system makes no queue, with its errno in
+--- the process's cell. Calling this before the hosted entry has
+--- established the process's arguments traps, as `hosted/system`'s `new`
+--- does. The queue stays open until the process ends.
+public new: (inout state: space, entries: []mut usize)
+            -> (handle: host from state, entries)
+            ! mem.out_of_memory | io.io_failed =
+    system.clear_errno(system.new())
+    state.events.queue = -1
+    state.events.first = 0
+    state.events.turned = false
+    state.events.reader = -1
+    state.events.watched = 0
+    state.events.stopped = false
+    state.events.queued = 0
+    state.idling = (address: usize(addr state.events))
+    round: stacks.round =
+        try stacks.round_over(state.round, entries, any(addr state.idling))
+    state.events.queue = made_queue() else (problem)
+        system.record_errno(system.new(), problem)
+        fail io.io_failed
+    end
+    handle = (state: addr state.events, round: round)
+end new
+
+--  The hosted/system handle beneath: the process's, which borrows
+--  nothing, so a handle `from` its caller's state carries no storage of
+--  the system's.
+services: (self: host) -> (handle: system.host) =
+    _ = self
+    handle = system.new()
+end services
+
+--  Keep a failure's errno in the system handle's cell.
+record: (self: host, problem: posix.errno) -> none =
+    system.record_errno(services(self), problem)
+end record
+
+--  Clear the cell before a call asks the system.
+cleared: (self: host) -> none =
+    system.clear_errno(services(self))
+end cleared
+
+--  The waiting record at `address`.
+entry_at: (address: usize) -> (entry: ptr mut waiting) =
+    --  [0810]: a list entry is the address of a record on the stack of a
+    --  fibre that waits in it.
+    entry = ptr(address)
+end entry_at
+
+--  Put `entry` on the loop's list.
+link: (state: ptr mut loop_state, entry: ptr mut waiting) -> none =
+    entry.val.next = state.val.first
+    state.val.first = usize(entry)
+end link
+
+--  Take `entry` off the loop's list, where it may not be.
+unlink: (state: ptr mut loop_state, entry: ptr mut waiting) -> none =
+    sought: usize = usize(entry)
+    if state.val.first == sought then
+        state.val.first = entry.val.next
+        return
+    end if
+    mut at: usize = state.val.first
+    while at <> 0 do
+        here: ptr mut waiting = entry_at(at)
+        if here.val.next == sought then
+            here.val.next = entry.val.next
+            return
+        end if
+        at = here.val.next
+    end while
+end unlink
+
+--  Answer `entry`, taking it off the list; its fibre sees the answer at
+--  its next turn.
+settle: (state: ptr mut loop_state, entry: ptr mut waiting, answer: u8)
+        -> none =
+    unlink(state, entry)
+    entry.val.answer = answer
+end settle
+
+--  Answer every record waiting on `descriptor` for input when `input`,
+--  and for output when `output`.
+answer_descriptor: (state: ptr mut loop_state, descriptor: i32, input: bool,
+                    output: bool, answer: u8) -> none =
+    mut at: usize = state.val.first
+    while at <> 0 do
+        here: ptr mut waiting = entry_at(at)
+        at = here.val.next
+        if here.val.descriptor == descriptor
+          and ((here.val.output and output)
+               or (not here.val.output and input)) then
+            settle(state, here, answer)
+        end if
+    end while
+end answer_descriptor
+
+--  Whether any record waits on `descriptor` for input, and for output.
+wanted_on: (state: ptr mut loop_state, descriptor: i32)
+           -> (input: bool, output: bool) =
+    input = false
+    output = false
+    mut at: usize = state.val.first
+    while at <> 0 do
+        here: ptr mut waiting = entry_at(at)
+        if here.val.descriptor == descriptor then
+            if here.val.output then output = true else input = true end if
+        end if
+        at = here.val.next
+    end while
+end wanted_on
+
+--  Answer every record waiting for a signal.
+answer_signals: (state: ptr mut loop_state, answer: u8) -> none =
+    mut at: usize = state.val.first
+    while at <> 0 do
+        here: ptr mut waiting = entry_at(at)
+        at = here.val.next
+        if here.val.signalled then settle(state, here, answer) end if
+    end while
+end answer_signals
+
+--  Answer every record waiting for the child `child` to end.
+answer_child: (state: ptr mut loop_state, child: i32) -> none =
+    mut at: usize = state.val.first
+    while at <> 0 do
+        here: ptr mut waiting = entry_at(at)
+        at = here.val.next
+        if child <> 0 and here.val.child == child then
+            settle(state, here, ready)
+        end if
+    end while
+end answer_child
+
+--  Answer every record whose deadline the clock has reached.
+answer_expired: (state: ptr mut loop_state, now: u64) -> none =
+    mut at: usize = state.val.first
+    while at <> 0 do
+        here: ptr mut waiting = entry_at(at)
+        at = here.val.next
+        if here.val.deadline <> 0 and here.val.deadline <= now then
+            settle(state, here, expired)
+        end if
+    end while
+end answer_expired
+
+--  The earliest deadline any record waits for, zero for none.
+earliest: (state: ptr mut loop_state) -> (deadline: u64) =
+    deadline = 0
+    mut at: usize = state.val.first
+    while at <> 0 do
+        here: ptr mut waiting = entry_at(at)
+        if here.val.deadline <> 0
+          and (deadline == 0 or here.val.deadline < deadline) then
+            deadline = here.val.deadline
+        end if
+        at = here.val.next
+    end while
+end earliest
+
+--  The longest a wait sleeps at once, a day, in milliseconds; the loop
+--  looks at its deadlines again after it.
+longest_wait: u64 = 86400000
+
+--  The wait for events, when every fibre of the round has taken a turn
+--  since anything last started or ended: with no limit when every fibre
+--  waits on the loop and none has a deadline, until the earliest
+--  deadline, a part of a millisecond counting as a whole one, and not at
+--  all when a fibre took a turn of its own, which is runnable work.  It
+--  answers what the reports say is ready, then every record whose
+--  deadline has passed.  With nothing waiting it returns at once.
+loop_idle: (self: idle_value) -> none =
+    --  [0810]: the address of the loop's state `new` kept.
+    state: ptr mut loop_state = ptr(self.address)
+    turned: bool = state.val.turned
+    state.val.turned = false
+    return when state.val.first == 0 and not turned
+    mut limit: i32 = -1
+    if turned then
+        limit = 0
+    else
+        soonest: u64 = earliest(state)
+        if soonest <> 0 then
+            now: u64 = reading()
+            if soonest <= now then
+                limit = 0
+            else
+                mut left: u64 = (soonest - now + 999999) / 1000000
+                if left > longest_wait then left = longest_wait end if
+                limit = i32(left)
+            end if
+        end if
+    end if
+    count: usize = wait_events(state, limit)
+    dispatch(state, count)
+    answer_expired(state, reading())
+end loop_idle
+
+idle_value is stacks.idler (idle: loop_idle)
+
+--  Submit `entry` and take turns until the loop answers it: the answer,
+--  or the errno of a submission the system refused, with nothing left
+--  waiting.  The record is the caller's local, and the caller is this
+--  fibre, which does not return from here until the record is off the
+--  list.
+park: (self: host, entry: ptr mut waiting) -> (answer: u8) ! posix.errno =
+    state: ptr mut loop_state = self.state
+    entry.val.answer = pending
+    link(state, entry)
+    arm(state, entry) else (problem)
+        unlink(state, entry)
+        fail problem
+    end
+    while entry.val.answer == pending do
+        turn(self.round)
+    end while
+    answer = entry.val.answer
+end park
+
+--  Submit two records and take turns until the loop answers either; the
+--  other is withdrawn.  The answer is the first's when it was answered,
+--  else the second's.
+park_either: (self: host, first: ptr mut waiting, second: ptr mut waiting)
+             -> (answer: u8) ! posix.errno =
+    state: ptr mut loop_state = self.state
+    first.val.answer = pending
+    second.val.answer = pending
+    link(state, first)
+    arm(state, first) else (problem)
+        unlink(state, first)
+        fail problem
+    end
+    link(state, second)
+    arm(state, second) else (problem)
+        unlink(state, first)
+        unlink(state, second)
+        fail problem
+    end
+    while first.val.answer == pending and second.val.answer == pending do
+        turn(self.round)
+    end while
+    unlink(state, first)
+    unlink(state, second)
+    answer = if first.val.answer <> pending then first.val.answer
+             else second.val.answer end if
+end park_either
+
+--  Wake every fibre waiting on `descriptor`, failing its call, and stop
+--  watching it: the descriptor is about to be closed through the
+--  provider (D449).
+forget: (self: host, descriptor: posix.descriptor) -> none =
+    answer_descriptor(self.state, i32(descriptor), true, true, failed)
+    withdraw(self.state, i32(descriptor))
+end forget
+
+--  Whether `descriptor` is ready in the direction asked now, without
+--  waiting: a regular file always is.
+ready_now: (descriptor: posix.descriptor, output: bool) -> (yes: bool) =
+    asked: posix.poll_events = if output then posix.poll_output
+                               else posix.poll_input end if
+    mut entries: [1]posix.poll_entry = [posix.watch(descriptor, asked)]
+    found: usize = posix.poll(entries[0..<1], 0) else (problem)
+        --  A descriptor poll refuses is left to the call to fail on.
+        _ = problem
+        yes = true
+        return
+    end
+    yes = found > 0
+end ready_now
+
+--  Wait for `descriptor` in one direction until `deadline`, zero for
+--  none: the loop's answer.
+await: (self: host, descriptor: posix.descriptor, output: bool,
+        deadline: u64) -> (answer: u8) ! posix.errno =
+    mut entry: waiting = on_descriptor(i32(descriptor), output, deadline)
+    answer = try park(self, addr entry)
+end await
+
+--  The descriptor ready in the direction asked, waiting for it as a
+--  fibre does: failed when it was shut or closed through the provider.
+until_ready: (self: host, descriptor: posix.descriptor, output: bool)
+             -> none ! io.io_failed =
+    return when ready_now(descriptor, output)
+    answer: u8 = await(self, descriptor, output, 0) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+    fail io.io_failed when answer == failed
+end until_ready
+
+--  Write some of `bytes` to `opened`: a send on a socket, a write
+--  otherwise.
+put_some: (opened: io.file, bytes: []u8) -> (count: usize) ! posix.errno =
+    if system.is_socket(opened) then
+        count = try posix.send(system.descriptor_of(opened), bytes)
+    else
+        count = try posix.write(system.descriptor_of(opened), bytes)
+    end if
+end put_some
+
+--  Read into `into` from `opened`, waiting for it to be ready as a fibre
+--  does; a regular file is always ready, and is read at once.
+events_read: (self: host, opened: io.file, into: []mut u8)
+             -> (count: usize) ! io.io_failed =
+    cleared(self)
+    count = 0
+    return when lenof into == 0
+    descriptor: posix.descriptor = system.descriptor_of(opened)
+    loop do
+        try until_ready(self, descriptor, false)
+        got: usize = posix.read(descriptor, into) else (problem)
+            --  Nothing was read: a signal came first, or another fibre
+            --  read what was ready.
+            continue when problem == posix.eintr or problem == posix.eagain
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when got > lenof into
+        count = got
+        return
+    end loop
+end events_read
+
+--  Write some of `bytes` once `opened` has room, waiting for it as a fibre
+--  does: a positive count no greater than the slice's.
+written_some: (self: host, opened: io.file, bytes: []u8)
+              -> (count: usize) ! io.io_failed =
+    descriptor: posix.descriptor = system.descriptor_of(opened)
+    loop do
+        try until_ready(self, descriptor, true)
+        accepted: usize = put_some(opened, bytes) else (problem)
+            continue when problem == posix.eintr or problem == posix.eagain
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when accepted == 0 or accepted > lenof bytes
+        count = accepted
+        return
+    end loop
+end written_some
+
+write_all: (self: host, opened: io.file, bytes: []u8)
+           -> none ! io.io_failed =
+    mut written: usize = 0
+    while written < lenof bytes do
+        written += try written_some(self, opened,
+                                    bytes[written..<lenof bytes])
+    end while
+end write_all
+
+events_write: (self: host, opened: io.file, bytes: []u8)
+              -> none ! io.io_failed =
+    cleared(self)
+    return when lenof bytes == 0
+    try write_all(self, opened, bytes)
+end events_write
+
+events_write_some: (self: host, opened: io.file, bytes: []u8)
+                   -> (count: usize) ! io.io_failed =
+    cleared(self)
+    if lenof bytes == 0 then
+        count = 0
+        return
+    end if
+    mut requested: usize = lenof bytes
+    if requested > 65536 then requested = 65536 end if
+    count = try written_some(self, opened, bytes[0..<requested])
+end events_write_some
+
+--  What does not wait is the system's: its files, streams and arguments.
+--  Closing a file wakes every fibre waiting on it first (D449).
+events_open_read: (self: host, path: text.host_string)
+                  -> (opened: io.file)
+                  ! io.not_found | io.no_access | io.io_failed =
+    opened = try io.open_read(services(self), path)
+end events_open_read
+
+events_open_write: (self: host, path: text.host_string)
+                   -> (opened: io.file)
+                   ! io.not_found | io.no_access | io.io_failed =
+    opened = try io.open_write(services(self), path)
+end events_open_write
+
+events_same_file: (self: host, left: text.host_string,
+                   right: text.host_string)
+                  -> (same: bool) ! io.io_failed =
+    same = try io.same_file(services(self), left, right)
+end events_same_file
+
+events_close: (self: host, sink opened: io.file) -> none ! io.io_failed =
+    forget(self, system.descriptor_of(opened))
+    try io.close(services(self), opened)
+end events_close
+
+events_input: (self: host) -> (stream: io.file) =
+    stream = io.input(services(self))
+end events_input
+
+events_out: (self: host) -> (stream: io.file) =
+    stream = io.out(services(self))
+end events_out
+
+events_err: (self: host) -> (stream: io.file) =
+    stream = io.err(services(self))
+end events_err
+
+events_argument_count: (self: host) -> (count: usize) =
+    count = io.argument_count(services(self))
+end events_argument_count
+
+events_argument: (self: host, index: usize)
+                 -> (value: text.host_string from self) ! io.no_argument =
+    value = try io.argument_at(services(self), index)
+end events_argument
+
+host is io.reader (read: events_read)
+host is io.writer (write: events_write, write_some: events_write_some)
+host is io.files
+    (open_read: events_open_read, open_write: events_open_write,
+     same_file: events_same_file, close: events_close)
+host is io.process
+    (input: events_input, out: events_out, err: events_err,
+     argument_count: events_argument_count, argument: events_argument)
+host is io.world ()
+
+--  The round's entries, with the loop told when a fibre takes a turn of
+--  its own, which keeps the next wait for events from sleeping.
+--  The round's own entries, through its evidence: a round's
+--  representation is core/fibre/stacks'.
+turn: (provider: type is fibre.turns, runs: provider) -> none =
+    provider.yield(runs)
+end turn
+
+started: (provider: type is fibre.turns, runs: provider,
+          escaping record: ptr mut fibre.space, escaping stack: []mut u8,
+          escaping work: any fibre.task) -> none ! mem.out_of_memory =
+    try provider.start(runs, record, stack, work)
+end started
+
+ended: (provider: type is fibre.turns, runs: provider, record: fibre.space)
+       -> (yes: bool) =
+    yes = provider.finished(runs, record)
+end ended
+
+waited_for: (provider: type is fibre.turns, runs: provider) -> none =
+    provider.wait(runs)
+end waited_for
+
+events_start: (self: host, escaping record: ptr mut fibre.space,
+               escaping stack: []mut u8, escaping work: any fibre.task)
+              -> none ! mem.out_of_memory =
+    try started(self.round, record, stack, work)
+end events_start
+
+events_finished: (self: host, record: fibre.space) -> (yes: bool) =
+    yes = ended(self.round, record)
+end events_finished
+
+events_wait: (self: host) -> none =
+    waited_for(self.round)
+end events_wait
+
+events_yield: (self: host) -> none =
+    self.state.val.turned = true
+    turn(self.round)
+end events_yield
+
+host is fibre.scheduler (start: events_start, finished: events_finished,
+                         wait: events_wait)
+host is fibre.turns (yield: events_yield)
+
+--  Each system's event mechanism beneath the loop: epoll and a signalfd
+--  on Linux, kqueue on Darwin and FreeBSD.  Each supplies the record a
+--  wait reports, the queue, arming a waiting record, withdrawing a
+--  descriptor about to close, the wait and its dispatch, and the signal
+--  numbers by `signal.kind`'s order.
+fixed if compiler.os == linux then
+    report: type = linux.epoll_record
+
+    --  SIGINT, SIGTERM, SIGHUP, SIGCHLD, SIGUSR1 and SIGUSR2, as Linux
+    --  numbers them on every architecture.
+    signal_numbers: [6]i32 = [2, 15, 1, 17, 10, 12]
+
+    made_queue: () -> (queue: i32) ! posix.errno =
+        queue = linux.epoll_create1(linux.epoll_cloexec)
+        fail posix.errno_of(-queue) when queue < 0
+    end made_queue
+
+    --  Watch a record's descriptor for what every record waiting on it
+    --  wants, once: a report disarms it until it is armed again.  A
+    --  record waiting only for a signal or a deadline arms nothing; the
+    --  signalfd is watched for as long as signals are.
+    arm: (state: ptr mut loop_state, entry: ptr mut waiting)
+         -> none ! posix.errno =
+        return when entry.val.descriptor < 0
+        try armed(state, entry.val.descriptor)
+    end arm
+
+    armed: (state: ptr mut loop_state, descriptor: i32)
+           -> none ! posix.errno =
+        (input, output) := wanted_on(state, descriptor)
+        return when not input and not output
+        mut asked: linux.epoll_record = zeroed
+        asked.events = linux.epolloneshot
+        if input then asked.events = asked.events | linux.epollin end if
+        if output then asked.events = asked.events | linux.epollout end if
+        asked.data = u64(u32(descriptor))
+        mut result: i32 = linux.epoll_ctl(state.val.queue,
+                                          linux.epoll_ctl_mod, descriptor,
+                                          addr asked)
+        if result == -2 then
+            result = linux.epoll_ctl(state.val.queue, linux.epoll_ctl_add,
+                                     descriptor, addr asked)
+        end if
+        fail posix.errno_of(-result) when result < 0
+    end armed
+
+    withdraw: (state: ptr mut loop_state, descriptor: i32) -> none =
+        mut unused: linux.epoll_record = zeroed
+        _ = linux.epoll_ctl(state.val.queue, linux.epoll_ctl_del, descriptor,
+                            addr unused)
+    end withdraw
+
+    wait_events: (state: ptr mut loop_state, milliseconds: i32)
+                 -> (count: usize) =
+        count = 0
+        result: i32 = linux.epoll_pwait(state.val.queue,
+                                        addr state.val.reports[0],
+                                        i32(report_count), milliseconds,
+                                        linux.no_mask)
+        --  EINTR, or a failure no wait of the loop's own makes: the loop
+        --  looks again.
+        return when result <= 0
+        count = usize(result)
+    end wait_events
+
+    dispatch: (state: ptr mut loop_state, count: usize) -> none =
+        for index in usize(0)..<count do
+            got: linux.epoll_record = state.val.reports[index]
+            descriptor: i32 = i32(u32(got.data))
+            if descriptor == state.val.reader then
+                collect(state)
+                answer_signals(state, ready)
+            else
+                broken: u32 = linux.epollerr | linux.epollhup
+                input: bool =
+                    (got.events & (linux.epollin | linux.epollrdhup | broken))
+                    <> 0
+                output: bool = (got.events & (linux.epollout | broken)) <> 0
+                answer_descriptor(state, descriptor, input, output, ready)
+                --  One report disarmed it for every record: arm it again
+                --  for those still waiting.
+                armed(state, descriptor) else (problem)
+                    _ = problem
+                    answer_descriptor(state, descriptor, true, true, ready)
+                end
+            end if
+        end for
+    end dispatch
+
+    --  Read every signal the signalfd holds into the arrivals.
+    collect: (state: ptr mut loop_state) -> none =
+        return when state.val.reader < 0
+        loop do
+            mut taken: linux.signalfd_record = zeroed
+            into: ptr mut u8 = ptr(usize(addr taken))
+            got: isize = linux.read(state.val.reader, into,
+                                    sizeof linux.signalfd_record)
+            break when got <> isize(sizeof linux.signalfd_record)
+            arrive(state, i32(taken.signal))
+        end loop
+    end collect
+
+    --  Take `number` from its default disposition: blocked, and read
+    --  through the loop's signalfd, which the loop watches from the first.
+    take_signal: (state: ptr mut loop_state, number: i32)
+                 -> none ! posix.errno =
+        mut adding: u64 = linux.signal_bit(number)
+        result: i32 = linux.rt_sigprocmask(linux.sig_block, addr adding,
+                                           linux.no_mask)
+        fail posix.errno_of(-result) when result < 0
+        mut mask: u64 = state.val.watched | adding
+        flags: i32 = linux.sfd_cloexec | linux.sfd_nonblock
+        made: i32 = linux.signalfd4(state.val.reader, addr mask, flags)
+        fail posix.errno_of(-made) when made < 0
+        if state.val.reader < 0 then
+            mut asked: linux.epoll_record = zeroed
+            asked.events = linux.epollin
+            asked.data = u64(u32(made))
+            added: i32 = linux.epoll_ctl(state.val.queue,
+                                         linux.epoll_ctl_add, made,
+                                         addr asked)
+            if added < 0 then
+                _ = linux.close(made)
+                fail posix.errno_of(-added)
+            end if
+            state.val.reader = made
+        end if
+    end take_signal
+
+    --  Give every watched signal back: read what arrived, so that none is
+    --  delivered as its default when it is unblocked, close the signalfd
+    --  and unblock them.
+    give_signals: (state: ptr mut loop_state) -> none ! posix.errno =
+        collect(state)
+        if state.val.reader >= 0 then
+            withdraw(state, state.val.reader)
+            _ = linux.close(state.val.reader)
+            state.val.reader = -1
+        end if
+        mut mask: u64 = state.val.watched
+        result: i32 = linux.rt_sigprocmask(linux.sig_unblock, addr mask,
+                                           linux.no_mask)
+        fail posix.errno_of(-result) when result < 0
+    end give_signals
+elsif compiler.os == darwin or compiler.os == freebsd then
+    report: type = kqueue.event_record
+
+    --  SIGINT, SIGTERM, SIGHUP, SIGCHLD, SIGUSR1 and SIGUSR2, as Darwin
+    --  and FreeBSD number them.
+    signal_numbers: [6]i32 = [2, 15, 1, 20, 30, 31]
+
+    --  The errno the C library left.
+    failure: () -> (problem: posix.errno) =
+        cell: ptr mut i32 = libc.errno_cell()
+        problem = posix.errno_of(cell.val)
+    end failure
+
+    made_queue: () -> (queue: i32) ! posix.errno =
+        queue = kqueue.kqueue()
+        fail failure() when queue < 0
+        if libc.fcntl(queue, libc.f_setfd, libc.fd_cloexec) <> 0 then
+            problem: posix.errno = failure()
+            _ = libc.close(queue)
+            fail problem
+        end if
+    end made_queue
+
+    --  Make one change to the queue, without waiting.
+    changed: (state: ptr mut loop_state, change: kqueue.event_record)
+             -> none ! posix.errno =
+        no_wait: libc.timespec = (seconds: 0, nanoseconds: 0)
+        result: i32 = kqueue.kevent(state.val.queue, addr change, 1,
+                                    kqueue.none_given, 0, addr no_wait)
+        fail failure() when result < 0
+    end changed
+
+    --  Watch a record's descriptor in its direction, or its child for its
+    --  end, once.  ESRCH for a child that has ended already.
+    arm: (state: ptr mut loop_state, entry: ptr mut waiting)
+         -> none ! posix.errno =
+        oneshot: u16 = kqueue.ev_add | kqueue.ev_oneshot
+        if entry.val.descriptor >= 0 then
+            filter: i16 = if entry.val.output then kqueue.evfilt_write
+                          else kqueue.evfilt_read end if
+            try changed(state, kqueue.change(usize(u32(entry.val.descriptor)),
+                                             filter, oneshot, 0, 0))
+        elsif entry.val.child > 0 then
+            try changed(state, kqueue.change(usize(u32(entry.val.child)),
+                                             kqueue.evfilt_proc, oneshot,
+                                             kqueue.note_exit, 0))
+        end if
+    end arm
+
+    --  Closing a descriptor removes its events from the queue.
+    withdraw: (state: ptr mut loop_state, descriptor: i32) -> none =
+        _ = state
+        _ = descriptor
+    end withdraw
+
+    wait_events: (state: ptr mut loop_state, milliseconds: i32)
+                 -> (count: usize) =
+        count = 0
+        limit: libc.timespec = (seconds: i64(milliseconds / 1000),
+                                nanoseconds: i64(milliseconds % 1000)
+                                             * 1000000)
+        bound: kqueue.wait_limit = if milliseconds < 0 then kqueue.none_given
+                                   else addr limit end if
+        result: i32 = kqueue.kevent(state.val.queue, kqueue.none_given, 0,
+                                    addr state.val.reports[0],
+                                    i32(report_count), bound)
+        return when result <= 0
+        count = usize(result)
+    end wait_events
+
+    dispatch: (state: ptr mut loop_state, count: usize) -> none =
+        for index in usize(0)..<count do
+            got: kqueue.event_record = state.val.reports[index]
+            identifier: i32 = i32(u32(got.identifier))
+            if got.filter == kqueue.evfilt_read then
+                answer_descriptor(state, identifier, true, false, ready)
+            elsif got.filter == kqueue.evfilt_write then
+                answer_descriptor(state, identifier, false, true, ready)
+            elsif got.filter == kqueue.evfilt_signal then
+                arrive(state, identifier)
+                answer_signals(state, ready)
+            elsif got.filter == kqueue.evfilt_proc then
+                answer_child(state, identifier)
+            end if
+        end for
+    end dispatch
+
+    --  kqueue reports a signal itself; nothing waits to be read.
+    collect: (state: ptr mut loop_state) -> none =
+        _ = state
+    end collect
+
+    --  Set `number`'s disposition to `handler`.
+    disposed: (number: i32, handler: u64) -> none ! posix.errno =
+        mut action: libc.signal_action = zeroed
+        action.handler = handler
+        fail failure() when libc.sigaction(number, addr action,
+                                           libc.no_address) <> 0
+    end disposed
+
+    --  Take `number` from its default disposition: ignored, so that its
+    --  arrival does nothing but the queue's report, which counts it
+    --  whatever its disposition.  SIGCHLD keeps its default, which
+    --  ignores it already: ignoring it outright would reap every child
+    --  before `wait` could.
+    take_signal: (state: ptr mut loop_state, number: i32)
+                 -> none ! posix.errno =
+        if number <> signal_numbers[3] then
+            try disposed(number, libc.sig_ign)
+        end if
+        try changed(state, kqueue.change(usize(u32(number)),
+                                         kqueue.evfilt_signal, kqueue.ev_add,
+                                         0, 0))
+    end take_signal
+
+    --  Give every watched signal back: no longer reported, and its
+    --  default disposition again.
+    give_signals: (state: ptr mut loop_state) -> none ! posix.errno =
+        for index in usize(0)..<kinds do
+            number: i32 = signal_numbers[index]
+            if (state.val.watched & (u64(1) << u64(number - 1))) <> 0 then
+                changed(state, kqueue.change(usize(u32(number)),
+                                             kqueue.evfilt_signal,
+                                             kqueue.ev_delete, 0, 0))
+                    else none
+                if index <> 3 then
+                    try disposed(number, libc.sig_dfl)
+                end if
+            end if
+        end for
+    end give_signals
+end if

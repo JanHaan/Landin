@@ -1,0 +1,62 @@
+--  The event provider's `time.clock`: the monotonic clock, and sleeping on
+--  it, which parks the fibre with a deadline and lets the others run.  The
+--  loop's own wait sleeps until the earliest deadline, so a sleep costs no
+--  descriptor and no timer of the system's (D480).  The wall clock is the
+--  system's, in delegated.ldn.
+
+import core/time
+import platform/posix
+
+--  A second in nanoseconds.
+second: u64 = 1000000000
+
+--  The clock `clock` read now.  Every hosted system has both clocks, and
+--  reading one fails only when the process is given a bad address, which
+--  no call here gives, so a failure ends the program.
+clock_read: (clock: posix.clock_kind) -> (sample: posix.time_value) =
+    sample = posix.clock_time(clock) else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+end clock_read
+
+--  The monotonic clock in nanoseconds since the system started, which no
+--  hosted system counts as negative, and never zero, which a waiting
+--  record takes for no deadline.
+reading: () -> (at: u64) =
+    sample: posix.time_value = clock_read(posix.monotonic_clock)
+    at = u64(sample.seconds) * second + u64(sample.nanoseconds)
+    if at == 0 then at = 1 end if
+end reading
+
+--  The instant `span` after now, the clock's last instant when that is
+--  past it.
+deadline_after: (span: time.duration) -> (deadline: u64) =
+    start: u64 = reading()
+    room: u64 = (0 -% 1) - start
+    deadline = if u64(span) > room then 0 -% 1
+               else start + u64(span) end if
+end deadline_after
+
+events_now: (self: host) -> (at: time.instant) =
+    _ = services(self)
+    at = time.instant(reading())
+end events_now
+
+--  The sleeping fibre waits for its deadline alone; it is answered when
+--  the loop finds the clock past it, never before.
+events_sleep: (self: host, span: time.duration) -> none =
+    deadline: u64 = deadline_after(span)
+    while reading() < deadline do
+        mut entry: waiting = (next: 0, descriptor: -1, output: false,
+                              child: 0, signalled: false, deadline: deadline,
+                              answer: pending)
+        --  A record with no descriptor or child is never refused.
+        _ = park(self, addr entry) else (problem)
+            _ = problem
+            return
+        end
+    end while
+end events_sleep
+
+host is time.clock (now: events_now, sleep: events_sleep)

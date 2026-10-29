@@ -1,0 +1,131 @@
+--  D449, D482, D488: prototype 5's stopping over hosted/events.
+--  A fibre written against `any signal.signals` watches SIGTERM and waits
+--  for it in `next_signal`; a server fibre waits in `accept` on a
+--  loopback listener.  The home stack lets both reach their waits, then
+--  sends SIGTERM to its own process, which does not end it: the loop reads
+--  it as an event, the signal fibre wakes and closes the listener through
+--  the provider, and the server's accept fails `io_failed`.  Last, a fibre
+--  waiting for SIGHUP is woken by `stop_watching`, its wait failing
+--  `io_failed`, and SIGTERM is back to its default.
+import core/cmp
+import core/failure
+import core/fibre
+import core/io
+import core/io/signal
+import core/net
+import hosted/events
+import platform/libc
+import platform/linux
+import platform/linux/numbers
+
+--  `t` SIGTERM arrived, `x` the server's accept failed, `s` a wait for a
+--  signal failed when watching stopped.
+mut trace: [8]u8 = zeroed
+mut marks: usize = 0
+
+mark: (letter: u8) -> none =
+    trace[marks] = letter
+    inc marks
+end mark
+
+stopping: type = struct
+    signals: any signal.signals
+    network: events.host
+    listener: io.file
+end stopping
+
+--  Wait for SIGTERM and stop the server by closing its listener.
+stop_on_terminate: (inout state: stopping) -> none ! failure.reason =
+    try state.signals.watch(signal.terminate)
+    received: signal.event = try state.signals.next_signal()
+    fail io.io_failed when received.which <> signal.terminate
+      or received.number <> 15
+    mark(u8('t'))
+    closing: io.file = state.listener
+    try net.close_socket(state.network, closing)
+end stop_on_terminate
+
+serving: type = struct
+    network: events.host
+    listener: io.file
+end serving
+
+--  Wait for a connection that never comes, until accepting fails.
+serve: (inout state: serving) -> none ! failure.reason =
+    connection: io.file = net.accept(state.network, state.listener)
+        else (problem)
+        if problem == io.io_failed then mark(u8('x')) end if
+        return
+    end
+    try net.close_socket(state.network, connection)
+end serve
+
+waiting: type = struct
+    signals: any signal.signals
+end waiting
+
+--  Wait for a signal that never comes.
+wait_in_vain: (inout state: waiting) -> none ! failure.reason =
+    try state.signals.watch(signal.hangup)
+    received: signal.event = state.signals.next_signal() else (problem)
+        if problem == io.io_failed then mark(u8('s')) end if
+        return
+    end
+    _ = received
+end wait_in_vain
+
+--  Send SIGTERM to this process.
+fixed if compiler.os == linux then
+    terminate_self: () -> (sent: bool) =
+        process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0,
+                                         0, 0)
+        sent = linux.system_call(numbers.kill_number, process,
+                                 i64(linux.sigterm), 0, 0, 0, 0) == 0
+    end terminate_self
+else
+    terminate_self: () -> (sent: bool) =
+        sent = libc.kill(libc.getpid(), libc.sigterm) == 0
+    end terminate_self
+end if
+
+mut backing: [2 * 32768]u8 = zeroed
+
+run: (host: events.host) -> none ! failure.reason =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    mut tasks := try fibre.turns_over(any(addr host), backing, 2)
+    defer fibre.join(tasks) else none
+    stopper: stopping = (signals: any(addr host), network: host,
+                         listener: listener)
+    try fibre.admit(tasks, stop_on_terminate, stopper)
+    server: serving = (network: host, listener: listener)
+    try fibre.admit(tasks, serve, server)
+    --  Both take their first turns and wait: one for the signal, one for
+    --  a connection.
+    fibre.yield(host)
+    fibre.yield(host)
+    fail io.io_failed when not terminate_self()
+    try fibre.join(tasks)
+    vain: waiting = (signals: any(addr host))
+    try fibre.admit(tasks, wait_in_vain, vain)
+    fibre.yield(host)
+    try signal.stop_watching(host)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when cmp.compare(trace[0..<marks], "txs") <> cmp.equal
+    code = 42
+end main

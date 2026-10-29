@@ -448,6 +448,17 @@ This is the maintained inventory of what the compiler does today:
   so only a provider whose fibres take turns delivers them, and a fibre
   waits for the next one as for a receive; `fake.signals` takes those a
   test raises, on Cortex-M0 too (D477, D482).
+  `hosted/events` is the second hosted Io: one handle over state its
+  caller declares supplies every concept the blocking provider does, and
+  `fibre.turns` and `signal.signals` beside them, on Linux over epoll and
+  a signalfd and on Darwin and FreeBSD over kqueue. Its fibres take turns
+  on a round whose wait, when every fibre waits, is the loop's wait for
+  events, limited by the earliest deadline. A read, a write, a socket's
+  accept, connect, send and receive, a child's pipes and end, a sleep and
+  a signal each submit a record on the waiting fibre's own stack and are
+  answered by the loop; closing or shutting a socket wakes its waiters
+  with `io_failed`, and a child's end is a pidfd or kqueue's process
+  filter (D485--D488).
   `core/random` is a deterministic generator, xoshiro256**, seeded from a
   fixed seed or from entropy, which draws the same sequence on every target,
   Cortex-M0 included, with unbiased bounded draws and shuffles; a buffered
@@ -467,9 +478,10 @@ This is the maintained inventory of what the compiler does today:
   integer keys and ordering, Boolean and byte slice keys, and UTF-8 keys and
   ordering. A closed set of named values, such as a diagnostic's severity, is
   an atom set.
-  `hosted/heap`, `hosted/system` and `hosted/blocking` supply the hosted
-  heap, the system's services that do not wait and the I/O provider that
-  blocks the thread while it waits, written once over `platform/posix`,
+  `hosted/heap`, `hosted/system`, `hosted/blocking` and `hosted/events`
+  supply the hosted heap, the system's services that do not wait, the I/O
+  provider that blocks the thread while it waits and the one that
+  switches fibres, written once over `platform/posix`,
   which gives POSIX's files, directories, memory mappings, `poll`,
   non-blocking descriptors, pipes, spawning,
   waiting and sockets, Unix-domain ones among them, reading and writing at

@@ -1,0 +1,399 @@
+--  The event provider's `net.network`: every socket it makes is
+--  non-blocking, and a call that would wait parks its fibre on the loop
+--  until the socket is ready, its limit passes or the socket is shut or
+--  closed through the provider, which fails the call `io_failed` (D449).
+--  A socket is a file of hosted/system's like any other, so `io.read` and
+--  `io.write` take a connection as they take a file.
+
+import core/io
+import core/net
+import core/time
+import hosted/system
+import platform/posix
+
+--  How many connections may wait to be accepted, which each system caps at
+--  its own limit: the BSDs' SOMAXCONN.
+backlog: i32 = 128
+
+--  Whether an errno says the caller may not do what it asked.
+refused: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.eperm or problem == posix.eacces
+          or problem == posix.erofs
+end refused
+
+--  Close a socket no caller is told about.
+quietly_closed: (closing: posix.descriptor) -> none =
+    posix.close(closing) else none
+end quietly_closed
+
+--  The family of socket an address needs.
+family_of: (at: net.address) -> (family: posix.socket_family) =
+    family = if at.family == net.ipv4 then posix.internet
+             else posix.internet6 end if
+end family_of
+
+--  Whether an errno says the system does not have the address here.
+unavailable: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.eaddrnotavail or problem == posix.eafnosupport
+          or problem == posix.epfnosupport
+end unavailable
+
+--  Whether an errno says the peer has gone.
+gone: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.epipe or problem == posix.econnreset
+          or problem == posix.etimedout or problem == posix.enotconn
+end gone
+
+--  Whether an errno says the call would have waited.
+would_wait: (problem: posix.errno) -> (yes: bool) =
+    yes = problem == posix.eagain
+end would_wait
+
+--  A non-blocking socket bound to `at`, a listener when `listening`, as
+--  hosted/blocking binds one.
+bound: (at: net.address, kind: posix.socket_kind, listening: bool)
+       -> (socket: posix.descriptor) ! posix.errno =
+    socket = try posix.socket(family_of(at), kind)
+    undo quietly_closed(socket)
+    try posix.set_non_blocking(socket, true)
+    if at.family == net.ipv6 then
+        try posix.set_ipv6_only(socket, true)
+    end if
+    if listening then
+        try posix.set_reuse_address(socket, true)
+    end if
+    try posix.bind(socket, posix.internet_address(at))
+    if listening then
+        try posix.listen(socket, backlog)
+    end if
+end bound
+
+bind_failure: (self: host, problem: posix.errno)
+              -> none ! net.address_in_use | net.address_unavailable
+                      | io.no_access | io.io_failed =
+    record(self, problem)
+    fail net.address_in_use when problem == posix.eaddrinuse
+    fail net.address_unavailable when unavailable(problem)
+    fail io.no_access when refused(problem)
+    fail io.io_failed
+end bind_failure
+
+events_listen: (self: host, at: net.address) -> (listener: io.file)
+               ! net.address_in_use | net.address_unavailable | io.no_access
+               | io.io_failed =
+    cleared(self)
+    made: posix.descriptor = bound(at, posix.stream, true) else (problem)
+        try bind_failure(self, problem)
+        fail io.io_failed
+    end
+    listener = system.socket_of(made)
+end events_listen
+
+events_open_datagram: (self: host, at: net.address) -> (socket: io.file)
+                      ! net.address_in_use | net.address_unavailable
+                      | io.no_access | io.io_failed =
+    cleared(self)
+    made: posix.descriptor = bound(at, posix.datagram, false) else (problem)
+        try bind_failure(self, problem)
+        fail io.io_failed
+    end
+    socket = system.socket_of(made)
+end events_open_datagram
+
+--  The deadline of a wait on `socket` limited by what `set_timeouts`
+--  gave it, zero for none.  A limit the system does not give back, as
+--  QEMU's user emulation does not, is none.
+limit_of: (socket: posix.descriptor, sending: bool) -> (deadline: u64) =
+    deadline = 0
+    mut span: posix.time_value = (seconds: 0, nanoseconds: 0)
+    if sending then
+        span = posix.send_timeout(socket) else (problem)
+            _ = problem
+            return
+        end
+    else
+        span = posix.receive_timeout(socket) else (problem)
+            _ = problem
+            return
+        end
+    end if
+    return when span.seconds <= 0 and span.nanoseconds == 0
+    deadline = deadline_after(time.duration(u64(span.seconds) * second
+                                            + u64(span.nanoseconds)))
+end limit_of
+
+--  Wait for `socket` in one direction as a fibre does, until `deadline`:
+--  `timed_out` when it passed, `io_failed` when the socket was shut or
+--  closed through the provider.
+socket_ready: (self: host, socket: posix.descriptor, output: bool,
+               deadline: u64) -> none ! net.timed_out | io.io_failed =
+    answer: u8 = await(self, socket, output, deadline) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+    fail net.timed_out when answer == expired
+    fail io.io_failed when answer == failed
+end socket_ready
+
+--  A connection begun on a non-blocking socket, waited for as a fibre
+--  does, and its outcome taken from the socket.  Nobody else holds the
+--  socket yet, so nothing closes it while the fibre waits.
+connected: (self: host, to: net.address)
+           -> (socket: posix.descriptor) ! posix.errno =
+    socket = try posix.socket(family_of(to), posix.stream)
+    undo quietly_closed(socket)
+    try posix.set_non_blocking(socket, true)
+    posix.connect(socket, posix.internet_address(to)) else (problem)
+        fail problem when problem <> posix.einprogress
+          and problem <> posix.eintr
+        answer: u8 = try await(self, socket, true, 0)
+        fail posix.ebadf when answer <> ready
+        try posix.pending_error(socket)
+    end
+end connected
+
+events_connect: (self: host, to: net.address) -> (opened: io.file)
+                ! net.refused | net.unreachable | net.address_unavailable
+                | net.timed_out | io.io_failed =
+    cleared(self)
+    made: posix.descriptor = connected(self, to) else (problem)
+        record(self, problem)
+        fail net.refused when problem == posix.econnrefused
+        fail net.unreachable when problem == posix.enetunreach
+          or problem == posix.ehostunreach
+        fail net.address_unavailable when unavailable(problem)
+        fail net.timed_out when problem == posix.etimedout
+        fail io.io_failed
+    end
+    opened = system.socket_of(made)
+end events_connect
+
+events_accept: (self: host, listener: io.file) -> (accepted: io.file)
+               ! net.timed_out | io.io_failed =
+    cleared(self)
+    socket: posix.descriptor = system.descriptor_of(listener)
+    deadline: u64 = limit_of(socket, false)
+    loop do
+        made: posix.descriptor =
+            posix.accept_non_blocking(socket) else (problem)
+                --  An interrupted accept took nothing, and a connection
+                --  its peer reset before it was taken is no connection.
+                continue when problem == posix.eintr
+                  or problem == posix.econnaborted
+                if would_wait(problem) then
+                    try socket_ready(self, socket, false, deadline)
+                    continue
+                end if
+                record(self, problem)
+                fail io.io_failed
+            end
+        accepted = system.socket_of(made)
+        return
+    end loop
+end events_accept
+
+events_send: (self: host, connection: io.file, bytes: []u8)
+             -> none ! net.disconnected | net.timed_out | io.io_failed =
+    cleared(self)
+    socket: posix.descriptor = system.descriptor_of(connection)
+    mut sent: usize = 0
+    while sent < lenof bytes do
+        accepted: usize =
+            posix.send(socket, bytes[sent..<lenof bytes]) else (problem)
+                continue when problem == posix.eintr
+                if would_wait(problem) then
+                    try socket_ready(self, socket, true,
+                                     limit_of(socket, true))
+                    continue
+                end if
+                record(self, problem)
+                fail net.disconnected when gone(problem)
+                fail io.io_failed
+            end
+        fail io.io_failed when accepted == 0
+          or accepted > lenof bytes - sent
+        sent += accepted
+    end while
+end events_send
+
+events_receive: (self: host, connection: io.file, into: []mut u8)
+                -> (count: usize)
+                ! net.disconnected | net.timed_out | io.io_failed =
+    cleared(self)
+    count = 0
+    return when lenof into == 0
+    socket: posix.descriptor = system.descriptor_of(connection)
+    deadline: u64 = limit_of(socket, false)
+    loop do
+        got: usize = posix.receive(socket, into) else (problem)
+            continue when problem == posix.eintr
+            if would_wait(problem) then
+                try socket_ready(self, socket, false, deadline)
+                continue
+            end if
+            record(self, problem)
+            fail net.disconnected when gone(problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when got > lenof into
+        count = got
+        return
+    end loop
+end events_receive
+
+events_send_to: (self: host, socket: io.file, bytes: []u8,
+                 to: net.address) -> none
+                ! net.unreachable | net.timed_out | io.io_failed =
+    cleared(self)
+    opened: posix.descriptor = system.descriptor_of(socket)
+    deadline: u64 = limit_of(opened, true)
+    loop do
+        accepted: usize =
+            posix.send_to(opened, bytes, posix.internet_address(to))
+            else (problem)
+                continue when problem == posix.eintr
+                if would_wait(problem) then
+                    try socket_ready(self, opened, true, deadline)
+                    continue
+                end if
+                record(self, problem)
+                fail net.unreachable when problem == posix.enetunreach
+                  or problem == posix.ehostunreach
+                fail io.io_failed
+            end
+        --  A datagram goes whole or not at all.
+        fail io.io_failed when accepted <> lenof bytes
+        return
+    end loop
+end events_send_to
+
+events_receive_from: (self: host, socket: io.file, into: []mut u8)
+                     -> (taken: net.datagram) ! net.timed_out | io.io_failed =
+    cleared(self)
+    opened: posix.descriptor = system.descriptor_of(socket)
+    deadline: u64 = limit_of(opened, false)
+    loop do
+        got: posix.received = posix.receive_from(opened, into)
+            else (problem)
+            continue when problem == posix.eintr
+            if would_wait(problem) then
+                try socket_ready(self, opened, false, deadline)
+                continue
+            end if
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when got.count > lenof into
+        sender: net.address = posix.address_of(got.sender) else (problem)
+            record(self, problem)
+            fail io.io_failed
+        end
+        taken = (count: got.count, sender: sender)
+        return
+    end loop
+end events_receive_from
+
+--  Shutting a side wakes every fibre waiting on that side, failing its
+--  call (D449).
+events_shutdown: (self: host, connection: io.file,
+                  stopping: net.direction) -> none ! io.io_failed =
+    cleared(self)
+    socket: posix.descriptor = system.descriptor_of(connection)
+    side: posix.shutdown_side = match stopping
+        net.receiving: posix.shut_reading
+        net.sending: posix.shut_writing
+        net.both_directions: posix.shut_both
+    end match
+    posix.shutdown(socket, side) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+    answer_descriptor(self.state, i32(socket),
+                      stopping <> net.sending, stopping <> net.receiving,
+                      failed)
+end events_shutdown
+
+named: (socket: io.file, peer: bool) -> (at: net.address) ! posix.errno =
+    record: posix.socket_address =
+        if peer then try posix.peer_name(system.descriptor_of(socket))
+        else try posix.socket_name(system.descriptor_of(socket)) end if
+    at = try posix.address_of(record)
+end named
+
+events_local_address: (self: host, socket: io.file) -> (at: net.address)
+                      ! io.io_failed =
+    cleared(self)
+    at = named(socket, false) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end events_local_address
+
+events_peer_address: (self: host, connection: io.file)
+                     -> (at: net.address) ! io.io_failed =
+    cleared(self)
+    at = named(connection, true) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end events_peer_address
+
+--  A span as the system's seconds and nanoseconds.
+time_of: (span: time.duration) -> (reading: posix.time_value) =
+    whole: u64 = u64(span) / second
+    reading = (seconds: i64(whole),
+               nanoseconds: u32(u64(span) - whole * second))
+end time_of
+
+--  The limits are kept on the socket, as the system's own time limits,
+--  which a non-blocking socket never waits on: each wait reads them back.
+limited: (socket: io.file, receive_limit: time.duration,
+          send_limit: time.duration) -> none ! posix.errno =
+    try posix.set_receive_timeout(system.descriptor_of(socket),
+                                  time_of(receive_limit))
+    try posix.set_send_timeout(system.descriptor_of(socket),
+                               time_of(send_limit))
+end limited
+
+events_set_timeouts: (self: host, socket: io.file,
+                      receive_limit: time.duration, send_limit: time.duration)
+                     -> none ! io.io_failed =
+    cleared(self)
+    limited(socket, receive_limit, send_limit) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end events_set_timeouts
+
+events_set_no_delay: (self: host, connection: io.file, on: bool)
+                     -> none ! io.io_failed =
+    cleared(self)
+    posix.set_no_delay(system.descriptor_of(connection), on) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end events_set_no_delay
+
+--  Closing wakes every fibre waiting on the socket first (D449).  A
+--  failed close may already have released the descriptor, so it is never
+--  retried.
+events_close_socket: (self: host, sink socket: io.file)
+                     -> none ! io.io_failed =
+    cleared(self)
+    closing: posix.descriptor = system.descriptor_of(socket)
+    forget(self, closing)
+    posix.close(closing) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end events_close_socket
+
+host is net.network
+    (connect: events_connect, listen: events_listen,
+     accept: events_accept, open_datagram: events_open_datagram,
+     send: events_send, receive: events_receive, send_to: events_send_to,
+     receive_from: events_receive_from, shutdown: events_shutdown,
+     local_address: events_local_address,
+     peer_address: events_peer_address,
+     set_timeouts: events_set_timeouts, set_no_delay: events_set_no_delay,
+     close_socket: events_close_socket)

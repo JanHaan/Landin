@@ -1,0 +1,100 @@
+--  D485: two fibres exchanging over a loopback TCP connection
+--  under hosted/events.  The server accepts and the client connects; each
+--  message is answered before the next is sent, so their lines can only
+--  interleave as the provider lets one fibre run while the other waits in
+--  `receive`.  The home stack joins the group, waiting in the loop.
+import core/failure
+import core/fibre
+import core/io
+import core/net
+import hosted/events
+
+mut trace: [64]u8 = zeroed
+mut marks: usize = 0
+
+--  Note one step: a letter and a digit, after a space from the last.
+mark: (letter: u8, digit: usize) -> none =
+    if marks > 0 then
+        trace[marks] = u8(' ')
+        inc marks
+    end if
+    trace[marks] = letter
+    trace[marks + 1] = u8('0') + u8(digit)
+    marks += 2
+end mark
+
+serving: type = struct
+    host: events.host
+    listener: io.file
+end serving
+
+--  Accept one connection and answer three messages, each with its
+--  number doubled.
+serve: (inout state: serving) -> none ! failure.reason =
+    connection: io.file = try net.accept(state.host, state.listener)
+    mut buffer: [1]u8 = zeroed
+    for round in usize(0)..<3 do
+        got: usize = try net.receive(state.host, connection, buffer)
+        fail io.io_failed when got <> 1
+        mark(u8('s'), usize(buffer[0]))
+        buffer[0] = buffer[0] * 2
+        try net.send(state.host, connection, buffer)
+        _ = round
+    end for
+    try net.close_socket(state.host, connection)
+end serve
+
+asking: type = struct
+    host: events.host
+    peer: net.address
+end asking
+
+--  Connect and send three messages, waiting for each answer.
+ask: (inout state: asking) -> none ! failure.reason =
+    connection: io.file = try net.connect(state.host, state.peer)
+    mut buffer: [1]u8 = zeroed
+    for round in usize(1)..<4 do
+        buffer[0] = u8(round)
+        mark(u8('c'), round)
+        try net.send(state.host, connection, buffer)
+        got: usize = try net.receive(state.host, connection, buffer)
+        fail io.io_failed when got <> 1
+        mark(u8('a'), usize(buffer[0]))
+    end for
+    got: usize = try net.receive(state.host, connection, buffer)
+    fail io.io_failed when got <> 0
+    try net.close_socket(state.host, connection)
+end ask
+
+mut backing: [2 * 32768]u8 = zeroed
+
+run: (host: events.host) -> none ! failure.reason =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    peer: net.address = try net.local_address(host, listener)
+    mut tasks := try fibre.turns_over(any(addr host), backing, 2)
+    defer fibre.join(tasks) else none
+    server: serving = (host: host, listener: listener)
+    try fibre.admit(tasks, serve, server)
+    client: asking = (host: host, peer: peer)
+    try fibre.admit(tasks, ask, client)
+    try fibre.join(tasks)
+    try net.close_socket(host, listener)
+    try io.write(host, io.out(host), trace[0..<marks])
+    try io.write(host, io.out(host), "\n")
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 0
+end main

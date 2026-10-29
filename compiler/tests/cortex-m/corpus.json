@@ -1020,6 +1020,48 @@
     "runtime/evaluation-order-is-left-then-right": {
       "mode": "execute"
     },
+    "runtime/events-child-wait": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations."
+    },
+    "runtime/events-close-wakes-waiter": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations."
+    },
+    "runtime/events-signal-stops-server": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations."
+    },
+    "runtime/events-sleep-answers-now": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations."
+    },
+    "runtime/events-stack-past-limit-traps": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations."
+    },
+    "runtime/events-tcp-exchange": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations."
+    },
     "runtime/evidence-projected-entries-kept": {
       "mode": "execute"
     },

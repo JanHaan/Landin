@@ -1,0 +1,105 @@
+--  D449: under hosted/events, closing or shutting a socket
+--  through the provider wakes a fibre waiting on it, whose call fails
+--  `io_failed`.  Over a loopback connection, one fibre waits in
+--  `receive` on the accepted end while another closes that end; then one
+--  waits in `receive` on the connecting end while another shuts it for
+--  receiving, on a second connection whose peer stays open.  Nothing is
+--  ever sent, so only the wake ends either wait.
+import core/cmp
+import core/failure
+import core/fibre
+import core/io
+import core/net
+import hosted/events
+
+--  `c` a receive failed when its socket was closed, `s` when it was shut.
+mut trace: [4]u8 = zeroed
+mut marks: usize = 0
+
+mark: (letter: u8) -> none =
+    trace[marks] = letter
+    inc marks
+end mark
+
+receiving: type = struct
+    host: events.host
+    connection: io.file
+    letter: u8
+end receiving
+
+--  Wait for bytes that never come, until the wait fails.
+receive_in_vain: (inout state: receiving) -> none ! failure.reason =
+    mut buffer: [4]u8 = zeroed
+    got: usize = net.receive(state.host, state.connection, buffer)
+        else (problem)
+        if problem == io.io_failed then mark(state.letter) end if
+        return
+    end
+    _ = got
+end receive_in_vain
+
+stopping: type = struct
+    host: events.host
+    connection: io.file
+    closing: bool
+end stopping
+
+--  Take a turn, so the receiver waits first, then close or shut.
+stop: (inout state: stopping) -> none ! failure.reason =
+    fibre.yield(state.host)
+    if state.closing then
+        closed: io.file = state.connection
+        try net.close_socket(state.host, closed)
+    else
+        try net.shutdown(state.host, state.connection, net.receiving)
+    end if
+end stop
+
+mut backing: [2 * 32768]u8 = zeroed
+
+--  One fibre waits on `connection` and another closes or shuts it.
+woken: (host: events.host, connection: io.file, closing: bool,
+        letter: u8) -> none ! failure.reason =
+    mut tasks := try fibre.turns_over(any(addr host), backing, 2)
+    defer fibre.join(tasks) else none
+    waiter: receiving = (host: host, connection: connection, letter: letter)
+    try fibre.admit(tasks, receive_in_vain, waiter)
+    stopper: stopping = (host: host, connection: connection,
+                         closing: closing)
+    try fibre.admit(tasks, stop, stopper)
+    try fibre.join(tasks)
+end woken
+
+run: (host: events.host) -> none ! failure.reason =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    peer: net.address = try net.local_address(host, listener)
+    client: io.file = try net.connect(host, peer)
+    accepted: io.file = try net.accept(host, listener)
+    try woken(host, accepted, true, u8('c'))
+    try net.close_socket(host, client)
+    --  A connection of its own, whose peer stays open while it is shut.
+    second: io.file = try net.connect(host, peer)
+    taken: io.file = try net.accept(host, listener)
+    try woken(host, second, false, u8('s'))
+    try net.close_socket(host, second)
+    try net.close_socket(host, taken)
+    try net.close_socket(host, listener)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    return when cmp.compare(trace[0..<marks], "cs") <> cmp.equal
+    code = 42
+end main

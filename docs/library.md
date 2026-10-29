@@ -194,7 +194,6 @@ systems:
 |---|---|---|
 | Calendars, time zones and formatting a date | the locale record in the register | The wall clock's seconds since 1970 are `time.wall_now`'s; turning them into a date is the program's. |
 | Resolving a host name to an address | the resolver record in the register | Under the C library, on Darwin, FreeBSD and Linux under `--link=libc`, `getaddrinfo` declared `extern(c)`; a static Linux program has none. `net.parse_address` reads an address that is already written as one. |
-| Sockets that do not block, many connections in one thread | an event-driven Io | `platform/posix`'s `set_non_blocking`, `accept_non_blocking` and `poll` over the sockets' descriptors, `system.descriptor_of(socket)` for a hosted `io.file`; for many descriptors, `platform/linux`'s epoll on Linux and `platform/kqueue` on Darwin and FreeBSD. |
 | Threads | the threads item | Nothing safe yet: the hosted providers keep process-wide state, and there is no thread-local storage. |
 | Changing the working directory | not offered: it is the whole process's, and beside threads it would move every relative path at once | A path built from `io.current_directory`, or a call relative to a directory open as `at` in `platform/posix`; `chdir` by its number through `linux.system_call` on Linux, or declared `extern(c)` on Darwin and FreeBSD, where a program must. |
 | Extended attributes, access control lists, file flags | not yet planned | On Linux, the call's number from `platform/linux/numbers` through `linux.system_call`; on Darwin and FreeBSD, the C function declared `extern(c)`. |
@@ -1334,7 +1333,7 @@ Two concepts say what runs the tasks:
 | Concept | What it promises | Providers |
 |---|---|---|
 | `scheduler` | `start`, `finished` and `wait`; it may run each task to its end as it is admitted | `fibre.whole`, the blocking host, and every provider of `turns` |
-| `turns` | a `scheduler` with `yield`: a task that yields lets every other unfinished one run first | `stacks.round` |
+| `turns` | a `scheduler` with `yield`: a task that yields lets every other unfinished one run first | `stacks.round`, `events.host` |
 
 - A program written against `scheduler` must be right when every task
   runs to its end. One that needs turns asks `turns_over`, and is
@@ -1381,6 +1380,7 @@ The library's own providers of turns switch in fewer:
 | `stacks.round` | `yield` and `wait`; its `start` prepares the fibre and returns |
 | `fake.network` over turns | `accept`, `send`, `receive`, `receive_from`, `read`, `write` and `write_some`, and only where the call would wait |
 | `fake.signals` | `next_signal` when nothing waits to be read, and its round's `yield` and `wait` |
+| `events.host` | `yield` and `wait`; `read`, `write` and `write_some` when the file is not ready; `read_child` and `write_child` when the pipe is not; the programs' `wait`, for the child's end; `sleep` until its deadline; `accept`, `connect`, `send`, `receive`, `send_to` and `receive_from` where the socket would wait; and `next_signal` when no arrival waits to be read. Its `start` prepares the fibre and returns, and `close`, `close_socket`, `shutdown`, `close_input` and `stop_watching` wake the fibres waiting on what they end without switching |
 
 `fake.clock`'s `sleep` advances the clock and returns, and switches
 nowhere; a test whose sleeps must take turns gives its fibres a clock
@@ -1542,6 +1542,62 @@ The program prints the arguments `blocking.new()`'s provider lends, one to
 a line after its index. It then looks for a settings file that is not
 there and prints why it could not be opened, in `failure.words`' phrase
 and by `blocking.last_errno`'s number, before going on with its defaults.
+
+## hosted/events
+
+The hosted provider whose waiting operations switch fibres, written once
+over `platform/posix`, `platform/linux`'s epoll and signalfd and
+`platform/kqueue`: the provider `host`, made by `new`, imported as
+`events` with no alias. A program that serves several things at once,
+or waits for a signal, mints it instead of `blocking.new()`.
+
+| Call | What it does |
+|---|---|
+| `events.new(space, entries)` | Fill an `events.space` the caller declares `zeroed` and return a `host` over it and over `entries`, the table of fibres that may be unfinished at once, one more than a group's count. |
+| `events.last_errno(host)` | The errno number of the last failing call, in the process's cell. |
+| `events.last_signal(host)` | The signal that ended the last child waited for. |
+
+`host` supplies every concept `hosted/blocking` does, `world`,
+`programs`, `network`, `clock` and the system's, and is a
+`fibre.turns` and a `signal.signals` beside them. Its fibres take turns
+on a `stacks.round` over the caller's table; when every fibre has taken
+a turn since anything last started or ended, the round waits for events:
+epoll on Linux and kqueue on Darwin and FreeBSD, limited by the earliest
+deadline any fibre waits for, and not at all when a fibre yielded of its
+own accord. With nothing waiting it returns at once.
+
+- A call that would wait submits a record on its fibre's own stack and
+  takes turns until the loop answers it: the descriptor is ready, the
+  deadline passed, or what it waited on was closed. A completion
+  interface could answer the same records with the call's result.
+- The provider's sockets and a child's pipes are non-blocking. A file it
+  did not make is polled first and read or written once it is ready, so
+  a regular file is read at once, and a terminal or a pipe a fibre waits
+  for lets the others run.
+- Closing a file or a socket, or shutting a socket's side, through the
+  provider wakes every fibre waiting on it, whose call fails `io_failed`.
+- A socket's limits from `set_timeouts` bound each wait, and their
+  passing is `timed_out`. A connect has no limit.
+- `sleep` waits for its deadline in the loop, never early: no timer or
+  descriptor is made for it.
+- A child's end is waited for on a pidfd on Linux and with kqueue's
+  process filter on Darwin and FreeBSD, then reaped.
+- `watch` blocks the signal and reads it through a signalfd on Linux,
+  and ignores it and reports it through kqueue on Darwin and FreeBSD,
+  SIGCHLD keeping its default there; every child started afterwards gets
+  the signal's default back. `stop_watching` reads what arrived, gives
+  each signal its default back and wakes every fibre in `next_signal`.
+- The event queue is closed on exec and stays open until the process
+  ends.
+
+The entries that may switch are the table's above, under "Which calls
+may switch".
+
+[Executable example](../compiler/tests/fixtures/runtime/events-tcp-exchange/main.ldn)
+
+The program runs a server fibre and a client fibre over one loopback
+connection; each waits in `receive` while the other runs, so their lines
+interleave.
 
 ## hosted/system
 

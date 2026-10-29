@@ -394,6 +394,13 @@ public receive_timeout:
     span = try system_get_time(socket, receive_limit)
 end receive_timeout
 
+--- How long a send on `socket` waits, as `set_send_timeout` set it, zero
+--- for no limit, as `receive_timeout` reads the receive limit.
+public send_timeout:
+    (socket: descriptor) -> (span: time_value) ! errno =
+    span = try system_get_time(socket, send_limit)
+end send_timeout
+
 --- Fail with the error pending on `socket`, `SO_ERROR`, clearing it, or
 --- return when there is none: how a connection `connect` began and a
 --- signal interrupted ended.

@@ -1,0 +1,8 @@
+class: runtime
+summary: D449 under hosted/events a fibre waiting in receive on a loopback connection is woken with io_failed when another fibre closes its socket through the provider, and another when the other end is shut for receiving, though nothing is ever sent
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1380, 1620, 1660, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

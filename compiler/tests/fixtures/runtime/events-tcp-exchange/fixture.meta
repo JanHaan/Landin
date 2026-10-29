@@ -1,0 +1,10 @@
+class: runtime
+summary: D485 D486 two fibres of hosted/events exchange over a loopback TCP connection, the server accepting and doubling each byte and the client connecting and sending three, and their lines interleave as each waits in receive while the other runs; the client reads the server's close as an end
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 1380, 1620, 1660, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

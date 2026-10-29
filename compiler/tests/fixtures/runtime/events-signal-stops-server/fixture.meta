@@ -1,0 +1,8 @@
+class: runtime
+summary: D449 D482 D488 a fibre of hosted/events written against any signal.signals waits for SIGTERM while a server fibre waits in accept; the process sends itself SIGTERM, which the loop reads as an event through signalfd or kqueue, the signal fibre closes the listener and the server's accept fails io_failed; stop_watching wakes a fibre waiting for SIGHUP with io_failed
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1240, 1310, 1380, 1620, 1660, 1680, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
