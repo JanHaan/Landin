@@ -1653,6 +1653,26 @@ package body Landin.Tests.Fixture_Execution_Suite is
      is (case Each is
             when 1 => "atomics", when 2 => "crc32", when 3 => "asimdrdm");
 
+   --  Whether `sysctl -n KEY` answered 1.  It ends its answer with a line
+   --  feed, which a trim of spaces alone keeps, so every blank, tab and
+   --  line ending on either side is dropped first.
+   function Sysctl_Says_Yes (Output : String) return Boolean;
+
+   function Sysctl_Says_Yes (Output : String) return Boolean is
+      First : Positive := Output'First;
+      Last : Natural := Output'Last;
+      function Blank (C : Character) return Boolean
+        is (C in ' ' | ASCII.HT | ASCII.LF | ASCII.CR);
+   begin
+      while First <= Last and then Blank (Output (First)) loop
+         First := First + 1;
+      end loop;
+      while Last >= First and then Blank (Output (Last)) loop
+         Last := Last - 1;
+      end loop;
+      return Output (First .. Last) = "1";
+   end Sysctl_Says_Yes;
+
    procedure Ask_Lane_Processor (Host : Landin.Platform.Filesystem'Class) is
       Line : constant String :=
         (case Landin.Targets.Architecture_Of (Lanes.Target) is
@@ -1694,9 +1714,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
                   Landin.Platform.Output_Only);
                if Asked.Ended = Landin.Platform.Exited
                  and then Asked.Exit_Code = 0
-                 and then Ada.Strings.Fixed.Trim
-                   (Unbounded.To_String (Asked.Output), Ada.Strings.Both)
-                   = "1"
+                 and then Sysctl_Says_Yes
+                   (Unbounded.To_String (Asked.Output))
                then
                   Unbounded.Append (Processor_Flags, Darwin_Flag (Each) & " ");
                end if;
@@ -1978,6 +1997,30 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  The probe on fakes: an emulator that writes past the record is
    --  refused by name, version and reason; one that does not is held to
    --  nothing more.
+   --  A Mac's level is confirmed by `sysctl -n` printing 1 and a line
+   --  feed; a trim of spaces alone kept the line feed and refused every
+   --  feature of a Mac that has them all.
+   procedure A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Landin.Testing.Check
+        (Item, Sysctl_Says_Yes ("1" & ASCII.LF), "1 and a line feed is yes");
+      Landin.Testing.Check
+        (Item, Sysctl_Says_Yes (" 1" & ASCII.CR & ASCII.LF),
+         "a carriage return and a blank are dropped too");
+      Landin.Testing.Check
+        (Item, Sysctl_Says_Yes ("1"), "a bare 1 is yes");
+      Landin.Testing.Check
+        (Item, not Sysctl_Says_Yes ("0" & ASCII.LF), "0 is no");
+      Landin.Testing.Check
+        (Item, not Sysctl_Says_Yes ("" & ASCII.LF), "an empty answer is no");
+      Landin.Testing.Check
+        (Item, not Sysctl_Says_Yes ("10" & ASCII.LF), "10 is no");
+   end A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending;
+
    procedure A_Known_Bad_Runner_Is_Refused
      (Item : in out Landin.Testing.Context);
 
@@ -4046,6 +4089,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a known-bad runner is refused",
          A_Known_Bad_Runner_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "a sysctl answer is read past its line ending",
+         A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending'Access);
       Landin.Testing.Register
         (Into, "fixture execution",
          "outputs belong to their producing attempt",
