@@ -7,8 +7,12 @@
 --  none reaches the child however it was made.  A thread makes four pipes
 --  with no close-on-exec flag at all and holds them, then makes and closes
 --  pipes through platform/posix for as long as the routine spawns; each
---  child, a shell, names every descriptor above its streams that it finds
---  open, and none may.
+--  child, a shell, is given the numbers of the eight ends the thread holds
+--  and names each it finds open, and none may be.  It asks with an `exec`
+--  in a subshell, which makes the shell keep no descriptor of its own: a
+--  probe of every number from 3 up once found 10 open under Darwin's
+--  bash, which kept its standard output there while it ran a redirected
+--  builtin.
 import core/failure
 import core/io
 import core/text
@@ -18,6 +22,9 @@ import hosted/thread
 import platform/libc
 import platform/linux
 import platform/posix
+
+--  The eight ends the thread holds, written before it says it holds them.
+mut held: [8]i32 = zeroed
 
 --  Set when the thread holds its four pipes; set when the routine has
 --  spawned every child.
@@ -53,7 +60,6 @@ end maker
 --  Hold four inheritable pipes, and make pipes until told to stop.
 make_pipes: (inout state: maker) -> none ! failure.reason =
     _ = state
-    mut held: [8]i32 = zeroed
     for pair in usize(0)..<4 do
         fail io.io_failed when not open_pipe(addr held[2 * pair])
     end for
@@ -72,22 +78,48 @@ make_pipes: (inout state: maker) -> none ! failure.reason =
     end for
 end make_pipes
 
---  Each descriptor from 3 to 31 the shell finds open, one a line.  Each
---  is tried in a subshell of its own, since a shell keeps the stream a
---  redirection replaces in a descriptor of its own while it runs, bash
---  at 10.
+--  Each descriptor among its arguments the shell finds open, one a line.
+--  A failed `exec` redirection ends the subshell, and nothing the shell
+--  keeps for itself is open there.
 script: []u8 = """
-    fd=3
-    while [ "$fd" -lt 32 ]; do
-        if (true >&"$fd") 2>/dev/null; then echo "$fd"; fi
-        fd=$((fd + 1))
+    for fd in "$@"; do
+        if (exec 2>/dev/null; exec 1>&"$fd"); then echo "$fd"; fi
     done
     """
 
+--  The held ends' numbers in decimal, for the shell's arguments.
+mut digits: [8][4]u8 = zeroed
+mut lengths: [8]usize = zeroed
+
+--  Write `number`, below 1000, into entry `index` of `digits`.
+spell: (index: usize, number: i32) -> none =
+    mut left: u32 = u32(number)
+    mut reversed: [4]u8 = zeroed
+    mut count: usize = 0
+    loop do
+        reversed[count] = u8(48 + left % 10)
+        inc count
+        left = left / 10
+        break when left == 0 or count == 3
+    end loop
+    for at in usize(0)..<count do
+        digits[index][at] = reversed[count - 1 - at]
+    end for
+    lengths[index] = count
+end spell
+
 --  Run the shell and return whether it found nothing open.
 nothing_inherited: (host: blocking.host) -> (clean: bool) ! failure.reason =
-    arguments: [2]text.host_string = [text.host_over("-c"),
-                                      text.host_over(script)]
+    arguments: [11]text.host_string =
+        [text.host_over("-c"), text.host_over(script), text.host_over("sh"),
+         text.host_over(digits[0][0..<lengths[0]]),
+         text.host_over(digits[1][0..<lengths[1]]),
+         text.host_over(digits[2][0..<lengths[2]]),
+         text.host_over(digits[3][0..<lengths[3]]),
+         text.host_over(digits[4][0..<lengths[4]]),
+         text.host_over(digits[5][0..<lengths[5]]),
+         text.host_over(digits[6][0..<lengths[6]]),
+         text.host_over(digits[7][0..<lengths[7]])]
     variables: []io.variable = []
     mut running: io.child = try io.spawn(host, text.host_over("/bin/sh"),
                                          arguments, variables, io.capturing)
@@ -121,6 +153,9 @@ run: (host: blocking.host) -> none ! failure.reason =
     while compiler.atomic_load(addr holding, compiler.acquire) == 0 do
         inc spins
     end while
+    for index in usize(0)..<8 do
+        spell(index, held[index])
+    end for
     for child in usize(0)..<8 do
         _ = child
         clean: bool = nothing_inherited(host) else (problem)
