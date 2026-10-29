@@ -29,10 +29,10 @@ does, and when the file cannot be read it says why on standard error:
 import core/failure
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Write each line of the file at `path` to `out` after its number.
-numbered: (inout out: io.buffered_writer(system.host), host: system.host,
+numbered: (inout out: io.buffered_writer(blocking.host), host: blocking.host,
            path: text.host_string) -> none ! ... =
     file := try io.open_read(host, path)
     defer io.close(host, file) else none
@@ -48,7 +48,7 @@ numbered: (inout out: io.buffered_writer(system.host), host: system.host,
 end numbered
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
@@ -110,7 +110,7 @@ Which module does what:
 
 | Task | Calls | Module |
 |---|---|---|
-| Get the handle every hosted call takes | `host := system.new()` | [hosted/system](../hosted/system) |
+| Get the handle every hosted call takes | `host := blocking.new()` | [hosted/blocking](../hosted/blocking) |
 | Print a formatted line | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` and `io.flush(out)` | [core/io](../core/io) |
 | Get a command-line argument | `io.argument_at(host, 0)`, and `io.argument_count(host)` | [core/io](../core/io) |
 | Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
@@ -131,9 +131,9 @@ A call writes far less: `io.argument_at(host, 0)`.
 | `provider: type is process`, first | A type parameter. The compiler deduces it from the arguments, so a call usually leaves it out [1300]. A call may name it instead, and then names every type parameter, as `vec.new(item: i32)` must, since no argument has that type. |
 | `provider: type` | A type parameter with no requirement: any type will do. |
 | `is process` | The type must conform to the concept `process`: a named set of operations [1230] [1240]. |
-| `host: provider` | The provider: the handle a call works through, here the one `system.new()` made. An allocator is passed the same way, usually as `memory: provider` beside its own `provider: type is mem.allocator`. |
+| `host: provider` | The provider: the handle a call works through, here the one `blocking.new()` made. An allocator is passed the same way, usually as `memory: provider` beside its own `provider: type is mem.allocator`. |
 | evidence | The table that tells generic code how a type does a concept's operations [1240] [1310]. A conformance such as `u32 is formattable (...)` supplies it. |
-| `world` | `core/io`'s concept for an ordinary program's provider: a `reader`, `writer`, `files` and `process` in one. `system.new()`'s `host` is one. In `core/io`, `memory` is the memory world, a provider over the caller's storage. |
+| `world` | `core/io`'s concept for an ordinary program's provider: a `reader`, `writer`, `files` and `process` in one. `blocking.new()`'s `host` is one. In `core/io`, `memory` is the memory world, a provider over the caller's storage. |
 | `buffered_writer(provider)` | A generic type applied to a type: a buffered writer over whichever provider the call deduces [1250]. |
 | `public builder: type = builder_value` | A public name for a type whose fields are the module's own. You hold one and pass it to the module's calls; reading a field is refused. |
 | `[]mut u8` | A slice the call may write through [0570]. A plain `[]u8` it only reads. |
@@ -586,7 +586,7 @@ The capabilities are concepts, and a program names only the ones it uses:
 | `entropy` | `fill_random` | no |
 
 Typical use, as in the tour's first program. Every call takes `host`,
-the handle `system.new()` makes in [hosted/system](../hosted/system),
+the handle `blocking.new()` makes in [hosted/blocking](../hosted/blocking),
 which a hosted program imports beside `core/io`. A call written with
 `try` is in a routine that can fail; `main` cannot, and handles each
 failure with `else` instead, as the program at the end of the page does:
@@ -636,8 +636,8 @@ How it behaves, so that a test gets the same answer every run:
 
 - Files must already be in its table. Opening one for writing truncates
   it, and reads stop at a file's initialized length.
-- `write` and `write_some` keep the system provider's contract below, in
-  [hosted/system](../hosted/system).
+- `write` and `write_some` keep the blocking provider's contract below, in
+  [hosted/blocking](../hosted/blocking).
 - The read and write limits cut each transfer into chunks, and
   `fail_read_at`, `fail_write_at` and `fail_close_at` fail the call with
   that one-based count: 1 is the first read, and 0 never fails. So short
@@ -736,8 +736,9 @@ A child never waited for keeps what its provider holds for it until the
 process ends. Close a child's pipes only through `close_input` and
 `wait`, never through `files`.
 
-The hosted provider's pipes are its own files, which `reader` and
-`writer` also take, a line reader over a child's output among them. The
+The hosted providers' pipes are their own files, which
+`hosted/blocking`'s `reader` and `writer` also take, a line reader over a
+child's output among them. The
 memory world's are not.
 
 `scripted_over` makes `scripted_programs`, a programs provider beside a
@@ -1343,25 +1344,115 @@ It is single-threaded. A refusal comes before any state changes.
 
 [Executable example](../compiler/tests/fixtures/runtime/hosted-heap-provider/main.ldn)
 
-## hosted/system
+## hosted/blocking
 
-Hosted file, stream and process operations, written once over `platform/posix`: the provider `host`, made by `new`, imported as `system` with no alias.
+The hosted provider whose waiting operations block the thread, written
+once over `platform/posix`: the provider `host`, made by `new`, imported
+as `blocking` with no alias. It is what an ordinary hosted program
+imports.
 
 | Call | What it does |
 |---|---|
-| `system.new()` | The process's provider: a `host` handle that borrows nothing. |
-| `system.over(space)` | A provider that keeps its last errno in a `space` the caller declares. |
+| `blocking.new()` | The process's provider: a `host` handle that borrows nothing. |
+| `blocking.over(space)` | A provider that keeps its last errno in a `space` the caller declares. |
+| `blocking.last_errno(host)` | The errno number of the last failing call. |
+| `blocking.last_signal(host)` | The signal that ended the last child waited for. |
+
+`host` supplies every concept of `core/io`, `core/time` and `core/net`:
+the shared I/O concepts and so `world`, `directories`, `environment`,
+`programs`, `network`, `file_system`, `terminals`, `clock`, `wall_clock`
+and `entropy`. It is also a `fibre.scheduler` that runs each task to its
+end before `admit` returns, as `fibre.whole` does, and so is no provider
+of `fibre.turns`: its calls block the thread.
+
+It is built over a `hosted/system` handle, which `new` makes, and hands
+that handle everything that does not wait: opening and closing files, the
+standard streams' descriptors and the arguments, the environment,
+directories, programs, the rest of the file system, terminals, entropy
+and the wall clock. What waits is its own: `read`, `write` and
+`write_some`, the network, and the monotonic clock with its `sleep`. Both
+report through the system handle's one last-error cell, so `last_errno`
+says the same whichever of them failed. Its files are the system's:
+`hosted/system`'s `descriptor_of`, `file_of` and `socket_of` convert them.
+
+### What the provider promises
+
+| Call | Promise |
+|---|---|
+| `write` | Writes the whole slice, or fails. Bytes written before a failure stay written. |
+| `write_some` | Makes one attempt and returns a positive count, which may be short. A failed attempt writes nothing. |
+| either, on an empty slice | Succeeds without asking the system; `write_some` returns zero. |
+| open, `read`, `write` | Retried after a signal interrupts them only when the system guarantees the attempt made no progress: completed progress is never repeated. |
+| `close` | Consumes the file once, even when it fails, and is never retried blindly. |
+| `same_file(left, right)` | Follows symbolic links and recognises hard links. The left path must exist; a missing right path gives false, and any other failure is an error. The check is not atomic: the names must stay put until the open that follows. |
+| the arguments | Begin after the program's name: neither this provider nor the memory world includes `argv[0]`. |
+
+### The network
+
+`network` runs over `platform/posix`'s sockets. A socket is a descriptor
+and a file of the provider like any other, so `read` and `write` take a
+connection.
+
+- A write to a socket the provider made is a send, which raises no
+  SIGPIPE beside a C handler on any system.
+- A listener reuses its address.
+- An IPv6 socket takes IPv6 alone on every system, which BSD does from
+  the start and Linux does not.
+- Up to 128 connections wait to be accepted.
+
+Interruptions and partial results are handled for you:
+
+- an interrupted call is made again;
+- a connection a signal interrupted is waited out with `poll`, and its
+  outcome read from the socket;
+- an accept refused because its connection was reset before it was taken
+  accepts the next;
+- a send goes on after a short one until every byte is sent.
+
+A send to a peer that has gone is `disconnected`, EPIPE or ECONNRESET kept
+as the last errno, and a `write` to it is `io_failed` with EPIPE. The
+process ignores SIGPIPE, so neither ends it.
+
+### The clock
+
+| Call | On the hosted provider |
+|---|---|
+| `now` | `platform/posix`'s monotonic clock, in nanoseconds since the system started. |
+| `sleep` | Takes its deadline from the monotonic clock, and asks the system to sleep for what is left until that clock has reached it. |
+
+A clock the system cannot read ends the program, since no hosted system
+fails to.
+
+A sleep a signal interrupts, or the system ends early, sleeps on: it
+never returns before the deadline as `now` reads it.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-system-arguments/main.ldn)
+
+The program prints the arguments `blocking.new()`'s provider lends, one to
+a line after its index. It then looks for a settings file that is not
+there and prints why it could not be opened, in `failure.words`' phrase
+and by `blocking.last_errno`'s number, before going on with its defaults.
+
+## hosted/system
+
+The hosted services that do not wait and are the same whoever waits,
+written once over `platform/posix`: the provider `host`, made by `new`,
+imported as `system` with no alias. It reads and writes no stream, so it
+is not a `world`; `hosted/blocking` is built over it and supplies what
+waits. A program that never reads, writes or sleeps may use it alone.
+
+| Call | What it does |
+|---|---|
+| `system.new()` | The process's services: a `host` handle that borrows nothing. |
+| `system.over(space)` | A handle that keeps its last errno in a `space` the caller declares. |
 | `system.last_errno(host)` | The errno number of the last failing call. |
 | `system.last_signal(host)` | The signal that ended the last child waited for. |
 | `system.descriptor_of(file)`, `system.file_of(descriptor)` | Convert between a provider's file and a `platform/posix` descriptor. |
-| `system.socket_of(descriptor)` | A provider's socket from a socket of `platform/posix`'s. |
+| `system.socket_of(descriptor)`, `system.is_socket(file)` | A provider's socket from a socket of `platform/posix`'s, and whether a file is one. |
+| `system.clear_errno(host)`, `system.record_errno(host, errno)` | Clear the last-error cell, or keep an errno in it, for a provider built over this one. |
 
-`host` supplies every concept of `core/io`, `core/time` and `core/net`:
-the shared I/O concepts, `directories`, `programs`, `network`,
-`file_system`, `terminals`, `clock`, `wall_clock` and `entropy`. It is
-also a `fibre.scheduler` that runs each task to its end before `admit`
-returns, as `fibre.whole` does, and so is no provider of `fibre.turns`:
-its calls block the thread.
+`host` supplies `files`, `process`, `environment`, `directories`,
+`programs`, `file_system`, `terminals`, `entropy` and `wall_clock`.
 
 ### The provider
 
@@ -1383,18 +1474,6 @@ provider makes itself, without asking the system, sets none. `last_signal` is th
 the child last waited for, beside `io.ending`'s `signalled`, and zero
 after a child that exited.
 
-### What the provider promises
-
-| Call | Promise |
-|---|---|
-| `write` | Writes the whole slice, or fails. Bytes written before a failure stay written. |
-| `write_some` | Makes one attempt and returns a positive count, which may be short. A failed attempt writes nothing. |
-| either, on an empty slice | Succeeds without asking the system; `write_some` returns zero. |
-| open, `read`, `write` | Retried after a signal interrupts them only when the system guarantees the attempt made no progress: completed progress is never repeated. |
-| `close` | Consumes the file once, even when it fails, and is never retried blindly. |
-| `same_file(left, right)` | Follows symbolic links and recognises hard links. The left path must exist; a missing right path gives false, and any other failure is an error. The check is not atomic: the names must stay put until the open that follows. |
-| the arguments | Begin after the program's name: neither this provider nor the memory world includes `argv[0]`. |
-
 ### A C `main` that calls Landin
 
 A Landin entry point sets up the arguments before its body runs. A program
@@ -1402,8 +1481,8 @@ whose `main` is C's, calling public Landin routines, does it itself, by
 calling `_landin_host_initialize_arguments(argc, argv, envp)` from
 `platform/posix`:
 
-- Call it before the first `system.new()`, and before starting any thread
-  that may make one; `system.new()` traps before it. Importing `core/io`
+- Call it before the first `system.new()` or `blocking.new()`, and before
+  starting any thread that may make one; both trap before it. Importing `core/io`
   does not initialize anything, and files, streams and the heap work
   without it.
 - The first call needs a nonnegative `argc` and a non-null `argv`, and
@@ -1458,33 +1537,9 @@ entry left it, never copied and never changed.
   writing to one meets a closed pipe rather than a parent that never
   reads.
 
-An interrupted spawn, poll, read or wait is made again.
-
-### The network
-
-`network` runs over `platform/posix`'s sockets. A socket is a descriptor
-and a file of the provider like any other, so `read` and `write` take a
-connection.
-
-- A write to a socket the provider made is a send, which raises no
-  SIGPIPE beside a C handler on any system.
-- A listener reuses its address.
-- An IPv6 socket takes IPv6 alone on every system, which BSD does from
-  the start and Linux does not.
-- Up to 128 connections wait to be accepted.
-
-Interruptions and partial results are handled for you:
-
-- an interrupted call is made again;
-- a connection a signal interrupted is waited out with `poll`, and its
-  outcome read from the socket;
-- an accept refused because its connection was reset before it was taken
-  accepts the next;
-- a send goes on after a short one until every byte is sent.
-
-A send to a peer that has gone is `disconnected`, EPIPE or ECONNRESET kept
-as the last errno, and a `write` to it is `io_failed` with EPIPE. The
-process ignores SIGPIPE, so neither ends it.
+An interrupted spawn, poll, read or wait is made again. A child's pipes
+are read and written here, blocking the thread, whichever provider is
+built over this one.
 
 ### The rest of the file system and terminals
 
@@ -1505,34 +1560,29 @@ provider is, for a call the portable concepts do not make: a permission
 bit, a lock or a terminal's raw mode. `file_of` gives the file a
 descriptor is.
 
-### Clocks and entropy
+### The wall clock and entropy
 
 | Call | On the hosted provider |
 |---|---|
-| `now` | `platform/posix`'s monotonic clock, in nanoseconds since the system started. |
-| `wall_now` | Its realtime clock. |
-| `sleep` | Takes its deadline from the monotonic clock, and asks the system to sleep for what is left until that clock has reached it. |
+| `wall_now` | `platform/posix`'s realtime clock. |
 | `fill_random` | `platform/posix`'s `random_bytes` until the buffer is full, asked again after an interruption: `getrandom` on Linux, which waits at boot until the kernel's pool is ready, and `arc4random_buf` on Darwin and FreeBSD. |
 
 A clock the system cannot read ends the program, since no hosted system
 fails to.
 
-A sleep a signal interrupts, or the system ends early, sleeps on: it
-never returns before the deadline as `now` reads it.
+[Executable example](../compiler/tests/fixtures/runtime/hosted-system-alone/main.ldn)
 
-[Executable example](../compiler/tests/fixtures/runtime/library-system-arguments/main.ldn)
-
-The program prints the arguments `system.new()`'s provider lends, one to
-a line after its index. It then looks for a settings file that is not
-there and prints why it could not be opened, in `failure.words`' phrase
-and by `system.last_errno`'s number, before going on with its defaults.
+The program uses `hosted/system` alone: it counts its arguments, finds a
+variable of its environment, makes and removes a directory, and asks for
+random bytes and the time, answering with its exit status since it has
+nothing to write with.
 
 ## platform/posix
 
 POSIX's facilities in Landin types, on Linux, Darwin and FreeBSD alike.
 
 The calls are POSIX's own, not policy. This module is what `hosted/system`
-is written over, and what a program uses when it needs a call the
+and `hosted/blocking` are written over, and what a program uses when it needs a call the
 portable concepts do not make.
 
 It is written twice beneath its interface: over `platform/linux`'s system

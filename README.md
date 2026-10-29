@@ -135,10 +135,10 @@ Save this there as `main.ldn`:
 
 ```landin
 import core/io
-import hosted/system
+import hosted/blocking
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     io.write(host, io.out(host), "Hello, world!\n") else none
     code = 0
 end main
@@ -157,7 +157,7 @@ It prints
 Hello, world!
 ```
 
-`system.new()` is the program's handle on the operating system, and
+`blocking.new()` is the program's handle on the operating system, and
 `io.write` writes through it. Writing can fail; `else none` says that here
 it does not matter. [The tour](tour.md) starts from this program and
 explains each line.
@@ -461,9 +461,10 @@ This is the maintained inventory of what the compiler does today:
   integer keys and ordering, Boolean and byte slice keys, and UTF-8 keys and
   ordering. A closed set of named values, such as a diagnostic's severity, is
   an atom set.
-  `hosted/heap` and `hosted/system` supply the hosted heap and
-  system I/O capabilities, written once over `platform/posix`, which gives
-  POSIX's files, directories, memory mappings, `poll`, pipes, spawning,
+  `hosted/heap`, `hosted/system` and `hosted/blocking` supply the hosted
+  heap, the system's services that do not wait and the I/O provider that
+  blocks the thread while it waits, written once over `platform/posix`,
+  which gives POSIX's files, directories, memory mappings, `poll`, pipes, spawning,
   waiting and sockets, Unix-domain ones among them, reading and writing at
   an offset, renaming, hard and symbolic links, permission bits, owners and
   file times, whole-file and record locks, terminals, their raw mode and

@@ -3,10 +3,10 @@
 import core/failure
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Write each line of the file at `path` to `out` after its number.
-numbered: (inout out: io.buffered_writer(system.host), host: system.host,
+numbered: (inout out: io.buffered_writer(blocking.host), host: blocking.host,
            path: text.host_string) -> none ! ... =
     file := try io.open_read(host, path)
     defer io.close(host, file) else none
@@ -22,7 +22,7 @@ numbered: (inout out: io.buffered_writer(system.host), host: system.host,
 end numbered
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

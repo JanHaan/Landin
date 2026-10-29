@@ -2058,11 +2058,13 @@ Foreign failure detail is ordinary explicit state. `platform/posix` reads the
 errno after a documented libc failure indication on Darwin and FreeBSD,
 through `platform/libc`'s `errno_cell` before any other host call, and on
 Linux takes it from the failing system call's negative result (D279); either
-way it reaches `hosted/system` as an atom of `posix.errno` with its number (D298).
-`hosted/system` retains the exact terminal value in the last-error cell the system handle
-names, exposed by `system.last_errno`: the process's private cell for a handle
-from `system.new()`, or a caller-declared `system.space` for one from
-`system.over` (D288). Safe interrupted open/read/write attempts may retry; completed
+way it reaches `hosted/system` or a provider built over it, `hosted/blocking`,
+as an atom of `posix.errno` with its number (D298). Each retains the exact
+terminal value in the last-error cell the system handle names, exposed by
+`system.last_errno` and `blocking.last_errno`: the process's private cell for a
+handle from `system.new()` or `blocking.new()`, or a caller-declared
+`system.space` for one from `system.over` or `blocking.over` (D288, D476).
+Safe interrupted open/read/write attempts may retry; completed
 read/write progress is never replayed. Close consumes the handle even on
 failure and is never blindly retried, including EINTR. These facts neither add
 payloads to error atoms nor make errno a public Landin variable.
@@ -2082,7 +2084,7 @@ a hosted entry every declaration carrying that symbol must be exactly
 markers, or it is refused. The environment table is retained beside the
 argument table without copying, a null table meaning an empty environment, and
 an identical repeat must repeat all three carriers. A C-owned startup that drives public C-convention Landin routines
-calls it explicitly before `system.new()` can mint an argument-table
+calls it explicitly before `system.new()` or `blocking.new()` can mint an argument-table
 capability and before starting any thread that may do so. Merely importing
 `core/io` does not perform initialization, and file, stream and heap work,
 which needs no argument root, may run without it. Ordinary exports and
@@ -2105,7 +2107,7 @@ owner must keep the `argv` table and every argument it names readable for the
 whole lifetime of every Landin world, view and callback derived from them. A
 later call with the identical count and pointer is harmless; a negative count,
 null table or attempt to replace either part of the established root traps.
-`system.new()` traps before initialization. The published user table begins
+`system.new()` and `blocking.new()` trap before initialization. The published user table begins
 at `argv + 1`, its count is `max(argc - 1, 0)`, and indexed lookup traps on a
 null entry within that count.
 
@@ -2123,9 +2125,11 @@ source as ordinary assembly blocks and owns the process entry `_landin_start`
 (D279); a hosted Linux executable links statically by default, with no C
 runtime or library, and `--link=libc` links C's runtime instead (D280).
 `hosted/system` turns descriptors and pointer-and-length
-argument views into ordinary values, maps foreseeable host failures onto
-declared atoms, and threads its `world(provider)` concept as the authority for
-opening files and touching streams [1660] [1680]. The required `world.write_some` reports counted
+argument views into ordinary values and maps foreseeable host failures onto
+declared atoms; it opens and closes files and names the streams but reads and
+writes none, so it is no world (D476). `hosted/blocking`, built over a system
+handle, reads and writes, and threads its `world(provider)` concept as the
+authority for opening files and touching streams [1660] [1680]. The required `world.write_some` reports counted
 progress for one attempt, with no transfer on failure and no host call for an
 empty slice. `world.same_file` follows path aliases and compares file identity
 before any destructive output open; a missing output returns false, while
@@ -13784,10 +13788,10 @@ classified failure boundary before the repository gate can pass.
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0339 rejects an invalid site type, L0301 a different signature, L0327 an extra positional argument or invalid forwarding source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 0570, 0750, 0920, 1000, 1570, 1580, 1600, 1975 | C convention and variadicness remain recursively distinct from the Landin convention; fixed positions at the selected boundary admit integers, bool, pointers, f32/f64, fixed C callbacks and compatible nonempty `layout(c)` structs, while L0346 refuses an ordinary Landin struct, a slice, a Landin error channel or a native-convention callback even when its machine shape matches | `positive/external-scalar-c-boundary`, `positive/r440-external-float`, `positive/r440-c-signatures`, `negative/external-aggregate-boundary`, `negative/r440-c-slice-parameter`, `negative/r440-c-error-channel`, `negative/r440-c-native-callback` |
 | `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, L0347 refuses an assembly expression, incompatible declarations or multiple definitions, and L0301 refuses treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
-| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry calls `hosted/system`'s initializer, when the program defines it, to establish the actual argument root before its body; C-owned startup must initialize it explicitly before `system.new()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and file, stream and heap work needs no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
+| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry calls `hosted/system`'s initializer, when the program defines it, to establish the actual argument root before its body; C-owned startup must initialize it explicitly before `system.new()` or `blocking.new()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and file, stream and heap work needs no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
 | `capabilities.host-root-exclusion` | outside | 1660, 1680, 1975 | non-guarantee: an ordinary hosted routine without an I/O or allocator parameter may call a public host constructor and use that authority; passing a replacement provider does not exclude this path | `runtime/derived-hosted-memory` |
-| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `hosted/system` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `hosted/system` and `hosted/blocking` report foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` copies at most N messages of up to `diag.message_capacity` bytes and counts later or oversized notes in `dropped` | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1675, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
@@ -24103,8 +24107,54 @@ program; keeping `hosted/system` the blocking provider and moving the shared
 services into a new `hosted/process`, which changes no program but leaves
 the blocking provider without a name that says so. Both were declined.
 
-**Pinned by** nothing that runs yet: the split's migration of every hosted
-fixture will pin it, with a program over `hosted/system` alone.
+**Pinned by** `runtime/hosted-system-alone`, a program over `hosted/system`
+alone that takes its arguments, environment, files, a directory, entropy
+and the wall clock from one handle, and `negative/hosted-system-is-no-world`,
+which refuses writing through that handle and erasing it as a world;
+`runtime/first-program` and every other hosted fixture mint
+`blocking.new()`.
+
+### D478 — Which side of the split each hosted concept is on
+
+**The tour said** nothing, and D476 named services rather than concepts.
+`core/io`'s concepts do not divide where waiting does: `world` composes
+`reader` and `writer` with `files` and `process`, `file_system` refines
+`files`, `programs` reads and writes pipes, and `time.clock` is `now` and
+`sleep` together.
+
+**Chosen:** `hosted/system` supplies `files`, `process`, `environment`,
+`directories`, `programs`, `file_system`, `terminals`, `entropy` and
+`time.wall_clock`. `process` is the standard streams' descriptors and the
+arguments, which do not wait; reading a stream does. `file_system`'s
+`read_at` and `write_at` stay with it, because a regular file is always
+ready and no event mechanism waits on one. `programs` stays with it as D476
+says, its pipes read and written and its children waited for by blocking
+the thread whatever provider is built over it. Entropy stays with it:
+`getrandom` waits only once, at boot, for a pool no event announces.
+`hosted/blocking` supplies `reader`, `writer` and so `world`, `net.network`,
+the monotonic `time.clock`, since `now` cannot be supplied without `sleep`,
+and `fibre.scheduler`, and supplies every concept of the system's by
+calling the system's own entry on its handle. Its handle is a struct
+holding the system's; there is one last-error cell, the system handle's,
+which `hosted/system` lets a provider built over it clear and fill with
+`clear_errno` and `record_errno`, and `is_socket` tells such a provider
+which of the system's files it writes by sending. The file encoding,
+`descriptor_of`, `file_of` and `socket_of`, stays the system's alone, so a
+program that converts a descriptor imports both modules.
+
+**The alternatives:** `hosted/system` exposing its reads and writes as
+public routines for a provider to delegate to, which keeps a reader in the
+module that is no world; `programs` moving to `hosted/blocking` with
+reading, which contradicts D476's list; and `hosted/blocking` re-exporting
+the file encoding, which gives one conversion two names. All were
+declined.
+
+**Pinned by** `runtime/hosted-system-alone`, which uses `files`, `process`,
+`environment`, `directories`, `file_system`, `entropy` and `wall_clock` on
+a `hosted/system` handle alone, `negative/hosted-system-is-no-world`,
+`runtime/run-no-descriptor-leak` and `runtime/tree-copy`, which convert a
+blocking provider's file with `system.descriptor_of`, and every hosted
+fixture's delegated calls through `blocking.new()`.
 
 ### D477 — Only a provider that takes turns waits for signals
 

@@ -10,7 +10,7 @@ import core/fibre
 import core/fibre/stacks
 import core/io
 import core/time
-import hosted/system
+import hosted/blocking
 
 answers: type = struct
     order: [2]u8
@@ -93,7 +93,7 @@ show: (provider: type is io.writer, inout out: io.buffered_writer(provider),
 end show
 
 --  The same `ask_both` over three providers.
-run: (host: system.host) -> none ! failure.reason =
+run: (host: blocking.host) -> none ! failure.reason =
     mut storage: [64]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
@@ -121,7 +121,7 @@ end run
 
 public main: () -> (code: i32) =
     code = 1
-    host := system.new()
+    host := blocking.new()
     run(host) else (problem)
         _ = problem
         return

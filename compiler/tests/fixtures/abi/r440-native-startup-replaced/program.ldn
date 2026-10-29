@@ -1,10 +1,10 @@
 import core/io
-import hosted/system
+import hosted/blocking
 
-extern(c) c_replace_root: (state: ptr system.host) -> none
+extern(c) c_replace_root: (state: ptr blocking.host) -> none
 
 public extern(c) l_root: () -> (count: usize) =
-    state: system.host = system.new()
+    state: blocking.host = blocking.new()
     c_replace_root(addr state)
     count = io.argument_count(state)
 end l_root

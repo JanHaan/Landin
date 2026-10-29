@@ -1,9 +1,9 @@
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Whether the settings file is there; any other failure is the caller's.
-settings_present: (host: system.host)
+settings_present: (host: blocking.host)
                   -> (present: bool) ! io.no_access | io.io_failed =
     present = false
     path := text.host_over("settings.conf")

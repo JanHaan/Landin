@@ -7,7 +7,7 @@
 import core/cmp
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 import platform/posix
 
 --  The shell writes each variable between brackets, and whether it has a
@@ -17,7 +17,7 @@ script: []u8 = """
     """
 
 --  Run the script with VARIABLES and read back what it wrote.
-echoed: (host: system.host, variables: []io.variable, into: []mut u8)
+echoed: (host: blocking.host, variables: []io.variable, into: []mut u8)
         -> (count: usize) ! ... =
     count = 0
     arguments: [2]text.host_string = [text.host_over("-c"),
@@ -36,14 +36,14 @@ echoed: (host: system.host, variables: []io.variable, into: []mut u8)
 end echoed
 
 --  Whether spawning with VARIABLES is refused with EINVAL.
-refused: (host: system.host, variables: []io.variable) -> (yes: bool) =
+refused: (host: blocking.host, variables: []io.variable) -> (yes: bool) =
     yes = false
     arguments: [1]text.host_string = [text.host_over("-c")]
     child: io.child = io.spawn(host, text.host_over("/bin/sh"),
                                arguments[0..<1], variables,
                                io.discarding) else (problem)
         yes = problem == io.io_failed
-              and system.last_errno(host) == posix.number(posix.einval)
+              and blocking.last_errno(host) == posix.number(posix.einval)
         return
     end
     ended: io.ending = io.wait(host, child) else (problem)
@@ -54,7 +54,7 @@ refused: (host: system.host, variables: []io.variable) -> (yes: bool) =
 end refused
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     bytes: [4]u8 = [0xff, 0xfe, 0x41, 0x80]
     variables: [3]io.variable =

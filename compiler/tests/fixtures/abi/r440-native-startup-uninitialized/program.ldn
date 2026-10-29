@@ -1,9 +1,9 @@
 import core/io
-import hosted/system
+import hosted/blocking
 
 -- The C root omitted argument initialization. Acquiring the system world is
 -- an actual argv-dependent operation; it must trap before publishing a ptr.
 public extern(c) l_root: () -> (count: usize) =
-    state: system.host = system.new()
+    state: blocking.host = blocking.new()
     count = io.argument_count(state)
 end l_root

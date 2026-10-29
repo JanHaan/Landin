@@ -1,15 +1,15 @@
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Write a name and a count through the program's buffered writer.
-report: (inout out: io.buffered_writer(system.host), name: utf8, count: u32)
+report: (inout out: io.buffered_writer(blocking.host), name: utf8, count: u32)
         -> none ! io.io_failed | text.no_space | text.invalid_format =
     try io.format(out, "{}: {} items\n", [any(addr name), any(addr count)])
 end report
 
 --- Make the writer once, pass it down, and flush it at the end.
-print_report: (host: system.host)
+print_report: (host: blocking.host)
               -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)

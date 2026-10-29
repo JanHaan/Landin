@@ -5,8 +5,8 @@
 import core/io
 import core/mem
 import core/text
+import hosted/blocking
 import hosted/heap
-import hosted/system
 
 in_set: (real_coordinate: f64, imaginary_coordinate: f64)
         -> (member: bool) =
@@ -52,7 +52,7 @@ pack_row: (n: usize, imaginary_coordinate: f64, row: []mut u8) -> none =
     end for
 end pack_row
 
-render: (inout out: io.buffered_writer(system.host), n: usize, row: []mut u8)
+render: (inout out: io.buffered_writer(blocking.host), n: usize, row: []mut u8)
         -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut room: [48]u8 = zeroed
     mut header := text.over(room)
@@ -68,7 +68,7 @@ render: (inout out: io.buffered_writer(system.host), n: usize, row: []mut u8)
 end render
 
 --- The image size named by the first argument.
-image_size: (host: system.host)
+image_size: (host: blocking.host)
             -> (n: usize)
             ! io.no_argument | text.invalid_number | text.number_overflow =
     first: usize = 0
@@ -77,7 +77,7 @@ image_size: (host: system.host)
 end image_size
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     memory := heap.new()
     code = 1
     n := image_size(host) else (problem)

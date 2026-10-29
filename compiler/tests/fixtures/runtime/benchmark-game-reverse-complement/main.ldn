@@ -7,8 +7,8 @@
 import core/io
 import core/mem
 import core/text
+import hosted/blocking
 import hosted/heap
-import hosted/system
 
 --- Each IUB code and the code it pairs with.  A lowercase code pairs
 --- with the same uppercase complement as its uppercase form.
@@ -29,7 +29,7 @@ complements: () -> (table: [256]u8) =
 end complements
 
 --- Append all of standard input to `whole`, a read at a time.
-read_all: (host: system.host, inout whole: text.builder)
+read_all: (host: blocking.host, inout whole: text.builder)
           -> none ! io.io_failed | text.no_space =
     input: io.file = io.input(host)
     mut chunk: [65536]u8 = zeroed
@@ -43,7 +43,7 @@ end read_all
 --- Write `sequence` to `out` from its last base to its first, each
 --- replaced by its complement, leaving out its line breaks and breaking it
 --- again into lines of sixty.
-write_reversed: (inout out: io.buffered_writer(system.host),
+write_reversed: (inout out: io.buffered_writer(blocking.host),
                  sequence: []u8, table: [256]u8) -> none ! io.io_failed =
     mut line: [61]u8 = zeroed
     mut width: usize = 0
@@ -69,7 +69,7 @@ end write_reversed
 --- Write every record of `input` to `out`: its header line, which begins
 --- with `>`, as it is, and then its sequence, every line up to the next
 --- header, turned around.
-records: (inout out: io.buffered_writer(system.host), input: []u8)
+records: (inout out: io.buffered_writer(blocking.host), input: []u8)
          -> none ! io.io_failed =
     table: [256]u8 = complements()
     mut at: usize = 0
@@ -88,7 +88,7 @@ records: (inout out: io.buffered_writer(system.host), input: []u8)
 end records
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     memory := heap.new()
     mut storage: [65536]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)

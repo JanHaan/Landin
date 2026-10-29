@@ -6,7 +6,7 @@
 import core/failure
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Write every line of `host`'s standard input to `out`, numbered.
 numbered: (provider: type is io.world, host: provider,
@@ -37,14 +37,14 @@ numbered: (provider: type is io.world, host: provider,
 end numbered
 
 --- Say on standard error why the lines could not be numbered.
-complain: (host: system.host, problem: failure.reason) -> none =
+complain: (host: blocking.host, problem: failure.reason) -> none =
     io.write(host, io.err(host), "numbers: ") else none
     io.write(host, io.err(host), failure.words(problem)) else none
     io.write(host, io.err(host), "\n") else none
 end complain
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

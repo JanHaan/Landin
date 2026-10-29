@@ -1,0 +1,53 @@
+--  D476: a program that never waits on anything uses hosted/system alone.
+--  It reads no stream and writes none, since the system's handle is no
+--  world, so it answers with its exit status: zero when its arguments,
+--  its environment, a file opened, examined and closed, a directory read,
+--  random bytes and the wall clock all came from the one handle, and the
+--  number of the first that did not otherwise.
+import core/cmp
+import core/io
+import core/text
+import core/time
+import hosted/system
+
+--  The arguments are `one` and the path of an eleven-byte input file.
+checked: (host: system.host) -> (failed: i32) ! ... =
+    failed = 2
+    return when io.argument_count(host) <> 2
+    first: []u8 = text.host_bytes(try io.argument_at(host, 0))
+    return when cmp.compare(first, "one") <> cmp.equal
+    failed = 3
+    _ = io.variable_count(host)
+    _ = io.variable_named(host, text.host_over("LANDIN_NO_SUCH_VARIABLE"))
+        else (problem)
+        failed = if problem == io.no_variable then 4 else 3 end if
+    end
+    return when failed <> 4
+    path: text.host_string = try io.argument_at(host, 1)
+    opened: io.file = try io.open_read(host, path)
+    found: io.status = try io.status_of_file(host, opened)
+    try io.close(host, opened)
+    return when found.size <> 11
+    failed = 5
+    mut buffer: [io.directory_buffer]u8 = zeroed
+    mut listing := try io.open_directory(host, text.host_over("."), buffer)
+    item: io.entry = try io.read_entry(host, listing)
+    named: bool = lenof text.host_bytes(item.name) > 0
+    try io.close_directory(host, listing)
+    return when not named
+    failed = 6
+    mut bytes: [16]u8 = zeroed
+    try io.fill_random(host, bytes[0..<16])
+    failed = 7
+    now: time.wall_time = time.wall_now(host)
+    return when now.seconds < 1600000000
+    failed = 0
+end checked
+
+public main: () -> (code: i32) =
+    code = checked(system.new()) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+end main

@@ -8,14 +8,14 @@
 --  answer its own way.
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 import platform/posix
 
 --  A lookup gave something other than what it was asked for.
 mismatched: atom
 
 --  Write what the account LINE holds, or that it holds none.
-account_line: (inout out: io.buffered_writer(system.host), line: []u8)
+account_line: (inout out: io.buffered_writer(blocking.host), line: []u8)
               -> none ! ... =
     mut room: [256]u8 = zeroed
     mut made := text.over(room[0..<256])
@@ -34,7 +34,7 @@ account_line: (inout out: io.buffered_writer(system.host), line: []u8)
 end account_line
 
 --  Write what the group LINE holds, or that it holds none.
-group_line: (inout out: io.buffered_writer(system.host), line: []u8)
+group_line: (inout out: io.buffered_writer(blocking.host), line: []u8)
             -> none ! ... =
     mut room: [256]u8 = zeroed
     mut made := text.over(room[0..<256])
@@ -56,7 +56,7 @@ group_line: (inout out: io.buffered_writer(system.host), line: []u8)
 end group_line
 
 --  Parse every line of standard input.
-parsed: (host: system.host, inout out: io.buffered_writer(system.host))
+parsed: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
         -> none ! ... =
     mut buffer: [128]u8 = zeroed
     mut lines := io.lines_over(host, io.input(host), buffer[0..<128])
@@ -169,7 +169,7 @@ looked_up: () -> none ! ... =
 end looked_up
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<512])

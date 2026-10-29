@@ -1,0 +1,225 @@
+--  The hosted provider whose waiting operations block the thread (D476),
+--  `host`: reading and writing, core/net's network in network.ldn,
+--  core/time's monotonic clock and its sleep in time.ldn, and core/fibre's
+--  scheduler in fibre.ldn, running each task to its end.  It is built over
+--  a hosted/system handle and hands it every service that does not wait,
+--  in delegated.ldn, so one handle is an `io.world` and every concept the
+--  system supplies.  Written once over platform/posix, like the system.
+--  Import this module only at a hosted authority root.
+
+import core/io
+import core/text
+import hosted/system
+import platform/posix
+
+blocking_value: type = struct
+    services: system.host
+end blocking_value
+
+--- Hosted implementation of all four I/O capabilities and so of
+--- `io.world`, of `net.network`, the monotonic `time.clock` and
+--- `fibre.scheduler`, whose waits block the thread, and of every concept
+--- `hosted/system` supplies, which it hands the system's handle it is
+--- built over: `io.directories`, `io.environment`, `io.programs`,
+--- `io.file_system`, `io.terminals`, `io.entropy` and `time.wall_clock`.
+--- A handle: copies share the process's descriptors, arguments and
+--- environment, and the last-error and last-signal cells they were made
+--- with. Its files are the system's, as `hosted/system`'s `descriptor_of`
+--- and `file_of` give them; borrowed arguments and variables refer to
+--- process storage.
+public host: type = blocking_value
+
+--- The system's last-error and last-signal cells of the caller's own,
+--- `hosted/system`'s `space`, for `over`.
+public space: type = system.space
+
+--- Return errno captured for the terminal failing provider call, as
+--- `hosted/system`'s `last_errno` does: the cell is the system handle's,
+--- which this provider's own calls report through too. Zero means the
+--- handle's most recent call of any concept did not fail with an errno.
+public last_errno: (handle: host) -> (number: i32) =
+    number = system.last_errno(handle.services)
+end last_errno
+
+--- Return the number of the signal that ended the child this handle's
+--- cell last saw end through `io.wait`, as `hosted/system`'s
+--- `last_signal` does; zero when it exited with a code or none was waited
+--- for.
+public last_signal: (handle: host) -> (number: i32) =
+    number = system.last_signal(handle.services)
+end last_signal
+
+--  Keep a failure's errno in the system handle's cell.
+record: (self: host, problem: posix.errno) -> none =
+    system.record_errno(self.services, problem)
+end record
+
+--  Clear the cell before a call asks the system.
+cleared: (self: host) -> none =
+    system.clear_errno(self.services)
+end cleared
+
+--  Write some of `bytes` to `opened`: a send on a socket, a write
+--  otherwise.
+put_some: (opened: io.file, bytes: []u8) -> (count: usize) ! posix.errno =
+    if system.is_socket(opened) then
+        count = try posix.send(system.descriptor_of(opened), bytes)
+    else
+        count = try posix.write(system.descriptor_of(opened), bytes)
+    end if
+end put_some
+
+blocking_read: (self: host, opened: io.file, into: []mut u8)
+               -> (count: usize) ! io.io_failed =
+    cleared(self)
+    if lenof into == 0 then
+        count = 0
+        return
+    end if
+    loop do
+        --  read returns EINTR only before transferring a byte, so the same
+        --  buffer and extent may be retried.  A positive partial read is
+        --  returned and is never discarded by an unnecessary retry.
+        got: usize = posix.read(system.descriptor_of(opened), into)
+            else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        --  A count beyond the buffer violates the system's contract and
+        --  fabricates no errno.  Zero from a nonempty read is genuine EOF.
+        fail io.io_failed when got > lenof into
+        count = got
+        return
+    end loop
+end blocking_read
+
+write_all: (self: host, opened: io.file, bytes: []u8)
+           -> none ! io.io_failed =
+    mut written: usize = 0
+    while written < lenof bytes do
+        remaining: []u8 = bytes[written..<lenof bytes]
+        --  write reports EINTR only before this attempt transfers data.
+        --  Retry the same remaining suffix; a preceding positive partial
+        --  write has already advanced `written` and is never repeated.
+        accepted: usize =
+            put_some(opened, remaining) else (problem)
+                continue when problem == posix.eintr
+                record(self, problem)
+                fail io.io_failed
+            end
+        --  A nonempty zero-progress success cannot complete write-all, and
+        --  an oversized count violates the system's contract.  Neither
+        --  fabricates errno.
+        fail io.io_failed when accepted == 0 or accepted > lenof remaining
+        written += accepted
+    end while
+end write_all
+
+blocking_write: (self: host, opened: io.file, bytes: []u8)
+                -> none ! io.io_failed =
+    cleared(self)
+    return when lenof bytes == 0
+    try write_all(self, opened, bytes)
+end blocking_write
+
+blocking_write_some: (self: host, opened: io.file, bytes: []u8)
+                     -> (count: usize) ! io.io_failed =
+    cleared(self)
+    if lenof bytes == 0 then
+        count = 0
+        return
+    end if
+    --  Keep a single host request within a representable, bounded extent;
+    --  the caller can send the remaining suffix after this progress.
+    mut requested: usize = lenof bytes
+    if requested > 65536 then requested = 65536 end if
+    loop do
+        --  EINTR transfers nothing on this attempt. A positive short write
+        --  returns immediately so its exact prefix reaches the caller.
+        accepted: usize = put_some(opened, bytes[0..<requested])
+            else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        fail io.io_failed when accepted == 0 or accepted > requested
+        count = accepted
+        return
+    end loop
+end blocking_write_some
+
+--  What does not wait is the system's: its files, streams and arguments.
+blocking_open_read: (self: host, path: text.host_string)
+                    -> (opened: io.file)
+                    ! io.not_found | io.no_access | io.io_failed =
+    opened = try io.open_read(self.services, path)
+end blocking_open_read
+
+blocking_open_write: (self: host, path: text.host_string)
+                     -> (opened: io.file)
+                     ! io.not_found | io.no_access | io.io_failed =
+    opened = try io.open_write(self.services, path)
+end blocking_open_write
+
+blocking_same_file: (self: host, left: text.host_string,
+                     right: text.host_string)
+                    -> (same: bool) ! io.io_failed =
+    same = try io.same_file(self.services, left, right)
+end blocking_same_file
+
+blocking_close: (self: host, sink opened: io.file) -> none ! io.io_failed =
+    try io.close(self.services, opened)
+end blocking_close
+
+blocking_input: (self: host) -> (stream: io.file) =
+    stream = io.input(self.services)
+end blocking_input
+
+blocking_out: (self: host) -> (stream: io.file) =
+    stream = io.out(self.services)
+end blocking_out
+
+blocking_err: (self: host) -> (stream: io.file) =
+    stream = io.err(self.services)
+end blocking_err
+
+blocking_argument_count: (self: host) -> (count: usize) =
+    count = io.argument_count(self.services)
+end blocking_argument_count
+
+blocking_argument: (self: host, index: usize)
+                   -> (value: text.host_string from self) ! io.no_argument =
+    value = try io.argument_at(self.services, index)
+end blocking_argument
+
+host is io.reader (read: blocking_read)
+host is io.writer (write: blocking_write, write_some: blocking_write_some)
+host is io.files
+    (open_read: blocking_open_read, open_write: blocking_open_write,
+     same_file: blocking_same_file, close: blocking_close)
+host is io.process
+    (input: blocking_input, out: blocking_out, err: blocking_err,
+     argument_count: blocking_argument_count, argument: blocking_argument)
+host is io.world ()
+
+--- Return a handle to the hosted provider whose waits block the thread,
+--- over a new `hosted/system` handle: the process's arguments, the three
+--- standard streams, descriptors 0, 1 and 2, and the process's last-error
+--- cell. Regular open-write operations create or truncate files; close
+--- regular files explicitly. The handle borrows nothing. Use `over` for a
+--- cell of the caller's own.
+---
+--- Calling this before the hosted entry has established the process's
+--- arguments traps, as `hosted/system`'s `new` does.
+public new: () -> (handle: host) =
+    handle = (services: system.new())
+end new
+
+--- Fill `state` and return a handle that records its last error there
+--- rather than in the process's cell, over `hosted/system`'s `over`. It
+--- shares the process's arguments and descriptors like any other handle;
+--- calling this before any root exists traps, as `new` does.
+public over: (inout state: space) -> (handle: host from state) =
+    handle = (services: system.over(state))
+end over

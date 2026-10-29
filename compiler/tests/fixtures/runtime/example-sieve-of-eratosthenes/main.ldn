@@ -1,7 +1,7 @@
 --  The sieve of Eratosthenes: cross out the multiples of each prime, and
 --  the numbers left are the primes.
 import core/io
-import hosted/system
+import hosted/blocking
 
 --- Mark every number below `lenof composite` that is not prime.
 sieve: (composite: []mut bool) -> none =
@@ -23,7 +23,7 @@ sieve: (composite: []mut bool) -> none =
 end sieve
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

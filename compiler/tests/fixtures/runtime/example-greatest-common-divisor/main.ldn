@@ -1,7 +1,7 @@
 --  Euclid's algorithm: replace the pair by the divisor and the remainder
 --  until the remainder is zero.
 import core/io
-import hosted/system
+import hosted/blocking
 
 gcd: (a: u32, b: u32) -> (result: u32) =
     mut dividend: u32 = a
@@ -20,7 +20,7 @@ pair: type = struct
 end pair
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

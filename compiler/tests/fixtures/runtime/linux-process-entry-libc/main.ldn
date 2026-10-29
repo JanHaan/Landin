@@ -1,5 +1,5 @@
 import core/io
-import hosted/system
+import hosted/blocking
 import platform/linux
 
 --  Under --link=libc the C runtime starts the program, so
@@ -8,7 +8,7 @@ import platform/linux
 --  same environment and the auxiliary vector after it, with the kernel's
 --  page size, as a static program's entry finds them.  hosted/system still
 --  reaches the kernel through platform/linux's system calls and the
---  arguments still reach its world.
+--  arguments still reach hosted/blocking's world over it.
 --  Whether the auxiliary vector gives the page size, a power of two of at
 --  least 4 KiB, and page_size is it.
 page_known: () -> (yes: bool) =
@@ -19,7 +19,7 @@ end page_known
 
 public main: () -> (code: i32) =
     code = 1
-    state: system.host = system.new()
+    state: blocking.host = blocking.new()
     return when io.argument_count(state) <> 1
     code = 2
     table: linux.environment_table = linux.environment()

@@ -6,7 +6,7 @@
 --  finds the name taken: `already_exists`, with EEXIST, 17.
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 file: []u8 = "through-file-scratch"
 under_file: []u8 = "through-file-scratch/inner"
@@ -15,13 +15,13 @@ device: []u8 = "/dev/null"
 refusal: type = io.not_found | io.no_access | io.io_failed | io.already_exists
 
 --  Whether PROBLEM is WANTED with errno NUMBER.
-refused: (host: system.host, problem: refusal, wanted: refusal,
+refused: (host: blocking.host, problem: refusal, wanted: refusal,
           number: i32) -> (yes: bool) =
-    yes = problem == wanted and system.last_errno(host) == number
+    yes = problem == wanted and blocking.last_errno(host) == number
 end refused
 
 --  Opening PATH as a directory is not_found with ENOTDIR.
-not_listed: (host: system.host, path: []u8) -> (yes: bool) =
+not_listed: (host: blocking.host, path: []u8) -> (yes: bool) =
     yes = false
     terminated: text.host_string = text.host_over(path)
     mut buffer: [1024]u8 = zeroed
@@ -34,7 +34,7 @@ not_listed: (host: system.host, path: []u8) -> (yes: bool) =
 end not_listed
 
 --  Making a directory at PATH is WANTED with errno NUMBER.
-not_made: (host: system.host, path: []u8, wanted: refusal, number: i32)
+not_made: (host: blocking.host, path: []u8, wanted: refusal, number: i32)
           -> (yes: bool) =
     yes = false
     terminated: text.host_string = text.host_over(path)
@@ -44,7 +44,7 @@ not_made: (host: system.host, path: []u8, wanted: refusal, number: i32)
 end not_made
 
 --  Removing PATH as a directory is not_found with ENOTDIR.
-not_removed: (host: system.host, path: []u8) -> (yes: bool) =
+not_removed: (host: blocking.host, path: []u8) -> (yes: bool) =
     yes = false
     terminated: text.host_string = text.host_over(path)
     io.remove_directory(host, terminated) else (problem)
@@ -53,7 +53,7 @@ not_removed: (host: system.host, path: []u8) -> (yes: bool) =
 end not_removed
 
 --  Make the regular file, or remove it when REMOVING.
-scratch_file: (host: system.host, removing: bool) -> none ! ... =
+scratch_file: (host: blocking.host, removing: bool) -> none ! ... =
     terminated: text.host_string = text.host_over(file)
     if removing then
         try io.remove_file(host, terminated)
@@ -64,7 +64,7 @@ scratch_file: (host: system.host, removing: bool) -> none ! ... =
 end scratch_file
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     scratch_file(host, false) else (problem)
         _ = problem

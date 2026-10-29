@@ -1,4 +1,4 @@
---  The hosted provider's `fibre.scheduler` (D444): the blocking host runs
+--  The blocking provider's `fibre.scheduler` (D444): it runs
 --  each task to its end, on the caller's stack, before `start` returns,
 --  as `fibre.whole` does.  Its calls block the thread, so it has nothing
 --  to yield to and is no provider of `fibre.turns`; a program that needs
@@ -9,25 +9,25 @@
 import core/fibre
 import core/mem
 
-fibre_start: (self: host, escaping record: ptr mut fibre.space,
-              escaping stack: []mut u8, escaping work: any fibre.task)
-             -> none ! mem.out_of_memory =
+scheduler_start: (self: host, escaping record: ptr mut fibre.space,
+                  escaping stack: []mut u8, escaping work: any fibre.task)
+                 -> none ! mem.out_of_memory =
     _ = self
     _ = stack
     record.val.status = 1
     work.run()
     record.val.status = 0
-end fibre_start
+end scheduler_start
 
-fibre_finished: (self: host, record: fibre.space) -> (yes: bool) =
+scheduler_finished: (self: host, record: fibre.space) -> (yes: bool) =
     _ = self
     yes = record.status == 0
-end fibre_finished
+end scheduler_finished
 
 --  Nothing is ever running when `start` has returned.
-fibre_wait: (self: host) -> none =
+scheduler_wait: (self: host) -> none =
     _ = self
-end fibre_wait
+end scheduler_wait
 
-host is fibre.scheduler (start: fibre_start, finished: fibre_finished,
-                         wait: fibre_wait)
+host is fibre.scheduler (start: scheduler_start, finished: scheduler_finished,
+                         wait: scheduler_wait)

@@ -1,5 +1,5 @@
 import core/io
-import hosted/system
+import hosted/blocking
 
 extern(c) link(symbol: ".Llandin_host_argv") foreign_state: () -> (value: i32)
 extern(c) link(symbol: "_landin_host_initialize_arguments") initialize:
@@ -19,5 +19,5 @@ public extern(c) link(symbol: "r440_renamed_main") main: () -> (code: i32) =
 end main
 
 public extern(c) r440_retained_count: () -> (count: usize) =
-    count = io.argument_count(system.new())
+    count = io.argument_count(blocking.new())
 end r440_retained_count

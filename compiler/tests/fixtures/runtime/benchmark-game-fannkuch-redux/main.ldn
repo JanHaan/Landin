@@ -3,7 +3,7 @@
 --  twelve for the performance run, and never more than sixteen.
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 bad_size: atom
 
@@ -81,7 +81,7 @@ fannkuch: (n: usize) -> (result: score) =
 end fannkuch
 
 --- The order named by the first argument, one to sixteen.
-order_size: (host: system.host)
+order_size: (host: blocking.host)
             -> (n: usize)
             ! io.no_argument | text.invalid_number | text.number_overflow
             | bad_size =
@@ -91,7 +91,7 @@ order_size: (host: system.host)
     fail bad_size when n < 1 or n > 16
 end order_size
 
-report: (host: system.host, n: usize, value: score)
+report: (host: blocking.host, n: usize, value: score)
         -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [64]u8 = zeroed
     mut line := text.over(storage)
@@ -102,7 +102,7 @@ report: (host: system.host, n: usize, value: score)
 end report
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     n := order_size(host) else (problem)
         io.write(host, io.err(host),

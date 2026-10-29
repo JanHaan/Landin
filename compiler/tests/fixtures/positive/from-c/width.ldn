@@ -1,10 +1,10 @@
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- The same line with the count right-aligned in five columns, as `%5u`
 --- would: the line is built first, because a template has no widths.
-report_aligned: (inout out: io.buffered_writer(system.host), name: utf8,
+report_aligned: (inout out: io.buffered_writer(blocking.host), name: utf8,
                  count: u32)
                 -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [128]u8 = zeroed

@@ -175,7 +175,8 @@ spelling and build identity apply as on x86-64. The assembler is held to the
 level at every level with `-Wa,-march=`, the baseline's `armv8-a` included;
 an arm64 executable carries no level note. x18 is never allocated and stays
 reserved for assembly blocks, as on Darwin. The hosted entry and the panic
-edges are Darwin's instructions; `hosted/system` makes Linux system calls through
+edges are Darwin's instructions; `hosted/system` and `hosted/blocking` make
+Linux system calls through
 `platform/posix` and `platform/linux`.
 
 ## C aliases and generated bindings

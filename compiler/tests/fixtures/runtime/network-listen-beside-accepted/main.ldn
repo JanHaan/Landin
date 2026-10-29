@@ -4,7 +4,7 @@
 import core/io
 import core/io/fake
 import core/net
-import hosted/system
+import hosted/blocking
 
 --  The second listener was refused, or a second listener on a port a
 --  listener holds was taken.
@@ -50,7 +50,7 @@ public main: () -> (code: i32) =
         return
     end
     code = 2
-    relisten(system.new()) else (problem)
+    relisten(blocking.new()) else (problem)
         _ = problem
         return
     end

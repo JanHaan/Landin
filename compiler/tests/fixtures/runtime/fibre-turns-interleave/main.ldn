@@ -7,7 +7,7 @@ import core/failure
 import core/fibre
 import core/fibre/stacks
 import core/io
-import hosted/system
+import hosted/blocking
 
 mut order: [16]u8 = zeroed
 mut steps: usize = 0
@@ -50,7 +50,7 @@ end both
 
 public main: () -> (code: i32) =
     code = 1
-    host := system.new()
+    host := blocking.new()
     mut state: stacks.round_space = zeroed
     mut entries: [3]usize = zeroed
     idler: stacks.spin = zeroed

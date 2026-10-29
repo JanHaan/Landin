@@ -9,7 +9,7 @@ import core/io
 import core/net
 import core/text
 import core/time
-import hosted/system
+import hosted/blocking
 
 --- What the client sends over TCP: three lines.
 request: []u8 = "one\ntwo\nhello, world\n"
@@ -129,8 +129,8 @@ end report
 
 --- Echo over TCP and then UDP on `family`'s loopback address, and report
 --- what came back to `out`.
-exchange: (host: system.host,
-           inout out: io.buffered_writer(system.host),
+exchange: (host: blocking.host,
+           inout out: io.buffered_writer(blocking.host),
            family: net.address_family) -> none ! ... =
     mut room: [256]u8 = zeroed
     mut echoed := text.over(room)
@@ -143,7 +143,7 @@ exchange: (host: system.host,
 end exchange
 
 --- Say on standard error why the echo could not be run or reported.
-complain: (host: system.host, problem: wrong_sender | failure.reason)
+complain: (host: blocking.host, problem: wrong_sender | failure.reason)
           -> none =
     reason: []u8 = match problem
         wrong_sender: "a datagram came from the wrong sender"
@@ -155,7 +155,7 @@ complain: (host: system.host, problem: wrong_sender | failure.reason)
 end complain
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

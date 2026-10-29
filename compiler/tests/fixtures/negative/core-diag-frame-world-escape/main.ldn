@@ -1,12 +1,12 @@
 import core/diag
 import core/io
-import hosted/system
+import hosted/blocking
 
 retain: (escaping value: diag.streaming) -> none =
 end retain
 
 bad: () -> none =
-    host := system.new()
+    host := blocking.new()
     writer: any io.writer = any(addr host)
     stream := io.err(host)
     logger := diag.stream(writer, stream)

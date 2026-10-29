@@ -6,7 +6,7 @@ import core/text
 import core/vec
 import examples/config_parser/lexer
 import examples/config_parser/parser
-import hosted/system
+import hosted/blocking
 
 --  Parsed nodes are independent allocations that live as long as the backing.
 --  Give the backing storage static lifetime, not a hidden frame origin.
@@ -268,7 +268,7 @@ end lexer_long_scans_are_expected
 
 public main: () -> (code: i32) =
     code = 1
-    host := system.new()
+    host := blocking.new()
     world: any io.world = any(addr host)
     first_argument: usize = 0
     source_argument := world.argument(first_argument) else (problem)

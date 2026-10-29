@@ -7,8 +7,8 @@ import core/io
 import core/mem
 import core/region
 import core/text
+import hosted/blocking
 import hosted/heap
-import hosted/system
 
 bad_depth: atom
 
@@ -62,7 +62,7 @@ checked_tree: (memory: heap.heap, depth: usize)
 end checked_tree
 
 --- Write one line of the report.
-say: (host: system.host, template: utf8, values: []any text.formattable)
+say: (host: blocking.host, template: utf8, values: []any text.formattable)
      -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [96]u8 = zeroed
     mut line := text.over(storage)
@@ -70,7 +70,7 @@ say: (host: system.host, template: utf8, values: []any text.formattable)
     try io.write(host, io.out(host), text.used(line))
 end say
 
-binary_trees: (host: system.host, n: usize)
+binary_trees: (host: blocking.host, n: usize)
               -> none ! mem.out_of_memory | io.io_failed | text.no_space
                       | text.invalid_format =
     memory := heap.new()
@@ -107,7 +107,7 @@ end binary_trees
 
 --- The depth named by the first argument; above fifty-nine the nodes
 --- counted at depth four would not fit in a usize.
-tree_depth: (host: system.host)
+tree_depth: (host: blocking.host)
             -> (n: usize) ! io.no_argument | text.invalid_number
                           | text.number_overflow | bad_depth =
     first: usize = 0
@@ -117,7 +117,7 @@ tree_depth: (host: system.host)
 end tree_depth
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     n := tree_depth(host) else (problem)
         io.write(host, io.err(host),

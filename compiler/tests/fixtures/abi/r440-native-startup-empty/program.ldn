@@ -1,11 +1,11 @@
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 -- C initialized the root with only the program name: the world exists, its
 -- sequence is empty, and asking for an argument refuses rather than traps.
 public extern(c) l_root: () -> (ok: bool) =
-    state: system.host = system.new()
+    state: blocking.host = blocking.new()
     ok = false
     return when io.argument_count(state) <> 0
     value: text.host_string = io.argument_at(state, usize(0)) else (problem)

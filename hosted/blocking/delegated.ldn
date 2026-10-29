@@ -1,0 +1,224 @@
+--  What does not wait, handed to the hosted/system handle this provider
+--  is built over: the environment, directories, the rest of the file
+--  system and terminals, programs, entropy and the wall clock.  Each entry
+--  is the system's, so a program over this provider meets the same
+--  behaviour, errno and all, as one over the system alone.
+
+import core/io
+import core/text
+import core/time
+
+blocking_variable_count: (self: host) -> (count: usize) =
+    count = io.variable_count(self.services)
+end blocking_variable_count
+
+blocking_variable_at: (self: host, index: usize)
+                      -> (item: io.variable from self) ! io.no_variable =
+    item = try io.variable_at(self.services, index)
+end blocking_variable_at
+
+blocking_variable_named: (self: host, name: text.host_string)
+                         -> (value: text.host_string from self)
+                         ! io.no_variable =
+    value = try io.variable_named(self.services, name)
+end blocking_variable_named
+
+host is io.environment
+    (variable_count: blocking_variable_count,
+     variable_at: blocking_variable_at,
+     variable_named: blocking_variable_named)
+
+blocking_open_directory: (self: host, path: text.host_string,
+                          buffer: []mut u8)
+                         -> (opened: io.directory from buffer)
+                         ! io.not_found | io.no_access | io.io_failed =
+    opened = try io.open_directory(self.services, path, buffer)
+end blocking_open_directory
+
+blocking_read_entry: (self: host, inout opened: io.directory)
+                     -> (item: io.entry from opened) ! io.io_failed =
+    item = try io.read_entry(self.services, opened)
+end blocking_read_entry
+
+blocking_entry_size: (self: host, opened: io.directory,
+                      name: text.host_string)
+                     -> (size: u64)
+                     ! io.not_found | io.no_access | io.io_failed =
+    size = try io.entry_size(self.services, opened, name)
+end blocking_entry_size
+
+blocking_close_directory: (self: host, sink opened: io.directory)
+                          -> none ! io.io_failed =
+    try io.close_directory(self.services, opened)
+end blocking_close_directory
+
+blocking_make_directory: (self: host, path: text.host_string)
+                         -> none ! io.already_exists | io.not_found
+                                 | io.no_access | io.io_failed =
+    try io.make_directory(self.services, path)
+end blocking_make_directory
+
+blocking_remove_file: (self: host, path: text.host_string)
+                      -> none ! io.not_found | io.no_access | io.io_failed =
+    try io.remove_file(self.services, path)
+end blocking_remove_file
+
+blocking_remove_directory: (self: host, path: text.host_string)
+                           -> none
+                           ! io.not_found | io.no_access | io.io_failed =
+    try io.remove_directory(self.services, path)
+end blocking_remove_directory
+
+host is io.directories
+    (open_directory: blocking_open_directory,
+     read_entry: blocking_read_entry, entry_size: blocking_entry_size,
+     close_directory: blocking_close_directory,
+     make_directory: blocking_make_directory,
+     remove_file: blocking_remove_file,
+     remove_directory: blocking_remove_directory)
+
+blocking_open_file: (self: host, path: text.host_string,
+                     options: io.open_options)
+                    -> (opened: io.file)
+                    ! io.already_exists | io.not_found | io.no_access
+                    | io.io_failed =
+    opened = try io.open_file(self.services, path, options)
+end blocking_open_file
+
+blocking_rename: (self: host, old: text.host_string, new: text.host_string)
+                 -> none ! io.not_found | io.no_access | io.io_failed =
+    try io.rename(self.services, old, new)
+end blocking_rename
+
+blocking_status_of: (self: host, path: text.host_string,
+                     links: io.link_handling)
+                    -> (found: io.status)
+                    ! io.not_found | io.no_access | io.io_failed =
+    found = try io.status_of(self.services, path, links)
+end blocking_status_of
+
+blocking_status_of_file: (self: host, opened: io.file)
+                         -> (found: io.status) ! io.io_failed =
+    found = try io.status_of_file(self.services, opened)
+end blocking_status_of_file
+
+blocking_set_read_only: (self: host, path: text.host_string,
+                         read_only: bool)
+                        -> none ! io.not_found | io.no_access | io.io_failed =
+    try io.set_read_only(self.services, path, read_only)
+end blocking_set_read_only
+
+blocking_synchronize: (self: host, opened: io.file,
+                       writing: io.synchronizing) -> none ! io.io_failed =
+    try io.synchronize(self.services, opened, writing)
+end blocking_synchronize
+
+blocking_truncate: (self: host, opened: io.file, size: u64)
+                   -> none ! io.io_failed =
+    try io.truncate(self.services, opened, size)
+end blocking_truncate
+
+--  A regular file's data is read and written at an offset at once on
+--  every hosted system, which no readiness says otherwise of, so these are
+--  the system's too.
+blocking_read_at: (self: host, opened: io.file, offset: u64,
+                   into: []mut u8) -> (count: usize) ! io.io_failed =
+    count = try io.read_at(self.services, opened, offset, into)
+end blocking_read_at
+
+blocking_write_at: (self: host, opened: io.file, offset: u64, bytes: []u8)
+                   -> none ! io.io_failed =
+    try io.write_at(self.services, opened, offset, bytes)
+end blocking_write_at
+
+--  core/io's own `make_temporary` erases a concrete source of names, and
+--  this one has an erased source already, which it hands on as it is.
+temporary_over: (provider: type is io.file_system, services: provider,
+                 directory: text.host_string, names: any io.entropy,
+                 into: []mut u8)
+                -> (made: io.temporary from into)
+                ! io.not_found | io.no_access | io.io_failed =
+    made = try provider.make_temporary(services, directory, names, into)
+end temporary_over
+
+blocking_make_temporary: (self: host, directory: text.host_string,
+                          names: any io.entropy, into: []mut u8)
+                         -> (made: io.temporary from into)
+                         ! io.not_found | io.no_access | io.io_failed =
+    made = try temporary_over(self.services, directory, names, into)
+end blocking_make_temporary
+
+blocking_current_directory: (self: host, into: []mut u8)
+                            -> (path: text.host_string from into)
+                            ! io.io_failed =
+    path = try io.current_directory(self.services, into)
+end blocking_current_directory
+
+host is io.file_system
+    (open_file: blocking_open_file, rename: blocking_rename,
+     status_of: blocking_status_of, status_of_file: blocking_status_of_file,
+     set_read_only: blocking_set_read_only,
+     synchronize: blocking_synchronize, truncate: blocking_truncate,
+     read_at: blocking_read_at, write_at: blocking_write_at,
+     make_temporary: blocking_make_temporary,
+     current_directory: blocking_current_directory)
+
+blocking_is_terminal: (self: host, stream: io.file) -> (yes: bool) =
+    yes = io.is_terminal(self.services, stream)
+end blocking_is_terminal
+
+blocking_window_size: (self: host, stream: io.file) -> (size: io.window)
+                      ! io.not_a_terminal | io.io_failed =
+    size = try io.window_size(self.services, stream)
+end blocking_window_size
+
+host is io.terminals
+    (is_terminal: blocking_is_terminal, window_size: blocking_window_size)
+
+--  The system runs programs and reads and writes their pipes itself,
+--  blocking, whichever provider is built over it (D478).
+blocking_spawn: (self: host, path: text.host_string,
+                 arguments: []text.host_string, environment: []io.variable,
+                 streams: io.child_streams)
+                -> (started: io.child)
+                ! io.not_found | io.no_access | io.io_failed =
+    started = try io.spawn(self.services, path, arguments, environment,
+                           streams)
+end blocking_spawn
+
+blocking_write_child: (self: host, inout started: io.child, bytes: []u8)
+                      -> none ! io.io_failed =
+    try io.write_child(self.services, started, bytes)
+end blocking_write_child
+
+blocking_close_input: (self: host, inout started: io.child)
+                      -> none ! io.io_failed =
+    try io.close_input(self.services, started)
+end blocking_close_input
+
+blocking_read_child: (self: host, inout started: io.child, into: []mut u8)
+                     -> (taken: io.child_read) ! io.io_failed =
+    taken = try io.read_child(self.services, started, into)
+end blocking_read_child
+
+blocking_wait: (self: host, sink started: io.child)
+               -> (ended: io.ending) ! io.io_failed =
+    ended = try io.wait(self.services, started)
+end blocking_wait
+
+host is io.programs
+    (spawn: blocking_spawn, write_child: blocking_write_child,
+     close_input: blocking_close_input, read_child: blocking_read_child,
+     wait: blocking_wait)
+
+blocking_fill_random: (self: host, into: []mut u8) -> none ! io.io_failed =
+    try io.fill_random(self.services, into)
+end blocking_fill_random
+
+host is io.entropy (fill_random: blocking_fill_random)
+
+blocking_wall_now: (self: host) -> (at: time.wall_time) =
+    at = time.wall_now(self.services)
+end blocking_wall_now
+
+host is time.wall_clock (wall_now: blocking_wall_now)

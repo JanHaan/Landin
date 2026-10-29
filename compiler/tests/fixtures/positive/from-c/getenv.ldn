@@ -1,9 +1,9 @@
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- The home directory, or `/` when the environment names none.
-home_directory: (host: system.host) -> (home: text.host_string from host) =
+home_directory: (host: blocking.host) -> (home: text.host_string from host) =
     home = io.variable_named(host, text.host_over("HOME")) else (problem)
         text.host_over("/")
     end

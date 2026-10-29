@@ -5,7 +5,7 @@
 --  hosted system.  No child is left to wait for.
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 import platform/posix
 
 --  How spawning PATH failed, as the hosted provider reports it, or
@@ -13,7 +13,7 @@ import platform/posix
 started: atom
 outcome: type = started | io.not_found | io.no_access | io.io_failed
 
-attempt: (host: system.host, path: []u8) -> (result: outcome) =
+attempt: (host: blocking.host, path: []u8) -> (result: outcome) =
     arguments: [1]text.host_string = [text.host_over("-c")]
     variables: [1]io.variable =
         [(name: text.host_over("A"), value: text.host_over("1"))]
@@ -31,19 +31,19 @@ attempt: (host: system.host, path: []u8) -> (result: outcome) =
 end attempt
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     return when attempt(host, "/nonexistent/landin-program") <> io.not_found
-    return when system.last_errno(host) <> posix.number(posix.enoent)
+    return when blocking.last_errno(host) <> posix.number(posix.enoent)
     code = 2
     return when attempt(host, "/dev/null/landin-program") <> io.not_found
-    return when system.last_errno(host) <> posix.number(posix.enotdir)
+    return when blocking.last_errno(host) <> posix.number(posix.enotdir)
     code = 3
     return when attempt(host, "/") <> io.no_access
-    return when system.last_errno(host) <> posix.number(posix.eacces)
+    return when blocking.last_errno(host) <> posix.number(posix.eacces)
     code = 4
     --  A child that does start leaves the last errno at zero.
     return when attempt(host, "/bin/sh") <> started
-    return when system.last_errno(host) <> 0
+    return when blocking.last_errno(host) <> 0
     code = 42
 end main

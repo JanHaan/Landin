@@ -6,11 +6,11 @@
 --  asked, and the wall clock reads a time after this item was written.
 --  Each check that fails returns its own code.
 import core/time
-import hosted/system
+import hosted/blocking
 import platform/linux/vdso
 
 --  Whether a thousand readings of the monotonic clock never go back.
-in_order: (host: system.host) -> (yes: bool) =
+in_order: (host: blocking.host) -> (yes: bool) =
     yes = false
     mut last: time.instant = time.now(host)
     for round in usize(0)..<1000 do
@@ -30,7 +30,7 @@ vdso_found: () -> (yes: bool) =
 end vdso_found
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     return when not vdso_found()
     code = 2

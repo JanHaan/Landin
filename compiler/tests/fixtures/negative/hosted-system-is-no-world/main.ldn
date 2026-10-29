@@ -1,0 +1,13 @@
+--  D476: hosted/system keeps what does not wait, and reading and writing
+--  can, so its handle is no writer and no world; a program that writes
+--  mints hosted/blocking's.
+import core/io
+import hosted/system
+
+public main: () -> (code: i32) =
+    host := system.new()
+    io.write(host, io.out(host), "Hello, world!\n") else none
+    world: any io.world = any(addr host)
+    _ = world
+    code = 0
+end main

@@ -3,9 +3,9 @@
 --  alone, so a group that needs turns is refused where it is made.
 import core/failure
 import core/fibre
-import hosted/system
+import hosted/blocking
 
-asks: (host: system.host) -> none ! failure.reason =
+asks: (host: blocking.host) -> none ! failure.reason =
     mut backing: [2 * 4096]u8 = zeroed
     runner: fibre.whole = zeroed
     mut over_whole := try fibre.turns_over(any(addr runner), backing, 2)
@@ -16,7 +16,7 @@ end asks
 
 public main: () -> (code: i32) =
     code = 1
-    asks(system.new()) else (problem)
+    asks(blocking.new()) else (problem)
         _ = problem
         return
     end

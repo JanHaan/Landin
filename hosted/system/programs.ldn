@@ -133,13 +133,13 @@ close_pipe: (self: host, opened: io.file) -> none ! io.io_failed =
     end
 end close_pipe
 
---  Write all of BYTES to the child's input pipe, its descriptor, as a
---  write to any file of this provider is made.
+--  Write all of BYTES to the child's input pipe, its descriptor,
+--  blocking the thread as reading its output does.
 system_write_child: (self: host, inout started: io.child, bytes: []u8)
                     -> none ! io.io_failed =
     self.failure.val = 0
     fail io.io_failed when not started.input_open
-    try system_write(self, started.input, bytes)
+    try pipe_write(self, started.input, bytes)
 end system_write_child
 
 system_close_input: (self: host, inout started: io.child)
@@ -186,7 +186,7 @@ system_read_child: (self: host, inout started: io.child, into: []mut u8)
         end if
         opened: io.file = if from_errors then started.errors
                           else started.output end if
-        count: usize = try system_read(self, opened, into)
+        count: usize = try pipe_read(self, opened, into)
         if count > 0 then
             taken = (count: count,
                      stream: if from_errors then io.child_errors

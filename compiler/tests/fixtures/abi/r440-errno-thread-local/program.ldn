@@ -1,25 +1,25 @@
 --  Two actual pthreads enter this exported routine concurrently.  Each owns a
---  handle over its own last-error cell, made by `system.over`, so the only
+--  handle over its own last-error cell, made by `blocking.over`, so the only
 --  shared failure source is libc's real thread-local errno, read through
 --  platform/libc.
 
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
-extern(c) r440_run_errno_threads: (first: ptr system.host,
-                                   second: ptr system.host)
+extern(c) r440_run_errno_threads: (first: ptr blocking.host,
+                                   second: ptr blocking.host)
                                   -> (result: i32)
 
 thread_path: []u8 = "r440-thread"
 
 public extern(c) link(symbol: "r440_errno_thread_probe") thread_probe:
-    (state: ptr system.host, expected: i32) -> (result: i32) =
+    (state: ptr blocking.host, expected: i32) -> (result: i32) =
     result = 1
     opened: io.file = io.open_read(state.val, text.host_over(thread_path))
         else (problem)
         if problem == io.io_failed
-          and system.last_errno(state.val) == expected
+          and blocking.last_errno(state.val) == expected
         then
             result = 42
         end if
@@ -30,13 +30,13 @@ end thread_probe
 
 public main: () -> (code: i32) =
     code = 1
-    mut first_cell: system.space = zeroed
-    mut second_cell: system.space = zeroed
-    first: system.host = system.over(first_cell)
-    second: system.host = system.over(second_cell)
+    mut first_cell: blocking.space = zeroed
+    mut second_cell: blocking.space = zeroed
+    first: blocking.host = blocking.over(first_cell)
+    second: blocking.host = blocking.over(second_cell)
     code = r440_run_errno_threads(addr first, addr second)
     return when code <> 42
     code = 1
-    return when system.last_errno(first) <> 5 or system.last_errno(second) <> 28
+    return when blocking.last_errno(first) <> 5 or blocking.last_errno(second) <> 28
     code = 42
 end main

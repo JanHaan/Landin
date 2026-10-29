@@ -6,7 +6,7 @@
 --  reaches the system and leaves the last errno at zero.
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 missing: []u8 = "/landin-absent-parent/absent"
 missing_parent: []u8 = "/landin-absent-parent/absent/new"
@@ -15,11 +15,11 @@ missing_parent: []u8 = "/landin-absent-parent/absent/new"
 refusal: type = io.not_found | io.no_access | io.io_failed | io.already_exists
 
 --  Whether the outcome was `not_found` with errno NUMBER.
-absent: (host: system.host, problem: refusal, number: i32) -> (yes: bool) =
-    yes = problem == io.not_found and system.last_errno(host) == number
+absent: (host: blocking.host, problem: refusal, number: i32) -> (yes: bool) =
+    yes = problem == io.not_found and blocking.last_errno(host) == number
 end absent
 
-opened_absent: (host: system.host) -> (yes: bool) =
+opened_absent: (host: blocking.host) -> (yes: bool) =
     yes = false
     path: text.host_string = text.host_over(missing)
     mut buffer: [1024]u8 = zeroed
@@ -30,7 +30,7 @@ opened_absent: (host: system.host) -> (yes: bool) =
     io.close_directory(host, listing) else none
 end opened_absent
 
-made_absent: (host: system.host) -> (yes: bool) =
+made_absent: (host: blocking.host) -> (yes: bool) =
     yes = false
     path: text.host_string = text.host_over(missing_parent)
     io.make_directory(host, path) else (problem)
@@ -38,7 +38,7 @@ made_absent: (host: system.host) -> (yes: bool) =
     end
 end made_absent
 
-removed_absent: (host: system.host, directory: bool) -> (yes: bool) =
+removed_absent: (host: blocking.host, directory: bool) -> (yes: bool) =
     yes = false
     path: text.host_string = text.host_over(missing)
     gone(host, path, directory) else (problem)
@@ -46,7 +46,7 @@ removed_absent: (host: system.host, directory: bool) -> (yes: bool) =
     end
 end removed_absent
 
-gone: (host: system.host, path: text.host_string, directory: bool)
+gone: (host: blocking.host, path: text.host_string, directory: bool)
       -> none ! io.not_found | io.no_access | io.io_failed =
     if directory then
         try io.remove_directory(host, path)
@@ -57,7 +57,7 @@ end gone
 
 --  In the directory the program runs in, which is there: a name that is
 --  not, and names no entry can have.
-sized_absent: (host: system.host) -> (code: i32) =
+sized_absent: (host: blocking.host) -> (code: i32) =
     code = 10
     here: []u8 = "."
     path: text.host_string = text.host_over(here)
@@ -87,7 +87,7 @@ sized_absent: (host: system.host) -> (code: i32) =
 end sized_absent
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     return when not opened_absent(host)
     code = 2

@@ -3,7 +3,7 @@
 --  fails with EBADF on every hosted system, so the count reports io_failed
 --  and the provider keeps the errno, rather than a total.
 import core/io
-import hosted/system
+import hosted/blocking
 
 counts: type = struct
     lines: u64
@@ -43,7 +43,7 @@ end count
 
 public main: () -> (code: i32) =
     code = 1
-    host := system.new()
+    host := blocking.new()
     input: io.file = io.input(host)
     stale: io.file = input
     io.close(host, stale) else (problem)
@@ -53,7 +53,7 @@ public main: () -> (code: i32) =
     code = 2
     mut buffer: [16]u8 = zeroed
     totals := count(host, input, buffer[0..<16]) else (problem)
-        if problem == io.io_failed and system.last_errno(host) == 9 then
+        if problem == io.io_failed and blocking.last_errno(host) == 9 then
             code = 42
         end if
         return

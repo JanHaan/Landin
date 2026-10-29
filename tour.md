@@ -17,10 +17,10 @@ Make a directory, `mkdir hello && cd hello`, and save this in it as
 
 ```landin
 import core/io
-import hosted/system
+import hosted/blocking
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     io.write(host, io.out(host), "Hello, world!\n") else none
     code = 0
 end main
@@ -36,14 +36,15 @@ refine compile main.ldn -o hello
 Line by line:
 
 - `import core/io` brings in the reader and writer interfaces, and
-  `hosted/system` the operating system that provides them.
+  `hosted/blocking` the operating system that provides them, waiting
+  for each read and write to finish.
 - `main` takes nothing and returns one named result, `code`, which becomes
   the exit status. A routine sets its results by assigning them.
-- `system.new()` is the program's handle on the operating system. Files,
+- `blocking.new()` is the program's handle on the operating system. Files,
   the terminal and the network are all reached through it. Pass it to the
   routines that need it rather than making one in each, and a routine's
   parameters say what it touches ([1660]). That is a convention: the
-  compiler does not stop a routine from calling `system.new()` itself
+  compiler does not stop a routine from calling `blocking.new()` itself
   ([1680]).
 - `io.write` can fail, and Landin will not let a failure pass unnoticed.
   `else none` says that here it does not matter ([1030]). It is the
@@ -54,7 +55,7 @@ To print values, use `format` through a buffered writer. Each `{}` takes
 the next value from the list:
 
 ```landin
-print_born: (inout out: io.buffered_writer(system.host), name: utf8,
+print_born: (inout out: io.buffered_writer(blocking.host), name: utf8,
              year: u32) -> none =
     io.format(out, "{} was born in {}.\n", [any(addr name), any(addr year)]) else none
 end print_born
@@ -91,10 +92,10 @@ and save it there as `main.ldn`:
 ```landin
 import core/failure
 import core/io
-import hosted/system
+import hosted/blocking
 
 --- How many lines the file named by the first argument has.
-count_file_lines: (host: system.host) -> (lines: usize)
+count_file_lines: (host: blocking.host) -> (lines: usize)
                   ! io.no_argument | io.not_found | io.no_access | io.io_failed
                   | io.line_too_long =
     path := try io.argument_at(host, 0)
@@ -111,7 +112,7 @@ count_file_lines: (host: system.host) -> (lines: usize)
 end count_file_lines
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     lines := count_file_lines(host) else (problem)
         mut err := io.buffered_over(host, io.err(host), storage)
@@ -2737,7 +2738,7 @@ Four source namespaces belong to the repository:
 | namespace | holds | available |
 |---|---|---|
 | `core` | the shared freestanding library: `core/mem`, `core/text`, `core/vec` | every module and interface on every target |
-| `hosted` | hosted providers such as `hosted/heap` and `hosted/system` | on hosted systems |
+| `hosted` | hosted providers such as `hosted/heap`, `hosted/system` and `hosted/blocking` | on hosted systems |
 | `platform` | scoped freestanding interfaces | `platform/c` with an enabled LP64 C ABI; `platform/cortex_m` on M-profile targets, higher feature levels included |
 | `landin` | the toolchain modules of [1560]: `landin/compiler`, `landin/assembler`, `landin/linker` | everywhere, without an import |
 
@@ -2755,7 +2756,7 @@ Fine print:
 
 That is the path. You can now write ordinary programs: routines with
 failures, your own types, loops and matches, arrays and text, modules, and
-the host's files and streams through `hosted/system` and `core/io`.
+the host's files and streams through `hosted/blocking` and `core/io`.
 [`examples.md`](examples.md) has complete programs to read and copy.
 
 The sections after this one are reference, to read when you need them:
@@ -4786,7 +4787,8 @@ A Linux executable needs no C library. It starts at `platform/linux`'s
 `--link=libc` links the C runtime instead. Darwin and FreeBSD always link
 their C library.
 
-When the program imports `hosted/system`, and so `platform/posix`, the
+When the program imports `hosted/system`, directly or through
+`hosted/blocking`, and so `platform/posix`, the
 entry first calls this C-callable routine with the real values, before the
 body of `main` begins, so the environment is kept beside the arguments and
 lent the same way:
@@ -4798,7 +4800,7 @@ void _landin_host_initialize_arguments(int argc, char **argv, char **envp);
 When C owns `main` and calls exported Landin routines, it calls that
 routine itself, with its own `envp` or C's `environ`:
 
-- Call it before `system.new()` acquires an argument capability, and
+- Call it before `blocking.new()` acquires an argument capability, and
   before starting any thread that may acquire one. File, stream and heap
   work needs no argument root, so linking `core/io` alone does not require
   the call.
@@ -4827,19 +4829,25 @@ Exact rules: spec [1975] for hosted programs, spec [1990] for firmware.
 The entry point is the usual place to make the program's roots — the host,
 an allocator, a diagnostics log — and pass them down as ordinary arguments.
 The language does not reserve that to the entry point: any routine can call
-the constructors ([1680]). A hosted root imports `hosted/system`; a
-caller-backed one needs only `core/io`.
+the constructors ([1680]). A hosted root imports `hosted/blocking`, whose
+reads, writes, network calls and sleeps block the thread until they are
+done; a caller-backed one needs only `core/io`. `hosted/blocking` is built
+over `hosted/system`, which keeps everything that does not wait: the
+arguments and environment, opening and closing files, directories,
+running programs, entropy and the wall clock. A program that never reads,
+writes or sleeps may use `system.new()` alone; it is not a world, since it
+cannot read or write.
 
 This is the essential flow of `examples/derived_hosted`, a complete log
 filter. Its `main` is one line, `code = app.entry()`, and the work starts
 in `entry`, a public routine of the program's own `app` module. That
-module imports `hosted/system`, `hosted/heap`, `core/region`, `core/diag`
+module imports `hosted/blocking`, `hosted/heap`, `core/region`, `core/diag`
 and `core/io`, and `run_logged` is the application's routine that does
 the work:
 
 ```landin
 public entry: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     world: any io.world = any(addr host)
     heap := heap.new()
     mut ledger: region.growing_space = zeroed
@@ -4861,9 +4869,9 @@ end entry
 Each root is a handle: a small value, copied and passed by value, that
 refers to its state.
 
-- `system.new()` and `heap.new()` borrow nothing, because what they refer
+- `blocking.new()` and `heap.new()` borrow nothing, because what they refer
   to belongs to the process: the argument root, the descriptors, the last
-  errno and the heap. `system.new()` acquires the real argument table; it
+  errno and the heap. `blocking.new()` acquires the real argument table; it
   does not create or copy it ([1650]).
 - A caller-owned provider is made from state the caller declares, as the
   region is made from `ledger`. The handle cannot outlive that state, and
@@ -4909,7 +4917,8 @@ Both providers lend each argument and path as a `text.host_string`: the
 bytes the system gave, unconverted and uncopied, so an argument passed on
 as a path reaches the system unchanged, whether or not it is UTF-8.
 Neither provider's arguments include `argv[0]`. The library reference
-describes the system provider (`hosted/system`), the memory provider and
+describes the system providers (`hosted/system` and `hosted/blocking`),
+the memory provider and
 host strings (`core/io`, `core/text`); the exact provider contracts —
 errno capture, whole and partial writes, retries, `same_file` — are in
 spec [1975].

@@ -6,7 +6,7 @@ import core/failure
 import core/io
 import core/text
 import core/time
-import hosted/system
+import hosted/blocking
 
 --- What the shell runs: it says what its environment holds, complains
 --- once, sleeps for a second and ends with code 3.  Its environment is
@@ -89,20 +89,20 @@ end report
 --- The parent's own PATH, the one variable of its environment it passes
 --- on, or the directories every hosted system keeps `sleep` in when it
 --- has none.
-search_path: (host: system.host) -> (path: text.host_string from host) =
+search_path: (host: blocking.host) -> (path: text.host_string from host) =
     path = io.variable_named(host, text.host_over("PATH"))
         else text.host_over("/bin:/usr/bin")
 end search_path
 
 --- Say on standard error why the shell could not be run or reported.
-complain: (host: system.host, problem: failure.reason) -> none =
+complain: (host: blocking.host, problem: failure.reason) -> none =
     io.write(host, io.err(host), "run-shell: ") else none
     io.write(host, io.err(host), failure.words(problem)) else none
     io.write(host, io.err(host), "\n") else none
 end complain
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

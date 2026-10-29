@@ -1,7 +1,7 @@
 --  Values of different types printed into one line each, through a
 --  buffered writer that gathers the lines and writes them together.
 import core/io
-import hosted/system
+import hosted/blocking
 
 person: type = struct
     name: utf8
@@ -10,7 +10,7 @@ person: type = struct
 end person
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     --  The lines wait in this buffer and are written when it fills, and
     --  the deferred flush writes what is left on the way out of main.
     mut storage: [256]u8 = zeroed

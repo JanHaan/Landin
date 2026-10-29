@@ -1,8 +1,8 @@
 import core/io
-import hosted/system
+import hosted/blocking
 
 --- The length of the longest line on standard input.
-longest_line: (host: system.host)
+longest_line: (host: blocking.host)
               -> (longest: usize) ! io.io_failed | io.line_too_long =
     longest = 0
     mut buffer: [256]u8 = zeroed

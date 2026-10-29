@@ -28,9 +28,10 @@ target's backend emits them (D453); `core/fibre` itself, its groups over
 `fibre.whole` and over the blocking host, needs no switch and serves every
 target. Their providers retain caller-supplied authority.
 
-`hosted/heap` and `hosted/system` require a hosted system. Import the I/O
-provider, `system`, beside the shared `core/io` protocol it implements, with
-no alias. Both are
+`hosted/heap`, `hosted/system` and `hosted/blocking` require a hosted
+system. Import the I/O provider, `blocking`, beside the shared `core/io`
+protocol it implements, with no alias; it is built over `system`, which
+keeps the services that do not wait (D476). They are
 written once, over `platform/posix`, which gives POSIX's facilities in
 Landin types on Linux, Darwin and FreeBSD and would not exist on a system
 that is not POSIX. Beneath it each system's own interface stays raw:

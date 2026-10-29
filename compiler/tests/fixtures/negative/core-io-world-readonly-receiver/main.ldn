@@ -1,8 +1,8 @@
 import core/io
-import hosted/system
+import hosted/blocking
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     world: any io.world = any(host)
     _ = world.argument_count()
     code = 0

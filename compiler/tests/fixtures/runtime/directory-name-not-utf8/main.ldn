@@ -7,7 +7,7 @@
 --  the directory then lists empty.  The program says which it met.
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 top: []u8 = "utf8-scratch"
 inside: []u8 = "utf8-scratch/n\xff.txt"
@@ -19,14 +19,14 @@ else
     refuses: bool = false
 end if
 
-say: (host: system.host, line: []u8) -> none =
+say: (host: blocking.host, line: []u8) -> none =
     io.write(host, io.out(host), line) else none
 end say
 
 --  Remove what an earlier run may have left.  Where the system refuses
 --  the name, nothing can have been made with it, and the name is not
 --  asked about again.
-clear: (host: system.host) -> none ! ... =
+clear: (host: blocking.host) -> none ! ... =
     if not refuses then
         try forget(host, text.host_over(inside))
     end if
@@ -37,7 +37,7 @@ clear: (host: system.host) -> none ! ... =
 end clear
 
 --  Remove the file PATH names, if it is there.
-forget: (host: system.host, path: text.host_string) -> none ! ... =
+forget: (host: blocking.host, path: text.host_string) -> none ! ... =
     io.remove_file(host, path) else (problem)
         fail problem when problem <> io.not_found
     end
@@ -45,13 +45,13 @@ end forget
 
 --  Make the file with the invalid name: whether the system took it, and
 --  the errno it refused it with.
-made: (host: system.host) -> (taken: bool, number: i32) ! ... =
+made: (host: blocking.host) -> (taken: bool, number: i32) ! ... =
     taken = false
     number = 0
     path: text.host_string = text.host_over(inside)
     opened: io.file = io.open_write(host, path) else (problem)
         fail problem when problem <> io.io_failed
-        number = system.last_errno(host)
+        number = blocking.last_errno(host)
         return
     end
     try io.close(host, opened)
@@ -60,7 +60,7 @@ end made
 
 --  How many entries the directory lists, and whether one of them was the
 --  invalid name, byte for byte, found invalid by core/text.
-listed: (host: system.host) -> (count: usize, found: bool) ! ... =
+listed: (host: blocking.host) -> (count: usize, found: bool) ! ... =
     count = 0
     found = false
     mut buffer: [1024]u8 = zeroed
@@ -100,7 +100,7 @@ same: (left: []u8, right: []u8) -> (yes: bool) =
 end same
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     clear(host) else (problem)
         _ = problem

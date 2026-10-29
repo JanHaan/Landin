@@ -5,10 +5,10 @@
 import core/failure
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
@@ -25,7 +25,7 @@ public main: () -> (code: i32) =
     path: []u8 = "settings.conf"
     file := io.open_read(host, text.host_over(path)) else (problem)
         reason: []u8 = failure.words(problem)
-        number: i32 = system.last_errno(host)
+        number: i32 = blocking.last_errno(host)
         io.format(out, "{}: {} (errno {}), so the defaults apply\n",
                   [any(addr path), any(addr reason), any(addr number)])
             else none

@@ -2,7 +2,7 @@ import core/diag
 import core/io
 import core/io/fake
 import core/text
-import hosted/system
+import hosted/blocking
 
 message_a: [2]u8 = [65, 10]
 message_b: [2]u8 = [66, 10]
@@ -172,7 +172,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    host := system.new()
+    host := blocking.new()
     world: any io.world = any(addr host)
     host_writer: any io.writer = any(addr host)
     mut immediate := diag.stream(host_writer, io.err(host))

@@ -2,11 +2,11 @@
 --  bytes it could not write stay waiting: the hosted writer refuses a
 --  closed standard output with EBADF.
 import core/io
-import hosted/system
+import hosted/blocking
 
 public main: () -> (code: i32) =
     code = 1
-    host := system.new()
+    host := blocking.new()
     output: io.file = io.out(host)
     stale: io.file = output
     io.close(host, stale) else (problem)
@@ -24,7 +24,7 @@ public main: () -> (code: i32) =
     return when io.pending(out) <> 10
     code = 4
     io.flush(out) else (problem)
-        if problem == io.io_failed and system.last_errno(host) == 9
+        if problem == io.io_failed and blocking.last_errno(host) == 9
           and io.pending(out) == 10
         then
             code = 42

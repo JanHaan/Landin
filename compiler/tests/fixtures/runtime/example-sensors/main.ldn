@@ -4,7 +4,7 @@ import core/arena
 import core/io
 import core/mem
 import core/vec
-import hosted/system
+import hosted/blocking
 
 offline, jammed: atom
 
@@ -52,7 +52,7 @@ poll: (provider: type is mem.allocator, memory: provider,
 end poll
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

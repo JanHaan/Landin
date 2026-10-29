@@ -225,7 +225,7 @@ end count_lines
 
 Pass the provider in rather than making one where you need it. Then the
 signature says what a routine touches, and a test can hand it a fake. This
-is a convention, not a rule: any hosted routine may call `system.new()`
+is a convention, not a rule: any hosted routine may call `blocking.new()`
 itself, and the compiler does not stop it [1680]. Create the provider in
 `main` and pass it down [1660].
 
@@ -274,10 +274,10 @@ int main(int argc, char **argv) {
 
 ```landin
 import core/io
-import hosted/system
+import hosted/blocking
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 2
     if io.argument_count(host) == 0 then
         io.write(host, io.err(host), "usage: tool FILE...\n") else none
@@ -318,16 +318,16 @@ printf("%s: %u items\n", name, count);
 ```landin
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Write a name and a count through the program's buffered writer.
-report: (inout out: io.buffered_writer(system.host), name: utf8, count: u32)
+report: (inout out: io.buffered_writer(blocking.host), name: utf8, count: u32)
         -> none ! io.io_failed | text.no_space | text.invalid_format =
     try io.format(out, "{}: {} items\n", [any(addr name), any(addr count)])
 end report
 
 --- Make the writer once, pass it down, and flush it at the end.
-print_report: (host: system.host)
+print_report: (host: blocking.host)
               -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
@@ -352,11 +352,11 @@ line with `%5u` in it is built first and then written:
 ```landin
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- The same line with the count right-aligned in five columns, as `%5u`
 --- would: the line is built first, because a template has no widths.
-report_aligned: (inout out: io.buffered_writer(system.host), name: utf8,
+report_aligned: (inout out: io.buffered_writer(blocking.host), name: utf8,
                  count: u32)
                 -> none ! io.io_failed | text.no_space | text.invalid_format =
     mut storage: [128]u8 = zeroed
@@ -428,10 +428,10 @@ if (fd < 0) { if (errno == ENOENT) return 0; return -1; }
 ```landin
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Whether the settings file is there; any other failure is the caller's.
-settings_present: (host: system.host)
+settings_present: (host: blocking.host)
                   -> (present: bool) ! io.no_access | io.io_failed =
     present = false
     path := text.host_over("settings.conf")
@@ -453,7 +453,7 @@ and a caller handles them with `else` or passes them on with `try` [0940],
 call that can fail and is neither handled nor passed on is a compile error.
 Only what cannot be foreseen is a failure; what can be checked is checked
 first [0950]. The number is still there when a log wants it:
-`system.last_errno(host)` gives the errno of the call that failed, and
+`blocking.last_errno(host)` gives the errno of the call that failed, and
 `platform/posix` names every errno as an atom. For a person,
 `failure.words(problem)` from `core/failure` turns a library failure into
 a short phrase: it is Landin's `strerror`.
@@ -491,10 +491,10 @@ for (int i = 1; i < argc; i++) puts(argv[i]);
 ```landin
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Write each argument on a line of its own.
-print_arguments: (host: system.host) -> none ! io.io_failed =
+print_arguments: (host: blocking.host) -> none ! io.io_failed =
     for index in usize(0)..<io.argument_count(host) do
         argument := io.argument_at(host, index) else (problem)
             return
@@ -519,10 +519,10 @@ while (fgets(line, sizeof line, stdin)) longest = max(longest, strlen(line));
 
 ```landin
 import core/io
-import hosted/system
+import hosted/blocking
 
 --- The length of the longest line on standard input.
-longest_line: (host: system.host)
+longest_line: (host: blocking.host)
               -> (longest: usize) ! io.io_failed | io.line_too_long =
     longest = 0
     mut buffer: [256]u8 = zeroed
@@ -813,11 +813,11 @@ out:
 ```landin
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Copy the first block of one file into another, closing both on every way
 --- out.
-copy_first_block: (host: system.host, source_path: text.host_string,
+copy_first_block: (host: blocking.host, source_path: text.host_string,
                    target_path: text.host_string)
                   -> none ! io.not_found | io.no_access | io.io_failed =
     source := try io.open_read(host, source_path)
@@ -909,10 +909,10 @@ if (home == NULL) home = "/";
 ```landin
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- The home directory, or `/` when the environment names none.
-home_directory: (host: system.host) -> (home: text.host_string from host) =
+home_directory: (host: blocking.host) -> (home: text.host_string from host) =
     home = io.variable_named(host, text.host_over("HOME")) else (problem)
         text.host_over("/")
     end

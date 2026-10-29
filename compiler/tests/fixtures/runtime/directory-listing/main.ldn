@@ -10,11 +10,11 @@ import core/io
 import core/mem
 import core/sort
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- Read every entry of the directory at `path` into `into`, with each
 --- file's size; `count` is how many there are.
-list: (host: system.host, path: []u8, into: []mut kept)
+list: (host: blocking.host, path: []u8, into: []mut kept)
       -> (count: usize) ! ... =
     count = 0
     mut buffer: [1024]u8 = zeroed
@@ -40,7 +40,7 @@ end list
 
 --- Sort `entries` and write them to `out`, a line each, and then how many
 --- there are and the files' bytes; `total` is those bytes.
-show: (inout out: io.buffered_writer(system.host), entries: []mut kept)
+show: (inout out: io.buffered_writer(blocking.host), entries: []mut kept)
       -> (total: u64) ! ... =
     sort.sort(entries)
     mut room: [300]u8 = zeroed
@@ -132,7 +132,7 @@ escaped: (name: []u8, inout into: text.builder) -> none ! text.no_space =
 end escaped
 
 --- List the directory the first argument names, up to 256 entries.
-list_named: (host: system.host, inout out: io.buffered_writer(system.host))
+list_named: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
             -> none ! ... =
     path: []u8 = text.host_bytes(try io.argument_at(host, 0))
     blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
@@ -142,7 +142,7 @@ list_named: (host: system.host, inout out: io.buffered_writer(system.host))
 end list_named
 
 --- Say on standard error why the listing stopped.
-complain: (host: system.host,
+complain: (host: blocking.host,
            problem: too_many | too_long | differs | failure.reason) -> none =
     reason: []u8 = match problem
         too_many: "more entries than the listing keeps"
@@ -178,7 +178,7 @@ joined: (name: []u8, inout path: text.builder) -> none ! text.no_space =
 end joined
 
 --- Make the file `name` in the top directory, holding `contents`.
-make_file: (host: system.host, name: []u8, contents: []u8) -> none ! ... =
+make_file: (host: blocking.host, name: []u8, contents: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
     mut path := text.over(scratch)
     try joined(name, path)
@@ -191,7 +191,7 @@ make_file: (host: system.host, name: []u8, contents: []u8) -> none ! ... =
 end make_file
 
 --- Remove the file `path` names, or with `directory` the empty directory.
-remove: (host: system.host, path: text.host_string, directory: bool)
+remove: (host: blocking.host, path: text.host_string, directory: bool)
         -> none ! ... =
     if directory then
         try io.remove_directory(host, path)
@@ -202,7 +202,7 @@ end remove
 
 --- Remove `name` from the top directory, or the top directory itself when
 --- `name` is empty, if it is there.
-forget: (host: system.host, name: []u8, directory: bool) -> none ! ... =
+forget: (host: blocking.host, name: []u8, directory: bool) -> none ! ... =
     mut scratch: [64]u8 = zeroed
     mut path := text.over(scratch)
     try joined(name, path)
@@ -212,7 +212,7 @@ forget: (host: system.host, name: []u8, directory: bool) -> none ! ... =
 end forget
 
 --- Remove everything the program makes, whatever an earlier run left.
-clear: (host: system.host) -> none ! ... =
+clear: (host: blocking.host) -> none ! ... =
     try forget(host, "nested/gamma.log", false)
     try forget(host, "nested", true)
     try forget(host, "alpha.log", false)
@@ -224,7 +224,7 @@ end clear
 
 --- Make the directory `name` in the top directory, or the top directory
 --- itself when `name` is empty.
-make_directory: (host: system.host, name: []u8) -> none ! ... =
+make_directory: (host: blocking.host, name: []u8) -> none ! ... =
     mut scratch: [64]u8 = zeroed
     mut path := text.over(scratch)
     try joined(name, path)
@@ -233,7 +233,7 @@ end make_directory
 
 --- Four files, one of them empty and one with a name beyond ASCII, and a
 --- subdirectory holding a fifth.
-build: (host: system.host) -> none ! ... =
+build: (host: blocking.host) -> none ! ... =
     try clear(host)
     try make_directory(host, "")
     try make_file(host, "alpha.log", "alpha\n")
@@ -251,7 +251,7 @@ end build
 
 --- Build the directory, list it to `out`, check the listing and remove the
 --- directory.
-demonstrate: (host: system.host, inout out: io.buffered_writer(system.host))
+demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
              -> none ! ... =
     try build(host)
     blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
@@ -263,7 +263,7 @@ demonstrate: (host: system.host, inout out: io.buffered_writer(system.host))
 end demonstrate
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

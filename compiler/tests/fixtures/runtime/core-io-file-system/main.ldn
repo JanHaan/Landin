@@ -9,7 +9,7 @@ import core/cmp
 import core/io
 import core/io/fake
 import core/text
-import hosted/system
+import hosted/blocking
 import platform/posix
 
 top: []u8 = "core-io-file-system-scratch"
@@ -42,7 +42,7 @@ forget: (name: []u8) -> none ! ... =
 end forget
 
 --  Remove what an earlier run may have left, temporary files included.
-clear: (host: system.host) -> none ! ... =
+clear: (host: blocking.host) -> none ! ... =
     mut buffer: [1024]u8 = zeroed
     mut listing: io.directory =
         io.open_directory(host, text.host_over(top), buffer[0..<1024])
@@ -61,7 +61,7 @@ end clear
 
 --  Whether opening PATH with OPTIONS fails as WANTED says, closing what
 --  it opens otherwise.
-refuses: (host: system.host, path: text.host_string,
+refuses: (host: blocking.host, path: text.host_string,
           options: io.open_options, wanted: open_failure) -> (yes: bool) =
     yes = false
     opened: io.file = io.open_file(host, path, options) else (problem)
@@ -72,7 +72,7 @@ refuses: (host: system.host, path: text.host_string,
 end refuses
 
 --  The bytes of the file at PATH, read into INTO.
-contents: (host: system.host, path: text.host_string, into: []mut u8)
+contents: (host: blocking.host, path: text.host_string, into: []mut u8)
           -> (bytes: []u8 from into) ! ... =
     opened: io.file = try io.open_read(host, path)
     defer io.close(host, opened) else none
@@ -87,14 +87,14 @@ end same
 
 --  Opening: options no open can have, a taken new name, a missing file,
 --  appending and updating in place.
-opening: (host: system.host) -> none ! ... =
+opening: (host: blocking.host) -> none ! ... =
     mut room: [128]u8 = zeroed
     log: text.host_string = try place("log", room[0..<128])
     nothing: io.open_options = (read: false, write: false, append: false,
                                 create: false, exclusive: false,
                                 truncate: false)
     fail wrong when not refuses(host, log, nothing, io.io_failed)
-      or system.last_errno(host) <> posix.number(posix.einval)
+      or blocking.last_errno(host) <> posix.number(posix.einval)
     fail wrong when not refuses(host, log, io.updating, io.not_found)
     made: io.file = try io.open_file(host, log, io.creating)
     try io.write(host, made, "first\n")
@@ -112,7 +112,7 @@ opening: (host: system.host) -> none ! ... =
 end opening
 
 --  Renaming onto a taken name replaces it; a missing one is not found.
-renaming: (host: system.host) -> none ! ... =
+renaming: (host: blocking.host) -> none ! ... =
     mut first: [128]u8 = zeroed
     log: text.host_string = try place("log", first[0..<128])
     mut second: [128]u8 = zeroed
@@ -132,7 +132,7 @@ renaming: (host: system.host) -> none ! ... =
 end renaming
 
 --  A link's status followed is its target's, and not followed its own.
-statuses: (host: system.host) -> none ! ... =
+statuses: (host: blocking.host) -> none ! ... =
     mut first: [128]u8 = zeroed
     link: text.host_string = try place("link", first[0..<128])
     try posix.symbolic_link_at(text.host_over("data"),
@@ -155,7 +155,7 @@ end statuses
 
 --  A read-only file says so and refuses an open for writing, except to
 --  root, whom no permission bit refuses; made writable again, it opens.
-read_only: (host: system.host) -> none ! ... =
+read_only: (host: blocking.host) -> none ! ... =
     mut room: [128]u8 = zeroed
     data: text.host_string = try place("data", room[0..<128])
     try io.set_read_only(host, data, true)
@@ -180,7 +180,7 @@ end read_only
 
 --  Sizes, synchronizing and offsets: a read past the end reads nothing, a
 --  write past it leaves zeros between, and truncation cuts.
-offsets: (host: system.host) -> none ! ... =
+offsets: (host: blocking.host) -> none ! ... =
     mut room: [128]u8 = zeroed
     data: text.host_string = try place("data", room[0..<128])
     opened: io.file = try io.open_file(host, data, io.updating)
@@ -206,7 +206,7 @@ end offsets
 --  is tried again with the next bytes; entropy that only repeats gives up
 --  after `io.temporary_tries`, EEXIST kept; and a missing directory is not
 --  found.
-temporaries: (host: system.host) -> none ! ... =
+temporaries: (host: blocking.host) -> none ! ... =
     mut first_room: [128]u8 = zeroed
     first: io.temporary =
         try io.make_temporary(host, host, text.host_over(top),
@@ -249,7 +249,7 @@ temporaries: (host: system.host) -> none ! ... =
     stuck := fake.entropy_over(repeated, same_bytes[0..<128])
     fail wrong when not temporary_refused(host, stuck, text.host_over(top),
                                           io.io_failed)
-      or system.last_errno(host) <> posix.number(posix.eexist)
+      or blocking.last_errno(host) <> posix.number(posix.eexist)
       or repeated.requests <> io.temporary_tries
     fail wrong when not temporary_refused(
         host, host, text.host_over("core-io-file-system-absent"),
@@ -258,7 +258,7 @@ end temporaries
 
 --  Whether making a temporary file in DIRECTORY with names from NAMES
 --  fails as WANTED says, closing one it makes otherwise.
-temporary_refused: (source: type is io.entropy, host: system.host,
+temporary_refused: (source: type is io.entropy, host: blocking.host,
                     names: source, directory: text.host_string,
                     wanted: open_failure) -> (yes: bool) =
     yes = false
@@ -273,7 +273,7 @@ end temporary_refused
 
 --  The working directory is the one platform/posix names, and a buffer
 --  too small for it is refused.
-working: (host: system.host) -> none ! ... =
+working: (host: blocking.host) -> none ! ... =
     mut room: [4096]u8 = zeroed
     path: text.host_string = try io.current_directory(host, room[0..<4096])
     mut other: [4096]u8 = zeroed
@@ -283,21 +283,21 @@ working: (host: system.host) -> none ! ... =
     mut met: bool = false
     _ = io.current_directory(host, small[0..<1]) else (problem)
         met = problem == io.io_failed
-              and system.last_errno(host) == posix.number(posix.erange)
+              and blocking.last_errno(host) == posix.number(posix.erange)
         named
     end
     fail wrong when not met
 end working
 
 --  Standard output, which every lane captures, is no terminal.
-terminals: (host: system.host) -> none ! ... =
+terminals: (host: blocking.host) -> none ! ... =
     fail wrong when io.is_terminal(host, io.out(host))
       or io.is_terminal(host, io.input(host))
     fail wrong when not unsized(host)
 end terminals
 
 --  Whether standard output's size is refused as no terminal's.
-unsized: (host: system.host) -> (yes: bool) =
+unsized: (host: blocking.host) -> (yes: bool) =
     yes = false
     size: io.window = io.window_size(host, io.out(host)) else (problem)
         yes = problem == io.not_a_terminal
@@ -307,7 +307,7 @@ unsized: (host: system.host) -> (yes: bool) =
 end unsized
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     clear(host) else (problem)
         _ = problem

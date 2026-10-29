@@ -1,0 +1,8 @@
+class: negative
+summary: D476 hosted/system's handle is no writer and no world, so writing through system.new() and erasing it as a world are both refused for want of a conformance
+program: main.ldn
+root: ../../../../..
+status: 1
+codes: L0318, L0318
+constructs: 1290, 1380, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -2,7 +2,7 @@
 --  the traditional lines and checks the complete tally for one through 100.
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 fizz, buzz, fizz_buzz, number: atom
 fizzbuzz_kind: type = fizz | buzz | fizz_buzz | number
@@ -37,7 +37,7 @@ end tally
 
 --  A number's line: its decimal digits and a newline, through a builder
 --  over a few bytes of the caller's frame.
-write_number: (inout out: io.buffered_writer(system.host), value: u32)
+write_number: (inout out: io.buffered_writer(blocking.host), value: u32)
               -> none ! io.io_failed | text.no_space =
     mut room: [16]u8 = zeroed
     mut line := text.over(room)
@@ -46,7 +46,7 @@ write_number: (inout out: io.buffered_writer(system.host), value: u32)
     try io.put(out, text.used(line))
 end write_number
 
-write_line: (inout out: io.buffered_writer(system.host),
+write_line: (inout out: io.buffered_writer(blocking.host),
              kind: fizzbuzz_kind, value: u32)
             -> none ! io.io_failed | text.no_space =
     match kind
@@ -57,7 +57,7 @@ write_line: (inout out: io.buffered_writer(system.host),
     end match
 end write_line
 
-run: (inout out: io.buffered_writer(system.host))
+run: (inout out: io.buffered_writer(blocking.host))
      -> (result: counts) ! io.io_failed | text.no_space =
     result = zeroed
     first: u32 = 1
@@ -73,7 +73,7 @@ end run
 --  The lines gather in a buffer and are written when it fills and at the
 --  end; a `defer` still flushes what is waiting on any other way out.
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [256]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage[0..<256])
     defer io.flush(out) else none

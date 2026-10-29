@@ -4,11 +4,11 @@
 import core/failure
 import core/io
 import core/text
-import hosted/system
+import hosted/blocking
 
 --- How many lines the file at `path` holds.  A last line without its
 --- newline counts, and so does a line too long for the buffer.
-count_lines: (host: system.host, path: text.host_string)
+count_lines: (host: blocking.host, path: text.host_string)
              -> (lines: u64) ! ... =
     lines = 0
     opened: io.file = try io.open_read(host, path)
@@ -28,7 +28,7 @@ end count_lines
 
 --- Say on standard error what failed and why: `count: notes.log: not
 --- found`.
-complain: (host: system.host, subject: []u8, problem: failure.reason)
+complain: (host: blocking.host, subject: []u8, problem: failure.reason)
           -> none =
     mut room: [256]u8 = zeroed
     mut err := io.buffered_over(host, io.err(host), room)
@@ -41,7 +41,7 @@ complain: (host: system.host, subject: []u8, problem: failure.reason)
 end complain
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     code = 1
     path := io.argument_at(host, 0) else (problem)
         io.write(host, io.err(host), "usage: count FILE\n") else none

@@ -9,8 +9,9 @@
 
 /*
  * The link resolves platform/libc's undefined libc references to these
- * functions.  Landin's hosted/system therefore still calls open, read and their
- * siblings exactly as it calls the C library; only the endpoint is scripted.
+ * functions.  Landin's hosted/system and hosted/blocking therefore still
+ * call open, read and their siblings exactly as they call the C library;
+ * only the endpoint is scripted.
  */
 
 enum scenario {

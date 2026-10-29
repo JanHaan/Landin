@@ -458,35 +458,35 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/heap and hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking and hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/benchmark-game-fannkuch-redux": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/benchmark-game-fasta": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/benchmark-game-mandelbrot": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/heap and hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking and hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/benchmark-game-reverse-complement": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/heap and hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking and hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/binary-search": {
       "mode": "execute"
@@ -508,7 +508,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/core-io-buffered-writer flushes through core/io.memory, failing writes included, here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/core-io-buffered-writer flushes through core/io.memory, failing writes included, here."
     },
     "runtime/buffered-writer-format": {
       "mode": "execute"
@@ -566,14 +566,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no system clock, sleep or entropy. runtime/clock-manual times and sleeps over core/io's manual clock and runtime/random-sequence seeds a generator from core/io's scripted entropy on Cortex-M0 instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no system clock, sleep or entropy. runtime/clock-manual times and sleeps over core/io's manual clock and runtime/random-sequence seeds a generator from core/io's scripted entropy on Cortex-M0 instead."
     },
     "runtime/clock-system-libc": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system and platform/linux on the freestanding target before checking declarations: firmware has no system clock and no C runtime."
+      "reason": "Source namespace checking refuses hosted/blocking and platform/linux on the freestanding target before checking declarations: firmware has no system clock and no C runtime."
     },
     "runtime/cmp-bytes-ordered": {
       "mode": "execute"
@@ -637,14 +637,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/core-io-file-system": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/volume-memory runs core/io's memory volume, the fake of io.file_system, on Cortex-M0 instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/volume-memory runs core/io's memory volume, the fake of io.file_system, on Cortex-M0 instead."
     },
     "runtime/core-io-identity-memory": {
       "mode": "execute"
@@ -871,14 +871,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/heap, hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking, hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/derived-parser": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/derived-storage-address-origin": {
       "mode": "execute"
@@ -897,21 +897,21 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/directory-larger-than-buffer": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
     "runtime/directory-listing": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
     "runtime/directory-memory": {
       "mode": "execute",
@@ -926,21 +926,21 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
     "runtime/directory-name-not-utf8": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
     "runtime/directory-through-file": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/directory-memory-firmware lists core/io.memory's directories here."
     },
     "runtime/discard-else-none-ignores-a-value-call-failure": {
       "mode": "execute"
@@ -976,14 +976,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/environment-variables-libc": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/erased-call-no-conformance-answers": {
       "mode": "execute"
@@ -1023,70 +1023,70 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/binary-search executes the same algorithm here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/binary-search executes the same algorithm here."
     },
     "runtime/example-failure-words": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/failure-words gives the library's phrases here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/failure-words gives the library's phrases here."
     },
     "runtime/example-fizzbuzz": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to."
     },
     "runtime/example-formatted-output": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/buffered-writer-format formats into a buffered writer here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/buffered-writer-format formats into a buffered writer here."
     },
     "runtime/example-greatest-common-divisor": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/greatest-common-divisor executes the same algorithm here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/greatest-common-divisor executes the same algorithm here."
     },
     "runtime/example-insertion-sort": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/insertion-sort executes the same algorithm here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/insertion-sort executes the same algorithm here."
     },
     "runtime/example-merge-sort": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/merge-sort executes the same algorithm here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/merge-sort executes the same algorithm here."
     },
     "runtime/example-run-length-encoding": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/run-length-encoding executes the same algorithm here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/run-length-encoding executes the same algorithm here."
     },
     "runtime/example-sensors": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/sensors executes the same poll here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/sensors executes the same poll here."
     },
     "runtime/example-sieve-of-eratosthenes": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/sieve-of-eratosthenes executes the same algorithm here."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/sieve-of-eratosthenes executes the same algorithm here."
     },
     "runtime/failure-words": {
       "mode": "execute"
@@ -1099,7 +1099,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/failure-words gives every phrase on Cortex-M0."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/failure-words gives every phrase on Cortex-M0."
     },
     "runtime/fibre-join-first-failure": {
       "mode": "execute"
@@ -1109,7 +1109,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations; runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations; runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0."
     },
     "runtime/fibre-stack-past-limit-traps": {
       "mode": "execute",
@@ -1121,7 +1121,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations; runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations; runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0."
     },
     "runtime/file-system-firmware": {
       "mode": "execute"
@@ -1131,7 +1131,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/fixed-array-any-shapes": {
       "mode": "execute"
@@ -1163,7 +1163,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/flexible-member-trailing-bytes": {
       "codes": [
@@ -1351,14 +1351,21 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/hosted-io-reads-parser-input": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
+    },
+    "runtime/hosted-system-alone": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no process, environment or file system."
     },
     "runtime/hosted-text-traversal": {
       "mode": "execute"
@@ -1398,7 +1405,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/inline-copies-trap-in-place": {
       "mode": "execute"
@@ -1468,14 +1475,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/library-common-tasks-missing": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/library-diag-severity": {
       "mode": "execute"
@@ -1567,21 +1574,21 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/library-text-columns": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/line-count": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Firmware has no files to name: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/core-io-line-reader reads lines of core/io.memory's standard input here."
+      "reason": "Firmware has no files to name: source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/core-io-line-reader reads lines of core/io.memory's standard input here."
     },
     "runtime/line-end-continues-expression": {
       "mode": "execute"
@@ -1591,7 +1598,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Firmware has no standard input: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/core-io-line-reader reads lines of core/io.memory's standard input here."
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/core-io-line-reader reads lines of core/io.memory's standard input here."
     },
     "runtime/linux-heap-size-classes": {
       "codes": [
@@ -1612,14 +1619,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system and platform/linux on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking and platform/linux on the freestanding target before checking declarations."
     },
     "runtime/linux-process-entry-libc": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system and platform/linux on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking and platform/linux on the freestanding target before checking declarations."
     },
     "runtime/linux-system-calls": {
       "codes": [
@@ -1843,7 +1850,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
     },
     "runtime/network-addresses": {
       "mode": "execute",
@@ -1858,7 +1865,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
     },
     "runtime/network-datagram-memory-firmware": {
       "mode": "execute"
@@ -1868,7 +1875,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory runs the same echo over core/io's memory network instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory runs the same echo over core/io's memory network instead."
     },
     "runtime/network-echo-memory": {
       "mode": "execute",
@@ -1880,21 +1887,21 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: the routine runs over the hosted provider as well as core/io's memory network, which runtime/network-echo-memory exercises on Cortex-M0."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: the routine runs over the hosted provider as well as core/io's memory network, which runtime/network-echo-memory exercises on Cortex-M0."
     },
     "runtime/network-receive-timeout": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
     },
     "runtime/network-refused": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
     },
     "runtime/null-pointer-dynamic-traps": {
       "mode": "execute"
@@ -1936,7 +1943,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system and platform/posix on the freestanding target before checking declarations: firmware has no account database and no standard input, which this fixture reads."
+      "reason": "Source namespace checking refuses hosted/blocking and platform/posix on the freestanding target before checking declarations: firmware has no account database and no standard input, which this fixture reads."
     },
     "runtime/posix-accounts-libc": {
       "codes": [
@@ -2079,7 +2086,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/r420-array-place-recovery": {
       "mode": "execute"
@@ -2280,7 +2287,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations."
     },
     "runtime/r440-io-partial-progress": {
       "mode": "execute"
@@ -2419,14 +2426,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/heap, hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking, hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r480-hosted-text": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/heap, hosted/system on the freestanding target before checking declarations."
+      "reason": "Source namespace checking refuses hosted/blocking, hosted/heap on the freestanding target before checking declarations."
     },
     "runtime/r480-loop-fresh-view": {
       "mode": "execute"
@@ -2755,14 +2762,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/run-large-output": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/run-length-encoding": {
       "mode": "execute"
@@ -2775,21 +2782,21 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/run-no-descriptor-leak": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/run-shell": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/run-shell-memory": {
       "mode": "execute",
@@ -2801,14 +2808,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no environment. runtime/run-memory-firmware starts core/io's scripted programs and reads a memory environment here instead."
     },
     "runtime/run-streams": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Firmware has no standard input and starts no program: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/run-shell-memory pipes a scripted program's input beside core/io.memory instead."
+      "reason": "Firmware has no standard input and starts no program: source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/run-shell-memory pipes a scripted program's input beside core/io.memory instead."
     },
     "runtime/rv64-assembly-level": {
       "mode": "execute"
@@ -3005,7 +3012,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/system and platform/posix on the freestanding target before checking declarations. runtime/volume-memory runs core/io's memory volume, the fake of io.file_system, on Cortex-M0 instead."
+      "reason": "Source namespace checking refuses hosted/blocking, hosted/system and platform/posix on the freestanding target before checking declarations. runtime/volume-memory runs core/io's memory volume, the fake of io.file_system, on Cortex-M0 instead."
     },
     "runtime/try-inferred-in-generic-argument": {
       "mode": "execute"
@@ -3182,21 +3189,21 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Firmware has no standard input: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
     },
     "runtime/word-count-closed-input": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Firmware has no standard input: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
     },
     "runtime/word-count-empty": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Firmware has no standard input: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
     },
     "runtime/word-count-memory": {
       "mode": "execute"
@@ -3206,7 +3213,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Firmware has no standard input: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
+      "reason": "Firmware has no standard input: source namespace checking refuses hosted/blocking on the freestanding target before checking declarations. runtime/word-count-memory executes the same counting routine over core/io.memory here."
     },
     "runtime/wrapping-add-and-subtract-cross-the-boundaries": {
       "mode": "execute"

@@ -1,10 +1,10 @@
 --  One to a hundred, with Fizz for a multiple of three, Buzz for a
 --  multiple of five and FizzBuzz for a multiple of both.
 import core/io
-import hosted/system
+import hosted/blocking
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     mut storage: [512]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none

@@ -15,6 +15,7 @@
 import core/io
 import core/net
 import core/text
+import hosted/blocking
 import hosted/system
 import platform/posix
 
@@ -26,7 +27,7 @@ number: (opened: io.file, room: []mut u8) -> (digits: []u8 from room) ! ... =
 end number
 
 --  The copy's part: report each descriptor it was given that is open.
-check: (host: system.host) -> none ! ... =
+check: (host: blocking.host) -> none ! ... =
     out: io.file = io.out(host)
     given: usize = io.argument_count(host)
     for at in usize(1)..<given do
@@ -51,7 +52,7 @@ check: (host: system.host) -> none ! ... =
 end check
 
 --  The parent's part.
-parent: (host: system.host) -> (code: i32) =
+parent: (host: blocking.host) -> (code: i32) =
     code = 1
     first: io.file = io.open_read(host, text.host_over("/dev/null")) else (problem)
         _ = problem
@@ -165,7 +166,7 @@ parent: (host: system.host) -> (code: i32) =
 end parent
 
 public main: () -> (code: i32) =
-    host := system.new()
+    host := blocking.new()
     if io.argument_count(host) == 0 then
         code = parent(host)
         return
