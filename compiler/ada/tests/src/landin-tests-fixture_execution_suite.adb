@@ -2359,8 +2359,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
          --  executable carries no note, so its image is held to holding
          --  the level's instructions and not the default's sequence, and
          --  the default's image of a fixture that names a level is held to
-         --  holding none of them.
-         if Lanes.Target_Name = "linux-arm64"
+         --  holding none of them.  Linux's and Darwin's arm64 alike: the
+         --  architecture picks the inspection, never the host, since a
+         --  Mac has objdump and no readelf.
+         if Landin.Targets.Architecture_Of (Lanes.Target)
+              = Landin.Targets.Arm64
            and then (Level /= "" or else not Lane_Levels (Case_Item).Is_Empty)
          then
             Check_Arm64_Level (Built, Label, Level /= "", Item);
