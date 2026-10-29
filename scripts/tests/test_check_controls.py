@@ -300,7 +300,8 @@ class CrossLanes(unittest.TestCase):
               "compiler/tests/fixtures/runtime/posix-sockets/fixture.meta",
               "compiler/tests/fixtures/runtime/environment-variables/fixture.meta",
               "compiler/tests/fixtures/runtime/environment-variables-libc/fixture.meta",
-              "compiler/tests/fixtures/runtime/run-no-descriptor-leak/fixture.meta"]
+              "compiler/tests/fixtures/runtime/run-no-descriptor-leak/fixture.meta",
+              "compiler/tests/fixtures/runtime/derived-server-two-process/fixture.meta"]
 
     def test_the_real_record_passes(self):
         self.assertEqual(faults(checker.check_cross_lanes, copied=self.COPIED), [])
