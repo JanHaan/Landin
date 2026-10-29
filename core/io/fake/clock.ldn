@@ -1,5 +1,6 @@
 --  A clock a test sets and advances, the fake of core/time's two clocks.
 
+import core/fibre
 import core/time
 
 --- Caller-owned state of a manual clock: what its monotonic clock reads,
@@ -20,6 +21,9 @@ end clock_space
 
 manual_value: type = struct
     state: ptr mut clock_space
+    beside: usize
+    runs: any fibre.turns
+    takes_turns: bool
 end manual_value
 
 --- A clock that moves only when it is told: `advance` moves it, and
@@ -27,6 +31,15 @@ end manual_value
 --- test of code that sleeps or times itself takes no time and gives the
 --- same answer every run.  Both of its clocks move together.  A provider
 --- of `clock` and `wall_clock`; copies share the state.
+---
+--- Made by `clock_beside` a network that takes turns, `sleep` takes turns
+--- of the network's scheduler instead, and the clock moves only after a
+--- whole round in which nothing moved in the network: then the sleeper
+--- that saw the round advances it by a millisecond, or by what is left of
+--- its sleep when that is less, and the advance is the network's move.
+--- So the round's other fibres run while it sleeps, its time passes only
+--- when they all wait, and the network fails no call `timed_out` while a
+--- fibre sleeps on the clock, since the sleeper will move it (D493).
 public clock: type = manual_value
 
 --- Fill `state` for a manual clock whose monotonic clock reads `start` and
@@ -36,8 +49,22 @@ public clock_over: (inout state: clock_space, start: time.instant,
     state = (monotonic: u64(start), wall_seconds: wall.seconds,
              wall_nanoseconds: wall.nanoseconds, readings: 0, sleeps: 0,
              slept: 0)
-    host = (state: addr state)
+    host = (state: addr state, beside: 0, runs: any(addr nobody),
+            takes_turns: false)
 end clock_over
+
+--- Fill `state` for a manual clock as `clock_over` does, whose `sleep`
+--- takes turns beside `network` when the network takes turns, and return
+--- its handle.  It borrows the network for as long as it is used.
+public clock_beside: (inout state: clock_space, start: time.instant,
+                      wall: time.wall_time, beside: network)
+                     -> (host: clock from state, beside) =
+    state = (monotonic: u64(start), wall_seconds: wall.seconds,
+             wall_nanoseconds: wall.nanoseconds, readings: 0, sleeps: 0,
+             slept: 0)
+    host = (state: addr state, beside: usize(beside.state),
+            runs: beside.runs, takes_turns: beside.takes_turns)
+end clock_beside
 
 --- Move a manual clock's monotonic and wall clocks forward by `span`; it
 --- traps past the monotonic clock's last instant.
@@ -64,7 +91,27 @@ end manual_now
 manual_sleep: (self: clock, span: time.duration) -> none =
     inc self.state.val.sleeps
     self.state.val.slept = self.state.val.slept + u64(span)
-    advance(self, span)
+    if not self.takes_turns then
+        advance(self, span)
+        return
+    end if
+    deadline: u64 = self.state.val.monotonic + u64(span)
+    network_state: ptr mut network_space = ptr(self.beside)
+    inc network_state.val.sleepers
+    while self.state.val.monotonic < deadline do
+        before: usize = network_state.val.moves
+        self.runs.yield()
+        if network_state.val.moves == before
+          and self.state.val.monotonic < deadline then
+            mut step: u64 = deadline - self.state.val.monotonic
+            if step > u64(time.milliseconds(1)) then
+                step = u64(time.milliseconds(1))
+            end if
+            advance(self, time.nanoseconds(step))
+            inc network_state.val.moves
+        end if
+    end while
+    dec network_state.val.sleepers
 end manual_sleep
 
 manual_wall_now: (self: clock) -> (at: time.wall_time) =

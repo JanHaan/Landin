@@ -40,8 +40,7 @@ end announce
 --- same (D444).
 ---
 --- A connection's failure is that connection's: the group keeps the first
---- one for `join`, and the loop does not stop for it. An accept that timed
---- out is tried again, since its listener is still usable.
+--- one for `join`, and the loop does not stop for it.
 public serve_forever: (runs: any fibre.scheduler, network: any net.network,
                        clock: any time.clock, listener: io.file)
                       -> none ! failure.reason =
@@ -49,10 +48,7 @@ public serve_forever: (runs: any fibre.scheduler, network: any net.network,
     mut sessions := try fibre.group_over(runs, stacks, session.at_once)
     defer fibre.join(sessions) else none
     loop do
-        connection: io.file = network.accept(listener) else (problem)
-            continue when problem == net.timed_out
-            fail problem
-        end
+        connection: io.file = try network.accept(listener)
         serving: session.session = (connection: connection, network: network,
                                     clock: clock)
         try fibre.admit(sessions, session.serve, serving)
@@ -164,9 +160,8 @@ asking: type = struct
     heard: ptr mut answers
 end asking
 
---  Connect, send the line, read the answer's line and note its tag. A
---  receive that timed out is tried again, since the connection is still
---  usable; an answer other than `<tag> done` is `io_failed`.
+--  Connect, send the line, read the answer's line and note its tag; an
+--  answer other than `<tag> done` is `io_failed`.
 ask: (inout self: asking) -> none ! failure.reason =
     connection: io.file = try self.network.connect(self.to)
     defer self.network.close_socket(connection) else none
@@ -175,11 +170,8 @@ ask: (inout self: asking) -> none ! failure.reason =
     mut got: usize = 0
     loop do
         fail io.io_failed when got == lenof reply
-        count: usize = self.network.receive(connection,
-                                            reply[got..<lenof reply]) else (problem)
-            continue when problem == net.timed_out
-            fail problem
-        end
+        count: usize = try self.network.receive(connection,
+                                                reply[got..<lenof reply])
         fail net.disconnected when count == 0
         got += count
         break when reply[got - 1] == u8('\n')

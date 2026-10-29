@@ -24522,7 +24522,8 @@ filled; timing out after one turn whatever happened, which fails a call
 whose peer is itself waiting on a third fibre that answers in the same
 round; and counting changes only to the waiting socket, which needs every
 socket to know its waiters and gains nothing a deterministic test needs.
-All were declined.
+All were declined. D493 adds that a fibre sleeping on a clock made beside
+the network is a move to come, so no call times out while one sleeps.
 
 **Pinned by** `runtime/network-fake-turns-exchange`, with the server first
 two turns and with the client first one; and
@@ -24703,8 +24704,7 @@ the buffered writer an adapter that holds the erased network, and
 counterpart makes from its board. The protocol separates words by one
 space, takes a tag of at least one byte and no space, and refuses a wait
 over a minute; every other line, one too long for the session's buffer
-among them, is answered `malformed`. An accept or a client's receive that
-times out is tried again.
+among them, is answered `malformed`.
 
 **The alternatives:** asking the provider at run time whether it delivers
 signals, which an `any` cannot answer and which D477 put at the mint site;
@@ -24716,10 +24716,10 @@ an adapter for each consumer serves better than one erased parameter; and
 failing a session on a line too long, which drops a connection for one
 line. All were declined.
 
-**Pinned by** `runtime/derived-server-two-process`, the server over the
-blocking provider in a process of its own, ended by SIGTERM's default
-disposition, and `--io=events` refused with status 3 while the event
-provider is absent; and `runtime/derived-server-fake-turns`,
+**Pinned by** `runtime/derived-server-two-process`, the server in a
+process of its own over the blocking provider, ended by SIGTERM's default
+disposition, and over the event provider, stopped cleanly by its signal
+waiter; and `runtime/derived-server-fake-turns`,
 `serve_until_terminated` and the client over the fake network and signals
 on a round of turns, `b` answered before `a` and the server stopped
 cleanly. Prototype 5's V1, V3 and V7 record the pressure.
@@ -24747,11 +24747,11 @@ it runs over the blocking provider on every hosted target. It sends
 SIGTERM, `kill` on Darwin and FreeBSD and the system call on Linux, reads
 the rest of the child's output and waits for it: over the blocking
 provider the child must have been ended by the signal and written nothing
-more. Until the event provider exists, `--io=events` must be refused with
-status 3 and no output, so the event half fails closed both ways: a server
-that served events over another provider fails it now, and the provider's
-arrival fails it until the half expects `b` first and a clean end. The
-QEMU cross lanes, which cannot start the program's own child without a
+more. The same exchange then runs with `--io=events`, over
+`hosted/events`, and requires `b` first, `stopped after 2 requests` as the
+child's last line and status 0: the server's signal waiter, not the
+signal's default, ended it. The server's source is the same in both
+children; only `app`'s minting routine differs. The QEMU cross lanes, which cannot start the program's own child without a
 binfmt_misc handler, list the fixture in `compiler/tests/cross-lanes.json`.
 
 **The alternatives:** the prototype's `ask_both` as the client, which
@@ -24762,4 +24762,48 @@ the test program, which no FreeBSD, Darwin or RV64 lane runs; and a
 shorter limit against the prototype's 200 milliseconds, which an emulated
 FreeBSD guest could miss. All were declined.
 
-**Pinned by** `runtime/derived-server-two-process` on every hosted target.
+**Pinned by** `runtime/derived-server-two-process` on every hosted target,
+both halves.
+
+### D493 — A sleep on a clock beside the fake network is a move to come
+
+**The tour said** nothing. D483 fails a call on the fake network over turns
+`timed_out` after a whole round in which nothing in the network moved. A
+fibre sleeping on a clock that takes turns is not quiet: when it wakes it
+may connect or send, and a server's `accept` or a client's `receive`
+waiting through its sleep timed out under D483, so prototype 5's derived
+server and client tried a timed-out call again, which over the hosted
+providers, with no limit set, never happens.
+
+**Chosen:** `clock_beside(state, start, wall, network)` makes
+`core/io/fake`'s manual clock beside a network, and over a network that
+takes turns its `sleep` takes the network's turns. While it sleeps the
+network counts it in `sleepers`, and a call that waited a round finding
+`moves` unchanged fails `timed_out` only while `sleepers` is zero. The
+clock moves only after a whole round in which nothing in the network
+moved, when every other fibre waited: the sleeper that saw the round
+advances it by a millisecond, or by what is left of its sleep when that is
+less, and counts the advance in `moves`, so a second sleeper in the same
+round does not advance it again and sleepers wake in the order of their
+deadlines, to the millisecond. Beside a network that takes no turns, and
+from `clock_over`, the clock is as before: `sleep` advances it at once.
+The only new surface is the constructor and the `sleepers` count.
+
+**The alternatives:** a constructor of the network taking the clock, which
+changes `network_over_turns` for every test that has no clock;
+counting a sleeper's every turn as a move, which a waiter that looked
+before the sleeper's turn still sees as a quiet round; a count of
+sleepers kept by the round of turns, which would put a fake's question in
+`fibre.turns`, a concept every provider implements; the network itself a
+clock, which mixes two fakes a test may want apart; and advancing the
+clock a millisecond for each turn the sleeper takes, as the derived
+server's fixture had its own clock do, which makes time pass while other
+fibres still have work. All were declined.
+
+**Pinned by** `runtime/network-fake-turns-sleeper`, the main fibre waiting
+in `accept` while one client fibre sleeps 100 milliseconds and another 50
+before connecting: both accepted, the second first, at 50 and 100
+milliseconds on the clock, and a receive with nobody sleeping timing out
+after one quiet round; and `runtime/derived-server-fake-turns`, the
+derived server and client, which no longer try a timed-out call again,
+over the fake network and a clock beside it.

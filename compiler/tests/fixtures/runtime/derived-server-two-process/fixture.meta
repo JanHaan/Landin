@@ -1,5 +1,5 @@
 class: runtime
-summary: prototype 5's derived server started as a child process through io.programs and asked WAIT 1000 a then NOW b on two connections by a client in another process; over --io=blocking a is answered first and SIGTERM ends the server by its default disposition; --io=events is refused with status 3 until hosted/events exists, when the same exchange expects b first and a clean stop
+summary: prototype 5's derived server started as a child process through io.programs and asked WAIT 1000 a then NOW b on two connections by a client in another process, the same source over both implementations of Io; over --io=blocking a is answered first and SIGTERM ends the server by its default disposition, and over --io=events b is answered first and SIGTERM read by the server's signal waiter stops it cleanly with status 0 and stopped after 2 requests as its last line
 program: main.ldn
 root: ../../../../..
 profiles: standard

@@ -9,10 +9,12 @@ import core/cmp
 import core/failure
 import core/fibre
 import core/io
+import core/io/signal
 import core/net
 import core/text
 import core/time
 import hosted/blocking
+import hosted/events
 import hosted/system
 import examples/derived_server/app/server
 
@@ -108,22 +110,42 @@ over_blocking: (port: u16) -> (code: i32) =
     code = 0
 end over_blocking
 
---  Over the provider whose waits switch fibres, `hosted/events`,
---  which mints `turning`, `signals`, `runs`, `network`, `clock` and `world`
---  from one handle and serves with `server.serve_until_terminated`.  This
---  build does not have that provider, so the choice is refused, with its
---  own status, rather than served over another.
+--  Over the provider whose waits switch fibres, `hosted/events`: one
+--  handle erased as `turning`, `signals`, `runs`, `network`, `clock` and
+--  `world`, served by `server.serve_until_terminated`, whose fibre waiting
+--  for SIGTERM stops it cleanly.  The round's table holds the fibres that
+--  may be unfinished at once, the signal waiter and two sessions, and one
+--  more.
 over_events: (port: u16) -> (code: i32) =
-    _ = port
-    host := blocking.new()
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [4]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        fallback := blocking.new()
+        complain(any(addr fallback), failure.words(problem))
+        return
+    end
+    turning: any fibre.turns = any(addr host)
+    signals: any signal.signals = any(addr host)
+    runs: any fibre.scheduler = any(addr host)
+    network: any net.network = any(addr host)
+    clock: any time.clock = any(addr host)
     world: any io.world = any(addr host)
-    complain(world, "--io=events needs hosted/events, which this build does not have")
-    code = 3
+    listener: io.file = listening(world, network, port) else (problem)
+        _ = problem
+        return
+    end
+    server.serve_until_terminated(turning, signals, runs, network, clock,
+                                  world, listener) else (problem)
+        complain(world, failure.words(problem))
+        return
+    end
+    code = 0
 end over_events
 
 --- Run the server with the options from argument `first` on: the code the
---- process ends with, 0 when it stopped cleanly, 1 when it failed, 2 for a
---- command line it could not read and 3 for a provider it does not have.
+--- process ends with, 0 when it stopped cleanly, 1 when it failed and 2 for
+--- a command line it could not read.
 public entry: (first: usize) -> (code: i32) =
     services := system.new()
     asked: choice = options(services, first) else (problem)

@@ -1,0 +1,8 @@
+class: runtime
+summary: D493 core/io/fake's network made by network_over_turns fails no call timed_out while a fibre sleeps on a clock made clock_beside it: the main fibre waits in accept while one client fibre sleeps 100 milliseconds and another 50 before connecting, both connections are accepted, the 50 millisecond sleeper's first, at 50 and 100 milliseconds on the clock, which moved only while every fibre waited, and once nobody sleeps a receive nothing answers times out after one quiet round
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+status: 42
+constructs: 1380, 1620, 1680, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

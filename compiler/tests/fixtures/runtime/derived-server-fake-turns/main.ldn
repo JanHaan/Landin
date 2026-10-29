@@ -1,6 +1,7 @@
 --  Prototype 5's derived server and its client in one process, over
---  core/io/fake's network and signals on a round of turns, with a clock
---  that takes a turn for each millisecond it sleeps.  The server is
+--  core/io/fake's network and signals on a round of turns, with its clock
+--  beside the network, so that time passes only while every fibre waits.
+--  The server is
 --  examples/derived_server's own `serve_until_terminated`, the routine
 --  `--io=events` serves with, and the client is its `ask_both`: a
 --  fibre sends `WAIT 200 a` and another `NOW b`, and `b` is answered
@@ -20,28 +21,6 @@ import core/time
 import hosted/blocking
 import examples/derived_server/app/server
 import examples/derived_server/app/session
-
---  A clock that takes a turn for each millisecond it sleeps: its reading
---  moves on only while a sleeper waits, and the round's other fibres run
---  meanwhile.
-turning: type = struct
-    reading: ptr mut u64
-    runs: any fibre.turns
-end turning
-
-turning_now: (self: turning) -> (at: time.instant) =
-    at = time.instant(self.reading.val)
-end turning_now
-
-turning_sleep: (self: turning, span: time.duration) -> none =
-    deadline: u64 = self.reading.val + u64(span)
-    while self.reading.val < deadline do
-        self.runs.yield()
-        self.reading.val += u64(time.milliseconds(1))
-    end while
-end turning_sleep
-
-turning is time.clock (now: turning_now, sleep: turning_sleep)
 
 --  The client fibre: both requests, then SIGTERM to the server.
 client_state: type = struct
@@ -77,8 +56,9 @@ run: (signals: fake.signals, runs: any fibre.turns, host: blocking.host)
     network := fake.network_over_turns(space, sockets, runs)
     listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
     at: net.address = try net.local_address(network, listener)
-    mut reading: u64 = 0
-    taking: turning = (reading: addr reading, runs: runs)
+    mut clock_space: fake.clock_space = zeroed
+    taking := fake.clock_beside(clock_space, time.instant(0),
+                                (seconds: 0, nanoseconds: 0), network)
     mut heard: server.answers = zeroed
     mut clients := try fibre.turns_over(runs, backing, 1)
     defer fibre.join(clients) else none
@@ -93,7 +73,8 @@ run: (signals: fake.signals, runs: any fibre.turns, host: blocking.host)
     fail io.io_failed when heard.count <> 2
       or cmp.compare(heard.order[0..<2], "ba") <> cmp.equal
     fail io.io_failed when session.served_count() <> 2
-    fail io.io_failed when reading <> u64(time.milliseconds(200))
+    fail io.io_failed when clock_space.monotonic <> u64(time.milliseconds(200))
+    fail io.io_failed when space.sleepers <> 0
     fail io.io_failed when space.connections <> 2
 end run
 

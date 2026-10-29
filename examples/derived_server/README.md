@@ -32,8 +32,7 @@ is answered after it, and SIGTERM ends the process by its default
 disposition. Over `--io=events`, the provider whose waits switch fibres,
 two connections are served at once, so `NOW b` is answered while `a`
 waits, and a fibre that waits for SIGTERM stops the server cleanly and
-prints `stopped after N requests`. This build does not have that provider
-yet: `--io=events` says so and ends with status 3.
+prints `stopped after N requests`.
 
 `app/protocol` reads and answers one request and knows nothing of sockets
 or fibres, so the firmware counterpart can share it. `app/session` serves

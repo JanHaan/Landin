@@ -1962,6 +1962,11 @@
       "profile_limit": "selected-image",
       "reason": "Two fibres exchanging over core/io's memory network under a round of turns need 60,408 bytes of flash at size/auto, overflowing the 32 KiB profile by 27,640. A table keeps only the entries something projects (D374), so what remains is the program's direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake's signals over a round of turns within the image and requires execution; this image limit is not runtime evidence."
     },
+    "runtime/network-fake-turns-sleeper": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Three fibres over core/io's memory network and a manual clock beside it under a round of turns need 68,824 bytes of flash at size/auto, overflowing the 32 KiB profile by 36,056. A table keeps only the entries something projects (D374), so what remains is the program's direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake's signals over a round of turns within the image and requires execution; this image limit is not runtime evidence."
+    },
     "runtime/network-fake-turns-waits": {
       "mode": "execute",
       "profile_limit": "selected-image",

@@ -11,11 +11,9 @@
 --
 --  Over `--io=blocking`, one request at a time: `a` is answered first, and
 --  SIGTERM ends the server by its default disposition (D477).  Over
---  `--io=events`, the server says now that this build has no
---  `hosted/events`, ends with status 3 and serves nothing; once it does
---  have it, `exchange(host, "--io=events", "ba", true)` replaces
---  `refused_events(host)` below: `b` is answered first, and the server's
---  signal waiter stops it cleanly, status 0 and `stopped after 2 requests`.
+--  `--io=events`, two at once: `b` is answered first, and the server's
+--  signal waiter stops it cleanly, status 0 with `stopped after 2
+--  requests` as its last line.  The server is the same source over both.
 import core/cmp
 import core/failure
 import core/io
@@ -182,23 +180,6 @@ exchange: (host: blocking.host, io_word: []u8, expected: []u8, clean: bool)
     end if
 end exchange
 
---  Start the server over `--io=events`, which this build does not have:
---  it serves nothing, writes nothing on its output, and ends with
---  status 3.
-refused_events: (host: blocking.host) -> none ! failure.reason =
-    step = 9
-    mut started: io.child = try start_server(host, "--io=events")
-    mut room: [16]u8 = zeroed
-    count: usize = try output_of(host, started, room, true)
-    ended: io.ending = try io.wait(host, started)
-    step = 10
-    fail io.io_failed when count <> 0
-    match ended.how
-        io.exited(given): fail io.io_failed when given <> 3
-        io.signalled: fail io.io_failed
-    end match
-end refused_events
-
 public main: () -> (code: i32) =
     host := blocking.new()
     if io.argument_count(host) > 0 then
@@ -211,7 +192,7 @@ public main: () -> (code: i32) =
         code = step
         return
     end
-    refused_events(host) else (problem)
+    exchange(host, "--io=events", "ba", true) else (problem)
         _ = problem
         code = step
         return

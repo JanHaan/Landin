@@ -14,7 +14,7 @@ a process of its own and a client in another, the server started through
 `io.programs` and stopped with SIGTERM. `runtime/derived-server-fake-turns`
 is the same server and the prototype's own client in one process, over
 `core/io/fake`'s network and signals on a round of turns, which is what the
-event provider's half of the two-process fixture will show on the hosts.
+event provider's half of the two-process fixture shows on the hosts.
 
 | Prototype section | Complete source and behavior |
 | --- | --- |
@@ -44,10 +44,6 @@ refused them or the sketch left a choice open, and D489 records each:
   the server's own end is clean only when the waiter stopped it, which it
   notes in a `bool` of `serve_until_terminated`'s frame kept through
   `escaping into` (D445).
-- An `accept` or a client's `receive` that times out is tried again: over
-  the hosted providers no limit is set and it never does, and over the
-  fake network a round in which only a sleeping clock moves times it out
-  (D483).
 - The sketch's `serve` failed the session on a line too long for its
   buffer; the derivative answers it `malformed`, and the line reader skips
   the rest of it.
@@ -59,40 +55,46 @@ refused them or the sketch left a choice open, and D489 records each:
 | V3 | Each session's state refers to `serve_forever`'s parameters, the signal waiter's to a local declared before its group, and each ask's to `ask_both`'s `inout` parameter, all kept through `escaping into`; every group is joined by `defer`. |
 | V4 | The switch points are the provider's: the clock's `sleep`, `accept`, the line reader's reads, the writer's flush and `next_signal`. `served_one` and the open-connection table switch nowhere. No `last_errno` is read. |
 | V5, V6 | `served +%= 1` and the connection table are plain module state: the fibres of one provider are one context (D446). Over the blocking host there is one fibre at a time anyway. |
-| V7 | Over a provider of signals, SIGTERM is read by a fibre and stops the server by failing its I/O; over `hosted/blocking` no signal is waited for and SIGTERM's default disposition ends the process (D477), which the two-process fixture checks. The event provider's clean stop is checked in-process now. |
+| V7 | Over a provider of signals, SIGTERM is read by a fibre and stops the server by failing its I/O; over `hosted/blocking` no signal is waited for and SIGTERM's default disposition ends the process (D477), which the two-process fixture checks. Over `hosted/events` the two-process fixture checks the clean stop too, status 0 after `stopped after 2 requests`. |
 | V8 | The in-process fixture runs the server on `core/fibre/stacks`' round, the library's round of turns, under `core/io/fake`'s signals. |
 | V9 | The stacks are guessed, as the sketch's were: 16 KiB for each session and for the signal waiter, 16 KiB for each ask. Every routine checks its frame against its stack's limit (D471), so a guess too small traps rather than overruns. |
-| V14 | `runtime/derived-server-fake-turns` runs the server over the fake network given a round of turns (D483), whose waiting calls take turns. |
+| V14 | `runtime/derived-server-fake-turns` runs the server over the fake network given a round of turns (D483), whose waiting calls take turns, beside a clock that keeps them from timing out while it sleeps (D493). |
 | V15 | The server, the waiter and the client start fibres only as groups they join. |
 | V10, V11, V12, V13 | The firmware counterpart's and the debugger's, not this derivative's. |
 
-`runtime/derived-server-two-process` is the exit evidence's shape. Run
-without arguments, the fixture's program starts itself again through
-`io.programs` as the server, `serve --io=blocking --port=0`, which calls
-the same `app.entry` the example's `main` does. It reads the server's
-first line, `listening on 127.0.0.1:<port>`, sends `WAIT 1000 a` on one
-connection and `NOW b` on another, and reads the second with a limit of
-500 milliseconds, half of `a`'s wait: an answer within it came first, and
-none means `a` comes first (D490). Over the blocking provider it requires
-`a` first, sends SIGTERM, and requires the server to have ended by that
-signal and written nothing more. It then starts the server with
-`--io=events`, which this build refuses with status 3 and no output.
+`runtime/derived-server-two-process` is the second Io's exit evidence: the
+derived server on the hosted targets over both implementations of Io,
+unchanged. Run without arguments, the fixture's program starts itself
+again through `io.programs` as the server, `serve --io=blocking --port=0`,
+which calls the same `app.entry` the example's `main` does. It reads the
+server's first line, `listening on 127.0.0.1:<port>`, sends `WAIT 1000 a`
+on one connection and `NOW b` on another, and reads the second with a
+limit of 500 milliseconds, half of `a`'s wait: an answer within it came
+first, and none means `a` comes first (D490). Over the blocking provider
+it requires `a` first, sends SIGTERM, and requires the server to have
+ended by that signal and written nothing more. It then does the same with
+`serve --io=events --port=0`, over `hosted/events`, and requires `b`
+first, then a clean end: status 0, with `stopped after 2 requests` as the
+server's last output line, written once its signal waiter had closed the
+listener and every session.
 
-When `hosted/events` lands, two things change and nothing else. In
-`examples/derived_server/app/app.ldn`, `over_events` mints the event
-handle, erases it as `any fibre.turns`, `any signal.signals`,
+The two children run the same `app/server`, `app/session` and
+`app/protocol`. Only `app/app.ldn`'s minting routines differ:
+`over_blocking` erases a `hosted/blocking` handle and calls `server.serve`,
+and `over_events` makes a `hosted/events` handle over its own frame's
+state and a round of four entries, the signal waiter and two sessions and
+one more, erases it as `any fibre.turns`, `any signal.signals`,
 `any fibre.scheduler`, `any net.network`, `any time.clock` and
 `any io.world`, listens through `listening` and calls
 `server.serve_until_terminated`, returning 0 when it returns and 1 when it
-fails, as `over_blocking` does. In the fixture, `refused_events(host)`
-becomes `exchange(host, "--io=events", "ba", true)`: `b` first, then a
-clean end, status 0, with `stopped after 2 requests` as the server's last
-output line. The fixture's summary and this paragraph say so then.
+fails.
 
 `runtime/derived-server-fake-turns` runs `serve_until_terminated`, the
-routine the event provider will serve with, beside `ask_both` in a fibre,
-over `core/io/fake`'s network and signals on one round and a clock that
-takes a turn for each millisecond it sleeps. It requires `b` answered
-before `a`, two requests served, 200 milliseconds slept, two connections
-made, the server stopped by SIGTERM which the client raises once both
-answers are in, and the server's two lines on standard output.
+routine the event provider serves with, beside `ask_both` in a fibre,
+over `core/io/fake`'s network and signals on one round and a clock made
+`clock_beside` the network, which moves only while every fibre waits and
+keeps the network from timing out a call while it sleeps (D493). It
+requires `b` answered before `a`, two requests served, 200 milliseconds
+slept, two connections made, the server stopped by SIGTERM which the
+client raises once both answers are in, and the server's two lines on
+standard output.

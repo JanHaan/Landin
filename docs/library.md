@@ -1027,7 +1027,7 @@ with unpredictable bytes or fails `io_failed`.
 
 | Fake | Made by | Behaviour |
 |---|---|---|
-| `fake.clock` | `clock_over`, over the caller's `clock_space` | Moves only when a test says: `advance` moves both its clocks, and a `sleep` advances them by exactly what it asks and returns at once. The test may set either reading through the state, and the state counts readings, sleeps and the time slept. |
+| `fake.clock` | `clock_over`, over the caller's `clock_space`, or `clock_beside` a fake network | Moves only when a test says: `advance` moves both its clocks, and a `sleep` advances them by exactly what it asks and returns at once. Made `clock_beside` a network that takes turns, a `sleep` takes turns instead and the clock moves only while every other fibre waits. The test may set either reading through the state, and the state counts readings, sleeps and the time slept. |
 | `fake.entropy` | `entropy_over`, over the caller's bytes | Gives the bytes in order; a request for more than is left fails. So a program that seeds itself from entropy runs the same in every test. |
 
 Both fakes run on Cortex-M0.
@@ -1115,14 +1115,21 @@ caller gives it, for a test whose client and server are fibres:
 - a call that would wait takes a turn instead, so the other fibres run,
   and looks again;
 - it answers `timed_out` only after a whole round in which nothing moved
-  anywhere in the network, so nothing it waits for arrived;
+  anywhere in the network, so nothing it waits for arrived, and never
+  while a fibre sleeps on a clock made `clock_beside` it;
 - a call whose socket another fibre closed, or shut for what it waits
   for, while it waited fails `io_failed` when it wakes.
 
 `accept`, `send`, `receive`, `receive_from`, `read`, `write` and
 `write_some` are its calls that may wait, and so switch; the others never
-do. `moves` counts what changed something a call may wait for, and
-`turns` the turns its calls took.
+do. `moves` counts what changed something a call may wait for, `turns`
+the turns its calls took and `sleepers` the fibres sleeping beside it.
+
+`clock_beside` makes a `fake.clock` whose `sleep`, beside a network that
+takes turns, takes the network's turns: the clock moves only after a whole
+round in which nothing in the network moved, a millisecond at a time, so
+sleepers wake in the order of their deadlines while the other fibres run
+first (D493).
 
 A test may take IPv6 away with `without_ipv6` and fail a call with
 `fail_at`.

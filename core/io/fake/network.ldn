@@ -19,8 +19,10 @@ import core/time
 --- `connections` counts connections made, `datagrams` datagrams
 --- delivered and `losses` datagrams no socket took.  `moves` counts what
 --- changed something a call may wait for: a connection made or taken,
---- bytes or a datagram delivered or taken, a shutdown and a close; and
---- `turns` the turns its calls took while they waited.
+--- bytes or a datagram delivered or taken, a shutdown, a close and the
+--- advance of a clock made `clock_beside` it; `turns` the turns its calls
+--- took while they waited; and `sleepers` the fibres sleeping on such a
+--- clock.
 public network_space: type = struct
     next_port: usize
     arrivals: usize
@@ -32,6 +34,7 @@ public network_space: type = struct
     losses: usize
     moves: usize
     turns: usize
+    sleepers: usize
 end network_space
 
 --  What a socket record is: free for the network to open, a listener, one
@@ -110,9 +113,10 @@ end network_value
 --- that would wait takes a turn of the scheduler it was given instead, so
 --- that the other fibres run, and looks again; it fails `timed_out` only
 --- after a whole round in which nothing moved anywhere in the network, so
---- nothing it waits for arrived, and a call whose socket was shut for
+--- nothing it waits for arrived, while no fibre sleeps on a clock made
+--- `clock_beside` it, which would move it when it wakes, and a call whose socket was shut for
 --- what it waits for, or closed, while it waited fails `io_failed` (D449,
---- D483).  `accept`, `send`, `receive`, `receive_from`, `read`, `write`
+--- D483, D493).  `accept`, `send`, `receive`, `receive_from`, `read`, `write`
 --- and `write_some` are the calls that may wait and so switch; the others
 --- never do.  A send to a connection whose peer has closed is
 --- `disconnected` at once, where a real one may take one send before it
@@ -180,7 +184,7 @@ freed: (inout state: network_space, sockets: []mut network_socket)
        -> none =
     state = (next_port: 49152, arrivals: 0, calls: 0, fail_at: 0,
              without_ipv6: false, connections: 0, datagrams: 0, losses: 0,
-             moves: 0, turns: 0)
+             moves: 0, turns: 0, sleepers: 0)
     for index in usize(0)..<lenof sockets do
         sockets[index].role = free_slot
         sockets[index].start = 0
@@ -195,8 +199,9 @@ moved: (self: network) -> none =
 end moved
 
 --  Where a call would wait: over turns, take a turn and say whether
---  anything moved in the network meanwhile, so the call looks again;
---  otherwise, or after a whole round in which nothing moved, no.
+--  anything moved in the network meanwhile, or a fibre sleeps on a clock
+--  beside it that will move it, so the call looks again; otherwise, or
+--  after a whole round in which nothing moved and nobody slept, no.
 waited: (self: network) -> (again: bool) =
     again = false
     return when not self.takes_turns
@@ -204,7 +209,7 @@ waited: (self: network) -> (again: bool) =
     before: usize = state.val.moves
     inc state.val.turns
     self.runs.yield()
-    again = state.val.moves <> before
+    again = state.val.moves <> before or state.val.sleepers > 0
 end waited
 
 --  Count a call, failing the one the test chose.

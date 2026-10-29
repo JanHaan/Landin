@@ -1,0 +1,124 @@
+--  D493: a fibre sleeping on a clock beside core/io/fake's network is
+--  movement the network waits for.  The main fibre waits in `accept`
+--  while two client fibres sleep, 100 and 50 milliseconds, before each
+--  connects and sends its tag: neither accept times out, the 50
+--  millisecond sleeper connects first, and the clock reads 50 and then
+--  100 milliseconds, since it moves only after a round in which every
+--  fibre waited.  With nobody sleeping, a receive that nothing answers
+--  still times out after one quiet round, as D483 has it.
+import core/cmp
+import core/failure
+import core/fibre
+import core/fibre/stacks
+import core/io
+import core/io/fake
+import core/net
+import core/time
+
+--  The tags in the order their connections were accepted.
+mut trace: [4]u8 = zeroed
+mut marks: usize = 0
+
+--  One client: sleep, connect, send the tag.
+asker: type = struct
+    network: fake.network
+    clock: fake.clock
+    to: net.address
+    span: time.duration
+    tag: [1]u8
+end asker
+
+ask: (inout state: asker) -> none ! failure.reason =
+    time.sleep(state.clock, state.span)
+    connection: io.file = try net.connect(state.network, state.to)
+    defer net.close_socket(state.network, connection) else none
+    try net.send(state.network, connection, state.tag[0..<1])
+end ask
+
+--  Accept one connection, read its tag and note it with the clock's
+--  reading then.
+take: (network: fake.network, clock: fake.clock, listener: io.file)
+      -> (at: u64) ! failure.reason =
+    connection: io.file = try net.accept(network, listener)
+    defer net.close_socket(network, connection) else none
+    at = u64(time.now(clock))
+    mut buffer: [1]u8 = zeroed
+    got: usize = try net.receive(network, connection, buffer)
+    fail io.io_failed when got <> 1
+    trace[marks] = buffer[0]
+    inc marks
+end take
+
+--  Module storage for the clients' stacks, as runtime/network-fake-turns-waits
+--  keeps them.
+fixed if compiler.word_size == 32 then
+    mut backing: [2 * 4096]u8 = zeroed
+else
+    mut backing: [2 * 12288]u8 = zeroed
+end if
+
+run: (runs: any fibre.turns) -> (code: i32) ! failure.reason =
+    code = 3
+    mut space: fake.network_space = zeroed
+    mut b0: [16]u8 = zeroed
+    mut b1: [16]u8 = zeroed
+    mut b2: [16]u8 = zeroed
+    mut b3: [16]u8 = zeroed
+    mut b4: [16]u8 = zeroed
+    mut sockets: [5]fake.network_socket =
+        [fake.socket_over(b0), fake.socket_over(b1), fake.socket_over(b2),
+         fake.socket_over(b3), fake.socket_over(b4)]
+    network := fake.network_over_turns(space, sockets, runs)
+    mut clock_space: fake.clock_space = zeroed
+    clock := fake.clock_beside(clock_space, time.instant(0),
+                               (seconds: 0, nanoseconds: 0), network)
+    listener: io.file = try net.listen(network, net.loopback(net.ipv4, 0))
+    defer net.close_socket(network, listener) else none
+    to: net.address = try net.local_address(network, listener)
+    mut tasks := try fibre.turns_over(runs, backing, 2)
+    defer fibre.join(tasks) else none
+    later: asker = (network: network, clock: clock, to: to,
+                    span: time.milliseconds(100), tag: [u8('a')])
+    try fibre.admit(tasks, ask, later)
+    sooner: asker = (network: network, clock: clock, to: to,
+                     span: time.milliseconds(50), tag: [u8('b')])
+    try fibre.admit(tasks, ask, sooner)
+    first: u64 = try take(network, clock, listener)
+    second: u64 = try take(network, clock, listener)
+    try fibre.join(tasks)
+    return when cmp.compare(trace[0..<marks], "ba") <> cmp.equal
+    code = 4
+    return when first <> u64(time.milliseconds(50))
+      or second <> u64(time.milliseconds(100))
+      or clock_space.monotonic <> u64(time.milliseconds(100))
+      or clock_space.sleeps <> 2 or space.sleepers <> 0
+    code = 5
+    caller: io.file = try net.connect(network, to)
+    defer net.close_socket(network, caller) else none
+    answerer: io.file = try net.accept(network, listener)
+    defer net.close_socket(network, answerer) else none
+    mut buffer: [1]u8 = zeroed
+    mut timed: bool = false
+    got: usize = net.receive(network, answerer, buffer) else (problem)
+        timed = problem == net.timed_out
+        0
+    end
+    return when not timed or got <> 0
+    code = 42
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: stacks.round_space = zeroed
+    mut entries: [3]usize = zeroed
+    idler: stacks.spin = zeroed
+    round := stacks.round_over(state, entries, any(addr idler)) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    code = run(any(addr round)) else (problem)
+        _ = problem
+        2
+    end
+end main
