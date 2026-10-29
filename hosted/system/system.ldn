@@ -1,9 +1,9 @@
 --  The hosted services that do not wait and are the same whoever waits
 --  (D476), `host`: files, opened and closed, and the process's standard
---  streams and arguments, the environment, directories, programs, the
---  rest of the file system and terminals, entropy and the wall clock, each
---  in a file named as core/io names it, and the process's last-error and
---  last-signal cells.  It is not a world: reading and writing can wait,
+--  streams and arguments, the environment, directories, starting a
+--  program, the rest of the file system and terminals, entropy and the
+--  wall clock, each in a file named as core/io names it, and the
+--  process's last-error and last-signal cells.  It is not a world: reading and writing can wait,
 --  and a provider that decides how to wait, hosted/blocking, is built
 --  over a handle of this one and hands it what does not wait.  It is
 --  written once, over platform/posix, which reaches Linux through its
@@ -33,14 +33,15 @@ system_value: type = struct
 end system_value
 
 --- Hosted provider of the services that do not wait: `io.files`,
---- `io.process`, `io.environment`, `io.directories`, `io.programs`,
---- `io.file_system`, `io.terminals`, the system's `io.entropy` and the
---- clock `time.wall_clock`, over platform/posix, as a handle: copies share
---- the process's descriptors, arguments and environment, and the
---- last-error and last-signal cells they were made with. It reads and
---- writes no stream, so it is no `io.world`: `hosted/blocking`, built
---- over it, supplies reading and writing, the network, the monotonic
---- clock and the scheduler. File identifiers belong to this provider and
+--- `io.process`, `io.environment`, `io.directories`, `io.file_system`,
+--- `io.terminals`, the system's `io.entropy` and the clock
+--- `time.wall_clock`, over platform/posix, as a handle: copies share the
+--- process's descriptors, arguments and environment, and the last-error
+--- and last-signal cells they were made with. It reads and writes no
+--- stream, so it is no `io.world`, and runs no program, since a child's
+--- pipes are read and the child waited for: `hosted/blocking`, built over
+--- it, supplies reading and writing, `io.programs` over this provider's
+--- `start`, the network, the monotonic clock and the scheduler (D479). File identifiers belong to this provider and
 --- to every provider built over it; borrowed arguments and variables
 --- refer to process storage.
 public host: type = system_value
@@ -71,8 +72,9 @@ public last_errno: (handle: host) -> (number: i32) =
 end last_errno
 
 --- Return the number of the signal that ended the child this handle's
---- cell last saw end through `io.wait`, as POSIX numbers it on this
---- system: SIGTERM is 15 and SIGKILL 9 on Linux, Darwin and FreeBSD alike.
+--- cell last saw end through `io.wait` of a provider built over it,
+--- which `ended` keeps, as POSIX numbers it on this system: SIGTERM is
+--- 15 and SIGKILL 9 on Linux, Darwin and FreeBSD alike.
 --- Zero means that child exited with a code, or that no child has been
 --- waited for.  It is the system's detail behind `io.ending`'s portable
 --- `signalled`, as `last_errno` is behind an error atom.
@@ -246,49 +248,6 @@ system_close: (self: host, sink opened: io.file)
         fail io.io_failed
     end
 end system_close
-
---  Read a child's pipe, which only `io.programs` reads: running a
---  program is this provider's, and its pipes are read and written here,
---  blocking the thread, whatever provider is built over it (D478).  read
---  returns EINTR only before transferring a byte, so the same buffer is
---  retried; a count beyond the buffer fabricates no errno, and zero from
---  a nonempty read is the pipe's end.
-pipe_read: (self: host, opened: io.file, into: []mut u8)
-           -> (count: usize) ! io.io_failed =
-    self.failure.val = 0
-    count = 0
-    return when lenof into == 0
-    loop do
-        got: usize = posix.read(descriptor_of(opened), into) else (problem)
-            continue when problem == posix.eintr
-            record(self, problem)
-            fail io.io_failed
-        end
-        fail io.io_failed when got > lenof into
-        count = got
-        return
-    end loop
-end pipe_read
-
---  Write all of `bytes` to a child's pipe: an interrupted write is made
---  again with the same remaining suffix, and a zero or oversized count
---  fails without fabricating an errno.
-pipe_write: (self: host, opened: io.file, bytes: []u8)
-            -> none ! io.io_failed =
-    self.failure.val = 0
-    mut written: usize = 0
-    while written < lenof bytes do
-        remaining: []u8 = bytes[written..<lenof bytes]
-        accepted: usize =
-            posix.write(descriptor_of(opened), remaining) else (problem)
-                continue when problem == posix.eintr
-                record(self, problem)
-                fail io.io_failed
-            end
-        fail io.io_failed when accepted == 0 or accepted > lenof remaining
-        written += accepted
-    end while
-end pipe_write
 
 system_input: (self: host) -> (stream: io.file) =
     _ = self.failure

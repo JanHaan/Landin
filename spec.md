@@ -24110,6 +24110,8 @@ system supplies, by handing it what does not wait. A program mints its root
 from the one it chooses, `blocking.new()` or `events.new(...)`; a program
 that never waits on anything may still use `system.new()` alone. Every
 hosted source and document moves from `system.new()` to `blocking.new()`.
+D479 amends this list: starting a program stays with the system, and
+reading its pipes and waiting for it are the waiting providers'.
 
 **The alternatives:** `hosted/events` importing the blocking `hosted/system`
 and delegating to it, which compiles the blocking provider into every event
@@ -24165,6 +24167,8 @@ ready and no event mechanism waits on one. `programs` stays with it as D476
 says, its pipes read and written and its children waited for by blocking
 the thread whatever provider is built over it. Entropy stays with it:
 `getrandom` waits only once, at boot, for a pool no event announces.
+D479 amends the placement of `programs`: the waiting providers supply it,
+and the system keeps only `start`, which they build on.
 `hosted/blocking` supplies `reader`, `writer` and so `world`, `net.network`,
 the monotonic `time.clock`, since `now` cannot be supplied without `sleep`,
 and `fibre.scheduler`, and supplies every concept of the system's by
@@ -24181,7 +24185,8 @@ public routines for a provider to delegate to, which keeps a reader in the
 module that is no world; `programs` moving to `hosted/blocking` with
 reading, which contradicts D476's list; and `hosted/blocking` re-exporting
 the file encoding, which gives one conversion two names. All were
-declined.
+declined. D479 later took the second, for the reason D476 gave the
+split: what waits belongs to the provider that decides how to wait.
 
 **Pinned by** `runtime/hosted-system-alone`, which uses `files`, `process`,
 `environment`, `directories`, `file_system`, `entropy` and `wall_clock` on
@@ -24189,6 +24194,72 @@ a `hosted/system` handle alone, `negative/hosted-system-is-no-world`,
 `runtime/run-no-descriptor-leak` and `runtime/tree-copy`, which convert a
 blocking provider's file with `system.descriptor_of`, and every hosted
 fixture's delegated calls through `blocking.new()`.
+
+### D479 — Starting a child is the system's, and waiting on it is a waiting provider's
+
+**The tour said** nothing, and D476 listed running programs among the
+system's services, which D478 kept there with its pipes read and written and
+its children waited for by blocking the thread. Under a provider that
+switches fibres, a fibre reading a child's output or waiting for it to end
+would then block the thread and every other fibre with it, while reading a
+socket in the same program switched. A provider that took a signal to read
+it as an event, D482's signalfd blocking it and kqueue ignoring it, would
+also pass that mask and that ignore to every program it ran, since an exec
+keeps both: a child of a server that blocks SIGTERM could not be stopped.
+
+**Chosen:** `io.programs` keeps its one shape, and the providers that wait
+supply it, as they supply reading and writing: `hosted/blocking` in its
+`programs.ldn`, and the event provider later. `write_child`, `read_child`
+and `wait` are the entries that wait; `spawn` and `close_input` do not.
+Starting a child stays in `hosted/system`, as the public routine
+`system.start(handle, path, arguments, environment, streams)`, which makes
+the pipes and `/dev/null`, calls `posix.spawn`, maps its errno onto the
+concept's atoms in the handle's last-error cell, and answers an `io.child`
+whose pipes are files of the system's, which the provider reads, writes and
+closes as its own. `system.process_of` gives the child's `posix.process_id`
+for the provider to wait for, and `system.ended` turns the status it waited
+for into `io.ending`, keeping the signal in the handle's last-signal cell.
+`hosted/system` is no provider of `io.programs`. The blocking provider polls
+both output pipes and reads with its `read`, as before; the event provider
+will set the parent's ends non-blocking and wait on them as on any file, and
+wait for the end of a child through `pidfd_open` or a signalfd for SIGCHLD
+on Linux, and kqueue's `EVFILT_PROC` with `NOTE_EXIT`, which
+`platform/kqueue` names as `note_exit`, on Darwin and FreeBSD, before
+reaping it with a `wait` that does not block. This amends D476's list of the
+system's services and D478's placement of `programs`.
+
+`posix.spawn` starts every child with an empty signal mask, on Linux by
+`rt_sigprocmask` in the child between the copy and the exec, and on Darwin
+and FreeBSD by `posix_spawnattr_setsigmask` with `POSIX_SPAWN_SETSIGMASK`.
+Beside SIGPIPE, which D322 already gives back, it gives the child the
+default disposition of each signal named to
+`posix.default_in_children(signal)`, which a provider calls for every signal
+it takes from its disposition; `POSIX_SPAWN_SETSIGDEF` carries them on
+Darwin and FreeBSD, and `rt_sigaction` in the Linux child. A signal nobody
+named keeps whatever disposition the parent gives it, so a shell's
+background job, started with SIGINT ignored, and a program under `nohup`
+pass their ignores on as POSIX programs do. `default_in_children` refuses
+with `einval` a number that is no signal, one past 64 or Darwin's 31, and
+SIGKILL and SIGSTOP, which a child could not be given.
+
+**The alternatives:** splitting `programs` into a concept that starts a
+child, supplied by the system, and one that waits on it, supplied by the
+waiting providers, which makes every program that runs one name two
+concepts and lets a program over the system alone start children it can
+neither read nor reap; keeping `programs` with the system and blocking,
+which holds every fibre while one waits for a child; and resetting every
+signal a provider could take, D482's six, in every child, which would undo
+a background job's SIGINT ignore and `nohup`'s SIGHUP. All were declined.
+
+**Pinned by** `negative/hosted-system-runs-no-programs`, which refuses
+spawning through `system.new()`; `runtime/run-signal-defaults` on every
+hosted target, a parent that blocks SIGTERM and ignores SIGUSR1, named to
+`default_in_children`, and SIGUSR2, not named, whose children are ended by
+SIGTERM and SIGUSR1 and survive SIGUSR2, and the einval oracles; the ABI
+fixture `abi/libc-socket-facts`, which holds `POSIX_SPAWN_SETSIGMASK` to the
+Darwin and FreeBSD headers; and `runtime/run-shell`, `runtime/run-streams`,
+`runtime/run-large-output`, `runtime/run-signalled` and the other programs
+fixtures, unchanged, over `blocking.new()`.
 
 ### D480 — The event loop sleeps in its wait, and needs no descriptor to wake it
 

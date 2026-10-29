@@ -1,8 +1,9 @@
 --  What does not wait, handed to the hosted/system handle this provider
 --  is built over: the environment, directories, the rest of the file
---  system and terminals, programs, entropy and the wall clock.  Each entry
---  is the system's, so a program over this provider meets the same
---  behaviour, errno and all, as one over the system alone.
+--  system and terminals, entropy and the wall clock.  Each entry is the
+--  system's, so a program over this provider meets the same behaviour,
+--  errno and all, as one over the system alone.  Running programs is
+--  programs.ldn's, which only starts a child through the system (D479).
 
 import core/io
 import core/text
@@ -174,42 +175,6 @@ end blocking_window_size
 
 host is io.terminals
     (is_terminal: blocking_is_terminal, window_size: blocking_window_size)
-
---  The system runs programs and reads and writes their pipes itself,
---  blocking, whichever provider is built over it (D478).
-blocking_spawn: (self: host, path: text.host_string,
-                 arguments: []text.host_string, environment: []io.variable,
-                 streams: io.child_streams)
-                -> (started: io.child)
-                ! io.not_found | io.no_access | io.io_failed =
-    started = try io.spawn(self.services, path, arguments, environment,
-                           streams)
-end blocking_spawn
-
-blocking_write_child: (self: host, inout started: io.child, bytes: []u8)
-                      -> none ! io.io_failed =
-    try io.write_child(self.services, started, bytes)
-end blocking_write_child
-
-blocking_close_input: (self: host, inout started: io.child)
-                      -> none ! io.io_failed =
-    try io.close_input(self.services, started)
-end blocking_close_input
-
-blocking_read_child: (self: host, inout started: io.child, into: []mut u8)
-                     -> (taken: io.child_read) ! io.io_failed =
-    taken = try io.read_child(self.services, started, into)
-end blocking_read_child
-
-blocking_wait: (self: host, sink started: io.child)
-               -> (ended: io.ending) ! io.io_failed =
-    ended = try io.wait(self.services, started)
-end blocking_wait
-
-host is io.programs
-    (spawn: blocking_spawn, write_child: blocking_write_child,
-     close_input: blocking_close_input, read_child: blocking_read_child,
-     wait: blocking_wait)
 
 blocking_fill_random: (self: host, into: []mut u8) -> none ! io.io_failed =
     try io.fill_random(self.services, into)

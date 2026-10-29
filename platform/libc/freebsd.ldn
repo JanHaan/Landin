@@ -238,6 +238,16 @@ fixed if compiler.os == freebsd then
         (attributes: ptr mut spawn_object, signals: ptr signal_set)
         -> (error: i32)
 
+    --- `posix_spawnattr_setflags` flag: the child's mask of blocked signals
+    --- is the one `posix_spawnattr_setsigmask` gives.
+    public posix_spawn_setsigmask: i16 = 32
+
+    --- Give the mask of blocked signals a child `posix_spawn` starts with
+    --- `posix_spawn_setsigmask` set: 0, or the errno.
+    public extern(c) posix_spawnattr_setsigmask:
+        (attributes: ptr mut spawn_object, signals: ptr signal_set)
+        -> (error: i32)
+
     --- Set the permission bits of the file `path` names, relative to
     --- `directory`, to `mode`, following a final symbolic link with
     --- `flags` zero: 0, or -1 with the reason in errno.

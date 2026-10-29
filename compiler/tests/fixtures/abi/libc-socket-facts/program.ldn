@@ -97,6 +97,10 @@ elsif compiler.os == freebsd then
     public extern(c) l_setsigdef: () -> (value: i16) =
         value = libc.posix_spawn_setsigdef
     end l_setsigdef
+
+    public extern(c) l_setsigmask: () -> (value: i16) =
+        value = libc.posix_spawn_setsigmask
+    end l_setsigmask
 else
     public extern(c) l_no_sigpipe: () -> (value: i32) =
         value = libc.so_nosigpipe
@@ -105,6 +109,10 @@ else
     public extern(c) l_setsigdef: () -> (value: i16) =
         value = libc.posix_spawn_setsigdef
     end l_setsigdef
+
+    public extern(c) l_setsigmask: () -> (value: i16) =
+        value = libc.posix_spawn_setsigmask
+    end l_setsigmask
 end if
 
 --- Where a field lies in the time limit and the signal action: the

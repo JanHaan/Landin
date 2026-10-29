@@ -103,6 +103,11 @@ end ending
 --- something: reading one to its end first can wait forever while the
 --- child waits to write the other.  Close a piped input before waiting for
 --- a child that reads it to its end.
+---
+--- `write_child`, `read_child` and `wait` wait, and `spawn` and
+--- `close_input` do not, so a provider supplies the concept whose waiting
+--- is its own: the hosted one that blocks the thread, or one that switches
+--- fibres while a child's pipe or its end is awaited (D479).
 public programs: type = concept (provider: type)
     --- Start the program at `path` with `arguments`, which it sees after
     --- its own name, and exactly the variables of `environment`.  A

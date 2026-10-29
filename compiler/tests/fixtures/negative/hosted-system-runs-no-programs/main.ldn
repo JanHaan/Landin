@@ -1,0 +1,23 @@
+--  D479: starting a child does not wait, and reading its pipes and waiting
+--  for it do, so hosted/system's handle is no provider of programs; a
+--  program that runs one mints hosted/blocking's, whose `spawn` starts the
+--  child through the system's `start`.
+import core/io
+import core/text
+import hosted/system
+
+public main: () -> (code: i32) =
+    host := system.new()
+    arguments: [1]text.host_string = [text.host_over("-c")]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin"))]
+    child: io.child = io.spawn(host, text.host_over("/bin/sh"),
+                               arguments[0..<1], variables[0..<1],
+                               io.discarding) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    _ = child
+    code = 0
+end main

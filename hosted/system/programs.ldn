@@ -1,6 +1,8 @@
---  The hosted provider's `io.programs`: a child is platform/posix's spawn,
---  its pipes are descriptors this provider made, and waiting for it is
---  POSIX's `waitpid`.  Written once, over platform/posix, like the rest.
+--  Starting a child, which does not wait, for the providers that run
+--  programs (D479): a child is platform/posix's spawn and its pipes are
+--  descriptors this provider made, which a provider built over it reads,
+--  writes and closes as its own files; waiting for the child is that
+--  provider's too.  Written once, over platform/posix, like the rest.
 
 import core/io
 import core/text
@@ -112,154 +114,50 @@ launched: (path: text.host_string, arguments: []text.host_string,
                errors_open: errors.piped)
 end launched
 
-system_spawn: (self: host, path: text.host_string,
+--- Start the program at `path` as `io.programs`' `spawn` says, for a
+--- provider built over this handle that supplies `io.programs`: it starts
+--- the child, which does not wait, and the provider reads, writes and
+--- closes the parent's ends of the child's pipes, files of this provider
+--- that `descriptor_of` converts, and waits for the child itself, through
+--- whatever waiting it does (D479).  A discarded stream is the system's
+--- `/dev/null`; a piped one is a pipe made closed on exec, whose child end
+--- is closed here once the child has it.  An interrupted spawn is made
+--- again.  A missing program is `not_found`, one the caller may not run
+--- `no_access`, the rest `io_failed`, each errno kept in the handle's
+--- last-error cell; on any failure no child was started and nothing it
+--- made is left open.  `io.child`'s `handle` is the child's
+--- platform/posix `process_id`.
+public start: (handle: host, path: text.host_string,
                arguments: []text.host_string, environment: []io.variable,
                streams: io.child_streams)
               -> (started: io.child)
               ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    handle.failure.val = 0
     started = launched(path, arguments, environment, streams) else (problem)
-        try path_failure(self, problem)
+        try path_failure(handle, problem)
         fail io.io_failed
     end
-end system_spawn
+end start
 
---  Close one of a child's pipes, which is closed even when the system
---  reports a failure.
-close_pipe: (self: host, opened: io.file) -> none ! io.io_failed =
-    posix.close(descriptor_of(opened)) else (problem)
-        record(self, problem)
-        fail io.io_failed
-    end
-end close_pipe
+--- The platform/posix process ID of a child `start` started, for a
+--- provider to wait for.
+public process_of: (started: io.child) -> (child: posix.process_id) =
+    child = posix.process_id(i32(started.handle))
+end process_of
 
---  Write all of BYTES to the child's input pipe, its descriptor,
---  blocking the thread as reading its output does.
-system_write_child: (self: host, inout started: io.child, bytes: []u8)
-                    -> none ! io.io_failed =
-    self.failure.val = 0
-    fail io.io_failed when not started.input_open
-    try pipe_write(self, started.input, bytes)
-end system_write_child
-
-system_close_input: (self: host, inout started: io.child)
-                    -> none ! io.io_failed =
-    self.failure.val = 0
-    fail io.io_failed when not started.input_open
-    started.input_open = false
-    try close_pipe(self, started.input)
-end system_close_input
-
---  Whether the child's errors, and not its output, is what to read next:
---  the output when it has anything, its end included, and the errors only
---  when they alone do.  A wait a signal interrupted is made again.
-errors_first: (self: host, started: io.child) -> (yes: bool)
-              ! io.io_failed =
-    mut entries: [2]posix.poll_entry =
-        [posix.watch(descriptor_of(started.output), posix.poll_input),
-         posix.watch(descriptor_of(started.errors), posix.poll_input)]
-    loop do
-        _ = posix.poll(entries[0..<2], -1) else (problem)
-            continue when problem == posix.eintr
-            record(self, problem)
-            fail io.io_failed
-        end
-        break
-    end loop
-    yes = posix.happened(entries[0]) == posix.poll_no_events
-end errors_first
-
-system_read_child: (self: host, inout started: io.child, into: []mut u8)
-                   -> (taken: io.child_read) ! io.io_failed =
-    self.failure.val = 0
-    taken = (count: 0, stream: io.child_output,
-             finished: not started.output_open and not started.errors_open)
-    return when lenof into == 0
-    loop do
-        if not started.output_open and not started.errors_open then
-            taken = (count: 0, stream: io.child_output, finished: true)
-            return
-        end if
-        mut from_errors: bool = not started.output_open
-        if started.output_open and started.errors_open then
-            from_errors = try errors_first(self, started)
-        end if
-        opened: io.file = if from_errors then started.errors
-                          else started.output end if
-        count: usize = try pipe_read(self, opened, into)
-        if count > 0 then
-            taken = (count: count,
-                     stream: if from_errors then io.child_errors
-                             else io.child_output end if,
-                     finished: false)
-            return
-        end if
-        --  That stream has ended, and its pipe is done with.
-        if from_errors then
-            started.errors_open = false
-        else
-            started.output_open = false
-        end if
-        try close_pipe(self, opened)
-    end loop
-end system_read_child
-
---  Close every pipe the child still has, keeping the first failure.
-close_pipes: (self: host, started: io.child) -> (closed: bool) =
-    closed = true
-    if started.input_open then
-        close_pipe(self, started.input) else (problem)
-            _ = problem
-            closed = false
-        end
-    end if
-    if started.output_open then
-        close_pipe(self, started.output) else (problem)
-            _ = problem
-            closed = false
-        end
-    end if
-    if started.errors_open then
-        close_pipe(self, started.errors) else (problem)
-            _ = problem
-            closed = false
-        end
-    end if
-end close_pipes
-
---  Wait for the child, again when a signal interrupts the wait.
-waited: (self: host, child: posix.process_id)
-        -> (status: posix.child_status) ! io.io_failed =
-    loop do
-        status = posix.wait(child) else (problem)
-            continue when problem == posix.eintr
-            record(self, problem)
-            fail io.io_failed
-        end
-        return
-    end loop
-end waited
-
---  The pipes are closed before the wait, so a child still writing to one
---  meets a closed pipe rather than waiting for a reader that never comes.
-system_wait: (self: host, sink started: io.child)
-             -> (ended: io.ending) ! io.io_failed =
-    self.failure.val = 0
-    self.signal.val = 0
-    closed: bool = close_pipes(self, started)
-    status: posix.child_status =
-        try waited(self, posix.process_id(i32(started.handle)))
+--- The portable ending of a child whose status a provider built over this
+--- handle waited for, keeping the signal that ended it in the handle's
+--- last-signal cell, or zero when it exited, which `last_signal` reports.
+public ended: (handle: host, status: posix.child_status)
+              -> (result: io.ending) =
     match status.how
-        posix.exited(code): ended = (how: io.exited(code: code))
+        posix.exited(code): begin
+            handle.signal.val = 0
+            result = (how: io.exited(code: code))
+        end
         posix.signalled(number): begin
-            self.signal.val = number
-            ended = (how: io.signalled)
+            handle.signal.val = number
+            result = (how: io.signalled)
         end
     end match
-    fail io.io_failed when not closed
-end system_wait
-
-host is io.programs
-    (spawn: system_spawn, write_child: system_write_child,
-     close_input: system_close_input, read_child: system_read_child,
-     wait: system_wait)
+end ended

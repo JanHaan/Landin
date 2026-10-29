@@ -737,10 +737,11 @@ A child never waited for keeps what its provider holds for it until the
 process ends. Close a child's pipes only through `close_input` and
 `wait`, never through `files`.
 
-The hosted providers' pipes are their own files, which
-`hosted/blocking`'s `reader` and `writer` also take, a line reader over a
-child's output among them. The
-memory world's are not.
+`write_child`, `read_child` and `wait` wait, and `spawn` and
+`close_input` do not, so `programs` is supplied by a provider that waits,
+as reading and writing are: `hosted/blocking`'s, not `hosted/system`'s.
+Its pipes are its own files, which its `reader` and `writer` also take, a
+line reader over a child's output among them. The memory world's are not.
 
 `scripted_over` makes `scripted_programs`, a programs provider beside a
 memory world, over the caller's `scripted_program` records. It is a
@@ -1475,9 +1476,11 @@ of `fibre.turns`: its calls block the thread.
 It is built over a `hosted/system` handle, which `new` makes, and hands
 that handle everything that does not wait: opening and closing files, the
 standard streams' descriptors and the arguments, the environment,
-directories, programs, the rest of the file system, terminals, entropy
-and the wall clock. What waits is its own: `read`, `write` and
-`write_some`, the network, and the monotonic clock with its `sleep`. Both
+directories, the rest of the file system, terminals, entropy and the wall
+clock. What waits is its own: `read`, `write` and `write_some`, running
+programs, the network, and the monotonic clock with its `sleep`. A child
+is started by the system handle's `start`, which does not wait; reading
+and writing its pipes and waiting for it are this provider's. Both
 report through the system handle's one last-error cell, so `last_errno`
 says the same whichever of them failed. Its files are the system's:
 `hosted/system`'s `descriptor_of`, `file_of` and `socket_of` convert them.
@@ -1557,9 +1560,13 @@ waits. A program that never reads, writes or sleeps may use it alone.
 | `system.descriptor_of(file)`, `system.file_of(descriptor)` | Convert between a provider's file and a `platform/posix` descriptor. |
 | `system.socket_of(descriptor)`, `system.is_socket(file)` | A provider's socket from a socket of `platform/posix`'s, and whether a file is one. |
 | `system.clear_errno(host)`, `system.record_errno(host, errno)` | Clear the last-error cell, or keep an errno in it, for a provider built over this one. |
+| `system.start(host, path, arguments, environment, streams)` | Start a child as `io.spawn` does, for a provider built over this one that supplies `io.programs`. |
+| `system.process_of(child)`, `system.ended(host, status)` | The child's `platform/posix` process ID, and the `io.ending` of the status a provider waited for, keeping its signal for `last_signal`. |
 
 `host` supplies `files`, `process`, `environment`, `directories`,
-`programs`, `file_system`, `terminals`, `entropy` and `wall_clock`.
+`file_system`, `terminals`, `entropy` and `wall_clock`. It is no provider
+of `programs`: reading a child's pipes and waiting for it wait, so a
+provider built over it supplies `programs` over its `start`.
 
 ### The provider
 
@@ -1626,27 +1633,28 @@ relative to the directory.
 filters. It is not retried when interrupted, because a directory made
 before the interruption would then report `already_exists`.
 
-### The environment and programs
+### The environment and starting programs
 
 The environment is the one the process's entry was given, read where the
 entry left it, never copied and never changed.
 
-`programs` runs over `platform/posix`'s `spawn`:
+`start` runs over `platform/posix`'s `spawn`:
 
 - a discarded stream is the system's `/dev/null`;
 - a piped one is a pipe whose child end is closed in the parent once the
   child has it;
 - a child receives only its three streams, since every descriptor the
-  provider makes is closed on exec and the spawn closes any other;
-- `read_child` polls both pipes when both are open, and reads the output
-  first when both have something;
-- `wait` closes the child's pipes before it waits, so a child still
-  writing to one meets a closed pipe rather than a parent that never
-  reads.
+  provider makes is closed on exec and the spawn closes any other, and
+  starts with no signal blocked;
+- an interrupted spawn is made again.
 
-An interrupted spawn, poll, read or wait is made again. A child's pipes
-are read and written here, blocking the thread, whichever provider is
-built over this one.
+The pipes it answers are files of this provider, which the provider built
+over it reads, writes and closes as its own. `hosted/blocking`'s
+`read_child` polls both pipes when both are open, and reads the output
+first when both have something, and its `wait` closes the child's pipes
+before it waits, so a child still writing to one meets a closed pipe
+rather than a parent that never reads. An interrupted poll, read or wait
+is made again.
 
 ### The rest of the file system and terminals
 
@@ -1791,6 +1799,7 @@ or with epoll or kqueue for many descriptors.
 |---|---|
 | `pipe` | Make a pipe's two ends. |
 | `spawn` | Start a program by its path. |
+| `default_in_children` | Give every child a signal's default disposition. |
 | `wait` | `waitpid`, reporting a `child_status`. |
 | `exit` | End the process. |
 | `arguments`, `argument` | The process's arguments. |
@@ -1816,6 +1825,16 @@ the process. A handler a C `main` installed first is kept.
 `broken_pipe_ignored` says whether it is ignored, and `spawn` gives every
 child SIGPIPE's default back. A program that imports no part of the POSIX
 layer keeps the system's default.
+
+A child starts with no signal blocked, whatever the parent's mask, so a
+provider that blocks a signal to read it through a signalfd starts no
+child with it blocked. `default_in_children` names a signal a provider
+took from its disposition, ignoring it to read it through kqueue, and
+every child `spawn` starts from then on gets that signal's default back
+too. A signal nobody named keeps the parent's disposition in the child,
+an ignore included, as a shell's background job and `nohup` expect. It
+refuses a number that is no signal, one past 64, or past 31 on Darwin,
+and SIGKILL and SIGSTOP, with `einval`.
 
 ### Clocks and random bytes
 
@@ -1933,7 +1952,8 @@ another language's code reached through its C entry points.
 | beneath the interface | `platform/linux`'s system calls | `platform/libc` | `platform/libc` |
 | `pipe` | `pipe2` | `pipe` and `fcntl` | `pipe2` |
 | `spawn` | copies the process with `clone`, as `fork` does; the child moves its streams into place and executes the program, reporting a failure through a pipe closed on exec | the C library's `posix_spawn` | the C library's `posix_spawn` |
-| SIGPIPE's default in a child | restored in the child before it executes the program | `posix_spawnattr_setsigdefault` | `posix_spawnattr_setsigdefault` |
+| SIGPIPE's default in a child, and each signal's `default_in_children` named | restored in the child before it executes the program | `posix_spawnattr_setsigdefault` | `posix_spawnattr_setsigdefault` |
+| a child's empty signal mask | `rt_sigprocmask` in the child before it executes the program | `posix_spawnattr_setsigmask` | `posix_spawnattr_setsigmask` |
 | `clock_time` | the vDSO's `clock_gettime` when the auxiliary vector names a vDSO that has one, found once and kept, under `--link=libc` as under a static link; the system call otherwise | the C library | the C library |
 | `sleep` | `clock_nanosleep` on the monotonic clock | `nanosleep` | `nanosleep` |
 | `random_bytes` | `getrandom` without `GRND_NONBLOCK`, which may fill a request over 256 bytes short and fail `eintr` | `arc4random_buf`, which fills it all and never fails | `arc4random_buf`, likewise |
@@ -1997,7 +2017,7 @@ with L0347.
 | directories | `fdopendir`, `readdir`, `closedir`, `fstatat`, `mkdirat` and `unlinkat`, with each system's `struct dirent` as `directory_record`, its `at_fdcwd`, `o_directory`, `at_symlink_nofollow` and `at_removedir`, and the `d_type` and mode bits |
 | clocks and randomness | `clock_gettime` with a `clock_realtime` or a `clock_monotonic`, `nanosleep` with a `timespec`, and `arc4random_buf` |
 | sockets | `socket`, `socketpair`, `bind`, `listen`, `accept`, `accept4`, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `shutdown`, `setsockopt`, `getsockopt`, `getsockname` and `getpeername`, with each system's `af_inet6`, `sol_socket` and option numbers, `sock_cloexec` and `msg_nosignal` where they exist, `so_nosigpipe`, the address records' sizes and its `time_limit`, C's `struct timeval` |
-| signals | `sigaction` with each system's `signal_action` and `signal_set`, `sigprocmask` with each system's `sig_block`, `sig_unblock` and `sig_setmask`, `getpid` and `kill`, the signals `sighup`, `sigint` and `sigterm` and each system's `sigusr1` and `sigusr2`, and `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef` |
+| signals | `sigaction` with each system's `signal_action` and `signal_set`, `sigprocmask` with each system's `sig_block`, `sig_unblock` and `sig_setmask`, `getpid` and `kill`, the signals `sighup`, `sigint` and `sigterm` and each system's `sigusr1` and `sigusr2`, `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef`, and `posix_spawnattr_setsigmask` with `posix_spawn_setsigmask` |
 | descriptors that do not block | `fcntl`'s `f_getfl` and `f_setfl`, each system's `o_nonblock`, and `sock_nonblock` where it exists |
 | the rest of the file system | `pread`, `pwrite`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat`, `futimens`, `fstat`, `flock` with its `lock_sh`, `lock_ex`, `lock_nb` and `lock_un`, and `fcntl`'s record locks with each system's `f_getlk`, `f_setlk`, `f_setlkw`, lock types and `lock_record`, C's `struct flock` |
 | users and groups | `getuid`, `geteuid`, `getgid` and `getegid` for the process's IDs, and `getpwuid_r`, `getpwnam_r`, `getgrgid_r` and `getgrnam_r` over each system's `account_record`, C's `struct passwd`, and the shared `group_record` |
@@ -2022,7 +2042,7 @@ with L0347.
 | `fdatasync` | declared | not declared; `f_fullfsync` instead | declared |
 | `so_nosigpipe` | none | yes | yes |
 | `time_limit`'s microseconds | an `i64` | an `int` | an `i64` |
-| `posix_spawnattr_setsigdefault` | not declared | declared | declared |
+| `posix_spawnattr_setsigdefault`, `posix_spawnattr_setsigmask` | not declared | declared | declared |
 | `posix_spawn` extras | none | `posix_spawn_cloexec_default` and `addinherit_np` | `addclosefrom_np` |
 | `rtld_local`, `rtld_global` | as FreeBSD's | numbered its own way | as Linux's |
 
