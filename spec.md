@@ -24670,3 +24670,96 @@ server for the SIGTERM that asked it to stop. All were declined.
 process itself waking a fibre in `next_signal` while another waits in
 `accept`, the listener closed and the accept failed `io_failed`, and a
 waiter for SIGHUP woken by `stop_watching`.
+
+### D489 — Prototype 5's derived server, and where it departs from the sketch
+
+**The tour said** at [1660] that a program's roots are minted at its entry
+and lent down, and at [1675] that a group's tasks run one at a time or take
+turns as the provider says. Prototype 5 sketched a server whose `main`
+minted one provider and lent it as `any` capabilities, a session that
+passed an erased network to the line reader and an erased clock to a
+generic `answer`, and a stopping fibre that shut "the listener and both
+connections", over a provider of turns only. D477 said the server takes
+its signal waiter only when it was given a provider of turns, with the
+choice made where the providers are minted.
+
+**Chosen:** `examples/derived_server` has the sketch's four modules. Its
+`app` reads `--io=blocking` or `--io=events` and `--port=N` through a
+`hosted/system` handle, and its two minting routines are the only code
+that knows which provider it got. Over the blocking provider it calls
+`server.serve`, which announces the address and serves with no signal
+waiter, so SIGTERM ends the process by its default disposition. Over a
+provider of turns and signals it calls `server.serve_until_terminated`,
+which watches SIGTERM, announces, and runs a fibre that waits for the
+signal, then shuts both directions of every connection being served and
+closes the listener; the accept and every receive fail `io_failed`
+(D449), and the server ends cleanly, with the count of requests it
+answered, only when the waiter stopped it. Such a provider is lent three
+ways, as `fibre.turns`, `signal.signals` and `fibre.scheduler`, since the
+three do not convert (D464). An `any C` is no provider of `C` [1290], so
+the server calls erased entries, the session gives the line reader and
+the buffered writer an adapter that holds the erased network, and
+`protocol.answer` takes its clock as `any time.clock`, which the firmware
+counterpart makes from its board. The protocol separates words by one
+space, takes a tag of at least one byte and no space, and refuses a wait
+over a minute; every other line, one too long for the session's buffer
+among them, is answered `malformed`. An accept or a client's receive that
+times out is tried again.
+
+**The alternatives:** asking the provider at run time whether it delivers
+signals, which an `any` cannot answer and which D477 put at the mint site;
+one serving routine taking a waiter that may be absent, which an erased
+capability has no empty value for; closing only the listener, which leaves
+a session waiting on an idle connection and its group's `join` with it;
+the sketch's generic `answer`, which neither the session's erased clock nor
+an adapter for each consumer serves better than one erased parameter; and
+failing a session on a line too long, which drops a connection for one
+line. All were declined.
+
+**Pinned by** `runtime/derived-server-two-process`, the server over the
+blocking provider in a process of its own, ended by SIGTERM's default
+disposition, and `--io=events` refused with status 3 while the event
+provider is absent; and `runtime/derived-server-fake-turns`,
+`serve_until_terminated` and the client over the fake network and signals
+on a round of turns, `b` answered before `a` and the server stopped
+cleanly. Prototype 5's V1, V3 and V7 record the pressure.
+
+### D490 — Prototype 5's two-process evidence observes the order without turns
+
+**The tour said** nothing. The second Io's exit evidence is the derived server
+running over both Io implementations, and the maintainer chose evidence in
+two processes: the server started as a child, a client in another
+process, the answers' order checked and the server stopped by SIGTERM.
+The prototype's own client, `ask_both`, needs turns to send `NOW b` while
+`a` waits, so over the blocking provider it cannot be written (D444), and
+a runtime fixture builds one program.
+
+**Chosen:** the fixture's program is both parts. Run without arguments it
+is the harness: it starts itself again through `io.programs`, by
+`posix.program_name()`, with `serve`, the provider's `--io=` and
+`--port=0`, and the child calls the same `app.entry` as the example's
+`main`. The harness reads the child's first output line for the address,
+sends `WAIT 1000 a` on one connection and `NOW b` on another, and reads
+the second with a receive limit of 500 milliseconds: an answer within it
+came before `a`, which the server sends no sooner than 1000 milliseconds
+after it was asked, and none means `a` came first. It needs no turns, so
+it runs over the blocking provider on every hosted target. It sends
+SIGTERM, `kill` on Darwin and FreeBSD and the system call on Linux, reads
+the rest of the child's output and waits for it: over the blocking
+provider the child must have been ended by the signal and written nothing
+more. Until the event provider exists, `--io=events` must be refused with
+status 3 and no output, so the event half fails closed both ways: a server
+that served events over another provider fails it now, and the provider's
+arrival fails it until the half expects `b` first and a clean end. The
+QEMU cross lanes, which cannot start the program's own child without a
+binfmt_misc handler, list the fixture in `compiler/tests/cross-lanes.json`.
+
+**The alternatives:** the prototype's `ask_both` as the client, which
+cannot run over the blocking provider and so leaves that half without a
+client until the event provider exists; a client in a third process, which
+needs a second program the fixture format cannot build; a script outside
+the test program, which no FreeBSD, Darwin or RV64 lane runs; and a
+shorter limit against the prototype's 200 milliseconds, which an emulated
+FreeBSD guest could miss. All were declined.
+
+**Pinned by** `runtime/derived-server-two-process` on every hosted target.

@@ -1,0 +1,214 @@
+--  Prototype 5's app/server: two requests in flight, or one, as the
+--  provider says; stopping on SIGTERM when the provider delivers signals;
+--  and the client the prototype's test makes, which needs turns.
+
+import core/cmp
+import core/failure
+import core/fibre
+import core/io
+import core/io/signal
+import core/mem
+import core/net
+import core/text
+import core/time
+import examples/derived_server/app/session
+
+--  Write where the server listens, `listening on 127.0.0.1:7070`, as the
+--  first line of the world's output: a test reads it to learn the port.
+announce: (world: any io.world, network: any net.network, listener: io.file)
+          -> none ! failure.reason =
+    at: net.address = try network.local_address(listener)
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room)
+    try text.append(line, "listening on ")
+    try net.append_address(line, at)
+    try text.append_byte(line, u8('\n'))
+    try world.write(world.out(), text.used(line))
+end announce
+
+--- Accept a connection, admit it, repeat, until accepting fails, and fail
+--- with what it failed with. The group and its stacks are this frame's,
+--- and the `defer` joins it before the frame goes, as a region's release
+--- would be deferred.
+---
+--- Over a provider that runs each task to its end, `admit` serves each
+--- connection to its end before it returns, so the next `accept` waits for
+--- it, and `NOW b` waits behind `WAIT 200 a` in the listener's queue. Over
+--- a provider that takes turns, `admit` returns at the session's first
+--- wait, the loop accepts the second connection while the first sleeps,
+--- and a third waits inside `admit` for a free stack. The source is the
+--- same (D444).
+---
+--- A connection's failure is that connection's: the group keeps the first
+--- one for `join`, and the loop does not stop for it. An accept that timed
+--- out is tried again, since its listener is still usable.
+public serve_forever: (runs: any fibre.scheduler, network: any net.network,
+                       clock: any time.clock, listener: io.file)
+                      -> none ! failure.reason =
+    mut stacks: [2 * 16 * 1024]u8 = zeroed
+    mut sessions := try fibre.group_over(runs, stacks, session.at_once)
+    defer fibre.join(sessions) else none
+    loop do
+        connection: io.file = network.accept(listener) else (problem)
+            continue when problem == net.timed_out
+            fail problem
+        end
+        serving: session.session = (connection: connection, network: network,
+                                    clock: clock)
+        try fibre.admit(sessions, session.serve, serving)
+    end loop
+end serve_forever
+
+--- Serve on `listener`, which it closes, over a provider that has no
+--- signals to give: say where it listens on `world`'s output and serve
+--- until accepting fails. Nothing here waits for a signal (D477), so
+--- SIGTERM keeps the system's default disposition and ends the process.
+public serve: (runs: any fibre.scheduler, network: any net.network,
+               clock: any time.clock, world: any io.world, listener: io.file)
+              -> none ! failure.reason =
+    closing: io.file = listener
+    defer network.close_socket(closing) else none
+    try announce(world, network, listener)
+    try serve_forever(runs, network, clock, listener)
+end serve
+
+--  What the signal waiter holds: the signals, the listener it closes, the
+--  network it closes it through, and where it notes that it stopped the
+--  server.
+stopping: type = struct
+    signals: any signal.signals
+    network: any net.network
+    listener: io.file
+    stopped: ptr mut bool
+end stopping
+
+--  Wait for SIGTERM, then shut every connection being served and close
+--  the listener, so that each session waiting in a receive and the
+--  accept fail and end (D449). Nothing cancels a fibre: what stops it is
+--  its I/O failing.
+stop_on_terminate: (inout self: stopping) -> none ! failure.reason =
+    loop do
+        received: signal.event = try self.signals.next_signal()
+        break when received.which == signal.terminate
+    end loop
+    self.stopped.val = true
+    session.shut_all(self.network)
+    closing: io.file = self.listener
+    try self.network.close_socket(closing)
+end stop_on_terminate
+
+--  Close LISTENER unless the signal waiter already has.
+released: (network: any net.network, listener: io.file, stopped: ptr bool)
+          -> none =
+    return when stopped.val
+    closing: io.file = listener
+    network.close_socket(closing) else none
+end released
+
+--- Serve on `listener`, which it closes, over a provider that takes turns
+--- and delivers signals, until SIGTERM: watch SIGTERM, say where it listens
+--- on `world`'s output, serve beside a fibre that waits for the signal and
+--- then stops the server by closing the listener, and say how many
+--- requests were answered, `stopped after 2 requests`. Each capability is
+--- erased from the one provider, `turning` as `fibre.turns`, which does
+--- not convert to `runs`'s `fibre.scheduler` (D464). The end is clean only
+--- when the signal stopped it; a failure to accept before that is
+--- `serve_until_terminated`'s, once `stop_watching` has woken the waiter
+--- and it has been joined.
+public serve_until_terminated: (turning: any fibre.turns,
+                                signals: any signal.signals,
+                                runs: any fibre.scheduler,
+                                network: any net.network,
+                                clock: any time.clock, world: any io.world,
+                                listener: io.file)
+                               -> none ! failure.reason =
+    mut stopped: bool = false
+    defer released(network, listener, addr stopped)
+    try signals.watch(signal.terminate)
+    try announce(world, network, listener)
+    mut stacks: [16 * 1024]u8 = zeroed
+    mut waiter := try fibre.turns_over(turning, stacks, 1)
+    defer fibre.join(waiter) else none
+    stopper: stopping = (signals: signals, network: network,
+                         listener: listener, stopped: addr stopped)
+    try fibre.admit(waiter, stop_on_terminate, stopper)
+    serve_forever(runs, network, clock, listener) else (problem)
+        if not stopped then
+            signals.stop_watching() else none
+            fail problem
+        end if
+    end
+    try fibre.join(waiter)
+    mut room: [64]u8 = zeroed
+    mut line := text.over(room)
+    try text.append(line, "stopped after ")
+    try text.append_u32(line, session.served_count())
+    try text.append(line, " requests\n")
+    try world.write(world.out(), text.used(line))
+end serve_until_terminated
+
+--- The order the client's two answers came in, by tag.
+public answers: type = struct
+    order: [2]u8
+    count: usize
+end answers
+
+--  One of the client's requests: where to send it, the line, the tag its
+--  answer names, and the caller's record of the order, which the group
+--  keeps through `escaping into` (D445).
+asking: type = struct
+    network: any net.network
+    to: net.address
+    line: []u8
+    tag: u8
+    heard: ptr mut answers
+end asking
+
+--  Connect, send the line, read the answer's line and note its tag. A
+--  receive that timed out is tried again, since the connection is still
+--  usable; an answer other than `<tag> done` is `io_failed`.
+ask: (inout self: asking) -> none ! failure.reason =
+    connection: io.file = try self.network.connect(self.to)
+    defer self.network.close_socket(connection) else none
+    try self.network.send(connection, self.line)
+    mut reply: [16]u8 = zeroed
+    mut got: usize = 0
+    loop do
+        fail io.io_failed when got == lenof reply
+        count: usize = self.network.receive(connection,
+                                            reply[got..<lenof reply]) else (problem)
+            continue when problem == net.timed_out
+            fail problem
+        end
+        fail net.disconnected when count == 0
+        got += count
+        break when reply[got - 1] == u8('\n')
+    end loop
+    fail io.io_failed when got < 2 or reply[0] <> self.tag
+      or cmp.compare(reply[1..<got], " done\n") <> cmp.equal
+    fail mem.full when self.heard.val.count == 2
+    self.heard.val.order[self.heard.val.count] = self.tag
+    self.heard.val.count += 1
+end ask
+
+--- The request this prototype is about, made by a client: `WAIT 200 a`
+--- on one connection, then `NOW b` on another, noting in `heard` the
+--- order their answers came in. It needs the stronger concept: under a
+--- provider that runs each task to its end, `NOW b` would be sent only
+--- once `a` had been answered, and the test would measure nothing. So it
+--- asks for `turns`, and the blocking host is refused here, where the
+--- group is made (D444).
+public ask_both: (runs: any fibre.turns, network: any net.network,
+                  to: net.address, inout heard: answers)
+                 -> none ! failure.reason =
+    mut stacks: [2 * 16 * 1024]u8 = zeroed
+    mut asks := try fibre.turns_over(runs, stacks, 2)
+    defer fibre.join(asks) else none
+    first: asking = (network: network, to: to, line: "WAIT 200 a\n",
+                     tag: u8('a'), heard: addr heard)
+    try fibre.admit(asks, ask, first)
+    second: asking = (network: network, to: to, line: "NOW b\n",
+                      tag: u8('b'), heard: addr heard)
+    try fibre.admit(asks, ask, second)
+    try fibre.join(asks)
+end ask_both

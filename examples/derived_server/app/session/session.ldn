@@ -1,0 +1,138 @@
+--  Prototype 5's app/session: one connection, served by an ordinary
+--  routine that does not know it runs on a fibre.
+
+import core/failure
+import core/io
+import core/net
+import core/time
+import examples/derived_server/app/protocol
+
+--- What serving a connection needs, and so the state a group copies onto
+--- the fibre's stack: a fibre captures nothing [1010]. Both capabilities
+--- are erased from one provider handle [1660], so the same session runs
+--- over the blocking host and over a provider that takes turns.
+public session: type = struct
+    connection: io.file
+    network: any net.network
+    clock: any time.clock
+end session
+
+--- How many connections are served at once: the server's group has this
+--- many stacks.
+public at_once: usize = 2
+
+--  Requests served, by every connection. No atomic and no lock: two fibres
+--  of one provider never run at once, and nothing in `served_one` can
+--  switch (D446). That is true of these providers and false of a thread.
+mut served: u32 = 0
+
+served_one: () -> none =
+    served +%= 1
+end served_one
+
+--- How many requests have been answered, malformed lines not among them.
+public served_count: () -> (count: u32) =
+    count = served
+end served_count
+
+--  The connections being served, so that stopping can shut them: a server
+--  blocked in two receives is stopped by failing them (D449). Like
+--  `served`, only fibres of one provider touch it.
+mut open: [2]io.file = zeroed
+mut held: [2]bool = zeroed
+
+--  Note CONNECTION as served, in the slot returned; `at_once` when every
+--  slot is taken, which a group of `at_once` stacks never lets happen.
+entered: (connection: io.file) -> (slot: usize) =
+    slot = 0
+    while slot < at_once and held[slot] do
+        inc slot
+    end while
+    return when slot == at_once
+    open[slot] = connection
+    held[slot] = true
+end entered
+
+--  Forget the connection in SLOT.
+left: (slot: usize) -> none =
+    return when slot >= at_once
+    held[slot] = false
+end left
+
+--- A connection's reader and writer, for `io.lines_over` and
+--- `io.buffered_over`. An `any net.network` is no provider of `io.reader`
+--- or `io.writer` itself, though the concept refines both, so this holds
+--- the erased network and hands each entry to it, as `io.writer_of`'s
+--- adapter does for a world.
+public stream: type = struct
+    network: any net.network
+end stream
+
+stream_read: (self: stream, opened: io.file, into: []mut u8)
+             -> (count: usize) ! io.io_failed =
+    count = try self.network.read(opened, into)
+end stream_read
+
+stream_write: (self: stream, opened: io.file, bytes: []u8)
+              -> none ! io.io_failed =
+    try self.network.write(opened, bytes)
+end stream_write
+
+stream_write_some: (self: stream, opened: io.file, bytes: []u8)
+                   -> (count: usize) ! io.io_failed =
+    count = try self.network.write_some(opened, bytes)
+end stream_write_some
+
+stream is io.reader (read: stream_read)
+stream is io.writer (write: stream_write, write_some: stream_write_some)
+
+--- Shut both directions of every connection being served, through
+--- `network`, so that a session waiting in a receive wakes with a failure
+--- and ends through its own `defer`s (D449). A shutdown that fails is
+--- passed over: the session it was for ends when its peer does.
+public shut_all: (network: any net.network) -> none =
+    for slot in usize(0)..<at_once do
+        if held[slot] then
+            network.shutdown(open[slot], net.both_directions) else none
+        end if
+    end for
+end shut_all
+
+--- Serve one connection to its end: read a line at a time, answer each
+--- request through app/protocol and each line that is none `malformed`,
+--- and close the connection once its peer has finished sending. Nothing
+--- in it knows it runs on a fibre.
+---
+--- The connection is copied out before the close sinks it, because sinking
+--- `self.connection` out of an `inout` would need a replacement before
+--- returning [0910]. Both buffers live on the fibre's stack. Reading a
+--- line waits; under a provider that takes turns, the wait is where the
+--- other connection gets the core (D446).
+public serve: (inout self: session) -> none ! failure.reason =
+    connection := self.connection
+    defer self.network.close_socket(connection) else none
+    slot: usize = entered(connection)
+    defer left(slot)
+    both: stream = (network: self.network)
+    mut incoming: [256]u8 = zeroed
+    mut lines := io.lines_over(both, connection, incoming)
+    mut outgoing: [256]u8 = zeroed
+    mut out := io.buffered_over(both, connection, outgoing)
+    loop do
+        item: io.line = io.read_line(lines) else (problem)
+            if problem == io.line_too_long then
+                try protocol.refuse(out)
+                continue
+            end if
+            fail problem
+        end
+        break when item.finished
+        asked := protocol.parse(item.bytes) else (problem)
+            _ = problem
+            try protocol.refuse(out)
+            continue
+        end
+        try protocol.answer(self.clock, out, asked)
+        served_one()
+    end loop
+end serve

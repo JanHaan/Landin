@@ -1,0 +1,10 @@
+class: runtime
+summary: prototype 5's derived server and client in one process over core/io/fake's network and signals on a round of turns: WAIT 200 a and NOW b in flight together, b answered first, two requests served, and SIGTERM read as an event stopping the server cleanly by closing its listener
+program: main.ldn
+root: ../../../../..
+profiles: specialization
+run_expect: output.txt
+stream: output
+status: 42
+constructs: 1240, 1380, 1660, 1675, 1680
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

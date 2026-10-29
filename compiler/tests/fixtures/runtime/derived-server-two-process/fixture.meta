@@ -1,0 +1,8 @@
+class: runtime
+summary: prototype 5's derived server started as a child process through io.programs and asked WAIT 1000 a then NOW b on two connections by a client in another process; over --io=blocking a is answered first and SIGTERM ends the server by its default disposition; --io=events is refused with status 3 until hosted/events exists, when the same exchange expects b first and a clean stop
+program: main.ldn
+root: ../../../../..
+profiles: standard
+status: 42
+constructs: 1660, 1675, 1680
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

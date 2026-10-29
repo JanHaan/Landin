@@ -1,0 +1,93 @@
+--  Prototype 5's app/protocol: one request, answered, on any provider.
+--  Shared unchanged by the hosted server and the firmware counterpart.  It
+--  knows a line, a clock and a writer, and nothing about sockets, serial
+--  lines or fibres.
+
+import core/cmp
+import core/io
+import core/text
+import core/time
+
+--- A line that is no request: neither `WAIT <ms> <tag>` nor `NOW <tag>`,
+--- each word separated from the next by one space, the tag at least one
+--- byte, or a wait longer than `longest_wait`.
+public malformed: atom
+
+--- The longest wait a request may ask for, in milliseconds: a minute.
+public longest_wait: u64 = 60000
+
+--- One request: how long to wait before answering, and the tag the
+--- answer names, borrowed from the line it was read from [0790].
+public request: type = struct
+    wait: time.duration
+    tag: []u8
+end request
+
+--  Where in LINE, from AT, the next space is, or its length.
+next_space: (line: []u8, at: usize) -> (found: usize) =
+    found = at
+    while found < lenof line and line[found] <> u8(' ') do
+        inc found
+    end while
+end next_space
+
+--  Whether WORD is the keyword NAME.
+named: (word: []u8, name: []u8) -> (yes: bool) =
+    yes = cmp.compare(word, name) == cmp.equal
+end named
+
+--- Read a request from a line without its ending: `WAIT <ms> <tag>`,
+--- answered after `<ms>` milliseconds, or `NOW <tag>`, answered at once.
+--- The tag is the rest of the line after one space, at least one byte and
+--- no space among them; anything else is `malformed`.
+public parse: (line: []u8) -> (asked: request from line) ! malformed =
+    first: usize = next_space(line, 0)
+    fail malformed when first == lenof line
+    keyword: []u8 = line[0..<first]
+    mut tag_at: usize = first + 1
+    mut wait: u64 = 0
+    if named(keyword, "WAIT") then
+        second: usize = next_space(line, tag_at)
+        fail malformed when second == lenof line
+        wait = text.parse_u64(line[tag_at..<second]) else (problem)
+            _ = problem
+            fail malformed
+        end
+        fail malformed when wait > longest_wait
+        tag_at = second + 1
+    else
+        fail malformed when not named(keyword, "NOW")
+    end if
+    fail malformed when tag_at >= lenof line
+      or next_space(line, tag_at) <> lenof line
+    asked = (wait: time.milliseconds(wait), tag: line[tag_at..<lenof line])
+end parse
+
+--- Answer one request on `out`: wait as long as it asks on `clock`, then
+--- write `<tag> done` and its line ending, and flush. The clock is erased,
+--- as a session holds it, since an `any time.clock` is no provider of the
+--- concept a generic parameter would ask for.
+---
+--- The only place a request can give the core away is `time.sleep`, and
+--- only if the clock's provider is the one that runs fibres (D446). A
+--- clock that blocks the thread holds every other request behind this
+--- one, and the source does not say which it got.
+public answer: (clock: any time.clock, provider: type is io.writer,
+                inout out: io.buffered_writer(provider),
+                asked: request) -> none ! io.io_failed =
+    if u64(asked.wait) > 0 then
+        clock.sleep(asked.wait)
+    end if
+    try io.put(out, asked.tag)
+    try io.put(out, " done\n")
+    try io.flush(out)
+end answer
+
+--- Answer a line that is no request: `malformed` and its line ending,
+--- flushed.
+public refuse: (provider: type is io.writer,
+                inout out: io.buffered_writer(provider))
+               -> none ! io.io_failed =
+    try io.put(out, "malformed\n")
+    try io.flush(out)
+end refuse

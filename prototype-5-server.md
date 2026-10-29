@@ -7,9 +7,11 @@
 > ambiguous or wrong. It is not a program you can compile: it leaves bodies
 > out with `...`, and its fibre interface is the sketch `core/fibre` was
 > written from, in spellings that have since changed. Its findings at the
-> end are the point. No derived program runs yet; the roadmap names the
-> items that derive one. To learn Landin, read [the tour](tour.md), whose
-> [1675] teaches fibres.
+> end are the point. The server that actually runs is
+> [`examples/derived_server/`](examples/derived_server/), with its fixtures
+> `runtime/derived-server-two-process` and `runtime/derived-server-fake-turns`;
+> the firmware counterpart is not derived yet. To learn Landin, read [the
+> tour](tour.md), whose [1675] teaches fibres.
 >
 > The sketch itself begins at its first module heading, `core/fibre`. The
 > notes between this banner and that heading say what it presses on and
@@ -18,8 +20,14 @@
 Current with specification 0.2.8. Its own findings V1-V15 are all
 resolved below: V15 while it was written, the rest by D444-D449. The fibres
 exist now, in `core/fibre` and its submodule `core/fibre/stacks`, and the
-runtime fixtures those decisions name pin them; D448's single-core answer
-and D449's promises wait for the derived programs.
+runtime fixtures those decisions name pin them. The hosted half is derived
+as `examples/derived_server`, whose
+`compiler/tests/fixtures/runtime/derived-server-two-process/DERIVATION.md`
+maps `app/protocol`, `app/session`, `app/server` and `app` to their
+executable sources and says where the derivative's spellings differ from
+the sketch's (D489). It runs over `hosted/blocking` in a process of its own
+(D490); the event provider's half of that evidence, and D448's single-core
+answer, wait for the providers and the firmware counterpart.
 
 A server that answers two kinds of request, one line each:
 
