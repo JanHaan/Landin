@@ -774,6 +774,10 @@ package body Landin.Backend.X86_64 is
       Limit_Margin : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Stack_Limit_Margin (Facts);
       Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
+      --  D491's stack for the default report's C call, and its bytes.
+      Report_Stack : constant String := Local_Prefix & "landin_report_stack";
+      Report_Stack_Bytes : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Report_Stack_Bytes (Facts);
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
       Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
       Stack_Start : constant String := Routine_Prefix & "stack_start";
@@ -9356,7 +9360,17 @@ package body Landin.Backend.X86_64 is
             if Debug /= null then
                Emit (".cfi_def_cfa_register %rbp");
             end if;
-            Emit ("andq $-16, %rsp");
+            --  D491: in a program that prepares a stack, the C call runs
+            --  on the report's own stack, aligned for C, whatever stack
+            --  failed; the frame pointer still names the frame record,
+            --  so a debugger unwinds to the failed check.
+            if Prepares and then Report_Stack_Bytes > 0 then
+               Emit ("leaq " & Report_Stack & "+"
+                     & Trimmed (Landin.Targets.Byte_Count'Image
+                       (Report_Stack_Bytes)) & "(%rip), %rsp");
+            else
+               Emit ("andq $-16, %rsp");
+            end if;
             Emit ("movq %rsi, %rdx");
             Emit ("movq %rdi, %rsi");
             Emit ("movl $2, %edi");
@@ -9378,6 +9392,14 @@ package body Landin.Backend.X86_64 is
             Emit (".asciz " & Landin.Backend.Trap_Reports.Quoted
               (Reports.Text (Index)));
          end loop;
+         if Prepares and then Report_Stack_Bytes > 0 then
+            Emit (".pushsection .bss.landin_report_stack,""aw"",@nobits");
+            Emit (".balign 16");
+            Put (Report_Stack & ":");
+            Emit (".zero " & Trimmed (Landin.Targets.Byte_Count'Image
+              (Report_Stack_Bytes)));
+            Emit (ELF.Pop_Section);
+         end if;
       end if;
 
       if Debug /= null then

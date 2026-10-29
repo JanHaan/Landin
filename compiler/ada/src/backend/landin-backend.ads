@@ -509,6 +509,16 @@ package Landin.Backend is
       Names   : Landin.Source.Names.Table;
       Facts   : Landin.Targets.Target_Facts) return String;
 
+   --  D491: the stack of its own D361's default report moves to before it
+   --  calls the C library's `write`, in a program that prepares a stack
+   --  on a hosted system reached through its C library, Darwin and
+   --  FreeBSD.  What `write` and its loader take there, a lazy binding
+   --  included, is then measured against this and never against a
+   --  prepared stack's margin.  Zero on Linux, whose report is a system
+   --  call, and on a target without a hosted system.
+   function Report_Stack_Bytes
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
+
 private
 
    package Spelling_Maps is new Ada.Containers.Indefinite_Hashed_Maps

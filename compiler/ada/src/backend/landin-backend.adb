@@ -1682,4 +1682,18 @@ package body Landin.Backend is
       end case;
    end Handler_Entry_Bytes;
 
+   function Report_Stack_Bytes
+     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count
+   is
+   begin
+      case Landin.Targets.Capabilities.Hosted_System_Of (Facts) is
+         when Landin.Targets.Capabilities.Darwin
+            | Landin.Targets.Capabilities.FreeBSD =>
+            return 16_384;
+         when Landin.Targets.Capabilities.Linux
+            | Landin.Targets.Capabilities.No_Hosted_System =>
+            return 0;
+      end case;
+   end Report_Stack_Bytes;
+
 end Landin.Backend;

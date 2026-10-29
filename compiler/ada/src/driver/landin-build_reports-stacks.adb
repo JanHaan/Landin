@@ -155,6 +155,14 @@ package body Landin.Build_Reports.Stacks is
         Landin.Stages.Target (Context);
       Machine : constant Landin.Backend.Dispatch.Stack_Facts :=
         Landin.Backend.Dispatch.Stack_Facts_Of (Facts);
+      --  D491: the C library's `write`, whose stack is not known here, is
+      --  open only where the report calls it on the stack that failed: a
+      --  program that prepares a stack calls it on the report's own.
+      Foreign_Open : constant Boolean :=
+        Machine.Report_Foreign
+        and then not (Landin.Backend.Report_Stack_Bytes (Facts) > 0
+                      and then Landin.Backend.Dispatch.Prepares_Stacks
+                        (Unit));
       Count : constant Natural := IR.Item_Count (Unit);
       Handler : constant IR.Item_Id := Landin.Panics.Handler (Panic);
       Initializer : constant IR.Item_Id :=
@@ -803,7 +811,7 @@ package body Landin.Build_Reports.Stacks is
            & ",""closed"":" & Boolean_Image
              (Trap_Openings.Is_Empty
               and then not (Trap_Calls = "report"
-                            and then Machine.Report_Foreign))
+                            and then Foreign_Open))
            & ",""foreign_write"":" & Boolean_Image
              (Trap_Calls = "report" and then Machine.Report_Foreign)
            & ",""openings"":");
@@ -841,7 +849,7 @@ package body Landin.Build_Reports.Stacks is
                     and then not (Traps (Index)
                       and then (not Trap_Openings.Is_Empty
                                 or else (Trap_Calls = "report"
-                                         and then Machine.Report_Foreign)));
+                                         and then Foreign_Open)));
                   Step : Positive := Index;
                begin
                   Put ((if First then "" else ",") & LF

@@ -18151,7 +18151,8 @@ compiler-owned routine, emitted only when some check uses it, which writes
 them with one call and executes the terminal instruction: Linux's `write`
 system call, which a static image has, on x86-64, arm64 and RV64 alike;
 `write` from the C library on Darwin and FreeBSD, whose images always link
-it. The routine keeps a frame record and frame information, so a backtrace
+it, on a stack of the report's own in a program that prepares a stack
+(D491). The routine keeps a frame record and frame information, so a backtrace
 from it reaches the failed operation. It touches no heap, latch or
 reporting library, and no source is imported for it. Firmware keeps D232's
 bare instruction and no filename enters a constrained image; a selected
@@ -19145,7 +19146,8 @@ computed in the same routine is a call to that routine; a value traced
 through slots names only the opening's kind, because a slot may be written
 through its address. A failed check's own openings are the report's
 `trap`: the handler's, or D361's report calling the C library's `write` off
-Linux.
+Linux on the stack it was called on, which D491 leaves only in a program
+that prepares no stack.
 
 **The alternatives:** a bound that assumes some cost for an opening, such as
 the largest frame of a family's providers for an `any` call, which is a
@@ -19358,8 +19360,8 @@ program that selects no handler is never refused: D361's report takes 8 to
 frame, which the figure before the handler holds, so the default fits every
 margin with at least 464 bytes to spare on the hosted targets and 196 on
 Cortex-M0. Off Linux the default report calls the C library's `write`,
-whose stack the compiler does not know; it is accepted by this rule, as
-D472 sized the margin for it. The handlers of
+whose stack the compiler does not know, on a stack of its own (D491), so
+the margin pays only its frame. The handlers of
 `runtime/stack-exhausted-reaches-the-handler` and
 `runtime/stack-frame-past-limit-traps`, which match the kind and switch
 away, need at most 536 bytes on x86-64, 528 on arm64, 688 on RV64 and 348
@@ -19444,6 +19446,63 @@ it, which carry the shadowed table this was found in; for the record,
 runtime fixture, `scripts/tests/test_darwin_assembly.py`'s
 `test_only_the_start_routine_opens_no_frame`, and the switch sessions on
 arm64, whose turn `switch_frames.py` now expects at `add x29, x10, #160`.
+
+### D491 — Off Linux the default report writes on a stack of its own
+
+**The tour said** nothing. D361's report reaches standard error on Darwin
+and FreeBSD through the C library's `write`, and D472 sized every margin
+as though the report took 8 to 24 bytes. What `write` takes was never
+counted, and on FreeBSD it is not small: the image binds `write` lazily,
+so the first report enters the run-time linker's `_rtld_bind_start`, which
+saves the argument registers, and on x86-64 the vector state, and looks
+the symbol up. In the FreeBSD guests that took 1,664 bytes on arm64 and
+1,152 on x86-64 (an EPYC 7302 under KVM), against the 496 and 488 the
+margin leaves. A task that recursed past its stack therefore reported far
+below its stack's base. With the backing a local that landed in the
+frames of the stack the program started on, unseen; with the backing in
+module storage it landed in the `.got.plt` and data the link lays just
+below `.bss`, and `runtime/events-stack-past-limit-traps`, so written,
+ended in SIGSEGV inside the run-time linker's symbol lookup on FreeBSD
+arm64, its stack pointer 848 bytes below the backing, where
+`LD_BIND_NOW=1` made the same image trap as it should.
+
+**Chosen:** off Linux, in a program that prepares a stack, the report
+routine pushes its frame record on the stack it was called on, as before,
+and then moves the stack pointer to the top of a 16 KiB stack of its own
+in zeroed storage, aligned for C, before it calls `write`. The report never
+returns, so nothing moves the pointer back. The frame address still names
+the record on the failed stack, so a debugger that stops on the terminal
+instruction unwinds to the failed check as before. The stack that failed
+pays only the report's frame, which D472's figures already count, so the
+margin and D474's verdicts are unchanged, and the stack report's `trap`
+in such a program is closed while `foreign_write` still says that the C
+library is called. A program that prepares no stack keeps the report on
+the stack it is called on, which is the one the program started on, and
+its `trap` stays open, as D468 has it. Linux's report is a system call,
+which needs no stack, and is unchanged, as are Cortex-M0's bare
+instruction and every program that prepares no stack. The storage is one
+per program, as D471's cell is, because a program is one execution
+context (D446); a thread, when one is admitted, needs its own. 16 KiB is
+ten times what either FreeBSD guest measured and holds the largest vector
+state x86-64 saves.
+
+**The alternatives:** linking FreeBSD images with `-z now`, which binds the
+image's own `write` at load but not the C library's internal calls, such
+as the `__error` a failed `write` reaches, which bind lazily on the same
+stack; a direct system call on FreeBSD, which the OS boundary keeps in the
+C library; a margin large enough for the run-time linker, which charges
+every prepared stack kilobytes for a cost that depends on the processor's
+vector state and on the loader's code; and switching back to the stack the
+program started on, whose pointer no context keeps once a fibre runs. All
+were declined.
+
+**Pinned by** `runtime/events-stack-past-limit-traps`, its backing in
+module storage, trapping `stack_exhausted` at every profile on FreeBSD
+x86-64 and arm64 and on Darwin; the `stack report` suite's `the default
+report writes on its own stack`, which holds Darwin and both FreeBSD
+targets to moving before the call, and closing the trap's depth, in a
+program that prepares a stack, and Linux, RV64 and Cortex-M0, and every
+program that prepares none, to emitting no such stack.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

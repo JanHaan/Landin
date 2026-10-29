@@ -37,7 +37,8 @@ package Landin.Backend.Dispatch is
    --  stack holds the larger of Prepared_Bytes and Entry_Bytes plus the
    --  entry's depth.  Report_Bytes is what D361's default report takes
    --  when a failed check calls it, and Report_Foreign that it calls the C
-   --  library's `write`, whose stack is not known here.  Limit_Margin is
+   --  library's `write`, whose stack is not known here: on the stack that
+   --  failed, unless the program prepares a stack (D491).  Limit_Margin is
    --  how far above a prepared stack's base its limit stands, and
    --  Unchecked the largest call-free frame or call area no check covers
    --  (D471, D472), and Handler_Entry what the margin pays before a

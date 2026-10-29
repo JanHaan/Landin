@@ -2201,6 +2201,10 @@ package body Landin.Backend.Arm64 is
       Limit_Margin : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Stack_Limit_Margin (Facts);
       Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
+      --  D491's stack for the default report's C call, and its bytes.
+      Report_Stack : constant String := Local_Prefix & "landin_report_stack";
+      Report_Stack_Bytes : constant Landin.Targets.Byte_Count :=
+        Landin.Backend.Report_Stack_Bytes (Facts);
       Stack_Limit_Slot : constant := 144;
       Stack_Record_Slot : constant := 160;
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
@@ -8282,6 +8286,18 @@ package body Landin.Backend.Arm64 is
          if Debug /= null then
             Emit (".cfi_def_cfa_register w29");
          end if;
+         --  D491: off Linux, in a program that prepares a stack, the C
+         --  call runs on the report's own stack, whatever stack failed:
+         --  the frame record stays where it was, and the frame address
+         --  still names it, so a debugger unwinds to the failed check.
+         if Prepares and then Report_Stack_Bytes > 0 then
+            Emit ("adrp x9, " & Platform.Page (Format, Report_Stack, False));
+            Emit ("add x9, x9, "
+                  & Platform.Page_Offset (Format, Report_Stack, False));
+            Emit ("add x9, x9, #" & Trimmed
+              (Landin.Targets.Byte_Count'Image (Report_Stack_Bytes)));
+            Emit ("mov sp, x9");
+         end if;
          Emit ("mov x2, x1");
          Emit ("mov x1, x0");
          Emit ("mov x0, #2");
@@ -8312,6 +8328,26 @@ package body Landin.Backend.Arm64 is
             Emit (".asciz " & Landin.Backend.Trap_Reports.Quoted
               (Reports.Text (Index)));
          end loop;
+         if Prepares and then Report_Stack_Bytes > 0 then
+            declare
+               Bytes : constant String :=
+                 Trimmed (Landin.Targets.Byte_Count'Image
+                   (Report_Stack_Bytes));
+            begin
+               case Format is
+                  when Landin.Targets.Capabilities.Mach_O =>
+                     Emit (".zerofill __DATA,__bss," & Report_Stack & ","
+                           & Bytes & ",4");
+                  when Landin.Targets.Capabilities.ELF =>
+                     Emit (".pushsection .bss.landin_report_stack,"
+                           & """aw"",@nobits");
+                     Emit (".balign 16");
+                     Put (Report_Stack & ":");
+                     Emit (".zero " & Bytes);
+                     Emit (".popsection");
+               end case;
+            end;
+         end if;
       end if;
       if Debug /= null then
          Unbounded.Append (Debug_Text,

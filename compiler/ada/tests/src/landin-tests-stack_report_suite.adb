@@ -625,6 +625,7 @@ package body Landin.Tests.Stack_Report_Suite is
       Status : Natural := 0;
       Said : US.Unbounded_String;
       Stack : US.Unbounded_String;
+      Assembly : US.Unbounded_String;
       Writes : Natural := 0;
    end record;
 
@@ -667,6 +668,8 @@ package body Landin.Tests.Stack_Report_Suite is
       if Result.Status = Landin.Driver.Status_Success then
          Outcome.Stack :=
            US.To_Unbounded_String (Host.Written ("stack.json"));
+         Outcome.Assembly :=
+           US.To_Unbounded_String (Host.Written ("out.s"));
       end if;
       return Outcome;
    end Emit_Handler;
@@ -836,6 +839,72 @@ package body Landin.Tests.Stack_Report_Suite is
       end loop;
    end Without_A_Prepared_Stack_Any_Handler_Is_Emitted;
 
+   --  D491: off Linux, the default report of a program that prepares a
+   --  stack moves to a stack of its own before it calls the C library's
+   --  `write`, so the stack that failed pays only the report's frame and
+   --  the trap's depth is closed; with no prepared stack the report stays
+   --  on the stack it was called on, its depth open, and Linux's system
+   --  call needs no stack, so its assembly has none.
+   procedure The_Default_Report_Writes_On_Its_Own_Stack
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Default_Report_Writes_On_Its_Own_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Index in Every_Backend'Range loop
+         declare
+            Target : constant String := Every_Backend (Index).all;
+            Foreign : constant Boolean :=
+              Target in "darwin-arm64" | "freebsd-x86-64" | "freebsd-arm64";
+            Call : constant String :=
+              (if Target = "darwin-arm64" then "bl _write"
+               elsif Target = "freebsd-x86-64" then "call write"
+               else "bl write");
+         begin
+            for Prepares in Boolean loop
+               declare
+                  Outcome : constant Handler_Outcome :=
+                    Emit_Handler (Handler_Program ("", Prepares), Target);
+                  Text : constant String := US.To_String (Outcome.Assembly);
+                  Stack : constant String := US.To_String (Outcome.Stack);
+                  Moved : constant Natural :=
+                    Ada.Strings.Fixed.Index (Text, "landin_report_stack");
+                  Called : constant Natural :=
+                    Ada.Strings.Fixed.Index (Text, Call);
+                  What : constant String :=
+                    Target & (if Prepares then " with" else " without")
+                    & " a prepared stack";
+               begin
+                  Landin.Testing.Check_Equal
+                    (Item, Outcome.Status, Landin.Driver.Status_Success,
+                     What & " is emitted: " & US.To_String (Outcome.Said));
+                  if Foreign and then Prepares then
+                     Landin.Testing.Check
+                       (Item, Moved > 0 and then Called > Moved,
+                        What & ": the report moves to its own stack before"
+                        & " it calls write");
+                     Landin.Testing.Check
+                       (Item, Contains (Stack, """closed"":true,"
+                          & """foreign_write"":true"),
+                        What & ": the trap's depth is closed: " & Stack);
+                  else
+                     Landin.Testing.Check
+                       (Item, Moved = 0,
+                        What & ": the report keeps the stack it is on");
+                  end if;
+                  if Foreign and then not Prepares then
+                     Landin.Testing.Check
+                       (Item, Contains (Stack, """closed"":false,"
+                          & """foreign_write"":true"),
+                        What & ": the trap's depth is open: " & Stack);
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
+   end The_Default_Report_Writes_On_Its_Own_Stack;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -872,6 +941,10 @@ package body Landin.Tests.Stack_Report_Suite is
         (Into, "stack report",
          "without a prepared stack any handler is emitted",
          Without_A_Prepared_Stack_Any_Handler_Is_Emitted'Access);
+      Landin.Testing.Register
+        (Into, "stack report",
+         "the default report writes on its own stack",
+         The_Default_Report_Writes_On_Its_Own_Stack'Access);
    end Register;
 
 end Landin.Tests.Stack_Report_Suite;

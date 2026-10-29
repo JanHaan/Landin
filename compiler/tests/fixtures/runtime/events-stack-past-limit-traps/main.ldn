@@ -1,7 +1,12 @@
 --  D471 under hosted/events: a task that has waited in the loop once,
 --  and so runs on as a fibre switched away from and back to, recurses
 --  past its stack and traps `stack_exhausted` in the prologue of the
---  routine whose frame would not fit, at that routine's site.
+--  routine whose frame would not fit, at that routine's site.  The stacks
+--  are module storage, which the link lays just above other data: off
+--  Linux the report once called the C library's `write` on the failed
+--  stack, the loader's lazy binding ran far below the backing, and on
+--  FreeBSD arm64 this ended in SIGSEGV until the report had a stack of
+--  its own (D491).
 import core/failure
 import core/fibre
 import core/time
@@ -10,6 +15,9 @@ import hosted/events
 deep: type = struct
     host: events.host
 end deep
+
+--  The tasks' stacks.
+mut backing: [2 * 16384]u8 = zeroed
 
 --  Goes on without end, and never switches.
 descend: (depth: u32) -> (reached: u32) =
@@ -23,7 +31,6 @@ dive: (inout state: deep) -> none ! failure.reason =
 end dive
 
 run: (host: events.host) -> none ! failure.reason =
-    mut backing: [2 * 16384]u8 = zeroed
     mut tasks := try fibre.turns_over(any(addr host), backing, 2)
     defer fibre.join(tasks) else none
     task: deep = (host: host)
