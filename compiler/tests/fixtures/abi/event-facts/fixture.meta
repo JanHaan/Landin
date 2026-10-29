@@ -1,0 +1,9 @@
+class: abi
+profiles: standard
+summary: platform/linux's epoll and signalfd numbers, struct epoll_event, packed on x86-64 alone, and struct signalfd_siginfo, and a signal's bit in the kernel's mask; platform/kqueue's filters, flags, timer units and struct kevent on Darwin and FreeBSD; and platform/libc's sigprocmask operations, signals, O_NONBLOCK, F_GETFL and SOCK_NONBLOCK where it exists, each held to the system's own C headers, with each record read from C as C filled it and filled for C to read
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+status: 42
+constructs: 0750, 1500, 1580
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

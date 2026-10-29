@@ -1,0 +1,166 @@
+--  kqueue, the event interface Darwin and FreeBSD share: one descriptor
+--  that a program asks to watch descriptors, signals, child processes and
+--  timers, and waits on for whichever happens first.  It is reached
+--  through each system's C library, which is its system interface, as
+--  platform/libc's declarations are, and is raw as they are: a failure is
+--  -1 with the reason in errno, which platform/libc's `errno_cell` reads.
+--  The two systems lay out `struct kevent` differently, and number a
+--  timer's units differently, so each record and number is chosen by
+--  `compiler.os`.
+--
+--  It is named for the facility rather than a system because it is
+--  Darwin's and FreeBSD's alike (D481).  Everything is declared on those
+--  two only.  Landin has no conditional import, so a provider written once
+--  for every POSIX system imports this module beside platform/linux, and
+--  the module's scope is theirs: Linux, Darwin and FreeBSD.  On Linux it
+--  declares nothing.
+
+import platform/libc
+
+compiler.assert(compiler.os == linux or compiler.os == darwin
+                or compiler.os == freebsd)
+
+fixed if compiler.os == darwin or compiler.os == freebsd then
+    --- Make a kernel event queue: its descriptor, or -1 with the reason in
+    --- errno.  The descriptor is not inherited by a child `fork` makes, but
+    --- an executed program keeps it unless `libc.fd_cloexec` is set on it
+    --- with `libc.fcntl`.
+    public extern(c) kqueue: () -> (descriptor: i32)
+
+    fixed if compiler.os == darwin then
+        --- Darwin's `struct kevent`, 32 bytes: what is watched, as a
+        --- descriptor, a signal's number, a process's ID or a timer's own
+        --- number; the filter that watches it; the `ev_*` flags; the
+        --- filter's own flags; the filter's datum, a count of bytes, of
+        --- signals or of timer expiries, C's `intptr_t`, which is 64 bits
+        --- there; and a word handed back unread with each event.
+        public event_record: type = layout(c) struct
+            identifier: usize
+            filter: i16
+            flags: u16
+            filter_flags: u32
+            data: i64
+            user_data: usize
+        end event_record
+
+        --- `evfilt_timer` filter flag: the period is in seconds,
+        --- `NOTE_SECONDS`; with none of these it is in milliseconds.
+        public note_seconds: u32 = 1
+        --- `evfilt_timer` filter flag: the period is in microseconds,
+        --- `NOTE_USECONDS`.  FreeBSD numbers it otherwise.
+        public note_useconds: u32 = 2
+        --- `evfilt_timer` filter flag: the period is in nanoseconds,
+        --- `NOTE_NSECONDS`.  FreeBSD numbers it otherwise.
+        public note_nseconds: u32 = 4
+    else
+        --- FreeBSD's `struct kevent` since FreeBSD 12, 64 bytes: Darwin's
+        --- fields, the datum C's `int64_t`, and four words of filter
+        --- extensions after them.
+        public event_record: type = layout(c) struct
+            identifier: usize
+            filter: i16
+            flags: u16
+            filter_flags: u32
+            data: i64
+            user_data: usize
+            extensions: [4]u64
+        end event_record
+
+        --- `evfilt_timer` filter flag: the period is in seconds,
+        --- `NOTE_SECONDS`; with none of these it is in milliseconds.
+        public note_seconds: u32 = 1
+        --- `evfilt_timer` filter flag: the period is in milliseconds,
+        --- `NOTE_MSECONDS`, as with none.
+        public note_mseconds: u32 = 2
+        --- `evfilt_timer` filter flag: the period is in microseconds,
+        --- `NOTE_USECONDS`.  Darwin numbers it otherwise.
+        public note_useconds: u32 = 4
+        --- `evfilt_timer` filter flag: the period is in nanoseconds,
+        --- `NOTE_NSECONDS`.  Darwin numbers it otherwise.
+        public note_nseconds: u32 = 8
+    end if
+
+    --- Filter: a descriptor has data to read, or a listener a connection
+    --- to accept; the datum is how much.  `EVFILT_READ`, which the two
+    --- systems number alike, as every filter and flag below.
+    public evfilt_read: i16 = -1
+    --- Filter: a descriptor has room to write; the datum is how much.
+    --- `EVFILT_WRITE`.
+    public evfilt_write: i16 = -2
+    --- Filter: something happened to a process, the identifier its ID, as
+    --- the filter flags ask: `note_exit` for its end.  `EVFILT_PROC`.
+    public evfilt_proc: i16 = -5
+    --- Filter: a signal was sent to this process, the identifier its
+    --- number; the datum counts the signals since the last report.  The
+    --- signal is recorded even when it is ignored or blocked, and is still
+    --- delivered as its disposition says, so a program ignores or blocks
+    --- each signal it watches.  `EVFILT_SIGNAL`.
+    public evfilt_signal: i16 = -6
+    --- Filter: a timer, the identifier a number of the program's own,
+    --- expiring after the datum's period in milliseconds unless a
+    --- `note_*` unit says otherwise, and again after each period unless
+    --- `ev_oneshot` is set.  `EVFILT_TIMER`.
+    public evfilt_timer: i16 = -7
+
+    --- Flag: add the event, or change one added already, `EV_ADD`.
+    public ev_add: u16 = 1
+    --- Flag: remove the event, `EV_DELETE`.  An event on a descriptor is
+    --- removed when the descriptor's last reference closes.
+    public ev_delete: u16 = 2
+    --- Flag: report the event when it happens, `EV_ENABLE`.
+    public ev_enable: u16 = 4
+    --- Flag: keep the event but do not report it, `EV_DISABLE`.
+    public ev_disable: u16 = 8
+    --- Flag: remove the event once it is reported, `EV_ONESHOT`.
+    public ev_oneshot: u16 = 16
+    --- Flag: reset the event's state once it is reported, so that it is
+    --- reported again only when something new happens, `EV_CLEAR`.
+    public ev_clear: u16 = 32
+    --- Reported flag: a descriptor's end was reached, or its peer shut
+    --- its side, `EV_EOF`; the filter flags may hold an errno.
+    public ev_eof: u16 = 32768
+    --- Reported flag: a change could not be made, and the datum is its
+    --- errno, `EV_ERROR`.
+    public ev_error: u16 = 16384
+
+    --- `evfilt_proc` filter flag: the process ended, `NOTE_EXIT`; the datum
+    --- is its status as `waitpid` gives it.
+    public note_exit: u32 = 2147483648
+
+    --- What `kevent` takes for no records and no time limit: C's null
+    --- pointer.
+    public none_given: atom
+    --- The changes `kevent` makes first, or `none_given`.
+    public changes_given: type = none_given | ptr event_record
+    --- Where `kevent` puts the events it reports, or `none_given`.
+    public events_filled: type = none_given | ptr mut event_record
+    --- How long `kevent` waits, or `none_given` to wait until an event
+    --- comes.  A zero time does not wait.
+    public wait_limit: type = none_given | ptr libc.timespec
+
+    --- Make the `change_count` changes at `changes` to what `queue`
+    --- watches, then wait until an event comes or `limit` passes and put
+    --- at most `event_count` of them at `events`: how many it put there,
+    --- zero when the limit passed first, or -1 with the reason in errno,
+    --- EINTR when a signal came first.  A change that fails is reported as
+    --- an event with `ev_error` when there is room for it, and fails the
+    --- call when there is none.
+    public extern(c) kevent: (queue: i32, changes: changes_given,
+                              change_count: i32, events: events_filled,
+                              event_count: i32, limit: wait_limit)
+                             -> (count: i32)
+
+    --- A change to what a queue watches: `identifier` with `filter`, and
+    --- the `flags`, filter flags and datum it is made with, as the record
+    --- `kevent` reads, with no user data.
+    public change:
+        (identifier: usize, filter: i16, flags: u16, filter_flags: u32,
+         data: i64) -> (record: event_record) =
+        record = zeroed
+        record.identifier = identifier
+        record.filter = filter
+        record.flags = flags
+        record.filter_flags = filter_flags
+        record.data = data
+    end change
+end if

@@ -45,8 +45,12 @@ program linked with `--link=libc` may call, its loader among it, which
 `platform/posix` loads shared objects through on Darwin and FreeBSD and on
 Linux under `--link=libc`, since a static Linux program has no loader
 (D336); what every system declares alike is in `libc.ldn`, and each
-system's own in a file of its own (D346). The compiler names none of it. The three `platform` modules' scope is the hosted POSIX
-systems, and firmware refuses each by name. `platform/c` holds the
+system's own in a file of its own (D346). `platform/kqueue` declares
+kqueue, the event interface Darwin and FreeBSD share, and nothing on Linux
+(D481), as `platform/linux` declares epoll and signalfd and nothing on
+Darwin and FreeBSD. The compiler names none of it. These `platform`
+modules' scope is the hosted POSIX systems, and firmware refuses each by
+name. `platform/c` holds the
 currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
 synthetic-32. `platform/cortex_m` holds M-profile CPU operations and admits the
 armv6-m, armv7-m and armv7e-m feature levels. Namespace availability is checked

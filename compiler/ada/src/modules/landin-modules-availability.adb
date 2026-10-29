@@ -11,12 +11,13 @@ package body Landin.Modules.Availability is
        and then Logical (Logical'First .. Logical'First + Root'Length) =
          Root & "/"));
 
-   --  platform/linux, platform/libc and platform/posix, with their
-   --  submodules.
+   --  platform/linux, platform/libc, platform/kqueue and platform/posix,
+   --  with their submodules.
    function POSIX_Module (Logical : String) return Boolean is
      (Under (Logical, "platform/posix")
       or else Under (Logical, "platform/linux")
-      or else Under (Logical, "platform/libc"));
+      or else Under (Logical, "platform/libc")
+      or else Under (Logical, "platform/kqueue"));
 
    function Permitted
      (Logical : String; Facts : Landin.Targets.Target_Facts) return Boolean

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/kqueue lays out each system's struct kevent, 32 bytes on Darwin and 64 on FreeBSD, and its queue reports nothing for an empty pipe, the reading end readable with its byte count and word once a byte is written and at its end once the writing end closes, an ignored SIGUSR1 sent to the process, and removing an event never added as an ev_error event carrying ENOENT and a change to a closed descriptor as one carrying EBADF; platform/libc's sigprocmask blocks SIGUSR2 and restores the mask
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0750, 1500, 1660
+targets: darwin-arm64, freebsd-x86-64, freebsd-arm64

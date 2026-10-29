@@ -179,7 +179,8 @@ def read_items(text, source):
             signature = '\n'.join(lines[i:j] + [lines[j][:col]]).rstrip()
             kind = 'function'
         elif re.match(r'type(?:\s|$)', after):
-            block = re.search(r'=\s*(struct|concept)\b', code)
+            block = re.search(r'=\s*(?:layout\s*\([^)]*\)\s*)?(struct|concept)\b',
+                              code)
             if block:
                 end_marker = prefix + 'end ' + name
                 j = next((n for n in range(i+1, len(codes))

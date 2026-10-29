@@ -1,0 +1,226 @@
+--  Linux's own event interfaces, on x86-64, arm64 and RV64: epoll, which
+--  waits until any of many descriptors is ready, and signalfd, which reads
+--  signals as records from a descriptor epoll can watch, with
+--  `rt_sigprocmask` to block the signals a signalfd reads so that none is
+--  delivered first.  They are raw, as the rest of this module is: a
+--  failure is minus the errno.  The loop's own sleep is the wait's time
+--  limit and nothing else wakes it, so there is no eventfd or timerfd here
+--  (D480).  Declared on Linux only, as the module is.
+
+fixed if compiler.os == linux then
+    --- `epoll_create1` flag: the new epoll descriptor is closed when the
+    --- process executes a program, `EPOLL_CLOEXEC`.
+    public epoll_cloexec: i32 = 524288
+
+    --- `epoll_ctl` operation: watch a descriptor not yet watched.
+    public epoll_ctl_add: i32 = 1
+    --- `epoll_ctl` operation: stop watching a descriptor.
+    public epoll_ctl_del: i32 = 2
+    --- `epoll_ctl` operation: change what a watched descriptor is watched
+    --- for.
+    public epoll_ctl_mod: i32 = 3
+
+    --- epoll event: data to read, or the end of a file, `EPOLLIN`.
+    public epollin: u32 = 1
+    --- epoll event: urgent data to read, `EPOLLPRI`.
+    public epollpri: u32 = 2
+    --- epoll event: room to write, `EPOLLOUT`.
+    public epollout: u32 = 4
+    --- epoll event, always reported: an error on the descriptor,
+    --- `EPOLLERR`.
+    public epollerr: u32 = 8
+    --- epoll event, always reported: the peer has gone, `EPOLLHUP`.
+    public epollhup: u32 = 16
+    --- epoll event: a stream's peer has shut its sending side,
+    --- `EPOLLRDHUP`.
+    public epollrdhup: u32 = 8192
+    --- epoll flag: report the descriptor once and then not again until
+    --- `epoll_ctl_mod` asks again, `EPOLLONESHOT`.
+    public epolloneshot: u32 = 1073741824
+    --- epoll flag: report a change of readiness rather than readiness,
+    --- `EPOLLET`.
+    public epollet: u32 = 2147483648
+
+    fixed if compiler.arch == x86_64 then
+        --- The kernel's `struct epoll_event`: the events asked about or
+        --- reported, and a word the kernel hands back unread with each
+        --- report.  x86-64 alone packs it, to twelve bytes, so that its
+        --- 32-bit compatibility layer reads the same record.
+        public epoll_record: type = layout(c, packed) struct
+            events: u32
+            data: u64
+        end epoll_record
+    else
+        --- The kernel's `struct epoll_event`: the events asked about or
+        --- reported, and a word the kernel hands back unread with each
+        --- report.  Sixteen bytes on arm64 and RV64, the word aligned.
+        public epoll_record: type = struct
+            events: u32
+            data: u64
+        end epoll_record
+    end if
+
+    --- Make an epoll descriptor, with `flags`, `epoll_cloexec` among them:
+    --- the new descriptor, or minus the errno.
+    public epoll_create1:
+        (flags: i32) -> (result: i32) =
+        result = i32(system_call(epoll_create1_number, i64(flags), 0, 0, 0,
+                                 0, 0))
+    end epoll_create1
+
+    --- Watch `descriptor` from `epoll` for what `event` asks, change what it
+    --- is watched for, or stop watching it, as `operation` says: zero, or
+    --- minus the errno, EEXIST when it is added twice and ENOENT when one
+    --- not watched is changed or removed.  `epoll_ctl_del` does not read
+    --- `event`.  A descriptor is watched until it is removed or every
+    --- descriptor for its open file is closed, so one closed while a
+    --- duplicate stays open is still reported.
+    public epoll_ctl:
+        (epoll: i32, operation: i32, descriptor: i32, event: ptr epoll_record)
+        -> (result: i32) =
+        result = i32(system_call(epoll_ctl_number, i64(epoll),
+                                 i64(operation), i64(descriptor),
+                                 i64(usize(event)), 0, 0))
+    end epoll_ctl
+
+    --- What `epoll_pwait` and `signalfd4` take for no signal mask: C's
+    --- null pointer.
+    public no_mask: atom
+    --- A signal mask a call reads, a set of signals, the kernel's eight
+    --- bytes with signal N at bit N - 1, or `no_mask`.
+    public mask_given: type = no_mask | ptr u64
+    --- Where `rt_sigprocmask` puts the mask it replaces, or `no_mask`.
+    public mask_kept: type = no_mask | ptr mut u64
+
+    --  The address an optional mask is, zero for none.
+    given_mask: (given: mask_given) -> (address: i64) =
+        address = match given
+            no_mask: i64(0)
+            ptr (mask): i64(usize(mask))
+        end match
+    end given_mask
+
+    --- Wait until one of the descriptors `epoll` watches is ready or
+    --- `milliseconds` pass, waiting indefinitely when it is negative and not
+    --- at all when it is zero, with the signal mask `mask` in place while it
+    --- waits when one is given, and fill at most `count` records at
+    --- `events`, each with its events and the word it was watched with: how
+    --- many it filled, zero when the time passed first, or minus the errno,
+    --- EINTR when a signal came first.  arm64 and RV64 have no
+    --- `epoll_wait`; this is every architecture's.
+    public epoll_pwait:
+        (epoll: i32, events: ptr mut epoll_record, count: i32,
+         milliseconds: i32, mask: mask_given) -> (result: i32) =
+        result = i32(system_call(epoll_pwait_number, i64(epoll),
+                                 i64(usize(events)), i64(count),
+                                 i64(milliseconds), given_mask(mask), 8))
+    end epoll_pwait
+
+    --- Signal: the terminal hung up, or a daemon is asked to reload,
+    --- SIGHUP.  Linux numbers the signals one way on all three
+    --- architectures.
+    public sighup: i32 = 1
+    --- Signal: interrupted from the terminal, SIGINT.
+    public sigint: i32 = 2
+    --- Signal: the first one a program defines, SIGUSR1.
+    public sigusr1: i32 = 10
+    --- Signal: the second one a program defines, SIGUSR2.
+    public sigusr2: i32 = 12
+    --- Signal: asked to end, SIGTERM.
+    public sigterm: i32 = 15
+
+    --- The bit of `signal` in the kernel's signal mask.
+    public signal_bit:
+        (signal: i32) -> (bit: u64) =
+        bit = 0
+        return when signal < 1 or signal > 64
+        bit = u64(1) << u64(signal - 1)
+    end signal_bit
+
+    --- `rt_sigprocmask` operation: block the signals given beside those
+    --- blocked already, `SIG_BLOCK`.
+    public sig_block: i32 = 0
+    --- `rt_sigprocmask` operation: unblock the signals given,
+    --- `SIG_UNBLOCK`.
+    public sig_unblock: i32 = 1
+    --- `rt_sigprocmask` operation: block exactly the signals given,
+    --- `SIG_SETMASK`.
+    public sig_setmask: i32 = 2
+
+    --- Change the calling thread's mask of blocked signals by `how` with
+    --- `mask` when it is given, and put the mask it had in `previous` when
+    --- that is given: zero, or minus the errno.  A blocked signal stays
+    --- pending until it is unblocked or a signalfd reads it; the mask is
+    --- the thread's, a child copies it and an executed program keeps it.
+    public rt_sigprocmask:
+        (how: i32, mask: mask_given, previous: mask_kept) -> (result: i32) =
+        keeping: i64 = match previous
+            no_mask: i64(0)
+            ptr (kept): i64(usize(kept))
+        end match
+        result = i32(system_call(rt_sigprocmask_number, i64(how),
+                                 given_mask(mask), keeping, 8, 0, 0))
+    end rt_sigprocmask
+
+    --- `signalfd4` flag: the new descriptor is closed when the process
+    --- executes a program, `SFD_CLOEXEC`.
+    public sfd_cloexec: i32 = 524288
+    --- `signalfd4` flag: a read with no signal pending fails with EAGAIN
+    --- rather than waiting, `SFD_NONBLOCK`, which is `o_nonblock`.
+    public sfd_nonblock: i32 = 2048
+
+    --- What a read of a signalfd gives for each signal, the kernel's
+    --- `struct signalfd_siginfo`: 128 bytes, one layout on every
+    --- architecture.  `signal` is its number; `process` and `user` are the
+    --- sender's for a signal another process sent.
+    public signalfd_record: type = struct
+        signal: u32
+        error: i32
+        code: i32
+        process: u32
+        user: u32
+        descriptor: i32
+        timer: u32
+        band: u32
+        overrun: u32
+        trap: u32
+        status: i32
+        integer: i32
+        pointer: u64
+        user_time: u64
+        system_time: u64
+        address: u64
+        address_low_bit: u16
+        padding: u16
+        call: i32
+        call_address: u64
+        architecture: u32
+        reserved: [28]u8
+    end signalfd_record
+
+    --- Make a descriptor that reads the signals in `mask` as
+    --- `signalfd_record`s, or with `descriptor` one made already change
+    --- which it reads, with `flags`, `sfd_cloexec` and `sfd_nonblock` among
+    --- them; -1 asks for a new one: the descriptor, or minus the errno.
+    --- It reads only signals that are pending, so the signals must be
+    --- blocked with `rt_sigprocmask` first, or a signal is delivered as its
+    --- disposition says before it can be read.
+    public signalfd4:
+        (descriptor: i32, mask: ptr u64, flags: i32) -> (result: i32) =
+        result = i32(system_call(signalfd4_number, i64(descriptor),
+                                 i64(usize(mask)), 8, i64(flags), 0, 0))
+    end signalfd4
+
+    --- `fcntl` command: read a descriptor's open-file flags, `o_nonblock`
+    --- among them, `F_GETFL`.
+    public f_getfl: i32 = 3
+    --- `fcntl` command: set a descriptor's open-file flags, `F_SETFL`.
+    public f_setfl: i32 = 4
+    --- `openat`, `pipe2`, `socket`, `accept4` and `fcntl` flag: a call that
+    --- would wait fails with EAGAIN instead, `O_NONBLOCK`.  The same on
+    --- x86-64, arm64 and RV64.
+    public o_nonblock: i32 = 2048
+    --- `socket` and `accept4` flag: the new socket is non-blocking, set
+    --- with it, `SOCK_NONBLOCK`.
+    public sock_nonblock: i32 = 2048
+end if

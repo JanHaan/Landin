@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/linux's epoll reports nothing for an empty pipe, the reading end readable with its 64-bit word once a byte is written and hung up once the writing end closes, refuses a descriptor watched twice with EEXIST and one never watched with ENOENT, and lays its record out as the kernel does, packed on x86-64 alone; SIGUSR1 blocked with rt_sigprocmask and sent to the process does not end it, a non-blocking signalfd is EAGAIN until it comes, epoll reports the signalfd readable, its 128-byte record names the signal, the sender and SI_USER, and the mask is restored
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0750, 1500, 1560, 1630, 1660
+targets: linux-x86-64, linux-arm64, linux-rv64
