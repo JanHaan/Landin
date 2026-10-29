@@ -1,0 +1,9 @@
+class: negative
+summary: D492 a pointer to an erased pair is a pointer to an ordinary value: a read-only address of an immutable pair is no `ptr mut` provider, whatever write authority the pair carries
+program: main.ldn
+codes: L0340
+constructs: 0440, 1290, 1370, 1390
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/any-provider-pair-permission/main.ldn
+status: 1

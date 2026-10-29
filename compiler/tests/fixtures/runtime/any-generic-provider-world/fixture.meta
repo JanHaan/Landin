@@ -1,0 +1,8 @@
+class: runtime
+profiles: specialization
+summary: D492 an erased memory world is handed to io.out and io.buffered_over, which want a provider of process and of writer, the concepts world refines, and the buffered line reaches the world through its own table with no adapter
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1290, 1340, 1370, 1380, 1390, 1660
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

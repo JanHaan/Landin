@@ -364,7 +364,9 @@ This is the maintained inventory of what the compiler does today:
   calls pass only the evidence their checked bodies use; direct and `any C`
   dispatch share table storage only when their layouts and entries match,
   and an `any C` call no conformance of C answers builds as a trap no value
-  reaches.
+  reaches. An `any C` is a provider of C and of the concepts C refines, so
+  a generic routine takes it and calls each entry through its own table
+  (D492).
   Pointers and slices
   get local origin, borrow, `escaping`, `escaping into` (D445), `from` and
   consume checks. Directory

@@ -1,0 +1,35 @@
+--  D492: an `any counter` provides `counter` and the concepts it refines,
+--  and no other: `labelled` wants a provider of `named`, which `counter`
+--  does not refine, though the value's own provider conforms to it.
+counter: type = concept (provider: type)
+    total: (self: ptr provider) -> (sum: u32)
+end counter
+
+named: type = concept (provider: type)
+    label: (self: ptr provider) -> (code: u32)
+end named
+
+thing: type = struct
+    n: u32
+end thing
+
+thing_total: (self: ptr thing) -> (sum: u32) =
+    sum = self.val.n
+end thing_total
+
+thing_label: (self: ptr thing) -> (code: u32) =
+    code = self.val.n + 1
+end thing_label
+
+thing is counter (total: thing_total)
+thing is named (label: thing_label)
+
+labelled: (provider: type is named, host: provider) -> (code: u32) =
+    code = provider.label(addr host)
+end labelled
+
+public main: () -> (code: i32) =
+    item: thing = (n: 4)
+    erased: any counter = any(addr item)
+    code = i32(labelled(erased))
+end main

@@ -59,33 +59,6 @@ left: (slot: usize) -> none =
     held[slot] = false
 end left
 
---- A connection's reader and writer, for `io.lines_over` and
---- `io.buffered_over`. An `any net.network` is no provider of `io.reader`
---- or `io.writer` itself, though the concept refines both, so this holds
---- the erased network and hands each entry to it, as `io.writer_of`'s
---- adapter does for a world.
-public stream: type = struct
-    network: any net.network
-end stream
-
-stream_read: (self: stream, opened: io.file, into: []mut u8)
-             -> (count: usize) ! io.io_failed =
-    count = try self.network.read(opened, into)
-end stream_read
-
-stream_write: (self: stream, opened: io.file, bytes: []u8)
-              -> none ! io.io_failed =
-    try self.network.write(opened, bytes)
-end stream_write
-
-stream_write_some: (self: stream, opened: io.file, bytes: []u8)
-                   -> (count: usize) ! io.io_failed =
-    count = try self.network.write_some(opened, bytes)
-end stream_write_some
-
-stream is io.reader (read: stream_read)
-stream is io.writer (write: stream_write, write_some: stream_write_some)
-
 --- Shut both directions of every connection being served, through
 --- `network`, so that a session waiting in a receive wakes with a failure
 --- and ends through its own `defer`s (D449). A shutdown that fails is
@@ -93,7 +66,7 @@ stream is io.writer (write: stream_write, write_some: stream_write_some)
 public shut_all: (network: any net.network) -> none =
     for slot in usize(0)..<at_once do
         if held[slot] then
-            network.shutdown(open[slot], net.both_directions) else none
+            net.shutdown(network, open[slot], net.both_directions) else none
         end if
     end for
 end shut_all
@@ -110,14 +83,13 @@ end shut_all
 --- other connection gets the core (D446).
 public serve: (inout self: session) -> none ! failure.reason =
     connection := self.connection
-    defer self.network.close_socket(connection) else none
+    defer net.close_socket(self.network, connection) else none
     slot: usize = entered(connection)
     defer left(slot)
-    both: stream = (network: self.network)
     mut incoming: [256]u8 = zeroed
-    mut lines := io.lines_over(both, connection, incoming)
+    mut lines := io.lines_over(self.network, connection, incoming)
     mut outgoing: [256]u8 = zeroed
-    mut out := io.buffered_over(both, connection, outgoing)
+    mut out := io.buffered_over(self.network, connection, outgoing)
     loop do
         item: io.line = io.read_line(lines) else (problem)
             if problem == io.line_too_long then

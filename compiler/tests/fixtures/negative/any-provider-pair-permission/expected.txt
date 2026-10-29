@@ -1,0 +1,10 @@
+error[L0340]: this argument has a different reference permission or view from its parameter pattern
+  --> ../tests/fixtures/negative/any-provider-pair-permission/main.ldn:26:12
+   |
+26 |     bumped(addr erased)
+   |            ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-provider-pair-permission/main.ldn:19:43
+   |
+19 | bumped: (provider: type is counter, host: ptr mut provider) -> none =
+   |                                           ^^^^^^^^^^^^^^^^ the parameter's type, as written
+  = note: D138: an argument to a generic routine is typed on its own, before the parameter is known, and must match the type written for it; only `mut` may relax to read-only

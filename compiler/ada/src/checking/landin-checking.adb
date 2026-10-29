@@ -4693,6 +4693,29 @@ package body Landin.Checking is
       end;
    end Note_Evidence_Selection;
 
+   procedure Note_Erased_Forward
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id)
+   is
+      Overlay : constant Positive :=
+        Ensure_Node_Overlay (Into, Slot (Into, Of_Tree, Node));
+   begin
+      Into.Node_Overlays (Overlay).Erased_Forward := True;
+   end Note_Erased_Forward;
+
+   function Is_Erased_Forward
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Boolean
+   is
+      Overlay : constant Natural :=
+        Node_Overlay_Position (Of_Table, Slot (Of_Table, Of_Tree, Node));
+   begin
+      return Overlay /= 0
+        and then Of_Table.Node_Overlays.Element (Overlay).Erased_Forward;
+   end Is_Erased_Forward;
+
    function Result_Shapes_Agree
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
    is

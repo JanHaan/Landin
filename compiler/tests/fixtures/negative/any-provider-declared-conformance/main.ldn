@@ -1,0 +1,34 @@
+--  D492: `any counter` is a provider of `counter` through a conformance
+--  the compiler supplies, which forwards each entry through the value's
+--  own table.  A program declaring that conformance is refused.
+counter: type = concept (provider: type)
+    total: (self: ptr provider) -> (sum: u32)
+end counter
+
+thing: type = struct
+    n: u32
+end thing
+
+thing_total: (self: ptr thing) -> (sum: u32) =
+    sum = self.val.n
+end thing_total
+
+thing is counter (total: thing_total)
+
+any_total: (self: ptr any counter) -> (sum: u32) =
+    sum = self.val.total() + 1
+end any_total
+
+erased_counter: type = any counter
+
+erased_counter is counter (total: any_total)
+
+summed: (provider: type is counter, host: provider) -> (sum: u32) =
+    sum = provider.total(addr host)
+end summed
+
+public main: () -> (code: i32) =
+    item: thing = (n: 4)
+    erased: any counter = any(addr item)
+    code = i32(summed(erased))
+end main

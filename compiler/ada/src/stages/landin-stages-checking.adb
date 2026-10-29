@@ -2266,6 +2266,20 @@ package body Landin.Stages.Checking is
       function Any_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
+      function Forwarded_Selection_Signature
+        (Of_Tree      : Syn.Tree;
+         Selection    : Syn.Node_Id;
+         Evidence     : Landin.Checking.Conformance_Id;
+         Declaring    : Landin.Checking.Concept_Id;
+         Direct_Entry : Positive) return Landin.Checking.Signature_Id;
+      function Entry_Is_Object_Safe
+        (Concept_Tree : Syn.Tree;
+         Entry_Node   : Syn.Node_Id;
+         Formal       : Res.Declaration_Id) return Boolean;
+      function Has_Own_Table
+        (Row : Landin.Checking.Conformance_Id) return Boolean
+        is (Landin.Checking.Conformance_Origin_Of (Types.all, Row)
+              /= Landin.Checking.Compiler_Erased_Conformance);
       procedure Collect_Concepts;
       procedure Collect_Conformances;
       procedure Validate_Composed_Conformances;
@@ -17450,6 +17464,266 @@ package body Landin.Stages.Checking is
          end;
       end Concept_For;
 
+      --  D492: whether WANTED is ROOT or a concept ROOT's erased table
+      --  flattens (D147): its represented formal's constraint and its
+      --  parents, transitively.  Compiler concepts are no part of it.
+      function Erased_Closure_Holds
+        (Root, Wanted : Landin.Checking.Concept_Id) return Boolean;
+
+      function Concept_Spelling
+        (Of_Concept : Landin.Checking.Concept_Id) return String
+      is (Spelled (Res.Name_Of
+            (Meanings.all,
+             Landin.Checking.Concept_Declaration
+               (Types.all, Of_Concept))));
+
+      function Erased_Closure_Holds
+        (Root, Wanted : Landin.Checking.Concept_Id) return Boolean
+      is
+         Seen : Index_Sets.Set;
+
+         function Visit
+           (Concept_Id : Landin.Checking.Concept_Id) return Boolean;
+
+         function Visit
+           (Concept_Id : Landin.Checking.Concept_Id) return Boolean
+         is
+         begin
+            if Concept_Id = Landin.Checking.No_Concept
+              or else Landin.Checking.Is_Compiler_Concept
+                (Types.all, Concept_Id)
+              or else Seen.Contains
+                (Landin.Checking.Concept_Identities.Position
+                   (Types.all, Concept_Id))
+            then
+               return False;
+            elsif Concept_Id = Wanted then
+               return True;
+            end if;
+            Seen.Include
+              (Landin.Checking.Concept_Identities.Position
+                 (Types.all, Concept_Id));
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration
+                   (Types.all, Concept_Id);
+               Concept_Tree : constant not null access constant
+                 Syn.Tree :=
+                   Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+               Required : constant Syn.Node_Id := Syn.Constraint_Of
+                 (Concept_Tree.all,
+                  Syn.Nth_Concept_Formal
+                    (Concept_Tree.all, Concept_Node, 1));
+            begin
+               if Required /= Syn.No_Node
+                 and then Visit (Concept_For (Concept_Tree.all, Required))
+               then
+                  return True;
+               end if;
+               for Parent in 1 .. Syn.Concept_Parent_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  if Visit
+                    (Concept_For
+                       (Concept_Tree.all,
+                        Syn.Nth_Concept_Parent
+                          (Concept_Tree.all, Concept_Node, Parent)))
+                  then
+                     return True;
+                  end if;
+               end loop;
+            end;
+            return False;
+         end Visit;
+      begin
+         return Visit (Root);
+      end Erased_Closure_Holds;
+
+      --  D492: an entry selected through an `any C`'s own conformance is an
+      --  erased call through the first argument: the noted dispatch is the
+      --  erased table of C at the entry's flattened position (D147), from
+      --  the first conformance of C, as an erased call's own is, or late
+      --  when C has none yet (D377).  The entry must be object-safe and
+      --  called where it is selected, as an erased call's must.
+      function Forwarded_Selection_Signature
+        (Of_Tree      : Syn.Tree;
+         Selection    : Syn.Node_Id;
+         Evidence     : Landin.Checking.Conformance_Id;
+         Declaring    : Landin.Checking.Concept_Id;
+         Direct_Entry : Positive) return Landin.Checking.Signature_Id
+      is
+         Root : constant Landin.Checking.Concept_Id :=
+           Descriptor_For
+             (Landin.Checking.Conformance_Target (Types.all, Evidence))
+               .Concept;
+         Flat : Natural := 0;
+         Cursor : Natural := 0;
+         Unsafe_Concept : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept;
+         Unsafe_Entry : Natural := 0;
+         Root_Evidence : Landin.Checking.Conformance_Id :=
+           Landin.Checking.No_Conformance;
+         Immediate : Boolean := False;
+         Seen : Index_Sets.Set;
+         Signature : Landin.Checking.Signature_Id;
+
+         procedure Visit (Concept : Landin.Checking.Concept_Id);
+
+         procedure Visit (Concept : Landin.Checking.Concept_Id) is
+         begin
+            if Concept = Landin.Checking.No_Concept
+              or else Landin.Checking.Is_Compiler_Concept
+                (Types.all, Concept)
+              or else Seen.Contains
+                (Landin.Checking.Concept_Identities.Position
+                   (Types.all, Concept))
+            then
+               return;
+            end if;
+            Seen.Include
+              (Landin.Checking.Concept_Identities.Position
+                 (Types.all, Concept));
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration (Types.all, Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+               Required : constant Syn.Node_Id := Syn.Constraint_Of
+                 (Concept_Tree.all,
+                  Syn.Nth_Concept_Formal (Concept_Tree.all, Concept_Node, 1));
+            begin
+               for Position in 1 .. Syn.Concept_Entry_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  Cursor := Cursor + 1;
+                  if Unsafe_Concept = Landin.Checking.No_Concept
+                    and then not Entry_Is_Object_Safe
+                      (Concept_Tree.all,
+                       Syn.Nth_Concept_Entry
+                         (Concept_Tree.all, Concept_Node, Position),
+                       Declaration_At
+                         (Syn.Source_Of (Concept_Tree.all),
+                          Syn.Nth_Concept_Formal
+                            (Concept_Tree.all, Concept_Node, 1)))
+                  then
+                     Unsafe_Concept := Concept;
+                     Unsafe_Entry := Position;
+                  end if;
+                  if Concept = Declaring and then Position = Direct_Entry
+                  then
+                     Flat := Cursor;
+                  end if;
+               end loop;
+               if Required /= Syn.No_Node then
+                  Visit (Concept_For (Concept_Tree.all, Required));
+               end if;
+               for Parent in 1 .. Syn.Concept_Parent_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  Visit
+                    (Concept_For
+                       (Concept_Tree.all,
+                        Syn.Nth_Concept_Parent
+                          (Concept_Tree.all, Concept_Node, Parent)));
+               end loop;
+            end;
+         end Visit;
+      begin
+         Visit (Root);
+         if Flat = 0 then
+            raise Landin.Compiler_Defect with
+              "an erased conformance's entry is outside its erased table";
+         end if;
+         for Candidate in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
+            if Syn.Kind (Of_Tree, Candidate)
+                 in Syn.Call | Syn.Labeled_Application
+              and then Syn.Callee_Of (Of_Tree, Candidate) = Selection
+            then
+               Immediate := True;
+               exit;
+            end if;
+         end loop;
+         --  A selection that is not called is refused in the template
+         --  already (a type name is no runtime value); nothing is noted.
+         if not Immediate then
+            return Landin.Checking.No_Signature;
+         end if;
+         if Unsafe_Concept /= Landin.Checking.No_Concept then
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration
+                   (Types.all, Unsafe_Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+            begin
+               Bad.Report
+                 (Item => Bad.Erased_Contract,
+                  Source => Syn.Source_Of (Of_Tree),
+                  Where => Syn.Where (Of_Tree, Selection),
+                  Message => "this concept entry has no object-safe erased"
+                             & " self signature",
+                  Note => "D146: every entry required by the erased table"
+                          & " needs input `self: ptr [mut] T` or `self: T`,"
+                          & " with hidden T nowhere else",
+                  Related => Syn.Origin
+                    (Concept_Tree.all,
+                     Syn.Nth_Concept_Entry
+                       (Concept_Tree.all,
+                        Res.Node_Of (Meanings.all, Declaration),
+                        Unsafe_Entry)),
+                  Because => "an entry required by the erased table",
+                  Into => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+               return Landin.Checking.No_Signature;
+            end;
+         end if;
+         Signature := Exact_Concept_Entry_Signature (Evidence, Direct_Entry);
+         if Signature = Landin.Checking.No_Signature then
+            return Landin.Checking.No_Signature;
+         end if;
+         for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
+         loop
+            declare
+               Candidate : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Conformance_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Conformance_Concept (Types.all, Candidate)
+                    = Root
+                 and then Has_Own_Table (Candidate)
+               then
+                  Root_Evidence := Candidate;
+                  exit;
+               end if;
+            end;
+         end loop;
+         Landin.Checking.Note_Erased_Forward (Types.all, Of_Tree, Selection);
+         if Root_Evidence /= Landin.Checking.No_Conformance then
+            Landin.Checking.Note_Any_Dispatch
+              (Types.all, Of_Tree, Selection, Root_Evidence, Flat);
+         else
+            declare
+               Late : constant Unanswered_Selection :=
+                 (Selection =>
+                    (Syn.Source_Of (Of_Tree), Selection,
+                     Landin.Checking.Current_Routine_View (Types.all)),
+                  Root => Root,
+                  Flat => Flat);
+            begin
+               if not Unanswered_Selections.Contains (Late) then
+                  Unanswered_Selections.Append (Late);
+               end if;
+            end;
+         end if;
+         Landin.Checking.Note_Signature
+           (Types.all, Of_Tree, Selection, Signature);
+         return Signature;
+      end Forwarded_Selection_Signature;
+
       function Evidence_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id
@@ -17470,6 +17744,8 @@ package body Landin.Stages.Checking is
          --  time, so answer what was noted rather than noting it again.
          if Landin.Checking.Evidence_Of (Types.all, Of_Tree, Selection)
               /= Landin.Checking.No_Conformance
+           or else Landin.Checking.Is_Erased_Forward
+             (Types.all, Of_Tree, Selection)
          then
             return Landin.Checking.Signature_Of
               (Types.all, Of_Tree, Selection);
@@ -17654,6 +17930,14 @@ package body Landin.Stages.Checking is
                   if Evidence = Landin.Checking.No_Conformance then
                      raise Landin.Compiler_Defect with
                        "a composed evidence entry has no hidden table";
+                  end if;
+                  if Landin.Checking.Conformance_Origin_Of
+                       (Types.all, Evidence)
+                       = Landin.Checking.Compiler_Erased_Conformance
+                  then
+                     return Forwarded_Selection_Signature
+                       (Of_Tree, Selection, Evidence, Declaring,
+                        Positive (Direct_Entry));
                   end if;
                   declare
                      Provider_Instance : constant
@@ -17959,11 +18243,6 @@ package body Landin.Stages.Checking is
       function Entry_Is_Object_Safe
         (Concept_Tree : Syn.Tree;
          Entry_Node   : Syn.Node_Id;
-         Formal       : Res.Declaration_Id) return Boolean;
-
-      function Entry_Is_Object_Safe
-        (Concept_Tree : Syn.Tree;
-         Entry_Node   : Syn.Node_Id;
          Formal       : Res.Declaration_Id) return Boolean
       is
          Safe : Boolean := True;
@@ -18254,6 +18533,7 @@ package body Landin.Stages.Checking is
             begin
                if Landin.Checking.Conformance_Concept
                  (Types.all, Candidate) = Root
+                 and then Has_Own_Table (Candidate)
                then
                   Root_Evidence := Candidate;
                   exit;
@@ -19116,6 +19396,28 @@ package body Landin.Stages.Checking is
                         Empty_Bindings, Requirement => Identity_Only);
                      Valid := Valid and then Target.Kind /= Ty.Ill_Typed;
 
+                     --  D492: the compiler supplies this conformance.
+                     if Valid
+                       and then Target.Kind = Ty.Any_Value
+                       and then Erased_Closure_Holds (Target.Concept, Concept)
+                     then
+                        Bad.Report
+                          (Item    => Bad.Compiler_Conformance_Reserved,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "`any "
+                                      & Concept_Spelling (Target.Concept)
+                                      & "` already provides `"
+                                      & Concept_Spelling (Concept)
+                                      & "` through its own table",
+                           Note    => "D492: the compiler supplies the"
+                                      & " conformance by which an erased"
+                                      & " value provides its concept and"
+                                      & " the concepts it refines",
+                           Into    => Found);
+                        Valid := False;
+                     end if;
+
                      if Syn.Kind
                        (Of_Tree, Syn.Conforming_Type (Of_Tree, Node))
                          = Syn.Type_Application
@@ -19421,6 +19723,38 @@ package body Landin.Stages.Checking is
                   Into    => Found);
                return False;
             end;
+         end if;
+
+         --  D492: an `any C` provides C, and every concept C's erased table
+         --  flattens, through a conformance the compiler adds and no program
+         --  declares.  Its entries are erased calls through the value's own
+         --  table, so it has no provider; it provides no other concept.
+         if Actual.Kind = Ty.Any_Value
+           and then Landin.Checking.Actual_Count (Inputs) = 0
+           and then Erased_Closure_Holds (Actual.Concept, Concept)
+         then
+            Existing := Landin.Checking.Find_Conformance
+              (Types.all, Concept, Actual_For (Actual), Inputs);
+            if Existing = Landin.Checking.No_Conformance then
+               declare
+                  Declaration : constant Res.Declaration_Id :=
+                    Landin.Checking.Concept_Declaration (Types.all, Concept);
+                  Count : constant Natural := Syn.Concept_Entry_Count
+                    (Tree_For (Res.Source_Of (Meanings.all, Declaration)).all,
+                     Res.Node_Of (Meanings.all, Declaration));
+               begin
+                  Existing := Landin.Checking.Add_Conformance
+                    (Types.all, Concept, Actual_For (Actual), Inputs,
+                     Landin.Checking.Empty_Actuals,
+                     Landin.Source.No_Source, Syn.No_Node,
+                     Landin.Checking.Compiler_Erased_Conformance);
+                  if Count > 0 then
+                     Landin.Checking.Set_Conformance_Entry_Count
+                       (Types.all, Existing, Count);
+                  end if;
+               end;
+            end if;
+            return Parents_Hold;
          end if;
 
          Existing := Landin.Checking.Find_Conformance
@@ -20272,10 +20606,22 @@ package body Landin.Stages.Checking is
            (Item    => Bad.Unsatisfied_Constraint,
             Source  => Application.Source,
             Where   => Application.Where,
-            Message => "this concrete type has no conformance to `"
-                       & Spelled (Syn.Name (Of_Tree, Constraint)) & "`",
-            Note    => "[1290]: every constrained type actual must have one"
-                       & " whole-program conformance",
+            Message =>
+              (if Actual.Kind = Ty.Any_Value
+               then "`any " & Concept_Spelling (Actual.Concept)
+                    & "` provides `" & Concept_Spelling (Actual.Concept)
+                    & "` and the concepts it refines, not `"
+                    & Spelled (Syn.Name (Of_Tree, Constraint)) & "`"
+               else "this concrete type has no conformance to `"
+                    & Spelled (Syn.Name (Of_Tree, Constraint)) & "`"),
+            Note    =>
+              (if Actual.Kind = Ty.Any_Value
+               then "D492: an erased value provides its own concept's"
+                    & " closure; erase the provider as `any "
+                    & Spelled (Syn.Name (Of_Tree, Constraint))
+                    & "` where it is made"
+               else "[1290]: every constrained type actual must have one"
+                    & " whole-program conformance"),
             Related => (if Required_At.Source = Landin.Source.No_Source
                               then Syn.Origin (Of_Tree, Constraint)
                               else Required_At),
@@ -33281,14 +33627,21 @@ package body Landin.Stages.Checking is
                            Reference => Descriptor.Reference,
                            Concept => Descriptor.Concept,
                            others => <>);
+                        --  D492: an `any` is its own concept's provider and
+                        --  is not erased again; the pair it is is passed.
+                        Again : constant Boolean :=
+                          Target.Kind = Ty.Any_Value;
                         Existing : constant Landin.Checking.Conformance_Id :=
-                          Landin.Checking.Find_Conformance
-                            (Types.all, Expected.Concept,
-                             Actual_For (Target),
-                             Landin.Checking.Empty_Actuals);
+                          (if Again then Landin.Checking.No_Conformance
+                           else Landin.Checking.Find_Conformance
+                             (Types.all, Expected.Concept,
+                              Actual_For (Target),
+                              Landin.Checking.Empty_Actuals));
                         Satisfied : constant Boolean :=
-                          Existing /= Landin.Checking.No_Conformance
-                          or else Ensure_Conformance (Target);
+                          not Again
+                          and then
+                            (Existing /= Landin.Checking.No_Conformance
+                             or else Ensure_Conformance (Target));
                         Evidence : constant Landin.Checking.Conformance_Id :=
                           (if Satisfied
                            then Landin.Checking.Find_Conformance
@@ -33304,7 +33657,23 @@ package body Landin.Stages.Checking is
                              (Expected.Concept, Evidence, Pointer);
                         end if;
                         if not Valid then
-                           if Satisfied
+                           if Again then
+                              Bad.Report
+                                (Item => Bad.Unsatisfied_Constraint,
+                                 Source => Syn.Source_Of (Of_Tree),
+                                 Where => Syn.Where (Of_Tree, Value),
+                                 Message => "this addresses an `any` value,"
+                                            & " which is not erased again",
+                                 Note => "D492: an `any` is already a"
+                                         & " provider of its concept;"
+                                         & " pass the value itself where"
+                                         & " an `any` of that concept is"
+                                         & " wanted",
+                                 Related => Beside (Of_Tree, Node, Site),
+                                 Because =>
+                                   Beside_Label (Of_Tree, Node, Site, Because),
+                                 Into => Found);
+                           elsif Satisfied
                              and then Read_Only_Receiver /= Syn.No_Node
                            then
                               --  The address is read-only and an entry
@@ -37586,6 +37955,7 @@ package body Landin.Stages.Checking is
                   begin
                      if Landin.Checking.Conformance_Concept
                        (Types.all, Candidate) = Late.Root
+                       and then Has_Own_Table (Candidate)
                      then
                         Root_Evidence := Candidate;
                         exit;

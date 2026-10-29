@@ -1,0 +1,28 @@
+--  D492, D146: the pair carries its pointee's write authority, but a
+--  pointer to the pair is a pointer to an ordinary value.  `bumped` wants
+--  a writable pointer to its provider, which may replace the pair, and the
+--  erased binding is immutable, so its address is read-only.
+counter: type = concept (provider: type)
+    bump: (self: ptr mut provider) -> none
+end counter
+
+thing: type = struct
+    n: u32
+end thing
+
+thing_bump: (self: ptr mut thing) -> none =
+    inc self.val.n
+end thing_bump
+
+thing is counter (bump: thing_bump)
+
+bumped: (provider: type is counter, host: ptr mut provider) -> none =
+    provider.bump(host)
+end bumped
+
+public main: () -> (code: i32) =
+    mut item: thing = (n: 4)
+    erased: any counter = any(addr item)
+    bumped(addr erased)
+    code = i32(item.n)
+end main

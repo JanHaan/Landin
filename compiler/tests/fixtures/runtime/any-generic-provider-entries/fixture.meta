@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: D492 an `any C` is a provider of C and of the concept C refines, so routines generic over a provider take two erased values of different providers, and a by-value, `ptr mut` and `ptr` self entry, a fallible entry recovered with `else` and one propagated with `try`, a parent concept's entry and a provider handed on all dispatch through the value's own table; a generic call through a concept no conformance answers builds
+program: main.ldn
+status: 42
+constructs: 1230, 1240, 1290, 1340, 1370, 1380, 1390, 1030
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

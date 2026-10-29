@@ -605,8 +605,13 @@ Use the smallest concept a consumer needs. A provider is a handle passed
 by value, `host` in every signature. An erased capability is built from
 the address of a handle binding, `any(addr host)`. Using a handle locks
 nothing, so a program and its logger write through one, and two lent
-arguments and a query are live at once. An erased world can lend
-`writer_of` to a writer-only consumer.
+arguments and a query are live at once. An erased capability is itself a
+provider of its concept and of every concept that one builds on (D492), so
+an `any io.world` or an `any net.network` goes to `io.buffered_over`,
+`io.lines_over` or any routine generic over a writer or a reader as it is,
+with no adapter. It does not convert to an `any` of another concept: where
+an `any io.writer` is wanted, an erased world lends a writer to erase with
+`writer_of`.
 
 Providers retain authority over files and arguments.
 

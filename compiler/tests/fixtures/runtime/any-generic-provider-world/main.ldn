@@ -1,0 +1,30 @@
+--  D492: an erased world is a provider of `writer` and `process`, the
+--  concepts `world` refines, so it is handed as it is to `io.out`, a
+--  process entry, and to `io.buffered_over`, which wants a writer.  No
+--  adapter holds it: each entry is an erased call through its own table.
+import core/cmp
+import core/io
+
+greeting: []u8 = "hello\n"
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: io.memory_space = zeroed
+    mut written: [16]u8 = zeroed
+    mut complained: [8]u8 = zeroed
+    memory := io.memory_over(state, [], [], "", written[0..<16],
+                             complained[0..<8])
+    world: any io.world = any(addr memory)
+    mut storage: [16]u8 = zeroed
+    mut out := io.buffered_over(world, io.out(world), storage[0..<16])
+    io.put(out, greeting) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    return when cmp.compare(io.written(memory), greeting) <> cmp.equal
+    code = 42
+end main

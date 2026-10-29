@@ -1,0 +1,93 @@
+--  D492: prototype 5's session in the form it was sketched.  An erased
+--  network is handed to `io.lines_over` and `io.buffered_over`, which want
+--  a reader and a writer, concepts `net.network` refines, and to routines
+--  generic over a network; an erased world is handed to the buffered
+--  writer the report goes through, and to `io.out`, a process entry.  No
+--  adapter holds either value: each entry is an erased call through the
+--  value's own table.
+import core/cmp
+import core/io
+import core/io/fake
+import core/net
+
+--  What the client sends: two lines.
+request: []u8 = "one\nhello, world\n"
+
+--  Serve one connection a line at a time, writing each back, until the
+--  client has finished sending: how many lines it echoed.
+serve: (network: any net.network, connection: io.file)
+       -> (lines: usize) ! ... =
+    mut incoming: [32]u8 = zeroed
+    mut reader := io.lines_over(network, connection, incoming)
+    mut outgoing: [32]u8 = zeroed
+    mut writer := io.buffered_over(network, connection, outgoing)
+    lines = 0
+    loop do
+        item: io.line = try io.read_line(reader)
+        break when item.finished
+        try io.put(writer, item.bytes)
+        try io.put(writer, "\n")
+        inc lines
+    end loop
+    try io.flush(writer)
+    try net.shutdown(network, connection, net.sending)
+end serve
+
+--  Echo `request` between a client and a server over HOST, a provider of
+--  the network, and read the echo back through the reader concept alone.
+echo: (provider: type is net.network, host: provider, into: []mut u8)
+      -> (count: usize) ! ... =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    defer net.close_socket(host, listener) else none
+    at: net.address = try net.local_address(host, listener)
+    client: io.file = try net.connect(host, at)
+    defer net.close_socket(host, client) else none
+    try net.send(host, client, request)
+    try net.shutdown(host, client, net.sending)
+    server: io.file = try net.accept(host, listener)
+    defer net.close_socket(host, server) else none
+    _ = try serve(host, server)
+    count = 0
+    loop do
+        got: usize = try io.read(host, client, into[count..<lenof into])
+        break when got == 0
+        count += got
+    end loop
+end echo
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: io.memory_space = zeroed
+    mut written: [64]u8 = zeroed
+    mut complained: [8]u8 = zeroed
+    memory := io.memory_over(state, [], [], "", written[0..<64],
+                             complained[0..<8])
+    world: any io.world = any(addr memory)
+    mut space: fake.network_space = zeroed
+    mut b0: [32]u8 = zeroed
+    mut b1: [32]u8 = zeroed
+    mut b2: [32]u8 = zeroed
+    mut sockets: [3]fake.network_socket =
+        [fake.socket_over(b0[0..<32]), fake.socket_over(b1[0..<32]),
+         fake.socket_over(b2[0..<32])]
+    host := fake.network_over(space, sockets[0..<3])
+    network: any net.network = any(addr host)
+    mut back: [32]u8 = zeroed
+    count: usize = echo(network, back[0..<32]) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    mut storage: [32]u8 = zeroed
+    mut out := io.buffered_over(world, io.out(world), storage[0..<32])
+    io.put(out, back[0..<count]) else (problem)
+        _ = problem
+        return
+    end
+    io.flush(out) else (problem)
+        _ = problem
+        return
+    end
+    return when cmp.compare(io.written(memory), request) <> cmp.equal
+    code = 42
+end main

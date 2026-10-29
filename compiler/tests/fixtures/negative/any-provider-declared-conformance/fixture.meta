@@ -1,0 +1,9 @@
+class: negative
+summary: D492 a program declaring the conformance by which an `any C` provides C is refused: the compiler supplies it
+program: main.ldn
+codes: L0319
+constructs: 1230, 1240, 1280, 1370
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/any-provider-declared-conformance/main.ldn
+status: 1

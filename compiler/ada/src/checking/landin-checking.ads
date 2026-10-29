@@ -190,8 +190,13 @@ package Landin.Checking is
    function No_Conformance return Conformance_Id
      renames Conformance_Identities.None;
 
+   --  D492: an `any C` provides C and every concept of C's erased closure
+   --  to a generic routine.  Its conformance has no provider routine: a
+   --  selection through it is an erased call through the receiver's own
+   --  table (Note_Erased_Forward), so no direct table of it is built.
    type Conformance_Origin is
-     (Declared_Conformance, Compiler_Zeroable_Conformance);
+     (Declared_Conformance, Compiler_Zeroable_Conformance,
+      Compiler_Erased_Conformance);
 
    --  Selects the fact layer used by every node and declaration query/write.
    --  Activating an instance never mutates the global module/nongeneric facts;
@@ -1923,6 +1928,29 @@ package Landin.Checking is
                   and then Evidence_Run_Position_Of
                     (Into, Of_Tree, Node) = Run_Position;
 
+   --  D492: a `T.entry` selection whose view's evidence is an erased
+   --  conformance (Compiler_Erased_Conformance) is an erased call through
+   --  its first argument, the `any` value or a pointer to it.  Its evidence
+   --  is the erased dispatch Note_Any_Dispatch records, answered late when
+   --  no conformance of the erased concept exists yet (D377).
+   procedure Note_Erased_Forward
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Current_Routine_View (Into) /= No_Routine_Instance,
+          Post => Is_Erased_Forward (Into, Of_Tree, Node);
+
+   function Is_Erased_Forward
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
    --  Instance construction and target-dependent layout share one state
    --  slot.  Interning alone leaves a new instance Unseen.  Building is the
    --  recursion guard for a parameterized body; Ready retains the completed
@@ -2862,6 +2890,7 @@ private
       Evidence     : Conformance_Id := No_Conformance;
       Evidence_Entry : Natural := 0;
       Evidence_Run_Position : Natural := 0;
+      Erased_Forward : Boolean := False;
    end record;
 
    package Node_Overlay_Vectors is new Ada.Containers.Vectors

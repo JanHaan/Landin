@@ -514,10 +514,15 @@ package body Landin.Diagnostics.Explanations is
                & "give one type `distinct` identity.",
             when Catalogue.Unsatisfied_Constraint =>
                "A type given for a formal lacks a conformance the formal"
-               & " requires [1290].",
+               & " requires [1290]. An `any C` provides C and every concep"
+               & "t C refines, and no other (D492): erase the provider as "
+               & "an `any` of the wanted concept where it is made. Its add"
+               & "ress is not erased again; pass the `any C` itself.",
             when Catalogue.Compiler_Conformance_Reserved =>
-               "The compiler owns `zeroable` and its conformances; a pro"
-               & "gram declares neither.",
+               "The compiler owns `zeroable` and its conformances, and t"
+               & "he conformance by which an `any C` provides C and the co"
+               & "ncepts it refines (D492); a program declares none of the"
+               & "m.",
             when Catalogue.Malformed_Text_Literal =>
                "A text literal holds an escape the language does not def"
                & "ine, or bytes that are not UTF-8 [0270] [1750].",
