@@ -146,14 +146,20 @@ fixed if compiler.os == linux then
         compiler.unreachable()
     end exit_thread
 
-    --  futex operation: wait while the word holds the value, FUTEX_WAIT,
-    --  not private: the kernel's wake when a thread ends is not.
-    futex_wait: i64 = 0
+    --  `futex` operation FUTEX_WAIT, not private.  The kernel wakes the
+    --  word a thread's end clears without FUTEX_PRIVATE_FLAG, and a
+    --  private wait is not woken by a shared wake on the same word, so a
+    --  join cannot sleep through `futex_wait`: it slept for ever when it
+    --  did (D517).  glibc's and musl's joins wait shared for the same
+    --  reason.
+    futex_wait_shared: i64 = 0
 
     --- Wait until the thread whose `child` word is `word` has ended: until
     --- the kernel has cleared the word, as it does once nothing of that
     --- thread runs. The word's acquire load that reads zero is the join's
-    --- edge with everything the thread did (D227).
+    --- edge with everything the thread did (D227). The word is the
+    --- kernel's to write, so it is read as a `u32` cell would be and not
+    --- through one.
     public wait_until_cleared:
         (word: ptr mut u32) -> none =
         loop do
@@ -161,8 +167,8 @@ fixed if compiler.os == linux then
             break when seen == 0
             --  EAGAIN when the word changed first, EINTR for a signal:
             --  both go round again.
-            _ = system_call(futex_number, i64(usize(word)), futex_wait,
-                            i64(seen), 0, 0, 0)
+            _ = system_call(futex_number, i64(usize(word)),
+                            futex_wait_shared, i64(seen), 0, 0, 0)
         end loop
     end wait_until_cleared
 end if

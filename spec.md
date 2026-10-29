@@ -25379,7 +25379,9 @@ block, on that area; the thread's first routine runs there, calls
 `exit_group`, so the kernel clears the record's word and wakes a futex
 waiter only once nothing of the thread runs. `join` waits with
 `FUTEX_WAIT` on that word, not the private form, because the kernel's
-wake is not private, until an acquire load reads zero. Elsewhere the C
+wake is not private, until an acquire load reads zero. `platform/linux`'s
+`futex_wait`, which waits private as a lock's word may, is therefore not
+the join's: a join that slept through it was never woken. Elsewhere the C
 library is given the area with `pthread_attr_setstack` and the routine
 with `pthread_create`, and `pthread_join` waits. On the area,
 `hosted/thread`'s routine switches with `compiler.stack_switch` to the

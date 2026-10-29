@@ -20,9 +20,11 @@
 --  records, the states and the ledger are the backing's, behind
 --  integer-made pointers that stay inside this module [0810].
 
+import core/atomic
 import core/failure
 import core/mem
 import hosted/system
+import hosted/thread/lock
 import platform/posix
 
 --  What a thread runs: one entry, as `core/fibre`'s task, with no error
@@ -42,7 +44,7 @@ slot: type = struct
     home: usize
     prepared: usize
     work: any job
-    ended: u32
+    ended: atomic.cell(u32)
     running: u32
     order: usize
 end slot
@@ -52,7 +54,7 @@ end slot
 --  claim the first failure takes, that failure, and how many tasks the
 --  group has admitted, which orders its stacks by when each was started.
 ledger: type = struct
-    claimed: u32
+    claimed: atomic.cell(u32)
     failed: bool
     problem: failure.reason
     admitted: usize
@@ -133,15 +135,15 @@ public group_over: (host: system.host, backing: []mut u8, count: usize)
     fail mem.out_of_memory when size < least_stack()
     --  [0810]: the ledger and the records are the backing's bytes.
     kept: ptr mut ledger = ptr(front)
-    kept.val = (claimed: 0, failed: false, problem: mem.out_of_memory,
-                admitted: 0)
+    kept.val = (claimed: atomic.new(u32(0)), failed: false,
+                problem: mem.out_of_memory, admitted: 0)
     g = (host: host, backing: backing, front: front, first: first,
          size: size, count: count, area: posix.thread_start_bytes())
     mut index: usize = 0
     while index < count do
         record: ptr mut slot = record_of(g, index)
         record.val.running = 0
-        record.val.ended = 0
+        record.val.ended = atomic.new(u32(0))
         record.val.order = 0
         inc index
     end while
@@ -163,10 +165,9 @@ end launch
 launch_run: (state_type: type, self: ptr mut launch(state_type)) -> none =
     self.val.work(self.val.state) else (problem)
         kept: ptr mut ledger = ptr(self.val.kept)
-        seen: u32 = compiler.atomic_compare_exchange(
-            addr kept.val.claimed, u32(0), u32(1), compiler.acq_rel,
-            compiler.acquire)
-        if seen == 0 then
+        if atomic.compare_exchange(addr kept.val.claimed, u32(0), u32(1))
+          == 0
+        then
             kept.val.problem = problem
             kept.val.failed = true
         end if
@@ -195,7 +196,7 @@ extern(c) begin_thread: (argument: usize) -> (result: usize) =
     --  [0810]: the argument is the address of the stack's record.
     record: ptr mut slot = ptr(argument)
     compiler.stack_switch(addr record.val.home, record.val.prepared)
-    compiler.atomic_store(addr record.val.ended, u32(1), compiler.release)
+    atomic.store(addr record.val.ended, u32(1))
     result = 0
 end begin_thread
 
@@ -225,8 +226,7 @@ free_stack: (g: group) -> (index: usize) =
     index = 0
     while index < g.count do
         record: ptr mut slot = record_of(g, index)
-        if compiler.atomic_load(addr record.val.ended, compiler.acquire) <> 0
-        then
+        if atomic.load(addr record.val.ended) <> 0 then
             finish(g, index)
             return
         end if
@@ -239,12 +239,6 @@ free_stack: (g: group) -> (index: usize) =
     finish(g, oldest)
     index = oldest
 end free_stack
-
---  Interim: the flag hosted/thread/lock keeps, that a thread has started,
---  which the heap's lock reads (D502).  The lock's `note_start` replaces
---  this when that module is in the library.
-note_start: () -> none =
-end note_start
 
 --- Start a task: wait until one of the group's stacks is free, joining a
 --- thread whose task has ended, or else the one that started first;
@@ -294,10 +288,10 @@ public admit: (state_type: type, inout g: group,
         start = start[0..<g.area]
     end unchecked
     record.val.work = any(copy)
-    record.val.ended = 0
+    atomic.store_relaxed(addr record.val.ended, u32(0))
     record.val.prepared = compiler.stack_prepare(stack, first_frame,
                                                  usize(record))
-    note_start()
+    lock.note_start()
     system.clear_errno(g.host)
     posix.start_thread(start, addr record.val.thread, begin_thread,
                        usize(record)) else (problem)
@@ -328,7 +322,7 @@ public join: (inout g: group) -> none ! failure.reason =
     kept: ptr mut ledger = ptr(g.front)
     if kept.val.failed then
         kept.val.failed = false
-        kept.val.claimed = 0
+        atomic.store_relaxed(addr kept.val.claimed, u32(0))
         fail kept.val.problem
     end if
 end join
