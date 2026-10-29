@@ -49,6 +49,7 @@ package Landin.Backend.ELF is
          & (if Kind = "text" then """ax"",@progbits"
             elsif Kind = "rodata" then """a"",@progbits"
             elsif Kind = "bss" then """aw"",@nobits"
+            elsif Kind = "tbss" then """awT"",@nobits"
             else """aw"",@progbits"));
 
    function Push_Item_Section

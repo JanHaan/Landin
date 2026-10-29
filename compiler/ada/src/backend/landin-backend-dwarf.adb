@@ -4,6 +4,7 @@ with Ada.Containers.Ordered_Maps;
 with Ada.Strings.Fixed;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
+with Landin.Targets.Capabilities;
 with Landin.Targets.Layouts;
 with Landin.Types;
 with Landin.Layouts;
@@ -228,6 +229,37 @@ package body Landin.Backend.Dwarf is
       --  The code each atom has in this program, which D423's enumerators
       --  give it.
       Codes : constant Atom_Codes := Ranked (Of_Unit);
+
+      --  A module datum's location expression: DW_OP_addr and its symbol,
+      --  or D496's instance of the selected thread, its offset in the
+      --  thread's block and DW_OP_form_tls_address.  Empty for a thread's
+      --  instance on arm64 ELF, whose assemblers spell no DTP-relative
+      --  word, where the datum then has no location, as GCC leaves it.
+      function Datum_Expression (Item : Item_Id) return String;
+      function Datum_Expression (Item : Item_Id) return String is
+         use type Landin.Targets.Capabilities.Backend_Kind;
+         Backend : constant Landin.Targets.Capabilities.Backend_Kind :=
+           Landin.Targets.Capabilities.Backend_For (Facts);
+      begin
+         if not Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item) then
+            return HT & ".byte 0x03" & LF & HT & ".quad " & Symbol (Item)
+              & LF;
+         elsif Backend = Landin.Targets.Capabilities.X86_64_ELF then
+            return HT & ".byte 0x0e" & LF & HT & ".long " & Symbol (Item)
+              & "@dtpoff, 0" & LF & HT & ".byte 0x9b" & LF;
+         elsif Backend = Landin.Targets.Capabilities.RV64_ELF then
+            return HT & ".byte 0x0e" & LF & HT & ".dtpreldword "
+              & Symbol (Item) & LF & HT & ".byte 0x9b" & LF;
+         elsif Backend = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+         then
+            --  The thread-local variable's descriptor, which LLDB hands
+            --  to the loader for the selected thread's instance.
+            return HT & ".byte 0x0e" & LF & HT & ".quad " & Symbol (Item)
+              & LF & HT & ".byte 0x9b" & LF;
+         else
+            return "";
+         end if;
+      end Datum_Expression;
 
       procedure Put (Text : String);
       procedure Put (Text : String) is
@@ -1072,8 +1104,7 @@ package body Landin.Backend.Dwarf is
                   case Alias.Place.Kind is
                      when Module_Datum =>
                         Expr := US.To_Unbounded_String
-                          (HT & ".byte 0x03" & LF & HT & ".quad "
-                           & Symbol (Alias.Place.Datum) & LF);
+                          (Datum_Expression (Alias.Place.Datum));
                         if Result_Of (Of_Unit, Alias.Place.Datum)
                           = Landin.Types.Fixed_Array
                         then
@@ -1500,12 +1531,22 @@ package body Landin.Backend.Dwarf is
          else
             return;
          end if;
-         U (14);
-         Str (Decl_Name (Declares (Of_Unit, Item)));
-         Ref (T (Typ));
-         Coordinates (Origin_Of (Of_Unit, Item));
-         U (9);
-         Put (HT & ".byte 0x03" & LF & HT & ".quad " & Symbol (Item));
+         declare
+            Expression : constant String := Datum_Expression (Item);
+         begin
+            if Expression = "" then
+               return;
+            end if;
+            U (14);
+            Str (Decl_Name (Declares (Of_Unit, Item)));
+            Ref (T (Typ));
+            Coordinates (Origin_Of (Of_Unit, Item));
+            --  DW_OP_addr and an address, or DW_OP_const8u, an offset and
+            --  DW_OP_form_tls_address.
+            U (if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
+               then 10 else 9);
+            US.Append (Result, Expression);
+         end;
       end Module_Datum;
 
       procedure Abbreviation

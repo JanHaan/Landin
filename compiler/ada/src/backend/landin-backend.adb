@@ -1696,4 +1696,43 @@ package body Landin.Backend is
       end case;
    end Report_Stack_Bytes;
 
+   function Has_Threads (Facts : Landin.Targets.Target_Facts) return Boolean
+   is
+      use type Landin.Targets.Capabilities.Hosted_System;
+   begin
+      return Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+        /= Landin.Targets.Capabilities.No_Hosted_System;
+   end Has_Threads;
+
+   function In_Thread_Storage
+     (Of_Unit : Landin.IR.Unit;
+      Facts   : Landin.Targets.Target_Facts;
+      Item    : Landin.IR.Item_Id) return Boolean
+   is
+      use type Landin.IR.Item_Kind;
+   begin
+      return Has_Threads (Facts)
+        and then Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+        and then Landin.IR.Is_Thread_Storage (Of_Unit, Item);
+   end In_Thread_Storage;
+
+   function Report_Claims_Latch
+     (Facts : Landin.Targets.Target_Facts) return Boolean is
+   begin
+      return Report_Stack_Bytes (Facts) > 0;
+   end Report_Claims_Latch;
+
+   function Runs_Before_Thread_Pointer
+     (Facts : Landin.Targets.Target_Facts; Symbol : String) return Boolean
+   is
+      use type Landin.Targets.Capabilities.Hosted_System;
+      Prefix : constant String := "_landin_start";
+   begin
+      return Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+          = Landin.Targets.Capabilities.Linux
+        and then Symbol'Length >= Prefix'Length
+        and then Symbol (Symbol'First .. Symbol'First + Prefix'Length - 1)
+          = Prefix;
+   end Runs_Before_Thread_Pointer;
+
 end Landin.Backend;

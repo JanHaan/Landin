@@ -1168,6 +1168,13 @@ package body Landin.IR.Dump is
                  & " values "
                  & Trimmed (Natural'Image (Value_Count (Of_Unit, Id))));
 
+            --  D496: one instance in every thread.
+            if Kind_Of (Of_Unit, Id) = Datum
+              and then Is_Thread_Storage (Of_Unit, Id)
+            then
+               Put ("  thread storage");
+            end if;
+
             if Has_Bool_Image (Of_Unit, Id) then
                Put
                  ("  bool image "

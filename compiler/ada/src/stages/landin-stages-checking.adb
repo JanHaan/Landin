@@ -34259,6 +34259,13 @@ package body Landin.Stages.Checking is
          --  D66 checks each scalar field inside a contextual module struct
          --  literal at the literal boundary.  Do not send its labelled run
          --  through the generic subtree refusal a second time.
+         --  D496: thread storage cannot be given a value, so a type with
+         --  no zero image is refused for what the declaration asked.
+         Thread_Storage : constant Boolean :=
+           Syn.Attributes (Of_Tree, Node).Thread;
+         Thread_Note : constant String :=
+           "D496: each thread's instance begins zeroed and takes no value,"
+           & " so its type needs a zero image";
          Module_Struct_Literal : constant Boolean :=
            Value /= Syn.No_Node
            and then Is_Struct_Construction (Of_Tree, Value)
@@ -34378,10 +34385,16 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "a module reference binding needs an explicit"
-                          & " initial value",
-               Note    => "[0540]: pointers and slices have no all-zero"
-                          & " value; an empty slice has a non-null base",
+               Message =>
+                 (if Thread_Storage
+                  then "thread storage cannot hold a pointer or a slice"
+                  else "a module reference binding needs an explicit"
+                       & " initial value"),
+               Note    =>
+                 (if Thread_Storage then Thread_Note & "; [0540]: pointers"
+                    & " and slices have none"
+                  else "[0540]: pointers and slices have no all-zero"
+                       & " value; an empty slice has a non-null base"),
                Related => Syn.Origin
                  (Of_Tree, (if Written = Syn.No_Node then Node else Written)),
                Because => "this reference binding",
@@ -34401,10 +34414,16 @@ package body Landin.Stages.Checking is
               (Item => Bad.Erased_Contract,
                Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, Node),
-               Message => "a module `any` binding has no implicit null"
-                          & " pair",
-               Note => "D145/D147: runtime construction supplies a non-null"
-                       & " data pointer and compatible table",
+               Message =>
+                 (if Thread_Storage
+                  then "thread storage cannot hold an `any` value"
+                  else "a module `any` binding has no implicit null"
+                       & " pair"),
+               Note =>
+                 (if Thread_Storage then Thread_Note & "; D145/D147: an"
+                    & " `any` value has none"
+                  else "D145/D147: runtime construction supplies a non-null"
+                       & " data pointer and compatible table"),
                Related => Syn.Origin
                  (Of_Tree, (if Written = Syn.No_Node then Node else Written)),
                Because => "this erased binding",
@@ -34428,9 +34447,15 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "a module atom binding needs an atom initializer",
-               Note    => "[0630]: every atom value is a declared identity;"
-                          & " there is no implicit zero atom",
+               Message =>
+                 (if Thread_Storage
+                  then "thread storage cannot hold an atom"
+                  else "a module atom binding needs an atom initializer"),
+               Note    =>
+                 (if Thread_Storage then Thread_Note & "; [0630]: there is"
+                    & " no zero atom"
+                  else "[0630]: every atom value is a declared identity;"
+                       & " there is no implicit zero atom"),
                Related => Syn.Origin
                  (Of_Tree,
                   (if Written = Syn.No_Node then Node else Written)),
@@ -34458,11 +34483,17 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "this module array needs an explicit initial"
-                          & " value",
-               Note    => "[0540]: its complete element type has no"
-                          & " zero image; fill it from one valid element"
-                          & " with `[n of value]`",
+               Message =>
+                 (if Thread_Storage
+                  then "this thread storage's element type has no zero"
+                       & " image"
+                  else "this module array needs an explicit initial"
+                       & " value"),
+               Note    =>
+                 (if Thread_Storage then Thread_Note
+                  else "[0540]: its complete element type has no"
+                       & " zero image; fill it from one valid element"
+                       & " with `[n of value]`"),
                Related => Syn.Origin (Of_Tree, Written),
                Because => "the array type written here",
                Into    => Found);
@@ -34489,10 +34520,17 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "this module value needs an explicit initial"
-                          & " value",
-               Note    => "[0540]/[0630]/D213: zeroed is available only when"
-                          & " the complete type permits a zero image",
+               Message =>
+                 (if Thread_Storage
+                  then "this thread storage's type has no zero image"
+                  else "this module value needs an explicit initial"
+                       & " value"),
+               Note    =>
+                 (if Thread_Storage then Thread_Note
+                    & "; [0540]/[0630]/D213: the complete type must permit"
+                    & " one"
+                  else "[0540]/[0630]/D213: zeroed is available only when"
+                       & " the complete type permits a zero image"),
                Related => Syn.Origin (Of_Tree, Written),
                Because => "the type written here",
                Into    => Found);
@@ -39847,6 +39885,37 @@ package body Landin.Stages.Checking is
            (Text'Length > Prefix'Length and then Text
               (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
       begin
+         --  D496: `link(thread)` gives a module `mut` binding one zeroed
+         --  instance in every thread, so it takes no initializer, and no
+         --  link name or section, which would name or place one instance
+         --  for all of them.  Its zero image is L0328's, as any module
+         --  binding with no value is.
+         if Attr.Thread
+           and then (Routine
+             or else not Syn.Is_Mutable (Of_Tree, Node)
+             or else Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+             or else Syn.Link_Symbol_Span (Of_Tree, Node)
+               /= Landin.Source.Empty_Span
+             or else Attr.Section /= Landin.Source.Empty_Span)
+         then
+            Bad.Report
+              (Item => Bad.Linkage_Contract, Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message =>
+                 (if Routine
+                  then "`link(thread)` places module storage, not a routine"
+                  elsif not Syn.Is_Mutable (Of_Tree, Node)
+                  then "thread storage is a `mut` binding"
+                  elsif Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+                  then "thread storage takes no initial value"
+                  else "thread storage takes no link symbol or section"),
+               Note => "D496: `link(thread) mut cell: T` gives every thread"
+                 & " its own instance, zeroed when the thread begins, so it"
+                 & " is a module `mut` binding with no value, link symbol"
+                 & " or section",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "the declaration it places", Into => Found);
+         end if;
          if not Attr.Present then
             return;
          end if;

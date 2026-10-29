@@ -774,8 +774,17 @@ package body Landin.Backend.X86_64 is
       Limit_Margin : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Stack_Limit_Margin (Facts);
       Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
+      --  D497: the cell is the running thread's, a word of ELF thread
+      --  storage the image reaches from %fs in the local-exec model; a
+      --  target with no threads keeps the one cell in module storage.
+      Limit_Cell : constant String :=
+        (if Landin.Backend.Has_Threads (Facts)
+         then "%fs:" & Stack_Limit & "@tpoff"
+         else Stack_Limit & "(%rip)");
       --  D491's stack for the default report's C call, and its bytes.
       Report_Stack : constant String := Local_Prefix & "landin_report_stack";
+      --  D498's latch, which the report claims before it moves there.
+      Report_Latch : constant String := Local_Prefix & "landin_report_latch";
       Report_Stack_Bytes : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Report_Stack_Bytes (Facts);
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
@@ -1505,6 +1514,11 @@ package body Landin.Backend.X86_64 is
       procedure Emit_Routine
         (Item : Landin.IR.Item_Id;
          Allocation_Plan : Allocation.Plan; Layout : Frame) is
+         --  D471's checks, unless the routine runs before its thread has
+         --  a thread pointer (D504).
+         Checks : constant Boolean := Prepares
+           and then not Landin.Backend.Runs_Before_Thread_Pointer
+             (Facts, Symbol (Item));
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
@@ -2050,8 +2064,18 @@ package body Landin.Backend.X86_64 is
          begin
             case Place.Kind is
                when Landin.IR.Module_Datum =>
-                  Emit
-                    ("leaq " & Symbol (Place.Datum) & "(%rip), " & Register);
+                  --  D496: a thread's instance is at its offset from the
+                  --  thread pointer, whose own address is the word there.
+                  if Landin.Backend.In_Thread_Storage
+                    (Of_Unit, Facts, Place.Datum)
+                  then
+                     Emit ("movq %fs:0, " & Register);
+                     Emit ("leaq " & Symbol (Place.Datum) & "@tpoff("
+                           & Register & "), " & Register);
+                  else
+                     Emit ("leaq " & Symbol (Place.Datum) & "(%rip), "
+                           & Register);
+                  end if;
                   if Field > 0 then
                      declare
                         At_Offset : constant Landin.Targets.Byte_Count :=
@@ -2753,12 +2777,12 @@ package body Landin.Backend.X86_64 is
          procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
          begin
             if Bytes = 0 then
-               Emit ("cmpq " & Stack_Limit & "(%rip), %rsp");
+               Emit ("cmpq " & Limit_Cell & ", %rsp");
             else
                Emit ("leaq -" & Trimmed
                      (Landin.Targets.Byte_Count'Image (Bytes))
                      & "(%rsp), %r11");
-               Emit ("cmpq " & Stack_Limit & "(%rip), %r11");
+               Emit ("cmpq " & Limit_Cell & ", %r11");
             end if;
             Emit ("jb " & Limit_Trap);
             Limit_Trapped := True;
@@ -2788,7 +2812,7 @@ package body Landin.Backend.X86_64 is
                  Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
                --  D471: an area larger than the margin allows unchecked
                --  is checked before it is reserved, as a frame is.
-               if Prepares and then Bytes > Unchecked_Bytes then
+               if Checks and then Bytes > Unchecked_Bytes then
                   Check_Limit (Bytes);
                end if;
             end if;
@@ -5405,9 +5429,20 @@ package body Landin.Backend.X86_64 is
                      Kind : constant Landin.Types.Scalar_Name :=
                        Landin.IR.Result_Of (Of_Unit, Datum);
                      Held : constant Held_Size := Size_Of (Kind, Facts);
+                     --  D496: a thread's instance is reached from the
+                     --  thread pointer, which %rcx holds: no value lives
+                     --  there, and Carry reads an operand that begins
+                     --  with `%` as a register, so `%fs:` cannot be one.
+                     Thread : constant Boolean :=
+                       Landin.Backend.In_Thread_Storage
+                         (Of_Unit, Facts, Datum);
                      Place : constant String :=
-                       Symbol (Datum) & "(%rip)";
+                       (if Thread then Symbol (Datum) & "@tpoff(%rcx)"
+                        else Symbol (Datum) & "(%rip)");
                   begin
+                     if Thread then
+                        Emit ("movq %fs:0, %rcx");
+                     end if;
                      if Op = Landin.IR.Load_Datum then
                         Carry (Held, Place, Value_Operand (Value));
                      else
@@ -5842,7 +5877,15 @@ package body Landin.Backend.X86_64 is
                          or else Has_Wide_Field (Datum))
                        and then At_Offset > 0
                      then
-                        Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");
+                        if Landin.Backend.In_Thread_Storage
+                          (Of_Unit, Facts, Datum)
+                        then
+                           Emit ("movq %fs:0, %rcx");
+                           Emit ("leaq " & Symbol (Datum)
+                                 & "@tpoff(%rcx), %rcx");
+                        else
+                           Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");
+                        end if;
                         Add_Storage_Offset (At_Offset, "%rcx");
 
                         if Op = Landin.IR.Load_Field then
@@ -5853,15 +5896,22 @@ package body Landin.Backend.X86_64 is
                         end if;
                      else
                         declare
+                           Thread : constant Boolean :=
+                             Landin.Backend.In_Thread_Storage
+                               (Of_Unit, Facts, Datum);
                            Place : constant String :=
                              Symbol (Datum)
+                             & (if Thread then "@tpoff" else "")
                              & (if At_Offset = 0 then ""
                                 else "+"
                                      & Trimmed
                                          (Landin.Targets.Byte_Count'Image
                                             (At_Offset)))
-                             & "(%rip)";
+                             & (if Thread then "(%rcx)" else "(%rip)");
                         begin
+                           if Thread then
+                              Emit ("movq %fs:0, %rcx");
+                           end if;
                            if Op = Landin.IR.Load_Field then
                               Carry (Held, Place, Value_Operand (Value));
                            else
@@ -7118,10 +7168,10 @@ package body Landin.Backend.X86_64 is
          --  not checked: it stores zero in the cell, so that it and what
          --  it calls run on what a failed check left, without a check
          --  that would enter it again.
-         if Prepares then
+         if Checks then
             if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
             then
-               Emit ("movq $0, " & Stack_Limit & "(%rip)");
+               Emit ("movq $0, " & Limit_Cell);
             elsif not Landin.Backend.Call_Free (Of_Unit, Item)
               or else Extent (Layout) > Unchecked_Bytes
             then
@@ -9077,13 +9127,13 @@ package body Landin.Backend.X86_64 is
                         & Trimmed (Natural'Image (8 + 8 * Index)));
                end if;
             end loop;
-            Emit ("pushq " & Stack_Limit & "(%rip)");
+            Emit ("pushq " & Limit_Cell);
             if Debug /= null then
                Emit (".cfi_def_cfa_offset 64");
             end if;
             Emit ("movq %rsp, (%rdi)");
             Emit ("movq %rsi, %rsp");
-            Emit ("popq " & Stack_Limit & "(%rip)");
+            Emit ("popq " & Limit_Cell);
             if Debug /= null then
                Emit (".cfi_def_cfa_offset 56");
             end if;
@@ -9298,9 +9348,18 @@ package body Landin.Backend.X86_64 is
                end loop;
                for Item of Landin.Backend.Smallest_First (Items, Extents)
                loop
-                  Begin_Item_Section
-                    (".bss.landin_datum_", """aw"",@nobits",
-                     Positive (Item));
+                  --  D496: a thread's instances are laid out by the system
+                  --  from the image's TLS segment, every one zeroed.
+                  if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
+                  then
+                     Begin_Item_Section
+                       (".tbss.landin_datum_", """awT"",@nobits",
+                        Positive (Item));
+                  else
+                     Begin_Item_Section
+                       (".bss.landin_datum_", """aw"",@nobits",
+                        Positive (Item));
+                  end if;
                   if Landin.IR.Result_Of (Of_Unit, Item)
                      = Landin.Types.Aggregate
                   then
@@ -9365,6 +9424,19 @@ package body Landin.Backend.X86_64 is
             --  failed; the frame pointer still names the frame record,
             --  so a debugger unwinds to the failed check.
             if Prepares and then Report_Stack_Bytes > 0 then
+               --  D498: one report stack serves every thread.  The first
+               --  report claims it; a later one writes nothing and waits
+               --  for the first to end the process.
+               if Landin.Backend.Report_Claims_Latch (Facts) then
+                  Emit ("movl $1, %eax");
+                  Emit ("xchgl %eax, " & Report_Latch & "(%rip)");
+                  Emit ("testl %eax, %eax");
+                  Emit ("jz " & Report_Latch & "_claimed");
+                  Put (Report_Latch & "_waiting:");
+                  Emit ("pause");
+                  Emit ("jmp " & Report_Latch & "_waiting");
+                  Put (Report_Latch & "_claimed:");
+               end if;
                Emit ("leaq " & Report_Stack & "+"
                      & Trimmed (Landin.Targets.Byte_Count'Image
                        (Report_Stack_Bytes)) & "(%rip), %rsp");
@@ -9399,6 +9471,14 @@ package body Landin.Backend.X86_64 is
             Emit (".zero " & Trimmed (Landin.Targets.Byte_Count'Image
               (Report_Stack_Bytes)));
             Emit (ELF.Pop_Section);
+            if Landin.Backend.Report_Claims_Latch (Facts) then
+               Emit (".pushsection .bss.landin_report_latch,""aw"","
+                     & "@nobits");
+               Emit (".balign 4");
+               Put (Report_Latch & ":");
+               Emit (".zero 4");
+               Emit (ELF.Pop_Section);
+            end if;
          end if;
       end if;
 
@@ -9410,7 +9490,11 @@ package body Landin.Backend.X86_64 is
       end if;
       Put (Character'Val (9) & ELF.No_Executable_Stack);
       if Stack_Used then
-         Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
+         if Landin.Backend.Has_Threads (Facts) then
+            Emit (".pushsection .tbss.landin_stack_limit,""awT"",@nobits");
+         else
+            Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
+         end if;
          Emit (".balign 8");
          Put (Stack_Limit & ":");
          Emit (".zero 8");

@@ -2205,6 +2205,188 @@ package body Landin.Backend.Arm64 is
       Report_Stack : constant String := Local_Prefix & "landin_report_stack";
       Report_Stack_Bytes : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Report_Stack_Bytes (Facts);
+      --  D498's latch, which the report claims before it moves there.
+      Report_Latch : constant String := Local_Prefix & "landin_report_latch";
+      --  D497: on Darwin the cell is the slot of a pthread key the
+      --  program makes before it runs Landin code, which this word holds
+      --  the byte offset of in the thread's slots, read from
+      --  `tpidrro_el0`; Thread_Start makes the key and checks the read.
+      Limit_Slot : constant String := Local_Prefix & "landin_limit_slot";
+      Limit_Key : constant String := Local_Prefix & "landin_limit_key";
+      Thread_Start : constant String :=
+        Landin.Targets.Capabilities.Link_Symbol
+          (Facts, Unused_Local_Prefix ("landin.") & "thread_start");
+
+      --  D497: the running thread's cell's address in Register, through
+      --  Scratch as well on Darwin.  On ELF it is a word of thread
+      --  storage at its local-exec offset from `tpidr_el0`; on Darwin a
+      --  key's slot, at the offset Limit_Slot holds from the slots'
+      --  base, which `tpidrro_el0` gives with its low three bits clear.
+      procedure Limit_Address (Register, Scratch : String);
+      procedure Limit_Address (Register, Scratch : String) is
+      begin
+         case Format is
+            when Landin.Targets.Capabilities.ELF =>
+               Emit ("mrs " & Register & ", tpidr_el0");
+               Emit ("add " & Register & ", " & Register
+                     & ", #:tprel_hi12:" & Stack_Limit & ", lsl #12");
+               Emit ("add " & Register & ", " & Register
+                     & ", #:tprel_lo12_nc:" & Stack_Limit);
+            when Landin.Targets.Capabilities.Mach_O =>
+               Emit ("mrs " & Register & ", tpidrro_el0");
+               Emit ("and " & Register & ", " & Register
+                     & ", #0xfffffffffffffff8");
+               Emit ("adrp " & Scratch & ", "
+                     & Platform.Page (Format, Limit_Slot, False));
+               Emit ("ldr " & Scratch & ", [" & Scratch & ", "
+                     & Platform.Page_Offset (Format, Limit_Slot, False)
+                     & "]");
+               Emit ("add " & Register & ", " & Register & ", " & Scratch);
+         end case;
+      end Limit_Address;
+
+      --  D496: the template a Mach-O thread-local variable's instances are
+      --  laid from, named after the variable as Apple's compilers name it.
+      function Template_Of (Name : String) return String
+        is (if Name'Length > 1 and then Name (Name'Last) = '"'
+            then Name (Name'First .. Name'Last - 1) & "$tlv$init"""
+            else Name & "$tlv$init");
+
+      --  D496: a datum's address in Register.  On ELF a thread's instance
+      --  is at its local-exec offset from `tpidr_el0`.  On Darwin the
+      --  loader's accessor gives it from the variable's descriptor in x0,
+      --  changing x16, x17 and x30 besides and keeping every other
+      --  register, so x0 is kept on the stack around it when it is not
+      --  the destination.
+      procedure Datum_Address (Register : String; Datum : Landin.IR.Item_Id);
+      procedure Datum_Address (Register : String; Datum : Landin.IR.Item_Id)
+      is
+         Name : constant String := Symbol (Datum);
+      begin
+         if not Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Datum) then
+            Address (Register, Name);
+            return;
+         end if;
+         case Format is
+            when Landin.Targets.Capabilities.ELF =>
+               Emit ("mrs " & Register & ", tpidr_el0");
+               Emit ("add " & Register & ", " & Register
+                     & ", #:tprel_hi12:" & Name & ", lsl #12");
+               Emit ("add " & Register & ", " & Register
+                     & ", #:tprel_lo12_nc:" & Name);
+            when Landin.Targets.Capabilities.Mach_O =>
+               if Register /= "x0" then
+                  Emit ("str x0, [sp, #-16]!");
+               end if;
+               Emit ("adrp x0, " & Name & "@TLVPPAGE");
+               Emit ("ldr x0, [x0, " & Name & "@TLVPPAGEOFF]");
+               Emit ("ldr x16, [x0]");
+               Emit ("blr x16");
+               if Register /= "x0" then
+                  Emit ("mov " & Register & ", x0");
+                  Emit ("ldr x0, [sp], #16");
+               end if;
+         end case;
+      end Datum_Address;
+
+      --  D497: Darwin's cell is a pthread key's slot.  Thread_Start runs
+      --  from the image's initializers, before `main` and so before any
+      --  Landin code: it makes the key, keeps its slot's offset, stores a
+      --  probe through `pthread_setspecific`, requires the inline read and
+      --  `pthread_getspecific` to agree on it, and leaves the slot zero, the
+      --  stack the program started on having no limit.  A key it cannot
+      --  make, or a read that disagrees, ends the process with status 127
+      --  and one line on standard error, as an unmet CPU level does.  A
+      --  thread the program starts begins with its slot zero.
+      procedure Emit_Thread_Start;
+      procedure Emit_Thread_Start is
+         Refused : constant String :=
+           Local_Prefix & "landin_thread_start_refused";
+         Line : constant String := Private_Prefix & "landin_thread_start_line";
+         Text : constant String := "landin: a pthread key's slot read"
+           & " through tpidrro_el0 disagrees with pthread_getspecific";
+         procedure Key (Register : String);
+         procedure Key (Register : String) is
+         begin
+            Emit ("adrp " & Register & ", "
+                  & Platform.Page (Format, Limit_Key, False));
+            Emit ("ldr " & Register & ", [" & Register & ", "
+                  & Platform.Page_Offset (Format, Limit_Key, False) & "]");
+         end Key;
+         function C (Name : String) return String
+           is (Landin.Targets.Capabilities.Link_Symbol (Facts, Name));
+      begin
+         Emit (".text");
+         Emit (".p2align 2");
+         Put (Thread_Start & ":");
+         if Debug /= null then
+            Emit (".cfi_startproc");
+         end if;
+         Emit ("stp x29, x30, [sp, #-16]!");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 16");
+            Emit (".cfi_offset w29, -16");
+            Emit (".cfi_offset w30, -8");
+         end if;
+         Emit ("mov x29, sp");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_register w29");
+         end if;
+         Emit ("sub sp, sp, #16");
+         Emit ("adrp x0, " & Platform.Page (Format, Limit_Key, False));
+         Emit ("add x0, x0, "
+               & Platform.Page_Offset (Format, Limit_Key, False));
+         Emit ("mov x1, #0");
+         Emit ("bl " & C ("pthread_key_create"));
+         Emit ("cbnz w0, " & Refused);
+         Key ("x9");
+         Emit ("lsl x10, x9, #3");
+         Emit ("adrp x11, " & Platform.Page (Format, Limit_Slot, False));
+         Emit ("str x10, [x11, "
+               & Platform.Page_Offset (Format, Limit_Slot, False) & "]");
+         Emit ("mov x0, x9");
+         Emit ("mov x1, x29");
+         Emit ("bl " & C ("pthread_setspecific"));
+         Emit ("cbnz w0, " & Refused);
+         Limit_Address ("x9", "x10");
+         Emit ("ldr x9, [x9]");
+         Emit ("str x9, [sp]");
+         Key ("x0");
+         Emit ("bl " & C ("pthread_getspecific"));
+         Emit ("ldr x9, [sp]");
+         Emit ("cmp x0, x9");
+         Emit ("b.ne " & Refused);
+         Emit ("cmp x0, x29");
+         Emit ("b.ne " & Refused);
+         Key ("x0");
+         Emit ("mov x1, #0");
+         Emit ("bl " & C ("pthread_setspecific"));
+         Emit ("cbnz w0, " & Refused);
+         Emit ("mov sp, x29");
+         Emit ("ldp x29, x30, [sp], #16");
+         Emit ("ret");
+         Put (Refused & ":");
+         Emit ("mov x0, #2");
+         Emit ("adrp x1, " & Platform.Page (Format, Line, False));
+         Emit ("add x1, x1, " & Platform.Page_Offset (Format, Line, False));
+         Emit ("mov x2, #" & Trimmed (Natural'Image (Text'Length + 1)));
+         Emit ("bl " & C ("write"));
+         Emit ("mov x0, #127");
+         Emit ("bl " & C ("_exit"));
+         Emit ("brk #1");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
+         Emit (".section __DATA,__mod_init_func,mod_init_funcs");
+         Emit (".p2align 3");
+         Emit (".quad " & Thread_Start);
+         Emit (".section __TEXT,__cstring,cstring_literals");
+         Put (Line & ":");
+         Emit (".asciz "
+               & Landin.Backend.Trap_Reports.Quoted (Text & ASCII.LF));
+         Emit (".zerofill __DATA,__bss," & Limit_Key & ",8,3");
+         Emit (".zerofill __DATA,__bss," & Limit_Slot & ",8,3");
+      end Emit_Thread_Start;
       Stack_Limit_Slot : constant := 144;
       Stack_Record_Slot : constant := 160;
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
@@ -2508,6 +2690,11 @@ package body Landin.Backend.Arm64 is
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+         --  D471's checks, unless the routine runs before its thread has
+         --  a thread pointer (D504).
+         Checks : constant Boolean := Prepares
+           and then not Landin.Backend.Runs_Before_Thread_Pointer
+             (Facts, Symbol (Item));
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Plan : constant Allocation_Plan :=
            Allocate (Of_Unit, Item, Facts, Options);
@@ -2574,6 +2761,10 @@ package body Landin.Backend.Arm64 is
 
          procedure Check_Limit (Bytes : Landin.Targets.Byte_Count) is
          begin
+            --  D497: the running thread's cell, loaded first so that
+            --  Darwin's slot offset can pass through x16.
+            Limit_Address ("x17", "x16");
+            Emit ("ldr x17, [x17]");
             if Bytes = 0 then
                Emit ("mov x16, sp");
             elsif Bytes < 4096 then
@@ -2583,9 +2774,6 @@ package body Landin.Backend.Arm64 is
                Immediate ("x16", Pattern (Bytes));
                Emit ("sub x16, sp, x16");
             end if;
-            Emit ("adrp x17, " & Platform.Page (Format, Stack_Limit, False));
-            Emit ("ldr x17, [x17, "
-                  & Platform.Page_Offset (Format, Stack_Limit, False) & "]");
             Emit ("cmp x16, x17");
             Emit ("b.lo " & Limit_Trap);
             Limit_Trapped := True;
@@ -3434,7 +3622,7 @@ package body Landin.Backend.Arm64 is
          begin
             case Place.Kind is
                when Landin.IR.Module_Datum =>
-                  Address (Register, Symbol (Place.Datum));
+                  Datum_Address (Register, Place.Datum);
                when Landin.IR.Frame_Slot =>
                   Frame_Address
                     (Slot_Offset (Layout, Place.Slot), Register);
@@ -3466,7 +3654,7 @@ package body Landin.Backend.Arm64 is
                   Frame_Memory (Store, Size, Register,
                                 Slot_Offset (Layout, Place.Slot) - Offset);
                when Landin.IR.Module_Datum =>
-                  Address ("x10", Symbol (Place.Datum));
+                  Datum_Address ("x10", Place.Datum);
                   Base_Memory (Store, Size, Register, "x10", Offset);
                when Landin.IR.Runtime_Address =>
                   if Plan.Slots (Positive (Place.Address)).Register
@@ -3757,7 +3945,7 @@ package body Landin.Backend.Arm64 is
                end if;
             end loop;
             Bytes := Stack_Align (Bytes, 16, 16#7fff_ffff#);
-            if Prepares and then Bytes > Unchecked_Bytes then
+            if Checks and then Bytes > Unchecked_Bytes then
                Check_Limit (Bytes);
             end if;
             Reserve (Bytes);
@@ -5127,8 +5315,8 @@ package body Landin.Backend.Arm64 is
                              Store_Source (Operand (2)), Base);
                   end;
                when Landin.IR.Load_Datum | Landin.IR.Store_Datum =>
-                  Address ("x10", Symbol
-                    (Landin.IR.Datum_Of (Of_Unit, Item, Value)));
+                  Datum_Address
+                    ("x10", Landin.IR.Datum_Of (Of_Unit, Item, Value));
                   if Op = Landin.IR.Load_Datum then
                      declare
                         Into : constant String := Load_Target (Value);
@@ -6144,7 +6332,7 @@ package body Landin.Backend.Arm64 is
                         C_Call (Value);
                         return;
                      end if;
-                     if Prepares and then Bytes > Unchecked_Bytes then
+                     if Checks and then Bytes > Unchecked_Bytes then
                         Check_Limit (Bytes);
                      end if;
                      Reserve (Bytes);
@@ -6370,10 +6558,10 @@ package body Landin.Backend.Arm64 is
          --  not checked: it stores zero in the cell, so that it and what
          --  it calls run on what a failed check left, without a check
          --  that would enter it again.
-         if Prepares then
+         if Checks then
             if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
             then
-               Address ("x16", Stack_Limit);
+               Limit_Address ("x16", "x17");
                Emit ("str xzr, [x16]");
             elsif not Landin.Backend.Call_Free (Of_Unit, Item)
               or else Extent (Layout) > Unchecked_Bytes
@@ -7742,14 +7930,35 @@ package body Landin.Backend.Arm64 is
          end if;
          case Format is
             when Landin.Targets.Capabilities.Mach_O =>
-               Emit (".zerofill __DATA,__bss," & Symbol (Item) & ","
-                 & Trimmed (Landin.Targets.Byte_Count'Image (Size)) & ","
-                 & Trimmed (Natural'Image (Power)));
+               if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
+               then
+                  --  D496: a thread-local variable.  Its symbol names the
+                  --  descriptor the loader's accessor reads, and the
+                  --  zeroed template each thread's instance is laid from
+                  --  is a symbol of its own.
+                  Emit (".tbss " & Template_Of (Symbol (Item)) & ","
+                    & Trimmed (Landin.Targets.Byte_Count'Image (Size)) & ","
+                    & Trimmed (Natural'Image (Power)));
+                  Emit (".pushsection __DATA,__thread_vars,"
+                    & "thread_local_variables");
+                  Emit (".p2align 3");
+                  Put (Symbol (Item) & ":");
+                  Emit (".quad __tlv_bootstrap");
+                  Emit (".quad 0");
+                  Emit (".quad " & Template_Of (Symbol (Item)));
+                  Emit (".popsection");
+               else
+                  Emit (".zerofill __DATA,__bss," & Symbol (Item) & ","
+                    & Trimmed (Landin.Targets.Byte_Count'Image (Size)) & ","
+                    & Trimmed (Natural'Image (Power)));
+               end if;
             when Landin.Targets.Capabilities.ELF =>
                --  The whole datum is its own `.bss` input section, pushed
-               --  and popped, so the section around it is unchanged.
+               --  and popped, so the section around it is unchanged; a
+               --  thread's instances' is `.tbss` (D496).
                Emit (ELF_Spelling.Push_Item_Section
-                 ("bss", "datum", Positive (Item)));
+                 ((if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
+                   then "tbss" else "bss"), "datum", Positive (Item)));
                Emit (".balign "
                  & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
                Emit (ELF_Spelling.Object_Type (Symbol (Item)));
@@ -8174,9 +8383,7 @@ package body Landin.Backend.Arm64 is
                   end loop;
                end if;
             end loop;
-            Emit ("adrp x12, " & Platform.Page (Format, Stack_Limit, False));
-            Emit ("add x12, x12, "
-                  & Platform.Page_Offset (Format, Stack_Limit, False));
+            Limit_Address ("x12", "x13");
             Emit ("ldr x11, [x12]");
             Emit ("str x11, [sp, #" & Image (Stack_Limit_Slot) & "]");
             Emit ("mov x11, sp");
@@ -8248,12 +8455,14 @@ package body Landin.Backend.Arm64 is
             end if;
             Platform_Directive (Platform.End_Function (Format, Stack_Start));
          end;
-         --  D471's cell, zero until a switch resumes a prepared stack.
+         --  D471's cell, zero until a switch resumes a prepared stack: on
+         --  ELF a word of each thread's storage (D497), and on Darwin the
+         --  slot of the key Thread_Start makes.
          case Format is
             when Landin.Targets.Capabilities.Mach_O =>
-               Emit (".zerofill __DATA,__bss," & Stack_Limit & ",8,3");
+               Emit_Thread_Start;
             when Landin.Targets.Capabilities.ELF =>
-               Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
+               Emit (".pushsection .tbss.landin_stack_limit,""awT"",@nobits");
                Emit (".balign 8");
                Put (Stack_Limit & ":");
                Emit (".zero 8");
@@ -8291,6 +8500,26 @@ package body Landin.Backend.Arm64 is
          --  the frame record stays where it was, and the frame address
          --  still names it, so a debugger unwinds to the failed check.
          if Prepares and then Report_Stack_Bytes > 0 then
+            --  D498: one report stack serves every thread.  The first
+            --  report claims it by exchanging one into its latch; a later
+            --  one writes nothing and waits for the first to end the
+            --  process.
+            if Landin.Backend.Report_Claims_Latch (Facts) then
+               Emit ("adrp x9, "
+                     & Platform.Page (Format, Report_Latch, False));
+               Emit ("add x9, x9, "
+                     & Platform.Page_Offset (Format, Report_Latch, False));
+               Emit ("mov w10, #1");
+               Put (Report_Latch & "_exchange:");
+               Emit ("ldaxr w11, [x9]");
+               Emit ("stlxr w12, w10, [x9]");
+               Emit ("cbnz w12, " & Report_Latch & "_exchange");
+               Emit ("cbz w11, " & Report_Latch & "_claimed");
+               Put (Report_Latch & "_waiting:");
+               Emit ("wfe");
+               Emit ("b " & Report_Latch & "_waiting");
+               Put (Report_Latch & "_claimed:");
+            end if;
             Emit ("adrp x9, " & Platform.Page (Format, Report_Stack, False));
             Emit ("add x9, x9, "
                   & Platform.Page_Offset (Format, Report_Stack, False));
@@ -8338,6 +8567,10 @@ package body Landin.Backend.Arm64 is
                   when Landin.Targets.Capabilities.Mach_O =>
                      Emit (".zerofill __DATA,__bss," & Report_Stack & ","
                            & Bytes & ",4");
+                     if Landin.Backend.Report_Claims_Latch (Facts) then
+                        Emit (".zerofill __DATA,__bss," & Report_Latch
+                              & ",4,2");
+                     end if;
                   when Landin.Targets.Capabilities.ELF =>
                      Emit (".pushsection .bss.landin_report_stack,"
                            & """aw"",@nobits");
@@ -8345,6 +8578,14 @@ package body Landin.Backend.Arm64 is
                      Put (Report_Stack & ":");
                      Emit (".zero " & Bytes);
                      Emit (".popsection");
+                     if Landin.Backend.Report_Claims_Latch (Facts) then
+                        Emit (".pushsection .bss.landin_report_latch,"
+                              & """aw"",@nobits");
+                        Emit (".balign 4");
+                        Put (Report_Latch & ":");
+                        Emit (".zero 4");
+                        Emit (".popsection");
+                     end if;
                end case;
             end;
          end if;

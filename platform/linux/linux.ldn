@@ -63,11 +63,34 @@ fixed if compiler.os == linux then
         --- The process entry: the kernel starts a static Linux executable
         --- here, with argc on top of the stack and no return address.  It
         --- clears the frame pointer so a debugger stops at this frame,
-        --- aligns the stack to sixteen bytes and calls
-        --- `_landin_start_main` with the initial stack's address.
+        --- aligns the stack to sixteen bytes, asks `_landin_start_thread`
+        --- for the first thread's storage, makes the thread pointer it
+        --- returns %fs's base with `arch_prctl(ARCH_SET_FS)` and calls `_landin_start_main` with the initial stack's
+        --- address.
         public extern(naked) _landin_start: () -> none =
-            assembler.block("xorl %ebp, %ebp\nmovq %rsp, %rdi\nandq $-16, %rsp\ncall _landin_start_main")
+            assembler.block("xorl %ebp, %ebp\nmovq %rsp, %rbx\nandq $-16, %rsp\nmovq %rbx, %rdi\ncall _landin_start_thread\nmovq %rax, %rsi\nmovl $4098, %edi\nmovl $158, %eax\nsyscall\nmovq %rbx, %rdi\ncall _landin_start_main")
         end _landin_start
+
+        --  Map `bytes` of zeroed memory for the first thread's storage
+        --  (D504): a private anonymous mapping, read and write.  It runs
+        --  before the thread pointer exists, so it makes the call itself
+        --  rather than through `system_call`, whose frame is checked.
+        _landin_start_map: (bytes: usize) -> (base: i64) =
+            base = assembler.block("syscall", inout n: i64 at rax = 9,
+                                   in p: i64 at rdi = 0,
+                                   in q: i64 at rsi = i64(bytes),
+                                   in r: i64 at rdx = 3,
+                                   in s: i64 at r10 = 34,
+                                   in t: i64 at r8 = -1,
+                                   in u: i64 at r9 = 0, out _ at rcx,
+                                   out _ at r11)
+        end _landin_start_map
+
+        --  D504: x86-64 is TLS variant II.  The thread pointer follows the
+        --  block, and the word it points to holds its own value, which a
+        --  thread's instance's address is formed from.
+        thread_pointer_after_block: bool = true
+        thread_control_bytes: usize = 16
     elsif compiler.arch == arm64 then
         --- Make the system call `number` with six arguments, unused ones
         --- zero, and return the kernel's result: a failure is minus its
@@ -98,11 +121,33 @@ fixed if compiler.os == linux then
         --- The process entry: the kernel starts a static Linux executable
         --- here, with argc at the sixteen-byte-aligned stack pointer and no
         --- return address.  It clears the frame and link registers so a
-        --- debugger stops at this frame and calls `_landin_start_main` with
-        --- the initial stack's address.
+        --- debugger stops at this frame, asks `_landin_start_thread` for the
+        --- first thread's storage, makes the thread pointer it returns
+        --- `tpidr_el0`, and calls `_landin_start_main`
+        --- with the initial stack's address.
         public extern(naked) _landin_start: () -> none =
-            assembler.block("mov x29, #0\nmov x30, #0\nmov x0, sp\nbl _landin_start_main")
+            assembler.block("mov x29, #0\nmov x30, #0\nmov x19, sp\nmov x0, sp\nbl _landin_start_thread\nmsr tpidr_el0, x0\nmov x0, x19\nbl _landin_start_main")
         end _landin_start
+
+        --  Map `bytes` of zeroed memory for the first thread's storage
+        --  (D504): a private anonymous mapping, read and write.  It runs
+        --  before the thread pointer exists, so it makes the call itself
+        --  rather than through `system_call`, whose frame is checked.
+        _landin_start_map: (bytes: usize) -> (base: i64) =
+            base = assembler.block("svc #0", in n: i64 at x8 = 222,
+                                   inout p: i64 at x0 = 0,
+                                   in q: i64 at x1 = i64(bytes),
+                                   in r: i64 at x2 = 3,
+                                   in s: i64 at x3 = 34,
+                                   in t: i64 at x4 = -1,
+                                   in u: i64 at x5 = 0)
+        end _landin_start_map
+
+        --  D504: arm64 is TLS variant I.  The thread pointer begins a
+        --  sixteen-byte control block, and the block follows it at that
+        --  size aligned up to the segment's alignment.
+        thread_pointer_after_block: bool = false
+        thread_control_bytes: usize = 16
     else
         --- Make the system call `number` with six arguments, unused ones
         --- zero, and return the kernel's result: a failure is minus its
@@ -133,11 +178,32 @@ fixed if compiler.os == linux then
         --- The process entry: the kernel starts a static Linux executable
         --- here, with argc on top of the stack and no return address.  It
         --- clears the frame pointer and return address so a debugger stops
-        --- at this frame, aligns the stack to sixteen bytes and calls
+        --- at this frame, aligns the stack to sixteen bytes, asks
+        --- `_landin_start_thread` for the first thread's storage, makes the
+        --- thread pointer it returns `tp`, and calls
         --- `_landin_start_main` with the initial stack's address.
         public extern(naked) _landin_start: () -> none =
-            assembler.block("li x8, 0\nli ra, 0\nmv a0, sp\nandi sp, sp, -16\ncall _landin_start_main")
+            assembler.block("li x8, 0\nli ra, 0\nmv s1, sp\nmv a0, sp\nandi sp, sp, -16\ncall _landin_start_thread\nmv tp, a0\nmv a0, s1\ncall _landin_start_main")
         end _landin_start
+
+        --  Map `bytes` of zeroed memory for the first thread's storage
+        --  (D504): a private anonymous mapping, read and write.  It runs
+        --  before the thread pointer exists, so it makes the call itself
+        --  rather than through `system_call`, whose frame is checked.
+        _landin_start_map: (bytes: usize) -> (base: i64) =
+            base = assembler.block("ecall", in n: i64 at x17 = 222,
+                                   inout p: i64 at x10 = 0,
+                                   in q: i64 at x11 = i64(bytes),
+                                   in r: i64 at x12 = 3,
+                                   in s: i64 at x13 = 34,
+                                   in t: i64 at x14 = -1,
+                                   in u: i64 at x15 = 0)
+        end _landin_start_map
+
+        --  D504: RV64 is TLS variant I with no control block of the
+        --  image's own: the thread pointer is the block's first byte.
+        thread_pointer_after_block: bool = false
+        thread_control_bytes: usize = 0
     end if
 
     --- The directory descriptor that makes an `*at` call's relative path
@@ -1680,6 +1746,165 @@ fixed if compiler.os == linux then
         exit_group(refused_status)
     end hold_level
 
+    --  D504: the executable's TLS segment, which `_landin_start_thread`
+    --  reads from its program headers before any thread has storage: where
+    --  its initialized image is and how many bytes of it there are; the
+    --  block a thread's instances fill, the segment's size rounded up to
+    --  its alignment; where in an allocation's aligned base the block and
+    --  the thread pointer go; the bytes from that base that a block and
+    --  its control words take; and the alignment of that base, the
+    --  segment's and at least sixteen.  All zero in a program
+    --  `_landin_start` did not start.
+    mut thread_image: usize
+    mut thread_image_bytes: usize
+    mut thread_memory_bytes: usize
+    mut thread_block_offset: usize
+    mut thread_pointer_offset: usize
+    mut thread_block_extent: usize
+    mut thread_alignment: usize
+    --  The first thread's block, which `_landin_start_main` lays.
+    mut thread_first_block: usize
+    --  The first thread's block when the executable has no TLS segment,
+    --  whose thread pointer still names control words: no mapping.
+    mut thread_spare: [48]u8
+
+    --  `value` rounded up to `alignment`, a power of two.
+    rounded: (value: usize, alignment: usize) -> (result: usize) =
+        result = (value + alignment - 1) & (0 -% alignment)
+    end rounded
+
+    --- The bytes a thread's storage takes in memory the caller supplies to
+    --- `thread_block_lay`: its block and control words and room to align
+    --- them, so any address will do.  Zero in a program `_landin_start` did
+    --- not start, whose C library makes every thread's storage.
+    public thread_block_bytes: () -> (bytes: usize) =
+        bytes = 0
+        return when thread_alignment == 0
+        bytes = thread_block_extent + thread_alignment - 1
+    end thread_block_bytes
+
+    --- The alignment `thread_block_lay` gives a thread's storage: the
+    --- executable's TLS segment's, and at least sixteen.
+    public thread_block_alignment: () -> (alignment: usize) =
+        alignment = thread_alignment
+    end thread_block_alignment
+
+    --  Lay a thread's storage at `base`, aligned to `thread_alignment`:
+    --  every byte of the block zeroed, the initialized image copied to its
+    --  start, and on x86-64 the thread pointer's word holding its own
+    --  address.  Gives the thread pointer.
+    lay_block: (base: usize) -> (pointer: usize) =
+        for at in usize(0)..<thread_block_extent do
+            byte: ptr mut u8 = ptr(base + at)
+            byte.val = 0
+        end for
+        for at in usize(0)..<thread_image_bytes do
+            into: ptr mut u8 = ptr(base + thread_block_offset + at)
+            source: ptr u8 = ptr(thread_image + at)
+            into.val = source.val
+        end for
+        pointer = base + thread_pointer_offset
+        if thread_pointer_after_block then
+            itself: ptr mut usize = ptr(pointer)
+            itself.val = pointer
+        end if
+    end lay_block
+
+    --- Lay a new thread's storage (D496, D497) in `block`, which holds at
+    --- least `thread_block_bytes()` bytes and lives as long as the thread:
+    --- each of its instances zeroed, its stack's limit among them, and the
+    --- image's initialized part copied in.  Gives the value the thread
+    --- starts with as its thread pointer, which `clone` takes with
+    --- `CLONE_SETTLS`: %fs's base on x86-64, `tpidr_el0` on arm64 and `tp`
+    --- on RV64.  For a program `_landin_start` started; under
+    --- `--link=libc` the C library makes every thread's storage.
+    public thread_block_lay: (block: []mut u8) -> (pointer: usize) =
+        start: usize = usize(addr block[0])
+        base: usize = rounded(start, thread_alignment)
+        _ = block[base - start + thread_block_extent - 1]
+        pointer = lay_block(base)
+    end thread_block_lay
+
+    --- What `_landin_start` runs before anything else (D504): it finds the
+    --- executable's TLS segment through the auxiliary vector's program
+    --- headers, keeps what a thread's storage needs, and maps and returns
+    --- the first thread's pointer; without a segment the block is a few
+    --- bytes of module storage and nothing is mapped.  It runs before the
+    --- thread pointer exists, so it is not checked against a stack's limit
+    --- and calls only `_landin_start_map`, which is not either: any other
+    --- callee's check would read the pointer.  `_landin_start_main` lays
+    --- the block once the pointer is the thread's.
+    public extern(c) _landin_start_thread: (stack: ptr usize)
+        -> (pointer: usize) =
+        pointer = 0
+        count: usize = stack.val
+        mut at: usize = usize(stack) + word + (count + 1) * word
+        loop do
+            entry: ptr usize = ptr(at)
+            at += word
+            break when entry.val == 0
+        end loop
+        mut headers: usize = 0
+        mut header_bytes: usize = 56
+        mut header_count: usize = 0
+        loop do
+            key: ptr usize = ptr(at)
+            datum: ptr usize = ptr(at + word)
+            break when key.val == 0
+            if key.val == 3 then headers = datum.val end if
+            if key.val == 4 then header_bytes = datum.val end if
+            if key.val == 5 then header_count = datum.val end if
+            at += 2 * word
+        end loop
+        mut bias: usize = 0
+        mut segment: usize = 0
+        for index in usize(0)..<header_count do
+            header: usize = headers + index * header_bytes
+            kind: ptr u32 = ptr(header)
+            if kind.val == 6 then
+                place: ptr usize = ptr(header + 16)
+                bias = headers -% place.val
+            end if
+            if kind.val == 7 then segment = header end if
+        end for
+        mut alignment: usize = 1
+        mut memory: usize = 0
+        if segment <> 0 then
+            place: ptr usize = ptr(segment + 16)
+            file: ptr usize = ptr(segment + 32)
+            size: ptr usize = ptr(segment + 40)
+            aligned: ptr usize = ptr(segment + 48)
+            if aligned.val > 1 then alignment = aligned.val end if
+            thread_image = place.val +% bias
+            thread_image_bytes = file.val
+            memory = size.val
+        end if
+        --  Rounded up as `rounded` does, which is a call.
+        thread_memory_bytes = (memory + alignment - 1) & (0 -% alignment)
+        thread_alignment = if alignment > 16 then alignment
+                           else usize(16) end if
+        if thread_pointer_after_block then
+            thread_block_offset = 0
+            thread_pointer_offset = thread_memory_bytes
+            thread_block_extent = thread_memory_bytes + thread_control_bytes
+        else
+            thread_block_offset =
+              (thread_control_bytes + alignment - 1) & (0 -% alignment)
+            thread_pointer_offset = 0
+            thread_block_extent = thread_block_offset + thread_memory_bytes
+        end if
+        mut first: usize = usize(addr thread_spare)
+        if segment <> 0 then
+            mapped: i64 = _landin_start_map(thread_block_extent
+                                            + thread_alignment - 1)
+            if mapped < 0 then compiler.unreachable() end if
+            first = usize(mapped)
+        end if
+        thread_first_block =
+          (first + thread_alignment - 1) & (0 -% thread_alignment)
+        pointer = thread_first_block + thread_pointer_offset
+    end _landin_start_thread
+
     --  C's view of the program's hosted entry: the process entry calls it
     --  as C's runtime would.
     extern(c) link(symbol: "main") program_main:
@@ -1693,7 +1918,8 @@ fixed if compiler.os == linux then
     --- runtime would, and ends the process with main's result.  A processor
     --- without a feature of the level ends the process with status 127 and
     --- one line on standard error before `main` runs.  No C library
-    --- initialisation runs and no thread-local storage exists.
+    --- initialisation runs.  The first thread's storage, which
+    --- `_landin_start_thread` mapped, is laid before anything else.
     public extern(c) _landin_start_main: (stack: ptr usize) -> none =
         count: usize = stack.val
         values: usize = usize(stack) + word
@@ -1706,6 +1932,9 @@ fixed if compiler.os == linux then
         end loop
         environment_root = environment_first
         auxiliary_root = at
+        --  D504: `_landin_start_thread` found the first thread's block
+        --  and `_landin_start` made it the thread's; lay it.
+        _ = lay_block(thread_first_block)
         check_level()
         arguments: ptr ptr u8 = ptr(values)
         variables: ptr ptr u8 = ptr(environment_first)
