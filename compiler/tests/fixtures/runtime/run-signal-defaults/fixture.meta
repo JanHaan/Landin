@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D479 a child the blocking provider starts has no signal blocked although its parent blocks SIGTERM, and SIGUSR1's default although its parent ignores it, once named to platform/posix's default_in_children, so a shell sending itself either is signalled; SIGUSR2, ignored and never named, stays ignored in the child, which exits; the parent keeps its mask; and default_in_children refuses 0, 65 and SIGKILL with einval
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1210, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

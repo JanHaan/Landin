@@ -1,5 +1,6 @@
 --  The hosted provider whose waiting operations block the thread (D476),
---  `host`: reading and writing, core/net's network in network.ldn,
+--  `host`: reading and writing, running programs, their pipes and their
+--  ends in programs.ldn (D479), core/net's network in network.ldn,
 --  core/time's monotonic clock and its sleep in time.ldn, and core/fibre's
 --  scheduler in fibre.ldn, running each task to its end.  It is built over
 --  a hosted/system handle and hands it every service that does not wait,
@@ -17,11 +18,12 @@ blocking_value: type = struct
 end blocking_value
 
 --- Hosted implementation of all four I/O capabilities and so of
---- `io.world`, of `net.network`, the monotonic `time.clock` and
---- `fibre.scheduler`, whose waits block the thread, and of every concept
---- `hosted/system` supplies, which it hands the system's handle it is
---- built over: `io.directories`, `io.environment`, `io.programs`,
---- `io.file_system`, `io.terminals`, `io.entropy` and `time.wall_clock`.
+--- `io.world`, of `io.programs`, `net.network`, the monotonic `time.clock`
+--- and `fibre.scheduler`, whose waits block the thread, and of every
+--- concept `hosted/system` supplies, which it hands the system's handle it
+--- is built over: `io.directories`, `io.environment`, `io.file_system`,
+--- `io.terminals`, `io.entropy` and `time.wall_clock`.  A child is started
+--- by that handle's `start`, which does not wait (D479).
 --- A handle: copies share the process's descriptors, arguments and
 --- environment, and the last-error and last-signal cells they were made
 --- with. Its files are the system's, as `hosted/system`'s `descriptor_of`

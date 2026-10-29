@@ -1,0 +1,126 @@
+--  D479: a child starts with no signal blocked and with the default
+--  disposition of every signal a provider took, whatever its parent's
+--  are.  The program blocks SIGTERM, as a provider that reads it through a
+--  signalfd does, and ignores SIGUSR1, as one that reads it through
+--  kqueue does, naming it to platform/posix's `default_in_children`; it
+--  ignores SIGUSR2 and names nothing.  A shell that sends itself SIGTERM,
+--  or SIGUSR1, is ended by it; one that sends itself SIGUSR2 keeps the
+--  ignore it was started with, as a background job keeps SIGINT's, and
+--  exits.  The parent keeps its own mask and dispositions throughout.
+--  The failure oracles: `default_in_children` refuses no signal, one past
+--  the system's last, and SIGKILL, with `einval`.
+import core/io
+import core/text
+import hosted/blocking
+import platform/libc
+import platform/linux
+import platform/posix
+
+--  Take the parent's signals as a provider would, and say whether the
+--  system did: SIGTERM blocked, SIGUSR1 and SIGUSR2 ignored.
+fixed if compiler.os == linux then
+    first_user: i32 = linux.sigusr1
+
+    taken: () -> (done: bool) =
+        blocking: u64 = linux.signal_bit(linux.sigterm)
+        mut ignoring: linux.signal_action = zeroed
+        ignoring.handler = linux.sig_ign
+        done = linux.rt_sigprocmask(linux.sig_block, addr blocking,
+                                    linux.no_mask) == 0
+               and linux.rt_sigaction(linux.sigusr1, addr ignoring,
+                                      linux.no_action) == 0
+               and linux.rt_sigaction(linux.sigusr2, addr ignoring,
+                                      linux.no_action) == 0
+    end taken
+
+    --  Whether SIGTERM is still blocked in the parent.
+    still_blocked: () -> (yes: bool) =
+        mut now: u64 = 0
+        yes = linux.rt_sigprocmask(linux.sig_block, linux.no_mask,
+                                   addr now) == 0
+              and (now & linux.signal_bit(linux.sigterm)) <> 0
+    end still_blocked
+else
+    first_user: i32 = libc.sigusr1
+
+    taken: () -> (done: bool) =
+        mut blocking: libc.signal_set = zeroed
+        blocking.bits[0] = u32(1) << u32(libc.sigterm - 1)
+        mut ignoring: libc.signal_action = zeroed
+        ignoring.handler = libc.sig_ign
+        done = libc.sigprocmask(libc.sig_block, addr blocking,
+                                libc.no_address) == 0
+               and libc.sigaction(libc.sigusr1, addr ignoring,
+                                  libc.no_address) == 0
+               and libc.sigaction(libc.sigusr2, addr ignoring,
+                                  libc.no_address) == 0
+    end taken
+
+    still_blocked: () -> (yes: bool) =
+        mut now: libc.signal_set = zeroed
+        yes = libc.sigprocmask(libc.sig_block, libc.no_address,
+                               addr now) == 0
+              and (now.bits[0] & (u32(1) << u32(libc.sigterm - 1))) <> 0
+    end still_blocked
+end if
+
+--  Run SCRIPT in /bin/sh, with every stream discarded, and report how it
+--  ended: the code it exited with, or -1 when it was signalled.
+ran: (host: blocking.host, script: []u8) -> (code: i32) ! ... =
+    arguments: [2]text.host_string = [text.host_over("-c"),
+                                      text.host_over(script)]
+    variables: [1]io.variable =
+        [(name: text.host_over("PATH"), value: text.host_over("/bin:/usr/bin"))]
+    child: io.child = try io.spawn(host, text.host_over("/bin/sh"),
+                                   arguments[0..<2], variables[0..<1],
+                                   io.discarding)
+    ended: io.ending = try io.wait(host, child)
+    code = match ended.how
+        io.exited(given): given
+        io.signalled: -1
+    end match
+end ran
+
+--  Whether `default_in_children` refuses SIGNAL with `einval`.
+refused: (signal: i32) -> (yes: bool) =
+    yes = false
+    posix.default_in_children(signal) else (problem)
+        yes = problem == posix.einval
+    end
+end refused
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    return when not taken()
+    code = 2
+    return when not refused(0) or not refused(65) or not refused(9)
+    posix.default_in_children(first_user) else (problem)
+        _ = problem
+        return
+    end
+    --  SIGTERM is blocked here and not in the child, which it ends.
+    code = 3
+    terminated: i32 = ran(host, "kill -TERM $$; exit 3") else (problem)
+        _ = problem
+        return
+    end
+    return when terminated <> -1 or blocking.last_signal(host) <> 15
+    --  SIGUSR1 is ignored here, and its default in the child ends it.
+    code = 4
+    defaulted: i32 = ran(host, "kill -USR1 $$; exit 4") else (problem)
+        _ = problem
+        return
+    end
+    return when defaulted <> -1 or blocking.last_signal(host) <> first_user
+    --  SIGUSR2, which nobody named, stays ignored in the child.
+    code = 5
+    ignored: i32 = ran(host, "kill -USR2 $$; exit 7") else (problem)
+        _ = problem
+        return
+    end
+    return when ignored <> 7 or blocking.last_signal(host) <> 0
+    code = 6
+    return when not still_blocked()
+    code = 42
+end main

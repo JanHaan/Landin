@@ -1,0 +1,152 @@
+--  The blocking provider's `io.programs` (D479): a child is started by the
+--  system handle this provider is built over, which does not wait, and
+--  its pipes, files of that handle, are read and written as this
+--  provider's `read` and `write` read and write any other, blocking the
+--  thread, as waiting for the child does, POSIX's `waitpid`.
+
+import core/io
+import core/text
+import hosted/system
+import platform/posix
+
+blocking_spawn: (self: host, path: text.host_string,
+                 arguments: []text.host_string, environment: []io.variable,
+                 streams: io.child_streams)
+                -> (started: io.child)
+                ! io.not_found | io.no_access | io.io_failed =
+    started = try system.start(self.services, path, arguments, environment,
+                               streams)
+end blocking_spawn
+
+--  Close one of a child's pipes, which is closed even when the system
+--  reports a failure.
+close_pipe: (self: host, opened: io.file) -> none ! io.io_failed =
+    posix.close(system.descriptor_of(opened)) else (problem)
+        record(self, problem)
+        fail io.io_failed
+    end
+end close_pipe
+
+--  Write all of BYTES to the child's input pipe, blocking the thread while
+--  the pipe is full, as any other write does.
+blocking_write_child: (self: host, inout started: io.child, bytes: []u8)
+                      -> none ! io.io_failed =
+    cleared(self)
+    fail io.io_failed when not started.input_open
+    try write_all(self, started.input, bytes)
+end blocking_write_child
+
+blocking_close_input: (self: host, inout started: io.child)
+                      -> none ! io.io_failed =
+    cleared(self)
+    fail io.io_failed when not started.input_open
+    started.input_open = false
+    try close_pipe(self, started.input)
+end blocking_close_input
+
+--  Whether the child's errors, and not its output, is what to read next:
+--  the output when it has anything, its end included, and the errors only
+--  when they alone do.  A wait a signal interrupted is made again.
+errors_first: (self: host, started: io.child) -> (yes: bool)
+              ! io.io_failed =
+    mut entries: [2]posix.poll_entry =
+        [posix.watch(system.descriptor_of(started.output), posix.poll_input),
+         posix.watch(system.descriptor_of(started.errors), posix.poll_input)]
+    loop do
+        _ = posix.poll(entries[0..<2], -1) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        break
+    end loop
+    yes = posix.happened(entries[0]) == posix.poll_no_events
+end errors_first
+
+blocking_read_child: (self: host, inout started: io.child, into: []mut u8)
+                     -> (taken: io.child_read) ! io.io_failed =
+    cleared(self)
+    taken = (count: 0, stream: io.child_output,
+             finished: not started.output_open and not started.errors_open)
+    return when lenof into == 0
+    loop do
+        if not started.output_open and not started.errors_open then
+            taken = (count: 0, stream: io.child_output, finished: true)
+            return
+        end if
+        mut from_errors: bool = not started.output_open
+        if started.output_open and started.errors_open then
+            from_errors = try errors_first(self, started)
+        end if
+        opened: io.file = if from_errors then started.errors
+                          else started.output end if
+        count: usize = try blocking_read(self, opened, into)
+        if count > 0 then
+            taken = (count: count,
+                     stream: if from_errors then io.child_errors
+                             else io.child_output end if,
+                     finished: false)
+            return
+        end if
+        --  That stream has ended, and its pipe is done with.
+        if from_errors then
+            started.errors_open = false
+        else
+            started.output_open = false
+        end if
+        try close_pipe(self, opened)
+    end loop
+end blocking_read_child
+
+--  Close every pipe the child still has, keeping the first failure.
+close_pipes: (self: host, started: io.child) -> (closed: bool) =
+    closed = true
+    if started.input_open then
+        close_pipe(self, started.input) else (problem)
+            _ = problem
+            closed = false
+        end
+    end if
+    if started.output_open then
+        close_pipe(self, started.output) else (problem)
+            _ = problem
+            closed = false
+        end
+    end if
+    if started.errors_open then
+        close_pipe(self, started.errors) else (problem)
+            _ = problem
+            closed = false
+        end
+    end if
+end close_pipes
+
+--  Wait for the child, again when a signal interrupts the wait.
+waited: (self: host, child: posix.process_id)
+        -> (status: posix.child_status) ! io.io_failed =
+    loop do
+        status = posix.wait(child) else (problem)
+            continue when problem == posix.eintr
+            record(self, problem)
+            fail io.io_failed
+        end
+        return
+    end loop
+end waited
+
+--  The pipes are closed before the wait, so a child still writing to one
+--  meets a closed pipe rather than waiting for a reader that never comes.
+blocking_wait: (self: host, sink started: io.child)
+               -> (ended: io.ending) ! io.io_failed =
+    cleared(self)
+    closed: bool = close_pipes(self, started)
+    status: posix.child_status =
+        try waited(self, system.process_of(started))
+    ended = system.ended(self.services, status)
+    fail io.io_failed when not closed
+end blocking_wait
+
+host is io.programs
+    (spawn: blocking_spawn, write_child: blocking_write_child,
+     close_input: blocking_close_input, read_child: blocking_read_child,
+     wait: blocking_wait)

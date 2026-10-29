@@ -2839,6 +2839,13 @@
       "profile_limit": "selected-image",
       "reason": "The process consumer's routines over core/io's scripted programs beside a memory world, with its report's buffered writer and format, a manual clock timing it and every failure oracle, need about 78 KiB of flash at size/auto, overflowing the 32 KiB profile by 46 KiB; most of it is the Cortex-M0 backend's frame homes and copies between them, as runtime/directory-memory's limit records. Each profile still attempts execution; runtime/run-memory-firmware starts a scripted program and reads the world's environment within the image and requires execution; this image limit is not runtime evidence."
     },
+    "runtime/run-signal-defaults": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware starts no program and has no signals."
+    },
     "runtime/run-signalled": {
       "codes": [
         "L0015"

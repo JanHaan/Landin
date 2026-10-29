@@ -32,6 +32,7 @@ extern int32_t l_no_signal(void);
 #if defined(__APPLE__) || defined(__FreeBSD__)
 extern int32_t l_no_sigpipe(void);
 extern int16_t l_setsigdef(void);
+extern int16_t l_setsigmask(void);
 #endif
 
 static const int64_t expected[] = {
@@ -63,7 +64,8 @@ int main(void)
         return 4;
 #endif
 #if defined(__APPLE__) || defined(__FreeBSD__)
-    if (l_no_sigpipe() != SO_NOSIGPIPE || l_setsigdef() != POSIX_SPAWN_SETSIGDEF)
+    if (l_no_sigpipe() != SO_NOSIGPIPE || l_setsigdef() != POSIX_SPAWN_SETSIGDEF
+        || l_setsigmask() != POSIX_SPAWN_SETSIGMASK)
         return 5;
 #endif
 

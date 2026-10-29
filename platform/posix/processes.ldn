@@ -279,6 +279,27 @@ public inherited_streams: standard_streams = (input: standard_input,
                                               output: standard_output,
                                               errors: standard_error)
 
+--  The signals besides SIGPIPE whose default disposition every child
+--  `spawn` starts is given, signal N at bit N - 1: those a provider took
+--  and named to `default_in_children`.
+mut child_defaults: u64 = 0
+
+--- Give `signal` its default disposition in every child `spawn` starts
+--- from now on, as SIGPIPE's always is.  A provider that takes a signal
+--- from its disposition to deliver it as an event, ignoring it while
+--- kqueue's signal filter counts it, names it here, so that no program it
+--- runs inherits the ignore, which an exec keeps.  A signal nobody named
+--- keeps in the child the disposition this process gives it, an ignore
+--- included, as a shell's background job and `nohup` rely on.  The name
+--- is kept for the rest of the process.  `einval` for a number that is no
+--- signal of the system's, one above 64 or Darwin's 31 among them, and for
+--- SIGKILL and SIGSTOP, whose disposition never changes.
+public default_in_children: (signal: i32) -> none ! errno =
+    fail einval when signal < 1 or signal > signal_limit or signal == 9
+      or signal == stop_signal
+    child_defaults = child_defaults | (u64(1) << u64(signal - 1))
+end default_in_children
+
 --- Start the program at `path` in a child process, POSIX's `posix_spawn`:
 --- the program is given `path` as its name, `argv[0]`, then `arguments`,
 --- and exactly the variables of `environment`, each as `NAME=value`, and
@@ -292,16 +313,20 @@ public inherited_streams: standard_streams = (input: standard_input,
 --- the system takes.  A child must be waited for, with `wait`, or it keeps
 --- its place in the system's table until this process ends.
 ---
---- The child starts with SIGPIPE's default disposition, whatever this
---- process's is: this process ignores it, which an exec would otherwise
---- pass on.
+--- The child starts with no signal blocked, whatever this thread's mask
+--- is, which an exec would otherwise pass on: a provider that blocks a
+--- signal to read it through a signalfd starts no child with it blocked.
+--- It starts with SIGPIPE's default disposition, whatever this process's
+--- is, since this process ignores it, and with the default of every signal
+--- `default_in_children` was given.
 ---
 --- On Linux it is a `clone` that copies this process, as `fork` does,
---- which in the child moves the streams into place, gives SIGPIPE its
---- default and executes the program, and reports a failure to the parent
---- through a pipe closed on exec; on Darwin and FreeBSD it is the C
---- library's `posix_spawn`, told to reset SIGPIPE with
---- `posix_spawnattr_setsigdefault`.  The
+--- which in the child moves the streams into place, gives those signals
+--- their default, empties its mask and executes the program, and reports
+--- a failure to the parent through a pipe closed on exec; on Darwin and
+--- FreeBSD it is the C library's `posix_spawn`, told to reset those
+--- signals with `posix_spawnattr_setsigdefault` and the mask with
+--- `posix_spawnattr_setsigmask`.  The
 --- block of strings and tables the child is given is mapped for the call
 --- and unmapped after it.
 public spawn:
@@ -442,6 +467,11 @@ end wait
 --  platform/libc on Darwin and FreeBSD, whose system interface it is.
 
 fixed if compiler.os == linux then
+    --  The highest signal `default_in_children` takes, and SIGSTOP, whose
+    --  disposition never changes: Linux numbers it 19.
+    signal_limit: i32 = 64
+    stop_signal: i32 = 19
+
     system_exit: (status: i32) -> noreturn =
         linux.exit_group(status)
     end system_exit
@@ -505,12 +535,29 @@ fixed if compiler.os == linux then
             --  closes any a C library or an inherited one left open, and a
             --  kernel older than 5.11 that refuses it leaves only those.
             _ = linux.close_range(3, 0 -% 1, linux.close_range_cloexec)
-            --  The parent ignores SIGPIPE, which an exec keeps; the child
-            --  starts with the default, as a program expects to.
+            --  The parent ignores SIGPIPE, which an exec keeps, and a
+            --  provider may ignore a signal it reads; the child starts
+            --  with their default, as a program expects to.
             mut restored: linux.signal_action = zeroed
             restored.handler = linux.sig_dfl
             result = linux.rt_sigaction(linux.sigpipe, addr restored,
                                         linux.no_action)
+            mut number: i32 = 1
+            while result >= 0 and number <= signal_limit do
+                if (child_defaults & (u64(1) << u64(number - 1))) <> 0 then
+                    result = linux.rt_sigaction(number, addr restored,
+                                                linux.no_action)
+                end if
+                number += 1
+            end while
+        end if
+        if result >= 0 then
+            --  The mask is the thread's and an exec keeps it: a signal the
+            --  parent blocks to read through a signalfd is not blocked in
+            --  the program.
+            unblocked: u64 = 0
+            result = linux.rt_sigprocmask(linux.sig_setmask, addr unblocked,
+                                          linux.no_mask)
         end if
         if result >= 0 then
             result = linux.execve(path, arguments, environment)
@@ -613,6 +660,16 @@ fixed if compiler.os == linux then
         word = status
     end system_wait
 elsif compiler.os == darwin or compiler.os == freebsd then
+    --  The highest signal `default_in_children` takes, Darwin's set
+    --  holding 31 and FreeBSD's more than the record's 64, and SIGSTOP,
+    --  whose disposition never changes: both number it 17.
+    fixed if compiler.os == darwin then
+        signal_limit: i32 = 31
+    else
+        signal_limit: i32 = 64
+    end if
+    stop_signal: i32 = 17
+
     system_exit: (status: i32) -> noreturn =
         libc._exit(status)
     end system_exit
@@ -682,10 +739,12 @@ elsif compiler.os == darwin or compiler.os == freebsd then
             error = 0
         end last_actions
 
-        --  Every descriptor the actions do not name is closed, and the
-        --  signals the attributes name start at their default.
+        --  Every descriptor the actions do not name is closed, the
+        --  signals the attributes name start at their default, and the
+        --  child's mask is the attributes'.
         spawn_flags: i16 = libc.posix_spawn_cloexec_default
                            | libc.posix_spawn_setsigdef
+                           | libc.posix_spawn_setsigmask
     else
         last_actions: (actions: ptr mut libc.spawn_object,
                        attributes: ptr mut libc.spawn_object)
@@ -694,18 +753,36 @@ elsif compiler.os == darwin or compiler.os == freebsd then
             error = libc.posix_spawn_file_actions_addclosefrom_np(actions, 3)
         end last_actions
 
-        --  The signals the attributes name start at their default.
+        --  The signals the attributes name start at their default, and
+        --  the child's mask is the attributes'.
         spawn_flags: i16 = libc.posix_spawn_setsigdef
+                           | libc.posix_spawn_setsigmask
     end if
 
-    --  The parent ignores SIGPIPE, which an exec keeps, so the child is
-    --  told to start with its default, as a program expects to: SIGPIPE,
-    --  13, is the set's bit 12 on both systems.
+    --  The parent ignores SIGPIPE, which an exec keeps, and a provider
+    --  may ignore a signal it reads, so the child is told to start with
+    --  their default, as a program expects to: signal N is bit N - 1 of
+    --  the set's words of 32, SIGPIPE, 13, bit 12 on both systems.  Its
+    --  mask, which an exec keeps too, starts empty.
     signal_defaults: (attributes: ptr mut libc.spawn_object)
                      -> (error: i32) =
         mut signals: libc.signal_set = zeroed
         signals.bits[0] = u32(1) << u32(libc.sigpipe - 1)
+        mut number: i32 = 1
+        while number <= signal_limit do
+            if (child_defaults & (u64(1) << u64(number - 1))) <> 0 then
+                index: usize = usize((number - 1) / 32)
+                signals.bits[index] = signals.bits[index]
+                                      | (u32(1) << u32((number - 1) % 32))
+            end if
+            number += 1
+        end while
         error = libc.posix_spawnattr_setsigdefault(attributes, addr signals)
+        if error == 0 then
+            unblocked: libc.signal_set = zeroed
+            error = libc.posix_spawnattr_setsigmask(attributes,
+                                                    addr unblocked)
+        end if
         if error == 0 then
             error = libc.posix_spawnattr_setflags(attributes, spawn_flags)
         end if
