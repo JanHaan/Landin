@@ -83,7 +83,7 @@ end complain
 --  Listen on the loopback address at PORT, saying so on failure.
 listening: (world: any io.world, network: any net.network, port: u16)
            -> (listener: io.file) ! failure.reason =
-    listener = network.listen(net.loopback(net.ipv4, port)) else (problem)
+    listener = net.listen(network, net.loopback(net.ipv4, port)) else (problem)
         complain(world, failure.words(problem))
         fail problem
     end

@@ -8,9 +8,11 @@
 > out with `...`, and its fibre interface is the sketch `core/fibre` was
 > written from, in spellings that have since changed. Its findings at the
 > end are the point. The server that actually runs is
-> [`examples/derived_server/`](examples/derived_server/), with its fixtures
-> `runtime/derived-server-two-process` and `runtime/derived-server-fake-turns`;
-> the firmware counterpart is not derived yet. To learn Landin, read [the
+> [`examples/derived_server/`](examples/derived_server/), over the provider
+> that blocks the thread and over the one that runs fibres alike, with its
+> fixtures `runtime/derived-server-two-process` and
+> `runtime/derived-server-fake-turns`; the firmware counterpart is not
+> derived yet. To learn Landin, read [the
 > tour](tour.md), whose [1675] teaches fibres.
 >
 > The sketch itself begins at its first module heading, `core/fibre`. The
@@ -25,9 +27,12 @@ as `examples/derived_server`, whose
 `compiler/tests/fixtures/runtime/derived-server-two-process/DERIVATION.md`
 maps `app/protocol`, `app/session`, `app/server` and `app` to their
 executable sources and says where the derivative's spellings differ from
-the sketch's (D489). It runs over `hosted/blocking` in a process of its own
-(D490); the event provider's half of that evidence, and D448's single-core
-answer, wait for the providers and the firmware counterpart.
+the sketch's (D489). It is the second Io's evidence: the same server, in
+a process of its own, runs over `hosted/blocking`, answering `a` first and
+ended by SIGTERM's default, and over `hosted/events`, answering `b` first
+and stopped cleanly by its signal waiter (D490); and over `core/io/fake`'s
+network on a round of turns in one process (D493). D448's single-core
+answer waits for the firmware counterpart.
 
 A server that answers two kinds of request, one line each:
 

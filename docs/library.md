@@ -743,7 +743,8 @@ process ends. Close a child's pipes only through `close_input` and
 
 `write_child`, `read_child` and `wait` wait, and `spawn` and
 `close_input` do not, so `programs` is supplied by a provider that waits,
-as reading and writing are: `hosted/blocking`'s, not `hosted/system`'s.
+as reading and writing are: `hosted/blocking`'s and `hosted/events`', not
+`hosted/system`'s.
 Its pipes are its own files, which its `reader` and `writer` also take, a
 line reader over a child's output among them. The memory world's are not.
 
@@ -954,8 +955,9 @@ one came and the number the system gave it:
   signal filter on Darwin and FreeBSD, and wakes the fibre that waits.
 - `signals` refines `fibre.turns`: only a provider whose fibres take
   turns supplies it, so a fibre waiting for a signal lets the others run.
-  Over the blocking host a program cannot ask for it, and a signal there
-  keeps the system's default disposition: SIGTERM ends the process.
+  `hosted/events` supplies it; over `hosted/blocking` a program cannot
+  ask for it, and a signal there keeps the system's default disposition:
+  SIGTERM ends the process.
 - Each arrival is read once, by one waiter. Two arrivals of one signal
   before it is read may be one event, as the systems keep them.
 - A fibre waiting for a signal is stopped as any waiting fibre is, by
@@ -1344,8 +1346,8 @@ Two concepts say what runs the tasks:
 
 | Concept | What it promises | Providers |
 |---|---|---|
-| `scheduler` | `start`, `finished` and `wait`; it may run each task to its end as it is admitted | `fibre.whole`, the blocking host, and every provider of `turns` |
-| `turns` | a `scheduler` with `yield`: a task that yields lets every other unfinished one run first | `stacks.round`, `events.host` |
+| `scheduler` | `start`, `finished` and `wait`; it may run each task to its end as it is admitted | `fibre.whole`, `blocking.host`, and every provider of `turns` |
+| `turns` | a `scheduler` with `yield`: a task that yields lets every other unfinished one run first | `stacks.round`, `events.host`, `fake.signals` |
 
 - A program written against `scheduler` must be right when every task
   runs to its end. One that needs turns asks `turns_over`, and is
@@ -1394,9 +1396,11 @@ The library's own providers of turns switch in fewer:
 | `fake.signals` | `next_signal` when nothing waits to be read, and its round's `yield` and `wait` |
 | `events.host` | `yield` and `wait`; `read`, `write` and `write_some` when the file is not ready; `read_child` and `write_child` when the pipe is not; the programs' `wait`, for the child's end; `sleep` until its deadline; `accept`, `connect`, `send`, `receive`, `send_to` and `receive_from` where the socket would wait; and `next_signal` when no arrival waits to be read. Its `start` prepares the fibre and returns, and `close`, `close_socket`, `shutdown`, `close_input` and `stop_watching` wake the fibres waiting on what they end without switching |
 
-`fake.clock`'s `sleep` advances the clock and returns, and switches
-nowhere; a test whose sleeps must take turns gives its fibres a clock
-that yields, as the example below does.
+A `fake.clock` made by `clock_over` advances the clock in its `sleep`
+and returns, and switches nowhere. One made `clock_beside` a network that
+takes turns switches in `sleep`, taking the network's turns until the
+clock reaches its deadline. A test with no fake network gives its fibres
+a clock that yields, as the example below does.
 
 [Executable example](../compiler/tests/fixtures/runtime/fibre-same-source-any-provider/main.ldn)
 
@@ -1616,8 +1620,10 @@ interleave.
 The hosted services that do not wait and are the same whoever waits,
 written once over `platform/posix`: the provider `host`, made by `new`,
 imported as `system` with no alias. It reads and writes no stream, so it
-is not a `world`; `hosted/blocking` is built over it and supplies what
-waits. A program that never reads, writes or sleeps may use it alone.
+is not a `world`. `hosted/blocking` and `hosted/events` are each built
+over it and supply what waits, the one by blocking the thread and the
+other by switching fibres. A program that never reads, writes or sleeps
+may use it alone.
 
 | Call | What it does |
 |---|---|
@@ -1722,7 +1728,8 @@ over it reads, writes and closes as its own. `hosted/blocking`'s
 first when both have something, and its `wait` closes the child's pipes
 before it waits, so a child still writing to one meets a closed pipe
 rather than a parent that never reads. An interrupted poll, read or wait
-is made again.
+is made again. `hosted/events` instead sets the parent's ends
+non-blocking and waits on them, and on the child's end, in its loop.
 
 ### The rest of the file system and terminals
 
@@ -1764,9 +1771,9 @@ nothing to write with.
 
 POSIX's facilities in Landin types, on Linux, Darwin and FreeBSD alike.
 
-The calls are POSIX's own, not policy. This module is what `hosted/system`
-and `hosted/blocking` are written over, and what a program uses when it needs a call the
-portable concepts do not make.
+The calls are POSIX's own, not policy. This module is what `hosted/system`,
+`hosted/blocking` and `hosted/events` are written over, and what a program
+uses when it needs a call the portable concepts do not make.
 
 It is written twice beneath its interface: over `platform/linux`'s system
 calls, and over `platform/libc`. A system that is not POSIX, as Windows
@@ -1927,7 +1934,7 @@ The sockets are POSIX's too.
 | `shutdown` | With a `shutdown_side`. |
 | `socket_name`, `peer_name` | The two ends' addresses. |
 | `set_reuse_address`, `set_no_delay`, `set_ipv6_only` | Options. |
-| `set_receive_timeout`, `set_send_timeout`, `receive_timeout` | Time limits. |
+| `set_receive_timeout`, `set_send_timeout`, `receive_timeout`, `send_timeout` | Time limits, set and read back. |
 | `pending_error` | Fails with the error pending on a socket. |
 
 The receive limit bounds an `accept` on every system, `eagain` when it

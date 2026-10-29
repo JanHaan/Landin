@@ -2,7 +2,7 @@
 --  each task to its end, on the caller's stack, before `start` returns,
 --  as `fibre.whole` does.  Its calls block the thread, so it has nothing
 --  to yield to and is no provider of `fibre.turns`; a program that needs
---  turns makes a round, or an Io that waits for events, instead.  It
+--  turns makes a round, or mints hosted/events, instead.  It
 --  imports core/fibre and not its switch, so every hosted target admits
 --  it whether or not its backend switches stacks.
 

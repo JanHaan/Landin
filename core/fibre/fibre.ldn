@@ -70,7 +70,7 @@ end yield
 
 --- A provider that has no second stack to give: it runs every task to its
 --- end, on the caller's stack, before `start` returns, and ignores the
---- stack it is given. The blocking host, `system.host`, is another; a
+--- stack it is given. The blocking host, `blocking.host`, is another; a
 --- device that wants no switching is a third. Make one `zeroed`.
 public whole: type = struct
     reserved: u32

@@ -24776,11 +24776,10 @@ closes the listener; the accept and every receive fail `io_failed`
 answered, only when the waiter stopped it. Such a provider is lent three
 ways, as `fibre.turns`, `signal.signals` and `fibre.scheduler`, since the
 three do not convert (D464). An `any C` is a provider of C and of the
-concepts C refines (D492), so the session hands its erased network to
-`io.lines_over`, `io.buffered_over` and `net`'s routines as the sketch
-did, with no adapter; the server calls erased entries, and
-`protocol.answer` takes its clock as `any time.clock`, which the firmware
-counterpart makes from its board. The protocol separates words by one
+concepts C refines (D492), so the erased network goes to `net`'s
+routines, `io.lines_over` and `io.buffered_over`, and the erased clock to
+`protocol.answer`, generic over its clock, as the sketch wrote them, with
+no adapter. The protocol separates words by one
 space, takes a tag of at least one byte and no space, and refuses a wait
 over a minute; every other line, one too long for the session's buffer
 among them, is answered `malformed`.
@@ -24790,11 +24789,8 @@ signals, which an `any` cannot answer and which D477 put at the mint site;
 one serving routine taking a waiter that may be absent, which an erased
 capability has no empty value for; closing only the listener, which leaves
 a session waiting on an idle connection and its group's `join` with it;
-the sketch's generic `answer`, which the session's erased clock could not
-reach before D492 and which still buys nothing over one erased parameter
-while every caller holds an erased clock; and
-failing a session on a line too long, which drops a connection for one
-line. All were declined.
+and failing a session on a line too long, which drops a connection for
+one line. All were declined.
 
 **Pinned by** `runtime/derived-server-two-process`, the server in a
 process of its own over the blocking provider, ended by SIGTERM's default

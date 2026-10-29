@@ -24,16 +24,14 @@ event provider's half of the two-process fixture shows on the hosts.
 | app/server | `examples/derived_server/app/server/server.ldn`: `serve_forever` accepts and admits each connection to a group of two over `any fibre.scheduler` whose stacks are its frame's, joined by `defer`; `serve` announces the address and serves with no signal waiter; `serve_until_terminated` watches SIGTERM, announces, and serves beside a fibre of a group over `any fibre.turns` that waits for the signal; `ask_both` is the prototype's client. |
 | app | `examples/derived_server/app/app.ldn` reads `--io=blocking` or `--io=events` and `--port=N` through a `hosted/system` handle and mints the providers in `over_blocking` and `over_events`, the only routines that know which one they got; `examples/derived_server/main.ldn` calls it. |
 
-The derivation departs from the sketch's spellings where the compiler
-refused them or the sketch left a choice open, and D489 records each:
+The derivation departs from the sketch where the compiler refused its
+spelling or the sketch left a choice open, and D489 records each. Where
+the sketch's spelling compiles it is kept: an `any C` is a provider of `C`
+(D492), so the erased network goes to `net.accept(network, ...)`,
+`io.lines_over(self.network, ...)` and `io.buffered_over`, and the erased
+clock to `protocol.answer`, generic over its clock, as the sketch wrote
+them.
 
-- An `any C` is no provider of `C` [1290], so the sketch's `net.accept(network, ...)`,
-  `io.lines_over(self.network, ...)` and `protocol.answer(self.clock, ...)`
-  do not compile. The server calls the erased entries, `network.accept(listener)`;
-  `session.stream` holds the erased network and is the reader and writer
-  `io.lines_over` and `io.buffered_over` are given; and `answer` takes its
-  clock as `any time.clock`, which the firmware counterpart will make from
-  its board.
 - The sketch's `main` held one `any fibre.scheduler`. A provider that
   delivers signals is erased three ways, as `fibre.turns` for the signal
   waiter's group, as `signal.signals` and as `fibre.scheduler` for the

@@ -64,19 +64,20 @@ public parse: (line: []u8) -> (asked: request from line) ! malformed =
 end parse
 
 --- Answer one request on `out`: wait as long as it asks on `clock`, then
---- write `<tag> done` and its line ending, and flush. The clock is erased,
---- as a session holds it, since an `any time.clock` is no provider of the
---- concept a generic parameter would ask for.
+--- write `<tag> done` and its line ending, and flush. Any clock will do: a
+--- session's erased one is a provider of `time.clock` (D492), and the
+--- firmware counterpart's board is another.
 ---
 --- The only place a request can give the core away is `time.sleep`, and
 --- only if the clock's provider is the one that runs fibres (D446). A
 --- clock that blocks the thread holds every other request behind this
 --- one, and the source does not say which it got.
-public answer: (clock: any time.clock, provider: type is io.writer,
+public answer: (clock_type: type is time.clock, clock: clock_type,
+                provider: type is io.writer,
                 inout out: io.buffered_writer(provider),
                 asked: request) -> none ! io.io_failed =
     if u64(asked.wait) > 0 then
-        clock.sleep(asked.wait)
+        time.sleep(clock, asked.wait)
     end if
     try io.put(out, asked.tag)
     try io.put(out, " done\n")

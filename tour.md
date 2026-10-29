@@ -4854,9 +4854,11 @@ reads, writes, network calls and sleeps block the thread until they are
 done; a caller-backed one needs only `core/io`. `hosted/blocking` is built
 over `hosted/system`, which keeps everything that does not wait: the
 arguments and environment, opening and closing files, directories,
-running programs, entropy and the wall clock. A program that never reads,
-writes or sleeps may use `system.new()` alone; it is not a world, since it
-cannot read or write.
+running programs, entropy and the wall clock. A program that serves
+several things at once imports `hosted/events` instead, whose waits let
+other fibres run ([1675]); it is built over `hosted/system` too. A program
+that never reads, writes or sleeps may use `system.new()` alone; it is not
+a world, since it cannot read or write.
 
 This is the essential flow of `examples/derived_hosted`, a complete log
 filter. Its `main` is one line, `code = app.entry()`, and the work starts
@@ -4939,7 +4941,8 @@ Both providers lend each argument and path as a `text.host_string`: the
 bytes the system gave, unconverted and uncopied, so an argument passed on
 as a path reaches the system unchanged, whether or not it is UTF-8.
 Neither provider's arguments include `argv[0]`. The library reference
-describes the system providers (`hosted/system` and `hosted/blocking`),
+describes the system providers (`hosted/system`, `hosted/blocking` and
+`hosted/events`),
 the memory provider and
 host strings (`core/io`, `core/text`); the exact provider contracts —
 errno capture, whole and partial writes, retries, `same_file` — are in
@@ -5083,6 +5086,20 @@ runs to its end as it is admitted. A program that needs turns says so:
 `fibre.turns_over` takes an `any fibre.turns`, and handing it the host or
 `whole` is refused where the group is made, not when a task waits for
 ever.
+
+On a hosted system the choice is made where the roots are minted
+([1660]), and the routines below never learn it:
+
+| provider | a call that waits | groups | signals |
+| --- | --- | --- | --- |
+| `hosted/blocking`, `blocking.new()` | blocks the thread | `scheduler`: each task to its end | none: SIGTERM ends the process |
+| `hosted/events`, `events.new(state, entries)` | lets the other fibres run while epoll or kqueue waits | `turns` | `core/io/signal`'s `signals` |
+
+`events.new` takes a space the caller declares and a round's table, one
+entry more than the fibres unfinished at once. A signal is an event a
+fibre waits for with `next_signal`, so only a provider of turns gives
+one: over the blocking host a fibre waiting for SIGTERM would hold the
+program before it served anything.
 
 Fibres are cooperative. A fibre gives the core away only inside a call to
 its provider, a `yield` or a call that waits, and nothing preempts it. The

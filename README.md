@@ -425,8 +425,10 @@ This is the maintained inventory of what the compiler does today:
   nanoseconds in a `u64` and no floating point; on Linux the clock is read
   through the vDSO the auxiliary vector names, falling back to the system
   call, and a manual clock and scripted entropy are their fakes. The
-  network is one more: blocking TCP and UDP over IPv4 and IPv6 that
-  listen, accept, connect, send and receive, with address values read
+  network is one more: TCP and UDP over IPv4 and IPv6 that listen,
+  accept, connect, send and receive, blocking the thread over
+  `hosted/blocking` and letting other fibres run over `hosted/events`,
+  with address values read
   from and written to their text, time limits whose passing is an atom,
   and a connection read and written as a file, a line reader and a
   buffered writer among them; a memory network of loopback addresses in
@@ -586,11 +588,13 @@ This is the maintained inventory of what the compiler does today:
   emulators, each against a generated oracle. The driver and its
   application run with compiler-owned startup within the recorded 32 KiB
   capacity and source-debugging limits. The server derived from prototype
-  5's hosted half runs on every hosted target over `hosted/blocking`, in a
-  process of its own that a client in another asks and SIGTERM ends, and
-  in one process over the fake network on a round of turns, where two
-  requests are in flight and SIGTERM stops it cleanly; the event-driven
-  provider's half and the firmware counterpart are not derived yet.
+  5's hosted half runs on every hosted target from one source over both
+  Ios, in a process of its own that a client in another asks: over
+  `hosted/blocking` it answers one request at a time and SIGTERM ends it,
+  and over `hosted/events` two requests are in flight and its signal
+  waiter stops it cleanly. It also runs in one process over the fake
+  network on a round of turns. The firmware counterpart is not derived
+  yet.
 - **Example programs.** Every program in [`examples.md`](examples.md) runs
   on every hosted target against its recorded output: everyday tools, the
   printing and failure lessons, the classic exercises from FizzBuzz to merge
