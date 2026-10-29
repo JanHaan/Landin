@@ -24126,3 +24126,69 @@ which gives one entry two meanings. Both were declined.
 
 **Pinned by** nothing that runs yet: the event Io's signal fixtures will pin
 it.
+
+### D480 — The event loop sleeps in its wait, and needs no descriptor to wake it
+
+**The tour said** nothing. D449 lets a fibre wait for a descriptor, a
+signal or a time, and the provider that runs fibres waits for all three in
+one call to the system's event mechanism. Linux offers a timerfd, a
+descriptor that becomes readable when a time passes, and an eventfd, one a
+program writes to wake a loop waiting elsewhere; kqueue offers a timer
+filter and, on each system under its own number, a user filter for waking.
+
+**Chosen:** the loop's sleep is the wait's own time limit: `epoll_pwait`'s
+milliseconds, a part of one counting as a whole one, and `kevent`'s
+`timespec`. A fibre's deadline is kept by the provider and checked against
+the monotonic clock when the wait returns, so a limit rounded up wakes the
+loop late by less than a millisecond and never early. Nothing outside the
+loop's own thread can make it ready while there is one thread and no
+handler runs Landin code (D449), so there is no waking descriptor.
+`platform/linux` therefore wraps `epoll_create1`, `epoll_ctl`,
+`epoll_pwait`, `signalfd4` and `rt_sigprocmask` and neither `eventfd2` nor
+the timerfd calls, and `platform/kqueue` names the timer filter, which a
+program may use, and not the user filter. Their numbers stay in
+`platform/linux/numbers` for a program that wants them.
+
+**The alternatives:** a timerfd or a timer event per sleeping fibre, which
+costs a descriptor or a change for each sleep where one limit serves them
+all; `epoll_pwait2`, whose nanosecond limit needs Linux 5.11 for a
+precision the provider's own clock check already gives; and an eventfd or
+a user event now, which only a second thread would write. All were
+declined; a thread that wakes the loop brings its descriptor with it.
+
+**Pinned by** `runtime/linux-epoll-signalfd`, which waits with no limit, a
+zero limit and a limit, and `runtime/kqueue-events`, which waits with a
+zero `timespec` and one of a second.
+
+### D481 — kqueue is a module named for the facility, declared on the two systems that have it
+
+**The tour said** nothing. D346 gives each system's C library a file of
+its own under `platform/libc`, and `platform/linux` declares Linux's calls
+and nothing on Darwin and FreeBSD, so that `platform/posix`, which has no
+conditional import, can import it on every system it serves. kqueue is
+Darwin's and FreeBSD's alike, reached through their C libraries, with a
+record and a timer's units that differ between them.
+
+**Chosen:** `platform/kqueue`, one file, `kqueue.ldn`, declaring `kqueue`,
+`kevent`, each system's `struct kevent` as `event_record`, the filters and
+flags the two share and each system's timer units under `compiler.os`,
+and nothing on Linux. Its scope is the hosted POSIX systems, Linux
+included, as `platform/linux`'s is, so a provider written once imports
+both and selects its own routines by `compiler.os`; firmware refuses it by
+name. It imports `platform/libc` for `timespec` and leaves the errno to
+`libc.errno_cell`. The calls a signal waiter needs beside it, `sigprocmask`,
+`kill` and `getpid`, are every system's C library's and are declared in
+`platform/libc`.
+
+**The alternatives:** declaring kqueue in `platform/libc`'s `darwin.ldn`
+and `freebsd.ldn`, which writes every name twice and hides the facility
+among the C library's; a `platform/bsd` named for a family Darwin only
+partly belongs to, which invites unrelated BSD calls; and a module whose
+scope is Darwin and FreeBSD alone, which a provider written once for every
+POSIX system could not import on Linux. All were declined.
+
+**Pinned by** `runtime/kqueue-events` on Darwin and FreeBSD,
+`abi/event-facts`, which holds each system's `struct kevent`, its numbers
+and `platform/linux`'s epoll and signalfd records to the system's headers,
+and the driver's namespace case, which refuses `platform/kqueue` on Cortex-M0 and
+synthetic-32.

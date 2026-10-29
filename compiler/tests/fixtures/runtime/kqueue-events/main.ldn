@@ -1,0 +1,130 @@
+import platform/kqueue
+import platform/libc
+
+--  platform/kqueue on Darwin and FreeBSD.  A queue watches a pipe's
+--  reading end, reports nothing while the pipe is empty, reports it
+--  readable with the bytes waiting and the word it was watched with once a
+--  byte is written, and reports its end once the writing end is closed.
+--  SIGUSR1, ignored, is sent to the process itself: the queue records it
+--  all the same.  `sigprocmask` blocks SIGUSR2 and puts the mask back.  The
+--  failure oracles: removing an event never added is reported as an event
+--  with `ev_error` and ENOENT, a change to a closed descriptor as one with
+--  EBADF, and a wait with nothing ready reports nothing.
+
+--  `struct kevent`: FreeBSD's carries four extension words.
+on_darwin: bool = compiler.os == darwin
+
+--  ENOENT and EBADF, the same on both systems.
+no_entry: i64 = 2
+bad_descriptor: i64 = 9
+
+--  The word the pipe is watched with, handed back by each report.
+pipe_word: usize = 0x0123456789abcdef
+
+public main: () -> (code: i32) =
+    code = 1
+    record_size: usize = if on_darwin then 32 else 64 end if
+    return when sizeof kqueue.event_record <> record_size
+
+    code = 2
+    queue: i32 = kqueue.kqueue()
+    return when queue < 0
+    return when libc.fcntl(queue, libc.f_setfd, libc.fd_cloexec) <> 0
+
+    code = 3
+    mut ends: [2]i32 = zeroed
+    return when libc.pipe(addr ends[0]) <> 0
+    mut watch_pipe: kqueue.event_record =
+        kqueue.change(usize(ends[0]), kqueue.evfilt_read, kqueue.ev_add, 0,
+                      0)
+    watch_pipe.user_data = pipe_word
+    mut reports: [4]kqueue.event_record = zeroed
+    no_wait: libc.timespec = (seconds: 0, nanoseconds: 0)
+    second: libc.timespec = (seconds: 1, nanoseconds: 0)
+    --  Added, and nothing written: nothing ready, without waiting.
+    return when kqueue.kevent(queue, addr watch_pipe, 1, addr reports[0], 4,
+                              addr no_wait) <> 0
+
+    --  A byte written: the reading end, its byte and its word.
+    code = 4
+    byte: [1]u8 = [33]
+    return when libc.write(ends[1], addr byte[0], 1) <> 1
+    return when kqueue.kevent(queue, kqueue.none_given, 0, addr reports[0],
+                              4, addr second) <> 1
+    first: kqueue.event_record = reports[0]
+    return when first.filter <> kqueue.evfilt_read
+      or first.identifier <> usize(ends[0]) or first.user_data <> pipe_word
+    return when first.data <> 1
+    mut taken: [1]u8 = zeroed
+    return when libc.read(ends[0], addr taken[0], 1) <> 1
+
+    --  The writing end closed: the reading end's end.
+    code = 5
+    return when libc.close(ends[1]) <> 0
+    return when kqueue.kevent(queue, kqueue.none_given, 0, addr reports[0],
+                              4, addr second) <> 1
+    ended: kqueue.event_record = reports[0]
+    return when (ended.flags & kqueue.ev_eof) == 0
+      or ended.identifier <> usize(ends[0])
+
+    --  Removing an event never added is an error event, ENOENT, and so is
+    --  any change to a descriptor once it is closed, EBADF.
+    code = 6
+    never: kqueue.event_record =
+        kqueue.change(usize(ends[0]), kqueue.evfilt_write, kqueue.ev_delete,
+                      0, 0)
+    return when kqueue.kevent(queue, addr never, 1, addr reports[0], 4,
+                              addr no_wait) <> 1
+    refused: kqueue.event_record = reports[0]
+    return when (refused.flags & kqueue.ev_error) == 0
+      or refused.data <> no_entry
+    return when libc.close(ends[0]) <> 0
+    removal: kqueue.event_record =
+        kqueue.change(usize(ends[0]), kqueue.evfilt_read, kqueue.ev_delete,
+                      0, 0)
+    return when kqueue.kevent(queue, addr removal, 1, addr reports[0], 4,
+                              addr no_wait) <> 1
+    closed: kqueue.event_record = reports[0]
+    return when (closed.flags & kqueue.ev_error) == 0
+      or closed.data <> bad_descriptor
+
+    --  SIGUSR1 ignored, sent, and recorded.
+    code = 7
+    mut ignoring: libc.signal_action = zeroed
+    ignoring.handler = libc.sig_ign
+    return when libc.sigaction(libc.sigusr1, addr ignoring,
+                               libc.no_address) <> 0
+    watch_signal: kqueue.event_record =
+        kqueue.change(usize(libc.sigusr1), kqueue.evfilt_signal,
+                      kqueue.ev_add, 0, 0)
+    return when kqueue.kevent(queue, addr watch_signal, 1, addr reports[0],
+                              4, addr no_wait) <> 0
+    return when libc.kill(libc.getpid(), libc.sigusr1) <> 0
+
+    code = 8
+    return when kqueue.kevent(queue, kqueue.none_given, 0, addr reports[0],
+                              4, addr second) <> 1
+    signalled: kqueue.event_record = reports[0]
+    return when signalled.filter <> kqueue.evfilt_signal
+      or signalled.identifier <> usize(libc.sigusr1) or signalled.data < 1
+    mut restored: libc.signal_action = zeroed
+    restored.handler = libc.sig_dfl
+    return when libc.sigaction(libc.sigusr1, addr restored,
+                               libc.no_address) <> 0
+
+    --  SIGUSR2 blocked, and not blocked before; then the mask as it was.
+    code = 9
+    mut blocking: libc.signal_set = zeroed
+    blocking.bits[0] = u32(1) << u32(libc.sigusr2 - 1)
+    mut before: libc.signal_set = zeroed
+    return when libc.sigprocmask(libc.sig_block, addr blocking,
+                                 addr before) <> 0
+    return when (before.bits[0] & blocking.bits[0]) <> 0
+    mut during: libc.signal_set = zeroed
+    return when libc.sigprocmask(libc.sig_setmask, addr before,
+                                 addr during) <> 0
+    return when (during.bits[0] & blocking.bits[0]) == 0
+
+    return when libc.close(queue) <> 0
+    code = 42
+end main

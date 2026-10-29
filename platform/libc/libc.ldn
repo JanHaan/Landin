@@ -217,9 +217,16 @@ public f_setfd: i32 = 2
 --- program.  The same on every hosted system.
 public fd_cloexec: i32 = 1
 
+--- `fcntl` command: read a descriptor's open-file flags, `o_nonblock`
+--- among them, `F_GETFL`.  The same on every hosted system.
+public f_getfl: i32 = 3
+--- `fcntl` command: set a descriptor's open-file flags, `F_SETFL`.  The
+--- same on every hosted system.
+public f_setfl: i32 = 4
+
 --- `fcntl(descriptor, command, ...)`, declared variadic as C declares it:
---- for `f_setfd` and `f_dupfd_cloexec` the one variadic argument is an
---- `i32`.  Its result, or -1 with the reason in errno.
+--- for `f_setfd`, `f_setfl` and `f_dupfd_cloexec` the one variadic
+--- argument is an `i32`.  Its result, or -1 with the reason in errno.
 public extern(c) fcntl: (descriptor: i32, command: i32, ...)
                         -> (result: i32)
 
@@ -379,6 +386,35 @@ public extern(c) getpeername: (descriptor: i32, address: ptr mut u8,
 --- errno.
 public extern(c) sigaction: (signal: i32, action: action_given,
                              previous: action_kept) -> (status: i32)
+
+--- Signal: the terminal hung up, or a daemon is asked to reload, SIGHUP.
+--- The same on every hosted system.
+public sighup: i32 = 1
+--- Signal: interrupted from the terminal, SIGINT.  The same on every
+--- hosted system.
+public sigint: i32 = 2
+--- Signal: asked to end, SIGTERM.  The same on every hosted system.
+public sigterm: i32 = 15
+
+--- A signal set `sigprocmask` reads, or `no_address`.
+public signals_given: type = no_address | ptr signal_set
+--- Where `sigprocmask` puts the set it replaces, or `no_address`.
+public signals_kept: type = no_address | ptr mut signal_set
+
+--- Change the calling thread's mask of blocked signals by `how`,
+--- `sig_block`, `sig_unblock` or `sig_setmask`, with `set` when it is
+--- given, and put the mask it had in `previous` when that is given: 0, or
+--- -1 with the reason in errno.  A blocked signal stays pending until it is
+--- unblocked; a child copies the mask and an executed program keeps it.
+public extern(c) sigprocmask: (how: i32, set: signals_given,
+                               previous: signals_kept) -> (status: i32)
+
+--- This process's ID.  It never fails.
+public extern(c) getpid: () -> (process: i32)
+
+--- Send `signal` to the process `process`: 0, or -1 with the reason in
+--- errno, ESRCH when there is no such process.
+public extern(c) kill: (process: i32, signal: i32) -> (status: i32)
 
 --  The rest of the file system: positional reads and writes, sizes,
 --  synchronizing, renaming, links, permission bits, owners, file times,

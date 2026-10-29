@@ -182,6 +182,26 @@ public after: atom
         self.assertEqual(result[1].signature,
                          'public kind: type =\n    one | two\n    | three')
 
+    def test_layout_qualified_struct_is_whole(self):
+        """platform/kqueue's `layout(c) struct` read as a one-line alias."""
+        text = '''--- A C record.
+public record: type = layout(c) struct
+    first: u32
+    second: u64
+end record
+--- A packed one.
+public packed: type = layout(c, packed) struct
+    events: u32
+end packed
+--- After.
+public after: atom
+'''
+        result = self.read(text)
+        self.assertEqual([i.name for i in result], ['record', 'packed', 'after'])
+        self.assertEqual([i.kind for i in result], ['type', 'type', 'atom'])
+        self.assertTrue(result[0].signature.endswith('end record'))
+        self.assertTrue(result[1].signature.endswith('end packed'))
+
     def test_live_failure_reason_lists_every_atom(self):
         source = ROOT / 'core/failure/failure.ldn'
         item = next(i for i in library.read_items(source.read_text(),

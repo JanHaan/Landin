@@ -170,6 +170,26 @@ fixed if compiler.os == linux then
         restorer: u64
     end signal_action
 
+    --- `sigprocmask` operation: block the signals given beside those
+    --- blocked already, `SIG_BLOCK`.  Linux numbers them as the C library does.
+    public sig_block: i32 = 0
+    --- `sigprocmask` operation: unblock the signals given, `SIG_UNBLOCK`.
+    public sig_unblock: i32 = 1
+    --- `sigprocmask` operation: block exactly the signals given,
+    --- `SIG_SETMASK`.
+    public sig_setmask: i32 = 2
+    --- Signal: the first one a program defines, SIGUSR1.
+    public sigusr1: i32 = 10
+    --- Signal: the second one a program defines, SIGUSR2.
+    public sigusr2: i32 = 12
+
+    --- `open` and `fcntl` flag: a call that would wait fails with EAGAIN
+    --- instead, `O_NONBLOCK`.
+    public o_nonblock: i32 = 2048
+    --- `socket` and `accept4` flag: the new socket is non-blocking, set
+    --- with it, `SOCK_NONBLOCK`.  Darwin has none.
+    public sock_nonblock: i32 = 2048
+
     --- `accept` with `flags`, `sock_cloexec` among them, set as the socket
     --- is made: Linux's and FreeBSD's; Darwin has none.
     public extern(c) accept4: (descriptor: i32, address: address_filled,

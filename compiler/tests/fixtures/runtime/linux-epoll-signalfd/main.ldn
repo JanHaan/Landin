@@ -1,0 +1,139 @@
+import platform/linux
+import platform/linux/numbers
+
+--  platform/linux's epoll and signalfd, on every Linux architecture.  An
+--  epoll descriptor watches a pipe's reading end, reports nothing while the
+--  pipe is empty, reports it readable with the word it was watched with
+--  once a byte is written, and reports it hung up once the writing end is
+--  closed.  SIGUSR1, blocked with `rt_sigprocmask`, is sent to the process
+--  itself and does not end it: a signalfd reads it, after epoll reports
+--  the signalfd readable.  The failure oracles: a descriptor watched twice
+--  is EEXIST and one never watched ENOENT, a wait with nothing ready
+--  reports nothing, and a non-blocking signalfd with no signal pending is
+--  EAGAIN.
+
+--  The errnos, as minus the errno.
+exists: i32 = -17
+no_entry: i32 = -2
+again: isize = -11
+
+--  The words each descriptor is watched with, handed back by each report.
+pipe_word: u64 = 0x0123456789abcdef
+signal_word: u64 = 9
+
+--  `struct epoll_event` is packed on x86-64 alone.
+packed_events: bool = compiler.arch == x86_64
+
+public main: () -> (code: i32) =
+    code = 1
+    --  The records are the kernel's.
+    record_size: usize = if packed_events then 12 else 16 end if
+    return when sizeof linux.epoll_record <> record_size
+    return when sizeof linux.signalfd_record <> 128
+
+    code = 2
+    epoll: i32 = linux.epoll_create1(linux.epoll_cloexec)
+    return when epoll < 0
+    return when (linux.fcntl(epoll, linux.f_getfd, 0) & linux.fd_cloexec) == 0
+
+    code = 3
+    mut ends: [2]i32 = zeroed
+    return when linux.pipe2(addr ends[0], linux.o_cloexec) <> 0
+    mut asked: linux.epoll_record = zeroed
+    asked.events = linux.epollin
+    asked.data = pipe_word
+    return when linux.epoll_ctl(epoll, linux.epoll_ctl_add, ends[0],
+                                addr asked) <> 0
+    return when linux.epoll_ctl(epoll, linux.epoll_ctl_add, ends[0],
+                                addr asked) <> exists
+    return when linux.epoll_ctl(epoll, linux.epoll_ctl_mod, ends[1],
+                                addr asked) <> no_entry
+
+    --  Nothing written: nothing ready, without waiting.
+    code = 4
+    mut reports: [4]linux.epoll_record = zeroed
+    return when linux.epoll_pwait(epoll, addr reports[0], 4, 0,
+                                  linux.no_mask) <> 0
+
+    --  A byte written: the reading end, with its word.
+    code = 5
+    byte: [1]u8 = [33]
+    return when linux.write(ends[1], addr byte[0], 1) <> 1
+    return when linux.epoll_pwait(epoll, addr reports[0], 4, 1000,
+                                  linux.no_mask) <> 1
+    first: linux.epoll_record = reports[0]
+    return when first.data <> pipe_word
+    return when (first.events & linux.epollin) == 0
+    mut taken: [1]u8 = zeroed
+    return when linux.read(ends[0], addr taken[0], 1) <> 1
+    return when taken[0] <> 33
+
+    --  The writing end closed: the reading end hung up.
+    code = 6
+    return when linux.close(ends[1]) <> 0
+    return when linux.epoll_pwait(epoll, addr reports[0], 4, 1000,
+                                  linux.no_mask) <> 1
+    hung: linux.epoll_record = reports[0]
+    return when (hung.events & linux.epollhup) == 0 or hung.data <> pipe_word
+    return when linux.epoll_ctl(epoll, linux.epoll_ctl_del, ends[0],
+                                addr asked) <> 0
+    return when linux.close(ends[0]) <> 0
+
+    --  SIGUSR1 blocked, and not blocked before.
+    code = 7
+    mut blocked: u64 = linux.signal_bit(linux.sigusr1)
+    return when blocked <> 512
+    mut before: u64 = 0
+    return when linux.rt_sigprocmask(linux.sig_block, addr blocked,
+                                     addr before) <> 0
+    return when (before & blocked) <> 0
+
+    code = 8
+    reader: i32 = linux.signalfd4(-1, addr blocked,
+                                  linux.sfd_cloexec | linux.sfd_nonblock)
+    return when reader < 0
+    mut record: linux.signalfd_record = zeroed
+    into: ptr mut u8 = ptr(usize(addr record))
+    return when linux.read(reader, into, sizeof linux.signalfd_record)
+      <> again
+
+    code = 9
+    mut watched: linux.epoll_record = zeroed
+    watched.events = linux.epollin
+    watched.data = signal_word
+    return when linux.epoll_ctl(epoll, linux.epoll_ctl_add, reader,
+                                addr watched) <> 0
+    process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0, 0, 0)
+    return when linux.system_call(numbers.kill_number, process,
+                                  i64(linux.sigusr1), 0, 0, 0, 0) <> 0
+
+    --  Still here: the signal waits to be read.
+    code = 10
+    return when linux.epoll_pwait(epoll, addr reports[0], 4, 1000,
+                                  linux.no_mask) <> 1
+    signalled: linux.epoll_record = reports[0]
+    return when signalled.data <> signal_word
+      or (signalled.events & linux.epollin) == 0
+
+    code = 11
+    return when linux.read(reader, into, sizeof linux.signalfd_record)
+      <> isize(sizeof linux.signalfd_record)
+    return when record.signal <> u32(linux.sigusr1)
+    return when i64(record.process) <> process
+    --  SI_USER: sent by `kill`.
+    return when record.code <> 0
+    return when linux.read(reader, into, sizeof linux.signalfd_record)
+      <> again
+
+    --  The mask as it was.
+    code = 12
+    return when linux.rt_sigprocmask(linux.sig_setmask, addr before,
+                                     linux.no_mask) <> 0
+    mut after: u64 = 1
+    return when linux.rt_sigprocmask(linux.sig_block, linux.no_mask,
+                                     addr after) <> 0
+    return when after <> before
+    return when linux.close(reader) <> 0
+    return when linux.close(epoll) <> 0
+    code = 42
+end main

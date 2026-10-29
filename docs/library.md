@@ -11,7 +11,8 @@ three namespaces:
 
 `platform/posix`, and beneath it each system's own interface,
 `platform/linux` and `platform/libc`, serve the hosted POSIX systems:
-Linux, Darwin and FreeBSD. They are refused on firmware.
+Linux, Darwin and FreeBSD, as does `platform/kqueue`, the event interface
+of Darwin and FreeBSD. They are refused on firmware.
 
 Availability does not promise that every composition fits a particular
 firmware image. All memory and handle lifetimes remain explicit caller
@@ -193,7 +194,7 @@ systems:
 |---|---|---|
 | Calendars, time zones and formatting a date | the locale record in the register | The wall clock's seconds since 1970 are `time.wall_now`'s; turning them into a date is the program's. |
 | Resolving a host name to an address | the resolver record in the register | Under the C library, on Darwin, FreeBSD and Linux under `--link=libc`, `getaddrinfo` declared `extern(c)`; a static Linux program has none. `net.parse_address` reads an address that is already written as one. |
-| Sockets that do not block, many connections in one thread | an event-driven Io | `platform/posix`'s `poll` over the sockets' descriptors, `system.descriptor_of(socket)` for a hosted `io.file`, before a call that would otherwise wait; a socket's time limits bound each wait. |
+| Sockets that do not block, many connections in one thread | an event-driven Io | `platform/posix`'s `set_non_blocking`, `accept_non_blocking` and `poll` over the sockets' descriptors, `system.descriptor_of(socket)` for a hosted `io.file`; for many descriptors, `platform/linux`'s epoll on Linux and `platform/kqueue` on Darwin and FreeBSD. |
 | Threads | the threads item | Nothing safe yet: the hosted providers keep process-wide state, and there is no thread-local storage. |
 | Changing the working directory | not offered: it is the whole process's, and beside threads it would move every relative path at once | A path built from `io.current_directory`, or a call relative to a directory open as `at` in `platform/posix`; `chdir` by its number through `linux.system_call` on Linux, or declared `extern(c)` on Darwin and FreeBSD, where a program must. |
 | Extended attributes, access control lists, file flags | not yet planned | On Linux, the call's number from `platform/linux/numbers` through `linux.system_call`; on Darwin and FreeBSD, the C function declared `extern(c)`. |
@@ -1622,6 +1623,12 @@ is or moves its pages.
 | `poll_input`, `poll_output`, `poll_urgent` | asked about |
 | `poll_error`, `poll_hung_up`, `poll_invalid` | only reported |
 
+`set_non_blocking` makes calls on a descriptor that would wait fail
+`eagain` instead, `O_NONBLOCK`, and `non_blocking` reads the mode back. The
+mode belongs to the open file, so every duplicate of the descriptor shares
+it. A program that waits for readiness sets it and then waits with `poll`,
+or with epoll or kqueue for many descriptors.
+
 ### Processes
 
 | Call | What it does |
@@ -1671,7 +1678,8 @@ The sockets are POSIX's too.
 |---|---|
 | `socket` | Make a socket of a `socket_family`, `internet`, `internet6` or `local` for Unix-domain sockets, and a `socket_kind`, `stream` or `datagram`. |
 | `socket_pair` | Two connected Unix-domain sockets. |
-| `bind`, `listen`, `accept`, `connect` | As POSIX's. |
+| `bind`, `listen`, `accept`, `connect` | As POSIX's. A non-blocking `connect` fails `einprogress` and goes on: `poll` for `poll_output`, then `pending_error`, says how it ended. |
+| `accept_non_blocking` | `accept` for a program that waits for readiness: the new socket is non-blocking whatever the listener's mode, and no receive limit bounds it, so a non-blocking listener with no connection waiting fails `eagain` at once. |
 | `send`, `receive`, `send_to`, `receive_from` | As POSIX's. |
 | `shutdown` | With a `shutdown_side`. |
 | `socket_name`, `peer_name` | The two ends' addresses. |
@@ -1779,6 +1787,8 @@ another language's code reached through its C entry points.
 | a socket closed on exec | SOCK_CLOEXEC | `fcntl` just after | SOCK_CLOEXEC |
 | a send without SIGPIPE | MSG_NOSIGNAL | SO_NOSIGPIPE set on each socket | SO_NOSIGPIPE set on each socket |
 | `accept`'s time limit | the kernel limits it | `accept` polls for a connection for as long as the limit first | as Darwin |
+| `accept_non_blocking` | `accept4` with SOCK_NONBLOCK | `accept`, then `fcntl` | `accept4` with SOCK_NONBLOCK |
+| a socket `accept` takes from a non-blocking listener | blocking | non-blocking, as the listener is | blocking |
 | `unix_address`'s longest path | 108 bytes | 104 bytes | 104 bytes |
 | `open_pseudo_terminal` | /dev/ptmx and `TIOCGPTPEER`, or the terminal's /dev/pts path where a kernel or an emulator lacks it | `posix_openpt` | `posix_openpt` |
 | accounts and groups | from /etc/passwd and /etc/group in a static program; through the C library under `--link=libc` | the C library, which asks every database the system is set to | as Darwin |
@@ -1831,7 +1841,8 @@ with L0347.
 | directories | `fdopendir`, `readdir`, `closedir`, `fstatat`, `mkdirat` and `unlinkat`, with each system's `struct dirent` as `directory_record`, its `at_fdcwd`, `o_directory`, `at_symlink_nofollow` and `at_removedir`, and the `d_type` and mode bits |
 | clocks and randomness | `clock_gettime` with a `clock_realtime` or a `clock_monotonic`, `nanosleep` with a `timespec`, and `arc4random_buf` |
 | sockets | `socket`, `socketpair`, `bind`, `listen`, `accept`, `accept4`, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `shutdown`, `setsockopt`, `getsockopt`, `getsockname` and `getpeername`, with each system's `af_inet6`, `sol_socket` and option numbers, `sock_cloexec` and `msg_nosignal` where they exist, `so_nosigpipe`, the address records' sizes and its `time_limit`, C's `struct timeval` |
-| signals | `sigaction` with each system's `signal_action` and `signal_set`, and `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef` |
+| signals | `sigaction` with each system's `signal_action` and `signal_set`, `sigprocmask` with each system's `sig_block`, `sig_unblock` and `sig_setmask`, `getpid` and `kill`, the signals `sighup`, `sigint` and `sigterm` and each system's `sigusr1` and `sigusr2`, and `posix_spawnattr_setsigdefault` with `posix_spawn_setsigdef` |
+| descriptors that do not block | `fcntl`'s `f_getfl` and `f_setfl`, each system's `o_nonblock`, and `sock_nonblock` where it exists |
 | the rest of the file system | `pread`, `pwrite`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat`, `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat`, `futimens`, `fstat`, `flock` with its `lock_sh`, `lock_ex`, `lock_nb` and `lock_un`, and `fcntl`'s record locks with each system's `f_getlk`, `f_setlk`, `f_setlkw`, lock types and `lock_record`, C's `struct flock` |
 | users and groups | `getuid`, `geteuid`, `getgid` and `getegid` for the process's IDs, and `getpwuid_r`, `getpwnam_r`, `getgrgid_r` and `getgrnam_r` over each system's `account_record`, C's `struct passwd`, and the shared `group_record` |
 | shared objects | `dlopen`, `dlsym`, `dlclose` and `dlerror`, with `rtld_now` and each system's `rtld_local` and `rtld_global`; glibc keeps them in its libc since 2.34 |
@@ -1848,6 +1859,10 @@ with L0347.
 | `clock_monotonic` | 1 | 6 | 4 |
 | `arc4random_buf` | not declared | declared | declared |
 | `accept4` | declared | not declared | declared |
+| `sig_block`, `sig_unblock`, `sig_setmask` | 0, 1, 2 | 1, 2, 3 | 1, 2, 3 |
+| `sigusr1`, `sigusr2` | 10, 12 | 30, 31 | 30, 31 |
+| `o_nonblock` | 2048 | 4 | 4 |
+| `sock_nonblock` | 2048 | none | its own |
 | `fdatasync` | declared | not declared; `f_fullfsync` instead | declared |
 | `so_nosigpipe` | none | yes | yes |
 | `time_limit`'s microseconds | an `i64` | an `int` | an `i64` |
@@ -1895,12 +1910,34 @@ The typed wrappers are the calls the library makes:
 |---|---|
 | files and directories | `getdents64`, `mkdirat`, `unlinkat`, `pread64`, `pwrite64`, `ftruncate`, `fsync`, `fdatasync`, `getcwd`, `renameat2` (every architecture's rename), `linkat`, `symlinkat`, `readlinkat`, `fchmodat`, `fchmod`, `fchownat`, `fchown`, `utimensat` (whose path may be `no_path`), `flock` |
 | descriptors | `ppoll`, `pipe2`, `dup3`, `fcntl`, `close_range`, `ioctl` |
+| events | `epoll_create1`, `epoll_ctl`, `epoll_pwait` (every architecture's epoll wait), `signalfd4` and `rt_sigprocmask` |
 | processes | `fork` (a `clone` with SIGCHLD and nothing shared), `execve`, `wait4`, `rt_sigaction` and the four ID calls |
 | time and randomness | `clock_gettime`, `clock_nanosleep`, `getrandom` |
 | sockets | the socket calls from `socket` to `getpeername`, with `accept4`, `sendto` and `recvfrom` standing for the calls arm64 and x86-64 lack |
 
 `rt_sigaction` takes the kernel's `signal_action`, which RV64 lays out
 without a restorer.
+
+### Events
+
+epoll waits until any of many descriptors is ready, and a signalfd reads
+signals as records from a descriptor epoll can watch:
+
+| Name | What it is |
+|---|---|
+| `epoll_record` | `struct epoll_event`: the events and a 64-bit word handed back with each report. Twelve bytes and packed on x86-64, as the kernel packs it there alone; sixteen on arm64 and RV64. |
+| `epollin`, `epollout`, `epollpri`, `epollrdhup`, `epollerr`, `epollhup` | Events; the last two are reported whether asked or not. |
+| `epolloneshot`, `epollet` | One report until asked again; a change of readiness rather than readiness. |
+| `epoll_ctl_add`, `epoll_ctl_mod`, `epoll_ctl_del` | `epoll_ctl`'s operations. |
+| `signalfd_record` | `struct signalfd_siginfo`, 128 bytes on every architecture: the signal, its sender and its code. |
+| `signal_bit`, `sig_block`, `sig_unblock`, `sig_setmask` | A signal's bit in the kernel's eight-byte mask, and `rt_sigprocmask`'s operations. |
+| `sighup`, `sigint`, `sigusr1`, `sigusr2`, `sigterm` | The signals, numbered alike on all three architectures. |
+| `epoll_cloexec`, `sfd_cloexec`, `sfd_nonblock`, `o_nonblock`, `sock_nonblock`, `f_getfl`, `f_setfl` | The flags. |
+
+A signalfd reads only pending signals, so the signals it reads are blocked
+with `rt_sigprocmask` first. The mask is the thread's, and a child and a
+program it executes keep it. There is no eventfd or timerfd: a loop sleeps
+in its wait's time limit and nothing else wakes it (D480).
 
 A terminal is the kernel's own `terminal_record`, `struct termios`,
 smaller than the C library's. `ioctl` reads and sets it with `tcgets`,
@@ -2027,6 +2064,37 @@ that needs a clock and not that speed can call `linux.clock_gettime`, the
 system call, itself, and carry none of it.
 
 [Executable example](../compiler/tests/fixtures/runtime/linux-vdso/main.ldn)
+
+## platform/kqueue
+
+kqueue, the event interface Darwin and FreeBSD share, through their C
+libraries, raw: a failure is -1 with the reason in `libc.errno_cell`.
+
+Every declaration is Darwin's and FreeBSD's. The module's scope is the
+hosted POSIX systems, as `platform/linux`'s is, so a provider written once
+imports both, and on Linux it declares nothing (D481).
+
+| Name | What it is |
+|---|---|
+| `kqueue` | Make a queue. It is not inherited by a child `fork` makes; set `libc.fd_cloexec` with `libc.fcntl` so a program executed does not keep it. |
+| `kevent` | Make the changes given, then wait for events or a `libc.timespec` limit; `none_given` for no changes, no room or no limit. A change that fails comes back as an event with `ev_error` and the errno in its datum. |
+| `change` | A change record: an identifier, a filter, flags, filter flags and a datum. |
+| `event_record` | `struct kevent`: what is watched, the filter, the flags, the filter's flags, its datum and a word handed back with each event. |
+| `evfilt_read`, `evfilt_write`, `evfilt_signal`, `evfilt_proc`, `evfilt_timer` | Filters: readiness, a signal, a process's end with `note_exit`, a timer. |
+| `ev_add`, `ev_delete`, `ev_enable`, `ev_disable`, `ev_oneshot`, `ev_clear` | Change flags. |
+| `ev_eof`, `ev_error` | Reported flags. |
+| `note_seconds`, `note_useconds`, `note_nseconds`, and FreeBSD's `note_mseconds` | A timer's unit; with none it is milliseconds. |
+
+A signal the queue watches is recorded even when it is ignored or blocked,
+and is still delivered as its disposition says, so a program ignores or
+blocks it.
+
+| Fact | Darwin | FreeBSD |
+|---|---|---|
+| `event_record` | 32 bytes | 64 bytes, with four extension words |
+| `note_useconds`, `note_nseconds` | 2, 4 | 4, 8 |
+
+[Executable example](../compiler/tests/fixtures/runtime/kqueue-events/main.ldn)
 
 ## platform/c
 

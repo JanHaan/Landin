@@ -42,6 +42,7 @@
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
     "platform/libc/linux.ldn",
+    "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
     "platform/linux/vdso/vdso.ldn",
     "platform/linux/wrapped.ldn",
@@ -95,6 +96,7 @@
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
     "platform/libc/linux.ldn",
+    "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
     "platform/linux/vdso/vdso.ldn",
     "platform/linux/wrapped.ldn",
@@ -167,6 +169,7 @@
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
     "platform/libc/linux.ldn",
+    "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
     "platform/linux/vdso/vdso.ldn",
     "platform/linux/wrapped.ldn",
@@ -186,6 +189,7 @@
   ],
   "switch": [
     "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",
+    "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
     "platform/linux/wrapped.ldn"
   ]

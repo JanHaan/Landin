@@ -11,6 +11,7 @@ fixed if compiler.os == linux then
         mmap_number: i64 = 9
         munmap_number: i64 = 11
         rt_sigaction_number: i64 = 13
+        rt_sigprocmask_number: i64 = 14
         ioctl_number: i64 = 16
         pread64_number: i64 = 17
         pwrite64_number: i64 = 18
@@ -46,6 +47,7 @@ fixed if compiler.os == linux then
         clock_gettime_number: i64 = 228
         clock_nanosleep_number: i64 = 230
         exit_group_number: i64 = 231
+        epoll_ctl_number: i64 = 233
         openat_number: i64 = 257
         mkdirat_number: i64 = 258
         fchownat_number: i64 = 260
@@ -56,7 +58,10 @@ fixed if compiler.os == linux then
         fchmodat_number: i64 = 268
         ppoll_number: i64 = 271
         utimensat_number: i64 = 280
+        epoll_pwait_number: i64 = 281
         accept4_number: i64 = 288
+        signalfd4_number: i64 = 289
+        epoll_create1_number: i64 = 291
         dup3_number: i64 = 292
         pipe2_number: i64 = 293
         renameat2_number: i64 = 316
@@ -65,6 +70,9 @@ fixed if compiler.os == linux then
         close_range_number: i64 = 436
     elsif compiler.arch == arm64 then
         getcwd_number: i64 = 17
+        epoll_create1_number: i64 = 20
+        epoll_ctl_number: i64 = 21
+        epoll_pwait_number: i64 = 22
         dup3_number: i64 = 24
         fcntl_number: i64 = 25
         ioctl_number: i64 = 29
@@ -87,6 +95,7 @@ fixed if compiler.os == linux then
         pread64_number: i64 = 67
         pwrite64_number: i64 = 68
         ppoll_number: i64 = 73
+        signalfd4_number: i64 = 74
         readlinkat_number: i64 = 78
         fsync_number: i64 = 82
         fdatasync_number: i64 = 83
@@ -95,6 +104,7 @@ fixed if compiler.os == linux then
         clock_gettime_number: i64 = 113
         clock_nanosleep_number: i64 = 115
         rt_sigaction_number: i64 = 134
+        rt_sigprocmask_number: i64 = 135
         getuid_number: i64 = 174
         geteuid_number: i64 = 175
         getgid_number: i64 = 176
@@ -124,6 +134,9 @@ fixed if compiler.os == linux then
         close_range_number: i64 = 436
     elsif compiler.arch == rv64 then
         getcwd_number: i64 = 17
+        epoll_create1_number: i64 = 20
+        epoll_ctl_number: i64 = 21
+        epoll_pwait_number: i64 = 22
         dup3_number: i64 = 24
         fcntl_number: i64 = 25
         ioctl_number: i64 = 29
@@ -146,6 +159,7 @@ fixed if compiler.os == linux then
         pread64_number: i64 = 67
         pwrite64_number: i64 = 68
         ppoll_number: i64 = 73
+        signalfd4_number: i64 = 74
         readlinkat_number: i64 = 78
         fsync_number: i64 = 82
         fdatasync_number: i64 = 83
@@ -154,6 +168,7 @@ fixed if compiler.os == linux then
         clock_gettime_number: i64 = 113
         clock_nanosleep_number: i64 = 115
         rt_sigaction_number: i64 = 134
+        rt_sigprocmask_number: i64 = 135
         getuid_number: i64 = 174
         geteuid_number: i64 = 175
         getgid_number: i64 = 176

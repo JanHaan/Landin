@@ -235,10 +235,25 @@ public accept:
     accepted = try system_accept(listener)
 end accept
 
+--- Take the next connection waiting on `listener` as a new socket that is
+--- non-blocking from the start, as `set_non_blocking` makes one, closed on
+--- exec and raising no SIGPIPE, or the errno: on a non-blocking listener
+--- `eagain` at once when no connection is waiting, which `poll` for
+--- `poll_input` on the listener says has changed.  It is `accept` for a
+--- program that waits for readiness, and no receive limit bounds it.  On
+--- Linux and FreeBSD the socket is made non-blocking with it, and on
+--- Darwin just after it is made.
+public accept_non_blocking:
+    (listener: descriptor) -> (accepted: descriptor) ! errno =
+    accepted = try system_accept_non_blocking(listener)
+end accept_non_blocking
+
 --- Connect `socket` to `to`: `econnrefused` when nothing listens there,
 --- `eintr` when a signal came first, after which the connection goes on and
 --- its outcome is what `poll` for `poll_output` and then `pending_error`
---- say.
+--- say.  A non-blocking socket fails `einprogress` rather than wait for a
+--- connection the system cannot make at once, and its outcome is found the
+--- same way.
 public connect:
     (socket: descriptor, to: socket_address) -> none ! errno =
     try system_connect(socket, addr to.bytes[0], to.length)
@@ -453,6 +468,15 @@ fixed if compiler.os == linux then
         fail errno_of(-result) when result < 0
         accepted = descriptor(result)
     end system_accept
+
+    system_accept_non_blocking: (listener: descriptor)
+                                -> (accepted: descriptor) ! errno =
+        result: i32 = linux.accept4(i32(listener), linux.no_address,
+                                    linux.no_address,
+                                    linux.sock_cloexec | linux.sock_nonblock)
+        fail errno_of(-result) when result < 0
+        accepted = descriptor(result)
+    end system_accept_non_blocking
 
     system_connect: (socket: descriptor, address: ptr u8, length: u32)
                     -> none ! errno =
@@ -682,6 +706,21 @@ elsif compiler.os == darwin or compiler.os == freebsd then
             accepted = descriptor(result)
         end system_accept
 
+        --  Darwin's `accept` gives the new socket the listener's
+        --  O_NONBLOCK; it is set here whatever the listener's is.
+        system_accept_non_blocking: (listener: descriptor)
+                                    -> (accepted: descriptor) ! errno =
+            result: i32 = libc.accept(i32(listener), libc.no_address,
+                                      libc.no_address)
+            fail failure() when result < 0
+            try kept(result)
+            accepted = descriptor(result)
+            set_non_blocking(accepted, true) else (problem)
+                _ = libc.close(result)
+                fail problem
+            end
+        end system_accept_non_blocking
+
         --  Darwin has no MSG_NOSIGNAL; SO_NOSIGPIPE stands in for it.
         send_flags: i32 = 0
     else
@@ -729,6 +768,17 @@ elsif compiler.os == darwin or compiler.os == freebsd then
             try quieted(result)
             accepted = descriptor(result)
         end system_accept
+
+        system_accept_non_blocking: (listener: descriptor)
+                                    -> (accepted: descriptor) ! errno =
+            result: i32 = libc.accept4(i32(listener), libc.no_address,
+                                       libc.no_address,
+                                       libc.sock_cloexec
+                                       | libc.sock_nonblock)
+            fail failure() when result < 0
+            try quieted(result)
+            accepted = descriptor(result)
+        end system_accept_non_blocking
 
         --  MSG_NOSIGNAL beside SO_NOSIGPIPE, for a socket this module did
         --  not make.

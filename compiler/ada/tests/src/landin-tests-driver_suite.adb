@@ -6000,6 +6000,8 @@ package body Landin.Tests.Driver_Suite is
       Refused ("cortex-m0", "platform/linux", True, True);
       Refused ("cortex-m0", "platform/linux/numbers", False);
       Refused ("cortex-m0", "platform/libc", True);
+      Refused ("cortex-m0", "platform/kqueue", True);
+      Refused ("synthetic-32", "platform/kqueue", False);
       Refused ("synthetic-32", "platform/posix", True);
       Refused ("linux-x86-64", "platform/cortex_m", True);
       Refused ("linux-x86-64", "platform/cortex_m", False);

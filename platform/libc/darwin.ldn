@@ -199,6 +199,23 @@ fixed if compiler.os == darwin then
         flags: i32
     end signal_action
 
+    --- `sigprocmask` operation: block the signals given beside those
+    --- blocked already, `SIG_BLOCK`.  Darwin and FreeBSD share the BSD numbers.
+    public sig_block: i32 = 1
+    --- `sigprocmask` operation: unblock the signals given, `SIG_UNBLOCK`.
+    public sig_unblock: i32 = 2
+    --- `sigprocmask` operation: block exactly the signals given,
+    --- `SIG_SETMASK`.
+    public sig_setmask: i32 = 3
+    --- Signal: the first one a program defines, SIGUSR1.
+    public sigusr1: i32 = 30
+    --- Signal: the second one a program defines, SIGUSR2.
+    public sigusr2: i32 = 31
+
+    --- `open` and `fcntl` flag: a call that would wait fails with EAGAIN
+    --- instead, `O_NONBLOCK`.
+    public o_nonblock: i32 = 4
+
     --- `posix_spawnattr_setflags` flag: the child's signals named by
     --- `posix_spawnattr_setsigdefault` start at their default disposition.
     public posix_spawn_setsigdef: i16 = 4

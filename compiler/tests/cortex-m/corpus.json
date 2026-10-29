@@ -50,6 +50,11 @@
       "reason": "A C main hands Landin an environment table through the hosted argument root; runtime/run-memory-firmware reads core/io's memory environment on Cortex-M0.",
       "witness": "compiler/tests/fixtures/abi/environment-from-c/fixture.meta"
     },
+    "abi/event-facts": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: epoll, signalfd and kqueue and the C library's signal headers exist only on a hosted system.",
+      "witness": "compiler/tests/fixtures/abi/event-facts/fixture.meta"
+    },
     "abi/freebsd-pseudo-terminal-closed-on-exec": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C posix_openpt of the program's own and FreeBSD's pseudo-terminals exist only on FreeBSD.",
@@ -1436,6 +1441,13 @@
     "runtime/io-handle-lends-two-arguments": {
       "mode": "execute"
     },
+    "runtime/kqueue-events": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/kqueue on the freestanding target before checking declarations."
+    },
     "runtime/large-array-offset-is-addressed": {
       "mode": "execute",
       "profile_limit": "selected-image",
@@ -1592,6 +1604,13 @@
       ],
       "mode": "refuse",
       "reason": "Firmware has no standard input: source namespace checking refuses hosted/system on the freestanding target before checking declarations. runtime/core-io-line-reader reads lines of core/io.memory's standard input here."
+    },
+    "runtime/linux-epoll-signalfd": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/linux on the freestanding target before checking declarations."
     },
     "runtime/linux-heap-size-classes": {
       "codes": [
@@ -2009,6 +2028,13 @@
       "reason": "Source namespace checking refuses platform/libc, platform/linux and platform/posix on the freestanding target before checking declarations: firmware has no file system, no lock and no second process."
     },
     "runtime/posix-memory": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/posix on the freestanding target before checking declarations."
+    },
+    "runtime/posix-non-blocking": {
       "codes": [
         "L0015"
       ],

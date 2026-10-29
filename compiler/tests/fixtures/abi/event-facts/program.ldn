@@ -1,0 +1,179 @@
+--  The facts platform/linux and platform/kqueue keep for the event
+--  interfaces, and platform/libc for the signals and descriptors beside
+--  them, handed to a C peer that holds each to the system's own headers:
+--  the numbers, the records' sizes, and the records themselves, which the
+--  peer fills as C lays them out for this program to read, and this
+--  program fills for the peer to read.
+import platform/kqueue
+import platform/libc
+import platform/linux
+
+fixed if compiler.os == linux then
+    --- The numbers, by the peer's index.
+    public extern(c) l_number: (index: i32) -> (value: i64) =
+        values: [33]i64 =
+            [i64(sizeof linux.epoll_record),
+             i64(sizeof linux.signalfd_record),
+             i64(linux.epoll_cloexec),
+             i64(linux.epoll_ctl_add),
+             i64(linux.epoll_ctl_del),
+             i64(linux.epoll_ctl_mod),
+             i64(linux.epollin),
+             i64(linux.epollpri),
+             i64(linux.epollout),
+             i64(linux.epollerr),
+             i64(linux.epollhup),
+             i64(linux.epollrdhup),
+             i64(linux.epolloneshot),
+             i64(linux.epollet),
+             i64(linux.sfd_cloexec),
+             i64(linux.sfd_nonblock),
+             i64(linux.sig_block),
+             i64(linux.sig_unblock),
+             i64(linux.sig_setmask),
+             i64(linux.sighup),
+             i64(linux.sigint),
+             i64(linux.sigusr1),
+             i64(linux.sigusr2),
+             i64(linux.sigterm),
+             i64(linux.o_nonblock),
+             i64(linux.sock_nonblock),
+             i64(linux.f_getfl),
+             i64(linux.f_setfl),
+             i64(libc.sig_block),
+             i64(libc.sig_setmask),
+             i64(libc.sigusr1),
+             i64(libc.o_nonblock),
+             i64(libc.sock_nonblock)]
+        value = -1
+        return when index < 0 or usize(index) >= lenof values
+        value = values[usize(index)]
+    end l_number
+
+    --- Whether the record C filled reads as it was filled.
+    public extern(c) l_epoll_read: (record: ptr linux.epoll_record)
+                                   -> (yes: bool) =
+        given: linux.epoll_record = record.val
+        yes = given.events == (linux.epollin | linux.epollet)
+              and given.data == 0x0102030405060708
+    end l_epoll_read
+
+    --- Fill a record for C to read.
+    public extern(c) l_epoll_write: (into: ptr mut linux.epoll_record)
+                                    -> none =
+        mut made: linux.epoll_record = zeroed
+        made.events = linux.epollout | linux.epolloneshot
+        made.data = 0x1112131415161718
+        into.val = made
+    end l_epoll_write
+
+    --- Whether the signalfd record C filled reads as it was filled.
+    public extern(c) l_signalfd_read: (record: ptr linux.signalfd_record)
+                                      -> (yes: bool) =
+        yes = record.val.signal == 10 and record.val.code == -6
+              and record.val.process == 1234 and record.val.user == 1000
+              and record.val.status == 3 and record.val.pointer == 0x55
+              and record.val.address_low_bit == 7 and record.val.call == 77
+              and record.val.call_address == 0x99
+              and record.val.architecture == 0xc000003e
+    end l_signalfd_read
+
+    --- The bit of SIGUSR1 in the kernel's mask.
+    public extern(c) l_signal_bit: () -> (bit: u64) =
+        bit = linux.signal_bit(linux.sigusr1)
+    end l_signal_bit
+elsif compiler.os == darwin then
+    --- The numbers, by the peer's index.
+    public extern(c) l_number: (index: i32) -> (value: i64) =
+        values: [28]i64 =
+            [i64(sizeof kqueue.event_record),
+             i64(kqueue.evfilt_read),
+             i64(kqueue.evfilt_write),
+             i64(kqueue.evfilt_proc),
+             i64(kqueue.evfilt_signal),
+             i64(kqueue.evfilt_timer),
+             i64(kqueue.ev_add),
+             i64(kqueue.ev_delete),
+             i64(kqueue.ev_enable),
+             i64(kqueue.ev_disable),
+             i64(kqueue.ev_oneshot),
+             i64(kqueue.ev_clear),
+             i64(kqueue.ev_eof),
+             i64(kqueue.ev_error),
+             i64(kqueue.note_exit),
+             i64(kqueue.note_seconds),
+             i64(kqueue.note_useconds),
+             i64(kqueue.note_nseconds),
+             i64(libc.sig_block),
+             i64(libc.sig_unblock),
+             i64(libc.sig_setmask),
+             i64(libc.sighup),
+             i64(libc.sigint),
+             i64(libc.sigusr1),
+             i64(libc.sigusr2),
+             i64(libc.sigterm),
+             i64(libc.o_nonblock),
+             i64(libc.f_getfl)]
+        value = -1
+        return when index < 0 or usize(index) >= lenof values
+        value = values[usize(index)]
+    end l_number
+else
+    --- The numbers, by the peer's index.
+    public extern(c) l_number: (index: i32) -> (value: i64) =
+        values: [30]i64 =
+            [i64(sizeof kqueue.event_record),
+             i64(kqueue.evfilt_read),
+             i64(kqueue.evfilt_write),
+             i64(kqueue.evfilt_proc),
+             i64(kqueue.evfilt_signal),
+             i64(kqueue.evfilt_timer),
+             i64(kqueue.ev_add),
+             i64(kqueue.ev_delete),
+             i64(kqueue.ev_enable),
+             i64(kqueue.ev_disable),
+             i64(kqueue.ev_oneshot),
+             i64(kqueue.ev_clear),
+             i64(kqueue.ev_eof),
+             i64(kqueue.ev_error),
+             i64(kqueue.note_exit),
+             i64(kqueue.note_seconds),
+             i64(kqueue.note_useconds),
+             i64(kqueue.note_nseconds),
+             i64(libc.sig_block),
+             i64(libc.sig_unblock),
+             i64(libc.sig_setmask),
+             i64(libc.sighup),
+             i64(libc.sigint),
+             i64(libc.sigusr1),
+             i64(libc.sigusr2),
+             i64(libc.sigterm),
+             i64(libc.o_nonblock),
+             i64(libc.f_getfl),
+             i64(kqueue.note_mseconds),
+             i64(libc.sock_nonblock)]
+        value = -1
+        return when index < 0 or usize(index) >= lenof values
+        value = values[usize(index)]
+    end l_number
+end if
+
+fixed if compiler.os == darwin or compiler.os == freebsd then
+    --- Whether the record C filled reads as it was filled.
+    public extern(c) l_kevent_read: (record: ptr kqueue.event_record)
+                                    -> (yes: bool) =
+        given: kqueue.event_record = record.val
+        yes = given.identifier == 7 and given.filter == kqueue.evfilt_signal
+              and given.flags == (kqueue.ev_add | kqueue.ev_clear)
+              and given.filter_flags == kqueue.note_exit
+              and given.data == -5 and given.user_data == 0x1234
+    end l_kevent_read
+
+    --- Fill a change for C to read.
+    public extern(c) l_kevent_write: (into: ptr mut kqueue.event_record)
+                                     -> none =
+        into.val = kqueue.change(3, kqueue.evfilt_timer,
+                                 kqueue.ev_add | kqueue.ev_oneshot,
+                                 kqueue.note_seconds, 2)
+    end l_kevent_write
+end if

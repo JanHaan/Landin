@@ -1,0 +1,160 @@
+--  platform/posix's non-blocking mode, as a program that waits for
+--  readiness uses it.  A non-blocking TCP listener's `accept_non_blocking`
+--  is `eagain` until a client connects and `poll` says the listener is
+--  readable; then it takes the connection as a non-blocking socket,
+--  whatever the listener's mode.  The client's non-blocking `connect`
+--  either connects at once or is `einprogress`, and `poll` for
+--  `poll_output` and `pending_error` say how it ended.  A receive with
+--  nothing sent is `eagain`, and one after `poll` says data came gets it.
+--  The mode reads back as it was set, and setting it off makes a socket
+--  block again.  The failure oracle: a non-blocking connect to a port
+--  nothing listens on ends `econnrefused`, at once or through
+--  `pending_error`.
+import core/net
+import platform/posix
+
+--  A check that did not hold.
+wrong: atom
+
+--  Wait at most five seconds for `wanted` on `watched`, or for an error
+--  or a hang-up, which a system may report alone.
+ready_for: (watched: posix.descriptor, wanted: posix.poll_events)
+           -> none ! ... =
+    mut entries: [1]posix.poll_entry = [posix.watch(watched, wanted)]
+    found: usize = try posix.poll(entries[0..<1], 5000)
+    ended: posix.poll_events = wanted | posix.poll_error | posix.poll_hung_up
+    fail wrong when found <> 1
+      or (posix.happened(entries[0]) & ended) == posix.poll_no_events
+end ready_for
+
+--  Connect the non-blocking `client` to `to`, waiting for the outcome
+--  when the system cannot connect at once: a connection that failed is
+--  reported ready to write, or in error, or hung up, and `pending_error`
+--  says why.
+connected: (client: posix.descriptor, to: posix.socket_address)
+           -> none ! ... =
+    mut going: bool = false
+    posix.connect(client, to) else (problem)
+        fail problem when problem <> posix.einprogress
+        going = true
+    end
+    return when not going
+    try ready_for(client, posix.poll_output)
+    try posix.pending_error(client)
+end connected
+
+accepting: () -> none ! ... =
+    listener: posix.descriptor = try posix.socket(posix.internet,
+                                                  posix.stream)
+    try posix.bind(listener,
+                   posix.internet_address(net.loopback(net.ipv4, 0)))
+    try posix.listen(listener, 4)
+    fail wrong when try posix.non_blocking(listener)
+    try posix.set_non_blocking(listener, true)
+    fail wrong when not try posix.non_blocking(listener)
+
+    --  Nobody has connected yet.
+    mut waiting: bool = false
+    _ = posix.accept_non_blocking(listener) else (problem)
+        waiting = problem == posix.eagain
+        listener
+    end
+    fail wrong when not waiting
+
+    client: posix.descriptor = try posix.socket(posix.internet, posix.stream)
+    try posix.set_non_blocking(client, true)
+    try connected(client, try posix.socket_name(listener))
+    try ready_for(listener, posix.poll_input)
+    accepted: posix.descriptor = try posix.accept_non_blocking(listener)
+    fail wrong when not try posix.non_blocking(accepted)
+      or not try posix.closed_on_exec(accepted)
+
+    --  Nothing sent: nothing to receive, without waiting.
+    mut buffer: [8]u8 = zeroed
+    mut empty: bool = false
+    _ = posix.receive(accepted, buffer[0..<8]) else (problem)
+        empty = problem == posix.eagain
+        0
+    end
+    fail wrong when not empty
+    sent: usize = try posix.send(client, "ready")
+    try ready_for(accepted, posix.poll_input)
+    got: usize = try posix.receive(accepted, buffer[0..<8])
+    fail wrong when sent <> 5 or got <> 5 or buffer[0] <> u8('r')
+
+    --  Blocking again.
+    try posix.set_non_blocking(accepted, false)
+    fail wrong when try posix.non_blocking(accepted)
+
+    --  A blocking listener gives a non-blocking socket too.
+    try posix.set_non_blocking(listener, false)
+    second: posix.descriptor = try posix.socket(posix.internet,
+                                                posix.stream)
+    try posix.connect(second, try posix.socket_name(listener))
+    taken: posix.descriptor = try posix.accept_non_blocking(listener)
+    fail wrong when not try posix.non_blocking(taken)
+    try posix.close(taken)
+    try posix.close(second)
+
+    try posix.close(accepted)
+    try posix.close(client)
+    try posix.close(listener)
+end accepting
+
+--  Nothing listens on a port once its listener is closed.
+refusing: () -> none ! ... =
+    listener: posix.descriptor = try posix.socket(posix.internet,
+                                                  posix.stream)
+    try posix.bind(listener,
+                   posix.internet_address(net.loopback(net.ipv4, 0)))
+    try posix.listen(listener, 4)
+    to: posix.socket_address = try posix.socket_name(listener)
+    try posix.close(listener)
+    nothing: posix.descriptor = try posix.socket(posix.internet,
+                                                 posix.stream)
+    try posix.set_non_blocking(nothing, true)
+    mut refused: bool = false
+    connected(nothing, to) else (problem)
+        refused = problem == posix.econnrefused
+    end
+    try posix.close(nothing)
+    fail wrong when not refused
+end refusing
+
+--  A pipe's reading end, made non-blocking, is `eagain` while it is empty.
+piped: () -> none ! ... =
+    ends: posix.pipe_ends = try posix.pipe()
+    try posix.set_non_blocking(ends.reading, true)
+    fail wrong when try posix.non_blocking(ends.writing)
+    mut buffer: [4]u8 = zeroed
+    mut empty: bool = false
+    _ = posix.read(ends.reading, buffer[0..<4]) else (problem)
+        empty = problem == posix.eagain
+        0
+    end
+    fail wrong when not empty
+    _ = try posix.write(ends.writing, "x")
+    got: usize = try posix.read(ends.reading, buffer[0..<4])
+    fail wrong when got <> 1
+    try posix.close(ends.writing)
+    try posix.close(ends.reading)
+end piped
+
+public main: () -> (code: i32) =
+    code = 1
+    piped() else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    accepting() else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    refusing() else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

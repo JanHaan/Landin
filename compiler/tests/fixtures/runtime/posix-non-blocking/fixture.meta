@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: platform/posix's non-blocking mode reads back as set and off again; an empty non-blocking pipe reads eagain; a non-blocking listener's accept_non_blocking is eagain until a client's non-blocking connect, finished through poll_output and pending_error when it is einprogress, makes poll report the listener readable, and then takes a non-blocking socket closed on exec, which receives eagain until poll reports data; a blocking listener's accept_non_blocking gives a non-blocking socket too; and a non-blocking connect to a closed port ends econnrefused
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

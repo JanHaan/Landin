@@ -463,7 +463,8 @@ This is the maintained inventory of what the compiler does today:
   an atom set.
   `hosted/heap` and `hosted/system` supply the hosted heap and
   system I/O capabilities, written once over `platform/posix`, which gives
-  POSIX's files, directories, memory mappings, `poll`, pipes, spawning,
+  POSIX's files, directories, memory mappings, `poll`, non-blocking
+  descriptors, pipes, spawning,
   waiting and sockets, Unix-domain ones among them, reading and writing at
   an offset, renaming, hard and symbolic links, permission bits, owners and
   file times, whole-file and record locks, terminals, their raw mode and
@@ -476,10 +477,12 @@ This is the maintained inventory of what the compiler does today:
   over `platform/libc` on Darwin and FreeBSD and `platform/linux` on Linux.
   A path, a process argument and a directory entry's name are host
   strings, never converted on the way through, with a checked conversion to
-  UTF-8. `platform/linux` supplies Linux's system calls and
+  UTF-8. `platform/linux` supplies Linux's system calls, epoll and
+  signalfd among them, and
   the static process entry, with a raw `system_call` that reaches any call
   by the number `platform/linux/numbers` names, generated from a pinned kernel
-  release; Linux executables link with no C library by
+  release, and `platform/kqueue` supplies kqueue on Darwin and FreeBSD;
+  Linux executables link with no C library by
   default (`--link=libc` keeps it), through the first GCC a distribution
   installs that the host can start. A failed check in a hosted program with
   no `panic_handler` writes its kind and source site to standard error before

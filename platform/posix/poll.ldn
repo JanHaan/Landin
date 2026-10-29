@@ -1,5 +1,6 @@
 --  Waiting for descriptors to be ready: POSIX's `poll`, its records and
---  the events it reports.
+--  the events it reports, and the non-blocking mode that lets a program
+--  wait for readiness rather than in a call.
 
 import platform/libc
 import platform/linux
@@ -77,6 +78,29 @@ public poll:
     ready = try system_poll(entries, milliseconds)
 end poll
 
+--- With `on`, make calls on `opened` that would wait fail `eagain`
+--- instead, `O_NONBLOCK`, and without it make them wait again: a send, a
+--- receive, a read, a write or an `accept`, and a `connect`, which fails
+--- `einprogress` and goes on.  The mode belongs to the open file, so
+--- every descriptor duplicated from `opened`, in this process or another,
+--- shares it.
+public set_non_blocking:
+    (opened: descriptor, on: bool) -> none ! errno =
+    flags: i32 = try system_status_flags(opened)
+    wanted: i32 = if on then flags | non_blocking_flag
+                  else flags & ~non_blocking_flag end if
+    return when wanted == flags
+    try system_set_status_flags(opened, wanted)
+end set_non_blocking
+
+--- Whether calls on `opened` that would wait fail `eagain` instead, as
+--- `set_non_blocking` says.
+public non_blocking:
+    (opened: descriptor) -> (yes: bool) ! errno =
+    flags: i32 = try system_status_flags(opened)
+    yes = (flags & non_blocking_flag) <> 0
+end non_blocking
+
 --  The system's own calls beneath the facility above: Linux's system
 --  calls through platform/linux, and the C library through
 --  platform/libc on Darwin and FreeBSD, whose system interface it is.
@@ -99,6 +123,19 @@ fixed if compiler.os == linux then
         fail errno_of(-result) when result < 0
         ready = usize(result)
     end system_poll
+
+    non_blocking_flag: i32 = linux.o_nonblock
+
+    system_status_flags: (opened: descriptor) -> (flags: i32) ! errno =
+        flags = linux.fcntl(i32(opened), linux.f_getfl, 0)
+        fail errno_of(-flags) when flags < 0
+    end system_status_flags
+
+    system_set_status_flags: (opened: descriptor, flags: i32)
+                             -> none ! errno =
+        result: i32 = linux.fcntl(i32(opened), linux.f_setfl, i64(flags))
+        fail errno_of(-result) when result < 0
+    end system_set_status_flags
 elsif compiler.os == darwin or compiler.os == freebsd then
     system_poll: (entries: []mut poll_entry, milliseconds: i32)
                  -> (ready: usize) ! errno =
@@ -111,4 +148,16 @@ elsif compiler.os == darwin or compiler.os == freebsd then
         fail failure() when result < 0
         ready = usize(result)
     end system_poll
+
+    non_blocking_flag: i32 = libc.o_nonblock
+
+    system_status_flags: (opened: descriptor) -> (flags: i32) ! errno =
+        flags = libc.fcntl(i32(opened), libc.f_getfl)
+        fail failure() when flags < 0
+    end system_status_flags
+
+    system_set_status_flags: (opened: descriptor, flags: i32)
+                             -> none ! errno =
+        fail failure() when libc.fcntl(i32(opened), libc.f_setfl, flags) < 0
+    end system_set_status_flags
 end if
