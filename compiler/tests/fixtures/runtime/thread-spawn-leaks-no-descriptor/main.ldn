@@ -6,13 +6,16 @@
 --  the streams closed on exec in the child and FreeBSD's closes them, so
 --  none reaches the child however it was made.  A thread makes four pipes
 --  with no close-on-exec flag at all and holds them, then makes and closes
---  pipes through platform/posix for as long as the routine spawns; each
---  child, a shell, is given the numbers of the eight ends the thread holds
---  and names each it finds open, and none may be.  It asks with an `exec`
---  in a subshell, which makes the shell keep no descriptor of its own: a
---  probe of every number from 3 up once found 10 open under Darwin's
---  bash, which kept its standard output there while it ran a redirected
---  builtin.
+--  pipes through platform/posix for as long as the routine spawns.  Eight
+--  times the routine starts the program again with the argument `check`
+--  and the eight ends' numbers; the copy asks `poll` about each, which
+--  answers `poll_invalid` for a closed descriptor and opens nothing, and
+--  ends with 42 when none is open and 7 when one is.
+--
+--  A shell cannot be the check: Darwin's /bin/sh, bash 3.2, keeps a
+--  descriptor of its own at the lowest free number from 10 up while it
+--  works, which it then finds open at 10, with a redirection in a
+--  subshell or an `exec` alike, as runtime/run-no-descriptor-leak found.
 import core/failure
 import core/io
 import core/text
@@ -78,62 +81,39 @@ make_pipes: (inout state: maker) -> none ! failure.reason =
     end for
 end make_pipes
 
---  Each descriptor among its arguments the shell finds open, one a line.
---  A failed `exec` redirection ends the subshell, and nothing the shell
---  keeps for itself is open there.
-script: []u8 = """
-    for fd in "$@"; do
-        if (exec 2>/dev/null; exec 1>&"$fd"); then echo "$fd"; fi
-    done
-    """
-
---  The held ends' numbers in decimal, for the shell's arguments.
-mut digits: [8][4]u8 = zeroed
-mut lengths: [8]usize = zeroed
-
---  Write `number`, below 1000, into entry `index` of `digits`.
-spell: (index: usize, number: i32) -> none =
-    mut left: u32 = u32(number)
-    mut reversed: [4]u8 = zeroed
-    mut count: usize = 0
-    loop do
-        reversed[count] = u8(48 + left % 10)
-        inc count
-        left = left / 10
-        break when left == 0 or count == 3
-    end loop
-    for at in usize(0)..<count do
-        digits[index][at] = reversed[count - 1 - at]
+--  The copy's part: whether any descriptor it was given is open.
+any_open: (host: blocking.host) -> (open: bool) ! failure.reason =
+    open = false
+    given: usize = io.argument_count(host)
+    for at in usize(1)..<given do
+        digits: []u8 = text.host_bytes(try io.argument_at(host, at))
+        found: u32 = try text.parse_u32(digits)
+        mut entries: [1]posix.poll_entry =
+            [posix.watch(posix.descriptor(i32(found)), posix.poll_input)]
+        _ = posix.poll(entries, 0) else (problem)
+            _ = problem
+            fail io.io_failed
+        end
+        events: posix.poll_events = posix.happened(entries[0])
+        if (events & posix.poll_invalid) == posix.poll_no_events then
+            open = true
+        end if
     end for
-    lengths[index] = count
-end spell
+end any_open
 
---  Run the shell and return whether it found nothing open.
-nothing_inherited: (host: blocking.host) -> (clean: bool) ! failure.reason =
-    arguments: [11]text.host_string =
-        [text.host_over("-c"), text.host_over(script), text.host_over("sh"),
-         text.host_over(digits[0][0..<lengths[0]]),
-         text.host_over(digits[1][0..<lengths[1]]),
-         text.host_over(digits[2][0..<lengths[2]]),
-         text.host_over(digits[3][0..<lengths[3]]),
-         text.host_over(digits[4][0..<lengths[4]]),
-         text.host_over(digits[5][0..<lengths[5]]),
-         text.host_over(digits[6][0..<lengths[6]]),
-         text.host_over(digits[7][0..<lengths[7]])]
+--  The held ends' numbers in decimal, for the copy's arguments.
+mut rooms: [8][12]u8 = zeroed
+
+--  Start the copy and say whether it found nothing open.
+nothing_inherited: (host: blocking.host, arguments: []text.host_string)
+                   -> (clean: bool) ! failure.reason =
     variables: []io.variable = []
-    mut running: io.child = try io.spawn(host, text.host_over("/bin/sh"),
-                                         arguments, variables, io.capturing)
-    mut buffer: [256]u8 = zeroed
-    mut said: usize = 0
-    loop do
-        part: io.child_read = try io.read_child(host, running, buffer)
-        break when part.finished
-        said += part.count
-    end loop
+    running: io.child = try io.spawn(host, posix.program_name(),
+                                     arguments, variables, io.inheriting)
     ended: io.ending = try io.wait(host, running)
     clean = false
     match ended.how
-        io.exited(status): clean = said == 0 and status == 0
+        io.exited(status): clean = status == 42
         io.signalled: clean = false
     end match
 end nothing_inherited
@@ -141,7 +121,7 @@ end nothing_inherited
 --  One thread's stack, with room for Darwin's whole 16 KiB pages.
 mut backing: [2 * 32768]u8 = zeroed
 
---  How many children came back clean.
+--  How many children found nothing open.
 mut clean_children: u32 = 0
 
 run: (host: blocking.host) -> none ! failure.reason =
@@ -153,12 +133,17 @@ run: (host: blocking.host) -> none ! failure.reason =
     while compiler.atomic_load(addr holding, compiler.acquire) == 0 do
         inc spins
     end while
+    mut arguments: [9]text.host_string = [9 of text.host_over("")]
+    arguments[0] = text.host_over("check")
     for index in usize(0)..<8 do
-        spell(index, held[index])
+        mut line := text.over(rooms[index][0..<12])
+        try text.append_i32(line, held[index])
+        arguments[1 + index] =
+            text.host_over(rooms[index][0..<text.length(line)])
     end for
     for child in usize(0)..<8 do
         _ = child
-        clean: bool = nothing_inherited(host) else (problem)
+        clean: bool = nothing_inherited(host, arguments) else (problem)
             compiler.atomic_store(addr finished, u32(1), compiler.release)
             fail problem
         end
@@ -168,9 +153,25 @@ run: (host: blocking.host) -> none ! failure.reason =
     try thread.join(workers)
 end run
 
+--  1: the run failed; 2: a child found a descriptor open, or did not end
+--  as the copy does; 42: none did.  The copy ends with 42, or 7 when it
+--  found one open, or 1 when it could not ask.
 public main: () -> (code: i32) =
+    host := blocking.new()
+    if io.argument_count(host) > 0 then
+        code = 1
+        open: bool = any_open(host) else (problem)
+            _ = problem
+            return
+        end
+        code = if open then 7 else 42 end if
+        return
+    end if
     code = 1
-    run(blocking.new()) else none
+    run(host) else (problem)
+        _ = problem
+        return
+    end
     code = 2
     return when clean_children <> 8
     code = 42

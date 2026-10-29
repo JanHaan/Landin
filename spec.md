@@ -25193,7 +25193,8 @@ declined. It was declined again.
 
 **Pinned by** `runtime/thread-spawn-leaks-no-descriptor` for the spawn:
 four pipes another thread made with no close-on-exec flag, and pipes it
-makes meanwhile, reach none of eight children on any hosted target. The
+makes meanwhile, reach none of eight children on any hosted target,
+each a copy of the program that asks `poll` about the eight ends. The
 cells are pinned by nothing that runs yet: the threads item's fixtures will
 pin them.
 

@@ -37,6 +37,13 @@
       "reason": "QEMU's user emulation answers getsockopt(SO_RCVTIMEO) with a zero-length record, so the receive limit the fixture set does not read back"
     },
     {
+      "fixture": "runtime/thread-spawn-leaks-no-descriptor",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "needs_binfmt": true,
+      "failures": ["the program's own exit status (expected 42, actual 1)"],
+      "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+    },
+    {
       "fixture": "runtime/thread-start-refused",
       "runners": ["qemu-aarch64", "qemu-riscv64"],
       "failures": ["the program returned a status"],

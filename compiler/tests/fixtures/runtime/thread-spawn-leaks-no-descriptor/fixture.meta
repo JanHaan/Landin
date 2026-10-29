@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D503 a thread of hosted/thread holds four pipes made with no close-on-exec flag and makes and closes pipes through platform/posix while the routine spawns a shell eight times; each shell finds no descriptor above its standard streams open, since every system's spawn closes what it does not give the child, Darwin's through POSIX_SPAWN_CLOEXEC_DEFAULT
+summary: D503 a thread of hosted/thread holds four pipes made with no close-on-exec flag and makes and closes pipes through platform/posix while the routine starts itself again eight times with the argument check and the eight ends' numbers; each copy asks poll about every number and finds none open, since every system's spawn closes what it does not give the child, Darwin's through POSIX_SPAWN_CLOEXEC_DEFAULT
 program: main.ldn
 root: ../../../../..
 status: 42
