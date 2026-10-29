@@ -228,7 +228,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   imports, typed global options and ordered roots. Your own modules are
   found under the roots given with `--root` [1480].
 - **Hardware.** D227's memory model supplies scalar atomics, volatile
-  accesses and barriers, and D228 packed register images with checked
+  accesses and barriers, each atomic fenced only as its ordering asks on
+  every backend (D499), and D228 packed register images with checked
   encoded fields.
 - **Stacks.** D450's stack builtins, `compiler.stack_prepare` and
   `compiler.stack_switch`, run on every target with a native backend. On

@@ -33,4 +33,11 @@ package Landin.Memory is
            | Atomic_Compare_Exchange | Volatile_Store | Stack_Operation);
    function Legal
      (Op : Operation; Success, Failure : Ordering) return Boolean;
+   --  The two halves of an ordering, which each backend's mapping reads
+   --  (D499): an acquiring read keeps later accesses after it, a releasing
+   --  write keeps earlier ones before it.  Acq_rel and seq_cst do both.
+   function Acquires (Order : Ordering) return Boolean
+     is (Order in Acquire | Acq_Rel | Seq_Cst);
+   function Releases (Order : Ordering) return Boolean
+     is (Order in Release | Acq_Rel | Seq_Cst);
 end Landin.Memory;

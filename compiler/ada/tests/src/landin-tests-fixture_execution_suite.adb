@@ -1413,8 +1413,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  An arm64 executable carries no level note, so the image that ran is
    --  held to its level by its instructions.  At Armv8.1-A an atomic
    --  read-modify-write is one LSE instruction and none of the default's
-   --  exclusive-monitor loops, `ldxr` and `stxr` at any width, remains; at
-   --  the default the same fixture's image holds no LSE instruction at all.
+   --  exclusive-monitor loops, `ldxr`, `ldaxr`, `stxr` and `stlxr` at any
+   --  width, remains; at the default the same fixture's image holds no LSE
+   --  instruction at all, at any ordering (D499).
    --  The lane's toolchain says which objdump reads the image.
    procedure Check_Arm64_Level
      (Built, Label : String; Leveled : Boolean;
@@ -1445,12 +1446,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Text : constant String := Unbounded.To_String (Listing.Output);
 
          --  A mnemonic at the start of an instruction, so `ldxr` also
-         --  finds `ldxrb` and `ldxrh` and never the acquiring `ldaxr`.
+         --  finds `ldxrb` and `ldxrh` and never the acquiring `ldaxr`, and
+         --  `ldadd` every ordering's and width's LSE add.
          function Has (Word : String) return Boolean
            is (Ada.Strings.Fixed.Index (Text, ASCII.HT & Word) > 0);
 
          LSE : constant Boolean :=
-           Has ("ldaddal") or else Has ("swpal") or else Has ("casal");
+           Has ("ldadd") or else Has ("swp") or else Has ("cas");
       begin
          Landin.Testing.Check
            (Item, Listing.Ended = Landin.Platform.Exited
@@ -1461,7 +1463,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Landin.Testing.Check
               (Item, LSE, Label & ": the image holds an LSE instruction");
             Landin.Testing.Check
-              (Item, not Has ("ldxr") and then not Has ("stxr"),
+              (Item, not Has ("ldxr") and then not Has ("ldaxr")
+                       and then not Has ("stxr") and then not Has ("stlxr"),
                Label & ": no exclusive-monitor loop remains");
          else
             Landin.Testing.Check

@@ -17971,10 +17971,10 @@ instruction the build does not assume. At `x86-64-v3` a variable shift of 32 or
 64 bits is BMI2's `shlx`, `shrx` or `sarx`, which shifts by any register
 rather than by `%cl`; narrower shifts, which BMI2 has no form for, and every
 guard [0320] and [1950] ask of a shift are unchanged. At `armv8.1-a` an
-atomic add, exchange or compare-exchange is one LSE instruction, `ldaddal`,
-`swpal` or `casal`, rather than an exclusive-monitor retry loop; the
-acquire-release form inside the same full fences strengthens every ordering
-exactly as much as the loop does. At `armv7-m` a 32-bit quotient is `sdiv` or
+atomic add, exchange or compare-exchange is one LSE instruction, `ldadd`,
+`swp` or `cas` in its ordering's form, rather than an exclusive-monitor
+retry loop; each orders exactly as the loop does at the same ordering
+(D522). At `armv7-m` a 32-bit quotient is `sdiv` or
 `udiv` and its remainder `mls`, after the same zero-divisor and
 minimum-over-minus-one guards, rather than a call to the runtime's
 `__aeabi_idivmod`; a 64-bit one still calls the runtime. RV64 indexed address
@@ -19684,8 +19684,70 @@ unchanged.
 **The alternatives:** fixing x86-64 alone and leaving arm64 and RV64 fully
 fenced until the optimization phase. It was declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures and instruction
-checks will pin it.
+**Pinned by** the backend case `atomics are fenced as their orderings ask`,
+which holds every operation at every ordering to its instructions on each
+backend, and `runtime/atomic-orderings-between-processes`, which runs message
+passing and store buffering between a process and its copy; D522 gives each
+architecture's mapping.
+
+### D522 — Each backend's ordering mapping is its architecture's published one
+
+**The tour said** nothing, and D499 named each architecture's memory model
+without choosing among the mappings each admits.
+
+**Chosen:** the mappings of the C/C++11 orderings the architectures'
+authors publish: x86-TSO's and ARMv8's from Sewell's collection
+(<https://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html>), ARMv7's from the
+same collection for Cortex-M0, which has no acquire or release instruction,
+and Table A.6 of the RISC-V unprivileged ISA's memory model appendix for RV64.
+
+- **x86-64.** Every load is a `mov`; a relaxed or release store is a `mov`
+  and a seq_cst store `xchg`; exchange, add and compare-exchange are `xchg`,
+  `lock xadd` and `lock cmpxchg` at every ordering; an acquire, release or
+  acq_rel fence emits nothing and a seq_cst fence `mfence`.
+- **arm64.** A relaxed load or store is `ldr` or `str`, an acquire or seq_cst
+  load `ldar`, a release or seq_cst store `stlr`. A read-modify-write's
+  exclusive loop reads with `ldaxr` when its ordering acquires and `ldxr`
+  otherwise, and writes with `stlxr` when it releases and `stxr` otherwise;
+  at `armv8.1-a` it is `swp`, `ldadd` or `cas` with no suffix, `a`, `l` or
+  `al`. An acquire fence is `dmb ishld`, every other `dmb ish`. Darwin and
+  FreeBSD share it.
+- **RV64.** A relaxed load or store is plain; an acquire load is followed by
+  `fence r, rw` and a seq_cst one also preceded by `fence rw, rw`; a release
+  or seq_cst store is preceded by `fence rw, w`. An AMO carries `.aq`, `.rl`
+  or `.aqrl`, seq_cst taking `.aqrl`; an LR/SC loop, compare-exchange and
+  the one- and two-byte masked loops, puts `.aq` on the LR for an acquire,
+  `.aqrl` for seq_cst, and `.rl` on the SC for a release. The four fences
+  are `fence r, rw`, `fence rw, w`, `fence.tso` and `fence rw, rw`.
+- **Cortex-M0.** A relaxed access is plain; an acquire or seq_cst load is
+  followed by `dmb sy`, a release store preceded by one and a seq_cst store
+  has one on each side; every thread fence is `dmb sy`, the only option
+  ARMv6-M's DMB has.
+
+A compare-exchange is lowered by its success ordering, never weaker than its
+failure ordering (D227), so the acquiring read a failed comparison may ask
+for is already there. The device, completion and compiler barriers, the
+alignment checks and the panic latch's sequences are unchanged; every atomic
+remains a full compiler memory boundary, which the IR and the allocators
+already kept without the instructions.
+
+**The alternatives:** on x86-64, a seq_cst store as `mov` followed by
+`mfence`, the collection's other choice; on arm64, a read-modify-write
+followed by `dmb ish`, the full barrier of GCC's older `__sync` builtins,
+which C11's seq_cst does not ask for; and on RV64, `fence rw, rw` for an
+acq_rel fence, which is what a core without FENCE.TSO executes `fence.tso`
+as. Each was declined for the published mapping. A relaxed load
+on x86-64 measured 0.9 ns a read against 49.5 before, and 0.6 for a plain
+word, in a loop of 10^8 reads at `--optimize speed` on an AMD EPYC 7302.
+
+**Pinned by** `backend/atomics are fenced as their orderings ask`,
+`backend/a level selects its instructions`, and
+`runtime/atomic-orderings-between-processes`, whose store-buffering rounds
+read both old values in about one round in twenty when their seq_cst stores
+and loads are made relaxed on that host, as a seq_cst store lowered as a
+plain `mov` would. Under QEMU's user emulation on an x86-64 host the arm64
+rounds can read both old values, because QEMU does not keep a `stlr` before
+a later `ldar`; `compiler/tests/cross-lanes.json` lists it.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -22681,7 +22743,8 @@ way.
 
 **The alternatives:** the system call alone; resolving the vDSO in every static
 program's entry, which carries its 17 KB into every image; and relaxed atomics
-for the cache, which cost about 50 ns a read until threads need them.
+for the cache, which cost about 50 ns a read until D499 made a relaxed load a
+plain move on x86-64.
 
 **Pinned by** `runtime/linux-vdso`, which also forces the fallback, and
 `runtime/clock-system-libc`, which requires the vDSO under `--link=libc`.

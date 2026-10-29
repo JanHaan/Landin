@@ -274,8 +274,9 @@ class Lane:
 
     def instructions(self, results):
         fixture = 'variable-shifts-at-every-width' if self.args.arch == 'amd64' else 'r630-memory-scalars'
-        present = r'\b(?:shlx|shrx|sarx)[ql]?\b' if self.args.arch == 'amd64' else r'\b(?:ldadd|swp|cas)al[bh]?\b'
-        exclusive = r'\b(?:ldxr|stxr)[bh]?\b'
+        present = (r'\b(?:shlx|shrx|sarx)[ql]?\b' if self.args.arch == 'amd64'
+                   else r'\b(?:ldadd|swp|cas)(?:a|l|al)?[bh]?\b')
+        exclusive = r'\b(?:ldxr|ldaxr|stxr|stlxr)[bh]?\b'
         for result in results:
             if result['case'] != 'runtime/' + fixture:
                 continue

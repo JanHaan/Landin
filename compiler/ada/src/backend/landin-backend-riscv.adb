@@ -2600,6 +2600,7 @@ package body Landin.Backend.RiscV is
                when Landin.IR.Memory_Access =>
                   declare
                      use all type Landin.Memory.Operation;
+                     use all type Landin.Memory.Ordering;
                      M : constant Landin.Memory.Operation :=
                        Landin.IR.Memory_Operation (Of_Unit, Item, Value);
                      Size : constant Landin.Targets.Scalar_Size :=
@@ -2611,6 +2612,11 @@ package body Landin.Backend.RiscV is
                        then "d" else "w");
                      Retry : constant String := Fresh;
                      Done : constant String := Fresh;
+                     --  The success ordering; a compare-exchange's failure
+                     --  ordering is never stronger (D227), so the LR the
+                     --  success ordering chooses serves both.
+                     Order : constant Landin.Memory.Ordering :=
+                       Landin.IR.Memory_Order (Of_Unit, Item, Value);
                   begin
                      if M = Stack_Prepare then
                         --  D450: the operands are the stack's base and
@@ -2669,22 +2675,53 @@ package body Landin.Backend.RiscV is
                         Emit ("call " & Stack_Switcher);
                         Stack_Used := True;
                      elsif Landin.Memory.Operands (M) = 0 then
-                        if M /= Compiler_Barrier then
-                           Emit ("fence iorw, iorw");
-                        end if;
+                        --  D499, the RISC-V memory model's mapping (the
+                        --  unprivileged ISA's Table A.6): acquire FENCE
+                        --  R,RW, release FENCE RW,W, acq_rel FENCE.TSO and
+                        --  seq_cst FENCE RW,RW.  The device and completion
+                        --  barriers keep their device-ordering FENCE.
+                        case M is
+                           when Compiler_Barrier => null;
+                           when Thread_Fence =>
+                              Emit (case Order is
+                                 when Acquire => "fence r, rw",
+                                 when Release => "fence rw, w",
+                                 when Acq_Rel => "fence.tso",
+                                 when others => "fence rw, rw");
+                           when others => Emit ("fence iorw, iorw");
+                        end case;
                      else
                         Load_Value (Operand (1), "x6");
                         if Bytes > 1 then
                            Emit ("andi x18, x6, " & Image (Bytes - 1));
                            Emit ("bnez x18, " & Trap);
                         end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("fence iorw, iorw");
-                        end if;
-                        if M in Atomic_Load | Volatile_Load then
+                        --  D499, Table A.6: a load is a plain load, an
+                        --  acquire one followed by FENCE R,RW and a seq_cst
+                        --  one also preceded by FENCE RW,RW; a store is a
+                        --  plain store, a release or seq_cst one preceded by
+                        --  FENCE RW,W.  A read-modify-write carries its
+                        --  ordering on its AMO, or on the LR and SC of its
+                        --  reservation loop: .aq on LR for an acquire, .rl
+                        --  on SC for a release, and .aqrl on LR for
+                        --  seq_cst.
+                        if M = Atomic_Load then
+                           if Order = Seq_Cst then
+                              Emit ("fence rw, rw");
+                           end if;
+                           Memory (False, Size, "x5", "x6");
+                           if Landin.Memory.Acquires (Order) then
+                              Emit ("fence r, rw");
+                           end if;
+                        elsif M = Volatile_Load then
                            Memory (False, Size, "x5", "x6");
                         elsif M in Atomic_Store | Volatile_Store then
                            Load_Value (Operand (2));
+                           if M = Atomic_Store
+                             and then Landin.Memory.Releases (Order)
+                           then
+                              Emit ("fence rw, w");
+                           end if;
                            Memory (True, Size, "x5", "x6");
                         else
                            Load_Value (Operand (2), "x7");
@@ -2696,7 +2733,13 @@ package body Landin.Backend.RiscV is
                            then
                               Emit ((if M = Atomic_Add
                                 then "amoadd." else "amoswap.")
-                                & Width & ".aqrl x5, x7, (x6)");
+                                & Width
+                                & (case Order is
+                                     when Relaxed | No_Ordering => "",
+                                     when Acquire => ".aq",
+                                     when Release => ".rl",
+                                     when Acq_Rel | Seq_Cst => ".aqrl")
+                                & " x5, x7, (x6)");
                               if Bytes = 4 then
                                  Extract ("x5", "x5", 0, 32);
                               end if;
@@ -2713,7 +2756,12 @@ package body Landin.Backend.RiscV is
                                  Emit ("mv x18, x6");
                               end if;
                               Put (Retry & ":");
-                              Emit ("lr." & Width & ".aq x20, (x18)");
+                              Emit ("lr." & Width
+                                & (case Order is
+                                     when Seq_Cst => ".aqrl",
+                                     when Acquire | Acq_Rel => ".aq",
+                                     when others => "")
+                                & " x20, (x18)");
                               if Bytes < 4 then
                                  Emit ("srl x5, x20, x19");
                                  Emit ("and x5, x5, x22");
@@ -2744,13 +2792,13 @@ package body Landin.Backend.RiscV is
                                  Emit ("and x25, x20, x24");
                                  Emit ("or x21, x25, x21");
                               end if;
-                              Emit ("sc." & Width & ".rl x30, x21, (x18)");
+                              Emit ("sc." & Width
+                                & (if Landin.Memory.Releases (Order)
+                                   then ".rl" else "")
+                                & " x30, x21, (x18)");
                               Put (Character'Val (9) & "bnez x30, " & Retry);
                               Put (Done & ":");
                            end if;
-                        end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("fence iorw, iorw");
                         end if;
                         if Landin.Memory.Returns_Value (M) then
                            Store_Value (Value);

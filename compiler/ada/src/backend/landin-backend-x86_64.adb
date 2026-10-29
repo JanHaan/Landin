@@ -4708,12 +4708,15 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Memory_Access =>
                   declare
                      use all type Landin.Memory.Operation;
+                     use all type Landin.Memory.Ordering;
                      M : constant Landin.Memory.Operation :=
                        Landin.IR.Memory_Operation (Of_Unit, Item, Value);
                      Size : constant Held_Size := Landin.Types.Storage_Size
                        (Landin.IR.Memory_Scalar (Of_Unit, Item, Value), Facts);
                      S : constant String := Suffix (Size);
                      A : constant String := Accumulator (Size);
+                     Order : constant Landin.Memory.Ordering :=
+                       Landin.IR.Memory_Order (Of_Unit, Item, Value);
                   begin
                      if M = Stack_Prepare then
                         --  D450: the operands are the stack's base and
@@ -4775,7 +4778,13 @@ package body Landin.Backend.X86_64 is
                         Emit ("call " & Stack_Switcher);
                         Stack_Used := True;
                      elsif Landin.Memory.Operands (M) = 0 then
-                        if M /= Compiler_Barrier then
+                        --  D499, under x86-TSO: an acquire, release or
+                        --  acq_rel fence is the compiler boundary alone,
+                        --  and a seq_cst fence, a device barrier and a
+                        --  completion barrier are MFENCE.
+                        if M in Device_Barrier | Completion_Barrier
+                          or else (M = Thread_Fence and then Order = Seq_Cst)
+                        then
                            Emit ("mfence");
                         end if;
                      else
@@ -4786,16 +4795,24 @@ package body Landin.Backend.X86_64 is
                              (Landin.Targets.Bytes (Size) - 1)) & ", %rcx");
                            Trap_On ("jnz");
                         end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("mfence");
-                        end if;
+                        --  D499, the x86-TSO mapping: every load is a plain
+                        --  MOV, a relaxed or release store too, a seq_cst
+                        --  store XCHG, and a read-modify-write its locked
+                        --  instruction, which orders as a full fence.  No
+                        --  access takes MFENCE.
                         if M in Atomic_Load | Volatile_Load then
                            Emit ("mov" & S & " (%rcx), " & A);
                         else
                            Emit ("mov" & S & " "
                              & Value_Operand (Operand (2)) & ", " & A);
                            case M is
-                              when Atomic_Store | Atomic_Exchange =>
+                              when Atomic_Store =>
+                                 if Order = Seq_Cst then
+                                    Emit ("xchg" & S & " " & A & ", (%rcx)");
+                                 else
+                                    Emit ("mov" & S & " " & A & ", (%rcx)");
+                                 end if;
+                              when Atomic_Exchange =>
                                  Emit ("xchg" & S & " " & A & ", (%rcx)");
                               when Volatile_Store =>
                                  Emit ("mov" & S & " " & A & ", (%rcx)");
@@ -4819,9 +4836,6 @@ package body Landin.Backend.X86_64 is
                               when others =>
                                  raise Landin.Compiler_Defect;
                            end case;
-                        end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("mfence");
                         end if;
                         if Landin.Memory.Returns_Value (M) then
                            Store_Value (Value, A);

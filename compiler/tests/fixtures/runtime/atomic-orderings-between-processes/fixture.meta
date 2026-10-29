@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D227's orderings between two CPU contexts, a process and its copy over a shared page, as each backend lowers them (D499): a message passed through a release store and an acquire load carries the ordinary write before it, and two seq_cst stores each followed by a seq_cst load of the other's location never both read the old values, in rounds whose starts are staggered; it cannot show that a weaker outcome would occur without the orderings, only that none the orderings forbid was seen
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 1620
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

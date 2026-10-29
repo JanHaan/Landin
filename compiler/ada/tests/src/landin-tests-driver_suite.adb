@@ -1491,8 +1491,8 @@ package body Landin.Tests.Driver_Suite is
    begin
       Landin.Testing.Check
         (Item, Contains (Plain, HT & ".arch armv8-a" & LF)
-           and then Contains (Plain, HT & "ldxr w")
-           and then Contains (Plain, HT & "stxr w")
+           and then Contains (Plain, HT & "ldaxr w")
+           and then Contains (Plain, HT & "stlxr w")
            and then not Contains (Plain, HT & "ldaddal")
            and then Contains (Plain, " -Wa,-march=armv8-a ")
            and then Contains (Plain, """level"":""armv8-a"""),
