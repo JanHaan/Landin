@@ -630,7 +630,7 @@ more targets and the microcontrollers people buy; a build tool, package acquisit
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R14.30 — A second Io (planned).**
+**Current roadmap work: R14.30 — A second Io.**
 
 ## What is here
 

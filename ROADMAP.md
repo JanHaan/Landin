@@ -2584,7 +2584,7 @@ missing answer, overlap, trap or timeout fails the run.
 
 ### R14.30 — A second Io
 
-Status: planned
+Status: active
 Depends on: R14.20, R13.33
 
 An event-driven Io that runs fibres over epoll on Linux and kqueue on

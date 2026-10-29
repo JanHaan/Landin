@@ -24073,3 +24073,56 @@ small into a trap where D464 has a failure. All were declined.
 routine that overflows; `runtime/fibre-same-source-any-provider` on every
 hosted target; and the `capacity` control of
 `environments/cortex-m/evidence.py` (D470).
+
+### D476 — The hosted services split into the system and two waiting providers
+
+**The tour said** at [1660] that a hosted root imports `hosted/system`, and
+D444 made the blocking host a provider of `fibre.scheduler`. Every hosted
+program therefore compiled the blocking provider's network, scheduling and
+`core/fibre`, and a second, event-driven provider would have had to sit
+beside a module that already answered every waiting operation by blocking.
+
+**Chosen:** three modules. `hosted/system` keeps the services that do not
+wait and are the same whoever waits: the arguments, the environment, opening
+and closing files, directories, running programs, entropy and the wall
+clock, and the last-error and last-signal cells. It is no longer a world,
+because reading and writing can wait. `hosted/blocking` is the provider
+whose waiting operations block the thread: reading and writing, the
+network, the monotonic clock's `sleep`, and `fibre.scheduler`, running each
+task to its end. `hosted/events` is the provider whose waiting operations
+switch fibres over the system's event mechanism. Each of the two is built
+over a `hosted/system` handle and supplies `io.world` and the concepts the
+system supplies, by handing it what does not wait. A program mints its root
+from the one it chooses, `blocking.new()` or `events.new(...)`; a program
+that never waits on anything may still use `system.new()` alone. Every
+hosted source and document moves from `system.new()` to `blocking.new()`.
+
+**The alternatives:** `hosted/events` importing the blocking `hosted/system`
+and delegating to it, which compiles the blocking provider into every event
+program; keeping `hosted/system` the blocking provider and moving the shared
+services into a new `hosted/process`, which changes no program but leaves
+the blocking provider without a name that says so. Both were declined.
+
+**Pinned by** nothing that runs yet: the split's migration of every hosted
+fixture will pin it, with a program over `hosted/system` alone.
+
+### D477 — Only a provider that takes turns waits for signals
+
+**The tour said** nothing. D449 makes a signal an event a provider reads with
+an entry that waits like a receive. Over a provider that runs each task to
+its end, a task waiting for a signal would hold the program before it served
+anything.
+
+**Chosen:** `core/io`'s `signals` concept is provided only by providers of
+`fibre.turns`. A program that waits for a signal asks for both, so over
+`hosted/blocking` it cannot be written and the process keeps the system's
+default disposition: SIGTERM ends it. Prototype 5's derived server takes its
+signal waiter only when it was given a provider of turns, and the choice is
+made where the providers are minted.
+
+**The alternatives:** a blocking `sigwait` in every provider, which serves
+nothing over the blocking host; and a polling entry that never waits there,
+which gives one entry two meanings. Both were declined.
+
+**Pinned by** nothing that runs yet: the event Io's signal fixtures will pin
+it.
