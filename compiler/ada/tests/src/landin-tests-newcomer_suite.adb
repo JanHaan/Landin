@@ -394,7 +394,9 @@ package body Landin.Tests.Newcomer_Suite is
       end;
 
       --  D374: the dump says which entries an emitted table names.  Only
-      --  `area` is projected, so `sides`' entry is left out of the table.
+      --  `area` is projected, so `sides`' entry is left out of the table,
+      --  and D484 makes it absent, naming no routine, though `square_sides`
+      --  is lowered as a routine the entry module defines.
       Host.Add_File
         ("shape.ldn",
          "shape: type = concept (t: type)" & LF
@@ -428,11 +430,110 @@ package body Landin.Tests.Newcomer_Suite is
          Landin.Testing.Check
            (Item, Contains (Dump, "  entry 1 target 1 provider 1 dispatch 1"
                                   & " kept" & LF)
-              and then Contains (Dump, "  entry 2 target 2 provider 2"
-                                       & " dispatch 2 dropped" & LF),
+              and then Contains (Dump, "  entry 2 target 0 provider 0"
+                                       & " dispatch 0 dropped" & LF),
             "the projected entry is kept and the other dropped: " & Dump);
       end;
    end The_IR_Is_Written_On_Request;
+
+   ---------------------------------------------------------------------
+   --  D484: a library conformance's entry nothing projects is not lowered
+   ---------------------------------------------------------------------
+
+   Shape_Library : constant String :=
+     "public shape: type = concept (t: type)" & LF
+     & "    area: (self: ptr t) -> (a: i32)" & LF
+     & "    sides: (self: ptr t) -> (n: i32)" & LF
+     & "end shape" & LF
+     & "public square: type = struct" & LF
+     & "    side: i32" & LF
+     & "end square" & LF
+     & "square_area: (self: ptr square) -> (a: i32) =" & LF
+     & "    a = self.val.side * self.val.side" & LF
+     & "end square_area" & LF
+     & "square_sides: (self: ptr square) -> (n: i32) =" & LF
+     & "    n = corner_count(self.val.side)" & LF
+     & "end square_sides" & LF
+     & "corner_count: (side: i32) -> (n: i32) =" & LF
+     & "    n = side - side + 4" & LF
+     & "end corner_count" & LF
+     & "square is shape (area: square_area, sides: square_sides)" & LF
+     & "public area_of: (t: type is shape, v: ptr t) -> (a: i32) =" & LF
+     & "    a = t.area(v)" & LF
+     & "end area_of" & LF;
+
+   procedure An_Unprojected_Entry_Is_Not_Lowered
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Unprojected_Entry_Is_Not_Lowered
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_Directory ("lib");
+      Host.Add_Directory ("lib/core");
+      Host.Add_Directory ("lib/core/shape");
+      Host.Add_File ("lib/core/shape/shape.ldn", Shape_Library);
+      Host.Add_Directory ("direct");
+      Host.Add_File
+        ("direct/main.ldn",
+         "import core/shape" & LF & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    s: shape.square = (side: 3)" & LF
+         & "    code = shape.area_of(addr s)" & LF
+         & "end main" & LF);
+      Host.Add_Directory ("erased");
+      Host.Add_File
+        ("erased/main.ldn",
+         "import core/shape" & LF & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    s: shape.square = (side: 3)" & LF
+         & "    e: any shape.shape = any(addr s)" & LF
+         & "    code = e.area()" & LF
+         & "end main" & LF);
+      declare
+         Direct : constant Landin.Driver.Outcome := Run
+           (["--target=linux-x86-64", "--link=libc", "--library=lib",
+             "direct/main.ldn", "--emit=asm", "-o", "direct.s"],
+            Host, Tools);
+         Lowered : constant Landin.Driver.Outcome := Run
+           (["--target=linux-x86-64", "--link=libc", "--library=lib",
+             "--specialize=off", "direct/main.ldn", "--emit=ir", "-o",
+             "direct.ir"], Host, Tools);
+         Erased : constant Landin.Driver.Outcome := Run
+           (["--target=linux-x86-64", "--link=libc", "--library=lib",
+             "erased/main.ldn", "--emit=asm", "-o", "erased.s"],
+            Host, Tools);
+         Text : constant String := Host.Written ("direct.s");
+         Dump : constant String := Host.Written ("direct.ir");
+         Whole : constant String := Host.Written ("erased.s");
+      begin
+         Landin.Testing.Check
+           (Item, Direct.Status = Landin.Driver.Status_Success
+              and then Lowered.Status = Landin.Driver.Status_Success
+              and then Erased.Status = Landin.Driver.Status_Success,
+            "every program compiles: " & Report (Direct) & Report (Lowered)
+            & Report (Erased));
+         --  Only `area` is selected, so `sides`' provider, and what only
+         --  it calls, is neither lowered nor emitted.
+         Landin.Testing.Check
+           (Item, Contains (Text, "square_area:")
+              and then not Contains (Text, "square_sides")
+              and then not Contains (Text, "corner_count"),
+            "the unprojected provider is not emitted: " & Text);
+         Landin.Testing.Check
+           (Item, Contains (Dump, "  entry 2 target 0 provider 0"
+                                  & " dispatch 0 dropped" & LF),
+            "its entry is absent from the direct table: " & Dump);
+         --  An erased table may have any entry read, so every provider
+         --  is lowered for it.
+         Landin.Testing.Check
+           (Item, Contains (Whole, "square_sides:")
+              and then Contains (Whole, "corner_count:"),
+            "an erased table's providers are all emitted: " & Whole);
+      end;
+   end An_Unprojected_Entry_Is_Not_Lowered;
 
    ---------------------------------------------------------------------
    --  D361: the hosted default's report
@@ -678,6 +779,9 @@ package body Landin.Tests.Newcomer_Suite is
       Landin.Testing.Register
         (Into, "driver", "the IR is written on request",
          The_IR_Is_Written_On_Request'Access);
+      Landin.Testing.Register
+        (Into, "driver", "an unprojected entry is not lowered",
+         An_Unprojected_Entry_Is_Not_Lowered'Access);
       Landin.Testing.Register
         (Into, "driver", "a trap names its site",
          A_Trap_Names_Its_Site'Access);

@@ -15595,6 +15595,48 @@ of an entry naming a C import is in a routine only an unprojected entry
 names, so that a static Linux link refused it, at every profile, while a
 block kept every routine live.
 
+### D484 — A direct table's entry no selection names is not lowered
+
+**The tour said** nothing, and D296 made a reached conformance reach every
+provider. A call such as `io.out(host)` reaches the generic instance of
+`io.out` and through it the provider's `process` table, so every provider
+of `process` was lowered and emitted, and every routine those providers
+call, though only `out` is ever read. D374 then left those entries zero
+words and the linker dropped the routines, but the compile time and the
+assembly were spent. Over a provider that delegates, the cost doubles: a
+hello-world over `hosted/blocking` (D476) lowered `blocking`'s and the
+system's argument, input and error entries and the `core/io` instances
+between them, 4,923 lines of assembly where the program needs 3,815.
+
+**Chosen:** a direct table's entry is reached only by a reached selection
+that names it: a constrained generic body's `t.entry`, in the instance's
+own view, which is the only way code reads a direct table, so the
+selection names the exact conformance the instance receives. A reached
+instance makes the tables of its evidence exist without reaching any of
+their entries. An erased table, built where an `any` is constructed or an
+erased entry selected, still reaches every entry and D145's parents,
+because an `any` value may have any entry read, and so does a `for`'s
+iterable conformance, which names no entry. A direct table's entry that
+nothing reaches is absent: its provider is not lowered, the IR entry
+names no routine and no signature, it keeps its place so D144's and
+D147's offsets stand, and every backend emits it as D374's zero word,
+which a projection elsewhere in its family can therefore not keep. The
+verifier refuses a projection of an absent entry.
+
+**The alternatives:** leaving the routines to the linker, which D296
+already declined for the time they cost; lowering every provider and
+having the backends skip the routines D374 finds unable to run, which
+still lowers their IR; and building direct tables of the reached entries
+alone, which moves offsets. All are declined. D296's "a reached
+conformance reaches its providers" now holds of erased tables and of
+`for`'s.
+
+**Pinned by** the driver case `an unprojected entry is not lowered`, a
+library conformance whose unselected provider and the routine only it
+calls are absent from the assembly and whose IR entry names nothing, while
+an erased table of the same conformance lowers both; and the lowering
+record `compiler/tests/lowering.ir`.
+
 ### D419 — A parameter whose type names no generic formal is an ordinary context
 
 **The discrepancy:** [1880] lists the type of the parameter an argument
@@ -21546,6 +21588,10 @@ D415 supersedes this decision in part: a link name on any routine makes it
 an export, so it roots the routine whatever its convention, and an import
 roots no definition, because every routine that is not an export is a local
 symbol an import of its spelling never reaches.
+
+D484 narrows "a reached conformance reaches its providers" to erased tables
+and a `for`'s iterable conformance: a direct table's entry is reached only
+by a reached selection that names it.
 
 ### D303 — Every routine and datum has its own section, and a static link counts what it reaches
 

@@ -4178,7 +4178,15 @@ package body Landin.IR.Verifier is
                        Of_Unit.Evidence_Entries.Element
                          (Held.Entries.First + Which);
                   begin
-                     if not Holds (Of_Unit, Provider.Target)
+                     --  D484: a concrete table's absent entry names
+                     --  nothing at all.
+                     if Provider.Target = No_Item
+                       and then not Held.Erased
+                       and then Provider.Signature = No_Signature
+                       and then Provider.Dispatch = No_Signature
+                     then
+                        null;
+                     elsif not Holds (Of_Unit, Provider.Target)
                        or else Kind_Of (Of_Unit, Provider.Target) /= Routine
                      then
                         return (Kind => Callee_Is_Not_A_Routine,
@@ -6940,6 +6948,9 @@ package body Landin.IR.Verifier is
                                  elsif Which = 0
                                    or else Which > Evidence_Entry_Count
                                      (Of_Unit, Evidence)
+                                   --  D484: an absent entry is no entry.
+                                   or else Evidence_Entry_Target
+                                     (Of_Unit, Evidence, Which) = No_Item
                                  then
                                     return
                                       (Kind => Evidence_Entry_Out_Of_Range,

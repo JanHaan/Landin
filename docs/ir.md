@@ -356,7 +356,15 @@ uses one of them a single datum, and a hello-world over `core/io` 64
 routines rather than 546. A compilation without such an entry keeps
 everything, since anything in it may be what its consumer came for.
 
-A reached conformance's table still need not name every provider. Each
+A reached conformance does not reach every provider. A direct table's
+entry is reached only by a reached `t.entry` selection naming it, in the
+instance's own view, so a call of `io.out` lowers the provider's `out` and
+none of its other `process` entries; the rest are absent entries, which
+name no routine and keep their places (D484). An erased table, and a `for`
+loop's iterable table, reach every entry, since an `any` value may have
+any of them read.
+
+Even a reached entry need not be named by the emitted table. Each
 table records its concept, and the backends keep entry N only where code
 that can run projects entry N from some table of that concept (D374): the
 concept rather than the table a projection names, because an `any` value

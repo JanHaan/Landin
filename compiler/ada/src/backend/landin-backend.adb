@@ -143,7 +143,12 @@ package body Landin.Backend is
       procedure Keep (Table : Positive; Which : Positive) is
          Position : constant Positive := Result.First (Table) + Which;
       begin
-         if not Result.Kept (Position) then
+         --  D484: an absent entry has nothing to keep and stays a zero
+         --  word, though another table of its family keeps the entry.
+         if not Result.Kept (Position)
+           and then IR.Evidence_Entry_Target
+             (Of_Unit, IR.Evidence_Id (Table), Which) /= IR.No_Item
+         then
             Result.Kept (Position) := True;
             Reach (IR.Evidence_Entry_Target
               (Of_Unit, IR.Evidence_Id (Table), Which));

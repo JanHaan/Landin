@@ -543,6 +543,21 @@ package body Landin.Stages.Lowering is
       Evidence_Retained : array (Source_Evidence) of Boolean :=
         [others => False];
 
+      --  D484: which entries of a retained conformance's table the program
+      --  can project, and so whose providers are lowered.  A table every
+      --  entry of which is needed, as an erased one is, says so in
+      --  Every_Entry_Reached; otherwise Entries_Reached holds the entry
+      --  positions a reached selection names, and the rest are absent.
+      Every_Entry_Reached : array (Source_Evidence) of Boolean :=
+        [others => False];
+      Entries_Reached : array (Source_Evidence)
+        of Evidence_Position_Sets.Set;
+
+      function Entry_Reached (Position : Positive; Which : Positive)
+        return Boolean
+      is (Every_Entry_Reached (Position)
+          or else Entries_Reached (Position).Contains (Which));
+
       function Needed_Evidence_Count
         (Instance : Landin.Checking.Routine_Instance_Id) return Natural
       is (Evidence_Use_Count
@@ -16536,11 +16551,18 @@ package body Landin.Stages.Lowering is
          --  Which reached conformances have had D145's parents reached.
          Closed : array (Source_Evidence) of Boolean := [others => False];
 
+         --  What Reach_Conformance's Which may say besides one entry: that
+         --  every entry is reached, or only that the table exists.
+         Every_Entry : constant Natural := 0;
+         Table_Only : constant Natural := Natural'Last;
+
          procedure Reach_Declaration (Id : Res.Declaration_Id);
          procedure Reach_Instance
            (Instance : Landin.Checking.Routine_Instance_Id);
          procedure Reach_Conformance
-           (Row : Landin.Checking.Conformance_Id; Erased : Boolean);
+           (Row    : Landin.Checking.Conformance_Id;
+            Erased : Boolean;
+            Which  : Natural := Every_Entry);
 
          procedure Reach_Declaration (Id : Res.Declaration_Id) is
          begin
@@ -16572,22 +16594,43 @@ package body Landin.Stages.Lowering is
             Pending.Append (Pending_Walk'(Instance => Instance, others => <>));
             Reach_Declaration
               (Landin.Checking.Routine_Template_Of (Types.all, Instance));
+            --  The instance's hidden tables exist; D484: which of their
+            --  entries are reached is what its body selects, which the
+            --  walk of the body in the instance's own view finds.
             for Index in 1 .. Landin.Checking.Routine_Evidence_Count
               (Types.all, Instance)
             loop
                Reach_Conformance
                  (Landin.Checking.Nth_Routine_Evidence
                     (Types.all, Instance, Index),
-                  Erased => False);
+                  Erased => False, Which => Table_Only);
             end loop;
          end Reach_Instance;
 
          procedure Reach_Conformance
-           (Row : Landin.Checking.Conformance_Id; Erased : Boolean)
+           (Row    : Landin.Checking.Conformance_Id;
+            Erased : Boolean;
+            Which  : Natural := Every_Entry)
          is
             Position : constant Positive :=
               Landin.Checking.Conformance_Identities.Position
                 (Types.all, Row);
+
+            procedure Reach_Entry (Entry_Position : Positive);
+
+            procedure Reach_Entry (Entry_Position : Positive) is
+               Provider : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Conformance_Provider_Instance
+                   (Types.all, Row, Entry_Position);
+            begin
+               if Provider /= Landin.Checking.No_Routine_Instance then
+                  Reach_Instance (Provider);
+               else
+                  Reach_Declaration
+                    (Landin.Checking.Conformance_Provider_Declaration
+                       (Types.all, Row, Entry_Position));
+               end if;
+            end Reach_Entry;
 
             procedure Reach_Parent
               (Parent_Row : Landin.Checking.Conformance_Id);
@@ -16600,25 +16643,27 @@ package body Landin.Stages.Lowering is
 
             procedure Reach_Parents is new For_Each_Parent_Row (Reach_Parent);
          begin
-            if not Evidence_Retained (Position) then
-               Evidence_Retained (Position) := True;
-               for Entry_Position in
-                 1 .. Landin.Checking.Conformance_Entry_Count (Types.all, Row)
-               loop
-                  declare
-                     Provider : constant Landin.Checking.Routine_Instance_Id
-                       := Landin.Checking.Conformance_Provider_Instance
-                         (Types.all, Row, Entry_Position);
-                  begin
-                     if Provider /= Landin.Checking.No_Routine_Instance then
-                        Reach_Instance (Provider);
-                     else
-                        Reach_Declaration
-                          (Landin.Checking.Conformance_Provider_Declaration
-                             (Types.all, Row, Entry_Position));
+            Evidence_Retained (Position) := True;
+            if Erased or else Which = Every_Entry then
+               if not Every_Entry_Reached (Position) then
+                  Every_Entry_Reached (Position) := True;
+                  for Entry_Position in
+                    1 .. Landin.Checking.Conformance_Entry_Count
+                      (Types.all, Row)
+                  loop
+                     if not Entries_Reached (Position).Contains
+                       (Entry_Position)
+                     then
+                        Reach_Entry (Entry_Position);
                      end if;
-                  end;
-               end loop;
+                  end loop;
+                  Entries_Reached (Position).Clear;
+               end if;
+            elsif Which /= Table_Only
+              and then not Entry_Reached (Position, Which)
+            then
+               Entries_Reached (Position).Insert (Which);
+               Reach_Entry (Which);
             end if;
             if Erased and then not Closed (Position) then
                Closed (Position) := True;
@@ -16640,9 +16685,6 @@ package body Landin.Stages.Lowering is
               Landin.Checking.Routine_Target_Of (Types.all, Of_Tree, Node);
             Selected : constant Landin.Checking.Conformance_Id :=
               Landin.Checking.Evidence_Of (Types.all, Of_Tree, Node);
-            Traversed : constant Landin.Checking.Conformance_Id :=
-              Landin.Checking.Traversal_Evidence_Of
-                (Types.all, Of_Tree, Node);
          begin
             if Bound then
                declare
@@ -16662,6 +16704,11 @@ package body Landin.Stages.Lowering is
             end if;
             --  An erased table is built where Collect_Any_Evidence below
             --  finds an `any` construction or an erased selection.
+            --  D484: a direct selection reaches the one entry it names; a
+            --  node that names no entry reaches them all.  A traversal's
+            --  iterable conformance is this same fact, with no entry
+            --  (Traversal_Evidence_Of), so its four entries are reached
+            --  here too.
             if Selected /= Landin.Checking.No_Conformance then
                Reach_Conformance
                  (Selected,
@@ -16671,10 +16718,9 @@ package body Landin.Stages.Lowering is
                        and then not Bound
                        and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
-                           = Ty.Any_Value));
-            end if;
-            if Traversed /= Landin.Checking.No_Conformance then
-               Reach_Conformance (Traversed, Erased => False);
+                           = Ty.Any_Value),
+                  Which => Landin.Checking.Evidence_Entry_Of
+                    (Types.all, Of_Tree, Node));
             end if;
          end Examine;
 
@@ -16800,6 +16846,7 @@ package body Landin.Stages.Lowering is
                    = Landin.Checking.Routine_Ready;
             end loop;
             Evidence_Retained := [others => True];
+            Every_Entry_Reached := [others => True];
          else
             Keep_Everything := False;
 
@@ -17683,8 +17730,15 @@ package body Landin.Stages.Lowering is
                     1 .. Landin.Checking.Conformance_Entry_Count
                            (Types.all, Source)
                   loop
-                     Add_Provider
-                       (Evidence (Position), Source, Provider_Position);
+                     --  D484: an entry nothing can project is absent, and
+                     --  its provider was never lowered.
+                     if Entry_Reached (Position, Provider_Position) then
+                        Add_Provider
+                          (Evidence (Position), Source, Provider_Position);
+                     else
+                        IR.Add_Absent_Evidence_Entry
+                          (Unit.all, Evidence (Position));
+                     end if;
                   end loop;
 
                   if Used_Any_Evidence (Position) then

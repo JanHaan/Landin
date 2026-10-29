@@ -1330,6 +1330,25 @@ package body Landin.IR is
       Into.Evidence (Positive (Evidence)) := Held;
    end Add_Evidence_Entry;
 
+   procedure Add_Absent_Evidence_Entry
+     (Into : in out Unit; Evidence : Evidence_Id)
+   is
+      Held : Evidence_Record := Into.Evidence (Positive (Evidence));
+   begin
+      if Held.Entries.First + Held.Entries.Count
+           /= Natural (Into.Evidence_Entries.Length)
+      then
+         raise Landin.Compiler_Defect with
+           "evidence entries were appended out of table order";
+      end if;
+      Into.Evidence_Entries.Append
+        (Evidence_Entry_Record'
+           (Target => No_Item, Signature => No_Signature,
+            Dispatch => No_Signature));
+      Held.Entries.Count := Held.Entries.Count + 1;
+      Into.Evidence (Positive (Evidence)) := Held;
+   end Add_Absent_Evidence_Entry;
+
    function Evidence_Entry_Target
      (Of_Unit : Unit; Id : Evidence_Id; Which : Positive) return Item_Id
    is

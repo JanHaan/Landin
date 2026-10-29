@@ -967,6 +967,22 @@ package Landin.IR is
           Post => Evidence_Entry_Count (Into, Evidence)
                     = Evidence_Entry_Count (Into, Evidence)'Old + 1;
 
+   --  D484: an entry of a concrete table that no code of the program can
+   --  project, whose provider was therefore never lowered.  It has no
+   --  target and no signature, keeps its place so every later entry keeps
+   --  its offset, and is emitted as the zero word D374 gives a left-out
+   --  entry.  An erased table names every entry and has none of these.
+   procedure Add_Absent_Evidence_Entry
+     (Into : in out Unit; Evidence : Evidence_Id)
+     with Pre  => Holds (Into, Evidence)
+                  and then not Evidence_Is_Erased (Into, Evidence),
+          Post => Evidence_Entry_Count (Into, Evidence)
+                    = Evidence_Entry_Count (Into, Evidence)'Old + 1
+                  and then Evidence_Entry_Target
+                    (Into, Evidence, Evidence_Entry_Count (Into, Evidence))
+                      = No_Item;
+
+   --  No_Item for an absent entry.
    function Evidence_Entry_Target
      (Of_Unit : Unit; Id : Evidence_Id; Which : Positive) return Item_Id
      with Pre => Holds (Of_Unit, Id)
