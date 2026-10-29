@@ -2628,7 +2628,7 @@ report writes on a stack of its own, since lazy binding overran a fibre's
 
 ### R14.40 — Threads and the atomic wrapper
 
-Status: planned
+Status: active
 Depends on: R14.20
 
 Hosted threads, and the atomic wrapper type over D227's builtins that answers

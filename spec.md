@@ -16444,6 +16444,36 @@ breaks `hosted/system` on Darwin and FreeBSD (D279). Both were declined.
 `platform/linux` call written for Darwin, and
 `negative/module-member-for-another-target`.
 
+### D496 — Per-thread module storage is placed by `link(thread)`
+
+**The tour said** nothing of thread-local storage, and its table of C
+facilities sends C's thread-locals through the binding generator. D207 and
+D288 keep the last error by ownership "until thread-local storage exists",
+and D471's limit cell and D491's report stack are one per program because a
+program is one execution context.
+
+**Chosen:** `link_attribute` gains `thread`. A module `mut` binding written
+`link(thread) mut cell: T` has one instance in every thread, each zeroed when
+its thread begins, so it takes no initializer and its type must be zeroable.
+A thread's reads and writes reach its own instance. On a hosted target the
+storage is the system's own: ELF thread-local storage in the local-exec
+model on Linux and FreeBSD, which a static Linux program sets up itself and
+the C library sets up otherwise, and Darwin's thread-local variables. On a
+target with no threads it is ordinary module storage, shared with interrupt
+handlers as any module storage is. It does not combine with `symbol` or
+`section`, so no C thread-local is named through it. What an instance's
+address may outlive, since the instance ends with its thread, is settled by
+the item that implements the form, in a record of its own.
+
+**The alternatives:** a reserved word, `thread mut cell`, which takes the
+name from every program; `mut(thread)`, a form of `mut` only module bindings
+could use; cells the compiler owns and the library reaches through a
+builtin, which keeps a storage class out of the source that declares it; and
+keeping the last error by ownership, which leaves a `system.new()` handle
+shared by two threads racing on its cell. All were declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
 The C boundary, the machine directives, the entry point, and the
@@ -19581,6 +19611,81 @@ report writes on its own stack`, which holds Darwin and both FreeBSD
 targets to moving before the call, and closing the trap's depth, in a
 program that prepares a stack, and Linux, RV64 and Cortex-M0, and every
 program that prepares none, to emitting no such stack.
+
+### D497 — A thread's limit cell is its own, in its system's thread storage
+
+**The tour said** nothing. D471 keeps the running stack's limit in one cell
+because a program is one execution context, "a thread, when one is admitted,
+needs a cell of its own", and D472's switch saves and loads that cell.
+
+**Chosen:** the cell is per thread. On Linux and FreeBSD it is ELF
+thread-local storage the image addresses in the local-exec model, so on
+x86-64 the check compares the stack pointer with an `%fs`-relative word. A
+static Linux program sets up its own thread pointer and block: its entry for
+the first thread, and the thread facility for each thread it starts, through
+`clone`'s `CLONE_SETTLS`. Under `--link=libc` and on FreeBSD the C library
+sets up the storage of every thread. Darwin has no ELF thread-local storage:
+there the cell is the slot of a pthread key the program creates before it
+runs Landin code, which the check reads inline through `tpidrro_el0`, and
+the program's start compares that read with `pthread_getspecific` and ends
+with a report if they disagree. A thread whose cell holds zero never traps,
+as D471's first stack never does: the thread a program starts on, and a C
+thread calling into Landin. D472's frames are unchanged; a switch saves and
+loads the running thread's cell. A program that prepares no stack and starts
+no thread still has no cell and no check.
+
+**The alternatives:** Darwin's thread-local variables for the cell, which
+call the loader's accessor in every checked prologue; a register reserved
+for the cell, which the execution model refuses; and one cell per program
+with threads refused beside a prepared stack. All were declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D498 — One report stack serves every thread, claimed before it is used
+
+**The tour said** nothing. D491 moves the default report off Linux to a
+16 KiB stack of its own in a program that prepares a stack, one per program,
+"a thread, when one is admitted, needs its own"; D361's report touched no
+latch.
+
+**Chosen:** the stack stays one per program. Before the report moves to it,
+it claims a latch of its own with an atomic exchange; a thread that finds the
+latch claimed writes nothing and waits, without returning, for the report
+that claimed it to end the process. The report's frame on the failed stack,
+and therefore D472's margins and D474's verdicts, are unchanged. Linux's
+report, a system call that needs no stack, takes no latch: each trapping
+thread's line is one `write`. D232's panic latch is the selected handler's
+and is unchanged.
+
+**The alternatives:** a report stack for each thread, cut from its backing,
+which costs every thread 16 KiB for a report that ends the process. It was
+declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D499 — An atomic is fenced as its ordering asks
+
+**The tour said** nothing. D227 states each operation's ordering, and every
+backend emitted a full fence before and after every atomic whatever it was,
+so a relaxed load cost about 50 ns more on x86-64 than a plain word and the
+vDSO cache stayed a plain word (D317).
+
+**Chosen:** each backend lowers an atomic by its ordering, by the mapping of
+its architecture's memory model: on x86-64 a load and a relaxed or release
+store are a plain move, a seq_cst store an exchange, a read-modify-write a
+locked instruction with no fence, and only a seq_cst fence an `mfence`; on
+arm64 acquire and release accesses are `ldar` and `stlr` or their exclusive
+and LSE forms, and fences `dmb ishld` or `dmb ish`; on RV64 the mapping the
+RISC-V memory model gives, with `.aq` and `.rl` on its atomic instructions;
+and on Cortex-M0 a `dmb` only where an acquire or a release needs one. Every
+atomic stays a full compiler memory boundary, and the alignment check is
+unchanged.
+
+**The alternatives:** fixing x86-64 alone and leaving arm64 and RV64 fully
+fenced until the optimization phase. It was declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures and instruction
+checks will pin it.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -24883,3 +24988,149 @@ milliseconds on the clock, and a receive with nobody sleeping timing out
 after one quiet round; and `runtime/derived-server-fake-turns`, the
 derived server and client, which no longer try a timed-out call again,
 over the fake network and a clock beside it.
+
+### D494 — A program starts threads as a group it joins
+
+**The tour said** nothing of threads. D227 makes a thread a CPU execution
+context and creation and join its happens-before edges; D444 found that a
+fibre outliving the routine that starts it is a thread and needs a thread's
+bookkeeping, and D446 that threads are no provider of the fibre concepts.
+
+**Chosen:** `hosted/thread` starts threads as `core/fibre`'s application
+layer starts fibres. A group is made over a `hosted/system` handle, a backing
+the caller lends and a count; `admit` copies a task's state onto a free stack
+and starts a thread that calls an ordinary routine with that copy, waiting
+for a stack to come free when none is; the group keeps the first failure in
+a ledger the threads share through the atomic wrapper, and `join` fails with
+it once every admitted thread has ended. D445's `escaping into` and the
+`defer` that joins are as for fibres. A successful `admit` synchronizes with
+the new thread's first action and a thread's end with the return of the
+`join` that waits for it, as D227 has it; a failed start establishes neither
+edge and starts nothing. A static Linux program starts a thread with `clone`
+and waits for its end on the word the kernel clears; under `--link=libc`, on
+Darwin and on FreeBSD the C library starts it with `pthread_create` and
+waits with `pthread_join`. A thread begins with every signal blocked, so the
+signals a provider reads through a signalfd or kqueue reach that provider and
+no worker's default disposition. `join` blocks the calling thread whatever
+provider it runs under, so a fibre that joins holds its round. A worker may
+run a round of fibres of its own; a fibre never moves between threads.
+
+**The alternatives:** a start that returns a handle the caller joins, which
+lets a thread outlive the routine that started it and brings back the pool
+D444 declined for fibres; and threads as one more fibre provider, which D446
+declined. Both were declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D495 — A thread runs on a stack its caller lends, and checks it
+
+**The tour said** nothing. D444 has the caller lend every fibre's
+backing, and D471 checks every routine's frame in a program that prepares a
+stack.
+
+**Chosen:** as a fibre group does, a thread group cuts its caller's backing
+into equal stacks and prepares each with `compiler.stack_prepare`, so a
+program that starts a thread checks every routine against the running
+thread's own limit (D497) and a worker past its stack traps
+`stack_exhausted`. Where the C library starts the thread, its own start
+frames and, under glibc, the thread's block are placed in the same backing.
+A stack smaller than the system's minimum is refused when the group is made;
+the item that implements the group records the figures. Starting a thread
+allocates nothing and maps no guard page.
+
+**The alternatives:** the system's stacks with a guard page, which allocate
+behind the caller's back and turn an overflow into a signal rather than
+`stack_exhausted`. It was declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D500 — `core/atomic` wraps one scalar, and its operations carry their orderings
+
+**The tour said** at [1620] that there is no atomic wrapper because what a
+portable one should offer on a core without read-modify-write is a library
+question. D227's orderings are compiler atoms usable only in a builtin's
+position, so a wrapper cannot take one as an argument; D449 requires the
+single-writer update as an operation of its own on every target and a
+refusal of a shared read-modify-write where the target has none, naming the
+critical section.
+
+**Chosen:** `core/atomic` gives a cell over one `u8`, `u16`, `u32` or `u64`.
+A load acquires and a store releases; exchange, add and compare-exchange are
+acq_rel, a failed comparison acquiring; a relaxed family loads, stores and
+adds for counters and caches; seq_cst stays with the builtins. The
+single-writer update, a relaxed load and a release store, is an operation of
+its own, correct while one context writes the cell, on every target. On
+Cortex-M0 exchange, add and compare-exchange are refused at the caller's use,
+the refusal naming the single-writer update and `platform/cortex_m`'s
+critical section, as are the eight-byte cell's operations there.
+
+**The alternatives:** seq_cst for every operation, which pays a full fence on
+every store; and every legal ordering in an entry's name, about fifteen
+entries. Both were declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D501 — A lock waits on its word through the system
+
+**The tour said** nothing of locks; D446 says that state shared with a thread
+is the atomic wrapper's or a lock's.
+
+**Chosen:** `hosted/thread` gives a lock over one word of the atomic
+wrapper, which an uncontended lock takes and gives with one read-modify-write
+each, and which waits and wakes through the system's own wait on an address:
+the futex on Linux, `_umtx_op` on FreeBSD and `os_sync_wait_on_address` on
+Darwin, which `platform/posix` names on each. Waiting blocks the thread, so a
+fibre that holds a lock across a switch can hold another fibre of its round.
+On Cortex-M0 the critical section is the lock.
+
+**The alternatives:** spinning and yielding, which burns a core while the
+holder is descheduled; `pthread_mutex`, which a static Linux program does
+not have; and Darwin's `os_unfair_lock` beside a futex elsewhere, which keeps
+per-system code above `platform/posix`. All were declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D502 — The heap is shared, and the vDSO cache is relaxed
+
+**The tour said** nothing. D282 and D300 make one single-threaded heap the
+heap of every hosted system, and D317 keeps the vDSO's clock address in a
+plain word because a relaxed atomic cost about 50 ns a read.
+
+**Chosen:** `hosted/heap`'s size classes are behind one lock (D501). A
+program that has started no thread skips it: the thread facility sets a
+relaxed flag before its first start, and the creation edge orders everything
+the program did before. A mapping of its own needs no lock. The vDSO cache is
+a relaxed atomic word, whose value every thread computes alike, and which
+D499 makes a plain move. Caches per thread are the optimization phase's.
+
+**The alternatives:** the lock in every program, which costs a
+read-modify-write per allocation and free in a program with one thread; and
+a cache per thread now, more code than one lock before a consumer contends.
+Both were declined.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+
+### D503 — The process's own state beside threads
+
+**The tour said** nothing. D207 and D288 keep the last error by ownership
+until thread-local storage exists; D480 needs no waking descriptor while
+there is one thread; and Darwin's pipe and socket set close-on-exec after
+creating a descriptor.
+
+**Chosen:** `hosted/system`'s last-error and last-signal cells are
+`link(thread)` storage (D496), and a handle from `system.new()` records into
+the cell of the thread making the call, not the one that made the handle, so
+handles shared across threads keep D207's thread-local meaning; `system.over`
+still records into a cell of its caller's own. The argument and environment
+roots are written before `main` and only read after, which the creation edge
+orders. `child_defaults` is the atomic wrapper's. The working directory and
+the environment are still never changed. D232's panic latch stays the
+process's. D480 is unchanged: a thread that wakes a loop brings its
+descriptor. Darwin's `spawn` already closes every descriptor it does not give
+the child, so a pipe made beside it in another thread leaks nothing into a
+program Landin starts; what remains is a C library's own `exec`.
+
+**The alternatives:** a last error shared by every thread, which D207
+declined. It was declined again.
+
+**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
