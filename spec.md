@@ -24124,6 +24124,30 @@ which refuses writing through that handle and erasing it as a world;
 `runtime/first-program` and every other hosted fixture mint
 `blocking.new()`.
 
+### D477 — Only a provider that takes turns waits for signals
+
+**The tour said** nothing. D449 makes a signal an event a provider reads with
+an entry that waits like a receive. Over a provider that runs each task to
+its end, a task waiting for a signal would hold the program before it served
+anything.
+
+**Chosen:** `core/io`'s `signals` concept is provided only by providers of
+`fibre.turns`. A program that waits for a signal asks for both, so over
+`hosted/blocking` it cannot be written and the process keeps the system's
+default disposition: SIGTERM ends it. Prototype 5's derived server takes its
+signal waiter only when it was given a provider of turns, and the choice is
+made where the providers are minted.
+
+**The alternatives:** a blocking `sigwait` in every provider, which serves
+nothing over the blocking host; and a polling entry that never waits there,
+which gives one entry two meanings. Both were declined.
+
+**Pinned by** `negative/signals-provider-without-turns`, a provider of
+`fibre.scheduler` alone refused as a provider of `signal.signals`;
+`runtime/signals-fake-firmware` and `runtime/signals-fake-stop-server`,
+signals waited for over a provider of turns (D482). The event Io's signal
+fixtures will pin signalfd and kqueue.
+
 ### D478 — Which side of the split each hosted concept is on
 
 **The tour said** nothing, and D476 named services rather than concepts.
@@ -24165,30 +24189,6 @@ a `hosted/system` handle alone, `negative/hosted-system-is-no-world`,
 `runtime/run-no-descriptor-leak` and `runtime/tree-copy`, which convert a
 blocking provider's file with `system.descriptor_of`, and every hosted
 fixture's delegated calls through `blocking.new()`.
-
-### D477 — Only a provider that takes turns waits for signals
-
-**The tour said** nothing. D449 makes a signal an event a provider reads with
-an entry that waits like a receive. Over a provider that runs each task to
-its end, a task waiting for a signal would hold the program before it served
-anything.
-
-**Chosen:** `core/io`'s `signals` concept is provided only by providers of
-`fibre.turns`. A program that waits for a signal asks for both, so over
-`hosted/blocking` it cannot be written and the process keeps the system's
-default disposition: SIGTERM ends it. Prototype 5's derived server takes its
-signal waiter only when it was given a provider of turns, and the choice is
-made where the providers are minted.
-
-**The alternatives:** a blocking `sigwait` in every provider, which serves
-nothing over the blocking host; and a polling entry that never waits there,
-which gives one entry two meanings. Both were declined.
-
-**Pinned by** `negative/signals-provider-without-turns`, a provider of
-`fibre.scheduler` alone refused as a provider of `signal.signals`;
-`runtime/signals-fake-firmware` and `runtime/signals-fake-stop-server`,
-signals waited for over a provider of turns (D482). The event Io's signal
-fixtures will pin signalfd and kqueue.
 
 ### D480 — The event loop sleeps in its wait, and needs no descriptor to wake it
 
