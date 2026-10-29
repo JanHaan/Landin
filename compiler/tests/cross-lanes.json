@@ -35,6 +35,12 @@
       "runners": ["qemu-aarch64", "qemu-riscv64"],
       "failures": ["the program's own exit status (expected 42, actual 6)"],
       "reason": "QEMU's user emulation answers getsockopt(SO_RCVTIMEO) with a zero-length record, so the receive limit the fixture set does not read back"
+    },
+    {
+      "fixture": "runtime/thread-start-refused",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "failures": ["the program returned a status"],
+      "reason": "QEMU 11.1's user emulation aborts in its plugin core, with `qemu_plugin_vcpu_exit_hook: assertion failed`, when the host refuses the thread a guest's clone asks for, as the fixture's RLIMIT_NPROC of zero makes it, so the guest never sees the EAGAIN Linux gives"
     }
   ]
 }
