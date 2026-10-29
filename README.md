@@ -198,8 +198,9 @@ short:
   stackful fibres on every native target.
 - **The library:** twenty `core` modules of allocators, containers, text,
   I/O, time, networking, random numbers and atomic cells, each service
-  with a fake for testing; `hosted` services over POSIX; and Linux
-  executables with no C library by default.
+  with a fake for testing; `hosted` services over POSIX, threads started
+  as a group a routine joins among them; and Linux executables with no C
+  library by default.
 - **The C boundary:** each hosted target's C ABI, packed and flexible
   records, callbacks and variadic calls, and a binding generator over Clang.
 - **Code generation:** byte-identical output on every target whatever the
