@@ -16941,7 +16941,21 @@ package body Landin.Stages.Lowering is
                       (Types.all, Position))
                    = Landin.Checking.Routine_Ready;
             end loop;
-            Evidence_Retained := [others => True];
+            --  Every table, which an `any`'s own conformance is not: D492's
+            --  entries are erased calls through the value's own table and
+            --  have no provider to lower, so the walk below never reaches
+            --  one either (Reach_Instance).
+            for Position in
+              1 .. Landin.Checking.Conformance_Count (Types.all)
+            loop
+               Evidence_Retained (Position) :=
+                 Landin.Checking."/="
+                   (Landin.Checking.Conformance_Origin_Of
+                      (Types.all,
+                       Landin.Checking.Conformance_Identities.Nth
+                         (Types.all, Position)),
+                    Landin.Checking.Compiler_Erased_Conformance);
+            end loop;
             Every_Entry_Reached := [others => True];
          else
             Keep_Everything := False;

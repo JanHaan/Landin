@@ -15594,7 +15594,9 @@ declined.
 `negative/any-provider-declared-conformance`,
 `negative/any-provider-unrelated-concept`,
 `negative/any-provider-pair-permission`,
-`negative/any-provider-erased-again`, and
+`negative/any-provider-erased-again`,
+`positive/any-provider-without-main`, where a program with no `main` keeps
+every table but this conformance's, and
 `examples/derived_server`'s session, which hands its erased network to the
 line reader and the buffered writer.
 
