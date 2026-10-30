@@ -1652,7 +1652,7 @@ or waits for a signal, mints it instead of `blocking.new()`.
 | Call | What it does |
 |---|---|
 | `events.new(space, entries)` | Fill an `events.space` the caller declares `zeroed` and return a `host` over it and over `entries`, the table of fibres that may be unfinished at once, one more than a group's count. |
-| `events.last_errno(host)` | The errno number of the last failing call, in the process's cell. |
+| `events.last_errno(host)` | The errno number of the calling thread's last failing call. |
 | `events.last_signal(host)` | The signal that ended the last child waited for. |
 
 `host` supplies every concept `hosted/blocking` does, `world`,
@@ -1732,10 +1732,11 @@ establishes through `platform/posix`'s `_landin_host_initialize_arguments`;
 a C `main` that drives Landin exports calls that initializer itself, as
 below.
 
-The handle borrows nothing, since the root, the descriptors and its
-last-error cell belong to the process. `over` makes a handle that keeps
-its last errno in a `space` the caller declares, for a C thread or a
-library that must not share the process's.
+The handle borrows nothing, since the root and the descriptors belong to
+the process, and it records its last errno in the last-error cell of
+whichever thread calls through it, a `link(thread)` binding (D503). `over`
+makes a handle that keeps its last errno in a `space` the caller declares,
+for a library that keeps its detail apart from the rest of its thread's.
 
 `last_errno` captures the terminal failing call as provider-specific
 detail: the number of the errno `platform/posix` failed with. It is not a

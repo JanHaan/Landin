@@ -19,7 +19,7 @@ system_open_file: (self: host, path: text.host_string,
                   -> (opened: io.file)
                   ! io.already_exists | io.not_found | io.no_access
                   | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     opened = file_of(posix.standard_input)
     if not io.valid_options(options) then
         record(self, posix.einval)
@@ -37,7 +37,7 @@ end system_open_file
 --  report the old name missing.
 system_rename: (self: host, old: text.host_string, new: text.host_string)
                -> none ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     posix.rename_at(posix.working_directory, old, posix.working_directory,
                     new) else (problem)
         record(self, problem)
@@ -60,7 +60,7 @@ system_status_of: (self: host, path: text.host_string,
                    links: io.link_handling)
                   -> (found: io.status)
                   ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     given: posix.status =
         posix.status_at(posix.working_directory, path,
                         links == io.following) else (problem)
@@ -72,7 +72,7 @@ end system_status_of
 
 system_status_of_file: (self: host, opened: io.file)
                        -> (found: io.status) ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     given: posix.status = posix.status_of(descriptor_of(opened)) else (problem)
         record(self, problem)
         fail io.io_failed
@@ -86,7 +86,7 @@ end system_status_of_file
 system_set_read_only: (self: host, path: text.host_string,
                        read_only: bool)
                       -> none ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     given: posix.status =
         posix.status_at(posix.working_directory, path, true) else (problem)
             try path_failure(self, problem)
@@ -103,7 +103,7 @@ end system_set_read_only
 system_synchronize: (self: host, opened: io.file,
                      writing: io.synchronizing)
                     -> none ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     loop do
         posix.synchronize(descriptor_of(opened), writing == io.data_only)
             else (problem)
@@ -117,7 +117,7 @@ end system_synchronize
 
 system_truncate: (self: host, opened: io.file, size: u64)
                  -> none ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     loop do
         posix.truncate(descriptor_of(opened), size) else (problem)
             continue when problem == posix.eintr
@@ -130,7 +130,7 @@ end system_truncate
 
 system_read_at: (self: host, opened: io.file, offset: u64, into: []mut u8)
                 -> (count: usize) ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     count = 0
     return when lenof into == 0
     loop do
@@ -148,7 +148,7 @@ end system_read_at
 
 system_write_at: (self: host, opened: io.file, offset: u64, bytes: []u8)
                  -> none ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     mut written: usize = 0
     while written < lenof bytes do
         accepted: usize =
@@ -177,7 +177,7 @@ system_make_temporary: (self: host, directory: text.host_string,
                         names: any io.entropy, into: []mut u8)
                        -> (made: io.temporary from into)
                        ! io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     made = (opened: file_of(posix.standard_input),
             path: text.host_over(into[0..<0]))
     mut tries: usize = 0
@@ -195,7 +195,7 @@ system_make_temporary: (self: host, directory: text.host_string,
                 fail io.no_access when problem == io.no_access
                 fail io.io_failed
             end
-        self.failure.val = 0
+        keep_failure(self, 0)
         made = (opened: opened, path: path)
         return
     end while
@@ -205,7 +205,7 @@ end system_make_temporary
 system_current_directory: (self: host, into: []mut u8)
                           -> (path: text.host_string from into)
                           ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     path = posix.current_directory(into) else (problem)
         record(self, problem)
         fail io.io_failed
@@ -219,7 +219,7 @@ end system_is_terminal
 
 system_window_size: (self: host, stream: io.file) -> (size: io.window)
                     ! io.not_a_terminal | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     found: posix.window_size =
         posix.window_size_of(descriptor_of(stream)) else (problem)
             record(self, problem)

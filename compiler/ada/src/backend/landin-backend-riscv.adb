@@ -983,6 +983,42 @@ package body Landin.Backend.RiscV is
       Limit_Margin : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Stack_Limit_Margin (Facts);
       Stack_Limit : constant String := Local_Prefix & "landin_stack_limit";
+
+      --  D497: the cell is the running thread's, a word of ELF thread
+      --  storage reached from `tp` in the local-exec model; a target with
+      --  no threads keeps one cell in module storage.  Limit_Base forms
+      --  the base the cell is at Limit_Offset from.
+      Limit_Offset : constant String :=
+        (if Landin.Backend.Has_Threads (Facts)
+         then "%tprel_lo(" & Stack_Limit & ")" else "0");
+      procedure Limit_Base (Register : String);
+      procedure Limit_Base (Register : String) is
+      begin
+         if Landin.Backend.Has_Threads (Facts) then
+            Emit ("lui " & Register & ", %tprel_hi(" & Stack_Limit & ")");
+            Emit ("add " & Register & ", " & Register & ", tp, %tprel_add("
+                  & Stack_Limit & ")");
+         else
+            Emit ("lla " & Register & ", " & Stack_Limit);
+         end if;
+      end Limit_Base;
+
+      --  D496: a datum's address.  A thread's instance is at its offset
+      --  from `tp`, in the local-exec model's three instructions.
+      procedure Datum_Address (Register : String; Datum : Landin.IR.Item_Id);
+      procedure Datum_Address (Register : String; Datum : Landin.IR.Item_Id)
+      is
+      begin
+         if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Datum) then
+            Emit ("lui " & Register & ", %tprel_hi(" & Symbol (Datum) & ")");
+            Emit ("add " & Register & ", " & Register & ", tp, %tprel_add("
+                  & Symbol (Datum) & ")");
+            Emit ("addi " & Register & ", " & Register & ", %tprel_lo("
+                  & Symbol (Datum) & ")");
+         else
+            Address (Register, Symbol (Datum));
+         end if;
+      end Datum_Address;
       Routine_Prefix : constant String := Unused_Local_Prefix ("landin.");
       Stack_Switcher : constant String := Routine_Prefix & "stack_switch";
       Stack_Start : constant String := Routine_Prefix & "stack_start";
@@ -1297,6 +1333,11 @@ package body Landin.Backend.RiscV is
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+         --  D471's checks, unless the routine runs before its thread has
+         --  a thread pointer (D504).
+         Checks : constant Boolean := Prepares
+           and then not Landin.Backend.Runs_Before_Thread_Pointer
+             (Facts, Symbol (Item));
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Plan : constant Allocation_Plan :=
            Allocate (Of_Unit, Item, Facts, Options);
@@ -1345,8 +1386,8 @@ package body Landin.Backend.RiscV is
                Immediate ("x5", Pattern (Bytes));
                Emit ("sub x5, sp, x5");
             end if;
-            Emit ("lla x6, " & Stack_Limit);
-            Emit ("ld x6, 0(x6)");
+            Limit_Base ("x6");
+            Emit ("ld x6, " & Limit_Offset & "(x6)");
             Put (Character'Val (9) & "bgeu x5, x6, " & Fits);
             Put (Character'Val (9) & "lla x7, " & Limit_Trap);
             Put (Character'Val (9) & "jr x7");
@@ -1864,7 +1905,7 @@ package body Landin.Backend.RiscV is
          begin
             case Place.Kind is
                when Landin.IR.Module_Datum =>
-                  Address (Register, Symbol (Place.Datum));
+                  Datum_Address (Register, Place.Datum);
                   if Field > 0 then
                      Offset := Field_Offset
                        (Place.Datum, Landin.IR.Part_Position (Field));
@@ -2196,7 +2237,7 @@ package body Landin.Backend.RiscV is
                end if;
             end loop;
             Bytes := Stack_Align (Bytes, 16, 16#7fff_ffff#);
-            if Prepares and then Bytes > Unchecked_Bytes then
+            if Checks and then Bytes > Unchecked_Bytes then
                Check_Limit (Bytes);
             end if;
             Reserve (Bytes);
@@ -2824,8 +2865,8 @@ package body Landin.Backend.RiscV is
                      Memory (True, Size_Of_Value (Operand (2)), "x5", "x6");
                   end if;
                when Landin.IR.Load_Datum | Landin.IR.Store_Datum =>
-                  Address ("x6", Symbol
-                    (Landin.IR.Datum_Of (Of_Unit, Item, Value)));
+                  Datum_Address
+                    ("x6", Landin.IR.Datum_Of (Of_Unit, Item, Value));
                   if Op = Landin.IR.Load_Datum then
                      Memory (False, Size_Of_Value (Value), "x5", "x6");
                      Store_Value (Value);
@@ -3545,7 +3586,7 @@ package body Landin.Backend.RiscV is
                         C_Call (Value);
                         return;
                      end if;
-                     if Prepares and then Bytes > Unchecked_Bytes then
+                     if Checks and then Bytes > Unchecked_Bytes then
                         Check_Limit (Bytes);
                      end if;
                      Reserve (Bytes);
@@ -3753,11 +3794,11 @@ package body Landin.Backend.RiscV is
          --  not checked: it stores zero in the cell, so that it and what
          --  it calls run on what a failed check left, without a check
          --  that would enter it again.
-         if Prepares then
+         if Checks then
             if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
             then
-               Emit ("lla x5, " & Stack_Limit);
-               Emit ("sd zero, 0(x5)");
+               Limit_Base ("x5");
+               Emit ("sd zero, " & Limit_Offset & "(x5)");
             elsif not Landin.Backend.Call_Free (Of_Unit, Item)
               or else Extent (Layout) > Unchecked_Bytes
             then
@@ -5070,8 +5111,11 @@ package body Landin.Backend.RiscV is
          end if;
          --  An empty datum retains its aligned, zero-sized symbol, without
          --  a zero-count space directive that GNU as diagnoses.
+         --  D496: a thread's instances are laid out by the system from the
+         --  image's TLS segment, every one zeroed.
          Emit (ELF_Spelling.Push_Item_Section
-           ("bss", "datum", Positive (Item)));
+           ((if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
+             then "tbss" else "bss"), "datum", Positive (Item)));
          Emit (".balign "
            & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
          Emit (ELF_Spelling.Object_Type (Symbol (Item)));
@@ -5526,7 +5570,8 @@ package body Landin.Backend.RiscV is
                      & Image (8 * Index));
             end if;
          end loop;
-         Emit ("lla x5, " & Stack_Limit);
+         Limit_Base ("x5");
+         Emit ("addi x5, x5, " & Limit_Offset);
          Emit ("ld x6, 0(x5)");
          Emit ("sd x6, 0(sp)");
          Emit ("sd sp, 0(x10)");
@@ -5587,8 +5632,13 @@ package body Landin.Backend.RiscV is
             Emit (".cfi_endproc");
          end if;
          Platform_Directive (ELF_Spelling.Size_To_Here (Stack_Start));
-         --  D471's cell, zero until a switch resumes a prepared stack.
-         Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
+         --  D471's cell, zero until a switch resumes a prepared stack, and
+         --  the running thread's (D497).
+         if Landin.Backend.Has_Threads (Facts) then
+            Emit (".pushsection .tbss.landin_stack_limit,""awT"",@nobits");
+         else
+            Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
+         end if;
          Emit (".balign 8");
          Put (Stack_Limit & ":");
          Emit (".zero 8");

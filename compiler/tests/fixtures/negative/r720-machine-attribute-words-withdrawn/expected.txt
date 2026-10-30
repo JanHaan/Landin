@@ -7,4 +7,4 @@ error[L0103]: a link label requires `:`, not `)`
   |
 4 | link(weak) handler: () -> none =
   | ^^^^ this annotation
-  = note: [1640]: each attribute of a link annotation but `keep` is a label, `:` and its value
+  = note: [1640]: each attribute of a link annotation but `keep` and `thread` is a label, `:` and its value

@@ -1793,6 +1793,14 @@ package body Landin.IR is
       end if;
    end Set_Placement;
 
+   function Is_Thread_Storage (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Thread_Storage);
+
+   procedure Mark_Thread_Storage (Into : in out Unit; Item : Item_Id) is
+   begin
+      Into.Items (Positive (Item)).Thread_Storage := True;
+   end Mark_Thread_Storage;
+
    function Is_Immutable (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).Immutable);
 

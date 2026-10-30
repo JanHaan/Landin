@@ -844,7 +844,8 @@ package body Landin.Tests.Stack_Report_Suite is
    --  `write`, so the stack that failed pays only the report's frame and
    --  the trap's depth is closed; with no prepared stack the report stays
    --  on the stack it was called on, its depth open, and Linux's system
-   --  call needs no stack, so its assembly has none.
+   --  call needs no stack, so its assembly has none.  Off Linux it first
+   --  claims the latch every thread's report shares (D498).
    procedure The_Default_Report_Writes_On_Its_Own_Stack
      (Item : in out Landin.Testing.Context);
 
@@ -870,8 +871,14 @@ package body Landin.Tests.Stack_Report_Suite is
                   Stack : constant String := US.To_String (Outcome.Stack);
                   Moved : constant Natural :=
                     Ada.Strings.Fixed.Index (Text, "landin_report_stack");
+                  --  The first call of `write` after the move: Darwin's
+                  --  key-making initializer calls it too, before (D506).
                   Called : constant Natural :=
-                    Ada.Strings.Fixed.Index (Text, Call);
+                    (if Moved = 0 then 0
+                     else Ada.Strings.Fixed.Index (Text, Call, Moved));
+                  --  D498: the latch the report claims before it moves.
+                  Latched : constant Natural :=
+                    Ada.Strings.Fixed.Index (Text, "landin_report_latch");
                   What : constant String :=
                     Target & (if Prepares then " with" else " without")
                     & " a prepared stack";
@@ -885,6 +892,10 @@ package body Landin.Tests.Stack_Report_Suite is
                         What & ": the report moves to its own stack before"
                         & " it calls write");
                      Landin.Testing.Check
+                       (Item, Latched > 0 and then Latched < Moved,
+                        What & ": the report claims its latch before it"
+                        & " moves");
+                     Landin.Testing.Check
                        (Item, Contains (Stack, """closed"":true,"
                           & """foreign_write"":true"),
                         What & ": the trap's depth is closed: " & Stack);
@@ -892,6 +903,9 @@ package body Landin.Tests.Stack_Report_Suite is
                      Landin.Testing.Check
                        (Item, Moved = 0,
                         What & ": the report keeps the stack it is on");
+                     Landin.Testing.Check
+                       (Item, Latched = 0,
+                        What & ": the report claims no latch");
                   end if;
                   if Foreign and then not Prepares then
                      Landin.Testing.Check

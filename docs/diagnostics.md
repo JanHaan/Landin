@@ -925,6 +925,10 @@ record holding one is zeroed, but `zeroed` does not construct the identity
 itself: write `name(0)` (D428).
 Give an explicit initializer that constructs a valid value, use a type with a
 zero image, or write `zeroed` as the whole value of a typed destination.
+Thread storage, `link(thread)`, begins zeroed in every thread and takes no
+value (D496), so its type is the one to change: keep a pointer in it as a
+`usize` or as a pointer union with an atom, or keep the referenced value
+itself.
 
 Two routes cover most programs. An array whose element has no zero image is
 filled from one valid element, `[n of value]`, rather than zeroed; an array of
@@ -1308,8 +1312,8 @@ end bad
 
 ### L0347
 
-A link symbol, hosted initializer or firmware placement breaks [1610]'s,
-[1975]'s or [1640]'s contract. A link symbol denotes one compatible function
+A link symbol, hosted initializer, firmware placement or thread storage
+breaks [1610]'s, [1975]'s, [1640]'s or [1996]'s contract. A link symbol denotes one compatible function
 and at most one definition. Beside a hosted entry, a declaration carrying
 `_landin_host_initialize_arguments` is exactly
 `extern(c) (count: i32, values: ptr ptr u8, environment: ptr ptr u8) -> none`,
@@ -1320,7 +1324,11 @@ spellings, alignments and vectors [1640] lists. Rename the symbol or correct
 the declaration. Two declarations of one C symbol that differ only in
 `escaping` are refused too, and the report names the parameter: a Landin
 caller of either is checked against what it says, so repeat `escaping` on
-both (D441).
+both (D441). `link(thread)` places a module `mut` binding that has no
+value, one instance in every thread (D496): it places no routine, takes no
+initializer, and takes no link symbol or section, which would name or place
+one instance for all of them. Drop the value, make the binding `mut`, or
+drop the other attribute.
 
 ```landin
 extern(c) link(symbol: "foreign_entry+8") bad: () -> none

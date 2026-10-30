@@ -8,7 +8,7 @@ repository = "https://github.com/JanHaan/Landin"
 
 [grammars.landin]
 repository = "https://github.com/JanHaan/Landin"
-rev = "5c9810d84044de88eb9df7595e67a4a797908ae9"
+rev = "1882a3df77ce178bb645c0919cf1cf633ddf6b50"
 path = "highlight/tree-sitter"
 
 [language_servers.refine]

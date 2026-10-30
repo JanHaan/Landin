@@ -1,0 +1,7 @@
+mut target: u32 = 0
+link(thread) mut cursor: ptr mut u32
+
+public main: () -> (code: i32) =
+    cursor = addr target
+    code = 0
+end main

@@ -17201,6 +17201,11 @@ package body Landin.Stages.Lowering is
                IR.Set_Placement
                  (Unit.all, Made, Landin.Configuration.Placement_Of
                     (Source (Context, Src), Of_Tree, Node, Spellings.all));
+               if Syn.Attributes (Of_Tree, Node).Thread
+                 and then IR.Kind_Of (Unit.all, Made) = IR.Datum
+               then
+                  IR.Mark_Thread_Storage (Unit.all, Made);
+               end if;
             end if;
          end Add_Declaration;
       begin

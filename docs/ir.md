@@ -338,6 +338,10 @@ Module data is also distinct from routine execution. A datum holds a static
 value description or image, including nested contents and function
 relocations where needed. Instructions used to describe a static value are
 not startup code. They do not introduce execution before the entry point.
+A datum written `link(thread)` is marked thread storage and is otherwise the
+same item; the backend for a target with threads places it in the system's
+thread storage and reaches it through the thread pointer, and the dump shows
+it as `thread storage` (D496).
 
 A program, one whose entry module declares a public `main`, gets an item only
 for the module routines and bindings it can reach (D296), and an evidence

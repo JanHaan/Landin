@@ -1197,6 +1197,16 @@ package Landin.IR is
    procedure Set_Placement
      (Into : in out Unit; Item : Item_Id; Value : Landin.Machine.Placement);
 
+   --  D496: a module datum written `link(thread)` has one instance in
+   --  every thread.  The IR is the same for it; a backend for a target
+   --  with threads places it in the system's thread storage and reaches
+   --  it through the thread pointer, and one without keeps it as ordinary
+   --  module storage.
+   function Is_Thread_Storage (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item);
+   procedure Mark_Thread_Storage (Into : in out Unit; Item : Item_Id)
+     with Pre => Holds (Into, Item) and then Kind_Of (Into, Item) = Datum;
+
    function Is_Immutable (Of_Unit : Unit; Item : Item_Id) return Boolean;
    procedure Mark_Immutable (Into : in out Unit; Item : Item_Id);
 
@@ -4327,6 +4337,7 @@ private
                       Landin.Source.Names.No_Name;
       Read_Only   : Boolean                   := False;
       Placement : Landin.Machine.Placement;
+      Thread_Storage : Boolean                := False;
       Immutable   : Boolean                   := False;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;

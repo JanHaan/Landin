@@ -1,0 +1,1 @@
+program.ldn:12:1: trap: stack_exhausted

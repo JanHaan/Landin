@@ -519,6 +519,33 @@ package Landin.Backend is
    function Report_Stack_Bytes
      (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
 
+   --  D496/D497: whether the target's system runs threads, so that a
+   --  `link(thread)` datum and D471's stack-limit cell are the running
+   --  thread's: every hosted system.  Firmware and the synthetic probe
+   --  have one execution context, and both are ordinary module storage
+   --  there.
+   function Has_Threads (Facts : Landin.Targets.Target_Facts) return Boolean;
+
+   --  D496: whether Item is a datum the backend places in the system's
+   --  thread storage and reaches through the thread pointer.
+   function In_Thread_Storage
+     (Of_Unit : Landin.IR.Unit;
+      Facts   : Landin.Targets.Target_Facts;
+      Item    : Landin.IR.Item_Id) return Boolean;
+
+   --  D498: off Linux, the default report claims a latch of its own
+   --  before it moves to D491's report stack, so that two threads failing
+   --  at once never share that stack.  Exactly where the stack is.
+   function Report_Claims_Latch
+     (Facts : Landin.Targets.Target_Facts) return Boolean;
+
+   --  D504: on Linux a static program's start runs before its first
+   --  thread has a thread pointer, and so before D497's cell can be read:
+   --  platform/linux's routines named `_landin_start...`, which make the
+   --  first thread's storage, are not checked against a stack's limit.
+   function Runs_Before_Thread_Pointer
+     (Facts : Landin.Targets.Target_Facts; Symbol : String) return Boolean;
+
 private
 
    package Spelling_Maps is new Ada.Containers.Indefinite_Hashed_Maps

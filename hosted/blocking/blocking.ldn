@@ -207,9 +207,9 @@ host is io.world ()
 
 --- Return a handle to the hosted provider whose waits block the thread,
 --- over a new `hosted/system` handle: the process's arguments, the three
---- standard streams, descriptors 0, 1 and 2, and the process's last-error
---- cell. Regular open-write operations create or truncate files; close
---- regular files explicitly. The handle borrows nothing. Use `over` for a
+--- standard streams, descriptors 0, 1 and 2, and the calling thread's
+--- last-error cell, whichever thread calls. Regular open-write operations
+--- create or truncate files; close regular files explicitly. The handle borrows nothing. Use `over` for a
 --- cell of the caller's own.
 ---
 --- Calling this before the hosted entry has established the process's
@@ -219,7 +219,7 @@ public new: () -> (handle: host) =
 end new
 
 --- Fill `state` and return a handle that records its last error there
---- rather than in the process's cell, over `hosted/system`'s `over`. It
+--- rather than in the calling thread's cell, over `hosted/system`'s `over`. It
 --- shares the process's arguments and descriptors like any other handle;
 --- calling this before any root exists traps, as `new` does.
 public over: (inout state: space) -> (handle: host from state) =

@@ -510,3 +510,39 @@ symbol : i32 = 0
                         (unary_expression
                           (literal
                             (integer_literal)))))))))))))))
+
+==================
+Thread storage is a link label, and thread stays a name elsewhere
+==================
+
+link(thread) mut counter : u32
+thread : i32 = 0
+
+---
+
+(source_file
+  (public_declaration
+    (binding
+      (link_symbol
+        (identifier)
+        (identifier))
+      (identifier_list
+        (identifier))
+      (scalar_type)))
+  (public_declaration
+    (binding
+      (identifier_list
+        (identifier))
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal)))))))))))))))

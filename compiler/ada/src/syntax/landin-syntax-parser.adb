@@ -3381,8 +3381,8 @@ package body Landin.Syntax.Parser is
                     (Syn.Token_Expected, Here, Message,
                      Note => "[1640]: a link annotation takes `section` and"
                              & " `symbol` with text, `align` and `vector`"
-                             & " with an integer, and `keep` alone, each"
-                             & " once",
+                             & " with an integer, and `keep` and `thread`"
+                             & " alone, each once",
                      Related => Opened, Because => "this annotation");
                end Refuse_Link;
             begin
@@ -3400,12 +3400,12 @@ package body Landin.Syntax.Parser is
                   begin
                      Seen := True;
                      Advance;
-                     if Label /= "keep" then
+                     if Label not in "keep" | "thread" then
                         if not Expect
                           (Tok.Colon, "a link label requires `:`",
                            "[1640]: each attribute of a link annotation but"
-                           & " `keep` is a label, `:` and its value", Opened,
-                           "this annotation")
+                           & " `keep` and `thread` is a label, `:` and its"
+                           & " value", Opened, "this annotation")
                         then
                            exit;
                         end if;
@@ -3431,6 +3431,7 @@ package body Landin.Syntax.Parser is
                        or else (Label = "symbol" and then Symbol
                            /= Landin.Source.Empty_Span)
                        or else (Label = "keep" and then Attr.Keep)
+                       or else (Label = "thread" and then Attr.Thread)
                      then
                         Refuse_Link ("duplicate link attribute");
                      end if;
@@ -3442,10 +3443,13 @@ package body Landin.Syntax.Parser is
                         Attr.Alignment := Value;
                      elsif Label = "vector" then
                         Attr.Vector := Value;
+                     elsif Label = "thread" then
+                        Attr.Thread := True;
                      else
                         Attr.Keep := True;
                      end if;
-                     Attr.Present := Attr.Present or else Label /= "symbol";
+                     Attr.Present := Attr.Present
+                       or else Label not in "symbol" | "thread";
                   end;
                   exit when Peek /= Tok.Comma;
                   Advance;
@@ -3465,6 +3469,7 @@ package body Landin.Syntax.Parser is
                then
                   Refuse_Link ("link applies to a function or module datum");
                elsif Result.Items (Positive (Parsed)).Attributes.Present
+                 or else Result.Items (Positive (Parsed)).Attributes.Thread
                  or else Result.Items (Positive (Parsed)).Link_Name
                    /= Landin.Source.Empty_Span
                then

@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: D503 two C threads failing through one shared blocking.new() handle each read back their own errno, and the thread that made the handle reads zero
+program: program.ldn
+root: ../../../../..
+c-sources: threads.c
+c-args: -pthread
+status: 42
+constructs: 0940, 1600, 1660, 1975, 1996
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

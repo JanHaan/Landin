@@ -1,0 +1,6 @@
+class: negative
+summary: D496 thread storage is zeroed in every thread and takes no initial value
+program: program.ldn
+codes: L0347
+constructs: 1996
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

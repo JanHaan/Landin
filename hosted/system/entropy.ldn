@@ -7,7 +7,7 @@ import platform/posix
 --  The system gives at most so much at once, and a signal may interrupt it
 --  before it gives anything; both are asked again for the rest.
 system_fill_random: (self: host, into: []mut u8) -> none ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     mut filled: usize = 0
     while filled < lenof into do
         got: usize = posix.random_bytes(into[filled..<lenof into]) else (problem)

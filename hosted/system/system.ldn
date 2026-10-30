@@ -3,7 +3,7 @@
 --  streams and arguments, the environment, directories, starting a
 --  program, the rest of the file system and terminals, entropy and the
 --  wall clock, each in a file named as core/io names it, and the
---  process's last-error and last-signal cells.  It is not a world: reading and writing can wait,
+--  last-error and last-signal cells of each thread.  It is not a world: reading and writing can wait,
 --  and a provider that decides how to wait, hosted/blocking, is built
 --  over a handle of this one and hands it what does not wait.  It is
 --  written once, over platform/posix, which reaches Linux through its
@@ -22,22 +22,47 @@ created_mode: u32 = 0o666
 --  A directory made by make_directory gets 0777, which the umask filters.
 created_directory_mode: u32 = 0o777
 
---  The process's last-error cell, which every handle from `host` shares,
---  and its last-signal cell beside it.
-mut process_errno: i32
-mut process_signal: i32
+--  The last-error cell and last-signal cell of each thread (D503), which
+--  a handle from `new` records into for whichever thread calls it.
+link(thread) mut thread_errno: i32
+link(thread) mut thread_signal: i32
+
+--  What a handle from `new` holds in place of a cell: the calling
+--  thread's.
+calling_thread: atom
+cell: type = calling_thread | ptr mut i32
 
 system_value: type = struct
-    failure: ptr mut i32
-    signal: ptr mut i32
+    failure: cell
+    signal: cell
 end system_value
+
+--  Keep `number` in the last-error cell the handle records into: the
+--  calling thread's for one from `new`, the caller's own for one from
+--  `over`.
+keep_failure: (self: host, number: i32) -> none =
+    match self.failure
+        calling_thread: thread_errno = number
+        ptr (own): own.val = number
+    end match
+end keep_failure
+
+--  Keep `number` in the last-signal cell beside it.
+keep_signal: (self: host, number: i32) -> none =
+    match self.signal
+        calling_thread: thread_signal = number
+        ptr (own): own.val = number
+    end match
+end keep_signal
 
 --- Hosted provider of the services that do not wait: `io.files`,
 --- `io.process`, `io.environment`, `io.directories`, `io.file_system`,
 --- `io.terminals`, the system's `io.entropy` and the clock
 --- `time.wall_clock`, over platform/posix, as a handle: copies share the
---- process's descriptors, arguments and environment, and the last-error
---- and last-signal cells they were made with. It reads and writes no
+--- process's descriptors, arguments and environment, and record into the
+--- last-error and last-signal cells they were made with: the calling
+--- thread's own for a handle from `new`, the caller's for one from
+--- `over`. It reads and writes no
 --- stream, so it is no `io.world`, and runs no program, since a child's
 --- pipes are read and the child waited for: `hosted/blocking`, built over
 --- it, supplies reading and writing, `io.programs` over this provider's
@@ -47,18 +72,18 @@ end system_value
 public host: type = system_value
 
 --- A last-error cell and a last-signal cell of the caller's own, for code
---- that must not share the process's: a C thread calling into Landin, or
---- a library keeping its own detail. Declare it `zeroed` and make its
---- handle with `over`.
+--- that keeps its detail apart from the rest of its thread's: a library
+--- keeping its own, or a handle shared on purpose. Declare it `zeroed`
+--- and make its handle with `over`.
 public space: type = struct
     failure: i32
     signal: i32
 end space
 
 --- Return errno captured for the terminal failing provider call. Read it
---- immediately after failure; it belongs to the cell the handle was made
---- with, the process's from `host` or the caller's from `over`, and is not a
---- portable error category.
+--- immediately after failure; it belongs to the cell the handle records
+--- into, the calling thread's for a handle from `new` or the caller's from
+--- `over`, and is not a portable error category.
 ---
 --- Zero means that the handle's most recent call of any concept did not
 --- fail with an errno: each call clears the cell before it asks the system.
@@ -68,7 +93,10 @@ end space
 --- failed with.  Retriable EINTR attempts are internal and do not replace
 --- a previously reported operation with a failure.
 public last_errno: (handle: host) -> (number: i32) =
-    number = handle.failure.val
+    match handle.failure
+        calling_thread: number = thread_errno
+        ptr (own): number = own.val
+    end match
 end last_errno
 
 --- Return the number of the signal that ended the child this handle's
@@ -79,14 +107,17 @@ end last_errno
 --- waited for.  It is the system's detail behind `io.ending`'s portable
 --- `signalled`, as `last_errno` is behind an error atom.
 public last_signal: (handle: host) -> (number: i32) =
-    number = handle.signal.val
+    match handle.signal
+        calling_thread: number = thread_signal
+        ptr (own): number = own.val
+    end match
 end last_signal
 
 --- Clear the handle's last-error cell, as every call of this provider
 --- does before it asks the system: for a provider built over this one,
 --- whose own calls report through the same cell.
 public clear_errno: (handle: host) -> none =
-    handle.failure.val = 0
+    keep_failure(handle, 0)
 end clear_errno
 
 --- Keep `problem` in the handle's last-error cell, which `last_errno`
@@ -101,7 +132,7 @@ end record_errno
 --  describes, leaves the cell at zero.
 record: (self: host, problem: posix.errno) -> none =
     number: i32 = posix.number(problem)
-    if number > 0 then self.failure.val = number end if
+    if number > 0 then keep_failure(self, number) end if
 end record
 
 --  A path names nothing when a component is absent, ENOENT, or when a
@@ -178,7 +209,7 @@ end is_socket
 open: (self: host, path: text.host_string, options: posix.open_options,
        mode: u32) -> (opened: io.file)
       ! io.already_exists | io.not_found | io.no_access | io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     loop do
         made: posix.descriptor =
             posix.open_at(posix.working_directory, path, options, mode)
@@ -221,7 +252,7 @@ end system_open_write
 system_same_file: (self: host, left: text.host_string,
                    right: text.host_string)
                   -> (same: bool) ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     first: posix.status =
         posix.status_at(posix.working_directory, left, true) else (problem)
             record(self, problem)
@@ -239,7 +270,7 @@ end system_same_file
 
 system_close: (self: host, sink opened: io.file)
               -> none ! io.io_failed =
-    self.failure.val = 0
+    keep_failure(self, 0)
     --  A failed close may already have released the descriptor; retrying
     --  could close an unrelated reused descriptor, so EINTR is
     --  deliberately terminal here.
@@ -331,8 +362,11 @@ host is io.environment
 --- operations create or truncate files; close regular files explicitly. A
 --- program that waits on anything mints `hosted/blocking`'s `new`
 --- instead, which makes this handle itself. The handle borrows nothing:
---- the argument root, the descriptors and its last-error cell belong to
---- the process. Use `over` for a cell of the caller's own.
+--- the argument root and the descriptors belong to the process, and each
+--- thread that calls through the handle, or through a copy of it, records
+--- into a last-error and last-signal cell of its own (D503), so threads
+--- sharing a handle never see each other's failures. Use `over` for a
+--- cell of the caller's own.
 ---
 --- The arguments are the root platform/posix's
 --- `_landin_host_initialize_arguments` established, which the hosted entry
@@ -340,11 +374,11 @@ host is io.environment
 --- traps.
 public new: () -> (handle: host) =
     _ = posix.arguments()
-    handle = (failure: addr process_errno, signal: addr process_signal)
+    handle = (failure: calling_thread, signal: calling_thread)
 end new
 
 --- Fill `state` and return a handle that records its last error there
---- rather than in the process's cell. It shares the process's arguments
+--- rather than in the calling thread's cell, whichever thread calls. It shares the process's arguments
 --- and descriptors like any other handle; calling this before any root
 --- exists traps, as `host` does.
 public over: (inout state: space) -> (handle: host from state) =

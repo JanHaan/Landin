@@ -130,11 +130,11 @@ end last_signal
 --- Fill `state` and return a handle to the event provider over it and
 --- over `entries`: a round of turns over that table of the fibres that
 --- may be unfinished at once, one more than a group's count, an event
---- queue, closed on exec, and the process's `hosted/system` handle, whose
---- last-error and last-signal cells it reports through. Fails
---- `mem.out_of_memory` when `entries` holds fewer than two,
+--- queue, closed on exec, and a `hosted/system` handle from `new`, which
+--- reports through the calling thread's last-error and last-signal
+--- cells. Fails `mem.out_of_memory` when `entries` holds fewer than two,
 --- and `io.io_failed` when the system makes no queue, with its errno in
---- the process's cell. Calling this before the hosted entry has
+--- the calling thread's cell. Calling this before the hosted entry has
 --- established the process's arguments traps, as `hosted/system`'s `new`
 --- does. The queue stays open until the process ends.
 public new: (inout state: space, entries: []mut usize)

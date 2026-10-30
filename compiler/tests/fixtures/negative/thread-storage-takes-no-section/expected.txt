@@ -1,0 +1,10 @@
+error[L0347]: thread storage takes no link symbol or section
+  --> ../tests/fixtures/negative/thread-storage-takes-no-section/program.ldn:1:42
+  |
+1 | link(thread, section: ".data.cells") mut counter: u32
+  |                                          ^^^^^^^
+  --> ../tests/fixtures/negative/thread-storage-takes-no-section/program.ldn:1:1
+  |
+1 | link(thread, section: ".data.cells") mut counter: u32
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the declaration it places
+  = note: D496: `link(thread) mut cell: T` gives every thread its own instance, zeroed when the thread begins, so it is a module `mut` binding with no value, link symbol or section

@@ -295,6 +295,11 @@
       "reason": "Hosted C peers observe panic contracts; the general Cortex C source surface remains refused. freestanding.py executes the selected and default panic paths through compiler-owned firmware.",
       "witness": "compiler/tests/fixtures/abi/r670-panic/fixture.meta"
     },
+    "abi/report-latch-one-line": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/report-latch-one-line/fixture.meta"
+    },
     "abi/sigpipe-handler-kept": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its signal handler and the argument initializer exist only on a hosted system, and Cortex-M0 has no signals.",
@@ -304,6 +309,16 @@
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its signal handler, the argument initializer and a TCP connection exist only on a hosted system, and Cortex-M0 has no signals.",
       "witness": "compiler/tests/fixtures/abi/socket-write-raises-no-sigpipe/fixture.meta"
+    },
+    "abi/system-new-records-per-thread": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/system-new-records-per-thread/fixture.meta"
+    },
+    "abi/thread-storage-per-thread": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/thread-storage-per-thread/fixture.meta"
     },
     "runtime/a-zero-divisor-traps": {
       "mode": "execute"
@@ -3175,6 +3190,16 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/thread/lock on the freestanding target before checking declarations."
+    },
+    "runtime/thread-storage-holds-its-instance": {
+      "mode": "execute"
+    },
+    "runtime/thread-storage-under-libc": {
+      "codes": [
+        "L0324"
+      ],
+      "mode": "refuse",
+      "reason": "The program asserts compiler.c_runtime, which firmware never has: it is the --link=libc counterpart of runtime/thread-storage-holds-its-instance, which runs on Cortex-M0, where thread storage is ordinary module storage."
     },
     "runtime/trapping-arm-leaves-a-statement": {
       "mode": "execute"
