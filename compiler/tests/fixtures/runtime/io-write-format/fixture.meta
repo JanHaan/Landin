@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: io.write_format prints a template and its values to standard output in one call, with no buffer or flush of the caller's: an integer, the lowest i64 and a bool, a string longer than its store, written in pieces, and an escaped brace, while a template with more placeholders than values fails invalid_format and writes nothing
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+stream: output
+status: 0
+constructs: 0960, 1030, 1370, 1380
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1562,6 +1562,16 @@
     "runtime/io-handle-lends-two-arguments": {
       "mode": "execute"
     },
+    "runtime/io-write-format": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no standard output to print to. runtime/io-write-format-memory writes through write_format here."
+    },
+    "runtime/io-write-format-memory": {
+      "mode": "execute"
+    },
     "runtime/kqueue-events": {
       "codes": [
         "L0015"

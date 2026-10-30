@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: io.write_format over the memory world's counted standard output writes a line that fits its store in one write, a value longer than the store as the bytes waiting before it, the value as it is and the rest of the line, writes nothing for a template with more placeholders than values, which fails invalid_format, and reports a failed write as io_failed
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0940, 0960, 1030, 1290, 1370, 1380
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

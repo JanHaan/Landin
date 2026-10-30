@@ -293,6 +293,9 @@ negative/core-fault-frame-escape | linux-x86-64, linux-arm64, darwin-arm64, synt
 negative/core-fault-needs-mutable-inner | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/core-io-argument-copy-frame | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/core-io-file-use-after-close | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/core-io-printf-is-write-format | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/core-io-println-is-write-format | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/core-io-selected-puts-is-write-format | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/core-io-world-readonly-receiver | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/core-map-key-frame-escape | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/core-map-missing-parent-conformance | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2087,6 +2090,8 @@ runtime/integer-to-bool-out-of-range-traps | linux-x86-64, linux-arm64, darwin-a
 runtime/integer-to-float-conversions | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/io-handle-beside-erased-view | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/io-handle-lends-two-arguments | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+runtime/io-write-format | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/io-write-format-memory | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/kqueue-events | darwin-arm64, freebsd-x86-64, freebsd-arm64
 runtime/large-array-offset-is-addressed | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/lenof-array-literal-is-compile-time | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

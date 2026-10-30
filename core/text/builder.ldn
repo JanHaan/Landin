@@ -14,31 +14,60 @@ builder_value: type = struct
     buffer: []mut u8
     used: usize
     held: holding
+    policy: any grower
     growth: variant
         bounded |
-        grows: (memory: any mem.allocator, policy: any grower)
+        grows: (memory: any mem.allocator)
     end growth
 end builder_value
 
---  How a builder from `growing` takes more storage.  Only `growing` builds
---  this concept's one table, so an image whose builders are all `over` a
---  caller's buffer links none of the growth: `room` projects `enlarge`
---  from the table a growing builder holds, and the table, with the
---  routines only it names, is linked only where `growing` is (D374).  A
---  match arm calling them directly would link them into every image that
---  appends to a builder, about 2.5 KiB of a Cortex-M0 image at none/off.
+--  What a builder does when a piece does not fit the room its buffer has
+--  left: `over`'s refuses, `growing`'s doubles through the allocator, and
+--  `format_onto`'s hands what it holds to an outlet.  Each builder holds
+--  the table of the one that made it, and only that maker builds it, so an
+--  image links the routines of only the policies its builders use: `room`
+--  and `append` project the entries, and a table's routines are linked
+--  only where something builds the table (D374).  A match arm calling them
+--  directly would link every policy into every image that appends to a
+--  builder, about 2.5 KiB of a Cortex-M0 image at none/off for the growth
+--  alone.
 grower: type = concept (implementation: type)
-    enlarge: (self: ptr implementation, memory: any mem.allocator,
-              buffer: []mut u8, held: holding, wanted: usize)
-             -> (result: []mut u8) ! no_space
+    --  Make room for `extra` more bytes after the used ones, more than the
+    --  buffer has left, and append `bytes` when they are not empty, `extra`
+    --  being their length; or report `no_space`.
+    enlarge: (self: ptr implementation, inout target: builder_value,
+              extra: usize, bytes: []u8) -> none ! no_space
 end grower
 
---  The one grower, which holds nothing: the doubling is `enlarge`'s.
+--  `over`'s policy, which holds nothing and refuses.
+refusing_value: type = struct
+    unused: u8
+end refusing_value
+
+refusing: refusing_value = (unused: 0)
+
+--  `growing`'s policy, which holds nothing: the doubling is `enlarge`'s.
 doubling_value: type = struct
     unused: u8
 end doubling_value
 
 doubling: doubling_value = (unused: 0)
+
+--  `format_onto`'s policy: the outlet a builder's bytes are handed to.
+draining_value: type = struct
+    onto: any outlet
+end draining_value
+
+--- Where `format_onto` hands the text it formats, a piece at a time: a
+--- value the caller keeps, which takes each piece whole or reports
+--- `no_space`, keeping its own reason for the caller, since a builder's
+--- appends fail with nothing else.  `io.write_format` makes one over a
+--- file.  Only a program that builds an erased `outlet` links any
+--- outlet's routines (D374).
+public outlet: type = concept (item: type)
+    --- Take all of `bytes`, or report `no_space`.
+    take: (self: ptr mut item, bytes: []u8) -> none ! no_space
+end outlet
 
 --- Text being built: the bytes written so far, in a buffer the caller gave
 --- `over` or in storage that `growing` takes from an allocator.  A value
@@ -51,7 +80,10 @@ public builder: type = builder_value
 --- append that does not fit reports `no_space`.  The buffer's earlier
 --- contents are overwritten as pieces are appended.
 public over: (buffer: []mut u8) -> (result: builder from buffer) =
-    result = (buffer: buffer, used: 0, held: not_allocated, growth: bounded)
+    --  A read-only view of module storage, which no store reaches (D375).
+    policy: any grower = any(addr refusing)
+    result = (buffer: buffer, used: 0, held: not_allocated, policy: policy,
+              growth: bounded)
 end over
 
 --- An empty builder that takes its storage from `memory` as it needs it,
@@ -66,8 +98,8 @@ public growing: (memory: any mem.allocator) -> (result: builder from memory) =
     --  A read-only view of module storage, which no store reaches and
     --  which outlives `memory` (D375).
     policy: any grower = any(addr doubling)
-    result = (buffer: nothing, used: 0, held: not_allocated,
-              growth: grows(memory: memory, policy: policy))
+    result = (buffer: nothing, used: 0, held: not_allocated, policy: policy,
+              growth: grows(memory: memory))
 end growing
 
 --- The bytes written so far, lent from the builder until it is next
@@ -114,10 +146,7 @@ public release: (inout target: builder) -> none =
     block: ptr mut u8 = addr target.buffer[0]
     match target.growth
         bounded: return
-        grows(memory, policy): begin
-            _ = policy
-            memory.free(block, extent)
-        end
+        grows(memory): memory.free(block, extent)
     end match
     nothing: []mut u8 = []
     target.buffer = nothing
@@ -147,15 +176,16 @@ storage: (memory: any mem.allocator, buffer: []mut u8, held: holding,
     end if
 end storage
 
---  Storage of at least `wanted` bytes for a growing builder's `buffer`,
---  doubling what it holds, with its bytes kept: `no_space` when the
---  allocator refuses.
-doubling_enlarge: (self: ptr doubling_value, memory: any mem.allocator,
-                   buffer: []mut u8, held: holding, wanted: usize)
-                  -> (result: []mut u8) ! no_space =
-    _ = self.val.unused
-    capacity_now: usize = lenof buffer
+--  Room for `extra` more bytes in a growing builder, doubling the storage
+--  it holds, with its bytes kept, then `bytes` appended: `no_space` when
+--  the allocator refuses, changing nothing.  The allocator's `resize`
+--  grows the storage in place or moves it.
+doubling_enlarge: (self: ptr doubling_value, inout target: builder_value,
+                   extra: usize, bytes: []u8) -> none ! no_space =
     maximum: usize = 0 -% 1
+    fail no_space when extra > maximum - target.used
+    wanted: usize = target.used + extra
+    capacity_now: usize = lenof target.buffer
     mut size: usize = 16
     if capacity_now > maximum / 2 then
         size = maximum
@@ -165,41 +195,76 @@ doubling_enlarge: (self: ptr doubling_value, memory: any mem.allocator,
     if size < wanted then
         size = wanted
     end if
-    block: ptr mut u8 = storage(memory, buffer, held, size) else (problem)
-        _ = problem
-        fail no_space
-    end
-    result = view(block, size)
+    match target.growth
+        bounded: fail no_space
+        grows(memory): begin
+            block: ptr mut u8 = storage(memory, target.buffer, target.held,
+                                        size) else (problem)
+                _ = problem
+                fail no_space
+            end
+            target.buffer = view(block, size)
+            target.held = allocated
+        end
+    end match
+    try append(target, bytes)
 end doubling_enlarge
 
 doubling_value is grower (enlarge: doubling_enlarge)
 
---  Make room for `extra` more bytes after the used ones.  A bounded builder
---  without the room reports `no_space`; a growing one asks its grower,
---  which doubles through the allocator's `resize`, growing the storage in
---  place or moving it, and reports `no_space` when the allocator refuses.
---  A failure changes nothing.
+--  A bounded builder's answer to a piece that does not fit.
+refusing_enlarge: (self: ptr refusing_value, inout target: builder_value,
+                   extra: usize, bytes: []u8) -> none ! no_space =
+    fail no_space
+end refusing_enlarge
+
+refusing_value is grower (enlarge: refusing_enlarge)
+
+--  Hand what a builder holds to `onto`, which takes it whole or fails, and
+--  empty the builder.
+handed: (inout target: builder, onto: any outlet) -> none ! no_space =
+    return when target.used == 0
+    try onto.take(target.buffer[0..<target.used])
+    target.used = 0
+end handed
+
+--  Room in a draining builder: what it holds is handed on and it starts
+--  again from empty, which is room for anything its whole buffer holds.
+--  `bytes` longer than that are handed on as they are.
+draining_enlarge: (self: ptr draining_value, inout target: builder_value,
+                   extra: usize, bytes: []u8) -> none ! no_space =
+    onto: any outlet = self.val.onto
+    try handed(target, onto)
+    if extra <= lenof target.buffer then
+        try append(target, bytes)
+    elsif lenof bytes == extra then
+        try onto.take(bytes)
+    else
+        fail no_space
+    end if
+end draining_enlarge
+
+draining_value is grower (enlarge: draining_enlarge)
+
+--  Make room for `extra` more bytes after the used ones, asking the
+--  builder's policy when the buffer has not the room: a bounded builder
+--  reports `no_space`, a growing one doubles, and a draining one hands
+--  what it holds on.  A failure changes nothing but what a draining
+--  builder has handed on.
 room: (inout target: builder, extra: usize) -> none ! no_space =
-    capacity_now: usize = lenof target.buffer
-    return when extra <= capacity_now - target.used
-    maximum: usize = 0 -% 1
-    fail no_space when extra > maximum - target.used
-    wanted: usize = target.used + extra
-    match target.growth
-        bounded: fail no_space
-        grows(memory, policy): begin
-            target.buffer = try policy.enlarge(memory, target.buffer,
-                                               target.held, wanted)
-            target.held = allocated
-        end
-    end match
+    return when extra <= lenof target.buffer - target.used
+    policy: any grower = target.policy
+    try policy.enlarge(target, extra, "")
 end room
 
 --- Append bytes as they are.
 public append: (inout into: builder, bytes: []u8) -> none ! no_space =
     count: usize = lenof bytes
-    return when count == 0
-    try room(into, count)
+    if count > lenof into.buffer - into.used then
+        policy: any grower = into.policy
+        try policy.enlarge(into, count, bytes)
+        return
+    end if
     ends: usize = into.used + count
     mem.copy(into.buffer[into.used..<ends], bytes) else (problem)
         _ = problem

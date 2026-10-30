@@ -97,6 +97,89 @@ public format: (inout into: builder, template: utf8,
     end
 end format
 
+--  Format one value into a builder over `format_onto`'s store.  It goes
+--  whole into the room left, as into a bounded builder; failing that, into
+--  the whole store once what waits there is handed on; and only a value
+--  longer than the whole store is written draining, handed on in pieces as
+--  the store fills.  So a conformance's `length`, `truncate` and alignment
+--  offsets hold for every value the store can hold.
+streamed_value: (inout into: builder, onto: any outlet,
+                 value: any formattable) -> none ! no_space =
+    count: usize = fitted(into.buffer, into.used, value) else (problem)
+        _ = problem
+        try handed(into, onto)
+        whole: usize = fitted(into.buffer, 0, value) else (again)
+            _ = again
+            try value.append(into)
+            return
+        end
+        into.used = whole
+        return
+    end
+    into.used = count
+end streamed_value
+
+--  Append `value` to a bounded builder over `buffer` after the `used` bytes
+--  already there, and say how many bytes it then holds.
+fitted: (buffer: []mut u8, used: usize, value: any formattable)
+        -> (count: usize) ! no_space =
+    mut fitting := over(buffer)
+    fitting.used = used
+    try value.append(fitting)
+    count = fitting.used
+end fitted
+
+--  `written` through a draining builder: each run of plain bytes, which
+--  may be handed on in pieces, and each value as `streamed_value` writes
+--  it.
+streamed: (inout into: builder, onto: any outlet, source: []u8,
+           values: []any formattable) -> none ! no_space =
+    mut run: usize = 0
+    mut at: usize = 0
+    mut next: usize = 0
+    while at < lenof source do
+        current: u8 = source[at]
+        if current == u8('{') or current == u8('}') then
+            if current == u8('{') and source[at + 1] == u8('}') then
+                try append(into, source[run..<at])
+                try streamed_value(into, onto, values[next])
+                inc next
+            else
+                try append(into, source[run..<at + 1])
+            end if
+            at += 2
+            run = at
+        else
+            inc at
+        end if
+    end while
+    try append(into, source[run..<at])
+end streamed
+
+--- Format `template` with `values`, as `format` does, through `store`, a
+--- buffer of the caller's, handing the text to `onto` each time the store
+--- fills and once at the end: text that fits the store is handed on in
+--- one piece, and text of any length in several.  The template is checked
+--- first, so `invalid_format` hands on nothing.  A value that fits the
+--- store is formatted whole into it; one longer than the whole store is
+--- handed on in pieces as it is written, and a library value's longest
+--- piece goes to `onto` as it is.  `no_space` is the outlet's refusal, or
+--- a conformance of the program's own asking for more room at once than
+--- the store has.  Twenty bytes hold every integer the library formats.
+--- `io.write_format` is this over a file.
+public format_onto: (store: []mut u8, onto: any outlet, template: utf8,
+                     values: []any formattable)
+                    -> none ! no_space | invalid_format =
+    source: []u8 = bytes(template)
+    try checked(source, lenof values)
+    draining: draining_value = (onto: onto)
+    policy: any grower = any(addr draining)
+    mut line: builder = (buffer: store, used: 0, held: not_allocated,
+                         policy: policy, growth: bounded)
+    try streamed(line, onto, source, values)
+    try handed(line, onto)
+end format_onto
+
 append_u8_value: (self: ptr u8, inout into: builder) -> none ! no_space =
     try append_u32(into, u32(self.val))
 end append_u8_value
