@@ -1,0 +1,9 @@
+class: negative
+summary: D529: a C result and a layout(c) record field holding a plain struct are each L0346 naming the record that is not layout(c)
+program: program.ldn
+codes: L0346, L0346
+constructs: 0750, 1580, 1610
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/c-record-holds-no-plain-struct/program.ldn
+status: 1

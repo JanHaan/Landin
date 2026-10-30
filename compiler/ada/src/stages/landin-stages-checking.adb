@@ -1171,15 +1171,17 @@ package body Landin.Stages.Checking is
          Parameters, Results : Landin.Checking.Signature_Part_Array;
          Valid : in out Boolean);
       --  Why a field cannot stand in a C record (D410, D413).
+      --  Plain_Field is a field whose struct is not `layout(c)`.
       type C_Field_Fault is
-        (Fine, Not_C, Empty_Not_Last, Flexible_Alone, Flexible_Nested,
-         Unaligned_Part, No_C_Records);
+        (Fine, Not_C, Plain_Field, Empty_Not_Last, Flexible_Alone,
+         Flexible_Nested, Unaligned_Part, No_C_Records);
       procedure Reject_C_Layout
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
          Field : Syn.Node_Id;
          Application : Landin.Provenance.Origin;
-         Fault : C_Field_Fault := Not_C);
+         Fault : C_Field_Fault := Not_C;
+         Held : String := "");
 
       procedure Validate_C_Layout
         (Of_Tree : Syn.Tree;
@@ -1389,20 +1391,76 @@ package body Landin.Stages.Checking is
             and then C_Nominal_Allowed (Part.Nominal)
             and then not C_By_Value (Part.Nominal));
 
+      --  D529: the name of the struct a C signature takes or returns, or a
+      --  C record holds, by value that is not `layout(c)`, or "" when the
+      --  part is anything else: a pointer union, a variant, or a C record
+      --  whose fault is another, which keep [1580]'s whole rule as their
+      --  note.
+      function Plain_Record_Name
+        (Nominal : Landin.Checking.Nominal_Type_Id) return String;
+
+      function Plain_Record_Name
+        (Part : Landin.Checking.Signature_Part) return String
+        is (if Part.Kind = Ty.Aggregate then Plain_Record_Name (Part.Nominal)
+            else "");
+
+      function Plain_Record_Name
+        (Nominal : Landin.Checking.Nominal_Type_Id) return String is
+      begin
+         if not Landin.Checking.Holds (Types.all, Nominal)
+           or else Landin.Checking.Is_Pointer_Union (Types.all, Nominal)
+           or else Template_Declaration (Nominal) = Res.No_Declaration
+         then
+            return "";
+         end if;
+         declare
+            Template : constant Res.Declaration_Id :=
+              Template_Declaration (Nominal);
+            Template_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Template));
+            Declaration : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Template);
+            Struct_Node : Syn.Node_Id := Syn.No_Node;
+         begin
+            if Syn.Kind (Template_Tree.all, Declaration)
+              = Syn.Type_Declaration
+            then
+               Struct_Node :=
+                 Syn.Declared_Type (Template_Tree.all, Declaration);
+            end if;
+            if Struct_Node = Syn.No_Node
+              or else Syn.Kind (Template_Tree.all, Struct_Node)
+                /= Syn.Struct_Body
+              or else Syn.Has_C_Layout (Template_Tree.all, Struct_Node)
+            then
+               return "";
+            end if;
+            return Spelled (Res.Name_Of (Meanings.all, Template));
+         end;
+      end Plain_Record_Name;
+
       --  A C signature's refusal names the signature and, beside it, what
       --  it holds that C cannot take: a parameter, a result, the error set,
       --  a generic formal, or the record a callback would pass by value.
+      --  Plain_Record names a struct that is not `layout(c)`, and Part the
+      --  parameter or result that holds it, `tint` or "" when unnamed.
       procedure Reject_C_Signature
         (Site : Landin.Provenance.Origin;
          Fault : Landin.Provenance.Origin;
          Because : String;
-         Pointer_Only : Boolean := False);
+         Pointer_Only : Boolean := False;
+         Plain_Record : String := "";
+         Part : String := "";
+         Returned : Boolean := False);
 
       procedure Reject_C_Signature
         (Site : Landin.Provenance.Origin;
          Fault : Landin.Provenance.Origin;
          Because : String;
-         Pointer_Only : Boolean := False)
+         Pointer_Only : Boolean := False;
+         Plain_Record : String := "";
+         Part : String := "";
+         Returned : Boolean := False)
       is
       begin
          if not Landin.Targets.Capabilities.C_Signatures (Facts) then
@@ -1416,6 +1474,29 @@ package body Landin.Stages.Checking is
                        & " ABI calls it, and this target has none yet; a"
                        & " Landin routine needs no C convention",
                Related => Fault, Because => Because, Into => Found);
+            return;
+         end if;
+         if Plain_Record /= "" then
+            --  D529: the one fault the reader has is the record, so the
+            --  refusal names it and its repair rather than every clause
+            --  of [1580].
+            Bad.Report
+              (Item => Bad.Foreign_Boundary,
+               Source => Site.Source,
+               Where => Site.Where,
+               Message => "C cannot " & (if Returned then "return" else "take")
+                          & " " & (if Part = "" then "this result"
+                                   else "`" & Part & "`")
+                          & ": `" & Plain_Record & "` is not `layout(c)`",
+               Note => "[0750]: only `layout(c)` lays a record out by the"
+                       & " target's C rules, and C takes no other by value;"
+                       & " declare `" & Plain_Record & ": type = layout(c)"
+                       & " struct`"
+                       & (if Returned then ""
+                          else ", or pass `ptr " & Plain_Record & "`")
+                       & " [1580]",
+               Related => Fault, Because => Because,
+               Into => Found);
             return;
          end if;
          if Pointer_Only then
@@ -1620,16 +1701,41 @@ package body Landin.Stages.Checking is
                declare
                   Fault : Syn.Node_Id := Syn.No_Node;
                   Because : Ada.Strings.Unbounded.Unbounded_String;
+                  --  D529: what the blamed part holds when that is a
+                  --  struct without `layout(c)`, and the part's name.
+                  Plain_Record, Part_Name :
+                    Ada.Strings.Unbounded.Unbounded_String;
+                  Returned : Boolean := False;
 
-                  procedure Blame (At_Node : Syn.Node_Id; Label : String);
+                  procedure Blame
+                    (At_Node : Syn.Node_Id;
+                     Label : String;
+                     Holds : String := "";
+                     Result : Boolean := False);
 
-                  procedure Blame (At_Node : Syn.Node_Id; Label : String) is
+                  procedure Blame
+                    (At_Node : Syn.Node_Id;
+                     Label : String;
+                     Holds : String := "";
+                     Result : Boolean := False) is
                   begin
                      if Fault = Syn.No_Node and then At_Node /= Syn.No_Node
                      then
                         Fault := At_Node;
                         Because :=
                           Ada.Strings.Unbounded.To_Unbounded_String (Label);
+                        Plain_Record :=
+                          Ada.Strings.Unbounded.To_Unbounded_String (Holds);
+                        Returned := Result;
+                        if Holds /= ""
+                          and then Syn.Has_Name (Syn.Kind (Of_Tree, At_Node))
+                          and then Syn.Name (Of_Tree, At_Node)
+                            /= Landin.Source.Names.No_Name
+                        then
+                           Part_Name :=
+                             Ada.Strings.Unbounded.To_Unbounded_String
+                               (Spelled (Syn.Name (Of_Tree, At_Node)));
+                        end if;
                      end if;
                   end Blame;
                begin
@@ -1656,7 +1762,9 @@ package body Landin.Stages.Checking is
                            Blame (Syn.Nth_Parameter (Of_Tree, Node, Position),
                                   (if C_Pointer_Only (Parameters (Index))
                                    then "this record crosses to C by pointer"
-                                   else "C cannot take this parameter"));
+                                   else "C cannot take this parameter"),
+                                  Holds => Plain_Record_Name
+                                    (Parameters (Index)));
                         end if;
                      end;
                   end loop;
@@ -1679,7 +1787,10 @@ package body Landin.Stages.Checking is
                            Blame (Syn.Nth_Return (Of_Tree, Node, Position),
                                   (if C_Pointer_Only (Results (Index))
                                    then "this record crosses to C by pointer"
-                                   else "C cannot return this result"));
+                                   else "C cannot return this result"),
+                                  Holds => Plain_Record_Name
+                                    (Results (Index)),
+                                  Result => True);
                         end if;
                      end;
                   end loop;
@@ -1700,7 +1811,11 @@ package body Landin.Stages.Checking is
                        (Syn.Origin (Of_Tree, Node),
                         Syn.Origin (Of_Tree, Fault),
                         Ada.Strings.Unbounded.To_String (Because),
-                        Pointer_Only);
+                        Pointer_Only,
+                        Plain_Record =>
+                          Ada.Strings.Unbounded.To_String (Plain_Record),
+                        Part => Ada.Strings.Unbounded.To_String (Part_Name),
+                        Returned => Returned);
                   end if;
                end;
                Valid := False;
@@ -1713,7 +1828,8 @@ package body Landin.Stages.Checking is
          Node : Syn.Node_Id;
          Field : Syn.Node_Id;
          Application : Landin.Provenance.Origin;
-         Fault : C_Field_Fault := Not_C)
+         Fault : C_Field_Fault := Not_C;
+         Held : String := "")
       is
          Known : constant Boolean := Landin.Provenance.Is_Known (Application);
          --  D413: a field's fault is said at the field, beside the layout
@@ -1741,6 +1857,10 @@ package body Landin.Stages.Checking is
                      then "this layout(c) struct has a non-C representation"
                      else "this field of a layout(c) struct has no C"
                           & " representation"),
+                  when Plain_Field =>
+                    "a C record cannot hold `"
+                    & Spelled (Syn.Name (Of_Tree, Field)) & "`: `" & Held
+                    & "` is not `layout(c)`",
                   when Empty_Not_Last =>
                     "only a C record's last field may be a zero-length"
                     & " array",
@@ -1767,6 +1887,11 @@ package body Landin.Stages.Checking is
                     & " layout(c) structs, and the last may be a `[0]T`"
                     & " flexible array member; tagged variants are not"
                     & " C unions",
+                  when Plain_Field =>
+                    "[0750]: a layout(c) record holds a record by value only"
+                    & " when that one is `layout(c)` too; declare `" & Held
+                    & ": type = layout(c) struct`, or hold `ptr " & Held
+                    & "` [1580]",
                   when Empty_Not_Last =>
                     "D413: `[0]T` is C's flexible array member, whose"
                     & " elements follow the record; move it last or give"
@@ -1846,7 +1971,10 @@ package body Landin.Stages.Checking is
                then
                   Fault := Flexible_Nested;
                elsif not C_Field_Allowed (Shape) then
-                  Fault := Not_C;
+                  Fault :=
+                    (if Shape.Kind = Landin.Checking.Aggregate_Field
+                       and then Plain_Record_Name (Shape.Nominal) /= ""
+                     then Plain_Field else Not_C);
                elsif Packed
                  and then Shape.Kind in Landin.Checking.Fixed_Array_Field
                    | Landin.Checking.Aggregate_Field
@@ -1857,7 +1985,10 @@ package body Landin.Stages.Checking is
                if Fault /= Fine then
                   Reject_C_Layout
                     (Of_Tree, Node, Syn.Nth_Field (Of_Tree, Node, Index),
-                     Application, Fault);
+                     Application, Fault,
+                     Held => (if Fault = Plain_Field
+                              then Plain_Record_Name (Shape.Nominal)
+                              else ""));
                   Valid := False;
                   return;
                end if;

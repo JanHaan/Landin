@@ -1,0 +1,10 @@
+error[L0346]: C cannot take `tint`: `color` is not `layout(c)`
+  --> ../tests/fixtures/negative/c-record-not-layout-c/program.ldn:8:1
+  |
+8 | extern(c) link(symbol: "ClearBackground") clear_background: (tint: color) -> none
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-record-not-layout-c/program.ldn:8:62
+  |
+8 | extern(c) link(symbol: "ClearBackground") clear_background: (tint: color) -> none
+  |                                                              ^^^^^^^^^^^ C cannot take this parameter
+  = note: [0750]: only `layout(c)` lays a record out by the target's C rules, and C takes no other by value; declare `color: type = layout(c) struct`, or pass `ptr color` [1580]
