@@ -101,6 +101,41 @@ class Archive(unittest.TestCase):
                 mode = archive.getmember("bin/refine").mode
                 self.assertEqual(mode & 0o111, 0o111)
 
+    @unittest.skipUnless(sys.platform.startswith("linux")
+                         and shutil.which("cc") and shutil.which("objcopy")
+                         and shutil.which("readelf"),
+                         "needs Linux with cc, objcopy and readelf")
+    def test_debug_information_is_packaged_apart(self):
+        with TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            source = directory / "main.c"
+            source.write_text("int main(void) { return 0; }\n")
+            binary = directory / "refine"
+            subprocess.run(["cc", "-g", "-o", str(binary), str(source)],
+                           check=True)
+            before = binary.read_bytes()
+            asset = directory / "landin.tar.gz"
+            debug = directory / "landin-debug.tar.gz"
+            subprocess.run([str(ROOT / "scripts/package.sh"), "--debug",
+                            str(debug), str(binary), str(asset)], check=True)
+            self.assertEqual(binary.read_bytes(), before)
+            unpacked = directory / "unpacked"
+            for archive in (asset, debug):
+                with tarfile.open(archive) as opened:
+                    opened.extractall(unpacked, filter="data")
+
+            def sections(path):
+                return subprocess.run(["readelf", "-S", str(path)],
+                                      capture_output=True, text=True,
+                                      check=True).stdout
+            stripped = sections(unpacked / "bin/refine")
+            self.assertNotIn(".debug_info", stripped)
+            self.assertNotIn(".symtab", stripped)
+            self.assertIn(".gnu_debuglink", stripped)
+            self.assertIn(".debug_info", sections(unpacked / "refine.debug"))
+            with tarfile.open(debug) as opened:
+                self.assertEqual(opened.getnames(), ["refine.debug"])
+
     def test_a_missing_binary_is_refused(self):
         with TemporaryDirectory() as scratch:
             directory = Path(scratch)

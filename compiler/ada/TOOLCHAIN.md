@@ -162,7 +162,9 @@ Set once, in `compiler/ada/landin_common.gpr`, and inherited by every project:
 
 Debug mode adds `-O0 -g -gnata -gnatVa -fstack-check`: assertions, contracts
 and validity checks are on while the compiler is being written. Release mode
-uses `-O2 -g -gnatn` and keeps debug information.
+uses `-O2 -g -gnatn` and keeps debug information; the release workflow's
+`scripts/package.sh --debug` takes it out of the published compiler and
+publishes it beside the archive (D531).
 
 Every unit of both projects is also compiled under `compiler/ada/landin.adc`,
 in both modes, as the projects' local configuration pragmas. It holds

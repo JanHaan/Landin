@@ -372,7 +372,7 @@ jobs:
           outside="$RUNNER_TEMP/outside"
           rm -rf "$outside"
           mkdir -p "$outside/prefix"
-          ./scripts/package.sh "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" "$outside/landin.tar.gz"
+          ./scripts/package.sh --debug "$outside/landin-debug.tar.gz" "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" "$outside/landin.tar.gz"
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           python3 scripts/outside_user.py --prefix "$outside/prefix" \
             --work "$outside/work"
@@ -429,7 +429,7 @@ jobs:
           rm -rf "$outside"
           mkdir -p "$outside/release" "$outside/prefix"
           tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" -C "$outside/release"
-          ./scripts/package.sh "$outside/release/bin/refine" "$outside/landin.tar.gz"
+          ./scripts/package.sh --debug "$outside/landin-debug.tar.gz" "$outside/release/bin/refine" "$outside/landin.tar.gz"
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           PATH=/usr/bin:/bin python3 scripts/outside_user.py --stock \
             --prefix "$outside/prefix" --work "$outside/work"
@@ -846,7 +846,7 @@ jobs:
           outside="$RUNNER_TEMP/outside"
           rm -rf "$outside"
           mkdir -p "$outside/prefix"
-          ./scripts/package.sh "$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine" "$outside/landin.tar.gz"
+          ./scripts/package.sh --debug "$outside/landin-debug.tar.gz" "$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine" "$outside/landin.tar.gz"
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           python3 scripts/outside_user.py --prefix "$outside/prefix" \
             --work "$outside/work"
@@ -1133,7 +1133,7 @@ jobs:
           outside="$RUNNER_TEMP/outside"
           rm -rf "$outside"
           mkdir -p "$outside/prefix"
-          ./scripts/package.sh "$PWD/compiler/ada/build/linux-arm64/release/bin/refine" "$outside/landin.tar.gz"
+          ./scripts/package.sh --debug "$outside/landin-debug.tar.gz" "$PWD/compiler/ada/build/linux-arm64/release/bin/refine" "$outside/landin.tar.gz"
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           python3 scripts/outside_user.py --prefix "$outside/prefix" \
             --work "$outside/work"

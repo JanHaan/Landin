@@ -156,16 +156,22 @@ jobs:
           set -eu
           version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           asset="landin-$version-${{ matrix.platform }}.tar.gz"
+          debug="landin-$version-${{ matrix.platform }}-debug.tar.gz"
           binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
           #  The archive is an installed prefix, refine and the library
           #  it finds beside itself, built reproducibly by the same script
-          #  the gate's outside-user check installs from.
-          ./scripts/package.sh "$binary" "$asset"
-          sum=$(shasum -a 256 "$asset" | cut -d' ' -f1)
-          echo "$sum  $asset"
+          #  the gate's outside-user check installs from.  refine's debug
+          #  information is three quarters of it, so it is published
+          #  beside the archive rather than in it (D531).
+          ./scripts/package.sh --debug "$debug" "$binary" "$asset"
+          for file in "$asset" "$debug"; do
+            sum=$(shasum -a 256 "$file" | cut -d' ' -f1)
+            printf '%s  %s\n' "$sum" "$file" > "$file.sha256"
+            ls -l "$file"
+            cat "$file.sha256"
+          done
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
-          echo "sha256=$sum"  >> "$GITHUB_OUTPUT"
-          printf '%s  %s\n' "$sum" "$asset" > "$asset.sha256"
+          echo "debug=$debug" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -173,6 +179,8 @@ jobs:
           path: |
             ${{ steps.package.outputs.asset }}
             ${{ steps.package.outputs.asset }}.sha256
+            ${{ steps.package.outputs.debug }}
+            ${{ steps.package.outputs.debug }}.sha256
 
   publish:
     needs: build

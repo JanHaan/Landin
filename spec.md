@@ -26075,5 +26075,7 @@ nothing beside, which leaves an internal error unexplained; and compressed
 debug sections, which keep one file at about half the size. All were
 declined.
 
-**Pinned by** nothing that runs yet: the release workflow's packaging step,
-which no fixture runs.
+**Pinned by** `scripts/tests/test_outside_user.py`, which packages an ELF
+with its debug information, and the gate's jobs that install a compiler
+outside the checkout, which package it the release's way; no fixture runs
+the release workflow itself.
