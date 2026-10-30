@@ -26043,6 +26043,24 @@ writer for a program that writes many pieces. An unknown `core/io` member
 spelt as another language's print, `print`, `println`, `printf` or `puts`,
 is L0201 whose fix shows the call. Floating-point values stay unformatted.
 
+**Settled in implementing it:** the store is `io.format_store`, 128 bytes,
+and the L0201 is a note rather than a fix, since the call's arguments are
+not the ones written; the row keeps one note. `core/text` gains
+`format_onto`, which formats through a caller's buffer and hands the text
+to an `outlet`, a concept of one entry, `take`, and `write_format` is
+`format_onto` over the file. A value is formatted whole into the room the
+store has left, failing that into the whole store once what waits is
+written, and only a value longer than the whole store is written in
+pieces as it is formatted, a library value's longest piece going to the
+file as it is; so a conformance's own `length` offsets and alignments hold
+for every value the store holds. Each builder holds the policy that
+answers a piece its buffer has no room for: `over`'s refuses, `growing`'s
+doubles and `format_onto`'s hands what waits to the outlet. Each is
+reached through a table only its maker builds, as D374 has the growth, so
+an image that never calls `write_format` links no drain. A conformance of
+the program's own that asks for more room at once than the store has, as
+an alignment wider than it, is `io_failed`: the text cannot be written.
+
 **The alternatives:** `io.print`, which the maintainer declined so that the
 other languages' names are told the call rather than half-matching it; a
 call to standard output with no file, which needs a process provider where a
@@ -26050,8 +26068,16 @@ writer suffices and hides which stream is written; a buffer the caller
 passes, which is the buffered writer again; storage from an allocator; and
 `no_space` past a fixed length, which makes a long name a failure of a print.
 
-**Pinned by** nothing that runs yet: the item that implements it adds a
-runtime fixture printing a number and a value longer than the store.
+**Pinned by** `runtime/io-write-format`, which prints an integer, the
+lowest `i64`, a `bool`, a string longer than the store and an escaped
+brace to standard output and writes nothing for a template with a
+placeholder too many, on every hosted target;
+`runtime/io-write-format-memory`, whose counted writes show a line that
+fits as one write, a longer value as the bytes before it, the value and
+the rest, a mismatch as no write and a failed write as `io_failed`, on
+Cortex-M0 too; and `negative/core-io-println-is-write-format`,
+`negative/core-io-printf-is-write-format`, under an alias, and
+`negative/core-io-selected-puts-is-write-format`, whose notes show the call.
 
 ### D531 — A released compiler carries no debug information, which ships beside it
 

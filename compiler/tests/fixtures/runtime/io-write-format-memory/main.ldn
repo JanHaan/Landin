@@ -1,0 +1,81 @@
+--  io.write_format over core/io.memory's standard output, whose writes are
+--  counted: a line that fits its store is one write, a value longer than
+--  the store goes out in pieces, a template that does not fit its values
+--  writes nothing, and a failed write is io_failed.
+import core/io
+import core/text
+
+mut output: [512]u8 = zeroed
+mut errors: [1]u8 = zeroed
+mut unused: [1]u8 = zeroed
+
+--  Whether standard output holds `expected` from `start` on, and nothing
+--  after it.
+wrote: (state: io.memory_space, start: usize, expected: []u8)
+       -> (yes: bool) =
+    yes = state.output_used - start == lenof expected
+    mut at: usize = start
+    for byte in expected do
+        yes = yes and output[at] == byte
+        inc at
+    end for
+end wrote
+
+formatted: (host: io.memory, inout state: io.memory_space)
+           -> (step: i32) ! ... =
+    step = 2
+    count: u32 = 42
+    done: bool = true
+    try io.write_format(host, io.out(host), "{} and {}\n",
+                        [any(addr count), any(addr done)])
+    return when state.writes <> 1 or not wrote(state, 0, "42 and true\n")
+    step = 3
+    --  Two hundred letters, more than the store holds: what waits is
+    --  written first, then the value as it is, then the rest of the line.
+    mut letters: [208]u8 = zeroed
+    mut at: usize = 0
+    while at < 200 do
+        letters[at] = u8('a') + u8(at % 26)
+        inc at
+    end while
+    long: []u8 = letters[0..<200]
+    start: usize = state.output_used
+    try io.write_format(host, io.out(host), "long: {}.\n", [any(addr long)])
+    letters[200] = u8('.')
+    letters[201] = u8('\n')
+    return when state.writes <> 4
+      or not wrote(state, start + 6, letters[0..<202])
+    step = 4
+    held: usize = state.output_used
+    mut refused: bool = false
+    io.write_format(host, io.out(host), "{} {}\n", [any(addr count)])
+        else (problem)
+        refused = problem == text.invalid_format
+    end
+    return when not refused or state.writes <> 4
+      or state.output_used <> held
+    step = 5
+    state.fail_write_at = state.writes + 1
+    refused = false
+    io.write_format(host, io.out(host), "{}\n", [any(addr count)])
+        else (problem)
+        refused = problem == io.io_failed
+    end
+    return when not refused
+    step = 42
+end formatted
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: false, writable: false, state: io.closed_slot)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: [][]u8 = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<1], no_arguments, "",
+                           output[0..<512], errors[0..<1])
+    code = formatted(host, state) else 1
+end main

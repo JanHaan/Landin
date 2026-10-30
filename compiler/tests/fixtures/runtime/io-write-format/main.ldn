@@ -1,0 +1,36 @@
+--  io.write_format prints a template and its values to standard output in
+--  one call: an integer and a bool, a string longer than its store, and a
+--  template that does not fit its values, which writes nothing.
+import core/io
+import core/text
+import hosted/blocking
+
+public main: () -> (code: i32) =
+    code = 1
+    host := blocking.new()
+    out := io.out(host)
+    count: u32 = 42
+    lowest: i64 = 0 - 9223372036854775807 - 1
+    done: bool = true
+    io.write_format(host, out, "{} items, {} at least, done: {}\n",
+                    [any(addr count), any(addr lowest), any(addr done)])
+        else none
+    --  Three hundred letters, more than the store holds, written in pieces.
+    mut letters: [300]u8 = zeroed
+    mut at: usize = 0
+    while at < 300 do
+        letters[at] = u8('a') + u8(at % 26)
+        inc at
+    end while
+    long: []u8 = letters[0..<300]
+    io.write_format(host, out, "long: {} ({} bytes)\n",
+                    [any(addr long), any(addr at)]) else none
+    code = 2
+    io.write_format(host, out, "{} and {}\n", [any(addr count)])
+        else (problem)
+        return when problem <> text.invalid_format
+    end
+    code = 3
+    io.write_format(host, out, "{{}} is a placeholder\n", []) else none
+    code = 0
+end main

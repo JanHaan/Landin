@@ -1,0 +1,9 @@
+--  C's and Rust's way to print a value, which core/io answers with one
+--  call of its own.
+import core/io
+
+public main: () -> (code: i32) =
+    count: u32 = 4
+    io.println(count)
+    code = 0
+end main

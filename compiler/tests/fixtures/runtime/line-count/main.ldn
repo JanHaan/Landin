@@ -30,14 +30,9 @@ end count_lines
 --- found`.
 complain: (host: blocking.host, subject: []u8, problem: failure.reason)
           -> none =
-    mut room: [256]u8 = zeroed
-    mut err := io.buffered_over(host, io.err(host), room)
-    io.put(err, "count: ") else none
-    io.put(err, subject) else none
-    io.put(err, ": ") else none
-    io.put(err, failure.words(problem)) else none
-    io.put(err, "\n") else none
-    io.flush(err) else none
+    words: []u8 = failure.words(problem)
+    io.write_format(host, io.err(host), "count: {}: {}\n",
+                    [any(addr subject), any(addr words)]) else none
 end complain
 
 public main: () -> (code: i32) =
@@ -51,10 +46,8 @@ public main: () -> (code: i32) =
         complain(host, text.host_bytes(path), problem)
         return
     end
-    mut storage: [64]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage)
-    io.format(out, "{} lines\n", [any(addr lines)]) else none
-    io.flush(out) else (problem)
+    io.write_format(host, io.out(host), "{} lines\n", [any(addr lines)])
+        else (problem)
         complain(host, "standard output", problem)
         return
     end

@@ -1,0 +1,8 @@
+class: negative
+summary: io.println is refused as L0201 whose note shows the one call that prints a value, io.write_format to io.out, rather than only saying a plain import exposes qualified members
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-io-println-is-write-format
+codes: L0201
+status: 1
+constructs: 1420, 1860
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

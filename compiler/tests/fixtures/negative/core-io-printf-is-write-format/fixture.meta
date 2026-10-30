@@ -1,0 +1,8 @@
+class: negative
+summary: io.printf under the alias stdio is refused as L0201 whose note shows the write_format call spelt with that alias
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-io-printf-is-write-format
+codes: L0201
+status: 1
+constructs: 1420, 1430, 1860
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

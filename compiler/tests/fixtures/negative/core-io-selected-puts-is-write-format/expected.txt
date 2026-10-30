@@ -1,0 +1,7 @@
+error[L0201]: the imported module has no member `puts`
+  --> ../tests/fixtures/negative/core-io-selected-puts-is-write-format/main.ldn:3:17
+  |
+3 | import core/io (puts)
+  |                 ^^^^
+  = note: D527: one call prints values, each `{}` taking the next; select `write_format` and `out`, and write `write_format(host, out(host), "{}\n", [any(addr x)])`, `host` being `blocking.new()` of `hosted/blocking` on a hosted system
+  = help: did you mean `put`?

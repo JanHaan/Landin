@@ -320,30 +320,49 @@ import core/io
 import core/text
 import hosted/blocking
 
---- Write a name and a count through the program's buffered writer.
-report: (inout out: io.buffered_writer(blocking.host), name: utf8, count: u32)
-        -> none ! io.io_failed | text.no_space | text.invalid_format =
-    try io.format(out, "{}: {} items\n", [any(addr name), any(addr count)])
+--- Write a name and a count to standard output in one call.
+report: (host: blocking.host, name: utf8, count: u32)
+        -> none ! io.io_failed | text.invalid_format =
+    try io.write_format(host, io.out(host), "{}: {} items\n",
+                        [any(addr name), any(addr count)])
 end report
+```
 
---- Make the writer once, pass it down, and flush it at the end.
-print_report: (host: blocking.host)
+`io.write_format` fills each `{}` with the next value [1370] [1380] and
+writes the line to the file it is given, here standard output. It formats
+into a small buffer on its own stack, so a line that fits is one `write`
+and a longer one goes out in pieces, and nothing is allocated. Nothing runs
+at compile time, so the template is checked against the values when it
+runs, and a mismatch is `invalid_format`, which writes nothing, rather than
+undefined behaviour [1540].
+
+A program that prints many lines makes one buffered writer and passes it
+down, much as C buffers `stdout`: it gathers the output in a buffer
+of yours and writes it with one system call when the buffer fills or is
+flushed, where each `write_format` makes its own. `io.format` fills a
+template into it. Flush it on the way out, since there is no destructor to
+do it for you [1100]:
+
+```landin
+import core/io
+import core/text
+import hosted/blocking
+
+--- Many lines through one buffered writer: made once, passed down or used
+--- in place, and flushed at the end.
+print_report: (host: blocking.host, names: []utf8)
               -> none ! io.io_failed | text.no_space | text.invalid_format =
-    mut storage: [256]u8 = zeroed
+    mut storage: [4096]u8 = zeroed
     mut out := io.buffered_over(host, io.out(host), storage)
     defer io.flush(out) else none
-    try report(out, "apples", 12)
+    mut count: u32 = 0
+    for name in names do
+        inc count
+        try io.format(out, "{}: {} items\n", [any(addr name), any(addr count)])
+    end for
     try io.flush(out)
 end print_report
 ```
-
-`io.format` fills each `{}` with the next value [1370] [1380]. Make one
-buffered writer near the top of the program and pass it down: it gathers the output in a buffer and
-writes it with one system call when the buffer fills or is flushed, where
-`io.write` makes a call every time. Flush it on the way out, since there is
-no destructor to do it for you [1100]. Nothing runs at compile time, so the
-template is checked against the values when it runs, and a mismatch is
-`invalid_format` rather than undefined behaviour [1540].
 
 Width, padding and hexadecimal are a builder's typed calls rather than
 letters in the template, `align_right` and `append_hex_u32` among them, so a

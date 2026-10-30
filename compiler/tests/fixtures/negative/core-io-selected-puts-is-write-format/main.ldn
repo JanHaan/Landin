@@ -1,0 +1,7 @@
+--  C's puts, selected from core/io, whose note names the two members to
+--  select instead.
+import core/io (puts)
+
+public main: () -> (code: i32) =
+    code = 0
+end main

@@ -1,0 +1,9 @@
+--  C's printf, asked of core/io under another name, which the note's call
+--  is spelt with.
+import core/io as stdio
+
+public main: () -> (code: i32) =
+    count: u32 = 4
+    stdio.printf("%u\n", count)
+    code = 0
+end main
