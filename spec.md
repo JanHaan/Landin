@@ -25649,11 +25649,13 @@ it; a block larger than the largest class takes none. Measured on Linux
 x86-64 with the debug compiler, twenty million allocations and frees of 24
 bytes, each pair: at `--optimize size` 78 ns before, 197 ns with the flag
 clear and 460 ns with it set; at `--optimize speed` 28 ns, 145 ns and
-367 ns. Until D499 every atomic is fenced before and after, so the flag's
-relaxed load costs two `mfence`s and is most of the difference; with D499's
-lowering the flag is a plain load, and the integration of the two
-measures it again. The vDSO cache is a relaxed `u64` cell and costs a
-clock read the same until then (D317), and `child_defaults` is a `u64` cell
+367 ns. Those figures predate D499, under which every atomic was fenced
+before and after. With D499's lowering, measured again on the merged item
+the same way, three runs each: at `size` 76 ns before, 100 ns with the
+flag clear and 135 ns with it set; at `speed` 27.5 ns, 37.7 ns and
+53.6 ns. The flag is a plain load now, and what a pair still pays with it
+clear is the register's to find. The vDSO cache is a relaxed `u64` cell, a
+plain move (D317), and `child_defaults` is a `u64` cell
 a compare-exchange adds a signal to and a spawn reads once with an
 acquiring load.
 

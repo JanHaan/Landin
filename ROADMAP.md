@@ -2628,7 +2628,7 @@ report writes on a stack of its own, since lazy binding overran a fibre's
 
 ### R14.40 — Threads and the atomic wrapper
 
-Status: active
+Status: complete
 Depends on: R14.20
 
 Hosted threads, and the atomic wrapper type over D227's builtins that answers
@@ -2648,6 +2648,31 @@ oracles. The hosted thread facility implements D227's creation and join
 happens-before edges: executable cases publish ordinary data before starting a
 worker and observe its ordinary writes after joining it, on each hosted
 target, with no other synchronization supplying either edge.
+
+Done: `hosted/thread` starts threads as a group its caller joins, over a
+backing the caller lends, with the first failure kept: `clone` and a wait
+on the word the kernel clears in a static Linux program, `pthread_create`
+on a stack area and `pthread_join` under `--link=libc`, on Darwin and on
+FreeBSD (D494, D495, D516-D520). A thread begins with the asynchronous
+signals blocked and a fault's own left open (D521), and runs on a
+prepared stack whose limit is its own: `link(thread)` places per-thread
+module storage, ELF local-exec on Linux and FreeBSD and Darwin's
+thread-local variables, and the stack-limit cell is the thread's, a
+pthread key's slot read inline on Darwin (D496, D497, D504-D508). One
+report stack serves every thread behind a latch (D498), and a
+`system.new()` handle records into the calling thread's last error
+(D503, D509). `core/atomic` wraps one unsigned scalar with acquiring
+loads, releasing stores, acq_rel read-modify-writes, a relaxed family
+and `sole_add`, the single writer's update, and Cortex-M0 refuses its
+read-modify-writes where they are used, naming `sole_add` and the
+critical section (D500, D510, D511). A lock waits on its word through
+the futex, `_umtx_op` or `os_sync_wait_on_address`, the heap is behind
+it once a thread has started, and the vDSO cache is a relaxed word
+(D501, D502, D512-D514). Every backend fences an atomic only as its
+ordering asks, so a relaxed load on x86-64 is a plain move (D499, D522).
+Executable cases publish ordinary data before a worker starts and read
+its ordinary writes after the join on every hosted target and under
+`--link=libc`, with no other synchronization.
 
 ### R14 gate
 
@@ -2853,7 +2878,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-28 | Language evolution | No callback-identity counterexample exists, and static rejection of known slice-range endpoints is not a normative requirement. | A valid counterexample or an explicit semantic proposal. | Present-contract defects go to their implementation owner; semantic changes need specification and tests. | watch |
 | R551-32 | Scale and self-hosting | Stable separate compilation and interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting. | An explicit scope decision; planning R8 considered it and left it outside. | Tested seams and complete interface and package identity with whole-program semantics preserved. | open |
 | R551-33 | Companion tool and ecosystem | Package acquisition, version solving, manifests, locks, naming authority, deterministic roots, generators and sandboxing; the binding generator's replacement of its four files is not atomic. Merged: R730-08, the RP2040 fixture is a bounded selection and no general SVD generator exists; R730-11, the firmware linker script is fixed. | Before acquisition, general generation or concurrent build consumers are offered. | Declared inputs and outputs, immutable publication, reproducible roots and single-version conflicts. R12.10 takes the SVD and linker halves. | open |
-| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20, R14.40 |
+| R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 gave the atomic wrapper, `core/atomic` (D500). | scheduled R13.20 |
 | R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | retired: R14.20 specifies the switch (D450), makes fibres a group over a scheduler (D444) and teaches them at [1675]; stackless coroutines stay rejected |
 | R551-36 | Release readiness | Licensing and distribution, release and version designation, production and operational claims. | Explicit maintainer decisions. | Separate decisions, each with evidence. | open |
 | R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | scheduled R12.20 |
@@ -2867,7 +2892,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R730-24 | Competitive optimization | Build-report counters are filled differently per backend, so a cross-target comparison from them is unsafe. | Before any cross-target code-quality comparison from the report. | Every declared counter filled on every backend, or the report saying which it does not measure. | scheduled R16.10 |
 | B3 | Scale and self-hosting | Separate compilation: whole-program checking is done; stable interfaces are R551-32's. | As R551-32. | As R551-32. | open |
 | B4 | Companion tool and ecosystem | Package, build and generators beyond the thin pieces the compiler owns; R551-33's. | As R551-33. | As R551-33. | open |
-| B5 | Broader standard library | The standard library beyond the sixteen `core` modules; R551-34's. | As R551-34. | As R551-34. | scheduled R13.20, R14.40 |
+| B5 | Broader standard library | The standard library beyond the sixteen `core` modules; R551-34's. | As R551-34. | As R551-34. | scheduled R13.20 |
 | B6 | Companion tool and ecosystem | Package naming authority, keeping the project-first override [1480]. | Before acquisition or a naming authority is offered. | A naming policy that keeps the project-first override. | open |
 | D6 | Companion tool and ecosystem | One version of a package name per program [1470]; the compiler's first-root rule is done and arranging roots is the tool's. | Before acquisition or root arrangement is offered. | Roots arranged so one version is reachable, a conflict a hard error. | open |
 | C1 | Language evolution | Affine values, which would change [0910]'s non-ownership `sink`. Merged: R730-10, the derived driver's device authority, descriptor linearity and stop are manual obligations. | A peripheral or resource program unpleasant without them. | [0910] amended with a register decision answering R730-10's obligations, on every target. | open |
@@ -3053,6 +3078,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-384 | Release readiness | On Darwin a thread's first access to a `link(thread)` datum enters dyld's `tlv_get_addr` slow path, which saves every register and allocates the thread's block, on whatever stack the access runs on; on a prepared stack that depth is in no check and no depth report, as the C library's `write` was before D491. Every later access takes the fast path, which uses no stack. Found while emitting D496's accessor in R14.40; not measured. | A Darwin thread that first touches thread storage on a prepared stack, or the threads item's Darwin start. | The first access made before a prepared stack runs, or the slow path's depth measured and counted as D468's foreign opening. | open |
 | SR-385 | Competitive optimization | x86-64 reaches a `link(thread)` instance in two instructions, `movq %fs:0, %rcx` and a `@tpoff(%rcx)` operand, where one `%fs:x@tpoff` operand would do, because the backend's move helper reads an operand that begins with `%` as a register; D497's check uses the one-instruction form. | The optimization phase, or a measured hot loop over thread storage. | The single `%fs`-relative operand in every access, with the helper telling a segment-prefixed operand from a register. | open |
 | SR-386 | Usability | `./scripts/dev-test.sh --fixture=abi/r440-errno-thread-local` on a Mac fails to link with "ld: unknown options: --wrap=open": the fixture's `c-args: -pthread -Wl,--wrap=open` are GNU ld's, and only `compiler/tests/darwin/check.py`'s parity run rewrites `-Wl,--wrap=NAME` to Apple's `-Wl,-alias,___wrap_NAME,_NAME`, so the gate's `darwin-parity` passes while the test program's own ABI execution on Darwin refuses the fixture, and nothing says which of the two is the fixture's Darwin verdict. The harness is unchanged by R14.40; met running R14.40's Darwin fixtures on the Mac. | The next change to the ABI fixture execution's C link or to Darwin parity. | One translation of a fixture's linker arguments for Darwin, shared by the test program and the parity run, or a fixture key that says which runner gives the Darwin verdict. | open |
+| SR-387 | Competitive optimization | `hosted/heap` with no thread started still costs about 10 ns more an allocation and free of 24 bytes than the heap before its lock, 37.7 against 27.5 ns a pair at `--optimize speed` on Linux x86-64 (100 against 76 at `size`), though the flag it reads is one relaxed load that D499 lowers to a plain move; nothing has yet shown where the rest goes, whether the call into `hosted/thread/lock` or the cell's concept dispatch. D514 records the figures. | The optimization phase, or a measured allocation-heavy program. | The flag-clear path within a load and a branch of the old heap, measured. | open |
 | SR-400 | Usability | A label in a naked routine's body is refused with L0330, "ordinary assembly is straight-line and defines no label", which calls the naked body ordinary; a hosted naked body may branch (D279) but no rule says it may not label, so a forward branch can only be computed. Met writing `platform/linux`'s `clone` trampoline in R14.40, whose text became branch-free, with conditional moves and on RV64 a mask, to do without one. | The next change to assembly's text rules. | The refusal naming a naked body as one, and either numeric local labels admitted in a naked body or the rule written where [1990] says what a naked body holds. | open |
 | SR-401 | Usability | A bodyless `extern(c) link(symbol: "S")` import beside a public naked routine named `S`, which D415 makes a global symbol under its own spelling, is admitted with no L0347: the collision check compares explicit and C link names, and a public machine-convention routine's spelling is neither, so the pair reached the IR unchecked. D516 admits the pair when the naked routine names its symbol explicitly. Met trying ways to call `clone`'s naked text in R14.40. | The next change to link-symbol checking. | A public naked routine's own spelling held to the same collision rule as an explicit link name. | open |
 | SR-402 | Usability | A fixture `compiler/tests/cross-lanes.json` lists for an emulator fails when it is run alone with `./scripts/dev-test.sh --fixture=...` on that lane, as it would with no row, and the transcript does not mention the row: the rows are read only by the corpus case of `fixture execution`. Met adding `runtime/thread-start-refused`'s row for QEMU's abort on a refused thread in R14.40, whose effect could be seen only through the whole corpus. | The next change to the cross lanes or to the test program's selectors. | A selected fixture with a row reported as the corpus reports it, an expected host failure, or the row named beside the failure. | open |
