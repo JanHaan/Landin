@@ -48,6 +48,29 @@ package body Landin.Tests.Commands_Suite is
          Landin.Testing.Check (Item, Landin.Json.Ok (Doc),
                                "version query is structured JSON");
       end;
+      --  D530: `--full` is explain's own option, before or after what it
+      --  is asked about, and the command line hands it to the driver.
+      declare
+         Before : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["explain", "--full", "D280"], Host, Tools, Meter);
+         After : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["explain", "D280", "--full"], Host, Tools, Meter);
+         Elsewhere : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["check", "--full", "main.ldn"], Host, Tools, Meter);
+      begin
+         Landin.Testing.Check
+           (Item, Before.Status = 0
+                  and then Ada.Strings.Fixed.Index
+                    (US.To_String (Before.Output), "Chosen: ") > 0
+                  and then US.To_String (After.Output)
+                    = US.To_String (Before.Output),
+            "explain --full answers wherever --full is written");
+         Landin.Testing.Check_Equal
+           (Item, Elsewhere.Status, 2, "--full is explain's alone");
+      end;
       Landin.Testing.Check_Equal
         (Item, Host.Write_Count, 0, "informational commands write no files");
       Landin.Testing.Check_Equal

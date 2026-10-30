@@ -21,7 +21,8 @@ package body Landin.Commands.Catalogue is
            "Compile a whole program to an executable or assembly",
          when Format =>
            "Format source files, or a directory's, in the one Landin layout",
-         when Explain => "Explain diagnostic codes and their repairs",
+         when Explain =>
+           "Explain diagnostic codes, and the rules and decisions notes cite",
          when Server => "Serve the language server protocol over stdio",
          when Version => "Identify this compiler build",
          when Targets => "List described targets and their CPU feature levels",
@@ -60,7 +61,7 @@ package body Landin.Commands.Catalogue is
          when Stage_Report => "--stage-report", when Dry_Run => "--dry-run",
          when Stack_Report => "--stack-report",
          when Depfile => "--depfile", when Format_Check => "--check",
-         when Format_Stdout => "--stdout",
+         when Format_Stdout => "--stdout", when Explain_Full => "--full",
          when Stdio => "--stdio", when JSON => "--json",
          when Warnings => "--warnings", when Warn => "--warn",
          when Allow => "--allow", when Deny => "--deny");
@@ -107,6 +108,8 @@ package body Landin.Commands.Catalogue is
            "Report every line out of the layout; write nothing",
          when Format_Stdout =>
            "Print the one source in the layout; write nothing",
+         when Explain_Full =>
+           "Add a construct's text or a decision's chosen rule",
          when Stdio => "Use the standard input/output LSP transport (default)",
          when JSON => "Print structured query output",
          when Warnings => "Base warning selection: default, all, none",
@@ -128,7 +131,8 @@ package body Landin.Commands.Catalogue is
 
    function Takes_Value (Flag : Option) return Boolean is
      (Flag not in Help_Flag | Verbose | Quiet | Panic_Map | Dry_Run
-       | Format_Check | Format_Stdout | Stdio | JSON | Keep_Asm);
+       | Format_Check | Format_Stdout | Explain_Full | Stdio | JSON
+       | Keep_Asm);
 
    function Shared (Flag : Option) return Boolean is
      (Flag in Help_Flag | Verbose | Quiet | Color | Diagnostics);
@@ -145,6 +149,7 @@ package body Landin.Commands.Catalogue is
           when Compile => Flag in Target .. Depfile
             or else Flag in Warnings .. Deny,
           when Format => Flag in Format_Check | Format_Stdout,
+          when Explain => Flag = Explain_Full,
           when Server => Flag = Stdio,
           when Version => Flag in JSON | Library,
           when Targets => Flag = JSON,
@@ -234,7 +239,7 @@ package body Landin.Commands.Catalogue is
         (case Command is
             when Check | Compile => " [options] source.ldn ...",
             when Format => " [options] source.ldn|DIR ...",
-            when Explain => " [options] [CODE ...]",
+            when Explain => " [options] [CODE|[NNNN]|DNNN ...]",
             when Completion => " [options] bash|zsh|fish",
             when Help => " [COMMAND|reference]",
             when others => " [options]");

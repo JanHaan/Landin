@@ -5239,6 +5239,120 @@ package body Landin.Tests.Driver_Suite is
          "a source called explain is named by a path");
    end Explain_Is_A_Subcommand;
 
+   --  D530: `refine explain` answers the citations notes carry, a
+   --  construct as `[1590]` or `1590` and a decision as `D275` or `d275`,
+   --  with its title, document and page, and with `--full` its text; a
+   --  number no document defines is misuse, as an unknown code is.
+   procedure Explain_Answers_Citations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Explain_Answers_Citations
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+
+      function Run (Words : Landin.Platform.Path_List)
+        return Landin.Driver.Outcome
+        is (Landin.Driver.Execute (Words, Host, Tools));
+
+      function Said (Answer : Landin.Driver.Outcome) return String
+        is (Unbounded.To_String (Answer.Output));
+
+      function Refused (Answer : Landin.Driver.Outcome) return String
+        is (Unbounded.To_String (Answer.Report));
+
+      Decision : constant Landin.Driver.Outcome :=
+        Run (["explain", "D275"]);
+      Lower : constant Landin.Driver.Outcome := Run (["explain", "d275"]);
+      Cited : constant Landin.Driver.Outcome := Run (["explain", "[1590]"]);
+      Bare : constant Landin.Driver.Outcome := Run (["explain", "1590"]);
+      Short : constant Landin.Driver.Outcome := Run (["explain", "D280"]);
+      Full : constant Landin.Driver.Outcome :=
+        Run (["explain", "--full", "D280"]);
+      Full_Construct : constant Landin.Driver.Outcome :=
+        Run (["explain", "[1760]", "--full"]);
+      Mixed : constant Landin.Driver.Outcome :=
+        Run (["explain", "L0012", "D275"]);
+      No_Construct : constant Landin.Driver.Outcome :=
+        Run (["explain", "[1595]"]);
+      No_Decision : constant Landin.Driver.Outcome :=
+        Run (["explain", "D9999"]);
+      Option : constant Landin.Driver.Outcome := Run (["explain", "-x"]);
+      Malformed : constant Landin.Driver.Outcome :=
+        Run (["explain", "[159]"]);
+      Index : constant Landin.Driver.Outcome := Run (["explain", "--full"]);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Decision.Status, Landin.Driver.Status_Success,
+         "a decision is an answer");
+      Landin.Testing.Check_Equal
+        (Item, Said (Decision),
+         "D275  The compiler finds its library beside itself" & LF
+         & "  spec.md, Decisions: The core library and the derived"
+         & " programs" & LF
+         & "  https://www.701.dev/spec.html"
+         & "#d275-the-compiler-finds-its-library-beside-itself" & LF,
+         "a decision names its title, register section and page");
+      Landin.Testing.Check_Equal
+        (Item, Said (Lower), Said (Decision),
+         "a decision asked in lower case is the same answer");
+      Landin.Testing.Check_Equal
+        (Item, Said (Cited),
+         "[1590]  Linking a static library" & LF
+         & "  tour.md" & LF
+         & "  https://www.701.dev/tour.html#1590" & LF,
+         "a construct names its title, document and page");
+      Landin.Testing.Check_Equal
+        (Item, Said (Bare), Said (Cited),
+         "a construct asked by its bare number is the same answer");
+      Landin.Testing.Check
+        (Item, Full.Status = Landin.Driver.Status_Success
+               and then Contains (Said (Full), Said (Short) & LF
+                                  & "Chosen: `--link=static|libc`")
+               and then not Contains (Said (Short), "Chosen"),
+         "--full adds a decision's chosen paragraph, and only then");
+      Landin.Testing.Check
+        (Item, Contains (Said (Full_Construct),
+                         LF & "    identifier  ::= lower")
+               and then Contains (Said (Full_Construct),
+                                  "`begin = 10` and `begin: i32 = 10`"),
+         "--full adds a construct's text, its code indented and its"
+         & " code spans kept");
+      Landin.Testing.Check
+        (Item, Mixed.Status = Landin.Driver.Status_Success
+               and then Contains (Said (Mixed), "For example:")
+               and then Contains (Said (Mixed), LF & LF & "D275  "),
+         "a code and a citation are answered together");
+      Landin.Testing.Check
+        (Item, No_Construct.Status = Landin.Driver.Status_Misuse
+               and then Contains (Refused (No_Construct), "L0002")
+               and then Contains
+                 (Refused (No_Construct),
+                  "no construct is numbered [1595] in tour.md or spec.md"),
+         "a construct no document defines is misuse");
+      Landin.Testing.Check
+        (Item, No_Decision.Status = Landin.Driver.Status_Misuse
+               and then Contains
+                 (Refused (No_Decision),
+                  "no decision is numbered D9999 in spec.md's register"),
+         "a decision the register does not hold is misuse");
+      Landin.Testing.Check
+        (Item, Option.Status = Landin.Driver.Status_Misuse
+               and then Contains (Refused (Option),
+                                  "explain takes one option, --full: -x"),
+         "any other option is still refused");
+      Landin.Testing.Check
+        (Item, Malformed.Status = Landin.Driver.Status_Misuse
+               and then Contains (Refused (Malformed),
+                                  "no catalogue row holds the code: [159]"),
+         "what is neither a code nor a citation is refused as a code");
+      Landin.Testing.Check
+        (Item, Index.Status = Landin.Driver.Status_Success
+               and then Contains (Said (Index), "L0012  error"),
+         "--full alone is the index");
+   end Explain_Answers_Citations;
+
    --  `refine fmt` is the second subcommand: it rewrites a source that is
    --  out of the layout and leaves one in it alone, refuses one that does
    --  not parse without touching it while formatting the rest, and with
@@ -6022,6 +6136,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "explain is a subcommand",
          Explain_Is_A_Subcommand'Access);
+      Landin.Testing.Register
+        (Into, "driver", "explain answers citations",
+         Explain_Answers_Citations'Access);
       Landin.Testing.Register
         (Into, "driver", "fmt is a subcommand",
          Fmt_Is_A_Subcommand'Access);

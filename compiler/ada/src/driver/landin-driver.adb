@@ -20,6 +20,7 @@ with Landin.IR.Pipeline;
 with Landin.Optimization;
 with Landin.Panics;
 with Landin.Diagnostics.Catalogue;
+with Landin.Diagnostics.Citations.Answers;
 with Landin.Diagnostics.Explanations;
 with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Text;
@@ -253,7 +254,9 @@ package body Landin.Driver is
    --  Explain
    --
    --  A request with no compilation in it.  The report it may make is a
-   --  driver report with no source, rendered as every other one is.
+   --  driver report with no source, rendered as every other one is.  It
+   --  answers a diagnostic code, and a construct or decision a note cites
+   --  (D530); `--full` adds a construct's or decision's own text.
    ---------------------------------------------------------------------
 
    function Explain (Arguments : Landin.Platform.Path_List) return Outcome;
@@ -262,6 +265,8 @@ package body Landin.Driver is
    is
       use type Rows.Disposition;
       use type Landin.Diagnostics.Severity;
+
+      package Citations renames Landin.Diagnostics.Citations.Answers;
 
       Result : Outcome;
       Text   : Unbounded.Unbounded_String;
@@ -287,8 +292,13 @@ package body Landin.Driver is
                     & (if Rows.Level (Name) = Landin.Diagnostics.Error
                        then "    " else "  "))
             & Rows.Rule (Name) & LF);
+      Full  : constant Boolean :=
+        (for some Index in 2 .. Natural (Arguments.Length) =>
+           Arguments.Element (Index) = "--full");
+      Asked_For : constant Natural :=
+        Natural (Arguments.Length) - 1 - Boolean'Pos (Full);
    begin
-      if Natural (Arguments.Length) = 1 then
+      if Asked_For = 0 then
          for Name in Rows.Code_Name loop
             Unbounded.Append (Text, Row_Line (Name));
          end loop;
@@ -298,11 +308,22 @@ package body Landin.Driver is
          declare
             Asked : constant String := Arguments.Element (Index);
          begin
-            if not Landin.Diagnostics.Is_Valid_Code (Asked)
+            if Asked = "--full" then
+               null;
+            elsif Citations.Is_Citation (Asked) then
+               if not Citations.Is_Known (Asked) then
+                  Refuse (Citations.Unknown (Asked));
+               else
+                  if Unbounded.Length (Text) > 0 then
+                     Unbounded.Append (Text, LF & "");
+                  end if;
+                  Unbounded.Append (Text, Citations.Answer (Asked, Full));
+               end if;
+            elsif not Landin.Diagnostics.Is_Valid_Code (Asked)
               or else not Rows.Holds (Asked)
             then
                Refuse ((if Asked'Length > 0 and then Asked (Asked'First) = '-'
-                        then "explain takes no option: "
+                        then "explain takes one option, --full: "
                         else "no catalogue row holds the code: ")
                        & Asked);
             else

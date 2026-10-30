@@ -19,7 +19,8 @@ package Landin.Commands.Catalogue is
       Link,
       Firmware_Entry, Build_Report, Stage_Report, Stack_Report, Dry_Run,
       Depfile,
-      Format_Check, Format_Stdout, Stdio, JSON, Warnings, Warn, Allow, Deny);
+      Format_Check, Format_Stdout, Explain_Full, Stdio, JSON, Warnings, Warn,
+      Allow, Deny);
 
    function Name (Flag : Option) return String;
    function Description (Flag : Option) return String;
