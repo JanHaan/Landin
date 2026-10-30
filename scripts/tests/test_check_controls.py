@@ -296,13 +296,12 @@ class PinnedToolchain(unittest.TestCase):
 class CrossLanes(unittest.TestCase):
     """An expected host failure names a fixture its runner's lane runs."""
 
-    COPIED = ["compiler/tests/cross-lanes.json",
-              "compiler/tests/fixtures/runtime/posix-sockets/fixture.meta",
-              "compiler/tests/fixtures/runtime/environment-variables/fixture.meta",
-              "compiler/tests/fixtures/runtime/environment-variables-libc/fixture.meta",
-              "compiler/tests/fixtures/runtime/run-no-descriptor-leak/fixture.meta",
-              "compiler/tests/fixtures/runtime/derived-server-two-process/fixture.meta",
-              "compiler/tests/fixtures/runtime/atomic-store-buffering-between-processes/fixture.meta"]
+    #  The record and the metadata of every fixture it names, read from the
+    #  record itself so that a new row needs no second list here.
+    RECORD = Path(__file__).resolve().parents[2] / "compiler/tests/cross-lanes.json"
+    COPIED = ["compiler/tests/cross-lanes.json"] + sorted({
+        "compiler/tests/fixtures/%s/fixture.meta" % row["fixture"]
+        for row in json.loads(RECORD.read_text(encoding="utf-8"))["expected"]})
 
     def test_the_real_record_passes(self):
         self.assertEqual(faults(checker.check_cross_lanes, copied=self.COPIED), [])

@@ -479,7 +479,8 @@ class GeneratedReference(unittest.TestCase):
                     r'<section class="api-item".*?</section>'
                     r'|<section class="api-values".*?</section>'
                     r'|<pre class="api-signature">.*?</pre>'
-                    r'|<section class="api-example".*?</section>', text, re.S))
+                    r'|<section class="api-example".*?</section>'
+                    r'|<ul class="api-index">.*?</ul>', text, re.S))
                 self.assertLess(len(text) - content, 96 * 1024)
         self.assertLess(max((self.destination / n).stat().st_size
                             for n in self.pages), 1024 * 1024)
