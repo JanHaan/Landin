@@ -74,7 +74,7 @@ The next item is the first dependency-ready planned item in execution order,
 and `README.md` and `handoff.md` name it.
 There are no dates, estimates or versions here.
 
-Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.18, R13.19, R13.31, R13.32, R13.60, R13.33, R13.34, R13.36, R13.61, R13.35, R13.70, R13.71, R13.72, R13.73, R14.10, R14.20, R14.30, R14.40, R12, R13.20, R14.25, R15, R16
+Execution order: R8, R9, R10, R11, R13.10, R13.11, R13.12, R13.13, R13.14, R13.15, R13.16, R13.17, R13.30, R13.18, R13.19, R13.31, R13.32, R13.60, R13.33, R13.34, R13.36, R13.61, R13.35, R13.70, R13.71, R13.72, R13.73, R14.10, R14.20, R14.30, R14.40, R13.74, R12, R13.20, R14.25, R15, R16
 
 The library availability split and hosted facilities precede microcontrollers.
 R12.10 depends on R13.35 to hold the first boundary, and on R13.70 for the
@@ -2457,6 +2457,49 @@ quiet citations, one captioned code panel, wayfinding on phones and in the
 library, print and keyboard use. What they met is SR-285 to SR-308 and
 SR-310 in the register.
 
+### R13.74 — What a first stream meets
+
+Status: planned
+Depends on: R13.73
+
+A newcomer trial of the 0.2.8 archive, guessing from C the way a streamer
+reviews a language, had hello world compiled in a third of a second and
+then needed five attempts to call raylib, could not print a number in one
+line and found no way to run what it built (SR-420 to SR-427). This item
+fixes what it met, and decides:
+
+- Under `--link=libc`, `linker.library("NAME")` is passed to the C driver as
+  `-lNAME` on every hosted target, so the driver resolves it as it would for
+  C, shared library or archive. This amends D202's archive-only resolution;
+  the default static link still refuses the directive (D280) (SR-423).
+- `linker.directory("DIR")`, a tool directive resolved against the
+  declaring file's directory, and a repeatable `-L DIR` on `compile` and
+  `run` name where libraries are searched. A library the link cannot find
+  is refused with the directories searched (SR-422).
+- `refine run FILE [-- ARGS]` compiles to a temporary executable, runs it
+  with the arguments, exits with its status and removes it. Bare
+  `refine FILE` says that it only checked (SR-424).
+- One call writes a template and its values straight to a file, with no
+  buffered writer or flush, and the tour shows it before its first loop. An
+  unknown `core/io` member spelt as another language's print, `print`,
+  `println` or `printf`, is told that call (SR-426). Floating-point text
+  stays SR-97's.
+
+Without a decision: L0012 once per identifier, naming `link(symbol: ...)`
+when the declaration follows `extern(c)` (SR-420); L0346 naming the record
+that is not `layout(c)` (SR-421); `refine explain` resolving `[NNNN]` and
+`Dnnn` to their titles and where to read them (SR-427); the released
+compiler without its debug information, and the archive's size beside the
+install route (SR-425); and `docs/from-c.md`'s C entry calling a mixed-case
+C library linked from a directory beside the source.
+
+Exit evidence: a runtime fixture that calls an archive built beside it
+through mixed-case link names, passes a `layout(c)` record by value and
+calls `sqrtf` and `pow` from libm under `--link=libc`, linked through both
+`linker.directory` and `-L`; a negative fixture for each refusal above;
+`refine run` cases in the test program; and the trial repeated on a release
+archive with raylib 5.5, what it meets in the register.
+
 ### R13 gate
 
 - The shared freestanding, target-specific freestanding and hosted roots are
@@ -3084,6 +3127,14 @@ scheduled on its other owners until they finish, then leaves the register.
 | SR-401 | Usability | A bodyless `extern(c) link(symbol: "S")` import beside a public naked routine named `S`, which D415 makes a global symbol under its own spelling, is admitted with no L0347: the collision check compares explicit and C link names, and a public machine-convention routine's spelling is neither, so the pair reached the IR unchecked. D516 admits the pair when the naked routine names its symbol explicitly. Met trying ways to call `clone`'s naked text in R14.40. | The next change to link-symbol checking. | A public naked routine's own spelling held to the same collision rule as an explicit link name. | open |
 | SR-402 | Usability | A fixture `compiler/tests/cross-lanes.json` lists for an emulator fails when it is run alone with `./scripts/dev-test.sh --fixture=...` on that lane, as it would with no row, and the transcript does not mention the row: the rows are read only by the corpus case of `fixture execution`. Met adding `runtime/thread-start-refused`'s row for QEMU's abort on a refused thread in R14.40, whose effect could be seen only through the whole corpus. | The next change to the cross lanes or to the test program's selectors. | A selected fixture with a row reported as the corpus reports it, an expected host failure, or the row named beside the failure. | open |
 | SR-403 | Usability | A shell's own descriptors look like a child's inherited ones, and the one place that says so is a comment in `runtime/run-no-descriptor-leak`'s source. Darwin's /bin/sh, bash 3.2.57, keeps a descriptor of its own at the lowest free number from 10 up while it works: a probe that tried `(true >&"$fd") 2>/dev/null` for each number from 3 found 10 open in every child, and so did its replacement, which tried only the numbers its parent named with `(exec 2>/dev/null; exec 1>&"$fd")`, into a pipe and into a file alike, with nothing inherited; dash, Linux's sh, finds nothing. Nothing in `docs/process.md` or the fixture README says how a fixture asks a child which descriptors it holds. Met when `runtime/thread-spawn-leaks-no-descriptor` failed only on Darwin, twice, in R14.40; it now starts itself again and asks `poll` about the numbers its parent names, as `runtime/run-no-descriptor-leak` does. | The next fixture that asks a child process what it holds. | A shared, documented way to ask, in the fixture README, beside the warning that a shell cannot be the check. | open |
+| SR-420 | Usability | `extern(c) InitWindow: (...) -> none`, raylib's own name, is L0012 "identifiers use lower-case letters" once per capital letter, 58 errors for eight declarations, and neither the note nor `refine explain L0012` says that a C name Landin cannot spell is `extern(c) link(symbol: "InitWindow") init_window: ...`; `docs/from-c.md`'s "Calling C, and linking it" calls `atoi`, which needs no link name. Met calling raylib from the 0.2.8 archive, guessing from C, in a newcomer trial on 2026-10-29. | The next change to L0012 or to `docs/from-c.md`'s C entry. | One refusal per identifier, naming `link(symbol: ...)` when the declaration follows `extern(c)`, and the C entry showing a mixed-case C name. | scheduled R13.74 |
+| SR-421 | Usability | A C function taking raylib's `Color` by value, declared as a plain `struct`, is L0346 "C cannot take this parameter" with [1580]'s whole C-signature rule as its note, eleven clauses, `layout(c) structs` among them, rather than saying that `color` is not `layout(c)`. Met in the same trial. | The next change to L0346. | The refusal naming the record and the `layout(c)` repair. | scheduled R13.74 |
+| SR-422 | Usability | Nothing says where `linker.library("raylib")` looks: `-L` is "unknown option: -L", `refine compile --help` names no search directory, and an archive in the project's own `raylib/lib` was found only through GCC's `LIBRARY_PATH`, which no document mentions. Met in the same trial. | The next change to [1590] or to `compile`'s link options. | A documented way to name an archive's directory, and a missing archive's refusal naming it. | scheduled R13.74 |
+| SR-423 | Usability | `linker.library("m")` passes `-l:libm.a`, so under `--link=libc` glibc's static `libm` goes into a dynamically linked executable, and raylib 5.5's `libraylib.a` then fails with "undefined reference to `_dl_x86_cpu_features`" from libm's ifunc members; the same C program fails alike with `-l:libm.a` and links with `-lm`. Only a `--toolchain` wrapper appending `-lm` linked it. [1590]'s own example is `linker.library("m")`, and `runtime/r430-static-library` calls only `fegetround`, which avoids those members. Reproduced with glibc 2.42 on NixOS; Debian and Ubuntu not tried. Met in the same trial. | Now: [1590]'s own example. | The C runtime's own libraries linked as the driver links them, or a shared-library form, with a fixture calling `sqrtf` and `pow` under `--link=libc`. | scheduled R13.74 |
+| SR-424 | Usability | `refine main.ldn` exits 0 silently having only checked, so a newcomer looks for an executable that was never written, and `refine run main.ldn` answers "`refine run` is not a command: name the source to check it, as `refine FILE`", steering to checking rather than running. There is no compile-and-run, which `hare run`, `nim c -r`, `crystal run`, `rdmd` and `c3c compile-run` each offer. Met in the same trial. | The next driver item. | The bare form saying it checked, and either a compile-and-run command or the refusal naming `refine compile main.ldn -o prog`. | scheduled R13.74 |
+| SR-425 | Release readiness | The 0.2.8 archive's `bin/refine` is 100 MB, not stripped and carrying its debug information; stripped it is 27.6 MB. Met unpacking the archive in the same trial. | The next release. | The released compiler stripped, or its debug information shipped apart, with the archive's size stated beside the install route. | scheduled R13.74 |
+| SR-426 | Usability | `io.println(x)` is L0201 "module `io` has no member `println`", naming nothing to use instead, and the shortest way the documents give to print an integer is `docs/from-c.md`'s `printf` entry: a buffered writer over a storage array, a deferred flush and `[any(addr name), any(addr count)]`. A float cannot be printed at all (SR-97). Met printing a number in the same trial. | The next change to L0201 or to `core/io`'s writing. | L0201 naming the module's nearest members, and one line that prints an integer shown before the tour's first loop. | scheduled R13.74 |
+| SR-427 | Usability | Diagnostic notes cite paragraphs and decisions, `[1760]`, `[1580]` and `D275`, which `refine explain` refuses ("no catalogue row holds the code: D275"), so a reader at a terminal cannot follow a note's citation without the site. Met in the same trial. | The next change to `refine explain` or to diagnostic notes. | `refine explain` resolving a citation, or a note carrying where to read it. | scheduled R13.74 |
 | R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on each full gate run, subject to the R8 gate's explanatory-only reuse exception, with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
 | R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence was a run, not a record the coverage readers read. | — | — | retired: R8.30 runs end-to-end fixtures in Darwin's diagnostics runner, which the gate runs, places their Darwin claims from it, and has `check.py` refuse any fixture whose named product target no record places |
 

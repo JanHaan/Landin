@@ -61,6 +61,8 @@ HOSTED = ("Standard input, files and directories",
           "Documentation that teaches")
 CONCURRENCY = ("Prototype 5", "Stackful fibres", "A second Io",
                "Threads and the atomic wrapper")
+#  What the newcomer's stream trial met, scheduled after the threads.
+STREAM = ("What a first stream meets",)
 
 
 class RoadmapProgress(unittest.TestCase):
@@ -225,6 +227,10 @@ Depends on: none
             complete([identity])
         #  The hosted concurrency items come before the devices.
         for title in CONCURRENCY:
+            assert_next(headings[title], title)
+            complete([headings[title]])
+        #  The stream trial's item comes after them and before the devices.
+        for title in STREAM:
             assert_next(headings[title], title)
             complete([headings[title]])
         assert_next(devices, "Describe devices")
