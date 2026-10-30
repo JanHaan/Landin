@@ -1,0 +1,15 @@
+named: type = concept (provider: type)
+    label: (self: provider) -> (code: u32)
+end named
+
+labelled: (provider: type is named, host: provider) -> (code: u32) =
+    code = provider.label(host)
+end labelled
+
+relabelled: (host: any named) -> (code: u32) =
+    code = labelled(host)
+end relabelled
+
+broken: (line: []u8) -> (count: usize) =
+    count = lenof line +
+end broken

@@ -80,6 +80,19 @@ declaration, pinned by `negative/generic-signature-names-nothing`. A hover on
 a pointer to an erased value read a reference its descriptor does not have;
 the `hover-erased-referent` session pins the answer.
 
+A later round from the same seed met a fixture truncated mid-comment, which
+left a program with no `main`. Such a program keeps every declaration and
+every conformance's table, and lowering also kept the conformance by which
+an `any C` provides C (D492). That conformance has no table and no provider
+to lower, only erased calls through the value's own table, so the lowering
+raised a defect, on the command line and in the server alike. It now keeps
+every table but that one, as the walk from `main` always did. The fixture
+`positive/any-provider-without-main` pins it on the command line, and
+`min-501824.ldn` in the server, where its broken body is stood in for. That
+reproducer is reduced by hand rather than by `--reduce`, whose result
+imported the derived server's module: the server suite serves each
+reproducer with no import root, so it must stand alone.
+
 The first driver was a Perl mutator, `mutate.pl`, run by `fuzz.sh`, with a
 `reduce.sh` beside it. They made the two recorded runs below and are in the
 history, last at commit `bb04329d`; a seed in those logs names a mutant only
@@ -102,8 +115,8 @@ refused field type in a struct whose field was then written, a fallible
 function with an undeclared result type, or a loop without `break with`
 standing where a function value belongs.
 
-The twelve reduced reproducers are in `reproducers/`, each named by the seed
-that found it. All twelve now exit 1 with a diagnostic, and a later round of
+The twelve reduced reproducers from those runs are in `reproducers/`, each
+named by the seed that found it. All twelve now exit 1 with a diagnostic, and a later round of
 1,369 mutants (seed 300000, one round) found nothing. The defects behind them
 fell into a few classes, and each class was fixed and is pinned by a negative
 fixture: `refused-field-type-in-written-struct`,
@@ -125,6 +138,7 @@ not a second copy of those tests:
 | `min-207488.ldn` | `positive/r440-origin-untaken-cleanups` | 1 | L0201, L0332, L0329 |
 | `min-207711.ldn` | `positive/r720-labelled-bare-blocks` | 1 | L0332 |
 | `min-207836.ldn` | `positive/struct-array-field-element-zeroed` | 1 | L0201, L0302 |
+| `min-501824.ldn` | `runtime/derived-server-two-process` | 1 | L0102 |
 
 ## What it is not
 

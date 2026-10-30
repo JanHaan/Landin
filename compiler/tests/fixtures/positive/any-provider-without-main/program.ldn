@@ -1,0 +1,26 @@
+--  D492: an `any C` is a provider of C through a conformance the compiler
+--  adds, whose entries are erased calls through the value's own table and
+--  have no provider of their own.  A program without `main` keeps every
+--  declaration and every conformance's table, but that conformance has no
+--  table for it to keep.
+named: type = concept (provider: type)
+    label: (self: provider) -> (code: u32)
+end named
+
+plain: type = struct
+    code: u32
+end plain
+
+plain_label: (self: plain) -> (code: u32) =
+    code = self.code
+end plain_label
+
+plain is named (label: plain_label)
+
+labelled: (provider: type is named, host: provider) -> (code: u32) =
+    code = provider.label(host)
+end labelled
+
+relabelled: (host: any named) -> (code: u32) =
+    code = labelled(host)
+end relabelled
