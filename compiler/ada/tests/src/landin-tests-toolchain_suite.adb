@@ -329,8 +329,8 @@ package body Landin.Tests.Toolchain_Suite is
             "file spelling adds no argument or response-file expansion");
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Args),
-            Expected_Assembly & LF & "-l:libsupport.a" & LF
-            & "-l:libsupport.a" & LF & "-o" & LF & Expected_Output & LF
+            Expected_Assembly & LF & "-lsupport" & LF
+            & "-lsupport" & LF & "-o" & LF & Expected_Output & LF
             & "-fuse-ld=mold" & LF & "-Wl,--build-id=0xa1b2" & LF
             & "-Wl,--gc-sections" & LF & "-Wa,-march=generic64" & LF,
             "literal paths preserve ordered libraries and driver options");
@@ -358,8 +358,8 @@ package body Landin.Tests.Toolchain_Suite is
       begin
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Args),
-            "main.s" & LF & "-l:libsupport.a" & LF
-            & "-l:libsupport.a" & LF & "-o" & LF & "main" & LF
+            "main.s" & LF & "-lsupport" & LF
+            & "-lsupport" & LF & "-o" & LF & "main" & LF
             & "-Wl,--build-id=0xa1b2" & LF & "-Wl,--gc-sections" & LF
             & "-Wa,-march=armv8.1-a" & LF,
             "Linux arm64 links as Linux and assembles at its level");
@@ -380,7 +380,7 @@ package body Landin.Tests.Toolchain_Suite is
                Landin.Targets.FreeBSD_X86_64,
                Level => Landin.Targets.Levels.Level_Named
                  (Landin.Targets.FreeBSD_X86_64, "x86-64-v3"))),
-         "main.s" & LF & "-l:libsupport.a" & LF & "-l:libsupport.a" & LF
+         "main.s" & LF & "-lsupport" & LF & "-lsupport" & LF
          & "-o" & LF & "main" & LF & "-Wl,--build-id=0xa1b2" & LF
          & "-Wl,--discard-locals" & LF & "-fno-integrated-as" & LF
          & "-Wl,--gc-sections" & LF
@@ -396,7 +396,7 @@ package body Landin.Tests.Toolchain_Suite is
                Landin.Targets.FreeBSD_Arm64,
                Level => Landin.Targets.Levels.Level_Named
                  (Landin.Targets.FreeBSD_Arm64, "armv8.1-a"))),
-         "main.s" & LF & "-l:libsupport.a" & LF & "-l:libsupport.a" & LF
+         "main.s" & LF & "-lsupport" & LF & "-lsupport" & LF
          & "-o" & LF & "main" & LF & "-Wl,--build-id=0xa1b2" & LF
          & "-Wl,--discard-locals" & LF
          & "-Wl,--gc-sections" & LF & "-march=armv8.1-a" & LF & "-Wa,-L"
@@ -405,11 +405,85 @@ package body Landin.Tests.Toolchain_Suite is
          & " and constrains Clang");
    end File_Operands_Keep_Their_Identity;
 
+   --  D523/D524/D525: each library is the driver's -lNAME after the
+   --  assembly, on every hosted target; each directory is -LDIR and the
+   --  runtime path before it, in the order given; and a failed link's
+   --  library is looked for as the target's linker would name it.
+   procedure Libraries_And_Directories_Reach_The_Driver
+     (Item : in out Landin.Testing.Context);
+
+   procedure Libraries_And_Directories_Reach_The_Driver
+     (Item : in out Landin.Testing.Context)
+   is
+      Libraries, Directories : Landin.Platform.Path_List;
+   begin
+      Libraries.Append ("raylib");
+      Libraries.Append ("m");
+      Directories.Append ("/work/vendor");
+      Directories.Append ("/work/game/lib");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", "", Libraries,
+               Landin.Targets.Linux_X86_64,
+               Directories => Directories)),
+         "-L/work/vendor" & LF & "-L/work/game/lib" & LF
+         & "-Wl,-rpath,/work/vendor" & LF & "-Wl,-rpath,/work/game/lib" & LF
+         & "main.s" & LF & "-lraylib" & LF & "-lm" & LF
+         & "-o" & LF & "main" & LF
+         & "-Wl,--gc-sections" & LF & "-Wa,-march=generic64" & LF,
+         "Linux names each directory, its runtime path, then each library");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", "", Libraries,
+               Landin.Targets.Darwin_Arm64,
+               Directories => Directories)),
+         "-arch" & LF & "arm64" & LF & "-Wl,-dead_strip" & LF
+         & "-L/work/vendor" & LF & "-L/work/game/lib" & LF
+         & "-Wl,-rpath,/work/vendor" & LF & "-Wl,-rpath,/work/game/lib" & LF
+         & "main.s" & LF & "-lraylib" & LF & "-lm" & LF
+         & "-o" & LF & "main" & LF,
+         "Darwin passes -lNAME as well, and no archive path it resolved");
+      declare
+         Comma : Landin.Platform.Path_List;
+      begin
+         Comma.Append ("/work/a,b");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Platform.Joined
+              (Landin.Backend.Toolchain.Link_Arguments
+                 ("main.s", "main", "", "", Libraries,
+                  Landin.Targets.FreeBSD_Arm64, Directories => Comma)),
+            "-L/work/a,b" & LF & "-Xlinker" & LF & "-rpath" & LF
+            & "-Xlinker" & LF & "/work/a,b" & LF
+            & "main.s" & LF & "-lraylib" & LF & "-lm" & LF
+            & "-o" & LF & "main" & LF & "-Wl,--discard-locals" & LF
+            & "-Wl,--gc-sections" & LF & "-march=armv8-a" & LF & "-Wa,-L"
+            & LF,
+            "a directory -Wl would split at its comma is passed whole");
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Library_Files
+              (Landin.Targets.Linux_Arm64, "raylib")),
+         "libraylib.so" & LF & "libraylib.a" & LF,
+         "an ELF link looks for the shared library, then the archive");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Library_Files
+              (Landin.Targets.Darwin_Arm64, "raylib")),
+         "libraylib.tbd" & LF & "libraylib.dylib" & LF & "libraylib.a" & LF,
+         "Darwin looks for a stub and a dylib before the archive");
+   end Libraries_And_Directories_Reach_The_Driver;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "toolchain", "file operands keep their identity",
          File_Operands_Keep_Their_Identity'Access);
+      Landin.Testing.Register
+        (Into, "toolchain", "libraries and directories reach the driver",
+         Libraries_And_Directories_Reach_The_Driver'Access);
       Landin.Testing.Register
         (Into, "toolchain", "a target names its toolchain",
          A_Target_Names_Its_Toolchain'Access);

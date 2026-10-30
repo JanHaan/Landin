@@ -443,11 +443,12 @@ that gives others. `./scripts/debug.sh --target=linux-arm64` and the
 commands in [the test guide's lanes](../compiler/tests/README.md#lanes) run
 in it as written.
 
-The static-library directive's fixture also needs nixpkgs' separate static glibc
-output. The Linux shell includes it as a library input so an explicit
-`linker.library("m")` request can find `libm.a`. The shared glibc output
-precedes the archive output so the driver's own `-lc` stays dynamic; the
-shell check verifies that dependency on the static-library fixture.
+The `libm` fixture of the library directive also needs nixpkgs' separate
+static glibc output, from when `linker.library("m")` asked for `libm.a`
+alone; the Linux shell still includes it as a library input. Since D523 the
+request is the driver's `-lm`, which takes the shared `libm` first. The
+shared glibc output precedes the archive output so the driver's own `-lc`
+stays dynamic; the shell check verifies that dependency on the fixture.
 [Job 1883411](https://builds.sr.ht/~sinnfrei/job/1883411) passes the complete
 418-case suite with 12,425 checks and verifies the dynamic libc dependency.
 

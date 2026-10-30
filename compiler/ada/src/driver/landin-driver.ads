@@ -52,6 +52,12 @@ package Landin.Driver is
       Named  : Landin.Platform.Path_List;
       Positions : Position_Vectors.Vector;
       Trace  : Ada.Strings.Unbounded.Unbounded_String;
+      --  D526: what `refine run` runs once the report above is written,
+      --  and the private directory it is in, removed after it.  Empty
+      --  when there is nothing to run.
+      Launch_Program   : Ada.Strings.Unbounded.Unbounded_String;
+      Launch_Arguments : Landin.Platform.Path_List;
+      Launch_Directory : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    --  Host and Tools are the only ways this reaches a disk or a process,

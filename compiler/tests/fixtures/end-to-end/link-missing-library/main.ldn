@@ -1,0 +1,9 @@
+--  D525: after a failed link, a library no searched directory holds is
+--  named at its directive with every directory searched, instead of the
+--  linker's own text.
+linker.library("nosuchlibrary")
+linker.directory(".")
+
+public main: () -> (code: i32) =
+    code = 0
+end main

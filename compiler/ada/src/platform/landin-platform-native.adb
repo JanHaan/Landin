@@ -466,6 +466,52 @@ package body Landin.Platform.Native is
                  else Not_Movable);
    end Move_File;
 
+   overriding procedure Make_Private_Directory
+     (Host   : Native_Filesystem;
+      Prefix : String;
+      Path   : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Write_Status)
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Private_Directory
+        (Name     : Interfaces.C.char_array;
+         Into     : out Interfaces.C.char_array;
+         Capacity : Interfaces.C.size_t) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_private_directory";
+      Made : Interfaces.C.char_array (0 .. 4095);
+      Named : constant Interfaces.C.char_array := Interfaces.C.To_C (Prefix);
+      Capacity : constant Interfaces.C.size_t := Made'Length;
+   begin
+      if Private_Directory (Named, Made, Capacity) = 0 then
+         Path := Ada.Strings.Unbounded.To_Unbounded_String
+           (Interfaces.C.To_Ada (Made));
+         Status := Write_Ok;
+      else
+         Path := Ada.Strings.Unbounded.Null_Unbounded_String;
+         Status := Not_Writable;
+      end if;
+   end Make_Private_Directory;
+
+   overriding procedure Remove_Tree
+     (Host   : Native_Filesystem;
+      Path   : String;
+      Status : out Remove_Status)
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Remove_Directory_Tree (Name : Interfaces.C.char_array)
+        return Interfaces.C.int
+        with Import, Convention => C, External_Name => "landin_remove_tree";
+      Result : constant Interfaces.C.int :=
+        Remove_Directory_Tree (Interfaces.C.To_C (Path));
+   begin
+      Status := (if Result = 1 then Removed
+                 elsif Result = 0 then Already_Absent
+                 else Not_Removable);
+   end Remove_Tree;
+
    overriding procedure Lock_Output
      (Host : Native_Filesystem; Path : String; Handle : out Integer)
    is

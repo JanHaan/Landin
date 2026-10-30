@@ -579,6 +579,13 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses platform/c on the freestanding target before checking declarations."
     },
+    "runtime/c-library-directories": {
+      "codes": [
+        "L0346"
+      ],
+      "mode": "refuse",
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program needs; firmware also refuses linker.library, linker.directory and -L."
+    },
     "runtime/c-packed-record-fields": {
       "mode": "execute"
     },

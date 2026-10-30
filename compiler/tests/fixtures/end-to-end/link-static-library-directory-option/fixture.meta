@@ -1,0 +1,8 @@
+class: end-to-end
+summary: a static Linux link refuses -L as it refuses linker.library, naming --link=libc
+program: main.ldn
+constructs: 1590
+targets: linux-x86-64
+expect: expected.txt
+args: check --target=linux-x86-64 -L / ../tests/fixtures/end-to-end/link-static-library-directory-option/main.ldn
+status: 1

@@ -1400,10 +1400,16 @@ option debug: u32 = 1
 
 A tool directive breaks [1510]/[1590]/D202 when it has other than one
 positional argument, or when `linker.library` has an argument that is not a
-quoted text literal with a portable static library name. Give
-`compiler.assert` one fixed bool expression.
-Give `linker.library` one quoted text literal containing a portable static
-library name; its argument must have the required form and name characters.
+quoted text literal with a portable library name, or `linker.directory` one
+that is not a quoted, nonempty directory (D524). A `linker.directory` naming
+a directory that does not exist is refused here too, before any tool runs,
+by `refine check` as well: a relative directory is read against the
+directory of the file that declares it. Give `compiler.assert` one fixed
+bool expression.
+Give `linker.library` one quoted text literal containing a portable library
+name; its argument must have the required form and name characters. Give
+`linker.directory` the directory that holds the library, relative to the
+declaring file or absolute.
 
 ```landin
 linker.library("-bad")
@@ -1442,8 +1448,9 @@ end unused
 The requested output cannot be made with the selected target, settings or
 available toolchain [1550]. The diagnostic and its note identify the cause:
 the target has no backend, its source debug mode is unsupported, firmware
-forbids `linker.library`, a static Linux link cannot be made (no library
-holding `platform/linux` was found, or the program asks for `linker.library` or
+forbids `linker.library`, `linker.directory` and `-L`, a static Linux link
+cannot be made (no library holding `platform/linux` was found, or the program
+asks for `linker.library`, `linker.directory` or `-L` (D524) or
 refers to C symbols nothing in it defines, each named with the routine that
 refers to it, as `platform/posix`'s loader refers to `dlopen`; `refine check`
 gives the last two as a compilation would), no toolchain
@@ -1519,3 +1526,17 @@ handler that only records the kind and switches away fits on every target.
 A program with no `compiler.stack_prepare`, and one that selects no
 handler, is not refused: the default report always fits. The rule is
 decided from emitted frames, so `refine check` does not raise it (D474).
+
+### L0509
+
+A link failed, and a library a `linker.library` directive asks for is in no
+directory the link searched (D525): not in a directory `-L` or
+`linker.directory` names, as `libNAME.so` or `libNAME.a` (on Darwin
+`libNAME.tbd`, `libNAME.dylib` or `libNAME.a`), and not where the C driver's
+`-print-file-name` finds its own. The message names the library at its
+directive, every named directory with where it was named, and says that the
+driver's own directories were searched as well. refine looks only after a
+link has failed; a failed link whose libraries are all found stays L0501
+with the linker's own text. Name the directory that holds the library with
+`linker.directory("DIR")`, relative to the declaring file, or with
+`-L DIR` when building, or install the library where the C driver finds it.

@@ -137,6 +137,28 @@ package body Landin.Platform.Overlays is
       Status := Not_Removable;
    end Remove_File;
 
+   overriding procedure Make_Private_Directory
+     (Host   : Overlay;
+      Prefix : String;
+      Path   : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Write_Status)
+   is
+      pragma Unreferenced (Host, Prefix);
+   begin
+      Path := Ada.Strings.Unbounded.Null_Unbounded_String;
+      Status := Not_Writable;
+   end Make_Private_Directory;
+
+   overriding procedure Remove_Tree
+     (Host   : Overlay;
+      Path   : String;
+      Status : out Remove_Status)
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      Status := Not_Removable;
+   end Remove_Tree;
+
    overriding procedure Move_File
      (Host   : Overlay;
       From, To : String;

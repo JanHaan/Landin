@@ -99,3 +99,4 @@ L0505  Live     [1640]: firmware static images exceed the bounded assembler mate
 L0506  Live     [1670]: invalid panic handler or unrepresentable site space
 L0507  Live     [1990]: one Cortex-M0 firmware frame exceeds the selected stack reservation
 L0508  Live     [1670]: a selected panic handler in a program that prepares a stack exceeds or cannot be measured against the target's stack margin
+L0509  Live     [1590]/D525: a failed link's library that no named directory and none of the C driver's own holds

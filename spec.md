@@ -16119,14 +16119,12 @@ contains only ASCII letters, digits, underscore, hyphen and dot, cannot begin
 with a hyphen and cannot consist only of dots. Active library directives
 produce separate tool arguments after the program assembly in canonical
 source/declaration order. Repeated requests are preserved: archive resolution
-may need a library more than once. The Linux adapter selects archives for
-this run while leaving hosted runtime linkage to the platform driver. Darwin
-resolves each `libNAME.a` through the selected driver's `-print-file-name`
-query and passes the resulting existing file directly. Missing archives fail;
-a same-named dynamic library is never a substitute. Apple's driver can return
-the bare filename, which must then exist in the invocation directory; a custom
-driver may provide a different archive search policy. Neither target changes
-the source order or repetition of archive operands.
+may need a library more than once. D523 amends how each reaches the driver:
+under `--link=libc` it is the driver's own `-lNAME` on every hosted target,
+resolved as the driver resolves it for C, a shared library or an archive,
+and Darwin's former `-print-file-name` resolution to an archive file is gone;
+D524 adds `linker.directory` and `-L` for where to look. No target changes
+the source order or repetition of library operands.
 This is the ordering exception to [0130] and [1740]'s order-independent
 module name lookup: moving an active directive can change archive resolution.
 Inactive directives add no arguments. D227 enables scalar atomic operations;
@@ -20031,8 +20029,12 @@ form their library ships before it links; and resolving archives to files on
 every target, which is D202's Darwin rule and fails the same way. The
 maintainer chose `-lNAME`.
 
-**Pinned by** nothing that runs yet: the item that implements it adds a
-runtime fixture calling `sqrtf` and `pow` from `libm` under `--link=libc`.
+**Pinned by** `runtime/c-library-directories`, which calls `sqrtf` and `pow`
+from `libm` under `--link=libc` beside two C archives on the hosted lanes;
+`end-to-end/link-library-directories-dry-run`, which shows the `-l` operands;
+the driver cases `libraries keep their written order` and `library
+directories reach the link`, the latter on Darwin too; and the toolchain case
+`libraries and directories reach the driver`.
 
 ### D524 — `linker.directory` and `-L` say where libraries are, at link and at run time
 
@@ -20071,9 +20073,24 @@ overrule its builder; and no runtime path, as in C, which leaves a program
 built against a shared library in a named directory refusing to start with
 the loader's message. The maintainer chose both forms and the runtime path.
 
-**Pinned by** nothing that runs yet: the item that implements it adds a
-runtime fixture linking one archive through `linker.directory` and another
-through `-L`.
+The implementation settles three details. `-L` takes its directory after a
+space, after `=`, or glued as a C compiler takes it, `-Lvendor`. The
+directive's text is any nonempty text without a NUL byte, and a report names
+a relative directory joined to its declaring file's directory as that file
+was named, the link the same directory made absolute. `-Wl` splits its
+argument at commas, so a directory holding one reaches the linker as
+`-Xlinker -rpath -Xlinker DIR` instead.
+
+**Pinned by** `runtime/c-library-directories`, which links one archive built
+beside its source through `linker.directory` and another through `-L` on every
+hosted lane; `end-to-end/link-library-directories-dry-run` for the order;
+`negative/linker-directory-missing` and `negative/linker-directory-empty`;
+`end-to-end/link-library-directory-option-missing`,
+`end-to-end/link-library-directory-option-elsewhere`,
+`end-to-end/link-static-linker-directory` and
+`end-to-end/link-static-library-directory-option` for the refusals; and the
+driver cases `library directories reach the link` and `library directories
+are refused`, and the commands case `-L names a library directory`.
 
 ### D525 — A library the link cannot find is named with the directories searched
 
@@ -20099,8 +20116,11 @@ linker's message, which differs between GNU ld, lld and Apple's ld and
 between their versions; and keeping the linker's message alone. All were
 declined.
 
-**Pinned by** nothing that runs yet: the item that implements it adds a
-negative fixture for a missing library.
+**Pinned by** `end-to-end/link-missing-library`, whose stand-in driver fails
+the link and finds nothing, and the driver case `a missing library names
+where it looked`, which also holds that a library found in a named
+directory or by the driver leaves the linker's L0501, and that the driver is
+asked only after a failed link.
 
 ### D526 — `refine run` compiles to a temporary executable and runs it
 
@@ -20141,8 +20161,15 @@ and a status of refine's own for a refused program, which collides with a
 program's own statuses as surely. The maintainer chose `run` and the line for
 the bare form.
 
-**Pinned by** nothing that runs yet: the item that implements it adds the
-`run` cases to the test program.
+The implementation settles two details. The private directory is
+`refine-run-` and six random characters, and a source spelt with a leading
+hyphen names its executable without the `./`. A program that cannot be
+started at all is refine's own status 1, with a line saying why.
+
+**Pinned by** the commands cases `run compiles and runs`, `run reports a
+signal`, `run removes its directory`, `run refusals` and `the bare form says
+it only checked`; `end-to-end/run-another-target`; and the outside-user
+check's `refine run` of the first program.
 
 ### D528 — An identifier with capitals is one L0012, and a C name's says `link(symbol: ...)`
 

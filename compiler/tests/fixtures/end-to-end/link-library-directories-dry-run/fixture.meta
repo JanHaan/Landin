@@ -1,0 +1,9 @@
+class: end-to-end
+summary: under --link=libc each -L and linker.directory reaches the driver as -L and -Wl,-rpath before the assembly, -L's first, and each linker.library as -lNAME after it
+program: main.ldn
+constructs: 1590
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --link=libc --emit=exe --dry-run -L / -o out ../tests/fixtures/end-to-end/link-library-directories-dry-run/main.ldn
+status: 0
+stream: output

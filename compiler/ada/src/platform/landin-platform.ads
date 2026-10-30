@@ -147,6 +147,23 @@ package Landin.Platform is
    procedure Unlock_Output
      (Host : Filesystem; Handle : Integer) is abstract;
 
+   --  D526: a new directory only its user may enter, under `TMPDIR` or
+   --  `/tmp`, its name beginning with Prefix; Path is where it is.  Where
+   --  `refine run` writes the program it runs.
+   procedure Make_Private_Directory
+     (Host   : Filesystem;
+      Prefix : String;
+      Path   : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Write_Status) is abstract;
+
+   --  Remove a directory and everything in it, never following a link
+   --  out of it.  A missing directory is Already_Absent.  Only for a
+   --  directory this compiler made, as Make_Private_Directory's.
+   procedure Remove_Tree
+     (Host   : Filesystem;
+      Path   : String;
+      Status : out Remove_Status) is abstract;
+
    --  Entry names only, without the directory prefix, sorted so that two
    --  runs discover fixtures in the same order on any host.
    procedure List_Directory
@@ -208,6 +225,31 @@ package Landin.Platform is
       Arguments : Path_List;
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged) is abstract;
+
+   --  D526: how a program `refine run` started ended.  Unlike a tool's,
+   --  this carries the signal, because refine says which one ended the
+   --  program and exits as a shell reports it, with 128 and its number.
+   --  The number is the host's own, so the name comes with it.
+   type Program_Result is record
+      --  Exited or Signaled: a program refine runs has no limit.
+      Ended       : Termination := Exited;
+      Exit_Code   : Integer := 0;
+      Signal      : Natural := 0;
+      Signal_Name : Ada.Strings.Unbounded.Unbounded_String;
+   end record;
+
+   --  Run the program at Program, a path and never looked up on PATH,
+   --  with the caller's standard input, output and error, environment and
+   --  working directory, in the caller's process group, and with no time
+   --  limit.  While it runs the caller ignores the terminal's interrupt
+   --  and quit signals, which reach the program with their default
+   --  actions.  A program that cannot be started raises
+   --  External_Tool_Failed.
+   procedure Run_Attached
+     (Host      : Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Result    : out Program_Result) is abstract;
 
    --  Tell a test runner which output its next Run may create. Native tools
    --  use their -o argument; this seam keeps fake production inside Run.

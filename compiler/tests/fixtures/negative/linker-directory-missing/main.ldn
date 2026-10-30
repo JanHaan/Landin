@@ -1,0 +1,3 @@
+--  D524: a relative directory is read against this file's directory, and
+--  one that does not exist is refused at the directive.
+linker.directory("no-such-directory")

@@ -88,6 +88,17 @@ package Landin.Platform.Overlays is
       From, To : String;
       Status : out Move_Status);
 
+   overriding procedure Make_Private_Directory
+     (Host   : Overlay;
+      Prefix : String;
+      Path   : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Write_Status);
+
+   overriding procedure Remove_Tree
+     (Host   : Overlay;
+      Path   : String;
+      Status : out Remove_Status);
+
    overriding procedure Lock_Output
      (Host : Overlay; Path : String; Handle : out Integer);
    overriding procedure Unlock_Output

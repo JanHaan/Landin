@@ -1,0 +1,8 @@
+class: end-to-end
+summary: refine run runs only the compiler's own host, and names refine compile --target for another
+program: main.ldn
+constructs: 1970
+targets: cortex-m0
+expect: expected.txt
+args: run --target=cortex-m0 ../tests/fixtures/end-to-end/run-another-target/main.ldn
+status: 2

@@ -1,0 +1,8 @@
+class: end-to-end
+summary: an -L naming no directory is a usage error before any source is read or tool runs
+program: main.ldn
+constructs: 1590
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --link=libc --emit=exe --dry-run -L /no-such-directory-of-landin ../tests/fixtures/end-to-end/link-library-directory-option-missing/main.ldn
+status: 2

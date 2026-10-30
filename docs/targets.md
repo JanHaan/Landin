@@ -20,7 +20,7 @@ explains the package boundaries, not a second work list.
 | POSIX's facilities in Landin types: descriptors, errno atoms and their numbers, paths' terminators, `stat`, directory streams, mappings and `poll` | ordinary `platform/posix`, written over `platform/linux` on Linux and `platform/libc` on Darwin and FreeBSD |
 | each hosted system's libc declarations, errno accessor, open flags and `stat` records | ordinary `platform/libc`, selected by `compiler.os` (beneath `platform/posix` on Darwin and FreeBSD; Linux under `--link=libc` only) |
 | Linux system calls and the static entry `_landin_start` | ordinary `platform/linux` |
-| native driver, archive resolution and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
+| native driver, library and directory arguments, and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
 | C alias identities | ordinary `platform/c`, guarded by the selected ABI fact |
 | actual header/tool ABI verification | `bindings/generate.py`, explicit Clang target and sysroot |
 
@@ -87,13 +87,16 @@ the same. The hosted entry calls `platform/posix`'s C-callable argument
 initializer when the program defines it, and a C-owned startup can call it
 by the same name.
 
-Archive requests retain source order and repetition. Linux keeps `-l:libNAME.a`
-and GNU build-id arguments. Darwin queries the selected driver with
-`-print-file-name=libNAME.a` and passes an existing returned file directly;
-Apple's bare response requires that file in the invocation directory. A custom
-driver can resolve another archive search policy. Missing archives fail; `-l`
-and `-hidden-l` cannot guarantee archive selection when a dylib is also present.
-No GNU build-id flags reach the Darwin driver. Caller-source sidecars use the Mach-O identity contract below.
+Library requests retain source order and repetition, and each reaches the
+driver as `-lNAME` after the assembly on every hosted target (D523), so the
+driver resolves it as it would for C, a shared library before an archive of
+the same name where its linker prefers one. Each `-L` and `linker.directory`
+directory comes before the assembly as `-LDIR` and `-Wl,-rpath,DIR`, `-L`'s
+first (D524). Only after a failed link does the toolchain package name the
+files a library may be, `libNAME.tbd`, `.dylib` and `.a` on Darwin and
+`libNAME.so` and `.a` elsewhere, for the driver to look for them (D525).
+Linux keeps GNU build-id arguments; no GNU build-id flags reach the Darwin
+driver. Caller-source sidecars use the Mach-O identity contract below.
 
 Only an export is a global symbol (D415): the hosted or firmware entry, C
 imports and public C definitions, anything with a link name, a public
@@ -122,14 +125,15 @@ compiler as an implicit root, and passes `-nostdlib -static -no-pie
 -Wl,-e,_landin_start` and `-Wl,--gc-sections` to the target's driver, so no C
 runtime object, C library or dynamic loader is linked and the process starts
 at `platform/linux`'s `_landin_start` (D279). `--link=libc` keeps the C runtime's
-link, `main` called by C's startup, archive requests and libc among them.
+link, `main` called by C's startup, library requests and libc among them.
 Darwin and FreeBSD reach their systems only through their C libraries, so
 `libc` is their only mode and `--link=static` there is L0002, as is `--link`
 for a target with no hosted system or without `--emit=exe` or `--emit=asm`.
 
 A static request is refused with L0500 before any tool runs, and the note
 names `--link=libc`, when no library holding `platform/linux` was found, when the
-program asks for `linker.library`, or when it refers to a bodyless external
+program asks for `linker.library` or `linker.directory` or the request names
+`-L`, or when it refers to a bodyless external
 symbol that no program item defines. That last check counts only what the
 entry reaches, as the link keeps it: every Linux backend collects per-item
 sections, so a reference from an unreached routine never reaches the linker.
@@ -170,7 +174,7 @@ rather than by comparing it with Darwin's:
 The driver is `aarch64-linux-gnu-gcc`, the name the pinned aarch64 GNAT
 installs and Debian's cross compiler too, then the others D364 names. Under `--link=libc` the program links as a position-independent
 executable, the driver's default, which the arm64 addressing already is; the
-default static link is fixed-address, as on x86-64. Linux's archive
+default static link is fixed-address, as on x86-64. Linux's library
 spelling and build identity apply as on x86-64. The assembler is held to the
 level at every level with `-Wa,-march=`, the baseline's `armv8-a` included;
 an arm64 executable carries no level note. x18 is never allocated and stays
@@ -300,7 +304,7 @@ objects cannot redirect a lexical scope to another object's range list.
 produces `program.s`, `program.o`, `program`, `program.dSYM` and
 `program.sources.json`. Apple Clang receives `-gdwarf-4 -x assembler` and
 `-save-temps=obj`; explicit assembler input prevents preprocessing from
-rewriting the compiler assembly. The language selection resets before archive
+rewriting the compiler assembly. The language selection resets before library
 arguments. Clang invokes its native dsymutil after linking. Output preflight
 protects the retained object and dSYM bundle as well as existing artifacts.
 

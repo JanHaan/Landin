@@ -326,7 +326,7 @@ package body Landin.Diagnostics.Citations is
             when 1615 =>
                "Storage each thread has its own of",
             when 1590 =>
-               "Linking a static library",
+               "Linking a library",
             when 1570 =>
                "Calling conventions",
             when 1620 =>

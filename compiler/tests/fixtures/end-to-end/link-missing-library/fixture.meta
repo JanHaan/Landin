@@ -1,0 +1,8 @@
+class: end-to-end
+summary: a failed link's library that no -L, linker.directory or driver directory holds is L0509 at its directive, naming each directory searched, instead of the linker's text
+program: main.ldn
+constructs: 1590
+targets: linux-x86-64
+expect: expected.txt
+args: compile --target=linux-x86-64 --link=libc --emit=exe --toolchain=../tests/fixtures/end-to-end/link-missing-library/cc -L / -o build/link-missing-library ../tests/fixtures/end-to-end/link-missing-library/main.ldn
+status: 1

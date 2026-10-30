@@ -180,7 +180,7 @@
 1560 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | The `compiler`, `assembler` and `linker` modules
 1570 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Calling conventions
 1580 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | hosted | none | none | Importing from C
-1590 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | refused | - | executed | hosted | none | none | Linking a static library
+1590 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | refused | - | executed | hosted | none | none | Linking a library
 1600 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | - | - | executed | hosted | none | none | Exporting to C
 1610 | tour | accepted emitted executed refused | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Choosing a symbol's linker name
 1615 | tour | accepted emitted executed | executed | executed | executed | executed | executed | executed | executed | - | executed | all | none | none | Storage each thread has its own of

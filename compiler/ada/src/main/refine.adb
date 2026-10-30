@@ -48,7 +48,7 @@ begin
    end if;
 
    declare
-      Result : constant Landin.Driver.Outcome :=
+      Result : Landin.Driver.Outcome :=
         Landin.Commands.Execute
           (Arguments, Host, Tools, Meter,
            Terminal_Color => Landin.Platform.Native.Diagnostic_Color);
@@ -73,6 +73,19 @@ begin
          String'Write
            (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
             Unbounded.To_String (Result.Report));
+      end if;
+
+      --  D526: `refine run`'s program, once what compiling it said is
+      --  written, so the program's output follows it.
+      if Unbounded.Length (Result.Launch_Program) > 0 then
+         Text_IO.Flush (Text_IO.Standard_Output);
+         Text_IO.Flush (Text_IO.Standard_Error);
+         Landin.Commands.Launch (Result, Host, Tools);
+         if Unbounded.Length (Result.Report) > 0 then
+            String'Write
+              (Text_IO.Text_Streams.Stream (Text_IO.Standard_Error),
+               Unbounded.To_String (Result.Report));
+         end if;
       end if;
 
       Command_Line.Set_Exit_Status

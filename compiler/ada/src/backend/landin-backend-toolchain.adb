@@ -250,77 +250,23 @@ package body Landin.Backend.Toolchain is
         & ", or name another driver with --toolchain=NAME" & Without;
    end Install_Advice;
 
-   procedure Resolve_Libraries
-     (Facts : Landin.Targets.Target_Facts;
-      Driver : String;
-      Host : Landin.Platform.Filesystem'Class;
-      Tools : Landin.Platform.Tool_Runner'Class;
-      Libraries : in out Landin.Platform.Path_List;
-      Result : out Landin.Platform.Tool_Result;
-      Ready : out Boolean)
+   function Library_Files
+     (Facts : Landin.Targets.Target_Facts; Name : String)
+      return Landin.Platform.Path_List
    is
-      use type Landin.Platform.Termination;
-      Resolved : Landin.Platform.Path_List;
+      List : Landin.Platform.Path_List;
    begin
-      Ready := True;
-      Result := (others => <>);
       if Landin.Targets.Capabilities.Backend_For (Facts)
-        /= Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+        = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
       then
-         return;
+         List.Append ("lib" & Name & ".tbd");
+         List.Append ("lib" & Name & ".dylib");
+      else
+         List.Append ("lib" & Name & ".so");
       end if;
-      for Library of Libraries loop
-         Tools.Run
-           (Driver, Landin.Platform.Arguments
-              ("-print-file-name=lib" & Library & ".a"), Result,
-            Landin.Platform.Output_Only);
-         if Result.Ended /= Landin.Platform.Exited
-           or else Result.Exit_Code /= 0
-         then
-            Ready := False;
-            declare
-               Output : constant String :=
-                 Ada.Strings.Unbounded.To_String (Result.Output);
-            begin
-               Result.Output := Ada.Strings.Unbounded.To_Unbounded_String
-                 ("cannot resolve Darwin archive lib" & Library & ".a");
-               if Output /= "" then
-                  Ada.Strings.Unbounded.Append
-                    (Result.Output, ASCII.LF & Output);
-               end if;
-               if Ada.Strings.Unbounded.Length (Result.Error_Output) > 0 then
-                  Ada.Strings.Unbounded.Append
-                    (Result.Output, ASCII.LF
-                     & Ada.Strings.Unbounded.To_String (Result.Error_Output));
-               end if;
-            end;
-            return;
-         end if;
-         declare
-            Path : constant String :=
-              Ada.Strings.Unbounded.To_String (Result.Output);
-            Last : Natural := Path'Last;
-         begin
-            while Last >= Path'First
-              and then Path (Last) in ASCII.LF | ASCII.CR
-            loop
-               Last := Last - 1;
-            end loop;
-            if Last < Path'First
-              or else not Host.Exists (Path (Path'First .. Last))
-              or else Host.Is_Directory (Path (Path'First .. Last))
-            then
-               Ready := False;
-               Result.Exit_Code := 1;
-               Result.Output := Ada.Strings.Unbounded.To_Unbounded_String
-                 ("cannot resolve Darwin archive lib" & Library & ".a");
-               return;
-            end if;
-            Resolved.Append (Path (Path'First .. Last));
-         end;
-      end loop;
-      Libraries := Resolved;
-   end Resolve_Libraries;
+      List.Append ("lib" & Name & ".a");
+      return List;
+   end Library_Files;
 
    function File_Operand (Path : String) return String is
      (if Path'Length > 0 and then Path (Path'First) in '-' | '@'
@@ -366,11 +312,14 @@ package body Landin.Backend.Toolchain is
         Landin.Platform.No_Arguments;
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False;
-      Static : Boolean := False)
+      Static : Boolean := False;
+      Directories : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments)
       return Landin.Platform.Path_List
      is (Link_Arguments
            (Assembly, Output, Linker, Build_Id, Libraries, Facts, Full_Debug,
-            Levels.Default_Level (Facts), Static));
+            Levels.Default_Level (Facts), Static,
+            Directories => Directories));
 
    function Link_Arguments
      (Assembly : String;
@@ -383,7 +332,9 @@ package body Landin.Backend.Toolchain is
       Full_Debug : Boolean := False;
       Level : Landin.Targets.Levels.Feature_Level;
       Static : Boolean := False;
-      Threads : Boolean := False)
+      Threads : Boolean := False;
+      Directories : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -400,7 +351,7 @@ package body Landin.Backend.Toolchain is
       if Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Cortex_M0_ELF
       then
-         if not Libraries.Is_Empty then
+         if not Libraries.Is_Empty or else not Directories.Is_Empty then
             raise Compiler_Defect with "unsupported firmware link request";
          end if;
          Add_M_Profile (List, Level, Facts);
@@ -459,12 +410,33 @@ package body Landin.Backend.Toolchain is
            /= Landin.Targets.Capabilities.Linux
          then
             raise Compiler_Defect with "a static link outside Linux";
+         elsif not Libraries.Is_Empty or else not Directories.Is_Empty then
+            raise Compiler_Defect with "a library in a static link";
          end if;
          Landin.Platform.Add (List, "-nostdlib");
          Landin.Platform.Add (List, "-static");
          Landin.Platform.Add (List, "-no-pie");
          Landin.Platform.Add (List, "-Wl,-e,_landin_start");
       end if;
+      --  D524: where the libraries are, the command line's directories
+      --  first, then the directives'; each is also where the executable
+      --  looks at run time, in the same order, so a program linked against
+      --  a shared library there starts where it was built.  `-Wl` splits
+      --  its argument at commas, so a directory holding one is passed
+      --  whole through `-Xlinker`.
+      for Directory of Directories loop
+         Landin.Platform.Add (List, "-L" & Directory);
+      end loop;
+      for Directory of Directories loop
+         if (for some Byte of Directory => Byte = ',') then
+            Landin.Platform.Add (List, "-Xlinker");
+            Landin.Platform.Add (List, "-rpath");
+            Landin.Platform.Add (List, "-Xlinker");
+            Landin.Platform.Add (List, Directory);
+         else
+            Landin.Platform.Add (List, "-Wl,-rpath," & Directory);
+         end if;
+      end loop;
       Landin.Platform.Add (List, File_Operand (Assembly));
       if Full_Debug and then
         Landin.Targets.Capabilities.Backend_For (Facts)
@@ -473,15 +445,11 @@ package body Landin.Backend.Toolchain is
          Landin.Platform.Add (List, "-x");
          Landin.Platform.Add (List, "none");
       end if;
-      --  [1590] selects archives, while the hosted driver retains control
-      --  of libc and startup linkage. Repeats matter to archive resolution.
+      --  D523: the driver resolves each library as it would for C, a
+      --  shared library or an archive, so the C runtime's own libraries
+      --  link as the driver links them.  Repeats matter to archives.
       for Library of Libraries loop
-         Landin.Platform.Add
-           (List, (if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
-                     in Landin.Targets.Capabilities.Linux
-                      | Landin.Targets.Capabilities.FreeBSD
-                   then "-l:lib" & Library & ".a"
-                   else File_Operand (Library)));
+         Landin.Platform.Add (List, "-l" & Library);
       end loop;
       if Threads
         and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)

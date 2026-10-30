@@ -1,0 +1,6 @@
+error[L0509]: the link found no library `nosuchlibrary`: no libnosuchlibrary.so or libnosuchlibrary.a in / (-L), ../tests/fixtures/end-to-end/link-missing-library (linker.directory at ../tests/fixtures/end-to-end/link-missing-library/main.ldn:5), or the C driver's own directories
+  --> ../tests/fixtures/end-to-end/link-missing-library/main.ldn:4:1
+  |
+4 | linker.library("nosuchlibrary")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: [1590]/D525: name the directory that holds it with linker.directory("DIR") beside the source, or with -L DIR when building

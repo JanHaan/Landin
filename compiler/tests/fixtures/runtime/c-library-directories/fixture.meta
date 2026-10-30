@@ -1,0 +1,10 @@
+class: runtime
+profiles: standard
+summary: C archives linked as -lNAME under --link=libc, one found through linker.directory beside the source and one through -L, with mixed-case link names, a layout(c) record by value and libm's sqrtf and pow
+program: main.ldn
+constructs: 1580, 1590, 1610
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+status: 42
+link: libc
+c-archives: lib/mixed.c, vendor/point.c
+library-directories: vendor

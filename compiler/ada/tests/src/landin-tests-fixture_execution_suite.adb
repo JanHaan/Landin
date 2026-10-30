@@ -2279,6 +2279,183 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
    end Build_Shared_Objects;
 
+   --  D524: the archiver beside the lane's C driver: its own name with
+   --  `gcc` or `clang` spelt `ar`, as a cross toolchain installs it, then
+   --  GCC's `-ar` wrapper of it, then the host's `ar`.
+   function Archiver_For
+     (Driver : String; Runner : Landin.Platform.Tool_Runner'Class)
+      return String;
+
+   function Archiver_For
+     (Driver : String; Runner : Landin.Platform.Tool_Runner'Class)
+      return String
+   is
+      function Ends_With (Suffix : String) return Boolean
+        is (Driver'Length >= Suffix'Length
+            and then Driver (Driver'Last - Suffix'Length + 1 .. Driver'Last)
+              = Suffix);
+      Beside : constant String :=
+        (if Ends_With ("gcc")
+         then Driver (Driver'First .. Driver'Last - 3) & "ar"
+         elsif Ends_With ("clang")
+         then Driver (Driver'First .. Driver'Last - 5) & "ar"
+         else "");
+   begin
+      if Beside /= "" and then Runner.Available (Beside) then
+         return Beside;
+      elsif Runner.Available (Driver & "-ar") then
+         return Driver & "-ar";
+      end if;
+      return "ar";
+   end Archiver_For;
+
+   --  D524: a runtime fixture's `c-archives`, in a work copy WORK of its
+   --  program and `with` files: each source compiled by the lane's C
+   --  driver and archived alone in the copy's directory of the same
+   --  relative name, so the program's own linker.directory finds it.
+   --  ARGS gains what compiles the copy: an `-L` for each
+   --  `library-directories` entry, then the copy's files.
+   procedure Prepare_Archives
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Directory : String;
+      Work      : String;
+      Label     : String;
+      Item      : in out Landin.Testing.Context;
+      Args      : in out Landin.Platform.Path_List;
+      Ready     : out Boolean);
+
+   procedure Prepare_Archives
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Directory : String;
+      Work      : String;
+      Label     : String;
+      Item      : in out Landin.Testing.Context;
+      Args      : in out Landin.Platform.Path_List;
+      Ready     : out Boolean)
+   is
+      Facts  : constant Landin.Targets.Target_Facts := Lanes.Target;
+      Driver : constant String :=
+        Landin.Backend.Toolchain.Driver_For (Facts, Lanes.Toolchain);
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Copied : Landin.Platform.Path_List;
+      Removed : Landin.Platform.Remove_Status;
+
+      --  The directory part of a relative path, "" for none.
+      function Parent (Path : String) return String;
+
+      function Parent (Path : String) return String is
+      begin
+         for Index in reverse Path'Range loop
+            if Path (Index) = '/' then
+               return Path (Path'First .. Index - 1);
+            end if;
+         end loop;
+         return "";
+      end Parent;
+
+      procedure Copy (File : String);
+
+      procedure Copy (File : String) is
+         Content : Unbounded.Unbounded_String;
+         Read    : Landin.Platform.Read_Status;
+         Written : Landin.Platform.Write_Status;
+      begin
+         if not Ready then
+            return;
+         end if;
+         Host.Read_File (Directory & "/" & File, Content, Read);
+         if Parent (File) /= "" then
+            Ada.Directories.Create_Path (Work & "/" & Parent (File));
+         end if;
+         Host.Write_File
+           (Work & "/" & File, Unbounded.To_String (Content), Written);
+         if Read /= Landin.Platform.Read_Ok
+           or else Written /= Landin.Platform.Write_Ok
+         then
+            Landin.Testing.Fail
+              (Item, Label & ": could not copy " & File & " to " & Work);
+            Ready := False;
+         end if;
+      end Copy;
+
+      procedure Archive (Source : String);
+
+      procedure Archive (Source : String) is
+         Object : constant String :=
+           Work & "/" & Archive_Of (Source) & ".o";
+         Made   : constant String := Work & "/" & Archive_Of (Source);
+         Compile, Collect : Landin.Platform.Path_List;
+         Built_One : Boolean;
+      begin
+         if not Ready then
+            return;
+         end if;
+         if Parent (Source) /= "" then
+            Ada.Directories.Create_Path (Work & "/" & Parent (Source));
+         end if;
+         Compile.Append (Directory & "/" & Source);
+         Compile.Append ("-std=c11");
+         Compile.Append ("-Wall");
+         Compile.Append ("-Wextra");
+         Compile.Append ("-Werror");
+         Compile.Append ("-fPIC");
+         Compile.Append ("-O2");
+         Compile.Append ("-c");
+         Compile.Append ("-o");
+         Compile.Append (Object);
+         Produce_Output
+           (Host, Runner, Driver, Label & " archive object " & Source,
+            Object, Compile, Item, Built_One);
+         if Built_One then
+            Collect.Append ("rcs");
+            Collect.Append (Made);
+            Collect.Append (Object);
+            Produce_Output
+              (Host, Runner, Archiver_For (Driver, Runner),
+               Label & " archive " & Archive_Of (Source), Made, Collect,
+               Item, Built_One);
+         end if;
+         Ready := Built_One;
+      end Archive;
+   begin
+      Ready := True;
+      if Driver = "" then
+         Landin.Testing.Fail
+           (Item, Label & ": " & Landin.Targets.Name (Facts)
+            & " names no C toolchain driver for its archives");
+         Ready := False;
+         return;
+      end if;
+      Host.Remove_Tree (Work, Removed);
+      if Removed = Landin.Platform.Not_Removable then
+         Landin.Testing.Fail
+           (Item, Label & ": could not clear the work copy " & Work);
+         Ready := False;
+         return;
+      end if;
+      Ada.Directories.Create_Path (Work);
+      Copied.Append (Program (Case_Item));
+      for One of Entries (With_Sources (Case_Item)) loop
+         Copied.Append (One);
+      end loop;
+      for File of Copied loop
+         Copy (File);
+      end loop;
+      for Source of Entries (C_Archives (Case_Item)) loop
+         Archive (Source);
+      end loop;
+      for Named of Entries (Library_Directories (Case_Item)) loop
+         Ada.Directories.Create_Path (Work & "/" & Named);
+         Args.Append ("-L");
+         Args.Append (Work & "/" & Named);
+      end loop;
+      for File of Copied loop
+         Args.Append (Work & "/" & File);
+      end loop;
+   end Prepare_Archives;
+
    procedure Run_Runtime
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
@@ -2325,7 +2502,17 @@ package body Landin.Tests.Fixture_Execution_Suite is
          end;
       end if;
 
-      Append_Module_Arguments (Case_Item, Fixture_Root, Args);
+      if C_Archives (Case_Item) = "" then
+         Append_Module_Arguments (Case_Item, Fixture_Root, Args);
+      else
+         Prepare_Archives
+           (Case_Item, Host, Fixture_Root & "/runtime/" & Name (Case_Item),
+            Ada.Directories.Full_Name (Built & "-work"), Label, Item, Args,
+            Ready);
+         if not Ready then
+            return;
+         end if;
+      end if;
 
       Append_Profile (Args, Profile);
       if Level /= "" then

@@ -164,14 +164,40 @@ class Lane:
         (self.output / 'source-verdicts.json').write_text(json.dumps(results, indent=2) + '\n')
         print(self.target + ': ' + str(len(results)) + ' source verdicts passed', flush=True)
 
+    def archives(self, base, meta, label):
+        """A `c-archives` fixture's work copy, with each source compiled
+        alone by the cross driver and archived alone as `lib<stem>.a` in
+        its own directory there (compiler/tests/README.md), and the peers'
+        record.  The archives are linked on this host, so the guest never
+        needs an archiver; `llvm-ar` writes the guest's ELF whatever its
+        machine.  Each build has a copy of its own, as builds run at once."""
+        copy = meta.work_copy(base, self.output / 'copies' / label)
+        compiler = [a for a in self.cc if not a.startswith('-fuse-ld=')]
+        peers = []
+        for index, (name, archive) in enumerate(zip(meta.c_archives, meta.archives)):
+            obj = copy / (archive + '.o')
+            self.command([*compiler, '-std=c11', '-Wall', '-Wextra', '-Werror', '-fPIC', '-O2',
+                          '-c', base / name, '-o', obj], label + f'-archive-{index}-compile')
+            self.command([self.args.ar, 'rcs', copy / archive, obj], label + f'-archive-{index}')
+            peers.append({'source': name, 'source_sha256': sha(base / name),
+                          'object_sha256': sha(copy / archive)})
+        return copy, peers
+
     def build(self, base, meta, optimize, specialize, level=None):
         label = '-'.join((base.parent.name, base.name, optimize, specialize, level or 'default'))
         executable = self.bundle / label
+        # FreeBSD always links its C library, so a `link: libc` fixture
+        # needs no --link=libc here, and each linker.library is the
+        # driver's -lNAME.  A `c-archives` fixture is compiled from its
+        # work copy, `library-directories` its -L, before the program.
+        peers = []
+        compiled = base
+        if meta.c_archives:
+            compiled, peers = self.archives(base, meta, label)
         argv = [self.args.refine.resolve(), '--target=' + self.target,
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 *(['--level=' + level] if level else []),
-                *meta.source_arguments(base)]
-        peers = []
+                *meta.library_arguments(compiled), *meta.source_arguments(compiled)]
         if not meta.get('c-sources'):
             self.command([*argv, '--toolchain=' + str(self.driver), '--emit=exe', '-o', executable],
                          label + '-build')
@@ -606,6 +632,7 @@ def main():
     parser.add_argument('--assembler', default='as')
     parser.add_argument('--objdump', default='llvm-objdump-19')
     parser.add_argument('--nm', default='llvm-nm-19')
+    parser.add_argument('--ar', default='llvm-ar-19')
     parser.add_argument('--ssh-port', type=int, help='development VM already running')
     parser.add_argument('--runner-ssh', help='existing Linux-hosted VM SSH argv; uses guest sudo')
     parser.add_argument('--prepare-only', action='store_true', help='emit and inspect a transferable Linux payload')

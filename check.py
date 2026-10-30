@@ -4851,9 +4851,10 @@ def fixture_sources():
     """Every Landin or companion file a fixture names is a file that is there.
 
     `with` names the rest of a module [1840], `c-sources` names the ordered
-    C companions of an ABI fixture, and `c-shared` the C sources a runtime or
-    ABI fixture's harness builds into shared objects its program loads. A
-    name that points at nothing is the same
+    C companions of an ABI fixture, `c-shared` the C sources a runtime or
+    ABI fixture's harness builds into shared objects its program loads, and
+    `c-archives` those a runtime fixture's harness builds into archives its
+    program links. A name that points at nothing is the same
     dead data `expect` without `args` already is: the fixture would compile one
     file and claim to have compiled two. The grammar corpus independently sees
     only `.ldn`; C sources and included headers are not Landin inputs.
@@ -4875,8 +4876,9 @@ def fixture_sources():
             where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (kind,
                                                                     name)
             fields = fixture_fields(meta)
-            for key in ("program", "with", "c-sources", "c-shared", "expect",
-                        "run_expect", "stdin", "run_files"):
+            for key in ("program", "with", "c-sources", "c-shared",
+                        "c-archives", "expect", "run_expect", "stdin",
+                        "run_files"):
                 if not fields.get(key):
                     continue
                 for one in (f.strip() for f in fields[key].split(",")):
@@ -5943,7 +5945,8 @@ def prototype_row_evidence(name, fields):
         for label, field in (("args", "args"), ("run_args", "run_args"),
                              ("run_files", "run_files"),
                              ("stdin", "stdin"), ("peer", "c-sources"),
-                             ("shared", "c-shared")):
+                             ("shared", "c-shared"),
+                             ("archives", "c-archives")):
             if fields.get(field):
                 inputs.append("%s %s" % (label, fields[field]))
         status = fields.get("status")
@@ -7271,8 +7274,10 @@ def check_diagnostic_matrix(full_run):
     #  L0008 refuses no program: its evidence is the driver case that
     #  checks a file out of the layout.  L0009 refuses none either: its
     #  evidence is the driver case that names a level another family has.
+    #  L0509 refuses no source either: only a failed link raises it, so its
+    #  evidence is end-to-end/link-missing-library and the driver case.
     driver = {"L0002", "L0003", "L0004", "L0005", "L0008", "L0009",
-              "L0500", "L0501", "L0502", "L0504"}
+              "L0500", "L0501", "L0502", "L0504", "L0509"}
     fixed = set()
     for _, fields in fixture_records().values():
         if fields.get("fixed"):

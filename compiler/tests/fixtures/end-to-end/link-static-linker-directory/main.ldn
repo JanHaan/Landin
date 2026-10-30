@@ -1,0 +1,7 @@
+--  D524: a static Linux link links no C library, so a directory to
+--  search for one is refused, by a check as by compiling.
+linker.directory(".")
+
+public main: () -> (code: i32) =
+    code = 0
+end main

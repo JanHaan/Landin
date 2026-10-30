@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/range-subtypes/program.ldn and wrote nothing; run it with `refine run ../tests/fixtures/positive/range-subtypes/program.ldn`, or build it with `refine compile ../tests/fixtures/positive/range-subtypes/program.ldn -o program`

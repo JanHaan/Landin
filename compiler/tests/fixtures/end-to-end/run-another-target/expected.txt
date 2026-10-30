@@ -1,0 +1,1 @@
+error[L0002]: run runs a program on this compiler's own host, and not on cortex-m0; build one for cortex-m0 with refine compile --target=cortex-m0

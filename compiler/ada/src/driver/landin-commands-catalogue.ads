@@ -4,7 +4,7 @@ with Ada.Strings.Unbounded;
 package Landin.Commands.Catalogue is
 
    type Action is
-     (Overview, Check, Compile, Format, Explain, Server, Version,
+     (Overview, Check, Compile, Run, Format, Explain, Server, Version,
       Targets, Completion, Help);
 
    function Name (Command : Action) return String;
@@ -14,9 +14,9 @@ package Landin.Commands.Catalogue is
 
    type Option is
      (Help_Flag, Verbose, Quiet, Color, Diagnostics,
-      Target, Level, Root, Library, Build_Option, Build_Mode, Optimize,
-      Specialize, Emit, Output, Keep_Asm, Debug, Panic_Map, Toolchain, Linker,
-      Link,
+      Target, Level, Root, Library, Library_Directory, Build_Option,
+      Build_Mode, Optimize, Specialize, Emit, Output, Keep_Asm, Debug,
+      Panic_Map, Toolchain, Linker, Link,
       Firmware_Entry, Build_Report, Stage_Report, Stack_Report, Dry_Run,
       Depfile,
       Format_Check, Format_Stdout, Explain_Full, Stdio, JSON, Warnings, Warn,

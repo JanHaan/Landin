@@ -1,0 +1,6 @@
+error[L0391]: this is not a directory name
+  --> ../tests/fixtures/negative/linker-directory-empty/main.ldn:1:18
+  |
+1 | linker.directory("")
+  |                  ^^
+  = note: [1590]/D524: name the directory that holds the library, nonempty and without a NUL byte, relative to this file's directory or absolute

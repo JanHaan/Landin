@@ -102,6 +102,8 @@ package body Landin.Driver is
      Rows.Code (Rows.Firmware_Frame_Exceeds_Stack);
    Code_Handler_Margin : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Handler_Exceeds_Stack_Margin);
+   Code_Library_Not_Found : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Library_Not_Found);
 
    procedure Keep_Locations
      (Result : in out Outcome;
@@ -805,6 +807,8 @@ package body Landin.Driver is
       Firmware_Seen : Boolean := False;
       Library_Path : Unbounded.Unbounded_String;
       Library_Seen : Boolean := False;
+      --  D524: each `-L` as written, in the order written.
+      Search_Options : Landin.Platform.Path_List;
       Build_Report_Path : Unbounded.Unbounded_String;
       Stage_Report_Path : Unbounded.Unbounded_String;
       Stage_Report_Seen : Boolean := False;
@@ -985,6 +989,9 @@ package body Landin.Driver is
                Library_Seen := True;
                Library_Path := Unbounded.To_Unbounded_String
                  (After (Argument, "--library="));
+
+            elsif Starts_With (Argument, "-L=") then
+               Search_Options.Append (After (Argument, "-L="));
 
             elsif Starts_With (Argument, "--firmware-entry=") then
                if Firmware_Seen
@@ -1271,7 +1278,7 @@ package body Landin.Driver is
                      | "--stack-report" | "--root"
                      | "--library" | "--emit" | "-o" | "--toolchain"
                      | "--linker" | "--link" | "--firmware-entry"
-                     | "--keep-asm");
+                     | "--keep-asm" | "-L");
 
          --  How many times an option with this stem was written.
          function Times_Written (Stem : String) return Natural;
@@ -1321,7 +1328,7 @@ package body Landin.Driver is
               new String'("--emit"),
               new String'("--toolchain"), new String'("--linker"),
               new String'("--link"), new String'("--firmware-entry"),
-              new String'("--keep-asm")];
+              new String'("--keep-asm"), new String'("-L")];
 
          --  Why the options given cannot be one request.
          function Incompatible_Action return String
@@ -1478,6 +1485,123 @@ package body Landin.Driver is
                   "dependency paths cannot contain line breaks");
             end if;
          end Check_Dependency_Path;
+
+         --  D524: a path as the link names it, absolute.  A relative one is
+         --  read against the working directory the host reports.
+         function Absolute (Path : String) return String;
+
+         function Absolute (Path : String) return String is
+            Last : Natural := Path'Last;
+         begin
+            while Last > Path'First and then Path (Last) = '/' loop
+               Last := Last - 1;
+            end loop;
+            declare
+               Trimmed : constant String := Path (Path'First .. Last);
+            begin
+               if Trimmed'Length > 0 and then Trimmed (Trimmed'First) = '/'
+               then
+                  return Trimmed;
+               elsif Trimmed = "." or else Trimmed = "" then
+                  return Host.Working_Directory;
+               elsif Starts_With (Trimmed, "./") then
+                  return Absolute
+                    (Trimmed (Trimmed'First + 2 .. Trimmed'Last));
+               end if;
+               return Host.Working_Directory & "/" & Trimmed;
+            end;
+         end Absolute;
+
+         --  D524: the directory a `linker.directory` names, as a report
+         --  names it: a relative one joined to the declaring file's
+         --  directory as that file was named.
+         function Directive_Named (Index : Positive) return String;
+
+         function Directive_Named (Index : Positive) return String is
+            Table : Landin.Configuration.Table renames
+              Landin.Stages.Configurations (Context).all;
+            Written : constant String :=
+              Landin.Configuration.Directory_Written (Table, Index);
+            Declaring : constant String :=
+              Landin.Source.Name
+                (Landin.Stages.Source
+                   (Context,
+                    Landin.Configuration.Directory_Source (Table, Index)));
+            Slash : Natural := 0;
+         begin
+            if Written (Written'First) = '/' then
+               return Written;
+            end if;
+            for Position in Declaring'Range loop
+               if Declaring (Position) = '/' then
+                  Slash := Position;
+               end if;
+            end loop;
+            if Written = "." then
+               return (if Slash = 0 then "."
+                       else Declaring (Declaring'First .. Slash - 1));
+            end if;
+            return (if Slash = 0 then ""
+                    else Declaring (Declaring'First .. Slash))
+              & Written;
+         end Directive_Named;
+
+         --  The same, absolute, as the link is given it.
+         function Directive_Directory (Index : Positive) return String
+           is (Absolute (Directive_Named (Index)));
+
+         --  D524's order: the command line's directories first, so whoever
+         --  builds can put another copy ahead, then the directives'.
+         function Search_Directories return Landin.Platform.Path_List;
+
+         function Search_Directories return Landin.Platform.Path_List is
+            List : Landin.Platform.Path_List;
+         begin
+            for Directory of Search_Options loop
+               List.Append (Absolute (Directory));
+            end loop;
+            for Index in 1 .. Landin.Configuration.Directory_Count
+              (Landin.Stages.Configurations (Context).all)
+            loop
+               List.Append (Directive_Directory (Index));
+            end loop;
+            return List;
+         end Search_Directories;
+
+         --  D524: a `linker.directory` naming no directory is refused at
+         --  the directive, before any tool runs, by a check as well.
+         procedure Check_Directories;
+
+         procedure Check_Directories is
+            Table : Landin.Configuration.Table renames
+              Landin.Stages.Configurations (Context).all;
+         begin
+            for Index in 1 .. Landin.Configuration.Directory_Count (Table)
+            loop
+               declare
+                  Named : constant String := Directive_Directory (Index);
+                  Item : Landin.Diagnostics.Diagnostic;
+               begin
+                  if not Host.Is_Directory (Named) then
+                     Item := Landin.Diagnostics.Make
+                       (Code    => Rows.Code (Rows.Invalid_Tool_Directive),
+                        Level   => Landin.Diagnostics.Error,
+                        Source  =>
+                          Landin.Configuration.Directory_Source (Table, Index),
+                        Where   =>
+                          Landin.Configuration.Directory_Where (Table, Index),
+                        Message => "linker.directory names no directory: "
+                          & Directive_Named (Index));
+                     Landin.Diagnostics.Add_Note
+                       (Item,
+                        "[1590]/D524: a relative directory is read against"
+                        & " the directory of the file that declares it;"
+                        & " name a directory that exists");
+                     Landin.Stages.Report (Context, Item);
+                  end if;
+               end;
+            end loop;
+         end Check_Directories;
 
          --  `--stage-report`: one row per stage, each the processor time
          --  spent in it and the process's peak resident set when it ended.
@@ -1849,6 +1973,24 @@ package body Landin.Driver is
                   "link with --link=libc, which keeps C's runtime"
                   & " and library");
                return True;
+            elsif Landin.Configuration.Directory_Count
+                (Landin.Stages.Configurations (Context).all) > 0
+              or else not Search_Options.Is_Empty
+            then
+               --  D524: where libraries are is a question only a link
+               --  with the C library asks.
+               Note_No_Toolchain
+                 ("a static link of " & Landin.Targets.Name (Facts)
+                  & " links no C library, so it searches no directory: "
+                  & (if Search_Options.Is_Empty
+                     then "linker.directory(" & '"'
+                       & Landin.Configuration.Directory_Written
+                           (Landin.Stages.Configurations (Context).all, 1)
+                       & '"' & ")"
+                     else "-L " & Search_Options.First_Element),
+                  "link with --link=libc, which keeps C's runtime"
+                  & " and library");
+               return True;
             end if;
             Landin.Backend.Entry_Point.Unsatisfied_Imports
               (Landin.Stages.Code (Context).all,
@@ -1915,6 +2057,168 @@ package body Landin.Driver is
                  (Facts, Unbounded.To_String (Toolchain), Native_Target));
          end Note_Unavailable_Toolchain;
 
+         --  D525's report: the library at its directive, the files looked
+         --  for, every named directory with where it was named, and that
+         --  the driver's own directories were searched as well.
+         procedure Note_Missing_Library
+           (Index : Positive;
+            Files, Directories : Landin.Platform.Path_List);
+
+         procedure Note_Missing_Library
+           (Index : Positive;
+            Files, Directories : Landin.Platform.Path_List)
+         is
+            Table : Landin.Configuration.Table renames
+              Landin.Stages.Configurations (Context).all;
+            Name : constant String :=
+              Landin.Configuration.Library_Name (Table, Index);
+            Looked_For : Unbounded.Unbounded_String;
+            Places : Unbounded.Unbounded_String;
+            Item : Landin.Diagnostics.Diagnostic;
+            Options : constant Natural := Natural (Search_Options.Length);
+         begin
+            for Position in 1 .. Natural (Files.Length) loop
+               Unbounded.Append
+                 (Looked_For,
+                  (if Position = 1 then ""
+                   elsif Position = Natural (Files.Length) then " or "
+                   else ", ")
+                  & Files (Position));
+            end loop;
+            for Position in 1 .. Natural (Directories.Length) loop
+               if Position <= Options then
+                  Unbounded.Append
+                    (Places, Search_Options (Position) & " (-L), ");
+               else
+                  declare
+                     Directive : constant Positive := Position - Options;
+                     Declaring : constant Landin.Source.Snapshot_Reference :=
+                       Landin.Stages.Source
+                         (Context,
+                          Landin.Configuration.Directory_Source
+                            (Table, Directive));
+                  begin
+                     Unbounded.Append
+                       (Places, Directive_Named (Directive)
+                        & " (linker.directory at "
+                        & Landin.Source.Name (Declaring) & ":"
+                        & Ada.Strings.Fixed.Trim
+                            (Landin.Source.Line_Number'Image
+                               (Landin.Source.Position_Of
+                                  (Declaring,
+                                   Landin.Configuration.Directory_Where
+                                     (Table, Directive).First).Line),
+                             Ada.Strings.Both)
+                        & "), ");
+                  end;
+               end if;
+            end loop;
+            Item := Landin.Diagnostics.Make
+              (Code    => Code_Library_Not_Found,
+               Level   => Landin.Diagnostics.Error,
+               Source  => Landin.Configuration.Library_Source (Table, Index),
+               Where   => Landin.Configuration.Library_Where (Table, Index),
+               Message => "the link found no library `" & Name & "`: no "
+                 & Unbounded.To_String (Looked_For) & " in "
+                 & Unbounded.To_String (Places)
+                 & (if Directories.Is_Empty then ""
+                    else "or ")
+                 & "the C driver's own directories");
+            Landin.Diagnostics.Add_Note
+              (Item,
+               "[1590]/D525: name the directory that holds it with"
+               & " linker.directory(""DIR"") beside the source, or with"
+               & " -L DIR when building");
+            Landin.Stages.Report (Context, Item);
+         end Note_Missing_Library;
+
+         --  D525: after a failed link, each library asked for that no named
+         --  directory and none of the driver's own holds, as L0509 at its
+         --  directive instead of the linker's text.  True when one was
+         --  reported.  A library the search cannot settle, because the
+         --  driver could not answer, counts as found: the linker's own
+         --  text is then the better report.
+         function Libraries_Missing
+           (Driver : String; Directories : Landin.Platform.Path_List)
+            return Boolean;
+
+         function Libraries_Missing
+           (Driver : String; Directories : Landin.Platform.Path_List)
+            return Boolean
+         is
+            Table : Landin.Configuration.Table renames
+              Landin.Stages.Configurations (Context).all;
+            Reported : Landin.Platform.Path_List;
+            Any : Boolean := False;
+
+            function Driver_Holds (File : String) return Boolean;
+
+            function Driver_Holds (File : String) return Boolean is
+               Asked : Landin.Platform.Tool_Result;
+            begin
+               Tools.Run
+                 (Driver, Landin.Backend.Toolchain.Print_File_Arguments (File),
+                  Asked, Landin.Platform.Output_Only);
+               if Asked.Ended /= Landin.Platform.Exited
+                 or else Asked.Exit_Code /= 0
+               then
+                  return True;
+               end if;
+               declare
+                  Path : constant String :=
+                    Unbounded.To_String (Asked.Output);
+                  Last : Natural := Path'Last;
+               begin
+                  while Last >= Path'First
+                    and then Path (Last) in ASCII.LF | ASCII.CR | ' '
+                  loop
+                     Last := Last - 1;
+                  end loop;
+                  --  The driver echoes the name alone when it has none.
+                  return Path (Path'First .. Last) /= File
+                    and then Last >= Path'First
+                    and then Host.Exists (Path (Path'First .. Last))
+                    and then not Host.Is_Directory
+                      (Path (Path'First .. Last));
+               end;
+            exception
+               when Landin.External_Tool_Failed =>
+                  return True;
+            end Driver_Holds;
+         begin
+            for Index in 1 .. Landin.Configuration.Library_Count (Table) loop
+               declare
+                  Name : constant String :=
+                    Landin.Configuration.Library_Name (Table, Index);
+                  Files : constant Landin.Platform.Path_List :=
+                    Landin.Backend.Toolchain.Library_Files (Facts, Name);
+                  Found : Boolean := False;
+               begin
+                  if not (for some Earlier of Reported => Earlier = Name)
+                  then
+                     Reported.Append (Name);
+                     for Directory of Directories loop
+                        for File of Files loop
+                           Found := Found
+                             or else (Host.Exists (Directory & "/" & File)
+                                      and then not Host.Is_Directory
+                                        (Directory & "/" & File));
+                        end loop;
+                     end loop;
+                     for File of Files loop
+                        exit when Found;
+                        Found := Driver_Holds (File);
+                     end loop;
+                     if not Found then
+                        Any := True;
+                        Note_Missing_Library (Index, Files, Directories);
+                     end if;
+                  end if;
+               end;
+            end loop;
+            return Any;
+         end Libraries_Missing;
+
          --  The link that finishes an executable from assembly, whether
          --  this request emitted it or named it (D362): the driver chosen,
          --  the prior executable kept aside until a new one exists, and
@@ -1943,7 +2247,8 @@ package body Landin.Driver is
                   else Default_Executable);
                Ran : Landin.Platform.Tool_Result;
                Libraries : Landin.Platform.Path_List;
-               Libraries_Ready : Boolean;
+               Directories : constant Landin.Platform.Path_List :=
+                 Search_Directories;
                Backup : Unbounded.Unbounded_String;
                Prior_Identity : Landin.Platform.File_Identity;
                Prepared : Boolean := False;
@@ -2047,16 +2352,6 @@ package body Landin.Driver is
                         return;
                      end if;
                   end if;
-                  Landin.Backend.Toolchain.Resolve_Libraries
-                    (Facts, Driver, Host, Tools, Libraries, Ran,
-                     Libraries_Ready);
-                  if not Libraries_Ready then
-                     Note_Failure
-                       (Code_Toolchain_Failed,
-                        Unbounded.To_String (Ran.Output));
-                     return;
-                  end if;
-
                   Host.Lock_Output (Target_Path, Lock_Handle);
                   if Lock_Handle < 0 then
                      Note_Failure
@@ -2148,7 +2443,8 @@ package body Landin.Driver is
                           Libraries => Libraries, Facts => Facts,
                           Level => Landin.Stages.Level (Context),
                           Static => Static_Link,
-                          Threads => Starts_C_Threads),
+                          Threads => Starts_C_Threads,
+                          Directories => Directories),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -2217,6 +2513,10 @@ package body Landin.Driver is
                            Landin.Stages.Report
                              (Context, Landin.Diagnostics.Get (Found, Index));
                         end loop;
+                     elsif not Libraries.Is_Empty
+                       and then Libraries_Missing (Driver, Directories)
+                     then
+                        null;
                      else
                         Note_Failure
                           (Code_Toolchain_Failed,
@@ -2528,6 +2828,15 @@ package body Landin.Driver is
                     ("firmware does not admit linker.library",
                      "remove linker.library declarations; only the"
                      & " selected private Arm runtime is linked");
+                  return;
+               elsif Landin.Configuration.Directory_Count
+                   (Landin.Stages.Configurations (Context).all) /= 0
+                 or else not Search_Options.Is_Empty
+               then
+                  Note_No_Toolchain
+                    ("firmware does not admit linker.directory or -L",
+                     "remove them; firmware links no library, so it"
+                     & " searches no directory (D524)");
                   return;
                end if;
             end if;
@@ -2873,25 +3182,16 @@ package body Landin.Driver is
                               Debug => Debug_Enabled,
                               Level => Landin.Stages.Level (Context)));
                         end if;
-                        if not Libraries.Is_Empty
-                          and then Landin.Targets.Capabilities.Backend_For
-                            (Facts)
-                            = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
-                        then
-                           Unbounded.Append (Result.Output,
-                             "resolve Darwin archive paths before linking"
-                             & LF);
-                        else
-                           Plan_Tool (Landin.Backend.Toolchain.Link_Arguments
-                             (Assembly => Assembly_Path,
-                              Output => Product_Path,
-                              Linker => Unbounded.To_String (Linker),
-                              Libraries => Libraries, Facts => Facts,
-                              Full_Debug => Debug_Enabled,
-                              Build_Id => Unbounded.To_String (Map_Id),
-                              Level => Landin.Stages.Level (Context),
-                              Static => Static_Link));
-                        end if;
+                        Plan_Tool (Landin.Backend.Toolchain.Link_Arguments
+                          (Assembly => Assembly_Path,
+                           Output => Product_Path,
+                           Linker => Unbounded.To_String (Linker),
+                           Libraries => Libraries, Facts => Facts,
+                           Full_Debug => Debug_Enabled,
+                           Build_Id => Unbounded.To_String (Map_Id),
+                           Level => Landin.Stages.Level (Context),
+                           Static => Static_Link,
+                           Directories => Search_Directories));
                         if not Keep_Assembly and then not Cortex
                           and then not Emit_Map
                         then
@@ -3049,6 +3349,20 @@ package body Landin.Driver is
                Note_Failure (Code_Unreadable, "source not found: " & Operand);
                return;
             end if;
+            --  D524: `-L` is refused wherever a library is.
+            if not Search_Options.Is_Empty and then (Cortex or Static_Link)
+            then
+               Note_No_Toolchain
+                 ((if Cortex then "firmware links no library"
+                   else "a static link of " & Landin.Targets.Name (Facts)
+                     & " links no C library")
+                  & ", so it searches no directory: -L "
+                  & Search_Options.First_Element,
+                  (if Cortex then "remove -L"
+                   else "link with --link=libc, which keeps C's runtime"
+                     & " and library"));
+               return;
+            end if;
             if Dry_Run then
                declare
                   procedure Plan_Tool (Arguments : Landin.Platform.Path_List);
@@ -3078,7 +3392,8 @@ package body Landin.Driver is
                      Linker => Unbounded.To_String (Linker),
                      Facts => Facts, Full_Debug => Debug_Enabled,
                      Level => Landin.Stages.Level (Context),
-                     Static => Static_Link));
+                     Static => Static_Link,
+                     Directories => Search_Directories));
                end;
                return;
             end if;
@@ -3307,6 +3622,23 @@ package body Landin.Driver is
                end if;
             end;
          end if;
+
+         --  D524: an `-L` names a directory that exists, before any tool
+         --  runs and before a source is read.
+         for Directory of Search_Options loop
+            Check_Dependency_Path (Directory);
+            if Directory = "" then
+               Bad_Use := True;
+               Note_Failure (Code_Unknown_Option, "-L names no directory");
+            elsif not Host.Is_Directory (Directory) then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option,
+                  "-L " & Directory & " is not a directory; name the"
+                  & " directory that holds the library, relative to the"
+                  & " working directory or absolute");
+            end if;
+         end loop;
 
          if Stage_Report_Seen
            and then
@@ -3608,6 +3940,9 @@ package body Landin.Driver is
                Checking.Run (Context, Panic, Watch_Stage'Access);
                Policy_Denied := Landin.Diagnostics.Warning_Policy.Denied
                  (Warnings, Landin.Stages.Report (Context));
+               if not Landin.Stages.Failed (Context) then
+                  Check_Directories;
+               end if;
 
                --  The backend runs on nothing that was refused, for the same
                --  reason the lowering does: an unaccepted program has no Unit

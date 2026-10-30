@@ -7,7 +7,6 @@ with Landin.Machine;
 private with Ada.Containers.Ordered_Sets;
 private with Ada.Containers.Ordered_Maps;
 private with Ada.Containers.Vectors;
-private with Ada.Containers.Indefinite_Vectors;
 private with Ada.Strings.Unbounded;
 
 with Landin.Source;
@@ -89,10 +88,35 @@ package Landin.Configuration is
    function Override_Value
      (In_Table : Table; Index : Positive) return String;
 
-   procedure Add_Library (Into : in out Table; Name : String);
+   --  D202/D523: each active `linker.library`, in source order with its
+   --  repeats, and the directive that asked for it, which D525's refusal
+   --  of a library the link cannot find names.
+   procedure Add_Library
+     (Into : in out Table; Name : String;
+      Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Where : Landin.Source.Span := Landin.Source.Empty_Span);
    function Library_Count (In_Table : Table) return Natural;
    function Library_Name
      (In_Table : Table; Index : Positive) return String;
+   function Library_Source
+     (In_Table : Table; Index : Positive) return Landin.Source.Source_Id;
+   function Library_Where
+     (In_Table : Table; Index : Positive) return Landin.Source.Span;
+
+   --  D524: each active `linker.directory`, in source order with its
+   --  repeats, as written and with the directive's place.  The driver
+   --  resolves a relative one against the declaring file's directory,
+   --  because only the driver asks the host where that is.
+   procedure Add_Directory
+     (Into : in out Table; Written : String;
+      Source : Landin.Source.Source_Id; Where : Landin.Source.Span);
+   function Directory_Count (In_Table : Table) return Natural;
+   function Directory_Written
+     (In_Table : Table; Index : Positive) return String;
+   function Directory_Source
+     (In_Table : Table; Index : Positive) return Landin.Source.Source_Id;
+   function Directory_Where
+     (In_Table : Table; Index : Positive) return Landin.Source.Span;
 
    --  D412: an active `compiler.assert` that measures a declared type's
    --  layout waits for checking, which knows that layout; configuration
@@ -175,8 +199,13 @@ private
    end record;
    package Overrides is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Override_Entry);
-   package Libraries is new Ada.Containers.Indefinite_Vectors
-     (Index_Type => Positive, Element_Type => String);
+   type Link_Request is record
+      Text : Ada.Strings.Unbounded.Unbounded_String;
+      Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Where : Landin.Source.Span := Landin.Source.Empty_Span;
+   end record;
+   package Libraries is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Link_Request);
    type Option_Site is record
       Name : Landin.Source.Names.Name_Id;
       Origin : Landin.Provenance.Origin;
@@ -200,6 +229,7 @@ private
       Inactive : Entries.Set;
       Settings : Overrides.Vector;
       Linked   : Libraries.Vector;
+      Searched : Libraries.Vector;
       Declared : Option_Sites.Vector;
       Selected_Mode : Build_Mode := Debug;
       C_Runtime_Linked : Boolean := False;

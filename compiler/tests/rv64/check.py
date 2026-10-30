@@ -48,6 +48,22 @@ def source_hashes():
             if p.is_file() and '__pycache__' not in p.parts}
 
 
+def archiver(driver):
+    """The archiver beside the C driver DRIVER: for a name ending in `gcc`
+    or `clang`, that name with `ar` in its place, then DRIVER-ar, then
+    plain `ar`, the first that is there (compiler/tests/README.md)."""
+    candidates = []
+    for suffix in ('gcc', 'clang'):
+        if driver.endswith(suffix):
+            candidates.append(driver[:-len(suffix)] + 'ar')
+    candidates += [driver + '-ar', 'ar']
+    for one in candidates:
+        found = shutil.which(one)
+        if found:
+            return found
+    raise ValueError('no archiver for ' + driver + ': tried ' + ', '.join(candidates))
+
+
 def select(kind):
     directory = 'runtime' if kind == 'isa' else kind
     selected = [(p.parent, metadata(p)) for p in
@@ -95,13 +111,19 @@ class Lane(SHARED.Lane):
         # A program linked with C peers, or one whose fixture asks for it,
         # takes C's startup and libc; every other one links statically.
         libc = bool(meta.get('c-sources')) or meta.get('link') == 'libc'
+        # A `c-archives` fixture is compiled from its work copy, which
+        # holds its archives, `library-directories` its -L before the
+        # program (compiler/tests/README.md).
+        compiled, peers = base, []
+        if meta.c_archives:
+            compiled, peers = self.archives(base, meta, label)
         argv = [self.args.refine.resolve(), '--target=' + TARGET,
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 *(['--level=' + level] if level else []), *(['--link=libc'] if libc else []),
-                *meta.source_arguments(base)]
+                *meta.library_arguments(compiled), *meta.source_arguments(compiled)]
         assembly = Path(str(executable) + '.s')
         self.command([*argv, '--emit=asm', '-o', assembly], label + '-emit')
-        objects, peers = [], []
+        objects = []
         cargs = shlex.split(meta.get('c-args', ''))
         compile_args = [a for a in cargs if not a.startswith('-Wl,') and not a.startswith('-l')]
         for index, name in enumerate(meta.c_sources):
@@ -114,8 +136,8 @@ class Lane(SHARED.Lane):
             self.command([*self.cc, '-march=' + (level or LEVELS[0]), assembly, *objects, *cargs,
                           '-o', executable], label + '-link')
         else:
-            # The compiler's toolchain adapter owns linker.library discovery,
-            # level arguments and startup policy; reuse that boundary here.
+            # The compiler's toolchain adapter owns the libraries' -lNAME and
+            # -L, level arguments and startup policy; reuse that boundary here.
             self.command([*argv, '--toolchain=' + str(self.driver), '--emit=exe', '--keep-asm',
                           '-o', executable], label + '-link')
         # `c-shared:` sources become shared objects the program loads, which
@@ -132,6 +154,13 @@ class Lane(SHARED.Lane):
         return {'case': str(base.relative_to(ROOT / 'compiler/tests/fixtures')),
                 'label': label, 'optimize': optimize, 'specialize': specialize, 'level': level,
                 'executable_sha256': sha(executable), 'c_peers': peers, 'shared': shared, 'meta': meta}
+
+    def archives(self, base, meta, label):
+        """The work copy and its archives, as the FreeBSD lane's, built
+        by the cross driver and the archiver beside it."""
+        if not getattr(self.args, 'ar', None):
+            self.args.ar = archiver(self.args.cc)
+        return SHARED.Lane.archives(self, base, meta, label)
 
     def build_debugger(self):
         source = HERE / 'debug.ldn'
@@ -424,6 +453,7 @@ def main():
     parser.add_argument('--objdump', default='riscv64-linux-gnu-objdump')
     parser.add_argument('--gdb', default='gdb')
     parser.add_argument('--nm', default='riscv64-linux-gnu-nm')
+    parser.add_argument('--ar', help="the archiver; by default the one beside --cc's driver")
     parser.add_argument('--qemu', metavar='PATH',
                         help='debugger kind only: run the sessions under this qemu-riscv64'
                              " user-mode GDB stub, cross evidence that is not the physical lane's")

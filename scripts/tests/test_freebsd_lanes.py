@@ -228,6 +228,45 @@ class FreeBSDControls(unittest.TestCase):
                       '/tmp/landin-control/bundle/loads-provider.so last <',
                       written[0])
 
+    def test_a_c_archive_fixture_is_compiled_from_its_work_copy(self):
+        #  compiler/tests/README.md: each `c-archives` source is compiled
+        #  alone and archived as lib<stem>.a in its own directory of a work
+        #  copy that refine compiles, `library-directories` its -L.
+        base = ROOT / 'compiler/tests/fixtures/runtime/c-library-directories'
+        meta = LANE.metadata(base / 'fixture.meta')
+        with tempfile.TemporaryDirectory() as tmp:
+            lane = LANE.Lane.__new__(LANE.Lane)
+            lane.output = Path(tmp)
+            lane.bundle = lane.output / 'bundle'
+            lane.bundle.mkdir()
+            lane.target = 'freebsd-arm64'
+            lane.cc = ['clang-19', '--target=aarch64-unknown-freebsd14.4', '-fuse-ld=lld']
+            lane.driver = lane.output / 'freebsd-clang'
+            lane.args = SimpleNamespace(refine=Path('/opt/refine'), ar='llvm-ar-19', arch='arm64')
+            ran = []
+
+            def command(argv, label, *, expected=0):
+                argv = list(map(str, argv))
+                ran.append(argv)
+                Path(argv[argv.index('-o') + 1] if '-o' in argv else argv[2]).write_bytes(b'made')
+                return b''
+            lane.command = command
+            result = lane.build(base, meta, 'none', 'off')
+        copy = lane.output / 'copies' / result['label']
+        self.assertEqual(ran[0], ['clang-19', '--target=aarch64-unknown-freebsd14.4',
+                                  '-std=c11', '-Wall', '-Wextra', '-Werror', '-fPIC', '-O2',
+                                  '-c', str(base / 'lib/mixed.c'),
+                                  '-o', str(copy / 'lib/libmixed.a.o')])
+        self.assertEqual(ran[1], ['llvm-ar-19', 'rcs', str(copy / 'lib/libmixed.a'),
+                                  str(copy / 'lib/libmixed.a.o')])
+        self.assertEqual(ran[3][:3], ['llvm-ar-19', 'rcs', str(copy / 'vendor/libpoint.a')])
+        refine = ran[4]
+        self.assertEqual(refine[refine.index('-L'):refine.index('-L') + 3],
+                         ['-L', str(copy / 'vendor'), str(copy / 'main.ldn')])
+        self.assertNotIn('--link=libc', refine)
+        self.assertEqual([peer['source'] for peer in result['c_peers']],
+                         ['lib/mixed.c', 'vendor/point.c'])
+
     def test_guest_failure_cannot_supply_a_feature_verdict(self):
         guest = vm.Guest(1)
         with patch.object(guest, 'run', return_value=type('Result', (), {

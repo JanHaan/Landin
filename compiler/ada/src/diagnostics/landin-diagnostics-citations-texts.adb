@@ -5474,20 +5474,28 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "Exact rules: spec [1996].",
             when 1590 =>
-               "`linker.library` asks the linker for a static archive. W"
-               & "rite it next to the declarations that need it, not in a "
-               & "separate build file."
+               "`linker.library` asks the C driver for a library, as `-l"
+               & "NAME` asks it in C. Write it next to the declarations th"
+               & "at need it, not in a separate build file. `linker.direct"
+               & "ory` says where to look, relative to the file it is in."
                & LF
+               & LF
+               & "    linker.library(""raylib"")"
                & LF
                & "    linker.library(""m"")"
                & LF
+               & "    linker.directory(""vendor/lib"")"
                & LF
-               & "This links `libm.a`."
+               & LF
+               & "This links `libraylib` from `vendor/lib` beside the sour"
+               & "ce, and `libm` from wherever the C driver keeps it."
                & LF
                & LF
                & "- The name is a fixed text literal of ASCII letters, dig"
                & "its, `_`, `-` and `.`. It is nonempty, does not begin wi"
-               & "th `-` and is not only dots."
+               & "th `-` and is not only dots. The driver takes a shared l"
+               & "ibrary or an archive of that name, as it would for a C p"
+               & "rogram."
                & LF
                & "- Active directives reach the linker after the program, "
                & "in source order, repeats included. So moving one among t"
@@ -5496,17 +5504,25 @@ package body Landin.Diagnostics.Citations.Texts is
                & " A directive in an inactive arm of a `fixed if` ([1500])"
                & " adds nothing."
                & LF
-               & "- On Linux an archive links beside the C library, so a b"
-               & "uild that asks for one needs `--link=libc`; the default "
-               & "static link ([1650]) refuses it."
+               & "- A directory is a fixed, nonempty text literal: relativ"
+               & "e to the directory of the file that names it, or absolut"
+               & "e. One that does not exist is refused before anything is"
+               & " linked. `-L DIR` on `refine compile`, `run` or `check` "
+               & "names another, relative to where the build runs, and is "
+               & "searched first, so a build can put its own copy of a lib"
+               & "rary ahead. Each directory is also where the program loo"
+               & "ks for a shared library when it starts."
                & LF
-               & "- On Darwin the driver resolves `libNAME.a` and passes t"
-               & "hat file. A missing archive fails even when a dylib of t"
-               & "he name exists. With Apple's default driver, a bare file"
-               & "name it returns must exist in the directory the build ru"
-               & "ns in."
+               & "- A library the link cannot find is named with every dir"
+               & "ectory searched."
                & LF
-               & "- Cortex-M firmware refuses `linker.library`.",
+               & "- On Linux a library links beside the C library, so a bu"
+               & "ild that asks for one needs `--link=libc`; the default s"
+               & "tatic link ([1650]) refuses it, and refuses a directory "
+               & "too."
+               & LF
+               & "- Cortex-M firmware refuses `linker.library`, `linker.di"
+               & "rectory` and `-L`.",
             when 1570 =>
                "A function's calling convention is written `extern(...)`"
                & " before its name. Without one, a function uses Landin's "
@@ -20853,32 +20869,29 @@ package body Landin.Diagnostics.Citations.Texts is
                & " tool arguments after the program assembly in canonical "
                & "source/declaration order. Repeated requests are preserve"
                & "d: archive resolution may need a library more than once."
-               & " The Linux adapter selects archives for this run while l"
-               & "eaving hosted runtime linkage to the platform driver. Da"
-               & "rwin resolves each `libNAME.a` through the selected driv"
-               & "er's `-print-file-name` query and passes the resulting e"
-               & "xisting file directly. Missing archives fail; a same-nam"
-               & "ed dynamic library is never a substitute. Apple's driver"
-               & " can return the bare filename, which must then exist in "
-               & "the invocation directory; a custom driver may provide a "
-               & "different archive search policy. Neither target changes "
-               & "the source order or repetition of archive operands. This"
-               & " is the ordering exception to [0130] and [1740]'s order-"
-               & "independent module name lookup: moving an active directi"
-               & "ve can change archive resolution. Inactive directives ad"
-               & "d no arguments. D227 enables scalar atomic operations; D"
-               & "229 enables Cortex-M0 body assembly, placement annotatio"
-               & "ns and explicit firmware requests, and other targets ref"
-               & "use placement and firmware. D248 checks assembly on ever"
-               & "y target with registers and states where this compiler l"
-               & "owers it. `assembler.block` is a body operation, not a m"
-               & "odule initializer; Cortex firmware refuses `linker.libra"
-               & "ry`. No fourth namespace or general build language is in"
-               & "troduced. The checked-in device fixtures' vendor provena"
-               & "nce and fixture policies are off-target generator inputs"
-               & "/comments, not compiler-recognized directives. Its check"
-               & "ed-in declarations derive into D228 images and D227/D228"
-               & " scalar accesses without enabling new syntax.",
+               & " D523 amends how each reaches the driver: under `--link="
+               & "libc` it is the driver's own `-lNAME` on every hosted ta"
+               & "rget, resolved as the driver resolves it for C, a shared"
+               & " library or an archive, and Darwin's former `-print-file"
+               & "-name` resolution to an archive file is gone; D524 adds "
+               & "`linker.directory` and `-L` for where to look. No target"
+               & " changes the source order or repetition of library opera"
+               & "nds. This is the ordering exception to [0130] and [1740]"
+               & "'s order-independent module name lookup: moving an activ"
+               & "e directive can change archive resolution. Inactive dire"
+               & "ctives add no arguments. D227 enables scalar atomic oper"
+               & "ations; D229 enables Cortex-M0 body assembly, placement "
+               & "annotations and explicit firmware requests, and other ta"
+               & "rgets refuse placement and firmware. D248 checks assembl"
+               & "y on every target with registers and states where this c"
+               & "ompiler lowers it. `assembler.block` is a body operation"
+               & ", not a module initializer; Cortex firmware refuses `lin"
+               & "ker.library`. No fourth namespace or general build langu"
+               & "age is introduced. The checked-in device fixtures' vendo"
+               & "r provenance and fixture policies are off-target generat"
+               & "or inputs/comments, not compiler-recognized directives. "
+               & "Its checked-in declarations derive into D228 images and "
+               & "D227/D228 scalar accesses without enabling new syntax.",
             when 412 =>
                "Chosen: `sizeof` and `alignof` of any type and D411's `o"
                & "ffsetof` stand in a `compiler.assert`. Configuration sti"

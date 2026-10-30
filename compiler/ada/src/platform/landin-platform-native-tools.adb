@@ -69,6 +69,63 @@ package body Landin.Platform.Native.Tools is
       Status : access Interfaces.C.int) return Interfaces.C.int
      with Import, Convention => C, External_Name => "landin_tool_stop";
 
+   function Start_Program
+     (Args          : C_Strings.chars_ptr_array;
+      Signal_Number : access Interfaces.C.int;
+      Status        : access Interfaces.C.int;
+      Child         : access Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_program_run";
+
+   function Signal_Name (Number : Interfaces.C.int)
+     return C_Strings.chars_ptr
+     with Import, Convention => C, External_Name => "landin_signal_name";
+
+   overriding procedure Run_Attached
+     (Host      : Native_Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Result    : out Program_Result)
+   is
+      pragma Unreferenced (Host);
+      use type C_Strings.chars_ptr;
+      List : C_Strings.chars_ptr_array
+        (0 .. Interfaces.C.size_t (Arguments.Length) + 1) :=
+          [others => C_Strings.Null_Ptr];
+      Signal_Number : aliased Interfaces.C.int := 0;
+      Status : aliased Interfaces.C.int := 0;
+      Child : aliased Interfaces.C.int := 0;
+      Error : Interfaces.C.int;
+   begin
+      Result := (others => <>);
+      List (0) := C_Strings.New_String (Program);
+      for Index in 1 .. Natural (Arguments.Length) loop
+         List (Interfaces.C.size_t (Index)) :=
+           C_Strings.New_String (Arguments.Element (Index));
+      end loop;
+      Error := Start_Program
+        (List, Signal_Number'Access, Status'Access, Child'Access);
+      for Item of List loop
+         C_Strings.Free (Item);
+      end loop;
+      if Error /= 0 then
+         raise External_Tool_Failed
+           with (if Child = 0 then "cannot start " else "cannot wait for ")
+             & Program;
+      elsif Signal_Number /= 0 then
+         Result.Ended := Signaled;
+         Result.Signal := Natural (Signal_Number);
+         declare
+            Name : constant C_Strings.chars_ptr := Signal_Name (Signal_Number);
+         begin
+            Result.Signal_Name := Unbounded.To_Unbounded_String
+              (if Name = C_Strings.Null_Ptr then "signal"
+               else C_Strings.Value (Name));
+         end;
+      else
+         Result.Exit_Code := Integer (Status);
+      end if;
+   end Run_Attached;
+
    procedure Set_Limit
      (Host : in out Native_Tool_Runner; Seconds : Duration) is
    begin

@@ -71,49 +71,86 @@ def main():
             summary['profiles'].append(dict(optimize=optimize, specialize=specialize,
                 assembly=hash_file(assembly), objects=[hash_file(o) for o in objects],
                 executable=hash_file(executable)))
-        # Apple -l searches can prefer a dylib. The language requests an
-        # archive, so prove the native driver passes the exact .a operand.
+        # D523: a linker.library is the driver's own -lNAME, which it
+        # resolves as it would for C; D524: -L and linker.directory say
+        # where, each also the executable's run-time path; D525: a library
+        # no searched directory holds is L0509.  First an archive found only
+        # through -L, in a directory whose name has a space, so the driver
+        # must receive it as one argument.
         peer = output / "archive.c"
         peer.write_text("int r530_probe(void) { return 42; }\n")
         run.command(["/usr/bin/clang", "-arch", "arm64", "-c", peer,
                      "-o", output / "archive.o"], "archive-compile", output)
-        archive = output / "libr530_probe.a"
-        run.command(["/usr/bin/ar", "rcs", archive, output / "archive.o"], "archive-create", output)
-        dynamic = output / "dynamic.c"
-        dynamic.write_text("int r530_probe(void) { return 1; }\n")
-        run.command(["/usr/bin/clang", "-arch", "arm64", "-dynamiclib", dynamic,
-                     "-o", output / "libr530_probe.dylib"], "dylib-create", output)
+        libraries = output / "probe libraries"
+        libraries.mkdir()
+        run.command(["/usr/bin/ar", "rcs", libraries / "libr530_probe.a", output / "archive.o"],
+                    "archive-create", output)
         source = output / "archive.ldn"
         source.write_text('linker.library("r530_probe")\n'
                           'extern(c) r530_probe: () -> (r: i32)\n'
                           'public main: () -> (code: i32) =\n'
                           '    code = r530_probe()\nend main\n')
-        retention = output / 'archive-driver'
-        retention.write_text('#!/bin/sh\nexec /usr/bin/clang -save-temps=obj "$@"\n')
-        retention.chmod(0o755)
-        driver_args = ['--toolchain=' + str(retention)] if args.parity else []
+        # The driver records each command it is given, one argument a line
+        # and a line of its own after the last, before it runs Clang.
+        recorded = output / "archive-driver.arguments"
+        recorder = output / "archive-driver"
+        recorder.write_text('#!/bin/sh\nprintf \'%s\\n\' "$@" >>' + shlex.quote(str(recorded))
+                            + '\nprintf \'%s\\n\' "<end>" >>' + shlex.quote(str(recorded))
+                            + '\nexec /usr/bin/clang -save-temps=obj "$@"\n')
+        recorder.chmod(0o755)
         linked = output / "archive-native"
-        run.command([refine, "--target=darwin-arm64", "--emit=exe", source, *driver_args,
-                     "-o", linked], "archive-link", output)
+        run.command([refine, "--target=darwin-arm64", "--emit=exe", "-L", libraries, source,
+                     "--toolchain=" + str(recorder), "-o", linked], "archive-link", output)
         run.command([linked], "archive-execute", output, expected=42)
-        archive.rename(output / "retained-probe.a")
+        commands = [command.split("\n") for command in
+                    recorded.read_text().split("\n<end>\n") if command]
+        link = [command for command in commands if "-lr530_probe" in command]
+        require(len(link) == 1, "the driver was not given -lr530_probe once: " + repr(commands))
+        require("-L" + str(libraries) in link[0]
+                and "-Wl,-rpath," + str(libraries) in link[0],
+                "the -L directory did not reach the driver whole: " + repr(link[0]))
+        require(not any(one.endswith(".a") for one in link[0]),
+                "the driver was given an archive refine resolved: " + repr(link[0]))
+        # The same program with no directory to look in: the link fails,
+        # and refine names the library at its directive.
         missing = output / "missing-native"
         _, _, diagnostic = run.command([refine, "--target=darwin-arm64", "--emit=exe",
                                        source, "-o", missing], "archive-missing", output, expected=1)
-        require(b"cannot resolve Darwin archive" in diagnostic and not missing.exists(),
-                "missing archive silently selected the dylib")
-        selected = output / "archive with spaces.a"
-        (output / "retained-probe.a").rename(selected)
-        driver = output / "selected-driver"
-        driver.write_text('#!/bin/sh\ncase "$1" in\n'
-                          '-print-file-name=libr530_probe.a) printf \'%s\\n\' '
-                          + shlex.quote(str(selected)) + ' ;;\n'
-                          '*) exec /usr/bin/clang -save-temps=obj "$@" ;;\nesac\n')
-        driver.chmod(0o755)
-        overridden = output / "selected-native"
-        run.command([refine, "--target=darwin-arm64", "--emit=exe", source,
-                     "--toolchain=" + str(driver), "-o", overridden], "selected-link", output)
-        run.command([overridden], "selected-execute", output, expected=42)
+        require(b"error[L0509]" in diagnostic and b"r530_probe" in diagnostic
+                and not missing.exists(), "a missing library was not L0509")
+        # A directory linker.directory names beside the source, holding the
+        # archive and a dylib of the same name: refine's program takes the
+        # one a C program linked from the same directory takes, and finds a
+        # dylib at run time through the directory's run-time path.
+        shared = output / "shared"
+        shared.mkdir()
+        run.command(["/usr/bin/ar", "rcs", shared / "libr530_probe.a", output / "archive.o"],
+                    "directory-archive-create", output)
+        dynamic = output / "dynamic.c"
+        dynamic.write_text("int r530_probe(void) { return 7; }\n")
+        run.command(["/usr/bin/clang", "-arch", "arm64", "-dynamiclib",
+                     "-install_name", "@rpath/libr530_probe.dylib", dynamic,
+                     "-o", shared / "libr530_probe.dylib"], "dylib-create", output)
+        directed = output / "directory.ldn"
+        directed.write_text('linker.library("r530_probe")\n'
+                            'linker.directory("shared")\n'
+                            'extern(c) r530_probe: () -> (r: i32)\n'
+                            'public main: () -> (code: i32) =\n'
+                            '    code = r530_probe()\nend main\n')
+        native = output / "directory-native"
+        run.command([refine, "--target=darwin-arm64", "--emit=exe", directed,
+                     "--toolchain=" + str(recorder), "-o", native], "directory-link", output)
+        landin_status, _, _ = run.command([native], "directory-execute", output, expected=None)
+        control = output / "control.c"
+        control.write_text("int r530_probe(void);\nint main(void) { return r530_probe(); }\n")
+        run.command(["/usr/bin/clang", "-arch", "arm64", control, "-L" + str(shared),
+                     "-Wl,-rpath," + str(shared), "-lr530_probe", "-o", output / "control-native"],
+                    "control-link", output)
+        c_status, _, _ = run.command([output / "control-native"], "control-execute", output,
+                                     expected=None)
+        require(landin_status == c_status and c_status in (7, 42),
+                f"refine's program returned {landin_status} and C's {c_status}")
+        summary["directory_selection"] = "dylib" if c_status == 7 else "archive"
         summary["archive_selection"] = "passed"
         summary["status"] = "passed"
     finally:
