@@ -1,0 +1,4 @@
+-- raylib names its functions as C spells them, and a reader from C
+-- writes the name so.
+extern(c) InitWindow: (width: i32, height: i32, title: ptr u8) -> none
+extern(c) CloseWindow: () -> none

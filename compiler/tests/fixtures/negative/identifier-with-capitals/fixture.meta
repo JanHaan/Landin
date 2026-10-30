@@ -1,0 +1,9 @@
+class: negative
+summary: D528: a lower-case name with a capital later in it is one L0012 per occurrence, whose note offers the lower-case spelling, and the parse reads on
+program: program.ldn
+codes: L0012, L0012
+constructs: 1760
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/identifier-with-capitals/program.ldn
+status: 1

@@ -1,5 +1,5 @@
 class: negative
-summary: [1760] identifiers are lower case, so an upper-case byte is not a name
+summary: [1760] identifiers are lower case, so a word with a capital is one L0012 over the word (D528)
 constructs: 1760
 program: program.ldn
 targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -14,6 +14,8 @@ with Landin.Platform;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
+with Landin.Syntax.Parser;
+with Landin.Syntax;
 with Landin.Testing.Fakes;
 with Landin.Tokens.Lexer;
 with Landin.Tokens;
@@ -232,33 +234,84 @@ package body Landin.Tests.Catalogue_Suite is
          "a malformed float renders exactly with its lexical rule");
    end Rendering_Is_Golden;
 
-   procedure Uppercase_And_Mixed_Bytes_Have_Exact_Reports
+   procedure Capitalised_Words_Have_Exact_Reports
      (Item : in out Landin.Testing.Context);
 
-   procedure Uppercase_And_Mixed_Bytes_Have_Exact_Reports
+   --  D528: one report per word, worded by what the parse says it names: a
+   --  C function without a link symbol is shown `link(symbol: ...)`, any
+   --  other word its lower-case spelling, or that spelling is reserved.
+   procedure Capitalised_Words_Have_Exact_Reports
      (Item : in out Landin.Testing.Context)
    is
       Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
       Report  : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("case.ldn",
+           "extern(c) InitWindow: () -> none" & LF
+           & "GetX: () -> (r: i32) = r = 1 end GetX" & LF
+           & "End: u32 = 1" & LF);
       Expected : constant String :=
         "error[L0012]: identifiers use lower-case letters" & LF
-        & "  --> case.ldn:1:1" & LF
+        & "  --> case.ldn:1:11" & LF
         & "  |" & LF
-        & "1 | ABC A;B" & LF
+        & "1 | extern(c) InitWindow: () -> none" & LF
+        & "  |           ^^^^^^^^^^" & LF
+        & "  = note: [1610]: a C function Landin cannot spell is linked by"
+        & " its symbol under a lower-case name: `extern(c) link(symbol:"
+        & " ""InitWindow"") init_window: ...`, called as `init_window`" & LF
+        & "error[L0012]: identifiers use lower-case letters" & LF
+        & "  --> case.ldn:2:1" & LF
+        & "  |" & LF
+        & "2 | GetX: () -> (r: i32) = r = 1 end GetX" & LF
+        & "  | ^^^^" & LF
+        & "  = note: [1760]: identifier letters are lower-case ASCII; write"
+        & " `get_x`" & LF
+        & "error[L0012]: identifiers use lower-case letters" & LF
+        & "  --> case.ldn:2:34" & LF
+        & "  |" & LF
+        & "2 | GetX: () -> (r: i32) = r = 1 end GetX" & LF
+        & "  |                                  ^^^^" & LF
+        & "  = note: [1760]: identifier letters are lower-case ASCII; write"
+        & " `get_x`" & LF
+        & "error[L0012]: identifiers use lower-case letters" & LF
+        & "  --> case.ldn:3:1" & LF
+        & "  |" & LF
+        & "3 | End: u32 = 1" & LF
         & "  | ^^^" & LF
-        & "  = note: [1760]: identifier letters are lower-case ASCII" & LF
-        & "error[L0012]: no rule spells these bytes" & LF
-        & "  --> case.ldn:1:5" & LF
-        & "  |" & LF
-        & "1 | ABC A;B" & LF
-        & "  |     ^^^" & LF
-        & "  = note: no rule of the grammar spells these bytes [1750]" & LF;
+        & "  = note: [1760]: identifier letters are lower-case ASCII, and"
+        & " `end` is reserved" & LF;
    begin
-      Lex_And_Report ("ABC A;B", Sources, Report);
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Report);
       Landin.Testing.Check_Equal
-        (Item, Landin.Diagnostics.Text.Render (Report, Sources), Expected,
-         "uppercase and mixed runs keep their code, span and explanation");
-   end Uppercase_And_Mixed_Bytes_Have_Exact_Reports;
+        (Item, Landin.Diagnostics.Count (Report), 0,
+         "the scan leaves a word with a capital to the parse");
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Report);
+         pragma Unreferenced (Parsed);
+      begin
+         Landin.Testing.Check_Equal
+           (Item,
+            Landin.Diagnostics.Text.Render
+              (Landin.Diagnostics.Sorted (Report), Sources),
+            Expected,
+            "each word is one report, worded by what it names");
+      end;
+      Landin.Testing.Check
+        (Item, Landin.Diagnostics.Lexical.Lower_Spelling ("HTTPServer")
+                 = "http_server"
+               and then Landin.Diagnostics.Lexical.Lower_Spelling
+                 ("SetTargetFPS") = "set_target_fps"
+               and then Landin.Diagnostics.Lexical.Lower_Spelling
+                 ("rlVertex3f") = "rl_vertex3f"
+               and then Landin.Diagnostics.Lexical.Lower_Spelling
+                 ("MAX_VALUE") = "max_value",
+         "the lower-case spelling splits a word where its parts begin");
+   end Capitalised_Words_Have_Exact_Reports;
 
    procedure Integer_Guidance_Covers_Missing_Digits
      (Item : in out Landin.Testing.Context);
@@ -395,8 +448,8 @@ package body Landin.Tests.Catalogue_Suite is
         (Into, "catalogue", "rendering is golden",
          Rendering_Is_Golden'Access);
       Landin.Testing.Register
-        (Into, "catalogue", "uppercase and mixed bytes have exact reports",
-         Uppercase_And_Mixed_Bytes_Have_Exact_Reports'Access);
+        (Into, "catalogue", "capitalised words have exact reports",
+         Capitalised_Words_Have_Exact_Reports'Access);
    end Register;
 
 end Landin.Tests.Catalogue_Suite;
