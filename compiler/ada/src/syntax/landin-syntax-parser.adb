@@ -1,9 +1,11 @@
 with Ada.Containers.Hashed_Maps;
+with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics.Fixes;
+with Landin.Diagnostics.Lexical;
 with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Syntactic;
 with Landin.Packed;
@@ -184,6 +186,60 @@ package body Landin.Syntax.Parser is
       Hash            => Landin.Source.Names.Hash,
       Equivalent_Keys => Same_Name,
       "="             => Token_Index_Vectors."=");
+
+   --  D528: the scan read every word with a capital as an identifier and
+   --  left its report to the parse, which alone knows whether the word is
+   --  the name of a function declared `extern(c)` with no link symbol, and
+   --  so whether the note should show `link(symbol: ...)`.  A table scan,
+   --  and only when such a word was met.
+   procedure Report_Capitalised_Words
+     (From   : Landin.Tokens.Token_Stream;
+      Names  : Landin.Source.Names.Table;
+      Parsed : Tree;
+      Report : in out Landin.Diagnostics.Diagnostic_List);
+
+   procedure Report_Capitalised_Words
+     (From   : Landin.Tokens.Token_Stream;
+      Names  : Landin.Source.Names.Table;
+      Parsed : Tree;
+      Report : in out Landin.Diagnostics.Diagnostic_List)
+   is
+      use type Tok.Fault_Kind;
+
+      package Offset_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Landin.Source.Byte_Offset);
+
+      C_Names : Offset_Sets.Set;
+      Ready   : Boolean := False;
+   begin
+      for Index in 1 .. Tok.Fault_Count (From) loop
+         declare
+            Fault : constant Tok.Fault := Tok.Nth_Fault (From, Index);
+         begin
+            if Tok.Kind (Fault) = Tok.Capitalised_Identifier then
+               if not Ready then
+                  for Item of Parsed.Items loop
+                     if Item.Kind = Function_Declaration
+                       and then Item.C_ABI
+                       and then Item.Link_Name = Landin.Source.Empty_Span
+                       and then not C_Names.Contains (Item.Anchor.First)
+                     then
+                        C_Names.Insert (Item.Anchor.First);
+                     end if;
+                  end loop;
+                  Ready := True;
+               end if;
+               Landin.Diagnostics.Lexical.Report_Word
+                 (Source   => Tok.Source_Of (From),
+                  Fault    => Fault,
+                  Spelling => Landin.Source.Names.Spelling
+                                (Names, Tok.Word (Fault)),
+                  C_Name   => C_Names.Contains (Tok.Where (Fault).First),
+                  Into     => Report);
+            end if;
+         end;
+      end loop;
+   end Report_Capitalised_Words;
 
    function Parse
      (From   : Landin.Tokens.Token_Stream;
@@ -12208,6 +12264,8 @@ package body Landin.Syntax.Parser is
                      Into    => Report);
                end;
             end if;
+
+            Report_Capitalised_Words (From, Names, Result, Report);
          end;
       end return;
    end Parse;

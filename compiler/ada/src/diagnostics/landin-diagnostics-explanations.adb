@@ -157,9 +157,18 @@ package body Landin.Diagnostics.Explanations is
                & "ary and `0o` octal. Keep underscores between digits, and"
                & " put a separator before a following name.",
             when Catalogue.Unknown_Bytes =>
-               "A run of bytes no lexical rule spells [1750]. A name is "
-               & "lower case [1760], and a byte outside the source alphabe"
-               & "t belongs in a text literal.",
+               "A run of bytes no lexical rule spells [1750], or a word "
+               & "with a capital in it. A name is lower case [1760], and a"
+               & " byte outside the source alphabet belongs in a text lite"
+               & "ral. A word of letters, digits and underscores that hold"
+               & "s a capital is one report over the whole word, and the p"
+               & "rogram is read on as if it were a name, so nothing else "
+               & "is said about it; the note offers its lower-case spellin"
+               & "g, `init_window` for `InitWindow`. A C function keeps C'"
+               & "s spelling as its link symbol and takes a lower-case Lan"
+               & "din name, which the note shows when the word names an `e"
+               & "xtern(c)` function without one: `extern(c) link(symbol: "
+               & """InitWindow"") init_window: ...` [1610] (D528).",
             when Catalogue.Unterminated_Comment =>
                "A block comment that is never closed [1780]. Every opene"
                & "r needs its closer; the second label shows where the com"
@@ -905,7 +914,13 @@ package body Landin.Diagnostics.Explanations is
                & "resentable result. Pass a pointer to a by-value array or"
                & " other unsupported aggregate, or change the type or layo"
                & "ut to one C represents. Pass `ptr` to a packed record or"
-               & " one with a flexible member.",
+               & " one with a flexible member. A struct declared without `"
+               & "layout(c)` has Landin's layout [0750], which C does not "
+               & "share, so a signature taking or returning one by value, "
+               & "or a C record holding one, is refused naming the part an"
+               & "d the struct, as in ""C cannot take `tint`: `color` is no"
+               & "t `layout(c)`"", and the repair is to declare it `layout("
+               & "c) struct` (D529).",
             when Catalogue.Linkage_Contract =>
                "A link symbol, hosted initializer, firmware placement or"
                & " thread storage breaks [1610]'s, [1975]'s, [1640]'s or ["

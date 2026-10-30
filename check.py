@@ -6737,17 +6737,29 @@ def ada_string(text):
     each on its own line of the generated body.
     """
     pieces = []
-    for line_index, line in enumerate(text.split("\n")):
+    for line_index, whole in enumerate(text.split("\n")):
         if line_index > 0:
             pieces.append("LF")
-        while line:
-            chunk = line[:56]
-            #  Never split a doubled quote across two literals.
-            while chunk.endswith('"') and len(chunk) < len(line) \
-                    and chunk.count('"') % 2:
-                chunk = line[:len(chunk) + 1]
-            pieces.append('"' + chunk.replace('"', '""') + '"')
-            line = line[len(chunk):]
+        #  A String holds bytes, so a character outside ASCII is its UTF-8
+        #  bytes, one Character'Val each, and what is printed is UTF-8.
+        for line in re.split(r"([^\x00-\x7f])", whole):
+            if line and ord(line[0]) > 127:
+                pieces.extend("Character'Val (%d)" % byte
+                              for byte in line.encode("utf-8"))
+                continue
+            while line:
+                #  At most 56 characters, and 60 once quotes are doubled,
+                #  so the piece fits the style checker's 79 columns; a
+                #  doubled quote is never split across two literals.
+                size, room = 0, 0
+                while size < len(line) and size < 56:
+                    room += 2 if line[size] == '"' else 1
+                    if room > 60:
+                        break
+                    size += 1
+                chunk = line[:size]
+                pieces.append('"' + chunk.replace('"', '""') + '"')
+                line = line[size:]
     if not pieces:
         return '""'
     return "\n               & ".join(pieces)
@@ -6832,6 +6844,214 @@ def check_explanations(full_run):
         out.append((EXPLANATIONS_ADA, 1,
                     "the explanations are stale; regenerate them with"
                     " python3 check.py --generate (or --catalogue)"))
+    return out
+
+
+CITATIONS_ADA = ("compiler/ada/src/diagnostics"
+                 "/landin-diagnostics-citations.adb")
+CITATION_TEXTS_ADA = ("compiler/ada/src/diagnostics"
+                      "/landin-diagnostics-citations-texts.adb")
+
+
+def plain_inline(text):
+    """A line of Markdown as a terminal shows it: code spans keep their
+    backticks, as every explanation's do, and a link is its text, bold is
+    its words and a citation is itself."""
+    parts = re.split(r"(`[^`]*`)", text)
+    for at in range(0, len(parts), 2):
+        part = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", parts[at])
+        parts[at] = re.sub(r"\*\*([^*]+)\*\*", r"\1", part)
+    return "".join(parts)
+
+
+def terminal_text(lines):
+    """Markdown lines as `refine explain --full` prints them.
+
+    A paragraph is one line, as an explanation's is, so the terminal wraps
+    it; a list item and a table row keep a line each, and a fenced block
+    is indented four spaces, as an explanation's example is.
+    """
+    out, paragraph, fenced = [], [], False
+
+    def flush():
+        if paragraph:
+            out.append(" ".join(paragraph))
+            del paragraph[:]
+
+    def gap():
+        flush()
+        if out and out[-1] != "":
+            out.append("")
+
+    for line in lines:
+        stripped = line.strip()
+        if fenced:
+            if stripped.startswith("```"):
+                fenced = False
+                gap()
+            else:
+                out.append(("    " + line.rstrip()) if stripped else "")
+            continue
+        if stripped.startswith("```"):
+            gap()
+            fenced = True
+            continue
+        if not stripped:
+            gap()
+            continue
+        shown = plain_inline(stripped.lstrip("#").strip()
+                             if stripped.startswith("#") else stripped)
+        if stripped.startswith("|") or re.match(r"(?:[-*+]|\d+\.)\s",
+                                                stripped):
+            flush()
+            out.append(shown)
+        elif (not paragraph and out and out[-1]
+              and line.startswith(" ")
+              and re.match(r"(?:[-*+]|\d+\.)\s", out[-1])):
+            out[-1] += " " + shown
+        else:
+            paragraph.append(shown)
+    flush()
+    while out and out[-1] == "":
+        out.pop()
+    return "\n".join(out)
+
+
+def citation_entries():
+    """Every construct and decision a reader can ask `refine explain` for.
+
+    Returns (constructs, decisions, problems).  A construct is (number,
+    document, title, anchor, text): its heading in `tour.md` or `spec.md`
+    and its own text up to the next heading.  A decision is (number,
+    title, section, anchor, text): its `spec.md` register entry, the
+    section of the register it is in and its `Chosen` paragraphs, up to
+    the next paragraph that opens with a bold label.  The anchors are the
+    site renderer's own, so the address printed is the page's.
+    """
+    sys.path.insert(0, ROOT)
+    from docs.site import render_html
+    constructs, decisions, problems = [], [], []
+    for name in (TOUR_NAME, SPEC_NAME):
+        path = os.path.join(ROOT, name)
+        if not os.path.exists(path):
+            return None, None, [(name, 1, "the document is missing")]
+        lines = io.open(path, encoding="utf-8").read().split("\n")
+        heads = [n for n, line in enumerate(lines)
+                 if re.match(r"^#{1,3} ", line)]
+        section = ""
+        for index, at in enumerate(heads):
+            line = lines[at]
+            end = heads[index + 1] if index + 1 < len(heads) else len(lines)
+            if line.startswith("## "):
+                section = line[3:].strip()
+                continue
+            found = re.match(r"^### \[(\d{4})\] (.+)$", line)
+            if found:
+                constructs.append(
+                    (int(found.group(1)), name, found.group(2).strip(),
+                     found.group(1), terminal_text(lines[at + 1:end])))
+                continue
+            found = re.match(r"^### D(\d+) — (.+)$", line)
+            if not found or name != SPEC_NAME:
+                continue
+            body = lines[at + 1:end]
+            chosen, keep = [], False
+            for n, text in enumerate(body):
+                opens = n == 0 or not body[n - 1].strip()
+                if opens and text.startswith("**"):
+                    keep = bool(re.match(r"\*\*(Chosen|Decision)\b", text))
+                if keep:
+                    chosen.append(text)
+            if not chosen:
+                problems.append((name, at + 1,
+                                 "D%s has no `**Chosen` paragraph for"
+                                 " `refine explain --full`"
+                                 % found.group(1)))
+            decisions.append(
+                (int(found.group(1)), found.group(2).strip(),
+                 render_html.sentence_case(section),
+                 render_html.slug(line[4:].strip()),
+                 terminal_text(chosen)))
+    seen = collections.Counter(entry[0] for entry in decisions)
+    for number, count in seen.items():
+        if count > 1:
+            problems.append((SPEC_NAME, 1, "D%d is recorded %d times"
+                             % (number, count)))
+    pages = {entry["src"]: entry["out"] for entry in render_html.DOCS}
+    constructs = [(number, name, title,
+                   "%s/%s#%s" % (render_html.SITE_URL, pages[name], anchor),
+                   text)
+                  for number, name, title, anchor, text in constructs]
+    decisions = [(number, title, section,
+                  "%s/%s#%s" % (render_html.SITE_URL, pages[SPEC_NAME],
+                                anchor), text)
+                 for number, title, section, anchor, text in decisions]
+    return constructs, decisions, problems
+
+
+def ada_case(function, rows, value):
+    """`function` as a case over a number, `""` for every other number."""
+    body = ["   function %s (Number : Natural) return String" % function,
+            "     is (case Number is"]
+    for row in rows:
+        body.append("            when %d =>" % row[0])
+        body.append("               %s," % ada_string(value(row)))
+    body.append('            when others => "");')
+    body.append("")
+    return body
+
+
+def citations_dump():
+    """The two Ada bodies that carry every construct and decision into
+    `refine explain`: the titles and places in one, the `--full` text in
+    the other, so a change to a paragraph recompiles only the second."""
+    constructs, decisions, problems = citation_entries()
+    if constructs is None or problems:
+        return None
+    head = ["--  Generated by check.py from tour.md and spec.md.  Do not"
+            " edit;",
+            "--  regenerate with python3 check.py --catalogue.",
+            ""]
+    places = head + ["package body Landin.Diagnostics.Citations is", "",
+                     "   LF : constant Character := Character'Val (10);",
+                     "   pragma Unreferenced (LF);", ""]
+    places += ada_case("Construct_Title", constructs, lambda r: r[2])
+    places += ada_case("Construct_Document", constructs, lambda r: r[1])
+    places += ada_case("Construct_Page", constructs, lambda r: r[3])
+    places += ada_case("Decision_Title", decisions, lambda r: r[1])
+    places += ada_case("Decision_Section", decisions, lambda r: r[2])
+    places += ada_case("Decision_Page", decisions, lambda r: r[3])
+    places.append("end Landin.Diagnostics.Citations;")
+    texts = head + ["package body Landin.Diagnostics.Citations.Texts is",
+                    "", "   LF : constant Character := Character'Val (10);",
+                    ""]
+    texts += ada_case("Construct_Text", constructs, lambda r: r[4])
+    texts += ada_case("Decision_Text", decisions, lambda r: r[4])
+    texts.append("end Landin.Diagnostics.Citations.Texts;")
+    return ("\n".join(places) + "\n", "\n".join(texts) + "\n")
+
+
+def check_citation_table(full_run):
+    """`refine explain`'s constructs and decisions are the documents'.
+
+    Every decision has the paragraph `--full` prints, no number is
+    recorded twice, and the generated bodies are what the documents
+    generate, so a retitled construct or an amended decision is never
+    answered with the old words.
+    """
+    if not full_run:
+        return []
+    _, _, out = citation_entries()
+    fresh = citations_dump()
+    if fresh is None:
+        return out
+    for path, text in zip((CITATIONS_ADA, CITATION_TEXTS_ADA), fresh):
+        target = os.path.join(ROOT, path)
+        if (not os.path.exists(target)
+                or io.open(target, encoding="utf-8").read() != text):
+            out.append((path, 1,
+                        "the citations are stale; regenerate them with"
+                        " python3 check.py --generate (or --catalogue)"))
     return out
 
 
@@ -9137,9 +9357,17 @@ def generate_catalogue():
         return 2
     io.open(os.path.join(ROOT, EXPLANATIONS_ADA), "w",
             encoding="utf-8").write(explained)
+    cited = citations_dump()
+    if cited is None:
+        print("the citations could not be generated; run check.py")
+        return 2
+    for path, text in zip((CITATIONS_ADA, CITATION_TEXTS_ADA), cited):
+        io.open(os.path.join(ROOT, path), "w", encoding="utf-8").write(text)
     print("wrote compiler/tests/diagnostics.catalogue")
     print("wrote compiler/tests/diagnostics.matrix")
     print("wrote " + EXPLANATIONS_ADA)
+    print("wrote " + CITATIONS_ADA)
+    print("wrote " + CITATION_TEXTS_ADA)
     return 0
 
 
@@ -9303,6 +9531,7 @@ def main(argv):
     extra += check_catalogue_labels(full_run)
     extra += check_diagnostic_matrix(full_run)
     extra += check_explanations(full_run)
+    extra += check_citation_table(full_run)
     extra += check_layout_page(full_run)
     extra += check_tour_layout(full_run)
     extra += check_coverage_registers(full_run)

@@ -1,0 +1,12 @@
+error[L0012]: identifiers use lower-case letters
+  --> ../tests/fixtures/negative/c-name-with-capitals/program.ldn:3:11
+  |
+3 | extern(c) InitWindow: (width: i32, height: i32, title: ptr u8) -> none
+  |           ^^^^^^^^^^
+  = note: [1610]: a C function Landin cannot spell is linked by its symbol under a lower-case name: `extern(c) link(symbol: "InitWindow") init_window: ...`, called as `init_window`
+error[L0012]: identifiers use lower-case letters
+  --> ../tests/fixtures/negative/c-name-with-capitals/program.ldn:4:11
+  |
+4 | extern(c) CloseWindow: () -> none
+  |           ^^^^^^^^^^^
+  = note: [1610]: a C function Landin cannot spell is linked by its symbol under a lower-case name: `extern(c) link(symbol: "CloseWindow") close_window: ...`, called as `close_window`

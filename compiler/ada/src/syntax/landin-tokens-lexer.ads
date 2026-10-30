@@ -27,4 +27,8 @@ package Landin.Tokens.Lexer is
       Names  : in out Landin.Source.Names.Table;
       Into   : out Token_Stream);
 
+   --  Whether the scan reads this spelling as a reserved word [1760].  A
+   --  word with a capital never is one, whatever its letters.
+   function Is_Reserved (Word : String) return Boolean;
+
 end Landin.Tokens.Lexer;

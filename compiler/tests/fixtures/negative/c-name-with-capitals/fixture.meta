@@ -1,0 +1,9 @@
+class: negative
+summary: D528: a C function named as C spells it is one L0012 per word, whose note shows the name linked by `link(symbol: ...)` under a lower-case Landin name
+program: program.ldn
+codes: L0012, L0012
+constructs: 1580, 1610, 1760
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/c-name-with-capitals/program.ldn
+status: 1

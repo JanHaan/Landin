@@ -222,10 +222,11 @@ package body Landin.Tests.Lexer_Suite is
             Lex_Text
               (Ada.Characters.Handling.To_Upper (Text),
                Sources, Names, Stream);
+            --  D528: one identifier with one fault, never the keyword.
             Landin.Testing.Check
               (Item, Landin.Tokens.Count (Stream) = 2
                and then Landin.Tokens.Kind (Stream, 1)
-                 = Landin.Tokens.Unknown_Bytes
+                 = Landin.Tokens.Identifier
                and then Landin.Tokens.Fault_Count (Stream) = 1,
                Text & " in capitals is not a keyword");
             Lex_Text
@@ -233,8 +234,9 @@ package body Landin.Tests.Lexer_Suite is
                  (Text (Text'First)) & Text (Text'First + 1 .. Text'Last),
                Sources, Names, Stream);
             Landin.Testing.Check
-              (Item, Landin.Tokens.Kind (Stream, 1)
-                 = Landin.Tokens.Unknown_Bytes
+              (Item, Landin.Tokens.Count (Stream) = 2
+               and then Landin.Tokens.Kind (Stream, 1)
+                 = Landin.Tokens.Identifier
                and then Landin.Tokens.Fault_Count (Stream) = 1,
                Text & " with an initial capital is not a keyword");
          end;
@@ -1042,51 +1044,69 @@ package body Landin.Tests.Lexer_Suite is
       end;
    end Unknown_Bytes_Recover;
 
-   procedure Uppercase_Faults_Keep_Byte_Boundaries
+   procedure Capitalised_Words_Are_One_Fault
      (Item : in out Landin.Testing.Context);
 
-   procedure Uppercase_Faults_Keep_Byte_Boundaries
+   --  D528: a word holding a capital is one identifier token of its own
+   --  spelling and one fault over the whole word, never a keyword, and a
+   --  byte no rule spells between two such words keeps its own fault.
+   procedure Capitalised_Words_Are_One_Fault
      (Item : in out Landin.Testing.Context)
    is
       Sources : Landin.Source.Sets.Source_Set;
       Names   : Landin.Source.Names.Table;
       Stream  : Landin.Tokens.Token_Stream;
+
+      function Fault_At (Index : Positive; First, Last : Natural;
+                         Kind : Landin.Tokens.Fault_Kind) return Boolean
+        is (Landin.Tokens."="
+              (Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, Index)),
+               Kind)
+            and then Landin.Tokens.Where
+              (Landin.Tokens.Nth_Fault (Stream, Index)).First
+                = Landin.Source.Byte_Offset (First)
+            and then Landin.Tokens.Where
+              (Landin.Tokens.Nth_Fault (Stream, Index)).Last
+                = Landin.Source.Byte_Offset (Last));
+
+      function Spelled (Index : Landin.Tokens.Token_Index) return String
+        is (Landin.Source.Names.Spelling
+              (Names, Landin.Tokens.Name
+                 (Landin.Tokens.Token_At (Stream, Index))));
    begin
-      Lex_Text ("A ABC A;B", Sources, Names, Stream);
+      Lex_Text ("A InitWindow End;x_Y", Sources, Names, Stream);
       Landin.Testing.Check
-        (Item, Landin.Tokens.Count (Stream) = 4
-           and then Landin.Tokens.Fault_Count (Stream) = 3,
-         "uppercase classification preserves tokens and fault runs");
-      Landin.Testing.Check
-        (Item,
-         (for all Index in Landin.Tokens.Token_Index'(1) .. 3 =>
-            Landin.Tokens.Kind (Stream, Index) = Landin.Tokens.Unknown_Bytes)
-         and then Landin.Tokens.Kind (Stream, 4) = Landin.Tokens.End_Of_Input,
-         "the parser receives its existing unknown-byte tokens and end");
+        (Item, Landin.Tokens.Count (Stream) = 6
+           and then Landin.Tokens.Fault_Count (Stream) = 5,
+         "each word is one token and one fault, the unknown byte its own");
       Landin.Testing.Check
         (Item,
-         Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 1))
-           = Landin.Tokens.Uppercase_Byte_Run
-         and then Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 2))
-           = Landin.Tokens.Uppercase_Byte_Run
-         and then Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 3))
-           = Landin.Tokens.Unknown_Byte_Run,
-         "only runs consisting entirely of uppercase ASCII specialize");
+         (for all Index in Landin.Tokens.Token_Index'(1) .. 5 =>
+            Landin.Tokens."="
+              (Landin.Tokens.Kind (Stream, Index),
+               (if Index = 4 then Landin.Tokens.Unknown_Bytes
+                else Landin.Tokens.Identifier)))
+         and then Spelled (1) = "A"
+         and then Spelled (2) = "InitWindow"
+         and then Spelled (3) = "End"
+         and then Spelled (5) = "x_Y",
+         "a word with a capital is an identifier of its own spelling,"
+         & " never a keyword");
       Landin.Testing.Check
         (Item,
-         Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 1)).First = 0
-         and then
-           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 1)).Last = 1
-         and then
-           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 2)).First = 2
-         and then
-           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 2)).Last = 5
-         and then
-           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 3)).First = 6
-         and then
-           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 3)).Last = 9,
-         "single, multiple and mixed bytes retain their exact spans");
-   end Uppercase_Faults_Keep_Byte_Boundaries;
+         Fault_At (1, 0, 1, Landin.Tokens.Capitalised_Identifier)
+         and then Fault_At (2, 2, 12, Landin.Tokens.Capitalised_Identifier)
+         and then Fault_At (3, 13, 16, Landin.Tokens.Capitalised_Identifier)
+         and then Fault_At (4, 16, 17, Landin.Tokens.Unknown_Byte_Run)
+         and then Fault_At (5, 17, 20, Landin.Tokens.Capitalised_Identifier),
+         "each fault spans its whole word or byte run");
+      Landin.Testing.Check
+        (Item,
+         Landin.Source.Names.Spelling
+           (Names, Landin.Tokens.Word (Landin.Tokens.Nth_Fault (Stream, 2)))
+           = "InitWindow",
+         "a word's fault carries the word");
+   end Capitalised_Words_Are_One_Fault;
 
    ------------------------------------------------------------------
    --  Space, kept
@@ -1687,8 +1707,8 @@ package body Landin.Tests.Lexer_Suite is
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);
       Landin.Testing.Register
-        (Into, "lexer", "uppercase faults keep byte boundaries",
-         Uppercase_Faults_Keep_Byte_Boundaries'Access);
+        (Into, "lexer", "capitalised words are one fault",
+         Capitalised_Words_Are_One_Fault'Access);
       Landin.Testing.Register
         (Into, "lexer", "unterminated literals are faults",
          Unterminated_Literals_Are_Faults'Access);

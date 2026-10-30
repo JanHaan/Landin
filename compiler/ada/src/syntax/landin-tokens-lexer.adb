@@ -27,6 +27,15 @@ package body Landin.Tokens.Lexer is
    function Is_Name_Byte (Item : Character) return Boolean
      is (Is_Lower (Item) or else Is_Digit (Item) or else Item = '_');
 
+   function Is_Upper (Item : Character) return Boolean
+     is (Item in 'A' .. 'Z');
+
+   --  D528: a word is read as far as C would read an identifier, so a
+   --  capital inside it is one report about the whole word rather than a
+   --  run of its own between two halves of a name.
+   function Is_Word_Byte (Item : Character) return Boolean
+     is (Is_Name_Byte (Item) or else Is_Upper (Item));
+
    function Keyword_Kind (Run : String) return Token_Kind;
 
    --  The reserved literals' images without their `KW_`, made once when
@@ -88,6 +97,10 @@ package body Landin.Tokens.Lexer is
       return Identifier;
    end Keyword_Kind;
 
+   function Is_Reserved (Word : String) return Boolean
+     is ((for all Letter of Word => not Is_Upper (Letter))
+         and then Keyword_Kind (Word) /= Identifier);
+
    procedure Lex
      (From   : Landin.Source.Snapshot;
       Names  : in out Landin.Source.Names.Table;
@@ -128,21 +141,26 @@ package body Landin.Tokens.Lexer is
          First  : Natural;
          Stop   : Natural;
          Opened : Landin.Source.Span := Landin.Source.Empty_Span;
-         Refused : Token_Kind := Bang);
+         Refused : Token_Kind := Bang;
+         Word   : Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.No_Name);
 
       procedure Complain
         (Kind   : Fault_Kind;
          First  : Natural;
          Stop   : Natural;
          Opened : Landin.Source.Span := Landin.Source.Empty_Span;
-         Refused : Token_Kind := Bang)
+         Refused : Token_Kind := Bang;
+         Word   : Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.No_Name)
       is
       begin
          Into.Faults.Append
            (Fault'(Kind    => Kind,
                    Where   => Span (First, Stop),
                    Opened  => Opened,
-                   Refused => Refused));
+                   Refused => Refused,
+                   Word    => Word));
       end Complain;
 
       --  A sign, longest first, so `<=` is never `<` and `=`.  The table is
@@ -769,13 +787,16 @@ package body Landin.Tokens.Lexer is
             elsif Is_Digit (Here) then
                Scan_Integer;
 
-            elsif Is_Lower (Here) or else Here = '_' then
+            elsif Is_Lower (Here) or else Is_Upper (Here) or else Here = '_'
+            then
                declare
                   First : constant Natural := Position;
+                  Capitals : Boolean := False;
                begin
                   while Position <= Last
-                    and then Is_Name_Byte (Text (Position))
+                    and then Is_Word_Byte (Text (Position))
                   loop
+                     Capitals := Capitals or else Is_Upper (Text (Position));
                      Position := Position + 1;
                   end loop;
 
@@ -786,6 +807,30 @@ package body Landin.Tokens.Lexer is
                      --  identifier rule refuses on purpose [1760].
                      if Run = "_" then
                         Emit (Underscore, First, Position - 1);
+
+                     --  D528: a word with a capital is no identifier
+                     --  [1760], and it is read on as one of its own
+                     --  spelling, so the word is one report and not one
+                     --  for every place it is written after.  It is never
+                     --  a keyword: `End` is not `end`.
+                     elsif Capitals then
+                        declare
+                           Named : constant Landin.Source.Names.Name_Id :=
+                             Landin.Source.Names.Intern (Names, Run);
+                        begin
+                           Into.Items.Append
+                             (Token'(Kind      => Identifier,
+                                     Where     =>
+                                       Span (First, Position - 1),
+                                     Name      => Named,
+                                     Base      => Decimal,
+                                     Digit_Run =>
+                                       Landin.Source.Empty_Span,
+                                     Assignment => Plain_Assignment));
+                           Complain
+                             (Capitalised_Identifier, First, Position - 1,
+                              Word => Named);
+                        end;
                      else
                         declare
                            Word : constant Token_Kind := Keyword_Kind (Run);
@@ -826,8 +871,7 @@ package body Landin.Tokens.Lexer is
                           or else Text (Position) = Tab
                           or else Text (Position) = LF
                           or else Text (Position) = CR
-                          or else Is_Lower (Text (Position))
-                          or else Is_Digit (Text (Position))
+                          or else Is_Word_Byte (Text (Position))
                           or else Text (Position) = '_'
                           or else Text (Position) = '"'
                           or else Text (Position) = ''';
@@ -842,11 +886,7 @@ package body Landin.Tokens.Lexer is
                         Position := Position + 1;
                      end loop;
                      Emit (Unknown_Bytes, First, Position - 1);
-                     Complain
-                       ((if (for all Index in First .. Position - 1 =>
-                               Text (Index) in 'A' .. 'Z')
-                         then Uppercase_Byte_Run else Unknown_Byte_Run),
-                        First, Position - 1);
+                     Complain (Unknown_Byte_Run, First, Position - 1);
                   else
                      Position := Position + Length;
                      if Kind = Compound_Assign then

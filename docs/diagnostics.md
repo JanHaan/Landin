@@ -2,7 +2,12 @@
 
 `refine explain CODE` prints one section of this page. Each section says what
 rule the code enforces, cites the paragraph or decision that states it, and
-says what to change. It is derived: `spec.md` and `tour.md` decide what a
+says what to change. The citations a section or a note carries are answered
+too: `refine explain [1760]` or `1760` names a construct's title, document
+and page on the site, `refine explain D275` or `d275` a decision's, with the
+section of the register it is in, and `--full` adds the construct's text or
+the decision's chosen rule (D530). zsh reads `[1760]` as a pattern, so quote
+it there or write `1760`. It is derived: `spec.md` and `tour.md` decide what a
 program means, and the diagnostic catalogue in
 `compiler/ada/src/diagnostics/landin-diagnostics-catalogue.ads` decides which
 codes exist and what each occurrence must carry. `check.py` holds every
@@ -218,8 +223,15 @@ mask: u64 = 1u64
 
 ### L0012
 
-A run of bytes no lexical rule spells [1750]. A name is lower case [1760], and
-a byte outside the source alphabet belongs in a text literal.
+A run of bytes no lexical rule spells [1750], or a word with a capital in it.
+A name is lower case [1760], and a byte outside the source alphabet belongs in
+a text literal. A word of letters, digits and underscores that holds a capital
+is one report over the whole word, and the program is read on as if it were a
+name, so nothing else is said about it; the note offers its lower-case
+spelling, `init_window` for `InitWindow`. A C function keeps C's spelling as
+its link symbol and takes a lower-case Landin name, which the note shows when
+the word names an `extern(c)` function without one:
+`extern(c) link(symbol: "InitWindow") init_window: ...` [1610] (D528).
 
 ```landin
 X: u32 = 1
@@ -1308,7 +1320,12 @@ through a parameter. Remove `caller` and constraints, specialize generics,
 represent errors through an ordinary C result, and combine multiple results
 into one C-representable result. Pass a pointer to a by-value array or other
 unsupported aggregate, or change the type or layout to one C represents.
-Pass `ptr` to a packed record or one with a flexible member.
+Pass `ptr` to a packed record or one with a flexible member. A struct
+declared without `layout(c)` has Landin's layout [0750], which C does not
+share, so a signature taking or returning one by value, or a C record holding
+one, is refused naming the part and the struct, as in "C cannot take
+`tint`: `color` is not `layout(c)`", and the repair is to declare it
+`layout(c) struct` (D529).
 
 ```landin
 extern(c) collect: (count: i32, ...) -> none

@@ -205,7 +205,7 @@ package Landin.Tokens is
       Malformed_Text_Literal_Run,
       Malformed_Raw_Literal_Run,
       Unknown_Byte_Run,
-      Uppercase_Byte_Run,
+      Capitalised_Identifier,
       Invalid_Comment_Encoding,
       Unterminated_Block_Comment,
       Unterminated_Literal);
@@ -229,6 +229,13 @@ package Landin.Tokens is
    --  has to say it was one.
    function Refused (Item : Fault) return Described_Kind
      with Pre => Kind (Item) = Unterminated_Literal;
+
+   --  D528: a word of letters, digits and underscores that holds a capital
+   --  is an identifier token of that spelling, and this is its name, so the
+   --  report can offer the lower-case one.  Its wording waits for the
+   --  parse, which knows whether the word names a C function.
+   function Word (Item : Fault) return Landin.Source.Names.Name_Id
+     with Pre => Kind (Item) = Capitalised_Identifier;
 
    ------------------------------------------------------------------
    --  Streams
@@ -352,6 +359,7 @@ private
       Where   : Landin.Source.Span := Landin.Source.Empty_Span;
       Opened  : Landin.Source.Span := Landin.Source.Empty_Span;
       Refused : Token_Kind := Bang;
+      Word    : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
    end record;
 
    package Token_Vectors is new Ada.Containers.Vectors

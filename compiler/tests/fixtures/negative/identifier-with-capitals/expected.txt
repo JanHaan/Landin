@@ -1,0 +1,12 @@
+error[L0012]: identifiers use lower-case letters
+  --> ../tests/fixtures/negative/identifier-with-capitals/program.ldn:1:1
+  |
+1 | frameCount: u32 = 0
+  | ^^^^^^^^^^
+  = note: [1760]: identifier letters are lower-case ASCII; write `frame_count`
+error[L0012]: identifiers use lower-case letters
+  --> ../tests/fixtures/negative/identifier-with-capitals/program.ldn:4:9
+  |
+4 |     r = frameCount + 1
+  |         ^^^^^^^^^^
+  = note: [1760]: identifier letters are lower-case ASCII; write `frame_count`

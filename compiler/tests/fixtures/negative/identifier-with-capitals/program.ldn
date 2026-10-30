@@ -1,0 +1,5 @@
+frameCount: u32 = 0
+
+next: () -> (r: u32) =
+    r = frameCount + 1
+end next

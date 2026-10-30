@@ -89,6 +89,9 @@ package body Landin.Tokens is
 
    function Refused (Item : Fault) return Described_Kind is (Item.Refused);
 
+   function Word (Item : Fault) return Landin.Source.Names.Name_Id
+     is (Item.Word);
+
    function Source_Of (Of_Stream : Token_Stream)
      return Landin.Source.Source_Id is (Of_Stream.Source);
 

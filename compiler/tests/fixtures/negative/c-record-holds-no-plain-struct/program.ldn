@@ -1,0 +1,11 @@
+vector2: type = struct
+    x: f32
+    y: f32
+end vector2
+
+camera: type = layout(c) struct
+    offset: vector2
+    zoom: f32
+end camera
+
+extern(c) link(symbol: "GetMousePosition") get_mouse_position: () -> (position: vector2)

@@ -1,4 +1,4 @@
-error[L0346]: this signature is not representable by the selected target's native C ABI
+error[L0346]: C cannot take `value`: `pair` is not `layout(c)`
   --> ../tests/fixtures/negative/external-aggregate-boundary/program.ldn:6:1
   |
 6 | extern(c) host_pair: (value: pair) -> none
@@ -7,4 +7,4 @@ error[L0346]: this signature is not representable by the selected target's nativ
   |
 6 | extern(c) host_pair: (value: pair) -> none
   |                       ^^^^^^^^^^^ C cannot take this parameter
-  = note: [1580]: C signatures are infallible and nongeneric; only implicit/in parameters, no caller or constraints; scalars, pointers (including named optional unions), fixed C callbacks or layout(c) structs, and at most one result; no slices, any, atoms or by-value arrays; variadic definitions require a generated adapter
+  = note: [0750]: only `layout(c)` lays a record out by the target's C rules, and C takes no other by value; declare `pair: type = layout(c) struct`, or pass `ptr pair` [1580]

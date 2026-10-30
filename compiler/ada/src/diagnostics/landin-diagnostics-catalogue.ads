@@ -424,7 +424,8 @@ package Landin.Diagnostics.Catalogue is
                "[1770]: an integer with missing digits, misplaced " &
                "underscores, an invalid base digit, or an adjacent name",
             when Unknown_Bytes         =>
-               "[1750]: a run of bytes no rule spells",
+               "[1750]/[1760]: a run of bytes no rule spells, or a word "
+               & "with a capital",
             when Unterminated_Comment  =>
                "[1780]: a block comment that is never closed",
             when Unterminated_Literal  =>

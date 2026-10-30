@@ -174,7 +174,7 @@ it names.
 | `refine compile --debug=full ...` | include source debugging for GDB or LLDB |
 | `refine compile --target=linux-arm64 ...` | compile for another target; `refine targets` lists them |
 | `refine fmt main.ldn` | rewrite a source in the one layout; `--check` only reports |
-| `refine explain L0301` | explain a diagnostic code and what to change |
+| `refine explain L0301` | explain a diagnostic code and what to change; `[1760]` or `D275`, a cited rule or decision |
 | `refine lsp` | the language server an editor starts |
 | `refine version` | name the compiler and the library it uses |
 | `refine --help`, `refine compile --help` | every command, and one command's options |

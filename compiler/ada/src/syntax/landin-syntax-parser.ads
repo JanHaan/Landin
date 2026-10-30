@@ -50,7 +50,10 @@ package Landin.Syntax.Parser is
    --
    --  Lexical faults are not this procedure's to report; the syntax stage
    --  calls Landin.Diagnostics.Lexical for those, before this, so that a
-   --  file with an unreadable byte and a missing `then` reports both.
+   --  file with an unreadable byte and a missing `then` reports both.  The
+   --  one exception is a word with a capital (D528): its note depends on
+   --  whether it names a C function without a link symbol, which only the
+   --  parse knows, so its one report is appended to Report from here.
    function Parse
      (From   : Landin.Tokens.Token_Stream;
       Names  : in out Landin.Source.Names.Table;
