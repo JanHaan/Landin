@@ -1392,10 +1392,10 @@ package body Landin.Stages.Checking is
             and then not C_By_Value (Part.Nominal));
 
       --  D529: the name of the struct a C signature takes or returns, or a
-      --  C record holds, by value that is not `layout(c)`, or "" when the
-      --  part is anything else: a pointer union, a variant, or a C record
-      --  whose fault is another, which keep [1580]'s whole rule as their
-      --  note.
+      --  C record holds, by value with Landin's own layout, none or
+      --  `layout(optimal)`, or "" when the part is anything else: a pointer
+      --  union, a variant, a register image, or a C record whose fault is
+      --  another, which keep [1580]'s whole rule as their note.
       function Plain_Record_Name
         (Nominal : Landin.Checking.Nominal_Type_Id) return String;
 
@@ -1428,10 +1428,14 @@ package body Landin.Stages.Checking is
                Struct_Node :=
                  Syn.Declared_Type (Template_Tree.all, Declaration);
             end if;
+            --  A `layout(packed)` register image is no record C could
+            --  take whatever its layout, so only Landin's own record
+            --  layouts are told to become `layout(c)`.
             if Struct_Node = Syn.No_Node
               or else Syn.Kind (Template_Tree.all, Struct_Node)
                 /= Syn.Struct_Body
-              or else Syn.Has_C_Layout (Template_Tree.all, Struct_Node)
+              or else Syn.Layout_Of (Template_Tree.all, Struct_Node)
+                not in Landin.Layouts.Natural | Landin.Layouts.Optimal
             then
                return "";
             end if;

@@ -17,7 +17,7 @@ L0008  Live     D252: a source `refine fmt --check` finds out of the layout
 L0009  Live     D255: a CPU feature level the selected target does not have
 L0010  Live     [1830]: the tour describes this and the kernel omits it
 L0011  Live     [1770]: an integer with missing digits, misplaced underscores, an invalid base digit, or an adjacent name
-L0012  Live     [1750]: a run of bytes no rule spells
+L0012  Live     [1750]/[1760]: a run of bytes no rule spells, or a word with a capital
 L0013  Live     [1780]: a block comment that is never closed
 L0014  Live     [0250]/[0260]/[0280]: a quoted or raw literal that is never closed
 L0100  Live     [1760]: a name position holds something that is not a name

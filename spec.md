@@ -20192,8 +20192,8 @@ The row keeps one note and one secondary label. A result is "C cannot return
 `result`", and a `layout(c)` record holding such a struct by value is the
 same refusal at its field, "a C record cannot hold `offset`: `vector2` is not
 `layout(c)`"; a parameter's and a field's note also offer `ptr` to the
-struct. A struct behind a pointer crosses as it did, and a pointer union or a
-variant keeps [1580]'s whole rule.
+struct. A struct behind a pointer crosses as it did, and a pointer union, a
+variant or a `layout(packed)` register image keeps [1580]'s whole rule.
 
 **The alternatives:** a label at the record's declaration, which changes the
 catalogue row's shape for one cause, and the general note with the record

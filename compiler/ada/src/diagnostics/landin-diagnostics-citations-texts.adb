@@ -23773,7 +23773,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & " hold `offset`: `vector2` is not `layout(c)`""; a paramet"
                & "er's and a field's note also offer `ptr` to the struct. "
                & "A struct behind a pointer crosses as it did, and a point"
-               & "er union or a variant keeps [1580]'s whole rule.",
+               & "er union, a variant or a `layout(packed)` register image"
+               & " keeps [1580]'s whole rule.",
             when 530 =>
                "Chosen: `refine explain` takes `[1590]`, `1590`, `D275` "
                & "or `d275` beside a diagnostic code. For a construct or a"
