@@ -1491,11 +1491,12 @@ package body Landin.Driver is
             end;
          end Absolute;
 
-         --  D524: the directory a `linker.directory` names, absolute: a
-         --  relative one against the directory of the file declaring it.
-         function Directive_Directory (Index : Positive) return String;
+         --  D524: the directory a `linker.directory` names, as a report
+         --  names it: a relative one joined to the declaring file's
+         --  directory as that file was named.
+         function Directive_Named (Index : Positive) return String;
 
-         function Directive_Directory (Index : Positive) return String is
+         function Directive_Named (Index : Positive) return String is
             Table : Landin.Configuration.Table renames
               Landin.Stages.Configurations (Context).all;
             Written : constant String :=
@@ -1508,18 +1509,25 @@ package body Landin.Driver is
             Slash : Natural := 0;
          begin
             if Written (Written'First) = '/' then
-               return Absolute (Written);
+               return Written;
             end if;
             for Position in Declaring'Range loop
                if Declaring (Position) = '/' then
                   Slash := Position;
                end if;
             end loop;
-            return Absolute
-              ((if Slash = 0 then ""
-                else Declaring (Declaring'First .. Slash))
-               & Written);
-         end Directive_Directory;
+            if Written = "." then
+               return (if Slash = 0 then "."
+                       else Declaring (Declaring'First .. Slash - 1));
+            end if;
+            return (if Slash = 0 then ""
+                    else Declaring (Declaring'First .. Slash))
+              & Written;
+         end Directive_Named;
+
+         --  The same, absolute, as the link is given it.
+         function Directive_Directory (Index : Positive) return String
+           is (Absolute (Directive_Named (Index)));
 
          --  D524's order: the command line's directories first, so whoever
          --  builds can put another copy ahead, then the directives'.
@@ -1562,7 +1570,7 @@ package body Landin.Driver is
                         Where   =>
                           Landin.Configuration.Directory_Where (Table, Index),
                         Message => "linker.directory names no directory: "
-                          & Named);
+                          & Directive_Named (Index));
                      Landin.Diagnostics.Add_Note
                        (Item,
                         "[1590]/D524: a relative directory is read against"
@@ -2059,7 +2067,7 @@ package body Landin.Driver is
             for Position in 1 .. Natural (Directories.Length) loop
                if Position <= Options then
                   Unbounded.Append
-                    (Places, Directories (Position) & " (-L), ");
+                    (Places, Search_Options (Position) & " (-L), ");
                else
                   declare
                      Directive : constant Positive := Position - Options;
@@ -2070,7 +2078,7 @@ package body Landin.Driver is
                             (Table, Directive));
                   begin
                      Unbounded.Append
-                       (Places, Directories (Position)
+                       (Places, Directive_Named (Directive)
                         & " (linker.directory at "
                         & Landin.Source.Name (Declaring) & ":"
                         & Ada.Strings.Fixed.Trim

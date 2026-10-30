@@ -1,0 +1,21 @@
+import platform/c
+
+linker.library("raylib")
+linker.directory("lib")
+
+color: type = layout(c) struct
+    r: u8
+    g: u8
+    b: u8
+    a: u8
+end color
+
+--- raylib's own mixed-case names, from `lib/libraylib.a` beside this file.
+extern(c) link(symbol: "GetRandomValue") get_random_value:
+    (min: c.c_int, max: c.c_int) -> (value: c.c_int)
+extern(c) link(symbol: "ColorToInt") color_to_int:
+    (shade: color) -> (packed: c.c_int)
+
+roll: () -> (face: i32) =
+    face = get_random_value(1, 6)
+end roll

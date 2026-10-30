@@ -1007,6 +1007,48 @@ exactly the same types. A pointer C may return as null is a pointer union,
 and a function exported to C returns a status, since no Landin failure
 crosses the boundary [1600].
 
+```c
+#include "raylib.h"  /* cc game.c -Llib -lraylib -lm */
+int face = GetRandomValue(1, 6);
+```
+
+```landin
+import platform/c
+
+linker.library("raylib")
+linker.directory("lib")
+
+color: type = layout(c) struct
+    r: u8
+    g: u8
+    b: u8
+    a: u8
+end color
+
+--- raylib's own mixed-case names, from `lib/libraylib.a` beside this file.
+extern(c) link(symbol: "GetRandomValue") get_random_value:
+    (min: c.c_int, max: c.c_int) -> (value: c.c_int)
+extern(c) link(symbol: "ColorToInt") color_to_int:
+    (shade: color) -> (packed: c.c_int)
+
+roll: () -> (face: i32) =
+    face = get_random_value(1, 6)
+end roll
+```
+
+A library of your own, here raylib's `libraylib.a` in `lib` beside the
+source, is named where it is used: `linker.library("raylib")` is the C
+driver's `-lraylib`, which takes a shared library or an archive, and
+`linker.directory("lib")` its `-L`, read against the directory of the file
+that says it, so the build finds it wherever it runs [1590]. `-L DIR` on
+`refine compile` or `refine run` names another directory for one build, and
+is searched first. Landin names are lower case, so a C name that is not is
+declared under a Landin name and linked by its own with
+`link(symbol: "GetRandomValue")` [1610]; a C struct passed by value is a
+`layout(c)` struct [1580]. Build it with
+`refine compile --link=libc game.ldn -o game` on Linux. A library the link
+cannot find is named with every directory searched.
+
 ## Close to the machine
 
 ### Pointer arithmetic

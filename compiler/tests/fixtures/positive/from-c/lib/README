@@ -1,0 +1,4 @@
+The directory `linking.ldn`'s linker.directory("lib") names, which the
+compiler refuses when it does not exist.  docs/from-c.md shows a program
+that keeps raylib's libraylib.a here; the fixture only emits assembly, so
+it needs no library.

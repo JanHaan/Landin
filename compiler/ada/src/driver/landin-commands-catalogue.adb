@@ -285,7 +285,11 @@ package body Landin.Commands.Catalogue is
       end loop;
       US.Append (Text, LF
         & "Shared options work before or after the command. Values may use"
-        & LF & "a space or '='. Use '--' before literal operands; @FILE reads"
+        & LF & "a space or '='. "
+        & (if Command = Run
+           then "'--' begins the program's arguments; @FILE"
+           else "Use '--' before literal operands; @FILE")
+        & " reads"
         & LF & "a response file. Single-valued options may be given once."
         & LF);
       case Command is

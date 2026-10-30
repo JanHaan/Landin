@@ -1,0 +1,6 @@
+error[L0391]: linker.directory names no directory: ../tests/fixtures/negative/linker-directory-missing/no-such-directory
+  --> ../tests/fixtures/negative/linker-directory-missing/main.ldn:3:1
+  |
+3 | linker.directory("no-such-directory")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: [1590]/D524: a relative directory is read against the directory of the file that declares it; name a directory that exists

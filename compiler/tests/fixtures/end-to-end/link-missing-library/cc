@@ -1,0 +1,15 @@
+#!/bin/sh
+# A stand-in C driver whose link always fails as a missing library's does,
+# and whose -print-file-name finds nothing, as a driver answers for a
+# library none of its own directories holds: the name alone.
+for argument
+do
+    case $argument in
+        -print-file-name=*)
+            echo "${argument#-print-file-name=}"
+            exit 0
+            ;;
+    esac
+done
+echo "ld: cannot find -lnosuchlibrary: No such file or directory" >&2
+exit 1

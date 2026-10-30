@@ -26,7 +26,14 @@ public main: () -> (code: i32) =
 end main
 ```
 
-Compile it and run it:
+Run it:
+
+```sh
+refine run main.ldn
+```
+
+`refine run` compiles the program, runs it and removes what it built; words
+after `--` are the program's arguments. To keep an executable, compile it:
 
 ```sh
 refine compile main.ldn -o hello
@@ -4376,31 +4383,42 @@ this needs no lock. `hosted/system` keeps each thread's last errno this way.
 
 Exact rules: spec [1996].
 
-### [1590] Linking a static library
+### [1590] Linking a library
 
-`linker.library` asks the linker for a static archive. Write it next to the
-declarations that need it, not in a separate build file.
+`linker.library` asks the C driver for a library, as `-lNAME` asks it in C.
+Write it next to the declarations that need it, not in a separate build file.
+`linker.directory` says where to look, relative to the file it is in.
 
 ```landin
+linker.library("raylib")
 linker.library("m")
+linker.directory("vendor/lib")
 ```
 
-This links `libm.a`.
+This links `libraylib` from `vendor/lib` beside the source, and `libm`
+from wherever the C driver keeps it.
 
 - The name is a fixed text literal of ASCII letters, digits, `_`, `-` and
-  `.`. It is nonempty, does not begin with `-` and is not only dots.
+  `.`. It is nonempty, does not begin with `-` and is not only dots. The
+  driver takes a shared library or an archive of that name, as it would
+  for a C program.
 - Active directives reach the linker after the program, in source order,
   repeats included. So moving one among the module's declarations can
   change how archives resolve. This is the one place where declaration
   order matters. A directive in an inactive arm of a `fixed if` ([1500])
   adds nothing.
-- On Linux an archive links beside the C library, so a build that asks for
-  one needs `--link=libc`; the default static link ([1650]) refuses it.
-- On Darwin the driver resolves `libNAME.a` and passes that file. A missing
-  archive fails even when a dylib of the name exists. With Apple's default
-  driver, a bare filename it returns must exist in the directory the build
-  runs in.
-- Cortex-M firmware refuses `linker.library`.
+- A directory is a fixed, nonempty text literal: relative to the
+  directory of the file that names it, or absolute. One that does not
+  exist is refused before anything is linked. `-L DIR` on `refine
+  compile`, `run` or `check` names another, relative to where the build
+  runs, and is searched first, so a build can put its own copy of a
+  library ahead. Each directory is also where the program looks for a
+  shared library when it starts.
+- A library the link cannot find is named with every directory searched.
+- On Linux a library links beside the C library, so a build that asks for
+  one needs `--link=libc`; the default static link ([1650]) refuses it,
+  and refuses a directory too.
+- Cortex-M firmware refuses `linker.library`, `linker.directory` and `-L`.
 
 ### [1570] Calling conventions
 

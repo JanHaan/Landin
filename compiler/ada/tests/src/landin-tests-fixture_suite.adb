@@ -1445,6 +1445,10 @@ package body Landin.Tests.Fixture_Suite is
             return C_Args (Fixture);
          elsif Key = "c-shared" then
             return C_Shared (Fixture);
+         elsif Key = "c-archives" then
+            return C_Archives (Fixture);
+         elsif Key = "library-directories" then
+            return Library_Directories (Fixture);
          elsif Key = "link" then
             return Link_Mode (Fixture);
          elsif Key = "levels" then

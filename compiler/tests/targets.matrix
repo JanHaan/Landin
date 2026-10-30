@@ -86,9 +86,15 @@ end-to-end/feature-level-of-another-family | linux-x86-64
 end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
 end-to-end/link-assembly-operand-dry-run | linux-x86-64
 end-to-end/link-libc-dry-run | linux-x86-64
+end-to-end/link-library-directories-dry-run | linux-x86-64
+end-to-end/link-library-directory-option-elsewhere | linux-x86-64
+end-to-end/link-library-directory-option-missing | linux-x86-64
+end-to-end/link-missing-library | linux-x86-64
 end-to-end/link-needs-hosted-system | cortex-m0
 end-to-end/link-static-dry-run | linux-x86-64
 end-to-end/link-static-dry-run-arm64 | linux-x86-64, linux-arm64
+end-to-end/link-static-library-directory-option | linux-x86-64
+end-to-end/link-static-linker-directory | linux-x86-64
 end-to-end/link-static-linker-library | linux-arm64
 end-to-end/link-static-loads-a-library | linux-x86-64
 end-to-end/link-static-needs-linux | darwin-arm64
@@ -98,6 +104,7 @@ end-to-end/link-static-unsatisfied-c-import | linux-x86-64
 end-to-end/r430-option-override-range | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, linux-arm64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, linux-arm64, darwin-arm64, linux-rv64
+end-to-end/run-another-target | cortex-m0
 negative/a-concept-entry-names-its-public-operation | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-control-value-missing-twice-reports-once | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/a-fold-deeper-than-any-limit | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -604,6 +611,8 @@ negative/line-leading-minus-continues-the-value | linux-x86-64, linux-arm64, dar
 negative/line-leading-parenthesis-argument-is-not-declared-yet | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-parenthesis-continues-as-a-call | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-outlives-read | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/linker-directory-empty | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+negative/linker-directory-missing | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/linux-ppoll-limit-is-written | linux-x86-64, linux-arm64, linux-rv64
 negative/literal-above-its-type | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/literal-below-its-type | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1848,6 +1857,7 @@ runtime/buffered-writer-closed-output | linux-x86-64, linux-arm64, darwin-arm64,
 runtime/buffered-writer-format | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/by-value-records-stay-independent | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/c-aliases-unsigned-char | linux-arm64, freebsd-arm64, linux-rv64
+runtime/c-library-directories | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/c-packed-record-fields | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/caller-is-an-ordinary-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/caller-parameters | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -202,6 +202,24 @@ package Landin.Testing.Fixtures is
    --  `plugin` for `plugins/plugin.c`.
    function Shared_Stem (Source : String) return String;
 
+   --  D524: a runtime fixture's C sources that the harness compiles and
+   --  archives alone, each as `lib<stem>.a` in the same relative directory
+   --  of the fixture's work copy, where the program is compiled, so that
+   --  its own `linker.directory` finds them: the same comma-separated
+   --  relative `.c` paths as `c-sources`.  Its link is `libc`.
+   function C_Archives (Item : Fixture) return String;
+
+   --  Each comma-separated entry of TEXT, trimmed, that is not empty.
+   function Entries (Text : String) return Landin.Platform.Path_List;
+
+   --  The archive one `c-archives` entry makes, relative to the work
+   --  copy: `lib/libmixed.a` for `lib/mixed.c`.
+   function Archive_Of (Source : String) return String;
+
+   --  D524: directories of the work copy, comma-separated, each handed to
+   --  refine as `-L` with its absolute path, in order.
+   function Library_Directories (Item : Fixture) return String;
+
    --  How a runtime fixture's hosted executable is linked, `static`
    --  or `libc`, or "" for the target's default.  A program that calls the
    --  C library names `libc`, because a static Linux link has none.
@@ -312,6 +330,8 @@ private
       C_Files   : Ada.Strings.Unbounded.Unbounded_String;
       C_Options : Ada.Strings.Unbounded.Unbounded_String;
       C_Libraries : Ada.Strings.Unbounded.Unbounded_String;
+      C_Archive_Files : Ada.Strings.Unbounded.Unbounded_String;
+      Search_Directories : Ada.Strings.Unbounded.Unbounded_String;
       Link      : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;
       Profiles  : Profile_Policy := Standard;

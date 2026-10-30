@@ -1,0 +1,33 @@
+--  D523/D524: a C archive beside the source, found through
+--  linker.directory; another found only through the build's -L; and libm
+--  from the C driver's own directories, each passed as -lNAME under
+--  --link=libc.  The C names are mixed case, so each is linked by
+--  link(symbol: ...), and a layout(c) record crosses by value both ways.
+linker.library("mixed")
+linker.library("point")
+linker.library("m")
+linker.directory("lib")
+
+vec2: type = layout(c) struct
+    x: f32
+    y: f32
+end vec2
+
+extern(c) link(symbol: "AddInts") add_ints: (a: i32, b: i32) -> (sum: i32)
+extern(c) link(symbol: "Vec2Length") vec2_length: (v: vec2) -> (length: f32)
+extern(c) link(symbol: "PointScale") point_scale:
+    (v: vec2, by: f32) -> (scaled: vec2)
+extern(c) sqrtf: (x: f32) -> (root: f32)
+extern(c) pow: (x: f64, y: f64) -> (power: f64)
+
+public main: () -> (code: i32) =
+    v := vec2(x: 3.0, y: 4.0)
+    scaled := point_scale(v, 2.0)
+    code = 1
+    if add_ints(40, 2) == 42 and vec2_length(v) == 5.0
+      and scaled.x == 6.0 and scaled.y == 8.0
+      and sqrtf(2.25) == 1.5 and pow(2.0, 10.0) == 1024.0
+    then
+        code = 42
+    end if
+end main

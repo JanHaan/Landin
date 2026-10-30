@@ -293,6 +293,78 @@ problem a runtime fixture with c-shared needs link: libc
 problem C source belongs in c-sources, never with: helper.c
 end
 
+case C archives built in a work copy and the directories that find them
+fixture runtime/c-archives
+| class: runtime
+| summary: archives beside the program and one only a -L finds
+| profiles: standard
+| program: main.ldn
+| link: libc
+| c-archives: lib/mixed.c, vendor/point.c
+| library-directories: vendor, lib
+| constructs: 1590
+| targets: linux-x86-64
+field c-archives = lib/mixed.c, vendor/point.c
+field library-directories = vendor, lib
+field module-arguments = F/runtime/c-archives/main.ldn
+field program-arguments =
+end
+
+case C archives and library directories that cannot be built or found
+fixture runtime/c-archives-faults
+| class: runtime
+| summary: archives that cannot be built
+| profiles: standard
+| program: main.ldn
+| root: .
+| c-archives: lib/mixed.c, lib/mixed.c, ../escape.c, lib/mixed.h,
+| library-directories: vendor, vendor, ../outside, ./lib,
+| constructs: 1590
+| targets: linux-x86-64
+problem duplicate c-archives path: lib/mixed.c
+problem c-archives path is not a relative .c file: ../escape.c
+problem c-archives path is not a relative .c file: lib/mixed.h
+problem c-archives path is not a relative .c file: <empty>
+problem duplicate library-directories entry: vendor
+problem library-directories entry is not a relative directory: ../outside
+problem library-directories entry is not a relative directory: ./lib
+problem library-directories entry is not a relative directory: <empty>
+problem a runtime fixture with c-archives needs link: libc
+problem c-archives and root cannot be combined
+end
+
+case C archives and library directories belong to a runtime fixture
+fixture abi/archived
+| class: abi
+| summary: archives on an ABI fixture
+| profiles: standard
+| program: main.ldn
+| c-sources: peer.c
+| c-archives: lib/a.c
+| c-archives: lib/b.c
+| library-directories: lib
+| constructs: 0300
+| targets: linux-x86-64
+problem c-archives belongs only to a runtime fixture
+problem duplicate key: c-archives
+problem library-directories belongs only to a runtime fixture
+end
+
+case library directories need archives
+fixture runtime/directories-alone
+| class: runtime
+| summary: a directory with nothing to find in it
+| profiles: standard
+| program: main.ldn
+| link: libc
+| library-directories: lib
+| library-directories: vendor
+| constructs: 1590
+| targets: linux-x86-64
+problem duplicate key: library-directories
+problem library-directories needs c-archives
+end
+
 case an ABI fixture needs its C peers
 fixture abi/no-peers
 | class: abi

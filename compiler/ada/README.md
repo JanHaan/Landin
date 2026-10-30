@@ -172,7 +172,7 @@ different responsibilities.
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.X86_64.Dwarf` | x86 allocation adapter, register encodings and ELF entry points for the shared DWARF encoder | change source facts or choose variable storage |
-| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, D364's ordered driver candidates and what to install when none is found, and D202's ordered archive arguments | infer target policy from the host, invoke a linker directly, or search a PATH |
+| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, D364's ordered driver candidates and what to install when none is found, and D202's ordered library arguments with D524's directories | infer target policy from the host, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Firmware` | compiler-owned reset text, constrained linker script and bounded image materialization | perform host effects or initialize user modules by executing source code |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, fixes and their edits, ordering | render, apply a fix, or own the catalogue of codes |
@@ -255,9 +255,16 @@ The driver accepts `--option=NAME=VALUE` and
 `--build-mode=debug|release` as explicit request configuration. The latter
 controls `compiler.build_mode`, independently of the Ada build's
 `LANDIN_BUILD_MODE`; it changes neither emitted checks nor optimization.
-`linker.library` requests a static archive through the platform driver,
-preserving source order and repetitions. It does not change that driver's
-hosted-runtime linkage policy.
+`linker.library` requests a library through the platform driver as its
+`-lNAME` (D523), preserving source order and repetitions, and
+`linker.directory` and `-L` name where it is searched (D524); configuration
+records each directive with its place, the driver resolves a relative
+directory against the declaring file's directory through the platform
+interface and asks whether it exists, and only after a failed link looks
+for each library (D525). None changes that driver's hosted-runtime linkage
+policy. `refine run` (D526) reaches the host through the filesystem's
+private directory and tree removal and the tool runner's attached run, so
+the commands cases hold it to fakes.
 
 D187 follows them too, and adds no stage: the parser recognises the region,
 `Landin.IR` records it on the instructions it is emitting, and the backend is

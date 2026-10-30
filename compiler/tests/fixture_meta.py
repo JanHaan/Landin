@@ -25,6 +25,7 @@ starts, so a lane that copies the corpus elsewhere passes its own spelling.
 
 import os
 import re
+import shutil
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -112,6 +113,13 @@ def shared_stem(source):
     return source.rsplit("/", 1)[-1][:-2]
 
 
+def archive_of(source):
+    """The archive a `c-archives` source becomes, in its own directory of
+    the work copy: `lib/libmixed.a` for `lib/mixed.c`."""
+    directory, slash, name = source.rpartition("/")
+    return directory + slash + "lib" + name[:-2] + ".a"
+
+
 def _below(base, name):
     """NAME below BASE as a process would be handed it: a base of `.`, a
     process run in the fixture directory, names it bare."""
@@ -188,6 +196,20 @@ class Metadata(dict):
         return self._list("c-shared")
 
     @property
+    def c_archives(self):
+        return self._list("c-archives")
+
+    @property
+    def archives(self):
+        """The archive each `c-archives` source becomes, relative to the
+        work copy, in their order."""
+        return [archive_of(one) for one in self.c_archives]
+
+    @property
+    def library_directories(self):
+        return self._list("library-directories")
+
+    @property
     def run_files(self):
         return self._list("run_files")
 
@@ -250,6 +272,35 @@ class Metadata(dict):
         if "args" in self:
             return self.args
         return self.module_arguments(base)
+
+    def library_arguments(self, base):
+        """The `-L DIR` pairs refine is given before the program, one for
+        each `library-directories` entry below BASE, the work copy as the
+        caller spells it: absolute, as the lanes pass it."""
+        base = str(base)
+        return [word for one in self.library_directories
+                for word in ("-L", _below(base, one))]
+
+    def work_copy(self, base, destination):
+        """Copy what refine compiles of the fixture in BASE -- its program
+        and `with` files, at their own relative paths -- into DESTINATION,
+        a fresh directory, with each of `archives`' directories made for
+        the caller to build them in.  A `c-archives` fixture is compiled
+        from this copy, so its program's `linker.directory` finds them
+        there; `run_files` and `stdin` still name the fixture's own files.
+        Returns DESTINATION."""
+        destination = Path(destination)
+        destination.mkdir(parents=True, exist_ok=False)
+        for one in [self.get("program", "")] + self.with_sources:
+            if not is_below_directory(one):
+                raise ValueError("%s: %s is not below the fixture directory,"
+                                 " so the work copy cannot hold it"
+                                 % (self.label, one or "<empty>"))
+            (destination / one).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(Path(str(base), one), destination / one)
+        for one in self.archives:
+            (destination / one).parent.mkdir(parents=True, exist_ok=True)
+        return destination
 
     def program_arguments(self, base, shared=()):
         """What a compiled runtime or ABI program is run with: its shared
@@ -409,7 +460,7 @@ def _c_files(key, belongs, message):
     def check(meta, value, cls, complain):
         if cls not in belongs:
             complain(message)
-        seen, stems = [], []
+        seen, stems, archives = [], [], []
         for one in _items(value):
             if not _relative_c_source(one):
                 complain("%s path is not a relative .c file: %s"
@@ -419,10 +470,28 @@ def _c_files(key, belongs, message):
             elif key == "c-shared" and shared_stem(one) in stems:
                 complain("two c-shared sources would build one object: "
                          + one)
+            elif key == "c-archives" and archive_of(one) in archives:
+                complain("two c-archives sources would build one archive: "
+                         + one)
             else:
                 seen.append(one)
                 stems.append(shared_stem(one))
+                archives.append(archive_of(one))
     return check
+
+
+def _library_directories(meta, value, cls, complain):
+    if cls != "runtime":
+        complain("library-directories belongs only to a runtime fixture")
+    seen = []
+    for one in _items(value):
+        if not is_below_directory(one):
+            complain("library-directories entry is not a relative"
+                     " directory: " + (one or "<empty>"))
+        elif one in seen:
+            complain("duplicate library-directories entry: " + one)
+        else:
+            seen.append(one)
 
 
 def _c_args(meta, value, cls, complain):
@@ -488,6 +557,9 @@ KEYS = {
                           "c-sources belong only to an ABI fixture"),
     "c-shared": _c_files("c-shared", ("runtime", "abi"),
                          "c-shared belongs only to a runtime or ABI fixture"),
+    "c-archives": _c_files("c-archives", ("runtime",),
+                           "c-archives belongs only to a runtime fixture"),
+    "library-directories": _library_directories,
     "c-args": _c_args,
     "link": _link,
     "constructs": _constructs,
@@ -550,6 +622,13 @@ def _whole(meta, cls, complain):
     if (has("class") and cls == "runtime" and has("c-shared")
             and meta.get("link") != "libc"):
         complain("a runtime fixture with c-shared needs link: libc")
+    if (has("class") and cls == "runtime" and has("c-archives")
+            and meta.get("link") != "libc"):
+        complain("a runtime fixture with c-archives needs link: libc")
+    if has("library-directories") and not has("c-archives"):
+        complain("library-directories needs c-archives")
+    if has("c-archives") and has("root"):
+        complain("c-archives and root cannot be combined")
     if has("with") and not has("program"):
         complain("with names the rest of a module and there is no program"
                  " to be the rest of")
@@ -596,7 +675,7 @@ def read(directory, strict=True):
     path = directory / NAME
     meta, problems = parse(path.read_text(encoding="utf-8"),
                            directory.parent.name, directory.name)
-    for key in ("run_files", "c-sources", "c-shared"):
+    for key in ("run_files", "c-sources", "c-shared", "c-archives"):
         for one in meta._list(key) if not problems else ():
             if not (directory / one).is_file():
                 problems.append("%s names %s, which is missing or not a"

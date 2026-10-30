@@ -1216,9 +1216,12 @@ package body Landin.Stages.Configuration is
             Report_Configuration_Rule
               (Bad.Invalid_Tool_Directive, Of_Tree, Node,
                "this tool directive needs one fixed argument",
-               Note => (if Member = "directory" then "D524: " else "D202: ")
-                 & Base & "." & Member
-                 & " takes exactly one positional argument");
+               Note =>
+                 (if Member = "directory"
+                  then "D524: linker.directory takes exactly one positional"
+                    & " argument"
+                  else "D202: " & Base & "." & Member
+                    & " takes exactly one positional argument"));
          else
             Argument := Syn.Nth_Argument (Of_Tree, Call, 1);
             if Base = "compiler"
@@ -1327,7 +1330,7 @@ package body Landin.Stages.Configuration is
                   if not Valid or else not Has_Name then
                      Report_Configuration_Rule
                        (Bad.Invalid_Tool_Directive, Of_Tree, Argument,
-                        "this is not a portable static library name",
+                        "this is not a portable library name",
                         Note => "[1590]/D202: use ASCII letters, digits, _, -"
                           & " and .; the name must be nonempty, must not start"
                           & " with -, and must not consist only of dots");

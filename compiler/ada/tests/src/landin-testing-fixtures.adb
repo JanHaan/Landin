@@ -274,9 +274,6 @@ package body Landin.Testing.Fixtures is
       end;
    end Append_Module_Arguments;
 
-   --  Each comma-separated entry of TEXT, trimmed, that is not empty.
-   function Entries (Text : String) return Landin.Platform.Path_List;
-
    function Entries (Text : String) return Landin.Platform.Path_List is
       Result : Landin.Platform.Path_List;
       First  : Integer := Text'First;
@@ -390,6 +387,24 @@ package body Landin.Testing.Fixtures is
       end loop;
       return Source (First .. Source'Last - 2);
    end Shared_Stem;
+
+   function C_Archives (Item : Fixture) return String
+     is (Unbounded.To_String (Item.C_Archive_Files));
+
+   function Archive_Of (Source : String) return String is
+      Slash : Natural := 0;
+   begin
+      for Index in Source'Range loop
+         if Source (Index) = '/' then
+            Slash := Index;
+         end if;
+      end loop;
+      return (if Slash = 0 then "" else Source (Source'First .. Slash))
+        & "lib" & Shared_Stem (Source) & ".a";
+   end Archive_Of;
+
+   function Library_Directories (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Search_Directories));
 
    function Link_Mode (Item : Fixture) return String
      is (Unbounded.To_String (Item.Link));
@@ -665,6 +680,8 @@ package body Landin.Testing.Fixtures is
       Seen_C_Sources : Boolean := False;
       Seen_C_Args  : Boolean := False;
       Seen_C_Shared : Boolean := False;
+      Seen_C_Archives : Boolean := False;
+      Seen_Library_Directories : Boolean := False;
       Seen_Link    : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Profiles : Boolean := False;
@@ -1166,6 +1183,111 @@ package body Landin.Testing.Fixtures is
                   end if;
                end;
 
+            elsif Key = "c-archives" then
+               if Seen_C_Archives then
+                  Complain ("duplicate key: c-archives");
+                  return;
+               end if;
+               Seen_C_Archives := True;
+
+               if Expected /= Runtime then
+                  Complain ("c-archives belongs only to a runtime fixture");
+               end if;
+
+               declare
+                  First : Integer := Value'First;
+                  Ok    : Boolean := Value'Length > 0;
+                  Seen  : Landin.Platform.Path_List;
+                  Made  : Landin.Platform.Path_List;
+
+                  procedure Consider (Text : String);
+
+                  procedure Consider (Text : String) is
+                     One : constant String := Trimmed (Text);
+                  begin
+                     if not Is_Relative_C_Source (One) then
+                        Ok := False;
+                        Complain
+                          ("c-archives path is not a relative .c file: "
+                           & (if One = "" then "<empty>" else One));
+                     elsif Seen.Contains (One) then
+                        Ok := False;
+                        Complain ("duplicate c-archives path: " & One);
+                     elsif Made.Contains (Archive_Of (One)) then
+                        Ok := False;
+                        Complain
+                          ("two c-archives sources would build one archive: "
+                           & One);
+                     else
+                        Seen.Append (One);
+                        Made.Append (Archive_Of (One));
+                     end if;
+                  end Consider;
+               begin
+                  for Index in Value'First .. Value'Last + 1 loop
+                     if Index > Value'Last or else Value (Index) = ',' then
+                        Consider (Value (First .. Index - 1));
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if Ok then
+                     Item.C_Archive_Files :=
+                       Unbounded.To_Unbounded_String (Value);
+                  end if;
+               end;
+
+            elsif Key = "library-directories" then
+               if Seen_Library_Directories then
+                  Complain ("duplicate key: library-directories");
+                  return;
+               end if;
+               Seen_Library_Directories := True;
+
+               if Expected /= Runtime then
+                  Complain
+                    ("library-directories belongs only to a runtime"
+                     & " fixture");
+               end if;
+
+               declare
+                  First : Integer := Value'First;
+                  Ok    : Boolean := Value'Length > 0;
+                  Seen  : Landin.Platform.Path_List;
+
+                  procedure Consider (Text : String);
+
+                  procedure Consider (Text : String) is
+                     One : constant String := Trimmed (Text);
+                  begin
+                     if not Is_Below_Directory (One) then
+                        Ok := False;
+                        Complain
+                          ("library-directories entry is not a relative"
+                           & " directory: "
+                           & (if One = "" then "<empty>" else One));
+                     elsif Seen.Contains (One) then
+                        Ok := False;
+                        Complain
+                          ("duplicate library-directories entry: " & One);
+                     else
+                        Seen.Append (One);
+                     end if;
+                  end Consider;
+               begin
+                  for Index in Value'First .. Value'Last + 1 loop
+                     if Index > Value'Last or else Value (Index) = ',' then
+                        Consider (Value (First .. Index - 1));
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if Ok then
+                     Item.Search_Directories :=
+                       Unbounded.To_Unbounded_String (Value);
+                  end if;
+               end;
+
             elsif Key = "c-args" then
                if Seen_C_Args then
                   Complain ("duplicate key: c-args");
@@ -1326,6 +1448,8 @@ package body Landin.Testing.Fixtures is
                C_Files => Unbounded.Null_Unbounded_String,
                C_Options => Unbounded.Null_Unbounded_String,
                C_Libraries => Unbounded.Null_Unbounded_String,
+               C_Archive_Files => Unbounded.Null_Unbounded_String,
+               Search_Directories => Unbounded.Null_Unbounded_String,
                Link    => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
                Profiles => Standard,
@@ -1525,6 +1649,23 @@ package body Landin.Testing.Fixtures is
         and then Unbounded.To_String (Item.Link) /= "libc"
       then
          Complain ("a runtime fixture with c-shared needs link: libc");
+      end if;
+
+      --  D524: an archive is linked by the C driver's -lNAME, which a
+      --  static Linux link refuses (D280), and is found in the work copy,
+      --  which holds the program and not a module root.
+      if Seen_Class and then Item.Class = Runtime and then Seen_C_Archives
+        and then Unbounded.To_String (Item.Link) /= "libc"
+      then
+         Complain ("a runtime fixture with c-archives needs link: libc");
+      end if;
+
+      if Seen_Library_Directories and then not Seen_C_Archives then
+         Complain ("library-directories needs c-archives");
+      end if;
+
+      if Seen_C_Archives and then Seen_Root then
+         Complain ("c-archives and root cannot be combined");
       end if;
 
       --  A `.ldn` program is written in the language, so it is evidence
@@ -1734,7 +1875,17 @@ package body Landin.Testing.Fixtures is
                     C_Sources (Item)
                     & (if C_Sources (Item) /= "" and then C_Shared (Item) /= ""
                        then "," else "")
-                    & C_Shared (Item);
+                    & C_Shared (Item)
+                    & (if (C_Sources (Item) /= ""
+                           or else C_Shared (Item) /= "")
+                         and then C_Archives (Item) /= ""
+                       then "," else "")
+                    & C_Archives (Item);
+                  Shared_End : constant Natural :=
+                    Sources'First + C_Sources (Item)'Length
+                    + (if C_Sources (Item) /= "" and then C_Shared (Item) /= ""
+                       then 1 else 0)
+                    + C_Shared (Item)'Length - 1;
                   First   : Integer := Sources'First;
                   Valid   : Boolean := True;
                begin
@@ -1759,7 +1910,9 @@ package body Landin.Testing.Fixtures is
                                 (Meta & ": "
                                  & (if Index - 1 <= Sources'First
                                          + C_Sources (Item)'Length - 1
-                                    then "c-sources" else "c-shared")
+                                    then "c-sources"
+                                    elsif Index - 1 <= Shared_End
+                                    then "c-shared" else "c-archives")
                                  & " names " & One
                                  & ", which is missing or not a file");
                               Valid := False;

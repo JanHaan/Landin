@@ -1,0 +1,4 @@
+write "out.s"
+write "out"
+run ["x86_64-pc-linux-gnu-gcc","-L/","-L/tmp","-Wl,-rpath,/","-Wl,-rpath,/tmp","out.s","-lthing","-lm","-o","out","-Wl,--gc-sections","-Wa,-march=generic64"]
+remove "out.s"

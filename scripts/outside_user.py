@@ -12,12 +12,17 @@ option, and run.  The environment is PATH alone, so nothing the checkout or
 a developer's shell provides can stand in for what the installation lacks.
 Each program is held to its fixture's status and output oracle, is given its
 fixture's `run_args:` and `run_files:` as its arguments, and reads the file
-its fixture's `stdin:` names as its standard input, or an empty one.
+its fixture's `stdin:` names as its standard input, or an empty one.  The
+first program is also run as `refine run` runs it (D526), and so is one that
+answers with whether it was given the arguments after `--`: each must
+print and end as it does when compiled, and leave no private directory.
 
 With `--stock`, the system is a stock distribution with only its own GCC
 (D364): the first compile's plan must name a driver the distribution
-installs, never the pinned image's `x86_64-pc-linux-gnu-gcc`, and a program
-that traps must report its kind and site (D361) before it ends.
+installs, never the pinned image's `x86_64-pc-linux-gnu-gcc`, a program
+that traps must report its kind and site (D361) before it ends, and a
+program links a C archive the distribution's `gcc` and `ar` built beside
+it, found through `linker.directory` (D523, D524).
 
 The first program is read from its runtime fixture, not from the README
 that shows it: the gate may skip this lane for an edit confined to the
@@ -85,6 +90,98 @@ TRAPPING = """public main: () -> (code: i32) =
     code = values[index]
 end main
 """
+
+
+#  The first program, answering with whether it was given two arguments.
+COUNTED = """import core/io
+import hosted/blocking
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    io.write(host, io.out(host), "Hello, world!\\n") else none
+    code = if io.argument_count(host) == 2 then 3 else 1 end if
+end main
+"""
+
+
+def run_checks(refine, work, env):
+    """D526: `refine run` compiles into a private directory under TMPDIR,
+    runs the program with what follows `--`, ends with its status and
+    removes the directory."""
+    failures = []
+    project = work / "run"
+    project.mkdir(exist_ok=True)
+    scratch = work / "run-tmp"
+    scratch.mkdir(exist_ok=True)
+    env = dict(env, TMPDIR=str(scratch))
+    source, printed, _, _, _ = first_program()
+    (project / "main.ldn").write_text(source, encoding="utf-8")
+    (project / "counted.ldn").write_text(COUNTED, encoding="utf-8")
+    for argv, status in (([str(refine), "run", "main.ldn"], 0),
+                         ([str(refine), "run", "counted.ldn", "--", "one",
+                           "--two"], 3)):
+        ran, report = run(argv, project, env, "refine run")
+        left = sorted(one.name for one in scratch.iterdir()
+                      if one.name.startswith("refine-run-"))
+        if ran.returncode != status:
+            failures.append("expected status %d\n%s" % (status, report))
+        elif ran.stdout != printed:
+            failures.append("output differs from the first program's\n%s"
+                            % report)
+        elif left:
+            failures.append("refine run left %s in %s\n%s"
+                            % (", ".join(left), scratch, report))
+        else:
+            print("ok   %s" % " ".join(["refine"] + argv[1:]))
+    if sorted(one.name for one in project.iterdir()) != ["counted.ldn",
+                                                         "main.ldn"]:
+        failures.append("refine run wrote beside its source: %s" % ", ".join(
+            sorted(one.name for one in project.iterdir())))
+    return failures
+
+
+#  D523, D524: a C archive beside the program's source, whose function has
+#  a mixed-case C name.
+ARCHIVED = """linker.library("mixed")
+linker.directory("lib")
+
+extern(c) link(symbol: "AddInts") add_ints: (a: i32, b: i32) -> (sum: i32)
+
+public main: () -> (code: i32) =
+    code = add_ints(40, 2)
+end main
+"""
+
+MIXED = """int AddInts(int a, int b)
+{
+    return a + b;
+}
+"""
+
+
+def archive_checks(refine, work, env):
+    """A program that links a C archive the distribution's `gcc` and `ar`
+    built in `lib/` beside it, found through `linker.directory`."""
+    failures = []
+    project = work / "archive"
+    (project / "lib").mkdir(parents=True, exist_ok=True)
+    (project / "main.ldn").write_text(ARCHIVED, encoding="utf-8")
+    (project / "lib" / "mixed.c").write_text(MIXED, encoding="utf-8")
+    for argv in (["gcc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-fPIC",
+                  "-O2", "-c", "lib/mixed.c", "-o", "lib/mixed.o"],
+                 ["ar", "rcs", "lib/libmixed.a", "lib/mixed.o"],
+                 [str(refine), "compile", "--link=libc", "main.ldn", "-o",
+                  "prog"]):
+        built, report = run(argv, project, env, "C archive")
+        if built.returncode != 0:
+            failures.append(report)
+            return failures
+    ran, report = run([str(project / "prog")], project, env, "C archive")
+    if ran.returncode != 42:
+        failures.append("expected status 42\n%s" % report)
+    else:
+        print("ok   a C archive beside the source")
+    return failures
 
 
 def stock_checks(refine, work, env):
@@ -161,9 +258,14 @@ def main():
         else:
             print("ok   %s" % name)
 
+    failures += run_checks(refine, work, env)
+    programs += [("refine run",), ("refine run with arguments",)]
+
     if args.stock:
         failures += stock_checks(refine, work, env)
         programs.append(("stock driver and trap report",))
+        failures += archive_checks(refine, work, env)
+        programs.append(("a C archive beside the source",))
 
     for failure in failures:
         print("FAIL " + failure, file=sys.stderr)

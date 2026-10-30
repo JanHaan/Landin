@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D202 links the fegetround routine from the platform libm archive beside its extern declaration
+summary: D202 and D523 link the fegetround routine from the platform libm, as the C driver's -lm, beside its extern declaration
 program: main.ldn
 constructs: 1560, 1580, 1590
 targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

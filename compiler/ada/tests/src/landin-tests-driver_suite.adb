@@ -3647,8 +3647,7 @@ package body Landin.Tests.Driver_Suite is
    begin
       Refused ("linker.directory(""missing"")" & LF,
                ["--emit=exe", "--link=libc"], Landin.Driver.Status_Reported,
-               "error[L0391]: linker.directory names no directory:"
-               & " /virtual/compile/missing",
+               "error[L0391]: linker.directory names no directory: missing",
                "a missing directive directory");
       Refused ("linker.directory(""missing"")" & LF,
                Landin.Platform.No_Arguments, Landin.Driver.Status_Reported,
@@ -3720,8 +3719,7 @@ package body Landin.Tests.Driver_Suite is
                  (Item, Contains
                     (Report, "error[L0509]: the link found no library"
                      & " `raylib`: no libraylib.so or libraylib.a in"
-                     & " /virtual/compile/vendor (-L),"
-                     & " /virtual/compile/lib (linker.directory at"
+                     & " vendor (-L), lib (linker.directory at"
                      & " main.ldn:2), or the C driver's own directories")
                   and then Contains (Report, "--> main.ldn:1:1")
                   and then Contains (Report, "-L DIR")

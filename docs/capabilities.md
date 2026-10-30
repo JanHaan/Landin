@@ -74,11 +74,20 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   an artifact. It takes every option that says which program is compiled,
   `--link`, `--firmware-entry` and `--build-report` among them, and with
   `--root` the operand is the entry module's directory or its source files.
+  It stays silent when the program is accepted.
 - `refine compile program.ldn -o program` assembles and links an executable.
   `--emit asm` writes assembly, `--emit ir` writes the IR the backend would
   receive, and `refine compile program.s -o program` links an assembly file
   as a compiled program is linked. The compile leaves only the executable;
   `--keep-asm` keeps the assembly beside it.
+- `refine run program.ldn -- ARGUMENT ...` compiles into a new private
+  directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
+  the arguments after `--` exactly, exits with its status, or with 128 and
+  the number of the signal that ended it and a line naming it, and removes
+  the directory on every way out. It takes `compile`'s options except those
+  that say what is written, and runs only the compiler's own host. A bare
+  `refine program.ldn` checks and says that it wrote nothing, naming both
+  commands; `-q` silences that line.
 - The default target is the compiler's own host; cross-compilation names a
   `--target`. Bare source requests and `--emit=asm|exe` remain
   compatibility spellings, and `build` is reserved for future project
@@ -176,8 +185,6 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 
 - `refine compile --dry-run` checks and emits in memory, prints planned
   writes and tool arguments, and performs no writes or tool executions.
-  Darwin archive lookup is identified as a deferred step when it requires
-  running a tool.
 - `--depfile PATH` writes Make-format source dependencies after successful
   emission, including observed module-search directories so import
   membership changes can cause a rebuild. Keep artifacts and reports outside
@@ -393,6 +400,14 @@ process ignores SIGPIPE and gives its children the default back.
   Linux executables link with no C library by default (`--link=libc` keeps
   it), through the first GCC a distribution installs that the host can
   start.
+- `linker.library("NAME")` links a C library under `--link=libc` as the C
+  driver's `-lNAME`, shared or archive, on every hosted target.
+  `linker.directory("DIR")`, relative to its file, and a repeatable `-L DIR`
+  on `check`, `compile` and `run` say where, `-L`'s first, and each is also
+  the executable's runtime search path. A missing directory is refused
+  before any tool runs, and a library a failed link cannot find is L0509,
+  naming every directory searched. The static Linux link and firmware
+  refuse all three.
 - `platform/c` supplies aliases for the supported LP64 C ABIs, and
   `platform/cortex_m` supplies M-profile CPU operations.
 - An import outside a module's target scope is refused by name, including

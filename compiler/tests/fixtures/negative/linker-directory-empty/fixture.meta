@@ -1,0 +1,9 @@
+class: negative
+summary: linker.directory needs a nonempty directory
+program: main.ldn
+codes: L0391
+constructs: 1590
+targets: linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/linker-directory-empty/main.ldn
+status: 1

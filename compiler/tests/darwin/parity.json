@@ -6,7 +6,7 @@
       "status": "1"
     },
     "runtime/r430-static-library": {
-      "reason": "The pinned Apple SDK supplies libSystem, not libm.a. Exact archive selection and missing-archive refusal run in the native binding/archive command.",
+      "reason": "The fixture names the targets whose libm archive it was written for, and the pinned Apple SDK has none. The native binding command links an archive through -L, takes what a C program takes from a linker.directory holding an archive and a dylib, and refuses a missing library as L0509.",
       "replacement": "bindings/archive-selection"
     },
     "abi/r440-bindings-generated": {

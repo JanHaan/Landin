@@ -174,6 +174,22 @@ def standard_input(base, meta):
     return as_meta(meta).standard_input(base)
 
 
+def archives(base, meta, copy, label, run, cwd):
+    """A `c-archives` fixture's work copy COPY, with each source compiled
+    alone by Apple's Clang and archived alone as `lib<stem>.a` in its own
+    directory there (compiler/tests/README.md).  The program is compiled
+    from the copy, so its `linker.directory` finds them, and the driver
+    resolves each `-lNAME` as it would for C."""
+    meta.work_copy(base, copy)
+    for index, (name, archive) in enumerate(zip(meta.c_archives, meta.archives)):
+        obj = copy / (archive + ".o")
+        run.command(["/usr/bin/clang", "-arch", "arm64", "-std=c11", "-Wall", "-Wextra",
+                     "-Werror", "-fPIC", "-O2", "-c", base / name, "-o", obj],
+                    label + f"-archive-{index}-compile", cwd)
+        run.command(["/usr/bin/ar", "rcs", copy / archive, obj], label + f"-archive-{index}", cwd)
+    return copy
+
+
 class Run:
     def __init__(self, directory):
         self.directory = directory
@@ -308,10 +324,14 @@ def main(argv=None):
                 assembly = directory / (label + ".s")
                 object_file = directory / (label + ".o")
                 executable = directory / label
+                cwd = ROOT / "compiler/ada"
+                #  A `c-archives` fixture is compiled from its work copy,
+                #  `library-directories` its -L before the program.
+                compiled = (archives(base, meta, directory / (label + "-copy"), label, run, cwd)
+                            if meta.c_archives else base)
                 argv = [refine, "--target=darwin-arm64", "--optimize=" + optimize,
                         "--specialize=" + specialize, *(["--level=" + level] if level else []),
-                        *meta.module_arguments(base)]
-                cwd = ROOT / "compiler/ada"
+                        *meta.library_arguments(compiled), *meta.module_arguments(compiled)]
                 # Runtime cases exercise refine's native driver selection;
                 # ABI cases retain a separate Apple-assembled Mach-O object.
                 if meta["class"] == "runtime" and not meta.get("c-sources"):

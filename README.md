@@ -89,7 +89,7 @@ keeps the compiler's own internal checks on.
 `refine` uses the clone's own library, so leave it where it is and put its
 directory on your `PATH`.
 
-**Linking on Linux** needs a C compiler driver: the GCC your distribution
+**Linking on Linux**, and so `refine run`, needs a C compiler driver: the GCC your distribution
 installs, `x86_64-linux-gnu-gcc` on Debian and Ubuntu,
 `x86_64-redhat-linux-gcc` on Fedora, or `gcc`, which `nix-shell -p gcc`
 provides on NixOS. Without one, `refine` says what to install; checking,
@@ -123,7 +123,15 @@ public main: () -> (code: i32) =
 end main
 ```
 
-Compile and run it:
+Run it:
+
+```sh
+refine run main.ldn
+```
+
+`refine run` compiles the program into a private temporary directory, runs
+it, exits with its status and removes the directory. To keep the
+executable, compile it instead:
 
 ```sh
 refine compile main.ldn -o hello
@@ -166,6 +174,7 @@ it names.
 | command | what it does |
 | --- | --- |
 | `refine check main.ldn` | check a whole program, writing nothing |
+| `refine run main.ldn -- ARGS` | compile, run and remove a program, exiting with its status |
 | `refine compile main.ldn -o prog` | compile and link an executable |
 | `refine compile --debug=full ...` | include source debugging for GDB or LLDB |
 | `refine compile --target=linux-arm64 ...` | compile for another target; `refine targets` lists them |

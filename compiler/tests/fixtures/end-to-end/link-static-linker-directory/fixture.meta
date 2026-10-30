@@ -1,0 +1,8 @@
+class: end-to-end
+summary: a static Linux link refuses linker.directory, at a check as at compiling, naming --link=libc
+program: main.ldn
+constructs: 1590
+targets: linux-x86-64
+expect: expected.txt
+args: check --target=linux-x86-64 ../tests/fixtures/end-to-end/link-static-linker-directory/main.ldn
+status: 1

@@ -313,8 +313,9 @@
             let
               cc = cross.buildPackages.gcc;
               prefix = cc.targetPrefix;
-              #  A `linker.library` request for a static archive links
-              #  `-l:libm.a`, and nixpkgs keeps glibc's archives in a
+              #  `linker.library` asked for a static archive, `-l:libm.a`,
+              #  until D523 made it the driver's `-lm`, which takes the
+              #  shared libm first; nixpkgs keeps glibc's archives in a
               #  separate output that no wrapper searches.  The driver gets
               #  a directory holding only the maths archives: a user -L
               #  precedes the cross compiler's own libc directory, and with
@@ -411,6 +412,7 @@
               ln -s ${llvm19.lld}/bin/ld.lld "$out/bin/ld.lld-19"
               ln -s ${llvm19.llvm}/bin/llvm-objdump "$out/bin/llvm-objdump-19"
               ln -s ${llvm19.llvm}/bin/llvm-nm "$out/bin/llvm-nm-19"
+              ln -s ${llvm19.llvm}/bin/llvm-ar "$out/bin/llvm-ar-19"
             '';
 
           crossTools = lib.optionals pkgs.stdenv.hostPlatform.isLinux (
@@ -656,10 +658,10 @@
 
             #  The binding generator's Linux C model comes from the same
             #  package-set pin as Clang, rather than from host Darwin headers.
-            #  Explicit static-library requests also need nixpkgs' separate
-            #  static glibc output: the ordinary libc output does not hold
-            #  libm.a.  Keep the shared output first so the driver's own -lc
-            #  remains dynamic while -l:libm.a can reach the requested archive.
+            #  Library requests were static archives, `-l:libm.a`, until
+            #  D523 made them the driver's `-lNAME`, and nixpkgs' separate
+            #  static glibc output held libm.a.  Keep the shared output first
+            #  so the driver's own -lc and a request's -lm stay dynamic.
             buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               (lib.getLib pkgs.glibc)
               pkgs.glibc.dev

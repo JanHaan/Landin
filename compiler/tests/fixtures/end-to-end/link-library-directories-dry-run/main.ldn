@@ -1,0 +1,10 @@
+--  D523/D524: each directory reaches the C driver before the assembly,
+--  -L's before the directives', and again as the runtime path; each
+--  library after it as -lNAME.
+linker.library("thing")
+linker.directory("/tmp")
+linker.library("m")
+
+public main: () -> (code: i32) =
+    code = 0
+end main

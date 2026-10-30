@@ -1,0 +1,8 @@
+class: end-to-end
+summary: -L is an option of check, compile and run, and fmt refuses it
+program: main.ldn
+constructs: 1590
+targets: linux-x86-64
+expect: expected.txt
+args: fmt --check -L / ../tests/fixtures/end-to-end/link-library-directory-option-elsewhere/main.ldn
+status: 2
