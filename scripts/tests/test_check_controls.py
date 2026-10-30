@@ -1323,6 +1323,28 @@ def status_of(work):
     return text[own:text.index("\n", own)]
 
 
+def then(first, second):
+    """Two edits, one after the other."""
+    return lambda text: second(first(text))
+
+
+def scheduled_pair():
+    """A register row scheduled on two items, made from the real roadmap.
+
+    The first row scheduled on one item gains a second, a planned item, so
+    that these controls do not depend on the register holding a row with
+    two owners at the time.
+    """
+    text = real_roadmap()
+    first = re.search(r"\| scheduled (R\d+\.\d+)(?:, R\d+\.\d+)* \|",
+                      text).group(1)
+    later = next(item for item in re.findall(
+        r"\n### (R\d+\.\d+) — [^\n]*\n\nStatus: planned\n", text)
+        if item != first)
+    return first, later, once("| scheduled %s |" % first,
+                              "| scheduled %s, %s |" % (first, later))
+
+
 def real_roadmap():
     """The roadmap these controls break, read rather than transcribed."""
     return (Path(checker.ROOT) / "ROADMAP.md").read_text(encoding="utf-8")
@@ -1442,24 +1464,22 @@ class RoadmapStructure(unittest.TestCase):
                             for why in said))
 
     def test_every_scheduled_owner_is_checked(self):
-        owners = re.search(r"\| scheduled (R\d+\.\d+(?:, R\d+\.\d+)+) \|",
-                           real_roadmap()).group(1)
-        later = owners.split(", ")[1]
-        said = roadmap_faults(once("| scheduled " + owners + " |",
-                                   "| scheduled " + owners.replace(
-                                       later, CLOSED, 1) + " |"))
+        first, later, owners = scheduled_pair()
+        said = roadmap_faults(then(
+            owners, once("| scheduled %s, %s |" % (first, later),
+                         "| scheduled %s, %s |" % (first, CLOSED))))
         self.assertTrue(any("scheduled on " + CLOSED in why for why in said))
 
-        said = roadmap_faults(restate(later, status_of(later), "complete"))
+        said = roadmap_faults(then(
+            owners, restate(later, status_of(later), "complete")))
         self.assertTrue(any("still scheduled on finished " + later in why
                             for why in said))
 
     def test_a_repeated_scheduled_owner_is_reported(self):
-        owners = re.search(r"\| scheduled (R\d+\.\d+(?:, R\d+\.\d+)+) \|",
-                           real_roadmap()).group(1)
-        first = owners.split(", ")[0]
-        said = roadmap_faults(once("| scheduled " + owners + " |",
-                                   "| scheduled " + owners + ", " + first + " |"))
+        first, later, owners = scheduled_pair()
+        said = roadmap_faults(then(
+            owners, once("| scheduled %s, %s |" % (first, later),
+                         "| scheduled %s, %s, %s |" % (first, later, first))))
         self.assertTrue(any("repeats scheduled owner " + first in why
                             for why in said))
 
