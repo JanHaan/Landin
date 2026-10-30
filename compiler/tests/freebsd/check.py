@@ -192,9 +192,14 @@ class Lane:
                               'object_sha256': sha(obj)})
             assembler = ['-fno-integrated-as', '-Wa,-march=generic64'] if self.args.arch == 'amd64' else ['-march=' + (level or 'armv8-a')]
             # The link discards the private labels -Wa,-L kept, as refine's
-            # own does (D475).
+            # own does (D475), and drops every section nothing retained
+            # reaches, as refine's own does: an unreached library routine
+            # may name a C symbol the link has no library for, as
+            # platform/posix's thread start names libthr's pthread_create
+            # (D518).
             self.command([self.driver, *assembler, assembly, *objects, *cargs,
-                          '-Wl,--discard-locals', '-o', executable], label + '-link')
+                          '-Wl,--discard-locals', '-Wl,--gc-sections',
+                          '-o', executable], label + '-link')
         # `c-shared:` sources become shared objects the program loads, which
         # the bundle carries beside it; their guest paths are its first
         # arguments (compiler/tests/README.md).
