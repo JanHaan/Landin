@@ -43969,6 +43969,7 @@ file negative/c-layout-second-word/program.ldn tokens 16
   51 53 u8
   54 57 end
   58 64 record
+file negative/c-name-with-capitals/program.ldn refused no rule spells 'I'
 file negative/c-packed-aligned-part/program.ldn tokens 68
   0 7 aligned
   7 8 :
@@ -44237,6 +44238,96 @@ file negative/c-packed-field-address/program.ldn tokens 112
   427 433 packet
   434 437 end
   438 441 use
+file negative/c-record-holds-no-plain-struct/program.ldn tokens 50
+  0 7 vector2
+  7 8 :
+  9 13 type
+  14 15 =
+  16 22 struct
+  27 28 x
+  28 29 :
+  30 33 f32
+  38 39 y
+  39 40 :
+  41 44 f32
+  45 48 end
+  49 56 vector2
+  58 64 camera
+  64 65 :
+  66 70 type
+  71 72 =
+  73 79 layout
+  79 80 (
+  80 81 c
+  81 82 )
+  83 89 struct
+  94 100 offset
+  100 101 :
+  102 109 vector2
+  114 118 zoom
+  118 119 :
+  120 123 f32
+  124 127 end
+  128 134 camera
+  136 142 extern
+  142 143 (
+  143 144 c
+  144 145 )
+  146 150 link
+  150 151 (
+  151 157 symbol
+  157 158 :
+  159 177 "GetMousePosition"
+  177 178 )
+  179 197 get_mouse_position
+  197 198 :
+  199 200 (
+  200 201 )
+  202 204 ->
+  205 206 (
+  206 214 position
+  214 215 :
+  216 223 vector2
+  223 224 )
+file negative/c-record-not-layout-c/program.ldn tokens 38
+  0 5 color
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 r
+  26 27 :
+  28 30 u8
+  35 36 g
+  36 37 :
+  38 40 u8
+  45 46 b
+  46 47 :
+  48 50 u8
+  55 56 a
+  56 57 :
+  58 60 u8
+  61 64 end
+  65 70 color
+  72 78 extern
+  78 79 (
+  79 80 c
+  80 81 )
+  82 86 link
+  86 87 (
+  87 93 symbol
+  93 94 :
+  95 112 "ClearBackground"
+  112 113 )
+  114 130 clear_background
+  130 131 :
+  132 133 (
+  133 137 tint
+  137 138 :
+  139 144 color
+  144 145 )
+  146 148 ->
+  149 153 none
 file negative/c-symbol-differs-only-in-escaping/main.ldn tokens 39
   0 6 import
   7 13 keeper
@@ -61941,6 +62032,7 @@ file negative/hosted-system-runs-no-programs/main.ldn tokens 135
   816 817 0
   818 821 end
   822 826 main
+file negative/identifier-with-capitals/program.ldn refused no rule spells 'C'
 file negative/if-expression-missing-else/program.ldn tokens 22
   0 1 f
   1 2 :

@@ -183,7 +183,10 @@ different responsibilities.
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
 | `Landin.Diagnostics.Warning_Policy` | catalogued warning selection and ordered invocation overrides, preserving diagnostic data when denied | change language legality, suppress an error or perform host effects |
 | `Landin.Diagnostics.Explanations` | what `refine explain` prints for each code, generated from `docs/diagnostics.md` | be edited by hand, or say anything the page does not |
-| `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
+| `Landin.Diagnostics.Citations` | each construct's and decision's title, document, register section and page, generated from `tour.md` and `spec.md` | be edited by hand, or say anything the documents do not |
+| `Landin.Diagnostics.Citations.Texts` | the text `refine explain --full` adds, a construct's to its next heading and a decision's `Chosen` paragraphs, generated from the same documents and rendered for a terminal | be edited by hand, or say anything the documents do not |
+| `Landin.Diagnostics.Citations.Answers` | reading `[1590]`, `1590`, `D275` and `d275`, and what `refine explain` prints for one | decide which numbers exist, or reach a file |
+| `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic, and a word with a capital into one once the parse says what it names | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Diagnostics.Checking` | turning a type that does not agree, a checker-recognised deferred use or D251's warning into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |

@@ -96,7 +96,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   [`docs/server.md`](server.md) describes. The packages under `highlight/`
   start it.
 - `refine explain CODE` prints [what a diagnostic code means](diagnostics.md)
-  and what to change.
+  and what to change. It answers the citations a note carries as well:
+  `refine explain [1760]` or `D275` names the construct's or decision's title,
+  its document and its page on the site, and `--full` adds the construct's
+  text or the decision's chosen rule, from a copy the compiler carries.
 
 ### Help, options and completion
 

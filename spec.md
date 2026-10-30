@@ -20160,14 +20160,22 @@ word is not reported again. When the word is the name of a function declared
 with `link(symbol: "InitWindow")` and the name in lower case with
 underscores, `init_window`. Elsewhere the note offers the lower-case
 spelling. A run holding a byte no rule spells keeps its own report.
+Each place the word is written is its own report, the declaration's and every
+use's, and a word whose lower-case spelling is a keyword, `End`, is told that
+spelling is reserved. The scan reads the word as an identifier and leaves its
+report to the parse, which alone knows whether the word names such a
+function, so the command line and `refine lsp` say the same.
 
 **The alternatives:** a report per run of capitals, which is what the trial
 met; admitting capitals in a C function's name, which gives Landin two
 identifier rules; and folding the case of an `extern(c)` name silently, which
 links a symbol the source does not spell. All were declined.
 
-**Pinned by** nothing that runs yet: the item that implements it adds a
-negative fixture declaring raylib's `InitWindow`.
+**Pinned by** `negative/c-name-with-capitals`, raylib's `InitWindow` and
+`CloseWindow`, `negative/identifier-with-capitals` and
+`negative/upper-case-name`, and the cases `lexer/capitalised words are one
+fault`, `lexer/reserved words and near misses` and `catalogue/capitalised
+words have exact reports`.
 
 ### D529 — L0346 names the record that is not `layout(c)`
 
@@ -20178,17 +20186,23 @@ parameter whose only fault was a record without `layout(c)`.
 **Chosen:** a C signature whose parameter or result is a record without
 `layout(c)` is L0346 naming the part and the record, "C cannot take `tint`:
 `color` is not `layout(c)`", with a note saying to declare the record
-`layout(c) struct` and why its layout is otherwise the compiler's own
-(D252). The other faults of a C signature keep their notes. The row keeps
-one note and one secondary label.
+`layout(c) struct` and why its layout is otherwise Landin's own, which C
+does not share ([0750]). The other faults of a C signature keep their notes.
+The row keeps one note and one secondary label. A result is "C cannot return
+`result`", and a `layout(c)` record holding such a struct by value is the
+same refusal at its field, "a C record cannot hold `offset`: `vector2` is not
+`layout(c)`"; a parameter's and a field's note also offer `ptr` to the
+struct. A struct behind a pointer crosses as it did, and a pointer union or a
+variant keeps [1580]'s whole rule.
 
 **The alternatives:** a label at the record's declaration, which changes the
 catalogue row's shape for one cause, and the general note with the record
 named after it, which still leaves the reader the eleven clauses. Both were
 declined.
 
-**Pinned by** nothing that runs yet: the item that implements it adds a
-negative fixture passing a plain struct to C by value.
+**Pinned by** `negative/c-record-not-layout-c`, a plain struct passed to C
+by value, `negative/c-record-holds-no-plain-struct`, its result and its field,
+and `negative/external-aggregate-boundary`.
 
 ### D530 — `refine explain` answers a construct and a decision
 
@@ -20205,6 +20219,15 @@ its next heading, and a decision's `Chosen` paragraph. The table is
 generated into the compiler by `python3 check.py --catalogue` from `tour.md`
 and `spec.md`, and the check holds it to them. A number that names nothing
 is refused as an unknown code is.
+The page is the address the site gives the heading: a construct's number,
+`tour.html#1590`, and a decision's heading as the renderer slugs it,
+`spec.html#d275-the-compiler-finds-its-library-beside-itself`, and the
+register section is named as the site heads it. The text is shown for a
+terminal: a code span keeps its backticks, as an explanation's does, a link
+is its text and bold its words, a paragraph is one line and a fenced block is
+indented four spaces. `--full` may stand anywhere among what is asked, and a
+decision's `Chosen` text runs to the next paragraph that opens with a bold
+label.
 
 **The alternatives:** the title and place only, which leaves a reader
 offline with a heading; every decision's whole entry, which is most of
@@ -20212,8 +20235,11 @@ offline with a heading; every decision's whole entry, which is most of
 which a reader must still search. The maintainer chose the place by default
 and the text on request.
 
-**Pinned by** nothing that runs yet: the item that implements it adds
-`explain` cases to the test program.
+**Pinned by** the cases `driver/explain answers citations`,
+`driver/explain is a subcommand` and `commands/help and queries`, and
+`check.py`'s comparison of the generated
+`compiler/ada/src/diagnostics/landin-diagnostics-citations.adb` and
+`landin-diagnostics-citations-texts.adb` with the documents.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
