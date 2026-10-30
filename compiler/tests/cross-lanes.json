@@ -35,6 +35,12 @@
       "runners": ["qemu-aarch64", "qemu-riscv64"],
       "failures": ["the program's own exit status (expected 42, actual 6)"],
       "reason": "QEMU's user emulation answers getsockopt(SO_RCVTIMEO) with a zero-length record, so the receive limit the fixture set does not read back"
+    },
+    {
+      "fixture": "runtime/atomic-store-buffering-between-processes",
+      "runners": ["qemu-aarch64"],
+      "failures": ["the program's own exit status (expected 42, actual 8)"],
+      "reason": "QEMU 11.1 translates STLR as a release barrier and then the store, and LDAR as the load and then an acquire barrier, so nothing keeps a store-release before a later load-acquire, which ARMv8 orders (RCsc); on an x86-64 host the store buffer then lets both seq_cst loads of a store-buffering round read the old values, at --optimize speed in every local run. The gate's Linux arm64 lane runs it on hardware"
     }
   ]
 }

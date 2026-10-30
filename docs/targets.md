@@ -206,11 +206,11 @@ ABI, is the same at every level of a family.
 | target | default | other levels | what a higher level selects | tool arguments and assembly directives |
 |---|---|---|---|---|
 | `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64` with the level's extensions, at every level; `-Wl,-z,x86-64-vN` above the baseline |
-| `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly, and `-Wa,-march=` with the level, at every level |
+| `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldadd`/`swp`/`cas`, in the ordering's form, for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly, and `-Wa,-march=` with the level, at every level |
 | `freebsd-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 shifts from v3 | GNU as with `-Wa,-march=generic64` plus the selected extensions; no loader level note |
 | `freebsd-arm64` | `armv8-a` | `armv8.1-a` | LSE atomic read-modify-write | `.arch` and Clang `-march=` with the selected level |
 | `linux-rv64` | `rv64gc` | `rv64gc_zba`, `rv64gc_xtheadba`, `rv64gc_zba_xtheadba` | `sh1add`/`sh2add`/`sh3add` or `th.addsl` for indexed addresses | selected ISA string passed to GNU tools with LP64D |
-| `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
+| `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldadd`/`swp`/`cas`, in the ordering's form, for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
 
@@ -243,13 +243,14 @@ that runs the lane confirms every feature of it. A native Linux lane reads
 its host's `/proc/cpuinfo`; a cross Linux lane asks its runner rather than
 assuming an emulator has everything, because QEMU's `-cpu cortex-a53` has
 no LSE, so a C program the lane's driver links copies `/proc/cpuinfo` as the
-runner presents it; Darwin asks `hw.optional.arm.FEAT_LSE`. A level nothing
+runner presents it; on a Mac the test program asks the `hw.optional.arm`
+sysctls `FEAT_LSE`, `FEAT_CRC32` and `FEAT_RDM`, and the Darwin lane `FEAT_LSE`. A level nothing
 confirmed fails as `UNVERIFIED` rather than being skipped, and is never
 inferred from the default's run or from another target's lane. The test
 program says on standard error which levels were confirmed and by what.
 Each lane requires the executable it ran to show the level: the ISA note on
-Linux x86-64; on arm64 the LSE instructions and no `ldxr`/`stxr` loop at
-`armv8.1-a`, and no LSE instruction in the default's image of the same
+Linux x86-64; on arm64 the LSE instructions and no exclusive loop, `ldxr`
+or `ldaxr` and `stxr` or `stlxr`, at `armv8.1-a`, and no LSE instruction in the default's image of the same
 fixture; and hardware division and no 32-bit helper on Cortex-M, where
 `armv7-m` runs on QEMU's Cortex-M3.
 
@@ -672,21 +673,44 @@ checks natural alignment at runtime, including inside `unchecked`. The M0
 source contract refuses exchange/add/compare-exchange. The backend emits the
 admitted loads/stores and barriers; it introduces no atomic runtime helper. Synthetic-32 refuses these operations.
 
-The initial hosted lowering deliberately strengthens every atomic ordering.
-x86 uses aligned MOV for loads, XCHG for stores/exchanges, LOCK XADD for wrapping
-fetch-add and LOCK CMPXCHG for strong compare-exchange, with MFENCE before and
-after each. Darwin uses DMB ISH before and after, ordinary scalar load/store,
-and a baseline LDXR/STXR retry loop for read-modify-write; a failed comparison
-clears the reservation with CLREX. At the default `armv8-a` level it requires no
-LSE extension or out-of-line atomic helper. At `armv8.1-a` (D255) each
-read-modify-write is instead one LSE instruction, LDADDAL, SWPAL or CASAL at
-the access's width, inside the same DMB ISH pair. Retry loops promise no
-wait-free bound. Scalar volatile accesses
-use exactly one width-matched load/store and no implicit hardware fence.
+Each atomic is lowered by its ordering (D499), by its architecture's published
+mapping of the C/C++11 orderings, and is a full compiler memory boundary
+whatever its ordering. In the table `l` and `s` are RV64's load and store at
+the access's width.
 
-Compiler barriers have no hardware instruction. Thread fences use MFENCE or
-DMB ISH. Device barriers use MFENCE or DMB SY; completion barriers use MFENCE
-or DSB SY. CPU atomic contracts assume ordinary coherent RAM (x86 write-back;
+| ordering | x86-64 (x86-TSO) | arm64 | RV64 (RVWMO, Table A.6) | Cortex-M0 |
+|---|---|---|---|---|
+| load relaxed | MOV | LDR | `l` | LDR |
+| load acquire | MOV | LDAR | `l`; FENCE R,RW | LDR; DMB SY |
+| load seq_cst | MOV | LDAR | FENCE RW,RW; `l`; FENCE R,RW | LDR; DMB SY |
+| store relaxed | MOV | STR | `s` | STR |
+| store release | MOV | STLR | FENCE RW,W; `s` | DMB SY; STR |
+| store seq_cst | XCHG | STLR | FENCE RW,W; `s` | DMB SY; STR; DMB SY |
+| read-modify-write relaxed | XCHG, LOCK XADD, LOCK CMPXCHG | LDXR/STXR loop, or SWP, LDADD, CAS | AMO, or LR/SC loop | refused |
+| acquire | the same | LDAXR/STXR, or the A form | `.aq` on the AMO or the LR | refused |
+| release | the same | LDXR/STLXR, or the L form | `.rl` on the AMO or the SC | refused |
+| acq_rel | the same | LDAXR/STLXR, or the AL form | `.aqrl` on the AMO; LR `.aq`, SC `.rl` | refused |
+| seq_cst | the same | LDAXR/STLXR, or the AL form | `.aqrl` on the AMO; LR `.aqrl`, SC `.rl` | refused |
+| fence acquire | none | DMB ISHLD | FENCE R,RW | DMB SY |
+| fence release | none | DMB ISH | FENCE RW,W | DMB SY |
+| fence acq_rel | none | DMB ISH | FENCE.TSO | DMB SY |
+| fence seq_cst | MFENCE | DMB ISH | FENCE RW,RW | DMB SY |
+
+A compare-exchange is lowered by its success ordering, which is never weaker
+than its failure ordering (D227), so its acquiring read serves a failed
+comparison too; a failed exclusive comparison on arm64 clears the reservation
+with CLREX. The arm64 exclusive loops need no LSE extension or out-of-line
+atomic helper at the default `armv8-a` level; at `armv8.1-a` (D255) each
+read-modify-write is one LSE instruction at the access's width, and RV64's
+one- and two-byte read-modify-writes are LR/SC loops on the aligned word that
+holds them, which keep every byte outside the access. ARMv6-M's DMB has only
+the SY option. Retry loops promise no wait-free bound. Scalar volatile
+accesses use exactly one width-matched load/store and no implicit hardware
+fence.
+
+Compiler barriers have no hardware instruction. Device barriers use MFENCE,
+DMB SY or FENCE IORW,IORW; completion barriers use MFENCE, DSB SY or FENCE
+IORW,IORW. CPU atomic contracts assume ordinary coherent RAM (x86 write-back;
 Arm Normal shareable memory). Device/MMIO behavior requires platform mappings,
 permitted bus width and the device's completion protocol. A fence cannot turn
 an arbitrary user pointer into a valid device mapping or drain a device's
@@ -694,6 +718,12 @@ internal command queue. On x86, MFENCE provides global visibility ordering,
 not instruction serialization or a peripheral acknowledgment; posted writes
 can require a device-specific readback. On Arm, DSB waits for architectural
 completion, which also does not imply peripheral-command completion. No portable cache-maintenance builtin is enabled.
+
+The mappings for x86-64, arm64 and Cortex-M0 are those collected in
+[Sewell's C/C++11 mappings to processors](https://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html),
+x86-TSO's and ARMv8's, and ARMv7's for a core without acquire and release
+instructions; RV64's is Table A.6 of the memory model appendix of
+[the RISC-V unprivileged ISA](https://github.com/riscv/riscv-isa-manual/releases).
 
 Official architecture and toolchain references checked on 2026-09-16:
 [Armv6-M reference manual DDI0419E](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),

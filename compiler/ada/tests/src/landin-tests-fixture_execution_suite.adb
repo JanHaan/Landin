@@ -1413,8 +1413,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  An arm64 executable carries no level note, so the image that ran is
    --  held to its level by its instructions.  At Armv8.1-A an atomic
    --  read-modify-write is one LSE instruction and none of the default's
-   --  exclusive-monitor loops, `ldxr` and `stxr` at any width, remains; at
-   --  the default the same fixture's image holds no LSE instruction at all.
+   --  exclusive-monitor loops, `ldxr`, `ldaxr`, `stxr` and `stlxr` at any
+   --  width, remains; at the default the same fixture's image holds no LSE
+   --  instruction at all, at any ordering (D499).
    --  The lane's toolchain says which objdump reads the image.
    procedure Check_Arm64_Level
      (Built, Label : String; Leveled : Boolean;
@@ -1445,12 +1446,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Text : constant String := Unbounded.To_String (Listing.Output);
 
          --  A mnemonic at the start of an instruction, so `ldxr` also
-         --  finds `ldxrb` and `ldxrh` and never the acquiring `ldaxr`.
+         --  finds `ldxrb` and `ldxrh` and never the acquiring `ldaxr`, and
+         --  `ldadd` every ordering's and width's LSE add.
          function Has (Word : String) return Boolean
            is (Ada.Strings.Fixed.Index (Text, ASCII.HT & Word) > 0);
 
          LSE : constant Boolean :=
-           Has ("ldaddal") or else Has ("swpal") or else Has ("casal");
+           Has ("ldadd") or else Has ("swp") or else Has ("cas");
       begin
          Landin.Testing.Check
            (Item, Listing.Ended = Landin.Platform.Exited
@@ -1461,7 +1463,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Landin.Testing.Check
               (Item, LSE, Label & ": the image holds an LSE instruction");
             Landin.Testing.Check
-              (Item, not Has ("ldxr") and then not Has ("stxr"),
+              (Item, not Has ("ldxr") and then not Has ("ldaxr")
+                       and then not Has ("stxr") and then not Has ("stlxr"),
                Label & ": no exclusive-monitor loop remains");
          else
             Landin.Testing.Check
@@ -1639,6 +1642,37 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return Unbounded.To_String (Result);
    end ISA_Extensions;
 
+   --  Darwin's sysctl for each Armv8.1-A feature, under hw.optional.arm,
+   --  and the Linux flag Host_Has_Level knows it by.
+   subtype Darwin_Feature is Positive range 1 .. 3;
+   function Darwin_Key (Each : Darwin_Feature) return String
+     is (case Each is
+            when 1 => "FEAT_LSE", when 2 => "FEAT_CRC32",
+            when 3 => "FEAT_RDM");
+   function Darwin_Flag (Each : Darwin_Feature) return String
+     is (case Each is
+            when 1 => "atomics", when 2 => "crc32", when 3 => "asimdrdm");
+
+   --  Whether `sysctl -n KEY` answered 1.  It ends its answer with a line
+   --  feed, which a trim of spaces alone keeps, so every blank, tab and
+   --  line ending on either side is dropped first.
+   function Sysctl_Says_Yes (Output : String) return Boolean;
+
+   function Sysctl_Says_Yes (Output : String) return Boolean is
+      First : Positive := Output'First;
+      Last : Natural := Output'Last;
+      function Blank (C : Character) return Boolean
+        is (C in ' ' | ASCII.HT | ASCII.LF | ASCII.CR);
+   begin
+      while First <= Last and then Blank (Output (First)) loop
+         First := First + 1;
+      end loop;
+      while Last >= First and then Blank (Output (Last)) loop
+         Last := Last - 1;
+      end loop;
+      return Output (First .. Last) = "1";
+   end Sysctl_Says_Yes;
+
    procedure Ask_Lane_Processor (Host : Landin.Platform.Filesystem'Class) is
       Line : constant String :=
         (case Landin.Targets.Architecture_Of (Lanes.Target) is
@@ -1659,6 +1693,36 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
       Processor_Asked := True;
       if Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
+        = Landin.Targets.Capabilities.Darwin and then Lanes.Is_Native
+      then
+         --  A Mac has no /proc/cpuinfo; its kernel names each feature in
+         --  a sysctl, which compiler/tests/darwin/check.py asks too.  Each
+         --  that answers 1 becomes the flag Host_Has_Level reads.
+         Processor_Source := Unbounded.To_Unbounded_String
+           ("this Mac's hw.optional.arm sysctls");
+         Processor_Flags := Unbounded.To_Unbounded_String (" ");
+         for Each in Darwin_Feature loop
+            declare
+               Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+               Args : Landin.Platform.Path_List;
+               Asked : Landin.Platform.Tool_Result;
+            begin
+               Args.Append ("-n");
+               Args.Append ("hw.optional.arm." & Darwin_Key (Each));
+               Runner.Run
+                 ("/usr/sbin/sysctl", Args, Asked,
+                  Landin.Platform.Output_Only);
+               if Asked.Ended = Landin.Platform.Exited
+                 and then Asked.Exit_Code = 0
+                 and then Sysctl_Says_Yes
+                   (Unbounded.To_String (Asked.Output))
+               then
+                  Unbounded.Append (Processor_Flags, Darwin_Flag (Each) & " ");
+               end if;
+            end;
+         end loop;
+         return;
+      elsif Landin.Targets.Capabilities.Hosted_System_Of (Lanes.Target)
         /= Landin.Targets.Capabilities.Linux
       then
          Refuse ("the " & Lanes.Target_Name & " lane has no /proc/cpuinfo"
@@ -1933,6 +1997,30 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  The probe on fakes: an emulator that writes past the record is
    --  refused by name, version and reason; one that does not is held to
    --  nothing more.
+   --  A Mac's level is confirmed by `sysctl -n` printing 1 and a line
+   --  feed; a trim of spaces alone kept the line feed and refused every
+   --  feature of a Mac that has them all.
+   procedure A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Landin.Testing.Check
+        (Item, Sysctl_Says_Yes ("1" & ASCII.LF), "1 and a line feed is yes");
+      Landin.Testing.Check
+        (Item, Sysctl_Says_Yes (" 1" & ASCII.CR & ASCII.LF),
+         "a carriage return and a blank are dropped too");
+      Landin.Testing.Check
+        (Item, Sysctl_Says_Yes ("1"), "a bare 1 is yes");
+      Landin.Testing.Check
+        (Item, not Sysctl_Says_Yes ("0" & ASCII.LF), "0 is no");
+      Landin.Testing.Check
+        (Item, not Sysctl_Says_Yes ("" & ASCII.LF), "an empty answer is no");
+      Landin.Testing.Check
+        (Item, not Sysctl_Says_Yes ("10" & ASCII.LF), "10 is no");
+   end A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending;
+
    procedure A_Known_Bad_Runner_Is_Refused
      (Item : in out Landin.Testing.Context);
 
@@ -2271,8 +2359,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
          --  executable carries no note, so its image is held to holding
          --  the level's instructions and not the default's sequence, and
          --  the default's image of a fixture that names a level is held to
-         --  holding none of them.
-         if Lanes.Target_Name = "linux-arm64"
+         --  holding none of them.  Linux's and Darwin's arm64 alike: the
+         --  architecture picks the inspection, never the host, since a
+         --  Mac has objdump and no readelf.
+         if Landin.Targets.Architecture_Of (Lanes.Target)
+              = Landin.Targets.Arm64
            and then (Level /= "" or else not Lane_Levels (Case_Item).Is_Empty)
          then
             Check_Arm64_Level (Built, Label, Level /= "", Item);
@@ -4001,6 +4092,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a known-bad runner is refused",
          A_Known_Bad_Runner_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "a sysctl answer is read past its line ending",
+         A_Sysctl_Answer_Is_Read_Past_Its_Line_Ending'Access);
       Landin.Testing.Register
         (Into, "fixture execution",
          "outputs belong to their producing attempt",

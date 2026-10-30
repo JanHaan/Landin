@@ -1,0 +1,120 @@
+--  D227's release and acquire between two CPU contexts as each backend
+--  lowers them (D499): this process and a copy of it, sharing one page.
+--  Each round this process writes an ordinary word and publishes it with
+--  a release store; the copy reads it once an acquire load sees the
+--  release, and must find the round's value, never an older one.  The
+--  copy's release of its acknowledgement orders the next round.  Nothing
+--  here can show that a weaker ordering would have let an older value be
+--  read, only that none was; runtime/atomic-store-buffering-between-processes
+--  holds seq_cst.  Each check that fails returns its own code.
+import platform/libc
+import platform/linux
+import platform/posix
+
+--  How long a side spins waiting for the other before it gives up, so a
+--  copy that died ends the run rather than hanging it.
+patience: u64 = 1000000000
+
+fixed if compiler.os == linux then
+    --  A zeroed page this process and its copies share, or zero.
+    shared: () -> (page: usize) =
+        result: i64 = linux.mmap(0, 4096, linux.prot_read | linux.prot_write,
+                                 1 | linux.map_anonymous, -1, 0)
+        page = if result < 0 then 0 else usize(result) end if
+    end shared
+
+    --  A copy of this process: zero in the copy, its ID in this one.
+    forked: () -> (child: i64) =
+        child = linux.fork()
+    end forked
+else
+    extern(c) fork: () -> (child: i32)
+
+    --  A zeroed page this process and its copies share, or zero.  MAP_SHARED
+    --  is 1 on every system.
+    shared: () -> (page: usize) =
+        result: usize = libc.mmap(0, 4096, libc.prot_read | libc.prot_write,
+                                  1 | libc.map_anonymous, -1, 0)
+        page = if result == libc.map_failed then 0 else result end if
+    end shared
+
+    --  A copy of this process: zero in the copy, its ID in this one.
+    forked: () -> (child: i64) =
+        child = i64(fork())
+    end forked
+end if
+
+--  The word of the shared page at PAGE + OFFSET.
+cell: (page: usize, offset: usize) -> (at: ptr mut u64) =
+    at = ptr(page + offset)
+end cell
+
+--  Spin until the word at AT holds VALUE, reading it with acquire: whether
+--  it did before patience ran out.
+waited: (at: ptr mut u64, value: u64) -> (yes: bool) =
+    yes = true
+    for spin in u64(0)..<patience do
+        _ = spin
+        return when compiler.atomic_load(at, compiler.acquire) == value
+    end for
+    yes = false
+end waited
+
+--  The code the copy STARTED ended with, 7 for its own zero, or 6 when it
+--  could not be waited for.
+joined: (started: i64) -> (code: i32) =
+    code = 6
+    ended: posix.child_status =
+        posix.wait(posix.process_id(i32(started))) else (problem)
+            _ = problem
+            return
+        end
+    match ended.how
+        posix.exited(status): begin
+            code = if status == 0 then 7 else status end if
+        end
+        posix.signalled(signal): _ = signal
+    end match
+end joined
+
+--  How many messages are passed.
+rounds: u64 = 20000
+
+--  Where each word lives in the shared page, a cache line apart.
+data_at: usize = 0
+flag_at: usize = 64
+ack_at: usize = 128
+
+--  The copy's side of every round, ending the copy with its code.
+copy: (page: usize) -> noreturn =
+    mut code: i32 = 0
+    data: ptr mut u64 = cell(page, data_at)
+    for k in u64(1)..<rounds + 1 do
+        if not waited(cell(page, flag_at), k) then posix.exit(20) end if
+        if data.val <> k then code = 21 end if
+        compiler.atomic_store(cell(page, ack_at), k, compiler.release)
+    end for
+    posix.exit(code)
+end copy
+
+public main: () -> (code: i32) =
+    code = 1
+    page: usize = shared()
+    return when page == 0
+    code = 2
+    started: i64 = forked()
+    if started == 0 then
+        copy(page)
+    end if
+    return when started < 0
+    data: ptr mut u64 = cell(page, data_at)
+    code = 3
+    for k in u64(1)..<rounds + 1 do
+        data.val = k
+        compiler.atomic_store(cell(page, flag_at), k, compiler.release)
+        return when not waited(cell(page, ack_at), k)
+    end for
+    code = joined(started)
+    return when code <> 7
+    code = 42
+end main

@@ -4306,6 +4306,7 @@ package body Landin.Backend.Cortex_M is
                when Landin.IR.Memory_Access =>
                   declare
                      use all type Landin.Memory.Operation;
+                     use all type Landin.Memory.Ordering;
                      M : constant Landin.Memory.Operation :=
                        Landin.IR.Memory_Operation (Of_Unit, Item, Value);
                      Size : constant Landin.Targets.Scalar_Size :=
@@ -4313,6 +4314,8 @@ package body Landin.Backend.Cortex_M is
                          (Landin.IR.Memory_Scalar (Of_Unit, Item, Value),
                           Facts);
                      Bytes : constant Positive := Landin.Targets.Bytes (Size);
+                     Order : constant Landin.Memory.Ordering :=
+                       Landin.IR.Memory_Order (Of_Unit, Item, Value);
                   begin
                      if M = Stack_Prepare then
                         --  D450/D460: the operands are the stack's base
@@ -4391,17 +4394,30 @@ package body Landin.Backend.Cortex_M is
                            Emit ("tst r2, r4");
                            Branch ("ne", Trap);
                         end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("dmb sy");
-                        end if;
+                        --  D499, Arm's mapping for a core without
+                        --  acquire and release instructions: a relaxed
+                        --  access is a plain LDR or STR, an acquire or
+                        --  seq_cst load is followed by DMB, a release store
+                        --  preceded by one and a seq_cst store by one on
+                        --  each side.  ARMv6-M's DMB has only the SY option.
                         if M in Atomic_Load | Volatile_Load then
                            Memory (False, Size, "r0", "r2");
+                           if M = Atomic_Load
+                             and then Landin.Memory.Acquires (Order)
+                           then
+                              Emit ("dmb sy");
+                           end if;
                         else
                            Load_Value (Operand (2));
+                           if M = Atomic_Store
+                             and then Landin.Memory.Releases (Order)
+                           then
+                              Emit ("dmb sy");
+                           end if;
                            Memory (True, Size, "r0", "r2");
-                        end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("dmb sy");
+                           if M = Atomic_Store and then Order = Seq_Cst then
+                              Emit ("dmb sy");
+                           end if;
                         end if;
                         if Landin.Memory.Returns_Value (M) then
                            Store_Value (Value);

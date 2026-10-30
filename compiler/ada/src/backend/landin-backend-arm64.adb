@@ -4956,6 +4956,7 @@ package body Landin.Backend.Arm64 is
                when Landin.IR.Memory_Access =>
                   declare
                      use all type Landin.Memory.Operation;
+                     use all type Landin.Memory.Ordering;
                      M : constant Landin.Memory.Operation :=
                        Landin.IR.Memory_Operation (Of_Unit, Item, Value);
                      Size : constant Landin.Targets.Scalar_Size :=
@@ -4973,6 +4974,17 @@ package body Landin.Backend.Arm64 is
                        (if Bytes = 1 then "b" elsif Bytes = 2 then "h"
                         else "");
                      Loop_Name : constant String := Fresh;
+                     --  The success ordering; a compare-exchange's failure
+                     --  ordering is never stronger (D227), so the success
+                     --  ordering's acquiring read serves both.
+                     Order : constant Landin.Memory.Ordering :=
+                       Landin.IR.Memory_Order (Of_Unit, Item, Value);
+                     Halves : constant String :=
+                       (case Order is
+                          when Relaxed | No_Ordering => "",
+                          when Acquire => "a",
+                          when Release => "l",
+                          when Acq_Rel | Seq_Cst => "al");
                   begin
                      if M = Stack_Prepare then
                         --  D450: the operands are the stack's base and
@@ -5037,11 +5049,15 @@ package body Landin.Backend.Arm64 is
                         Emit ("bl " & Stack_Switcher);
                         Stack_Used := True;
                      elsif Landin.Memory.Operands (M) = 0 then
+                        --  D499: an acquire fence orders loads alone, DMB
+                        --  ISHLD; release, acq_rel and seq_cst need DMB ISH.
                         case M is
                            when Compiler_Barrier => null;
                            when Completion_Barrier => Emit ("dsb sy");
                            when Device_Barrier => Emit ("dmb sy");
-                           when others => Emit ("dmb ish");
+                           when others =>
+                              Emit (if Order = Acquire then "dmb ishld"
+                                    else "dmb ish");
                         end case;
                      else
                         Load_Value (Operand (1), "x10");
@@ -5050,32 +5066,43 @@ package body Landin.Backend.Arm64 is
                              & Trimmed (Natural'Image (Bytes - 1)));
                            Emit ("b.ne " & Trap);
                         end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("dmb ish");
-                        end if;
-                        if M in Atomic_Load | Volatile_Load then
+                        --  D499, Arm's mapping of the C/C++11 orderings:
+                        --  a relaxed access is a plain LDR or STR, an
+                        --  acquire or seq_cst load LDAR and a release or
+                        --  seq_cst store STLR, whose RCsc order needs no
+                        --  DMB.  A read-modify-write acquires through
+                        --  LDAXR and releases through STLXR, or is the LSE
+                        --  instruction carrying the same halves, A and L.
+                        --  No access takes a DMB.
+                        if M = Volatile_Load
+                          or else (M = Atomic_Load and then Order = Relaxed)
+                        then
                            Memory (False, Size, "x9", "x10");
-                        elsif M in Atomic_Store | Volatile_Store then
+                        elsif M = Atomic_Load then
+                           Emit ("ldar" & Suffix & " " & R9 & ", [x10]");
+                        elsif M = Volatile_Store
+                          or else (M = Atomic_Store and then Order = Relaxed)
+                        then
                            Load_Value (Operand (2));
                            Memory (True, Size, "x9", "x10");
+                        elsif M = Atomic_Store then
+                           Load_Value (Operand (2));
+                           Emit ("stlr" & Suffix & " " & R9 & ", [x10]");
                         elsif Has_LSE then
-                           --  The acquire-release forms, inside the same
-                           --  full fences the retry loop has: an ordering
-                           --  is strengthened exactly as much at both
-                           --  levels.  Each returns the value it found in
-                           --  memory, which is the operation's result.
+                           --  Each returns the value it found in memory,
+                           --  which is the operation's result.
                            Load_Value (Operand (2), "x11");
                            if M = Atomic_Compare_Exchange then
                               Load_Value (Operand (3), "x12");
                               Emit ("mov " & R9 & ", " & R11);
-                              Emit ("casal" & Suffix & " " & R9 & ", " & R12
-                                    & ", [x10]");
+                              Emit ("cas" & Halves & Suffix & " " & R9 & ", "
+                                    & R12 & ", [x10]");
                            elsif M = Atomic_Add then
-                              Emit ("ldaddal" & Suffix & " " & R11 & ", "
-                                    & R9 & ", [x10]");
+                              Emit ("ldadd" & Halves & Suffix & " " & R11
+                                    & ", " & R9 & ", [x10]");
                            else
-                              Emit ("swpal" & Suffix & " " & R11 & ", "
-                                    & R9 & ", [x10]");
+                              Emit ("swp" & Halves & Suffix & " " & R11
+                                    & ", " & R9 & ", [x10]");
                            end if;
                         else
                            Load_Value (Operand (2), "x11");
@@ -5083,7 +5110,9 @@ package body Landin.Backend.Arm64 is
                               Load_Value (Operand (3), "x12");
                            end if;
                            Put (Loop_Name & ":");
-                           Emit ("ldxr" & Suffix & " " & R9 & ", [x10]");
+                           Emit ((if Landin.Memory.Acquires (Order)
+                                  then "ldaxr" else "ldxr")
+                                 & Suffix & " " & R9 & ", [x10]");
                            if M = Atomic_Compare_Exchange then
                               Emit ("cmp " & R9 & ", " & R11);
                               Emit ("b.ne " & Loop_Name & "_mismatch");
@@ -5092,8 +5121,9 @@ package body Landin.Backend.Arm64 is
                            else
                               Emit ("mov " & R12 & ", " & R11);
                            end if;
-                           Emit ("stxr" & Suffix & " w13, " & R12
-                                 & ", [x10]");
+                           Emit ((if Landin.Memory.Releases (Order)
+                                  then "stlxr" else "stxr")
+                                 & Suffix & " w13, " & R12 & ", [x10]");
                            Emit ("cbnz w13, " & Loop_Name);
                            if M = Atomic_Compare_Exchange then
                               Emit ("b " & Loop_Name & "_done");
@@ -5101,9 +5131,6 @@ package body Landin.Backend.Arm64 is
                               Emit ("clrex");
                               Put (Loop_Name & "_done:");
                            end if;
-                        end if;
-                        if M not in Volatile_Load | Volatile_Store then
-                           Emit ("dmb ish");
                         end if;
                         if Landin.Memory.Returns_Value (M) then
                            Store_Value (Value);

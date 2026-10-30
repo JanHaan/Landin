@@ -122,9 +122,11 @@ def assembly_contract(text):
 #  The Darwin arm64 CPU feature levels (D255) above the default, each with
 #  the sysctl that says this Mac's processor has it and what the executed
 #  image must then contain and lack.
+#  An LSE instruction carries its ordering's suffix, none, a, l or al, and
+#  the default's exclusive pair its acquiring and releasing halves (D499).
 LEVELS = {"armv8.1-a": {"sysctl": "hw.optional.arm.FEAT_LSE",
-                        "present": r"\b(?:ldadd|swp|cas)al[bh]?\b",
-                        "absent": r"\b(?:ldxr|stxr)[bh]?\b"}}
+                        "present": r"\b(?:ldadd|swp|cas)(?:a|l|al)?[bh]?\b",
+                        "absent": r"\b(?:ldxr|ldaxr|stxr|stlxr)[bh]?\b"}}
 
 
 def levels_of(meta):

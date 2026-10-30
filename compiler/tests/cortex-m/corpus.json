@@ -469,6 +469,13 @@
     "runtime/atom-values-cross-the-abi": {
       "mode": "execute"
     },
+    "runtime/atomic-orderings-between-processes": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/libc, platform/linux and platform/posix on the freestanding target before checking declarations: firmware has no second process and no shared mapping. backend-memory.ldn executes each admitted load and store ordering, and the backend case holds each ordering's DMB."
+    },
     "runtime/atomic-read-modify-write": {
       "codes": [
         "L0300",
@@ -476,6 +483,13 @@
       ],
       "mode": "refuse",
       "reason": "D510: Cortex-M0 has no atomic read-modify-write and no eight-byte atomic access, so the u64 cells and every exchange, add and compare-exchange are refused at their use, naming sole_add and platform/cortex_m's critical section; the L0300 is the u64 cell's refusal leaving its literal argument typed as i32, a cascade the register records."
+    },
+    "runtime/atomic-store-buffering-between-processes": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses platform/libc, platform/linux and platform/posix on the freestanding target before checking declarations: firmware has no second process and no shared mapping. backend-memory.ldn executes each admitted load and store ordering, and the backend case holds each ordering's DMB."
     },
     "runtime/atomic-tick-firmware": {
       "mode": "execute"

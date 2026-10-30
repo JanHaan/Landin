@@ -8254,8 +8254,9 @@ package body Landin.Tests.Backend_Suite is
    end Arm64_Packed_Reads_Validate_Atoms_Once;
 
    --  D255: at armv8.1-a an atomic read-modify-write is one LSE instruction
-   --  at every width, inside the same fences, and the default emits the
-   --  exclusive-monitor loop it always did; the Cortex-M profile at armv7-m
+   --  at every width, and the default emits the exclusive-monitor loop it
+   --  always did, each carrying its ordering's halves and neither a fence
+   --  (D499); the Cortex-M profile at armv7-m
    --  divides 32 bits in hardware and still asks the runtime for 64.
    procedure A_Level_Selects_Its_Instructions
      (Item : in out Landin.Testing.Context);
@@ -8342,8 +8343,10 @@ package body Landin.Tests.Backend_Suite is
         Emitted (Landin.Targets.Cortex_M, Division, "armv7-m");
    begin
       Landin.Testing.Check
-        (Item, Occurrences (Base_Arm, "ldxr") = 4
-           and then Occurrences (Base_Arm, "stxr") = 4
+        (Item, Occurrences (Base_Arm, "ldxr")
+                 + Occurrences (Base_Arm, "ldaxr") = 4
+           and then Occurrences (Base_Arm, "stxr")
+                      + Occurrences (Base_Arm, "stlxr") = 4
            and then Occurrences (Base_Arm, "ldadd") = 0
            and then Contains (Base_Arm, ".arch armv8-a" & LF)
            and then Occurrences (Base_Arm, ".arch") = 1,
@@ -8355,35 +8358,39 @@ package body Landin.Tests.Backend_Suite is
          "the default architecture precedes an inline LSE instruction");
       Landin.Testing.Check
         (Item, Contains (LSE, ".arch armv8.1-a" & LF)
-           and then Contains (LSE, "ldaddalb w11, w9, [x10]")
+           and then Contains (LSE, "ldaddb w11, w9, [x10]")
            and then Contains (LSE, "swpalh w11, w9, [x10]")
            and then Contains (LSE, "casal w9, w12, [x10]")
            and then Contains (LSE, "ldaddal x11, x9, [x10]")
            and then Occurrences (LSE, "ldxr") = 0
+           and then Occurrences (LSE, "ldaxr") = 0
            and then Occurrences (LSE, "stxr") = 0
+           and then Occurrences (LSE, "stlxr") = 0
            and then Occurrences (LSE, "clrex") = 0,
          "armv8.1-a does each read-modify-write in one LSE instruction");
       Landin.Testing.Check
-        (Item, Occurrences (LSE, "dmb ish")
-                 = Occurrences (Base_Arm, "dmb ish"),
-         "LSE keeps every fence the loop had");
+        (Item, Occurrences (LSE, "dmb") = 0
+           and then Occurrences (Base_Arm, "dmb") = 0,
+         "neither level fences a read-modify-write (D499)");
       --  Linux arm64 shares the family's levels (D256), so each of add,
       --  exchange and compare-exchange is its own exclusive loop at the
-      --  baseline and its own LSE instruction at Armv8.1-A, under the same
-      --  fences, there too.
+      --  baseline and its own LSE instruction at Armv8.1-A, unfenced, there
+      --  too.
       Landin.Testing.Check
         (Item, Contains (Linux_Base, ".arch armv8-a" & LF)
            and then Contains (Linux_Base, "ldxrb w9, [x10]" & LF
                                 & HT & "add w12, w9, w11" & LF
                                 & HT & "stxrb w13, w12, [x10]")
-           and then Contains (Linux_Base, "ldxrh w9, [x10]" & LF
+           and then Contains (Linux_Base, "ldaxrh w9, [x10]" & LF
                                 & HT & "mov w12, w11" & LF
-                                & HT & "stxrh w13, w12, [x10]")
-           and then Contains (Linux_Base, "ldxr w9, [x10]" & LF
+                                & HT & "stlxrh w13, w12, [x10]")
+           and then Contains (Linux_Base, "ldaxr w9, [x10]" & LF
                                 & HT & "cmp w9, w11")
            and then Occurrences (Linux_Base, "clrex") = 1
-           and then Occurrences (Linux_Base, "ldxr") = 4
-           and then Occurrences (Linux_Base, "stxr") = 4
+           and then Occurrences (Linux_Base, "ldxr")
+                      + Occurrences (Linux_Base, "ldaxr") = 4
+           and then Occurrences (Linux_Base, "stxr")
+                      + Occurrences (Linux_Base, "stlxr") = 4
            and then Occurrences (Linux_Base, "ldadd") = 0
            and then Occurrences (Linux_Base, "swp") = 0
            and then Occurrences (Linux_Base, "cas") = 0,
@@ -8391,16 +8398,19 @@ package body Landin.Tests.Backend_Suite is
          & " exclusive loops");
       Landin.Testing.Check
         (Item, Contains (Linux_LSE, ".arch armv8.1-a" & LF)
-           and then Contains (Linux_LSE, "ldaddalb w11, w9, [x10]")
+           and then Contains (Linux_LSE, "ldaddb w11, w9, [x10]")
            and then Contains (Linux_LSE, "swpalh w11, w9, [x10]")
            and then Contains (Linux_LSE, "casal w9, w12, [x10]")
            and then Contains (Linux_LSE, "ldaddal x11, x9, [x10]")
            and then Occurrences (Linux_LSE, "ldxr") = 0
+           and then Occurrences (Linux_LSE, "ldaxr") = 0
            and then Occurrences (Linux_LSE, "stxr") = 0
+           and then Occurrences (Linux_LSE, "stlxr") = 0
            and then Occurrences (Linux_LSE, "clrex") = 0
-           and then Occurrences (Linux_LSE, "dmb ish")
-                      = Occurrences (Linux_Base, "dmb ish"),
-         "Linux armv8.1-a does each in one LSE instruction, fenced alike");
+           and then Occurrences (Linux_LSE, "dmb") = 0
+           and then Occurrences (Linux_Base, "dmb") = 0,
+         "Linux armv8.1-a does each in one LSE instruction, neither"
+         & " fenced");
       Landin.Testing.Check
         (Item, Contains (Base_M, ".cpu cortex-m0" & LF)
            and then Occurrences (Base_M, "bl __aeabi_idivmod") = 1
@@ -8421,6 +8431,408 @@ package body Landin.Tests.Backend_Suite is
         (Item, Occurrences (Seven, "udf") = Occurrences (Base_M, "udf"),
          "every division guard is kept at both levels");
    end A_Level_Selects_Its_Instructions;
+
+   --  D499: every native backend lowers an atomic by its ordering, by its
+   --  architecture's published mapping, with no fence its ordering does
+   --  not ask for.  Each routine is reduced to its access and its barriers:
+   --  every line addressing the base register the lowering puts the
+   --  pointer in, and every barrier, in order.  The alignment check and
+   --  everything else in the routine are outside the signature.
+   procedure Atomics_Are_Fenced_As_Their_Orderings_Ask
+     (Item : in out Landin.Testing.Context);
+
+   procedure Atomics_Are_Fenced_As_Their_Orderings_Ask
+     (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+      type Lowering is (X86_64, Arm64, Arm64_LSE, RV64, Cortex_M);
+
+      function Routine
+        (Name, Parameter, Result, Body_Text : String) return String
+        is ("public " & Name & ": (p: " & Parameter & ") -> "
+            & (if Result = "" then "none" else "(r: " & Result & ")")
+            & " =" & LF & "    " & Body_Text & LF & "end " & Name & LF);
+
+      function Fence (Name, Order : String) return String
+        is ("public " & Name & ": () -> none =" & LF
+            & "    compiler.thread_fence(compiler." & Order & ")" & LF
+            & "end " & Name & LF);
+
+      Accesses : constant String :=
+        Routine ("load_relaxed", "ptr u32", "u32",
+                 "r = compiler.atomic_load(p, compiler.relaxed)")
+        & Routine ("load_acquire", "ptr u32", "u32",
+                   "r = compiler.atomic_load(p, compiler.acquire)")
+        & Routine ("load_seq_cst", "ptr u32", "u32",
+                   "r = compiler.atomic_load(p, compiler.seq_cst)")
+        & Routine ("store_relaxed", "ptr mut u32", "",
+                   "compiler.atomic_store(p, 7, compiler.relaxed)")
+        & Routine ("store_release", "ptr mut u32", "",
+                   "compiler.atomic_store(p, 7, compiler.release)")
+        & Routine ("store_seq_cst", "ptr mut u32", "",
+                   "compiler.atomic_store(p, 7, compiler.seq_cst)")
+        & Routine ("store8_seq_cst", "ptr mut u8", "",
+                   "compiler.atomic_store(p, 7, compiler.seq_cst)")
+        & Fence ("fence_acquire", "acquire")
+        & Fence ("fence_release", "release")
+        & Fence ("fence_acq_rel", "acq_rel")
+        & Fence ("fence_seq_cst", "seq_cst")
+        & "public device: () -> none =" & LF
+        & "    compiler.device_barrier()" & LF & "end device" & LF
+        & "public completion: () -> none =" & LF
+        & "    compiler.completion_barrier()" & LF & "end completion" & LF;
+      Updates : constant String :=
+        Routine ("xchg_relaxed", "ptr mut u32", "u32",
+                 "r = compiler.atomic_exchange(p, 7, compiler.relaxed)")
+        & Routine ("xchg_acquire", "ptr mut u32", "u32",
+                   "r = compiler.atomic_exchange(p, 7, compiler.acquire)")
+        & Routine ("xchg_release", "ptr mut u32", "u32",
+                   "r = compiler.atomic_exchange(p, 7, compiler.release)")
+        & Routine ("xchg_acq_rel", "ptr mut u32", "u32",
+                   "r = compiler.atomic_exchange(p, 7, compiler.acq_rel)")
+        & Routine ("xchg_seq_cst", "ptr mut u32", "u32",
+                   "r = compiler.atomic_exchange(p, 7, compiler.seq_cst)")
+        & Routine ("add_relaxed", "ptr mut u64", "u64",
+                   "r = compiler.atomic_add(p, 7, compiler.relaxed)")
+        & Routine ("add_acquire", "ptr mut u64", "u64",
+                   "r = compiler.atomic_add(p, 7, compiler.acquire)")
+        & Routine ("add_release", "ptr mut u64", "u64",
+                   "r = compiler.atomic_add(p, 7, compiler.release)")
+        & Routine ("add_acq_rel", "ptr mut u64", "u64",
+                   "r = compiler.atomic_add(p, 7, compiler.acq_rel)")
+        & Routine ("add_seq_cst", "ptr mut u64", "u64",
+                   "r = compiler.atomic_add(p, 7, compiler.seq_cst)")
+        & Routine ("cas_relaxed", "ptr mut u32", "u32",
+                   "r = compiler.atomic_compare_exchange(p, 3, 4,"
+                   & " compiler.relaxed, compiler.relaxed)")
+        & Routine ("cas_acquire", "ptr mut u32", "u32",
+                   "r = compiler.atomic_compare_exchange(p, 3, 4,"
+                   & " compiler.acquire, compiler.acquire)")
+        & Routine ("cas_release", "ptr mut u32", "u32",
+                   "r = compiler.atomic_compare_exchange(p, 3, 4,"
+                   & " compiler.release, compiler.relaxed)")
+        & Routine ("cas_acq_rel", "ptr mut u32", "u32",
+                   "r = compiler.atomic_compare_exchange(p, 3, 4,"
+                   & " compiler.acq_rel, compiler.acquire)")
+        & Routine ("cas_seq_cst", "ptr mut u32", "u32",
+                   "r = compiler.atomic_compare_exchange(p, 3, 4,"
+                   & " compiler.seq_cst, compiler.seq_cst)")
+        & Routine ("add8_release", "ptr mut u8", "u8",
+                   "r = compiler.atomic_add(p, 1, compiler.release)")
+        & Routine ("xchg16_acquire", "ptr mut u16", "u16",
+                   "r = compiler.atomic_exchange(p, 1, compiler.acquire)");
+
+      Access_Names : constant String :=
+        "load_relaxed,load_acquire,load_seq_cst,store_relaxed,"
+        & "store_release,store_seq_cst,store8_seq_cst,fence_acquire,"
+        & "fence_release,fence_acq_rel,fence_seq_cst,device,completion,";
+      Update_Names : constant String :=
+        "xchg_relaxed,xchg_acquire,xchg_release,xchg_acq_rel,xchg_seq_cst,"
+        & "add_relaxed,add_acquire,add_release,add_acq_rel,add_seq_cst,"
+        & "cas_relaxed,cas_acquire,cas_release,cas_acq_rel,cas_seq_cst,"
+        & "add8_release,xchg16_acquire,";
+
+      function Emitted (Kind : Lowering; Source : String) return String;
+
+      function Emitted (Kind : Lowering; Source : String) return String is
+         Facts : constant Landin.Targets.Target_Facts :=
+           (case Kind is
+              when X86_64 => Landin.Targets.Linux_X86_64,
+              when Arm64 | Arm64_LSE => Landin.Targets.Linux_Arm64,
+              when RV64 => Landin.Targets.Linux_RV64,
+              when Cortex_M => Landin.Targets.Cortex_M);
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+         Options : constant Landin.Optimization.Options :=
+           Landin.Optimization.Reference_Options;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 5, Lowering'Image (Kind) & ": the source lowers");
+         if Landin.Stages.Failed (Work) then
+            return "";
+         end if;
+         case Kind is
+            when X86_64 =>
+               Landin.Backend.X86_64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts, Options,
+                  Assembly, Report);
+            when Arm64 | Arm64_LSE =>
+               Landin.Backend.Arm64.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts, Options,
+                  Assembly, Report,
+                  Level => L.Level_Named
+                    (Facts, (if Kind = Arm64 then "armv8-a"
+                             else "armv8.1-a")));
+            when RV64 =>
+               Landin.Backend.RiscV.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts, Options,
+                  Assembly, Report);
+            when Cortex_M =>
+               Landin.Backend.Cortex_M.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts, Options,
+                  Assembly, Report);
+         end case;
+         return Ada.Strings.Unbounded.To_String (Assembly);
+      end Emitted;
+
+      --  Each named routine as `name|` and its kept instructions joined by
+      --  " ; ", a line apiece.
+      function Signature
+        (Kind : Lowering; Whole, Names : String) return String;
+
+      function Signature
+        (Kind : Lowering; Whole, Names : String) return String
+      is
+         use Ada.Strings.Unbounded;
+         Result : Unbounded_String;
+         From : Positive := Names'First;
+
+         function Kept (Line : String) return Boolean;
+
+         function Kept (Line : String) return Boolean is
+            function Starts (Word : String) return Boolean
+              is (Line'Length >= Word'Length
+                  and then Line (Line'First .. Line'First + Word'Length - 1)
+                    = Word);
+         begin
+            case Kind is
+               when X86_64 =>
+                  return Contains (Line, "(%rcx)") or else Starts ("mfence");
+               when Arm64 | Arm64_LSE =>
+                  return Contains (Line, "[x10]") or else Starts ("dmb")
+                    or else Starts ("dsb") or else Starts ("clrex");
+               when RV64 =>
+                  return Contains (Line, "(x6)")
+                    or else Contains (Line, "(x18)")
+                    or else Starts ("fence");
+               when Cortex_M =>
+                  return Contains (Line, "[r2]") or else Starts ("dmb")
+                    or else Starts ("dsb");
+            end case;
+         end Kept;
+      begin
+         while From <= Names'Last loop
+            declare
+               Comma : constant Natural :=
+                 Index (Names (From .. Names'Last), ",");
+               Name : constant String := Names (From .. Comma - 1);
+               Start : constant Natural := Index (Whole, LF & Name & ":" & LF);
+               Stop : constant Natural :=
+                 (if Start = 0 then 0
+                  else Index (Whole (Start .. Whole'Last),
+                              HT & ".size " & Name & ","));
+               Joined : Unbounded_String;
+            begin
+               Append (Result, Name & "|");
+               if Start > 0 and then Stop > Start then
+                  declare
+                     Text : constant String :=
+                       Whole (Start + Name'Length + 3 .. Stop);
+                     Line_From : Positive := Text'First;
+                  begin
+                     while Line_From < Text'Last loop
+                        declare
+                           Ending : constant Natural :=
+                             Index (Text (Line_From .. Text'Last), "" & LF);
+                           Line : constant String :=
+                             Text (Line_From .. (if Ending = 0 then Text'Last
+                                                 else Ending - 1));
+                        begin
+                           if Line'Length > 1
+                             and then Line (Line'First) = HT
+                             and then Kept (Line (Line'First + 1 .. Line'Last))
+                           then
+                              if Length (Joined) > 0 then
+                                 Append (Joined, " ; ");
+                              end if;
+                              Append
+                                (Joined, Line (Line'First + 1 .. Line'Last));
+                           end if;
+                           exit when Ending = 0;
+                           Line_From := Ending + 1;
+                        end;
+                     end loop;
+                  end;
+               else
+                  Append (Joined, "(missing)");
+               end if;
+               Append (Result, Joined & LF);
+               From := Comma + 1;
+            end;
+         end loop;
+         return To_String (Result);
+      end Signature;
+
+      X86_Accesses : constant String :=
+        "load_relaxed|movl (%rcx), %eax" & LF
+        & "load_acquire|movl (%rcx), %eax" & LF
+        & "load_seq_cst|movl (%rcx), %eax" & LF
+        & "store_relaxed|movl %eax, (%rcx)" & LF
+        & "store_release|movl %eax, (%rcx)" & LF
+        & "store_seq_cst|xchgl %eax, (%rcx)" & LF
+        & "store8_seq_cst|xchgb %al, (%rcx)" & LF
+        & "fence_acquire|" & LF
+        & "fence_release|" & LF
+        & "fence_acq_rel|" & LF
+        & "fence_seq_cst|mfence" & LF
+        & "device|mfence" & LF
+        & "completion|mfence" & LF;
+      X86_Updates : constant String :=
+        "xchg_relaxed|xchgl %eax, (%rcx)" & LF
+        & "xchg_acquire|xchgl %eax, (%rcx)" & LF
+        & "xchg_release|xchgl %eax, (%rcx)" & LF
+        & "xchg_acq_rel|xchgl %eax, (%rcx)" & LF
+        & "xchg_seq_cst|xchgl %eax, (%rcx)" & LF
+        & "add_relaxed|lock xaddq %rax, (%rcx)" & LF
+        & "add_acquire|lock xaddq %rax, (%rcx)" & LF
+        & "add_release|lock xaddq %rax, (%rcx)" & LF
+        & "add_acq_rel|lock xaddq %rax, (%rcx)" & LF
+        & "add_seq_cst|lock xaddq %rax, (%rcx)" & LF
+        & "cas_relaxed|lock cmpxchgl %edx, (%rcx)" & LF
+        & "cas_acquire|lock cmpxchgl %edx, (%rcx)" & LF
+        & "cas_release|lock cmpxchgl %edx, (%rcx)" & LF
+        & "cas_acq_rel|lock cmpxchgl %edx, (%rcx)" & LF
+        & "cas_seq_cst|lock cmpxchgl %edx, (%rcx)" & LF
+        & "add8_release|lock xaddb %al, (%rcx)" & LF
+        & "xchg16_acquire|xchgw %ax, (%rcx)" & LF;
+      Arm_Accesses : constant String :=
+        "load_relaxed|ldr w9, [x10]" & LF
+        & "load_acquire|ldar w9, [x10]" & LF
+        & "load_seq_cst|ldar w9, [x10]" & LF
+        & "store_relaxed|str w9, [x10]" & LF
+        & "store_release|stlr w9, [x10]" & LF
+        & "store_seq_cst|stlr w9, [x10]" & LF
+        & "store8_seq_cst|stlrb w9, [x10]" & LF
+        & "fence_acquire|dmb ishld" & LF
+        & "fence_release|dmb ish" & LF
+        & "fence_acq_rel|dmb ish" & LF
+        & "fence_seq_cst|dmb ish" & LF
+        & "device|dmb sy" & LF
+        & "completion|dsb sy" & LF;
+      Arm_Updates : constant String :=
+        "xchg_relaxed|ldxr w9, [x10] ; stxr w13, w12, [x10]" & LF
+        & "xchg_acquire|ldaxr w9, [x10] ; stxr w13, w12, [x10]" & LF
+        & "xchg_release|ldxr w9, [x10] ; stlxr w13, w12, [x10]" & LF
+        & "xchg_acq_rel|ldaxr w9, [x10] ; stlxr w13, w12, [x10]" & LF
+        & "xchg_seq_cst|ldaxr w9, [x10] ; stlxr w13, w12, [x10]" & LF
+        & "add_relaxed|ldxr x9, [x10] ; stxr w13, x12, [x10]" & LF
+        & "add_acquire|ldaxr x9, [x10] ; stxr w13, x12, [x10]" & LF
+        & "add_release|ldxr x9, [x10] ; stlxr w13, x12, [x10]" & LF
+        & "add_acq_rel|ldaxr x9, [x10] ; stlxr w13, x12, [x10]" & LF
+        & "add_seq_cst|ldaxr x9, [x10] ; stlxr w13, x12, [x10]" & LF
+        & "cas_relaxed|ldxr w9, [x10] ; stxr w13, w12, [x10] ; clrex" & LF
+        & "cas_acquire|ldaxr w9, [x10] ; stxr w13, w12, [x10] ; clrex" & LF
+        & "cas_release|ldxr w9, [x10] ; stlxr w13, w12, [x10] ; clrex" & LF
+        & "cas_acq_rel|ldaxr w9, [x10] ; stlxr w13, w12, [x10] ; clrex"
+        & LF
+        & "cas_seq_cst|ldaxr w9, [x10] ; stlxr w13, w12, [x10] ; clrex"
+        & LF
+        & "add8_release|ldxrb w9, [x10] ; stlxrb w13, w12, [x10]" & LF
+        & "xchg16_acquire|ldaxrh w9, [x10] ; stxrh w13, w12, [x10]" & LF;
+      LSE_Updates : constant String :=
+        "xchg_relaxed|swp w11, w9, [x10]" & LF
+        & "xchg_acquire|swpa w11, w9, [x10]" & LF
+        & "xchg_release|swpl w11, w9, [x10]" & LF
+        & "xchg_acq_rel|swpal w11, w9, [x10]" & LF
+        & "xchg_seq_cst|swpal w11, w9, [x10]" & LF
+        & "add_relaxed|ldadd x11, x9, [x10]" & LF
+        & "add_acquire|ldadda x11, x9, [x10]" & LF
+        & "add_release|ldaddl x11, x9, [x10]" & LF
+        & "add_acq_rel|ldaddal x11, x9, [x10]" & LF
+        & "add_seq_cst|ldaddal x11, x9, [x10]" & LF
+        & "cas_relaxed|cas w9, w12, [x10]" & LF
+        & "cas_acquire|casa w9, w12, [x10]" & LF
+        & "cas_release|casl w9, w12, [x10]" & LF
+        & "cas_acq_rel|casal w9, w12, [x10]" & LF
+        & "cas_seq_cst|casal w9, w12, [x10]" & LF
+        & "add8_release|ldaddlb w11, w9, [x10]" & LF
+        & "xchg16_acquire|swpah w11, w9, [x10]" & LF;
+      RV_Accesses : constant String :=
+        "load_relaxed|lwu x5, 0(x6)" & LF
+        & "load_acquire|lwu x5, 0(x6) ; fence r, rw" & LF
+        & "load_seq_cst|fence rw, rw ; lwu x5, 0(x6) ; fence r, rw" & LF
+        & "store_relaxed|sw x5, 0(x6)" & LF
+        & "store_release|fence rw, w ; sw x5, 0(x6)" & LF
+        & "store_seq_cst|fence rw, w ; sw x5, 0(x6)" & LF
+        & "store8_seq_cst|fence rw, w ; sb x5, 0(x6)" & LF
+        & "fence_acquire|fence r, rw" & LF
+        & "fence_release|fence rw, w" & LF
+        & "fence_acq_rel|fence.tso" & LF
+        & "fence_seq_cst|fence rw, rw" & LF
+        & "device|fence iorw, iorw" & LF
+        & "completion|fence iorw, iorw" & LF;
+      RV_Updates : constant String :=
+        "xchg_relaxed|amoswap.w x5, x7, (x6)" & LF
+        & "xchg_acquire|amoswap.w.aq x5, x7, (x6)" & LF
+        & "xchg_release|amoswap.w.rl x5, x7, (x6)" & LF
+        & "xchg_acq_rel|amoswap.w.aqrl x5, x7, (x6)" & LF
+        & "xchg_seq_cst|amoswap.w.aqrl x5, x7, (x6)" & LF
+        & "add_relaxed|amoadd.d x5, x7, (x6)" & LF
+        & "add_acquire|amoadd.d.aq x5, x7, (x6)" & LF
+        & "add_release|amoadd.d.rl x5, x7, (x6)" & LF
+        & "add_acq_rel|amoadd.d.aqrl x5, x7, (x6)" & LF
+        & "add_seq_cst|amoadd.d.aqrl x5, x7, (x6)" & LF
+        & "cas_relaxed|lr.w x20, (x18) ; sc.w x30, x21, (x18)" & LF
+        & "cas_acquire|lr.w.aq x20, (x18) ; sc.w x30, x21, (x18)" & LF
+        & "cas_release|lr.w x20, (x18) ; sc.w.rl x30, x21, (x18)" & LF
+        & "cas_acq_rel|lr.w.aq x20, (x18) ; sc.w.rl x30, x21, (x18)" & LF
+        & "cas_seq_cst|lr.w.aqrl x20, (x18) ; sc.w.rl x30, x21, (x18)" & LF
+        & "add8_release|lr.w x20, (x18) ; sc.w.rl x30, x21, (x18)" & LF
+        & "xchg16_acquire|lr.w.aq x20, (x18) ; sc.w x30, x21, (x18)" & LF;
+      M0_Accesses : constant String :=
+        "load_relaxed|ldr r0, [r2]" & LF
+        & "load_acquire|ldr r0, [r2] ; dmb sy" & LF
+        & "load_seq_cst|ldr r0, [r2] ; dmb sy" & LF
+        & "store_relaxed|str r0, [r2]" & LF
+        & "store_release|dmb sy ; str r0, [r2]" & LF
+        & "store_seq_cst|dmb sy ; str r0, [r2] ; dmb sy" & LF
+        & "store8_seq_cst|dmb sy ; strb r0, [r2] ; dmb sy" & LF
+        & "fence_acquire|dmb sy" & LF
+        & "fence_release|dmb sy" & LF
+        & "fence_acq_rel|dmb sy" & LF
+        & "fence_seq_cst|dmb sy" & LF
+        & "device|dmb sy" & LF
+        & "completion|dsb sy" & LF;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Signature (X86_64, Emitted (X86_64, Accesses & Updates),
+                          Access_Names & Update_Names),
+         X86_Accesses & X86_Updates,
+         "x86-64 fences only a seq_cst fence and the barriers (x86-TSO)");
+      Landin.Testing.Check_Equal
+        (Item, Signature (Arm64, Emitted (Arm64, Accesses & Updates),
+                          Access_Names & Update_Names),
+         Arm_Accesses & Arm_Updates,
+         "armv8-a acquires and releases by LDAR, STLR and the exclusive"
+         & " pair's halves");
+      Landin.Testing.Check_Equal
+        (Item, Signature (Arm64_LSE, Emitted (Arm64_LSE, Accesses & Updates),
+                          Access_Names & Update_Names),
+         Arm_Accesses & LSE_Updates,
+         "armv8.1-a carries each ordering on its LSE instruction");
+      Landin.Testing.Check_Equal
+        (Item, Signature (RV64, Emitted (RV64, Accesses & Updates),
+                          Access_Names & Update_Names),
+         RV_Accesses & RV_Updates,
+         "RV64 follows RVWMO's Table A.6");
+      Landin.Testing.Check_Equal
+        (Item, Signature (Cortex_M, Emitted (Cortex_M, Accesses),
+                          Access_Names),
+         M0_Accesses,
+         "Cortex-M0 takes a DMB only where an acquire or a release needs"
+         & " one");
+   end Atomics_Are_Fenced_As_Their_Orderings_Ask;
 
    procedure Cortex_Wrapping_Products_Use_Low_Word
      (Item : in out Landin.Testing.Context);
@@ -9897,6 +10309,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a level selects its instructions",
          A_Level_Selects_Its_Instructions'Access);
+      Landin.Testing.Register
+        (Into, "backend", "atomics are fenced as their orderings ask",
+         Atomics_Are_Fenced_As_Their_Orderings_Ask'Access);
       Landin.Testing.Register
         (Into, "backend", "Cortex wrapping products use low word",
          Cortex_Wrapping_Products_Use_Low_Word'Access);
