@@ -1,0 +1,6 @@
+error[L0201]: module `io` has no member `println`
+  --> ../tests/fixtures/negative/core-io-println-is-write-format/main.ldn:7:8
+  |
+7 |     io.println(count)
+  |        ^^^^^^^
+  = note: D527: one call prints values, each `{}` taking the next: `io.write_format(host, io.out(host), "{}\n", [any(addr x)])`, `host` being `blocking.new()` of `hosted/blocking` on a hosted system

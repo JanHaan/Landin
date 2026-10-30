@@ -319,6 +319,29 @@ package body Landin.Stages.Resolution is
            (Source, Where, Offered);
       end Near_In_Module;
 
+      --  The note of a member `Module` does not have: Usual, unless it is
+      --  another language's print asked of `core/io`, which has none
+      --  because one call writes a template and its values to a file
+      --  (D527).  That note shows the call, its members written after
+      --  Prefix: the alias and a dot when the module is qualified, nothing
+      --  when its members are selected, which must then select two more,
+      --  and says where a hosted program's `host` comes from.
+      function Missing_Member_Note
+        (Module : Landin.Modules.Module_Id;
+         Member : String;
+         Prefix : String;
+         Usual  : String) return String
+        is (if Landin.Modules.Logical_Path (Graph.all, Module) = "core/io"
+              and then Member in "print" | "println" | "printf" | "puts"
+            then "D527: one call prints values, each `{}` taking the next"
+                 & (if Prefix = "" then "; select `write_format` and `out`,"
+                    & " and write" else ":")
+                 & " `" & Prefix & "write_format(host, " & Prefix
+                 & "out(host), ""{}\n"", [any(addr x)])`"
+                 & ", `host` being `blocking.new()` of `hosted/blocking`"
+                 & " on a hosted system"
+            else Usual);
+
       --  Whether `Member` is a public declaration of `Module` in some arm of
       --  a fixed conditional, which configuration did not select for this
       --  target: the member exists for another system, not misspelt.
@@ -1520,8 +1543,11 @@ package body Landin.Stages.Resolution is
                            Message => "module `" & Spelled (Prefix_Name)
                                       & "` has no member `"
                                       & Spelled (Member_Name) & "`",
-                           Note    => "[1420]: a plain import exposes only"
-                                      & " qualified public members",
+                           Note    => Missing_Member_Note
+                             (Imported, Spelled (Member_Name),
+                              Spelled (Prefix_Name) & ".",
+                              "[1420]: a plain import exposes only"
+                              & " qualified public members"),
                            Fixes   => Near_In_Module
                              (Syn.Source_Of (Of_Tree),
                               Syn.Anchor (Of_Tree, Node),
@@ -2391,8 +2417,10 @@ package body Landin.Stages.Resolution is
                            Where => Syn.Anchor (Of_Tree.all, Node),
                            Message => "the imported module has no member `"
                                       & Spelled (Named) & "`",
-                           Note => "[1440]: selected imports name public"
-                                   & " declarations in the selected module",
+                           Note => Missing_Member_Note
+                             (Target, Spelled (Named), "",
+                              "[1440]: selected imports name public"
+                              & " declarations in the selected module"),
                            Fixes => Near_In_Module
                              (Source_Id, Syn.Anchor (Of_Tree.all, Node),
                               Spelled (Named), Target),

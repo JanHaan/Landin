@@ -266,6 +266,16 @@ package body Landin.Diagnostics.Explanations is
                & "t would be found here."
                & LF
                & LF
+               & "`core/io` has no `print`, `println`, `printf` or `puts`:"
+               & " one call writes a template and its values to a file (D5"
+               & "27). Asked for one of those, the note shows that call sp"
+               & "elt with the name the program reaches the module by, `io"
+               & ".write_format(host, io.out(host), ""{}\n"", [any(addr x)])"
+               & "`, with `host` from `hosted/blocking`'s `blocking.new()`"
+               & " on a hosted system, and for a selected import says to s"
+               & "elect `write_format` and `out` instead."
+               & LF
+               & LF
                & "A name applied to type arguments, `shlf(item)`, is the s"
                & "ame misspelling and is offered the same near names. A pa"
                & "yload-free case of a variant another module declares is "
