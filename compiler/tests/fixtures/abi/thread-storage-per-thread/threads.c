@@ -2,7 +2,11 @@
 #include <stdint.h>
 
 /* Each worker counts through the exported Landin routine, waiting first
- * until every worker has started, so that all four count at once. */
+ * until every worker has started, so that all four count at once, and
+ * then until every worker has counted and taken its instance's address,
+ * so that all four instances are alive when their addresses are compared:
+ * Darwin makes a thread's block at its first access and may reuse an
+ * ended thread's memory for it. */
 extern uint64_t r1440_thread_count(uint32_t rounds, uint64_t mark);
 extern uintptr_t r1440_thread_counter_address(void);
 
@@ -18,19 +22,28 @@ struct worker {
     uintptr_t address;
 };
 
+/* Wait until `count` workers have reached this gate. */
+static void meet(int *reached, int count)
+{
+    pthread_mutex_lock(&gate_mutex);
+    ++*reached;
+    pthread_cond_broadcast(&gate_condition);
+    while (*reached < count) {
+        pthread_cond_wait(&gate_condition, &gate_mutex);
+    }
+    pthread_mutex_unlock(&gate_mutex);
+}
+
+static int counted;
+
 static void *run_worker(void *opaque)
 {
     struct worker *work = opaque;
 
-    pthread_mutex_lock(&gate_mutex);
-    ++arrived;
-    pthread_cond_broadcast(&gate_condition);
-    while (arrived < workers) {
-        pthread_cond_wait(&gate_condition, &gate_mutex);
-    }
-    pthread_mutex_unlock(&gate_mutex);
+    meet(&arrived, workers);
     work->result = r1440_thread_count(rounds, work->mark);
     work->address = r1440_thread_counter_address();
+    meet(&counted, workers);
     return NULL;
 }
 
