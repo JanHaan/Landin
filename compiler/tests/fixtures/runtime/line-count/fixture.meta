@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the published line count opens the file its first argument names, reads it through core/io's line reader, counting a last line without its newline and a line too long for the buffer, prints the count through a buffered writer, and would say a failure in words through failure.words on standard error
+summary: the published line count opens the file its first argument names, reads it through core/io's line reader, counting a last line without its newline and a line too long for the buffer, prints the count with io.write_format, and would say a failure in words through failure.words on standard error
 program: main.ldn
 root: ../../../../..
 run_files: input.txt

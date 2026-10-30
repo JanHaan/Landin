@@ -148,7 +148,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   reported again, and where one change of a token mends a line the report
   says which change and offers it as a fix.
 - A spelling from another language, such as `elif`, `fn`, `x as i32`,
-  `x++`, `*u8`, `&&` or `!=`, is refused naming what Landin writes instead.
+  `x++`, `*u8`, `&&` or `!=`, is refused naming what Landin writes instead,
+  and `io.println`, `io.printf`, `io.print` or `io.puts` is shown the
+  `io.write_format` call that prints a value, spelt with the program's
+  alias for `core/io`.
   A construct the tour describes and the kernel omits is refused with a note
   naming the paragraph that describes it and whether the form is a recorded
   boundary, withdrawn or transferred to a successor.
@@ -296,8 +299,11 @@ failure injector as capabilities.
   buffer, or one an allocator grows, takes bytes, text, host strings,
   decimals of every integer width and hexadecimal, aligned in a field.
   `text.format` fills a template's `{}` with any value that has
-  `formattable` evidence, checked against its values when it runs. Every
-  width parses back from bytes, and no locale is consulted.
+  `formattable` evidence, checked against its values when it runs, and
+  `io.write_format` writes one to a file in a single call, through a
+  128-byte store on its own stack that goes out whenever it fills, so a
+  value of any length is printed on every target (D527). Every width
+  parses back from bytes, and no locale is consulted.
 - **Bytes.** Byte slices copy, with overlap allowed either way, fill,
   compare and search with their lengths checked.
 - **Failures and panics.** Bulk cleanup, panic dispatch, the
@@ -325,7 +331,7 @@ a caller-backed fake; the fakes of a system's providers are
 
 | service | what it does | its fake |
 | --- | --- | --- |
-| reader, writer, file | caller-backed I/O; a streaming log needs only a writer; a buffered writer gathers output in a caller's buffer until it is flushed, and a line reader lends each line until the next read | the memory world |
+| reader, writer, file | caller-backed I/O; a streaming log needs only a writer; `write_format` writes a template and its values in one call, a buffered writer gathers many writes in a caller's buffer until it is flushed, and a line reader lends each line until the next read | the memory world |
 | process | lends standard input beside standard output and error | the memory world |
 | directories | lists a directory through a buffer its caller supplies, lending each name until the next read, and makes and removes directories and files | the memory world |
 | environment | lends the read-only environment | an environment over data |

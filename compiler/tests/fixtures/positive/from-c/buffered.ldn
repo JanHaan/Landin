@@ -1,0 +1,18 @@
+import core/io
+import core/text
+import hosted/blocking
+
+--- Many lines through one buffered writer: made once, passed down or used
+--- in place, and flushed at the end.
+print_report: (host: blocking.host, names: []utf8)
+              -> none ! io.io_failed | text.no_space | text.invalid_format =
+    mut storage: [4096]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    mut count: u32 = 0
+    for name in names do
+        inc count
+        try io.format(out, "{}: {} items\n", [any(addr name), any(addr count)])
+    end for
+    try io.flush(out)
+end print_report

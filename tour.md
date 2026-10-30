@@ -51,37 +51,31 @@ Line by line:
   handler to reach for last: [1030] also shows passing a failure on and
   reporting it, as the next program does.
 
-To print values, use `format` through a buffered writer. Each `{}` takes
-the next value from the list:
+To print values, `io.write_format` writes a template and its values in one
+call. Each `{}` takes the next value from the list:
 
 ```landin
-print_born: (inout out: io.buffered_writer(blocking.host), name: utf8,
-             year: u32) -> none =
-    io.format(out, "{} was born in {}.\n", [any(addr name), any(addr year)]) else none
+print_born: (host: blocking.host, name: utf8, year: u32) -> none =
+    io.write_format(host, io.out(host), "{} was born in {}.\n",
+                    [any(addr name), any(addr year)]) else none
 end print_born
 ```
 
-`main` makes the writer once and hands it to whatever prints:
+`main` passes it the handle, which is how its parameters say that it
+writes:
 
 ```landin
-    mut storage: [256]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage)
-    defer io.flush(out) else none
-    print_born(out, "Ada", 1815) -- Ada was born in 1815.
+    print_born(host, "Ada", 1815) -- Ada was born in 1815.
 ```
 
-- `buffered_over` collects output in a buffer you supply, here on the
-  stack, so printing allocates nothing. One `format` call's whole output
-  must fit in the buffer, or that call fails with `text.no_space`. A line
-  made by several calls may be longer, and `io.put` writes bytes larger
-  than the buffer straight through.
-- `defer` runs `flush` when the routine ends, by returning or by a
-  failure, but not on a trap, which runs no cleanup ([1100]). There are no
-  destructors, so nothing flushes for you.
-- `any(addr name)` hands `format` the address of a value it can turn into
-  text ([1370]). Integers, `bool`, `utf8` and byte strings are formattable;
-  floats are not yet. A type of your own becomes formattable by declaring
-  a conformance ([1240]).
+- `any(addr name)` hands `write_format` the address of a value it can
+  turn into text ([1370]). Integers, `bool`, `utf8` and byte strings are
+  formattable; floats are not yet. A type of your own becomes formattable
+  by declaring a conformance ([1240]).
+- The text is made in a small buffer on the stack and written as it
+  fills, so printing allocates nothing, a line that fits is one write and
+  a longer one goes out in pieces. A template whose `{}` and values differ
+  in number fails with `text.invalid_format` and writes nothing.
 
 ## Reading a file
 
@@ -113,18 +107,15 @@ end count_file_lines
 
 public main: () -> (code: i32) =
     host := blocking.new()
-    mut storage: [256]u8 = zeroed
     lines := count_file_lines(host) else (problem)
-        mut err := io.buffered_over(host, io.err(host), storage)
-        defer io.flush(err) else none
         words: []u8 = failure.words(problem)
-        io.format(err, "error: {}\n", [any(addr words)]) else none
+        io.write_format(host, io.err(host), "error: {}\n", [any(addr words)])
+            else none
         code = 1
         return
     end
-    mut out := io.buffered_over(host, io.out(host), storage)
-    defer io.flush(out) else none
-    io.format(out, "{} lines\n", [any(addr lines)]) else none
+    io.write_format(host, io.out(host), "{} lines\n", [any(addr lines)])
+        else none
     code = 0
 end main
 ```
@@ -135,11 +126,30 @@ end main
   name.
 - `io.lines_over` reads through a buffer you supply and hands out one line
   at a time ([1130] for `loop`, [0400] for `inc`).
+- `defer` closes the file when the routine ends, by returning or by a
+  failure, but not on a trap, which runs no cleanup ([1100]). There are no
+  destructors, so nothing closes it for you.
 - `main` decides what a failure means. `else (problem)` handles it in
   place ([1030]): `failure.words`, from `core/failure`, has words for
   every library failure, `io.err(host)` is standard error, and `code = 1`
-  is the exit status. The handler returns before `out` is made, so the two
-  writers can share one buffer.
+  is the exit status.
+
+A program that writes many lines gathers them in a buffered writer over a
+buffer you supply, which writes them in one call each time it fills, and
+`defer` flushes what is left on the way out:
+
+```landin
+    mut storage: [4096]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    defer io.flush(out) else none
+    for number in 1..1000 do
+        io.format(out, "{}\n", [any(addr number)]) else none
+    end for
+```
+
+`io.format` fills a template into the buffer as `write_format` writes one
+to the file, and `io.put` writes bytes as they are
+([the library reference](docs/library.md#the-buffered-writer)).
 
 Make a small file, then run the program on it and on a file that is not
 there:

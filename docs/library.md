@@ -112,7 +112,8 @@ Which module does what:
 | Task | Calls | Module |
 |---|---|---|
 | Get the handle every hosted call takes | `host := blocking.new()` | [hosted/blocking](../hosted/blocking) |
-| Print a formatted line | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` and `io.flush(out)` | [core/io](../core/io) |
+| Print a formatted line | `io.write_format(host, io.out(host), "{} lines\n", [any(addr count)])` | [core/io](../core/io) |
+| Print many lines | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` for each and `io.flush(out)` | [core/io](../core/io) |
 | Get a command-line argument | `io.argument_at(host, 0)`, and `io.argument_count(host)` | [core/io](../core/io) |
 | Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
 | Write straight to standard error | `io.write(host, io.err(host), bytes)` | [core/io](../core/io) |
@@ -392,6 +393,7 @@ Byte cursors, validated UTF-8 views, byte search, a text builder, formatting and
 | `text.over`, `text.growing` | Make a builder over your buffer, or one that grows from an allocator. |
 | `text.append_text`, `text.append_u32` and the rest | Append a piece to a builder. |
 | `text.format` | Append a template with each `{}` filled in. |
+| `text.format_onto` | Format a template through a buffer, handing the text to an `outlet` as the buffer fills. |
 | `text.parse_u32` and the rest | Read a number from bytes. |
 | `text.host_over`, `text.from_host` | Make a host string, and check one is UTF-8. |
 
@@ -503,6 +505,15 @@ integer types in decimal, `bool` as `true` or `false`, `utf8`, `[]u8` and
 host strings, and a program declares it for a type of its own. Floats,
 `f32` and `f64`, are not formattable yet.
 
+`format_onto` formats through a buffer of the caller's and hands the text
+to an `outlet` each time the buffer fills and once at the end, so text of
+any length goes through a buffer of any size: `io.write_format` is it over
+a file. An `outlet` has one entry, `take`, which takes the bytes whole or
+reports `no_space`. A value that fits the buffer is formatted whole into
+it, so a conformance's `length` and alignments see its own piece; only a
+value longer than the whole buffer is handed on in pieces as it is
+written.
+
 To print a float, scale it to an integer and print the parts. Converting
 a float to an integer truncates toward zero and traps when the value does
 not fit, so this adds a half to round, and takes the sign off first so
@@ -569,7 +580,7 @@ decimals.
 
 ## core/io
 
-Reader, writer, file and process capabilities, their world composition, directories, running programs, entropy, the rest of the file system and terminals beside them, the memory world, a buffered writer and a line reader. Time is `core/time`, the network `core/net` and the fakes of a system `core/io/fake`.
+Reader, writer, file and process capabilities, their world composition, directories, running programs, entropy, the rest of the file system and terminals beside them, the memory world, a formatted write, a buffered writer and a line reader. Time is `core/time`, the network `core/net` and the fakes of a system `core/io/fake`.
 
 The capabilities are concepts, and a program names only the ones it uses:
 
@@ -593,7 +604,8 @@ failure with `else` instead, as the program at the end of the page does:
 
 | Task | Calls |
 |---|---|
-| Print a formatted line | `mut out := io.buffered_over(host, io.out(host), storage)` makes a buffered writer over your buffer, an array such as `mut storage: [256]u8 = zeroed`, `defer io.flush(out) else none` writes what waits on the way out, and `try io.format(out, "{} of {}\n", [any(addr done), any(addr total)])` fills each `{}` with a value. |
+| Print a formatted line | `try io.write_format(host, io.out(host), "{} of {}\n", [any(addr done), any(addr total)])` fills each `{}` with a value and writes the line. |
+| Print many lines | `mut out := io.buffered_over(host, io.out(host), storage)` makes a buffered writer over your buffer, an array such as `mut storage: [4096]u8 = zeroed`, `defer io.flush(out) else none` writes what waits on the way out, and `try io.format(out, "{} of {}\n", [any(addr done), any(addr total)])` fills each `{}` with a value. |
 | Print bytes as they are | `try io.put(out, "done\n")`, through the same writer. |
 | Write straight to a stream | `io.write(host, io.err(host), bytes)` writes all the bytes, or fails with `io_failed`. |
 | Get an argument | `path := try io.argument_at(host, 0)` lends the first argument after the program's name as a host string, or fails with `no_argument`; `io.argument_count(host)` counts them. |
@@ -830,9 +842,24 @@ Terminals are `terminals`, one more concept outside `world`.
 `is_terminal` says whether a stream is one, and `window_size` gives its
 `window`, rows and columns, or `not_a_terminal`.
 
+### A formatted write
+
+`write_format` writes a template and its values to a file in one call:
+`io.write_format(host, io.out(host), "{} of {}\n", [any(addr done),
+any(addr total)])`. Each `{}` takes the next value, as `text.format`'s
+does, and the template is checked against them before anything is
+written, so a mismatch is `text.invalid_format` and writes nothing. The
+text is formatted into `format_store` bytes on the stack, 128, and written
+whenever they fill and at the end: a line that fits is one write, and a
+value of any length goes out in pieces, so it never reports `no_space`. A
+failed write is `io_failed` and may follow partial output, as `write`'s
+may. It needs no buffer or flush of the caller's, and works on every
+target that has a writer.
+
 ### The buffered writer
 
-A `buffered_writer` gathers writes to one file in a buffer the caller
+A program that writes many pieces to one file gathers them in a buffered
+writer, which makes fewer, larger writes. A `buffered_writer` gathers writes to one file in a buffer the caller
 supplies, and hands them to a writer when the buffer fills or the program
 flushes it.
 

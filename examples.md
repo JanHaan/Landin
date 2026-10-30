@@ -31,8 +31,11 @@ says where the program lives in the repository.
 
 ## Printing formatted values
 
-The everyday way to print: gather the output in a buffered writer and fill
-the `{}` placeholders of a template with values of any type.
+A template's `{}` placeholders take values of any type. One line is one
+call, `io.write_format(host, io.out(host), "{} lines\n", [any(addr
+count)])`, as Counting lines below prints its count. A program that prints
+many lines, as this one does, gathers them in a buffered writer, which
+writes them in a few large writes:
 
 - `io.buffered_over` makes the writer over a buffer in `main`'s frame.
 - `io.format` takes the template and an inline list of the values, each
@@ -212,7 +215,9 @@ in words on standard error and returns 1.
   more line.
 - A `defer` closes the file on every way out of `count_lines` [1100].
 - `complain` writes the program's name, what it was working on and
-  `failure.words` of the failure to `io.err(host)`.
+  `failure.words` of the failure to `io.err(host)`, and `main` the count
+  to `io.out(host)`, each in one `io.write_format` call: a template whose
+  `{}` take the values in order [1370] [1380].
 
 Fixture source: `compiler/tests/fixtures/runtime/line-count/main.ldn`.
 
@@ -249,14 +254,9 @@ end count_lines
 --- found`.
 complain: (host: blocking.host, subject: []u8, problem: failure.reason)
           -> none =
-    mut room: [256]u8 = zeroed
-    mut err := io.buffered_over(host, io.err(host), room)
-    io.put(err, "count: ") else none
-    io.put(err, subject) else none
-    io.put(err, ": ") else none
-    io.put(err, failure.words(problem)) else none
-    io.put(err, "\n") else none
-    io.flush(err) else none
+    words: []u8 = failure.words(problem)
+    io.write_format(host, io.err(host), "count: {}: {}\n",
+                    [any(addr subject), any(addr words)]) else none
 end complain
 
 public main: () -> (code: i32) =
@@ -270,10 +270,8 @@ public main: () -> (code: i32) =
         complain(host, text.host_bytes(path), problem)
         return
     end
-    mut storage: [64]u8 = zeroed
-    mut out := io.buffered_over(host, io.out(host), storage)
-    io.format(out, "{} lines\n", [any(addr lines)]) else none
-    io.flush(out) else (problem)
+    io.write_format(host, io.out(host), "{} lines\n", [any(addr lines)])
+        else (problem)
         complain(host, "standard output", problem)
         return
     end
