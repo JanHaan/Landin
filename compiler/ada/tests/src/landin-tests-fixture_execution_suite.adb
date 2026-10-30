@@ -16,6 +16,7 @@ with Ada.Environment_Variables;
 with Ada.Text_IO;
 
 with Landin.Backend.Toolchain;
+with Landin.Commands.Catalogue;
 with Landin.Json;
 with Landin.Optimization;
 with Landin.Platform;
@@ -78,15 +79,26 @@ package body Landin.Tests.Fixture_Execution_Suite is
    end Recorded_Lane_Count;
 
    --  A refine invocation for the lane: the target a cross run names, then
-   --  the rest.  A fixture's own `args` that name a target keep it.
+   --  the rest.  A fixture's own `args` that name a target keep it, and so
+   --  do those of a command that takes none, `fmt` or `explain`, which
+   --  would refuse the lane's `--target` before reaching what the fixture
+   --  holds it to.
    function Lane_Arguments
      (Rest : Landin.Platform.Path_List) return Landin.Platform.Path_List;
 
    function Lane_Arguments
      (Rest : Landin.Platform.Path_List) return Landin.Platform.Path_List
    is
+      package Commands renames Landin.Commands.Catalogue;
       Result : Landin.Platform.Path_List := Lanes.Target_Arguments;
    begin
+      if not Rest.Is_Empty
+        and then Commands.Known (Rest.First_Element)
+        and then not Commands.Accepts
+          (Commands.Named (Rest.First_Element), Commands.Target)
+      then
+         return Rest;
+      end if;
       for Argument of Rest loop
          if Argument'Length > 9
            and then Argument (Argument'First .. Argument'First + 8)
