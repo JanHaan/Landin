@@ -2459,7 +2459,7 @@ SR-310 in the register.
 
 ### R13.74 — What a first stream meets
 
-Status: planned
+Status: active
 Depends on: R13.73
 
 A newcomer trial of the 0.2.8 archive, guessing from C the way a streamer

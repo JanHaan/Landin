@@ -20003,6 +20003,218 @@ not need. All were declined.
 `runtime/thread-creation-and-join-order-writes`, on x86-64, arm64 and
 RV64.
 
+### D523 — Under `--link=libc` a library is the C driver's `-lNAME`
+
+**The tour said** at [1590] that `linker.library` asks the linker for a static
+archive, and D202 made that exact: Linux and FreeBSD pass `-l:libNAME.a`, and
+Darwin resolves `libNAME.a` through the driver's `-print-file-name` and
+passes the file. A same-named shared library was never a substitute.
+
+**Chosen:** under `--link=libc`, which Darwin and FreeBSD always use, each
+active `linker.library("NAME")` reaches the C driver as `-lNAME`, in D202's
+source order with its repeats, after the program's assembly. The driver
+resolves it as it would for C, a shared library before an archive of the
+same name in one directory where its linker prefers one. The C runtime's own
+libraries, `m` among them, therefore link as the driver links them for C: a
+dynamically linked Linux executable no longer takes glibc's static `libm`,
+whose ifunc members ask the dynamic loader for CPU features no static member
+provides. The default static Linux link still refuses the directive (D280),
+and firmware still refuses it (D229). `--dry-run` and `-v` show the `-l`
+operands. This amends D202's archive-only resolution on every hosted target,
+and Darwin's `-print-file-name` query goes with it.
+
+**The alternatives:** keeping `-l:libNAME.a` and naming the C runtime's own
+libraries as exceptions, which keeps a list that differs by system and still
+drags an archive into a dynamic link for any other library that ships both;
+a second directive for shared libraries, which asks a newcomer to know which
+form their library ships before it links; and resolving archives to files on
+every target, which is D202's Darwin rule and fails the same way. The
+maintainer chose `-lNAME`.
+
+**Pinned by** nothing that runs yet: the item that implements it adds a
+runtime fixture calling `sqrtf` and `pow` from `libm` under `--link=libc`.
+
+### D524 — `linker.directory` and `-L` say where libraries are, at link and at run time
+
+**The tour said** nothing of where a library is looked for, and D202 left
+the search to the driver: an archive in a project's own directory was found
+only through GCC's `LIBRARY_PATH`, which no document mentions, and `-L` was
+an unknown option.
+
+**Chosen:** `linker.directory("DIR")` is a tool directive taking one fixed
+text literal, decoded by the ordinary text decoder and nonempty. A relative
+directory is resolved against the directory of the file that declares it, so
+a project's `lib` beside its source is found wherever the build runs; an
+absolute one is used as written. `-L DIR`, repeatable on `compile`, `run` and
+`check`, names one relative to the working directory, as a C compiler's does.
+Both reach the driver as `-L` with the absolute path, before the program's
+assembly: the command line's first in their order, so whoever builds can put
+another copy of a library ahead without editing the source, then the
+directives in source order, then the driver's own directories. Each named
+directory is also the executable's runtime search path, `-Wl,-rpath,DIR`, in
+the same order on every hosted target, so a program linked against a shared
+library in a named directory starts where it was built, as `refine run` runs
+it; the executable then records that path on the machine that built it. A
+directive in an inactive arm adds nothing, and repeats of one directory are
+kept. A directive naming a directory that does not exist is L0391 at the
+directive, and such an `-L` is a usage error, both before any tool runs.
+Wherever `linker.library` is refused, `linker.directory` and `-L` are too:
+the static Linux link, with D280's L0500 naming `--link=libc`, and firmware.
+`refine check` gives these refusals as compiling does (D443).
+
+**The alternatives:** an environment variable, which D275 declined for the
+library root and which the newcomer trial found only by chance; only the
+option, which puts into every build command what the source already knows;
+only the directive, which leaves the person building no way to choose
+another copy; the directives ahead of the command line, which lets a source
+overrule its builder; and no runtime path, as in C, which leaves a program
+built against a shared library in a named directory refusing to start with
+the loader's message. The maintainer chose both forms and the runtime path.
+
+**Pinned by** nothing that runs yet: the item that implements it adds a
+runtime fixture linking one archive through `linker.directory` and another
+through `-L`.
+
+### D525 — A library the link cannot find is named with the directories searched
+
+**The tour said** nothing, and a missing library was L0501 carrying the
+linker's own text, "cannot find -l:libraylib.a", which names neither where it
+looked nor how to add a place.
+
+**Chosen:** only when the link fails, refine looks for each requested
+library: in each named directory, in D524's order, for `libNAME.so` and
+`libNAME.a`, or `libNAME.tbd`, `libNAME.dylib` and `libNAME.a` on Darwin, and
+then through the driver's `-print-file-name`, which knows the driver's own
+directories and not the named ones. A library found nowhere is L0509, given
+instead of the linker's text. It names the library at its directive, every
+named directory with where it was named, and says that the C driver's own
+directories were searched as well; its note names `linker.directory` and
+`-L`. A failed link whose libraries are all found stays L0501 with the
+tool's output. A successful link searches nothing, so it runs no more tools
+than before.
+
+**The alternatives:** searching before every link, which costs a tool run per
+library per build to learn what a successful link already shows; reading the
+linker's message, which differs between GNU ld, lld and Apple's ld and
+between their versions; and keeping the linker's message alone. All were
+declined.
+
+**Pinned by** nothing that runs yet: the item that implements it adds a
+negative fixture for a missing library.
+
+### D526 — `refine run` compiles to a temporary executable and runs it
+
+**The tour said** nothing of running a program, and `refine run main.ldn`
+answered that `run` is not a command, steering a newcomer to checking. Bare
+`refine main.ldn` exited silently having only checked, so the executable
+looked for had never been written.
+
+**Chosen:** `refine run [options] SOURCE... [-- ARGUMENT...]` takes
+`compile`'s options except `--emit`, `-o`, `--keep-asm`, `--depfile` and
+`--dry-run`. Its `--` ends refine's operands and begins the program's
+arguments, which the program receives exactly; a source spelt with a leading
+hyphen is written `./-name.ldn`. It runs only the compiler's own host: another
+`--target` is a usage error naming `refine compile --target`. The executable
+is written into a new directory only its user may enter, under `TMPDIR` or
+`/tmp`, and is named after the entry source without `.ldn`, so its `argv[0]`
+and a trap report name the program. The program runs in the caller's working
+directory with refine's environment, standard input, output and error, and
+no time limit; while it runs refine ignores the terminal's interrupt and quit
+signals, which reach the program. The directory is removed when the program
+ends, and on every way out before it: a refusal, a failed link, a program
+killed. refine exits with the program's status. A program ended by a signal
+makes refine write one line naming the signal and exit with 128 and its
+number, as a shell reports it. A program refused before it runs exits with
+refine's own statuses, which a script cannot tell from the program's.
+
+Bare `refine FILE`, after a check that found no error, writes one line to
+standard error: that it checked and wrote nothing, with `refine run FILE` to
+run it and `refine compile FILE -o NAME` to build it. `-q` silences it, and
+`refine check` stays silent, since it is the form tools call.
+
+**The alternatives:** writing the executable beside the source, which leaves
+files in a project and fails in a read-only one; a cache of executables,
+which the compiler keeps no other of; running another target through an
+emulator, which is a runner's choice and stays the test harness's; re-raising
+the program's signal in refine, which hides the line saying what ended it;
+and a status of refine's own for a refused program, which collides with a
+program's own statuses as surely. The maintainer chose `run` and the line for
+the bare form.
+
+**Pinned by** nothing that runs yet: the item that implements it adds the
+`run` cases to the test program.
+
+### D528 — An identifier with capitals is one L0012, and a C name's says `link(symbol: ...)`
+
+**The tour said** at [1760] that identifier letters are lower-case ASCII. The
+lexer ended an unknown run at the next lower-case letter, so
+`InitWindow` was two reports and eight raylib declarations were 58, and none
+said that a C name Landin cannot spell is linked by `link(symbol: ...)`
+([1610]).
+
+**Chosen:** a word of ASCII letters, digits and underscores that begins with
+a letter or underscore and holds a capital is one L0012 spanning the word,
+and the parse continues as if it were an identifier of that spelling, so the
+word is not reported again. When the word is the name of a function declared
+`extern(c)` without `link(symbol: ...)`, the note shows that declaration
+with `link(symbol: "InitWindow")` and the name in lower case with
+underscores, `init_window`. Elsewhere the note offers the lower-case
+spelling. A run holding a byte no rule spells keeps its own report.
+
+**The alternatives:** a report per run of capitals, which is what the trial
+met; admitting capitals in a C function's name, which gives Landin two
+identifier rules; and folding the case of an `extern(c)` name silently, which
+links a symbol the source does not spell. All were declined.
+
+**Pinned by** nothing that runs yet: the item that implements it adds a
+negative fixture declaring raylib's `InitWindow`.
+
+### D529 — L0346 names the record that is not `layout(c)`
+
+**The tour said** at [1580] that a C signature's records are `layout(c)`
+structs, and L0346 gave that whole rule, eleven clauses, as its note to a
+parameter whose only fault was a record without `layout(c)`.
+
+**Chosen:** a C signature whose parameter or result is a record without
+`layout(c)` is L0346 naming the part and the record, "C cannot take `tint`:
+`color` is not `layout(c)`", with a note saying to declare the record
+`layout(c) struct` and why its layout is otherwise the compiler's own
+(D252). The other faults of a C signature keep their notes. The row keeps
+one note and one secondary label.
+
+**The alternatives:** a label at the record's declaration, which changes the
+catalogue row's shape for one cause, and the general note with the record
+named after it, which still leaves the reader the eleven clauses. Both were
+declined.
+
+**Pinned by** nothing that runs yet: the item that implements it adds a
+negative fixture passing a plain struct to C by value.
+
+### D530 — `refine explain` answers a construct and a decision
+
+**The tour said** nothing. Diagnostic notes cite paragraphs and decisions,
+`[1760]` and `D275`, and `refine explain` answered "no catalogue row holds
+the code: D275", so a reader at a terminal could not follow a citation
+without the site.
+
+**Chosen:** `refine explain` takes `[1590]`, `1590`, `D275` or `d275` beside a
+diagnostic code. For a construct or a decision it prints the title, the
+document and, for a decision, its register section, and its page on
+<https://www.701.dev>. `--full` adds the text: a construct's section up to
+its next heading, and a decision's `Chosen` paragraph. The table is
+generated into the compiler by `python3 check.py --catalogue` from `tour.md`
+and `spec.md`, and the check holds it to them. A number that names nothing
+is refused as an unknown code is.
+
+**The alternatives:** the title and place only, which leaves a reader
+offline with a heading; every decision's whole entry, which is most of
+`spec.md` inside the compiler; and shipping the documents beside the library,
+which a reader must still search. The maintainer chose the place by default
+and the text on request.
+
+**Pinned by** nothing that runs yet: the item that implements it adds
+`explain` cases to the test program.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most
@@ -25810,3 +26022,58 @@ no hosted architecture has. Both were declined.
 
 **Pinned by** `runtime/thread-stack-past-limit-traps` on Darwin, whose
 report ends the process from the thread, and on every other hosted target.
+
+### D527 — `io.write_format` writes a template and its values in one call
+
+**The tour said** at [1370] and [1380] that a template's `{}` takes the next
+value through `any`, and the library gave that to a builder and to a
+buffered writer: printing an integer took storage, a writer over it, a
+deferred flush and the call, four lines before a program's first loop.
+
+**Chosen:** `core/io` gains `write_format`, generic over a `writer` like
+`write`: a host, the file to write, a template and its values as
+`[]any text.formattable`, failing `io_failed` or `text.invalid_format`. It
+checks the template against its values before writing anything, as D355's
+`format` does, so a mismatch writes nothing. It formats into a small store
+of its own on the stack and writes the store to the file whenever it fills
+and at the end, so a line that fits is one write and a value of any length
+is written in pieces: it never reports `no_space`. Every target has it. The
+tour prints a value with it before its first loop, and keeps the buffered
+writer for a program that writes many pieces. An unknown `core/io` member
+spelt as another language's print, `print`, `println`, `printf` or `puts`,
+is L0201 whose fix shows the call. Floating-point values stay unformatted.
+
+**The alternatives:** `io.print`, which the maintainer declined so that the
+other languages' names are told the call rather than half-matching it; a
+call to standard output with no file, which needs a process provider where a
+writer suffices and hides which stream is written; a buffer the caller
+passes, which is the buffered writer again; storage from an allocator; and
+`no_space` past a fixed length, which makes a long name a failure of a print.
+
+**Pinned by** nothing that runs yet: the item that implements it adds a
+runtime fixture printing a number and a value longer than the store.
+
+### D531 — A released compiler carries no debug information, which ships beside it
+
+**The tour said** nothing. D275 laid the release archive out as `bin/refine`
+beside `lib/landin`, and the release build kept its debug information, so
+the 0.2.8 archive's compiler was 100 MB, and 27.6 MB stripped.
+
+**Chosen:** the release workflow takes the debug information out of the
+released `refine` before packaging: `objcopy --only-keep-debug`, a
+`.gnu_debuglink` and `strip --strip-debug` on Linux, `dsymutil` and
+`strip -S` on Darwin. It publishes the debug information as an asset of its
+own beside the archive, with its checksum, and the archive's layout is
+unchanged. The README's install route states each archive's size. A
+released compiler's internal error prints addresses, which a debugger or
+`addr2line` given the debug asset resolves. Checkout, Nix and debug builds
+keep their information.
+
+**The alternatives:** shipping it inside, which is three quarters of the
+download for a reader who never debugs the compiler; stripping it with
+nothing beside, which leaves an internal error unexplained; and compressed
+debug sections, which keep one file at about half the size. All were
+declined.
+
+**Pinned by** nothing that runs yet: the release workflow's packaging step,
+which no fixture runs.

@@ -221,7 +221,7 @@ buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
 [`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
 
-**Next roadmap item: R13.74 — What a first stream meets (planned).**
+**Current roadmap work: R13.74 — What a first stream meets.**
 
 ## Questions, bugs and ideas
 
