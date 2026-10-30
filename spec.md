@@ -25689,7 +25689,10 @@ wake is not private, until an acquire load reads zero. `platform/linux`'s
 the join's: a join that slept through it was never woken. Elsewhere the C
 library is given the area with `pthread_attr_setstack` and the routine
 with `pthread_create`, and `pthread_join` waits. On the area,
-`hosted/thread`'s routine switches with `compiler.stack_switch` to the
+`hosted/thread`'s routine first writes a `link(thread)` byte of its own,
+so that Darwin's dyld makes the thread's storage there, in a slow path no
+check or depth report counts, rather than at a first access on the
+prepared stack, and then switches with `compiler.stack_switch` to the
 prepared stack, whose first frame runs the task and switches back; the
 routine then marks the record ended and returns. Every asynchronous signal is
 blocked around the start and the caller's mask put back after it, so the

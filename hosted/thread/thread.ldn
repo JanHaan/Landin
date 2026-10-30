@@ -187,14 +187,22 @@ first_frame: (argument: usize) -> noreturn =
     compiler.unreachable()
 end first_frame
 
---  The thread's routine, on the area at its stack's top: switch to the
---  prepared stack, and once the task has ended there and switched back,
---  say so and end.  Its prologue checks nothing a new thread has set: a
---  thread's limit holds zero until the switch installs the prepared
---  stack's (D497).
+--  Written once by every thread `begin_thread` runs, on its start area.
+--  Darwin makes an image's thread storage at a thread's first access to
+--  any of it, in dyld's slow path, on whatever stack that access runs on,
+--  which no check or depth report counts; this write makes it on the C
+--  library's area before the prepared stack runs (D517).
+link(thread) mut begun: u8
+
+--  The thread's routine, on the area at its stack's top: make the thread's
+--  storage, switch to the prepared stack, and once the task has ended
+--  there and switched back, say so and end.  Its prologue checks nothing a
+--  new thread has set: a thread's limit holds zero until the switch
+--  installs the prepared stack's (D497).
 extern(c) begin_thread: (argument: usize) -> (result: usize) =
     --  [0810]: the argument is the address of the stack's record.
     record: ptr mut slot = ptr(argument)
+    begun = 1
     compiler.stack_switch(addr record.val.home, record.val.prepared)
     atomic.store(addr record.val.ended, u32(1))
     result = 0
