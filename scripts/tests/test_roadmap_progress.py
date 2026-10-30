@@ -182,8 +182,10 @@ Depends on: none
         text = text.replace("Status: active", "Status: planned")
         device_phase = devices.split(".")[0]
         concurrency = [headings[title] for title in CONCURRENCY]
+        stream = [headings[title] for title in STREAM]
         selected = [split, conventions, reading, review, library, boundary,
-                    linux, handles, *hosted, *concurrency, freestanding] + [
+                    linux, handles, *hosted, *concurrency, *stream,
+                    freestanding] + [
             identity for identity in headings.values()
             if identity.startswith(device_phase + ".")]
         for identity in selected:
