@@ -1,0 +1,178 @@
+--  D503: a descriptor another thread makes is never inherited by
+--  a program `io.spawn` starts.  Darwin has no pipe2, so platform/posix's
+--  pipe there is marked closed on exec only after it is made, and a
+--  program executed in between could inherit it; but Darwin's spawn asks
+--  for POSIX_SPAWN_CLOEXEC_DEFAULT, Linux's marks every descriptor above
+--  the streams closed on exec in the child and FreeBSD's closes them, so
+--  none reaches the child however it was made.  A thread makes four pipes
+--  with no close-on-exec flag at all and holds them, then makes and closes
+--  pipes through platform/posix for as long as the routine spawns.  Eight
+--  times the routine starts the program again with the argument `check`
+--  and the eight ends' numbers; the copy asks `poll` about each, which
+--  answers `poll_invalid` for a closed descriptor and opens nothing, and
+--  ends with 42 when none is open and 7 when one is.
+--
+--  A shell cannot be the check: Darwin's /bin/sh, bash 3.2, keeps a
+--  descriptor of its own at the lowest free number from 10 up while it
+--  works, which it then finds open at 10, with a redirection in a
+--  subshell or an `exec` alike, as runtime/run-no-descriptor-leak found.
+import core/failure
+import core/io
+import core/text
+import hosted/blocking
+import hosted/system
+import hosted/thread
+import platform/libc
+import platform/linux
+import platform/posix
+
+--  The eight ends the thread holds, written before it says it holds them.
+mut held: [8]i32 = zeroed
+
+--  Set when the thread holds its four pipes; set when the routine has
+--  spawned every child.
+mut holding: u32 = 0
+mut finished: u32 = 0
+
+--  How many pipes the thread made and closed while the children started.
+mut made: u64 = 0
+
+--  Make a pipe with no close-on-exec flag at either end.
+fixed if compiler.os == linux then
+    open_pipe: (ends: ptr mut i32) -> (done: bool) =
+        done = linux.pipe2(ends, 0) == 0
+    end open_pipe
+
+    close_end: (end_of: i32) -> none =
+        _ = linux.close(end_of)
+    end close_end
+else
+    open_pipe: (ends: ptr mut i32) -> (done: bool) =
+        done = libc.pipe(ends) == 0
+    end open_pipe
+
+    close_end: (end_of: i32) -> none =
+        _ = libc.close(end_of)
+    end close_end
+end if
+
+maker: type = struct
+    reserved: u32
+end maker
+
+--  Hold four inheritable pipes, and make pipes until told to stop.
+make_pipes: (inout state: maker) -> none ! failure.reason =
+    _ = state
+    for pair in usize(0)..<4 do
+        fail io.io_failed when not open_pipe(addr held[2 * pair])
+    end for
+    compiler.atomic_store(addr holding, u32(1), compiler.release)
+    while compiler.atomic_load(addr finished, compiler.acquire) == 0 do
+        ends: posix.pipe_ends = posix.pipe() else (problem)
+            _ = problem
+            fail io.io_failed
+        end
+        posix.close(ends.reading) else none
+        posix.close(ends.writing) else none
+        inc made
+    end while
+    for index in usize(0)..<8 do
+        close_end(held[index])
+    end for
+end make_pipes
+
+--  The copy's part: whether any descriptor it was given is open.
+any_open: (host: blocking.host) -> (open: bool) ! failure.reason =
+    open = false
+    given: usize = io.argument_count(host)
+    for at in usize(1)..<given do
+        digits: []u8 = text.host_bytes(try io.argument_at(host, at))
+        found: u32 = try text.parse_u32(digits)
+        mut entries: [1]posix.poll_entry =
+            [posix.watch(posix.descriptor(i32(found)), posix.poll_input)]
+        _ = posix.poll(entries, 0) else (problem)
+            _ = problem
+            fail io.io_failed
+        end
+        events: posix.poll_events = posix.happened(entries[0])
+        if (events & posix.poll_invalid) == posix.poll_no_events then
+            open = true
+        end if
+    end for
+end any_open
+
+--  The held ends' numbers in decimal, for the copy's arguments.
+mut rooms: [8][12]u8 = zeroed
+
+--  Start the copy and say whether it found nothing open.
+nothing_inherited: (host: blocking.host, arguments: []text.host_string)
+                   -> (clean: bool) ! failure.reason =
+    variables: []io.variable = []
+    running: io.child = try io.spawn(host, posix.program_name(),
+                                     arguments, variables, io.inheriting)
+    ended: io.ending = try io.wait(host, running)
+    clean = false
+    match ended.how
+        io.exited(status): clean = status == 42
+        io.signalled: clean = false
+    end match
+end nothing_inherited
+
+--  One thread's stack, with room for Darwin's whole 16 KiB pages.
+mut backing: [2 * 32768]u8 = zeroed
+
+--  How many children found nothing open.
+mut clean_children: u32 = 0
+
+run: (host: blocking.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(system.new(), backing, 1)
+    defer thread.join(workers) else none
+    task: maker = (reserved: 0)
+    try thread.admit(workers, make_pipes, task)
+    mut spins: u64 = 0
+    while compiler.atomic_load(addr holding, compiler.acquire) == 0 do
+        inc spins
+    end while
+    mut arguments: [9]text.host_string = [9 of text.host_over("")]
+    arguments[0] = text.host_over("check")
+    for index in usize(0)..<8 do
+        mut line := text.over(rooms[index][0..<12])
+        try text.append_i32(line, held[index])
+        arguments[1 + index] =
+            text.host_over(rooms[index][0..<text.length(line)])
+    end for
+    for child in usize(0)..<8 do
+        _ = child
+        clean: bool = nothing_inherited(host, arguments) else (problem)
+            compiler.atomic_store(addr finished, u32(1), compiler.release)
+            fail problem
+        end
+        if clean then inc clean_children end if
+    end for
+    compiler.atomic_store(addr finished, u32(1), compiler.release)
+    try thread.join(workers)
+end run
+
+--  1: the run failed; 2: a child found a descriptor open, or did not end
+--  as the copy does; 42: none did.  The copy ends with 42, or 7 when it
+--  found one open, or 1 when it could not ask.
+public main: () -> (code: i32) =
+    host := blocking.new()
+    if io.argument_count(host) > 0 then
+        code = 1
+        open: bool = any_open(host) else (problem)
+            _ = problem
+            return
+        end
+        code = if open then 7 else 42 end if
+        return
+    end if
+    code = 1
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    return when clean_children <> 8
+    code = 42
+end main

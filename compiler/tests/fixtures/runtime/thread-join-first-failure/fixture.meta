@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D494 three tasks share one stack of a hosted/thread group, so each starts once the last has ended; the first fails net.refused, the second succeeds and the third fails io.io_failed; join fails with the first failure only, once all three have run, and a second join succeeds
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

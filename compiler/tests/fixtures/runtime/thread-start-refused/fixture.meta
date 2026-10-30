@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D494 D519 D520 a backing too small for one stack of a hosted/thread group, and one too small for the count asked for, are refused when the group is made; with RLIMIT_NPROC at zero Linux refuses the thread with EAGAIN, admit fails mem.out_of_memory with EAGAIN in the handle's last errno and the task never runs, and with the limit restored the same stack starts the next task
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64

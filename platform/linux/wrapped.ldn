@@ -30,6 +30,7 @@ fixed if compiler.os == linux then
         getsockopt_number: i64 = 55
         clone_number: i64 = 56
         execve_number: i64 = 59
+        exit_number: i64 = 60
         wait4_number: i64 = 61
         fcntl_number: i64 = 72
         flock_number: i64 = 73
@@ -101,6 +102,7 @@ fixed if compiler.os == linux then
         fsync_number: i64 = 82
         fdatasync_number: i64 = 83
         utimensat_number: i64 = 88
+        exit_number: i64 = 93
         exit_group_number: i64 = 94
         futex_number: i64 = 98
         clock_gettime_number: i64 = 113
@@ -166,6 +168,7 @@ fixed if compiler.os == linux then
         fsync_number: i64 = 82
         fdatasync_number: i64 = 83
         utimensat_number: i64 = 88
+        exit_number: i64 = 93
         exit_group_number: i64 = 94
         futex_number: i64 = 98
         clock_gettime_number: i64 = 113

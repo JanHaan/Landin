@@ -1,0 +1,102 @@
+--  D494: a thread starts with every signal blocked, so a signal the
+--  process is sent reaches the provider that waits for it.  The thread is
+--  started before anything blocks SIGTERM, and waits until a fibre of
+--  hosted/events watches SIGTERM, which blocks it in the routine's thread
+--  alone on Linux, to read it through a signalfd, and has kqueue report
+--  it on Darwin and FreeBSD.  The thread then sends SIGTERM to its own
+--  process.  Had it kept the mask it was started with, SIGTERM's default
+--  would have ended the process in the thread; instead the signal stays
+--  pending until the loop reads it, and the fibre's `next_signal` returns
+--  it once the routine has joined the thread.
+import core/failure
+import core/fibre
+import core/io
+import core/io/signal
+import hosted/events
+import hosted/system
+import hosted/thread
+import platform/libc
+import platform/linux
+import platform/linux/numbers
+
+--  Set when the fibre watches SIGTERM; the thread waits for it.
+mut watching: u32 = 0
+--  Set when the thread has sent SIGTERM, and when the fibre received it.
+mut sent: bool = false
+mut received: bool = false
+
+--  Send SIGTERM to this process.
+fixed if compiler.os == linux then
+    terminate_self: () -> (done: bool) =
+        process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0,
+                                         0, 0)
+        done = linux.system_call(numbers.kill_number, process,
+                                 i64(linux.sigterm), 0, 0, 0, 0) == 0
+    end terminate_self
+else
+    terminate_self: () -> (done: bool) =
+        done = libc.kill(libc.getpid(), libc.sigterm) == 0
+    end terminate_self
+end if
+
+sender: type = struct
+    reserved: u32
+end sender
+
+--  Wait until the fibre watches, then send the signal.
+send: (inout state: sender) -> none ! failure.reason =
+    _ = state
+    mut spins: u64 = 0
+    while compiler.atomic_load(addr watching, compiler.acquire) == 0 do
+        inc spins
+    end while
+    sent = terminate_self()
+end send
+
+waiter: type = struct
+    signals: any signal.signals
+end waiter
+
+--  Watch SIGTERM, say so, and wait for it.
+wait_for_terminate: (inout state: waiter) -> none ! failure.reason =
+    try state.signals.watch(signal.terminate)
+    compiler.atomic_store(addr watching, u32(1), compiler.release)
+    arrived: signal.event = try state.signals.next_signal()
+    fail io.io_failed when arrived.which <> signal.terminate
+    received = true
+end wait_for_terminate
+
+--  One thread's stack, with room for Darwin's whole 16 KiB pages, and
+--  one fibre's.
+mut thread_backing: [2 * 32768]u8 = zeroed
+mut fibre_backing: [32768]u8 = zeroed
+
+run: (host: events.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(system.new(), thread_backing, 1)
+    defer thread.join(workers) else none
+    task: sender = (reserved: 0)
+    try thread.admit(workers, send, task)
+    mut tasks := try fibre.turns_over(any(addr host), fibre_backing, 1)
+    defer fibre.join(tasks) else none
+    watcher: waiter = (signals: any(addr host))
+    try fibre.admit(tasks, wait_for_terminate, watcher)
+    --  The fibre takes its first turn: it watches, and waits.
+    fibre.yield(host)
+    try thread.join(workers)
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    mut entries: [2]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else none
+    code = 3
+    return when not sent or not received
+    code = 42
+end main

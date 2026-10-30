@@ -16601,6 +16601,46 @@ package body Landin.Stages.Lowering is
             Erased : Boolean;
             Which  : Natural := Every_Entry);
 
+         --  D516: the naked routines that define a link symbol, which a C
+         --  import of that symbol reaches when it is reached itself; one
+         --  such a C import names is no root of its own.
+         package Declaration_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Res.Declaration_Id);
+         Naked_Definitions : Declaration_Vectors.Vector;
+         Viewed : array (Module_Image_Index) of Boolean :=
+           [others => False];
+
+         function Linked_Function
+           (Id : Res.Declaration_Id; Naked : Boolean) return Boolean;
+
+         --  A module function with a link symbol: a naked routine with a
+         --  body when Naked, else a bodyless C import.
+         function Linked_Function
+           (Id : Res.Declaration_Id; Naked : Boolean) return Boolean
+         is
+         begin
+            if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Function
+              or else Landin.Checking.Link_Symbol (Types.all, Id)
+                = Landin.Source.Names.No_Name
+            then
+               return False;
+            end if;
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Id));
+               Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
+            begin
+               return Syn.Kind (Of_Tree.all, Node) = Syn.Function_Declaration
+                 and then
+                   (if Naked
+                    then not Syn.Is_External (Of_Tree.all, Node)
+                      and then Syn.Machine_Convention (Of_Tree.all, Node)
+                        = Landin.Machine.Naked_Routine
+                    else Syn.Is_External (Of_Tree.all, Node)
+                      and then Syn.Uses_C_ABI (Of_Tree.all, Node));
+            end;
+         end Linked_Function;
+
          procedure Reach_Declaration (Id : Res.Declaration_Id) is
          begin
             if Id in Module_Image_Index
@@ -16611,6 +16651,17 @@ package body Landin.Stages.Lowering is
             then
                Retained (Id) := True;
                Pending.Append (Pending_Walk'(Declaration => Id, others => <>));
+               if not Naked_Definitions.Is_Empty
+                 and then Linked_Function (Id, Naked => False)
+               then
+                  for Defined of Naked_Definitions loop
+                     if Landin.Checking.Link_Symbol (Types.all, Defined)
+                       = Landin.Checking.Link_Symbol (Types.all, Id)
+                     then
+                        Reach_Declaration (Defined);
+                     end if;
+                  end loop;
+               end if;
             end if;
          end Reach_Declaration;
 
@@ -16823,7 +16874,10 @@ package body Landin.Stages.Lowering is
                        and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0
                        and then not Syn.Is_External (Of_Tree, Node);
                   begin
-                     if (Defined
+                     --  D516: reached through the C import of its symbol.
+                     if Id in Module_Image_Index and then Viewed (Id) then
+                        null;
+                     elsif (Defined
                          and then Natural (Src)
                            <= Landin.Modules.Source_Count (Grouped.all)
                          and then Landin.Modules.Module_Of (Grouped.all, Src)
@@ -16932,6 +16986,39 @@ package body Landin.Stages.Lowering is
                   end loop;
                end;
             end loop;
+
+            for Index in 1 .. Res.Declaration_Count (Meanings.all) loop
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Declaration_Id (Index);
+               begin
+                  if Id in Module_Image_Index
+                    and then Linked_Function (Id, Naked => True)
+                  then
+                     Naked_Definitions.Append (Id);
+                  end if;
+               end;
+            end loop;
+            if not Naked_Definitions.Is_Empty then
+               for Index in 1 .. Res.Declaration_Count (Meanings.all) loop
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Res.Declaration_Id (Index);
+                  begin
+                     if Id in Module_Image_Index
+                       and then Linked_Function (Id, Naked => False)
+                     then
+                        for Defined of Naked_Definitions loop
+                           if Landin.Checking.Link_Symbol (Types.all, Defined)
+                             = Landin.Checking.Link_Symbol (Types.all, Id)
+                           then
+                              Viewed (Defined) := True;
+                           end if;
+                        end loop;
+                     end if;
+                  end;
+               end loop;
+            end if;
 
             for Index in 1 .. Source_Count (Context) loop
                declare

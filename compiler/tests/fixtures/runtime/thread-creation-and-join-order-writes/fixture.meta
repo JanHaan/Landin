@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D227 D494 the routine writes ordinary data and then admits two threads of hosted/thread, each of which reads its half of that data and writes ordinary results; after join the routine reads every result, with no atomic, fence or lock of its own supplying either the creation edge or the join edge
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

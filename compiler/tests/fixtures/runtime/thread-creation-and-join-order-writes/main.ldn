@@ -1,0 +1,54 @@
+--  D227's two edges for hosted threads, and nothing else: the routine
+--  writes `published` with ordinary stores, admits two threads that each
+--  read their half and write `results` with ordinary stores, and reads
+--  every result once `join` has returned.  No atomic, fence or lock of the
+--  program's own orders any of it, so a value read wrong on either side
+--  is an edge the thread facility did not supply.  The threads run at
+--  once, each on a stack of the group's backing.
+import core/failure
+import hosted/system
+import hosted/thread
+
+--  How many words each thread reads and writes.
+half: usize = 512
+
+mut published: [2 * half]u64 = zeroed
+mut results: [2 * half]u64 = zeroed
+
+part: type = struct
+    first: usize
+    count: usize
+end part
+
+--  Read the published words of its part and write their results.
+work: (inout state: part) -> none ! failure.reason =
+    for index in state.first..<state.first + state.count do
+        results[index] = published[index] * 3 + 1
+    end for
+end work
+
+--  Two stacks, with room for Darwin's whole 16 KiB pages.
+mut backing: [3 * 32768]u8 = zeroed
+
+run: (host: system.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(host, backing, 2)
+    defer thread.join(workers) else none
+    low: part = (first: 0, count: half)
+    try thread.admit(workers, work, low)
+    high: part = (first: half, count: half)
+    try thread.admit(workers, work, high)
+    try thread.join(workers)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    for index in usize(0)..<2 * half do
+        published[index] = u64(index) * 7 + 5
+    end for
+    run(system.new()) else none
+    code = 2
+    for index in usize(0)..<2 * half do
+        return when results[index] <> (u64(index) * 7 + 5) * 3 + 1
+    end for
+    code = 42
+end main

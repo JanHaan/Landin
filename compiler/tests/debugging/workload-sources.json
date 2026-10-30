@@ -47,8 +47,11 @@
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
     "platform/libc/linux.ldn",
+    "platform/libc/threads.ldn",
     "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
+    "platform/linux/thread_block.ldn",
+    "platform/linux/threads.ldn",
     "platform/linux/vdso/vdso.ldn",
     "platform/linux/wrapped.ldn",
     "platform/posix/accounts.ldn",
@@ -63,6 +66,7 @@
     "platform/posix/random.ldn",
     "platform/posix/sockets.ldn",
     "platform/posix/terminals.ldn",
+    "platform/posix/threads.ldn",
     "platform/posix/time.ldn",
     "platform/posix/waits.ldn"
   ],
@@ -104,8 +108,11 @@
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
     "platform/libc/linux.ldn",
+    "platform/libc/threads.ldn",
     "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
+    "platform/linux/thread_block.ldn",
+    "platform/linux/threads.ldn",
     "platform/linux/vdso/vdso.ldn",
     "platform/linux/wrapped.ldn",
     "platform/posix/accounts.ldn",
@@ -120,6 +127,7 @@
     "platform/posix/random.ldn",
     "platform/posix/sockets.ldn",
     "platform/posix/terminals.ldn",
+    "platform/posix/threads.ldn",
     "platform/posix/time.ldn",
     "platform/posix/waits.ldn"
   ],
@@ -186,8 +194,11 @@
     "platform/libc/freebsd.ldn",
     "platform/libc/libc.ldn",
     "platform/libc/linux.ldn",
+    "platform/libc/threads.ldn",
     "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
+    "platform/linux/thread_block.ldn",
+    "platform/linux/threads.ldn",
     "platform/linux/vdso/vdso.ldn",
     "platform/linux/wrapped.ldn",
     "platform/posix/accounts.ldn",
@@ -202,6 +213,7 @@
     "platform/posix/random.ldn",
     "platform/posix/sockets.ldn",
     "platform/posix/terminals.ldn",
+    "platform/posix/threads.ldn",
     "platform/posix/time.ldn",
     "platform/posix/waits.ldn"
   ],
@@ -209,6 +221,8 @@
     "compiler/tests/fixtures/runtime/stack-switch-frames/main.ldn",
     "platform/linux/events.ldn",
     "platform/linux/linux.ldn",
+    "platform/linux/thread_block.ldn",
+    "platform/linux/threads.ldn",
     "platform/linux/wrapped.ldn"
   ]
 }

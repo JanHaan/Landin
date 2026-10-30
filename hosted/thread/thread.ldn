@@ -1,0 +1,328 @@
+--  Threads: tasks a routine starts as a group and waits for before it goes
+--  on, each on a thread of its own (D494).  It is `core/fibre`'s group
+--  over threads: made over a `hosted/system` handle, a backing the caller
+--  lends and a count; `admit` copies a task's state onto a free stack and
+--  starts a thread that calls an ordinary routine with the copy; and
+--  `join`, which the routine making the group defers, waits for every one
+--  and fails with the first failure any had.  Threads are no provider of
+--  `core/fibre`'s concepts (D446): a thread runs in parallel with the one
+--  that started it, so state they share is the atomic wrapper's or a
+--  lock's.
+--
+--  Each stack is cut from the backing and prepared with
+--  `compiler.stack_prepare`, so every routine of the task checks its frame
+--  against the thread's own limit and a task past its stack traps
+--  `stack_exhausted` (D495).  The thread starts on a small area at the
+--  stack's top, the system's least, where the C library, when it starts
+--  the thread, keeps its own frames, and switches from there to the
+--  prepared stack; when the task ends it switches back and the thread
+--  ends (D517).  Nothing here allocates and no guard page is mapped: the
+--  records, the states and the ledger are the backing's, behind
+--  integer-made pointers that stay inside this module [0810].
+
+import core/atomic
+import core/failure
+import core/mem
+import hosted/system
+import hosted/thread/lock
+import platform/posix
+
+--  What a thread runs: one entry, as `core/fibre`'s task, with no error
+--  set, since a thread's first frame has no caller to fail to.
+job: type = concept (job_type: type)
+    --  Run the task to its end.
+    run: (self: ptr mut job_type) -> none
+end job
+
+--  The record at a stack's base: the system's record of the thread, the
+--  start area's saved stack pointer while the task runs and the prepared
+--  stack's, the task, whether it has ended, which the thread writes, and
+--  whether a thread was started and not yet joined, and when, which only
+--  the group's owner reads and writes.
+slot: type = struct
+    thread: posix.thread
+    home: usize
+    prepared: usize
+    work: any job
+    ended: atomic.cell(u32)
+    running: u32
+    order: usize
+end slot
+
+--  The group's state shared with its threads, at the front of its backing
+--  so a task finds it wherever the group's handle has been copied to: the
+--  claim the first failure takes, that failure, and how many tasks the
+--  group has admitted, which orders its stacks by when each was started.
+ledger: type = struct
+    claimed: atomic.cell(u32)
+    failed: bool
+    problem: failure.reason
+    admitted: usize
+end ledger
+
+--  The alignment every stack and record is cut to, and the room kept at
+--  the backing's front for the ledger and at each stack's base for its
+--  record.
+alignment: usize = 16
+ledger_room: usize = (sizeof ledger + 15) / 16 * 16
+record_room: usize = (sizeof slot + 15) / 16 * 16
+
+--  The least a task's stack keeps below its state: room for the first
+--  frame `compiler.stack_prepare` lays, the limit's margin above the
+--  stack's base (D472) and a few calls of the task's own.  A stack this
+--  small is a test's; a real one is as deep as the task's calls.
+least_task: usize = 4096
+
+group_value: type = struct
+    host: system.host
+    backing: []mut u8
+    front: usize
+    first: usize
+    size: usize
+    count: usize
+    area: usize
+end group_value
+
+--- Threads a routine starts and waits for: `count` equal stacks cut from
+--- a backing the caller lends, each with its record at its base and the
+--- area its thread starts on at its top. Made by `group_over`, given
+--- tasks by `admit`, and waited for by `join`, which the routine making
+--- the group defers as it would a region's release: a group must be
+--- joined before its backing goes, and nothing else makes sure it is.
+public group: type = group_value
+
+--  A value rounded down to `unit`.
+round_down: (value: usize, unit: usize) -> (result: usize) =
+    result = value - value % unit
+end round_down
+
+--  How far `value` is below the next multiple of `unit`.
+skip_to: (value: usize, unit: usize) -> (result: usize) =
+    result = (unit - value % unit) % unit
+end skip_to
+
+record_of: (g: group, index: usize) -> (record: ptr mut slot) =
+    --  [0810]: a record is the base of its stack, in the group's backing.
+    record = ptr(g.first + index * g.size)
+end record_of
+
+--- The least bytes one stack of a group takes on this system: its
+--- record, 4 KiB for the task's own stack and the area the thread starts
+--- on, the system's least: 2 KiB and the thread's storage on a static
+--- Linux program, glibc's PTHREAD_STACK_MIN, 16 KiB on x86-64 and RV64 and
+--- 128 KiB on arm64, under --link=libc, and 16 KiB on Darwin and FreeBSD,
+--- where Darwin cuts every stack in whole 16 KiB pages (D519).
+public least_stack: () -> (bytes: usize) =
+    unit: usize = posix.thread_start_alignment()
+    bytes = record_room + least_task + posix.thread_start_bytes()
+    bytes += skip_to(bytes, unit)
+end least_stack
+
+--- A group of threads over `host`, whose last-error cell keeps the errno
+--- of a start the system refused. It cuts `backing` into `count` equal
+--- stacks and fails `mem.out_of_memory` when they would be smaller than
+--- `least_stack()`, before any thread starts. The group borrows the
+--- handle and the backing for as long as it is used [0790].
+public group_over: (host: system.host, backing: []mut u8, count: usize)
+                   -> (g: group from host, backing) ! mem.out_of_memory =
+    fail mem.out_of_memory when count == 0 or lenof backing == 0
+    unit: usize = posix.thread_start_alignment()
+    lowest: usize = usize(addr backing[0])
+    front: usize = lowest + skip_to(lowest, alignment)
+    first: usize = front + ledger_room + skip_to(front + ledger_room, unit)
+    fail mem.out_of_memory when first >= lowest + lenof backing
+    size: usize = round_down((lowest + lenof backing - first) / count, unit)
+    fail mem.out_of_memory when size < least_stack()
+    --  [0810]: the ledger and the records are the backing's bytes.
+    kept: ptr mut ledger = ptr(front)
+    kept.val = (claimed: atomic.new(u32(0)), failed: false,
+                problem: mem.out_of_memory, admitted: 0)
+    g = (host: host, backing: backing, front: front, first: first,
+         size: size, count: count, area: posix.thread_start_bytes())
+    mut index: usize = 0
+    while index < count do
+        record: ptr mut slot = record_of(g, index)
+        record.val.running = 0
+        record.val.ended = atomic.new(u32(0))
+        record.val.order = 0
+        inc index
+    end while
+end group_over
+
+--  What a task's stack holds at its top, below the area its thread starts
+--  on: the routine, the address of its group's ledger and the state the
+--  routine is called with.
+launch: type (state_type: type) = struct
+    work: (inout state: state_type) -> none ! failure.reason
+    kept: usize
+    state: state_type
+end launch
+
+--  Run the task; the first failure of the group's tasks takes the claim,
+--  and only it writes the failure, beside the count `admit` writes, whose
+--  bytes it never touches.  The failure is read only after `join` has
+--  waited for every thread, whose end orders the write.
+launch_run: (state_type: type, self: ptr mut launch(state_type)) -> none =
+    self.val.work(self.val.state) else (problem)
+        kept: ptr mut ledger = ptr(self.val.kept)
+        if atomic.compare_exchange(addr kept.val.claimed, u32(0), u32(1))
+          == 0
+        then
+            kept.val.problem = problem
+            kept.val.failed = true
+        end if
+    end
+end launch_run
+
+(state_type: type) launch(state_type) is job (run: launch_run)
+
+--  The prepared stack's first frame: run the task, then go back to the
+--  area the thread started on, which ends the thread.  Nothing resumes
+--  this frame again.
+first_frame: (argument: usize) -> noreturn =
+    --  [0810]: the argument is the address of the stack's record.
+    record: ptr mut slot = ptr(argument)
+    record.val.work.run()
+    compiler.stack_switch(addr record.val.prepared, record.val.home)
+    compiler.unreachable()
+end first_frame
+
+--  The thread's routine, on the area at its stack's top: switch to the
+--  prepared stack, and once the task has ended there and switched back,
+--  say so and end.  Its prologue checks nothing a new thread has set: a
+--  thread's limit holds zero until the switch installs the prepared
+--  stack's (D497).
+extern(c) begin_thread: (argument: usize) -> (result: usize) =
+    --  [0810]: the argument is the address of the stack's record.
+    record: ptr mut slot = ptr(argument)
+    compiler.stack_switch(addr record.val.home, record.val.prepared)
+    atomic.store(addr record.val.ended, u32(1))
+    result = 0
+end begin_thread
+
+--  Wait for the thread on stack `index` to end, and mark the stack free.
+--  A join the system refuses is a defect of this module, since only a
+--  thread it started is joined, and once.
+finish: (g: group, index: usize) -> none =
+    record: ptr mut slot = record_of(g, index)
+    posix.join_thread(addr record.val.thread) else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+    record.val.running = 0
+end finish
+
+--  The index of a stack no thread runs on: a free one, or else one whose
+--  task has ended, or else the one whose thread started first, waited
+--  for until it ends.
+free_stack: (g: group) -> (index: usize) =
+    index = 0
+    while index < g.count do
+        free: ptr mut slot = record_of(g, index)
+        return when free.val.running == 0
+        inc index
+    end while
+    mut oldest: usize = 0
+    index = 0
+    while index < g.count do
+        record: ptr mut slot = record_of(g, index)
+        if atomic.load(addr record.val.ended) <> 0 then
+            finish(g, index)
+            return
+        end if
+        first: ptr mut slot = record_of(g, oldest)
+        if record.val.order < first.val.order then
+            oldest = index
+        end if
+        inc index
+    end while
+    finish(g, oldest)
+    index = oldest
+end free_stack
+
+--- Start a task: wait until one of the group's stacks is free, joining a
+--- thread whose task has ended, or else the one that started first;
+--- copy `state` onto the top of that stack's own part, as a call passes
+--- an argument; prepare the stack; and start a thread whose first frame
+--- calls `work` with the copy. The thread begins with every
+--- asynchronous signal blocked, and only a fault's own unblocked (D521). Because each task's state lives on its own stack, one group
+--- holds tasks of different state types. The thread runs in parallel with
+--- the caller: everything sequenced before `admit` happens before the
+--- task's first action, and nothing after it does unless the two
+--- synchronize themselves (D227).
+---
+--- `work`'s failure is kept by the group, the first one only, and `join`
+--- fails with it. A task with atoms of its own maps them to
+--- `failure.reason` before returning. `state` is kept in the group until
+--- the task ends, so what it refers to must outlive the group (D445).
+--- It fails `mem.out_of_memory` when the state leaves the stack less than
+--- 4 KiB for the task's own calls, and when the system refuses the thread,
+--- whose errno the group's handle then keeps for `system.last_errno`; a
+--- failed start starts nothing and leaves the stack free.
+public admit: (state_type: type, inout g: group,
+               work: (inout state: state_type) -> none ! failure.reason,
+               escaping into g state: state_type)
+              -> none ! mem.out_of_memory =
+    index: usize = free_stack(g)
+    record: ptr mut slot = record_of(g, index)
+    low: usize = usize(record) + record_room
+    area: usize = usize(record) + g.size - g.area
+    extent: usize = sizeof launch(state_type)
+    fail mem.out_of_memory when extent > area - low - least_task
+    mut place: usize = round_down(area - extent, alignment)
+    place -= place % alignof launch(state_type)
+    fail mem.out_of_memory when place < low + least_task
+    --  [0810]: the launch is the top bytes of the stack's own part, kept
+    --  until the task ends; the task's stack is the bytes below it, and
+    --  the thread's start area the bytes above.
+    copy: ptr mut launch(state_type) = ptr(place)
+    copy.val = (work: work, kept: g.front, state: state)
+    bottom: ptr mut [1]u8 = ptr(low)
+    mut stack: []mut u8 = bottom.val[0..<1]
+    top: ptr mut [1]u8 = ptr(area)
+    mut start: []mut u8 = top.val[0..<1]
+    unchecked begin
+        --  The bytes from `low` to the launch, and from the area to the
+        --  stack's end, are the backing's.
+        stack = stack[0..<place - low]
+        start = start[0..<g.area]
+    end unchecked
+    record.val.work = any(copy)
+    atomic.store_relaxed(addr record.val.ended, u32(0))
+    record.val.prepared = compiler.stack_prepare(stack, first_frame,
+                                                 usize(record))
+    lock.note_start()
+    system.clear_errno(g.host)
+    posix.start_thread(start, addr record.val.thread, begin_thread,
+                       usize(record)) else (problem)
+        system.record_errno(g.host, problem)
+        fail mem.out_of_memory
+    end
+    kept: ptr mut ledger = ptr(g.front)
+    kept.val.admitted += 1
+    record.val.order = kept.val.admitted
+    record.val.running = 1
+end admit
+
+--- Wait until every task admitted to `g` has ended, blocking the calling
+--- thread, whatever provider of fibres it runs under: a fibre that joins
+--- holds its round. Every thread's end happens before `join` returns
+--- (D227). The first failure any task had is `join`'s, handed on once;
+--- the rest ran to their own ends regardless, since nothing cancels a
+--- thread. A group may be joined again, and given more tasks after it is.
+public join: (inout g: group) -> none ! failure.reason =
+    mut index: usize = 0
+    while index < g.count do
+        record: ptr mut slot = record_of(g, index)
+        if record.val.running <> 0 then
+            finish(g, index)
+        end if
+        inc index
+    end while
+    kept: ptr mut ledger = ptr(g.front)
+    if kept.val.failed then
+        kept.val.failed = false
+        atomic.store_relaxed(addr kept.val.claimed, u32(0))
+        fail kept.val.problem
+    end if
+end join

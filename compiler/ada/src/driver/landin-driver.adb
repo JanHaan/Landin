@@ -1771,6 +1771,29 @@ package body Landin.Driver is
            (Executable : Boolean; Checking : Boolean := False)
             return Boolean;
 
+         --  D518: whether a FreeBSD program starts a thread through the C
+         --  library, whose `pthread_create` is libthr's, which the link
+         --  then names: a program that starts none links libc alone.
+         function Starts_C_Threads return Boolean;
+
+         function Starts_C_Threads return Boolean is
+            Needed : Landin.Platform.Path_List;
+            Referrers : Landin.Platform.Path_List;
+         begin
+            if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+              /= Landin.Targets.Capabilities.FreeBSD
+            then
+               return False;
+            end if;
+            Landin.Backend.Entry_Point.Unsatisfied_Imports
+              (Landin.Stages.Code (Context).all,
+               Landin.Stages.Meanings (Context).all,
+               Landin.Stages.Modules (Context).all,
+               Landin.Stages.Identities (Context).all,
+               Needed, Referrers);
+            return (for some Name of Needed => Name = "pthread_create");
+         end Starts_C_Threads;
+
          function Refused_Static_Link
            (Executable : Boolean; Checking : Boolean := False)
             return Boolean
@@ -2103,7 +2126,8 @@ package body Landin.Driver is
                           Full_Debug => Debug_Enabled,
                           Libraries => Libraries, Facts => Facts,
                           Level => Landin.Stages.Level (Context),
-                          Static => Static_Link),
+                          Static => Static_Link,
+                          Threads => Starts_C_Threads),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception

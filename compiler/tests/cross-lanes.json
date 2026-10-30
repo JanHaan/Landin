@@ -41,6 +41,19 @@
       "runners": ["qemu-aarch64"],
       "failures": ["the program's own exit status (expected 42, actual 8)"],
       "reason": "QEMU 11.1 translates STLR as a release barrier and then the store, and LDAR as the load and then an acquire barrier, so nothing keeps a store-release before a later load-acquire, which ARMv8 orders (RCsc); on an x86-64 host the store buffer then lets both seq_cst loads of a store-buffering round read the old values, at --optimize speed in every local run. The gate's Linux arm64 lane runs it on hardware"
+    },
+    {
+      "fixture": "runtime/thread-spawn-leaks-no-descriptor",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "needs_binfmt": true,
+      "failures": ["the program's own exit status (expected 42, actual 1)"],
+      "reason": "the program starts itself again by its own name, and QEMU's user emulation runs another architecture's executable started from inside it only through a binfmt_misc handler"
+    },
+    {
+      "fixture": "runtime/thread-start-refused",
+      "runners": ["qemu-aarch64", "qemu-riscv64"],
+      "failures": ["the program returned a status"],
+      "reason": "QEMU 11.1's user emulation aborts in its plugin core, with `qemu_plugin_vcpu_exit_hook: assertion failed`, when the host refuses the thread a guest's clone asks for, as the fixture's RLIMIT_NPROC of zero makes it, so the guest never sees the EAGAIN Linux gives"
     }
   ]
 }

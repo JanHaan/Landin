@@ -39519,6 +39519,28 @@ package body Landin.Stages.Checking is
          end;
       end Is_C_Entry_View;
 
+      --  D516: a bodyless C import that names a naked routine's symbol, so
+      --  that ordinary code calls the routine through C's convention.
+      function Is_C_Naked_View
+        (Of_Tree   : Syn.Tree;
+         Node      : Syn.Node_Id;
+         Signature : Landin.Checking.Signature_Id) return Boolean
+      is (Syn.Is_External (Of_Tree, Node)
+          and then Landin.Checking.Holds (Types.all, Signature)
+          and then Landin.Checking.Signature_Uses_C_ABI
+            (Types.all, Signature)
+          and then not Landin.Checking.Signature_Is_Variadic
+            (Types.all, Signature)
+          and then Syn.Link_Symbol_Span (Of_Tree, Node)
+            /= Landin.Source.Empty_Span);
+
+      --  A naked routine with a body.
+      function Is_Naked_Definition
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is (not Syn.Is_External (Of_Tree, Node)
+          and then Syn.Machine_Convention (Of_Tree, Node)
+            = Landin.Machine.Naked_Routine);
+
       procedure Check_External_Declaration
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
@@ -39620,6 +39642,24 @@ package body Landin.Stages.Checking is
                                   and then Landin.Checking
                                     .Signature_Uses_C_ABI
                                       (Types.all, Prior_Signature))
+                  then
+                     null;
+                  --  D516: a bodyless C import beside the naked routine
+                  --  that defines its symbol is that routine's C view, as
+                  --  a C header declares an assembly routine: the text
+                  --  owns the convention the import states.
+                  elsif Syn.Kind (Prior_Tree.all, Prior_Node)
+                      = Syn.Function_Declaration
+                    and then Syn.Kind (Of_Tree, Node)
+                      = Syn.Function_Declaration
+                    and then
+                      ((Is_C_Naked_View (Of_Tree, Node, Signature)
+                        and then Is_Naked_Definition
+                          (Prior_Tree.all, Prior_Node))
+                       or else
+                         (Is_C_Naked_View
+                            (Prior_Tree.all, Prior_Node, Prior_Signature)
+                          and then Is_Naked_Definition (Of_Tree, Node)))
                   then
                      null;
                   elsif Syn.Kind (Prior_Tree.all, Prior_Node)

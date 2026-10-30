@@ -1,0 +1,67 @@
+--  The C library's threads, POSIX's `pthread` calls, alike on every system
+--  with a C library: glibc on Linux under --link=libc, where they are in
+--  libc itself since glibc 2.34, Darwin's libSystem, and FreeBSD's libthr,
+--  which a FreeBSD program that names one of them links (D518).  Each
+--  returns its errno itself, zero for success, and sets no errno cell.
+
+--- A thread's attributes, `pthread_attr_t`, as room for any system's:
+--- glibc's is 56 bytes on x86-64 and RV64 and 64 on arm64, Darwin's 64,
+--- and FreeBSD's one pointer. Declare it `zeroed` and fill it with
+--- `pthread_attr_init`.
+public thread_attributes: type = struct
+    opaque: [8]u64
+end thread_attributes
+
+--- A thread the C library started, `pthread_t`: one word on every system.
+public thread_handle: type = usize
+
+--- The routine a thread the C library starts runs, `void *(*)(void *)`:
+--- called with the argument `pthread_create` was given, and its result
+--- is what `pthread_join` may read.
+public thread_routine: type = extern(c) (argument: usize) -> (result: usize)
+
+--- Fill `attributes` with the defaults: 0, or the errno.
+public extern(c) pthread_attr_init: (attributes: ptr mut thread_attributes)
+                                    -> (status: i32)
+
+--- Free what `pthread_attr_init` took: 0, or the errno.
+public extern(c) pthread_attr_destroy:
+    (attributes: ptr mut thread_attributes) -> (status: i32)
+
+--- Make the `size` bytes from `lowest` the stack of a thread started with
+--- `attributes`, the C library's own frames and, under glibc, its thread
+--- block among them: 0, or the errno, EINVAL when `size` is below the
+--- system's PTHREAD_STACK_MIN, and on Darwin when either is not a multiple
+--- of the page.
+public extern(c) pthread_attr_setstack:
+    (attributes: ptr mut thread_attributes, lowest: usize, size: usize)
+    -> (status: i32)
+
+--- Start a thread with `attributes` that calls `routine(argument)`, and
+--- put its handle in `thread`: 0, or the errno, EAGAIN when the system
+--- lacks what another thread needs. The new thread starts with the
+--- creator's signal mask.
+public extern(c) pthread_create:
+    (thread: ptr mut thread_handle, attributes: ptr thread_attributes,
+     routine: thread_routine, argument: usize) -> (status: i32)
+
+--- Wait until `thread` has ended, and release it, discarding its result:
+--- 0, or the errno. A thread is joined once.
+public extern(c) pthread_join: (thread: thread_handle, result: address_filled)
+                               -> (status: i32)
+
+--- Change the calling thread's mask of blocked signals by `how`,
+--- `sig_block`, `sig_unblock` or `sig_setmask`, with `set` when it is
+--- given, and put the mask it had in `previous` when that is given: 0, or
+--- the errno. glibc leaves its own two signals unblocked whatever `set`
+--- says.
+public extern(c) pthread_sigmask: (how: i32, set: signals_given,
+                                   previous: signals_kept) -> (status: i32)
+
+--- Make `set` hold every signal: 0, or -1 with the reason in errno.
+public extern(c) sigfillset: (set: ptr mut signal_set) -> (status: i32)
+
+--- Take `signal` out of `set`: 0, or -1 with the reason in errno, EINVAL
+--- for a number that is no signal.
+public extern(c) sigdelset: (set: ptr mut signal_set, signal: i32)
+                            -> (status: i32)

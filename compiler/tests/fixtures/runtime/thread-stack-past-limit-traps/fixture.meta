@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: D471 D495 a task of a hosted/thread group recurses past the stack its group prepared and traps stack_exhausted in the prologue of the routine whose frame would not fit, at that routine's site, ending the process from the thread
+program: main.ldn
+root: ../../../../..
+traps: yes
+trap_report: main.ldn:16:1: trap: stack_exhausted
+constructs: 1380, 1620, 1670, 1675, 1910, 1995
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

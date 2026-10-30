@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D494 a task of a hosted/thread group runs a round of fibres of its own, whose two tasks interleave on stacks of the thread's own round, and the routine that started the thread reads their letters after join
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

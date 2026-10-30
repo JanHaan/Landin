@@ -19966,6 +19966,43 @@ which hides the binding from every debugger. Both were declined.
 **Pinned by** nothing that runs yet: a scripted session that prints a
 thread's instance is a register row of its own.
 
+### D516 — A naked routine is called through a C import of its symbol
+
+**The tour said** at [1570] that a naked routine's function value is not
+called or converted, and D450 declined making naked routines callable,
+which would give every one an ordinary convention it does not have. A
+thread `clone` makes on a static Linux program returns from the system
+call on its new stack, into no frame a Landin routine could have, so the
+call has to be in a naked body; and an ordinary assembly block may not
+leave its routine.
+
+**Chosen:** a bodyless `extern(c)` declaration with an explicit
+`link(symbol: ...)` may name the symbol a naked routine with a body
+defines, as a C header declares a routine written in assembly: ordinary
+code calls the naked text through the import's C signature, and the text
+owns honouring it. The checker admits the pair beside each other, as it
+admits C's view of `main` (D279), and the verified IR's agreement of a
+symbol's declarations takes the pair as one; any other pairing of a
+naked definition and a declaration of its symbol is still L0347. The
+naked routine is reached through the import, rather than kept as every
+machine-convention definition is, so a program that never calls the
+import carries neither.
+`platform/linux`'s `clone_thread` is such an import, and its text has
+no label: the creator and the new thread run the same instructions
+after the call and each picks its next step with a conditional move, or
+on RV64 a mask, since a hosted body admits no label.
+
+**The alternatives:** a compiler builtin that starts a thread, which
+puts one system's call in the compiler; storing the naked function value
+and reading its bits as an address to make a C function value, which
+works only by evading the rule that nothing converts a function value to
+an address; and labels in a naked body, which the branch-free text does
+not need. All were declined.
+
+**Pinned by** every static Linux fixture of `hosted/thread`, among them
+`runtime/thread-creation-and-join-order-writes`, on x86-64, arm64 and
+RV64.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most
@@ -25304,7 +25341,12 @@ lets a thread outlive the routine that started it and brings back the pool
 D444 declined for fibres; and threads as one more fibre provider, which D446
 declined. Both were declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `runtime/thread-creation-and-join-order-writes` and
+`runtime/thread-creation-and-join-order-writes-libc`, two threads reading ordinary data written before
+`admit` and writing results read after `join`, on every hosted target and
+under `--link=libc` on Linux; `runtime/thread-join-first-failure`;
+`runtime/thread-runs-fibres`, a round of fibres in a thread;
+`runtime/thread-start-refused`; and `runtime/thread-signal-reaches-events`.
 
 ### D495 — A thread runs on a stack its caller lends, and checks it
 
@@ -25326,7 +25368,9 @@ allocates nothing and maps no guard page.
 behind the caller's back and turn an overflow into a signal rather than
 `stack_exhausted`. It was declined.
 
-**Pinned by** nothing that runs yet: the threads item's fixtures will pin it.
+**Pinned by** `runtime/thread-stack-past-limit-traps`, a thread's task
+trapping `stack_exhausted` at the site of the routine whose frame would
+not fit, and the figures of D519.
 
 ### D500 — `core/atomic` wraps one scalar, and its operations carry their orderings
 
@@ -25426,9 +25470,11 @@ program Landin starts; what remains is a C library's own `exec`.
 **The alternatives:** a last error shared by every thread, which D207
 declined. It was declined again.
 
-**Pinned by** `abi/system-new-records-per-thread` for the cells (D509);
-the rest of it by nothing that runs yet: the threads item's fixtures will
-pin it.
+**Pinned by** `runtime/thread-spawn-leaks-no-descriptor` for the spawn:
+four pipes another thread made with no close-on-exec flag, and pipes it
+makes meanwhile, reach none of eight children on any hosted target,
+each a copy of the program that asks `poll` about the eight ends; and
+`abi/system-new-records-per-thread` for the cells (D509).
 
 ### D509 — A handle from `system.new()` names the calling thread, not a cell
 
@@ -25618,3 +25664,144 @@ made before the first start would keep for ever. Both were declined.
 **Pinned by** `runtime/hosted-heap-after-thread-start`,
 `runtime/hosted-heap-provider` and `runtime/linux-heap-size-classes`,
 unchanged.
+
+### D517 — A thread starts on an area at its stack's top, and switches to the prepared stack
+
+**The tour said** nothing. D494 has a static Linux program start a thread
+with `clone` and wait on the word the kernel clears, and the C library
+start it elsewhere; D495 prepares each stack with `compiler.stack_prepare`.
+
+**Chosen:** each of a group's stacks holds its record at its base, the
+task's own stack above it with the task's state at that part's top, and,
+at the stack's top, the area the thread starts on. A static Linux program
+calls `clone` with `CLONE_VM`, `CLONE_FS`, `CLONE_FILES`,
+`CLONE_SIGHAND`, `CLONE_THREAD`, `CLONE_SYSVSEM`, `CLONE_PARENT_SETTID`
+and `CLONE_CHILD_CLEARTID`, and `CLONE_SETTLS` with the thread's own
+block, on that area; the thread's first routine runs there, calls
+`hosted/thread`'s, and ends with the thread's own `exit`, never
+`exit_group`, so the kernel clears the record's word and wakes a futex
+waiter only once nothing of the thread runs. `join` waits with
+`FUTEX_WAIT` on that word, not the private form, because the kernel's
+wake is not private, until an acquire load reads zero. `platform/linux`'s
+`futex_wait`, which waits private as a lock's word may, is therefore not
+the join's: a join that slept through it was never woken. Elsewhere the C
+library is given the area with `pthread_attr_setstack` and the routine
+with `pthread_create`, and `pthread_join` waits. On the area,
+`hosted/thread`'s routine switches with `compiler.stack_switch` to the
+prepared stack, whose first frame runs the task and switches back; the
+routine then marks the record ended and returns. Every asynchronous signal is
+blocked around the start and the caller's mask put back after it, so the
+thread begins with them blocked (D521).
+
+**The alternatives:** starting the thread on the prepared stack itself,
+which needs the first frame's layout outside the compiler (D450); and
+the task on the area itself, which no stack check would bound. Both were
+declined.
+
+**Pinned by** `runtime/thread-creation-and-join-order-writes` and
+`runtime/thread-creation-and-join-order-writes-libc`, and `runtime/thread-signal-reaches-events`, whose
+thread is started before SIGTERM is blocked anywhere and sends it: with
+the thread's mask left as it was, the signal ends the process.
+
+### D518 — FreeBSD links libthr for a program that starts a thread
+
+**The tour said** nothing. D494 has the C library start a thread on
+FreeBSD, whose libc holds only stubs of the `pthread` calls and no
+`pthread_create` at all: those are libthr's.
+
+**Chosen:** a FreeBSD program whose reached code imports
+`pthread_create` is linked with `-lthr`, after the archives the program
+asks for; one that imports none links libc alone, as before. glibc has
+held its threads in libc since 2.34 and Darwin's are libSystem's, so
+neither needs a library named. libthr keeps its own record of each
+thread and its thread's storage beside the area it is given, as Darwin's
+`pthread_create` does; glibc keeps both in the area (D495).
+
+**The alternatives:** linking libthr into every FreeBSD program, which
+makes every one of them load it and turns the C library's stubs into
+locks a program with one thread never needs; and `linker.library("thr")`,
+which [1590] makes a static archive beside a dynamic libc. Both were
+declined.
+
+**Pinned by** the FreeBSD lanes of `hosted/thread`'s fixtures.
+
+### D519 — The least stack of a thread group, on each system
+
+**The tour said** nothing. D495 refuses a stack smaller than the
+system's minimum when the group is made and leaves the figures to the
+implementing item.
+
+**Chosen:** a stack is its record, at least 4 KiB for the task's own
+stack, which holds `compiler.stack_prepare`'s first frame and D472's
+margin and a few calls, and the area the thread starts on, which is the
+system's: 2 KiB and the thread's own storage on a static Linux program,
+for the start's frames and the switch's; glibc's PTHREAD_STACK_MIN under
+`--link=libc`, 16 KiB on x86-64 and RV64 and 128 KiB on arm64, which
+`pthread_attr_setstack` refuses below; and 16 KiB on Darwin and FreeBSD.
+Darwin's minimum is 16 KiB too, and it takes a stack only page-aligned in
+whole 16 KiB pages, so every stack of a Darwin group is cut in whole pages
+and is at least 32 KiB. FreeBSD's PTHREAD_STACK_MIN, 2 KiB on x86-64 and
+4 KiB on arm64, is too little for libthr's own start and end, whose calls
+the run-time linker binds lazily on that stack, which took 1,664 bytes on
+FreeBSD arm64 (D491). `thread.least_stack()` gives the figure, and
+`group_over` fails `mem.out_of_memory` below it.
+
+**The alternatives:** the system's own minimum alone on FreeBSD, which
+lazy binding overruns; a stack the C library allocates, which D495
+declined; and one figure for every system, which charges a static Linux
+program glibc's 128 KiB. All were declined.
+
+**Pinned by** `runtime/thread-start-refused`, whose backing too small for
+one stack and too small for sixteen are refused, and every fixture of
+`hosted/thread` whose group is made at those sizes.
+
+### D520 — A thread group waits for a free stack by joining, and a refused start fails as out of memory
+
+**The tour said** nothing. D494's `admit` waits for a stack to come free
+when none is, and a failed start starts nothing.
+
+**Chosen:** `admit` takes a stack no thread runs on; failing one, it
+joins a thread whose task has said it ended, and failing that, the thread
+started first. A start the system refuses fails `admit` with
+`mem.out_of_memory`, as POSIX's EAGAIN says the system lacked what another
+thread needs, and keeps the errno in the group's `hosted/system` handle
+for `system.last_errno`; the stack stays free and nothing was started.
+The first failure is claimed with a compare-exchange on the ledger, so
+only one task writes it, and `join` reads it after every thread's end.
+
+**The alternatives:** an atom of its own for a refused start, which no
+caller could recover from differently; and waiting on every thread at
+once, which needs a wait on several words the systems do not share. Both
+were declined.
+
+**Pinned by** `runtime/thread-start-refused`, whose RLIMIT_NPROC of zero
+makes Linux refuse the thread with EAGAIN, and `runtime/thread-join-first-failure`,
+whose one stack makes each `admit` join the task before it.
+
+### D521 — A thread starts with the asynchronous signals blocked, and a fault's own not
+
+**The tour said** nothing. D494 has a thread begin with every signal
+blocked, so that a signal the process is sent reaches the provider that
+reads it. A fault's signal is the faulting thread's own, raised by the
+instruction that faulted, and the systems differ on one that is blocked:
+Linux delivers it whatever the mask, while Darwin leaves it pending and
+returns to the instruction, which faults again. A trap report in a thread
+ends with `brk #1` on Darwin arm64, so `runtime/thread-stack-past-limit-traps`
+wrote its line and then ran that instruction for ever while the routine
+waited in `pthread_join`.
+
+**Chosen:** this amends D494's "every signal". A new thread begins with
+every signal blocked but the six a fault raises in the thread that made
+it: SIGILL, SIGTRAP, SIGBUS, SIGFPE, SIGSEGV and SIGSYS, which keep the
+disposition the process gives them, so a trap's terminal instruction ends
+the process on every system alike. Every other signal is blocked while
+the thread starts and in the thread, as D494 has it; the caller's mask is
+put back after the start.
+
+**The alternatives:** every signal blocked on Linux alone, where a
+blocked fault is still delivered, which makes the mask differ by system
+for no gain; and a terminal instruction the mask cannot hold off, which
+no hosted architecture has. Both were declined.
+
+**Pinned by** `runtime/thread-stack-past-limit-traps` on Darwin, whose
+report ends the process from the thread, and on every other hosted target.

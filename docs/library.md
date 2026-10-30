@@ -171,6 +171,7 @@ The library covers:
 - running programs, clocks, sleeping, the system's entropy and a
   deterministic generator;
 - blocking TCP and UDP sockets over IPv4 and IPv6;
+- threads started as a group the routine joins, `hosted/thread`;
 - the rest of the file system: opening with options, renaming, a file's
   status, read-only files, synchronizing, truncation, reading and writing
   at an offset, temporary files, the working directory's path and
@@ -194,7 +195,6 @@ systems:
 |---|---|---|
 | Calendars, time zones and formatting a date | the locale record in the register | The wall clock's seconds since 1970 are `time.wall_now`'s; turning them into a date is the program's. |
 | Resolving a host name to an address | the resolver record in the register | Under the C library, on Darwin, FreeBSD and Linux under `--link=libc`, `getaddrinfo` declared `extern(c)`; a static Linux program has none. `net.parse_address` reads an address that is already written as one. |
-| Threads | the threads item | Nothing safe yet: the hosted providers keep process-wide state, and there is no thread-local storage. |
 | Changing the working directory | not offered: it is the whole process's, and beside threads it would move every relative path at once | A path built from `io.current_directory`, or a call relative to a directory open as `at` in `platform/posix`; `chdir` by its number through `linux.system_call` on Linux, or declared `extern(c)` on Darwin and FreeBSD, where a program must. |
 | Extended attributes, access control lists, file flags | not yet planned | On Linux, the call's number from `platform/linux/numbers` through `linux.system_call`; on Darwin and FreeBSD, the C function declared `extern(c)`. |
 | Accounts kept outside /etc/passwd and /etc/group on Linux, a directory service's or NSS's | `--link=libc` | A static Linux program reads the two files itself; linked with `--link=libc`, `platform/posix` asks the C library, which asks NSS. |
@@ -1850,6 +1850,68 @@ variable of its environment, makes and removes a directory, and asks for
 random bytes and the time, answering with its exit status since it has
 nothing to write with.
 
+## hosted/thread
+
+Threads: tasks a routine starts as a group and waits for before it goes
+on, each on a thread of its own, written once over `platform/posix`.
+
+| Call | What it does |
+|---|---|
+| `thread.group_over(host, backing, count)` | Cut a backing the caller lends into `count` equal stacks, over a `hosted/system` handle, and return the group `from` both. |
+| `thread.admit` | Wait for a free stack, copy a state onto it and start a thread that calls a routine with the copy. |
+| `thread.join` | Wait until every thread has ended, and fail with the first failure any task had. |
+| `thread.least_stack()` | The least bytes one stack takes on this system. |
+
+It is `core/fibre`'s group over threads: a task is an ordinary routine,
+`(inout state: T) -> none ! failure.reason`, its state is copied onto its
+own stack and kept `escaping into` the group, and a routine making a
+group defers `thread.join(group) else none` as it would a region's
+release. Threads are no provider of `core/fibre`'s concepts: a thread
+runs beside the one that started it, so what they share between `admit`
+and `join` is the atomic wrapper's or a lock's.
+
+- Everything the routine did before `admit` happens before the task's
+  first action, and everything the task did happens before `join`
+  returns. Nothing else orders the two.
+- `join` blocks the calling thread, so a fibre that joins holds its
+  round. A thread may run a round of fibres of its own; a fibre never
+  moves between threads.
+- A thread starts with every asynchronous signal blocked, so a signal the
+  process is sent reaches the provider that reads it, through a signalfd or kqueue,
+  and never a thread's default disposition.
+- Every stack is prepared as a fibre's is, so a task that goes too deep
+  traps `stack_exhausted` at the routine whose frame would not fit.
+  Nothing is allocated and no guard page is mapped.
+- The first failure is kept and the rest are dropped; nothing cancels a
+  thread. A start the system refuses fails `admit` with
+  `mem.out_of_memory`, its errno kept in the group's handle for
+  `system.last_errno`, and starts nothing.
+- `admit` waits for a free stack by joining a thread whose task has
+  ended, or else the one that started first.
+
+Each stack holds its record, at least 4 KiB for the task's own stack and,
+at its top, the area its thread starts on, which is the system's:
+
+| System | Start area | Least stack |
+|---|---|---|
+| Linux, static | 2 KiB and the thread's own storage | about 6 KiB |
+| Linux, `--link=libc` | glibc's least: 16 KiB, 128 KiB on arm64 | about 20 KiB, 132 KiB on arm64 |
+| Darwin | 16 KiB, in whole 16 KiB pages | 32 KiB |
+| FreeBSD | 16 KiB | about 20 KiB |
+
+A smaller backing fails `group_over` with `mem.out_of_memory`, before
+any thread starts. A static Linux program starts each thread with
+`clone` and waits on the word the kernel clears when it ends; under
+`--link=libc`, on Darwin and on FreeBSD the C library starts it with
+`pthread_create` on the area and `pthread_join` waits, and a FreeBSD
+program that starts one links libthr.
+
+[Executable example](../compiler/tests/fixtures/runtime/thread-creation-and-join-order-writes/main.ldn)
+
+The program writes ordinary data, starts two threads that each read half
+of it and write their results, and reads every result after `join`, with
+no other synchronization of its own.
+
 ## platform/posix
 
 POSIX's facilities in Landin types, on Linux, Darwin and FreeBSD alike.
@@ -2001,6 +2063,22 @@ too. A signal nobody named keeps the parent's disposition in the child,
 an ignore included, as a shell's background job and `nohup` expect. It
 refuses a number that is no signal, one past 64, or past 31 on Darwin,
 and SIGKILL and SIGSTOP, with `einval`.
+
+### Threads
+
+| Call | What it does |
+|---|---|
+| `start_thread` | Start a thread that calls a C routine with an argument, on a stack area the caller lends. |
+| `join_thread` | Wait until it has ended. |
+| `thread_start_bytes`, `thread_start_alignment` | What the area takes on this system. |
+
+A static Linux program starts the thread with `platform/linux`'s
+`clone_thread` and waits on the word the kernel clears when it ends;
+elsewhere, and under `--link=libc`, the C library starts it with
+`pthread_create` and `pthread_join` waits. The thread begins with every
+asynchronous signal blocked, and the caller's mask is as it was. A start the system
+refuses fails with its errno, `eagain` when it lacks what another thread
+needs, and starts nothing. `hosted/thread` is written over these.
 
 ### Clocks and random bytes
 
@@ -2165,6 +2243,8 @@ with L0347.
 
 - `open` and `openat` are declared variadic, as C declares them, and take
   the mode as the one unnamed argument.
+- The `pthread` calls return their errno, and set no errno cell. FreeBSD's
+  are libthr's, which a program that starts a thread links.
 - Facts that differ between systems are chosen by `compiler.os`; the
   table below lists them. `stat`'s record follows the system and the C
   ABI.
@@ -2231,6 +2311,7 @@ FreeBSD it declares nothing.
 | `adopt_start` | Take the tables from a C runtime's `main`, under `--link=libc`. |
 | `environment`, `auxiliary` | What the entry found. |
 | `level`, `read_cpu_words`, `missing_feature` | The CPU feature check. |
+| `clone_thread`, `exit_thread`, `wait_until_cleared` | Start a thread with `clone`, end it alone, and wait for the word the kernel clears at its end. |
 
 ### Calls
 

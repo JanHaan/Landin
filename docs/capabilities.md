@@ -360,6 +360,16 @@ process ignores SIGPIPE and gives its children the default back.
   record on the waiting fibre's own stack and are answered by the loop;
   closing or shutting a socket wakes its waiters with `io_failed`, and a
   child's end is a pidfd or kqueue's process filter (D485--D488).
+- `hosted/thread` starts threads as a group a routine joins, made over a
+  `hosted/system` handle, a backing the caller lends and a count, as
+  `core/fibre` starts fibres: each task's stack is prepared and checked,
+  the group keeps the first failure, a thread begins with every asynchronous
+  signal blocked, and creation and join are the only edges it supplies (D494,
+  D495). A static Linux program starts a thread with `clone` and waits on
+  the word the kernel clears; under `--link=libc`, on Darwin and on
+  FreeBSD the C library starts it on the caller's stack area and joins it
+  (D517--D520). Each thread checks its frames against its own stack's
+  limit, kept in its thread-local storage (D497).
 - `platform/posix` gives POSIX in Landin types: files, directories, memory
   mappings, `poll`, non-blocking descriptors, pipes, spawning, waiting and
   sockets, Unix-domain ones

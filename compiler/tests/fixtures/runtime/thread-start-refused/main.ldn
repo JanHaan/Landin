@@ -1,0 +1,97 @@
+--  D494, D520: a start the system refuses starts nothing.  With the
+--  process's RLIMIT_NPROC at zero, Linux refuses every new thread of a
+--  user that is not root with EAGAIN, as it refuses a process, so `admit`
+--  fails `mem.out_of_memory`, the group's handle keeps EAGAIN for
+--  `last_errno` and the task never runs.  With the limit back, the same
+--  stack is free and the next `admit` starts the task.  A backing too
+--  small for one stack, and one too small for the count asked for, are
+--  refused when the group is made.
+import core/failure
+import core/io
+import core/mem
+import hosted/system
+import hosted/thread
+import platform/linux
+import platform/linux/numbers
+
+--  RLIMIT_NPROC, the same on every Linux architecture.
+nproc: i64 = 6
+
+--  A resource limit as `prlimit64` reads and writes it.
+limit: type = struct
+    soft: u64
+    hard: u64
+end limit
+
+--  Set the soft limit on threads and processes to `soft`, keeping the
+--  hard one, and return the soft one it had.
+set_soft: (soft: u64) -> (had: u64, done: bool) =
+    mut old: limit = zeroed
+    done = linux.system_call(numbers.prlimit64_number, 0, nproc, 0,
+                             i64(usize(addr old)), 0, 0) == 0
+    had = old.soft
+    return when not done
+    new: limit = (soft: soft, hard: old.hard)
+    done = linux.system_call(numbers.prlimit64_number, 0, nproc,
+                             i64(usize(addr new)), 0, 0, 0) == 0
+end set_soft
+
+mut ran: u32 = 0
+
+step: type = struct
+    digit: u32
+end step
+
+note: (inout state: step) -> none ! failure.reason =
+    ran = ran * 10 + state.digit
+end note
+
+--  Room for one stack of the least, and for a group of one.
+mut backing: [32768]u8 = zeroed
+
+--  Whether a group of `count` over the first `bytes` of the backing is
+--  refused as out of memory.
+refused: (host: system.host, bytes: usize, count: usize) -> (yes: bool) =
+    yes = false
+    made := thread.group_over(host, backing[0..<bytes], count) else (problem)
+        yes = problem == mem.out_of_memory
+        return
+    end
+    _ = made
+end refused
+
+--  The step the run reached, for the exit code.
+mut reached: i32 = 0
+
+run: (host: system.host) -> none ! failure.reason =
+    reached = 1
+    fail io.io_failed when not refused(host, 1024, 1)
+    reached = 2
+    fail io.io_failed when not refused(host, lenof backing, 16)
+    reached = 3
+    mut workers := try thread.group_over(host, backing, 1)
+    defer thread.join(workers) else none
+    (had, done: lowered) := set_soft(0)
+    fail io.io_failed when not lowered
+    reached = 4
+    first: step = (digit: 1)
+    mut kept: i32 = 0
+    thread.admit(workers, note, first) else (problem)
+        if problem == mem.out_of_memory then
+            kept = system.last_errno(host)
+        end if
+    end
+    (had: _, done: restored) := set_soft(had)
+    fail io.io_failed when kept <> 11 or not restored or ran <> 0
+    reached = 5
+    second: step = (digit: 2)
+    try thread.admit(workers, note, second)
+    try thread.join(workers)
+    fail io.io_failed when ran <> 2
+    reached = 42
+end run
+
+public main: () -> (code: i32) =
+    run(system.new()) else none
+    code = reached
+end main
