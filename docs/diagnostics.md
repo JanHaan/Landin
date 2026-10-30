@@ -451,7 +451,7 @@ since no spelling of it would be found here.
 `core/io` has no `print`, `println`, `printf` or `puts`: one call writes a
 template and its values to a file (D527). Asked for one of those, the note
 shows that call spelt with the name the program reaches the module by,
-`io.write_format(host, io.out(host), "{}\n", [any(addr x)])`, with
+`io.write_format(host, io.out(host), "{}\n", [any(addr x)]) else none`, with
 `host` from `hosted/blocking`'s `blocking.new()` on a hosted system, and
 for a selected import says to select `write_format` and `out` instead.
 

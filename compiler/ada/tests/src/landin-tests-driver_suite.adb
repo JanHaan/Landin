@@ -5556,7 +5556,7 @@ package body Landin.Tests.Driver_Suite is
          "a decision asked in lower case is the same answer");
       Landin.Testing.Check_Equal
         (Item, Said (Cited),
-         "[1590]  Linking a static library" & LF
+         "[1590]  Linking a library" & LF
          & "  tour.md" & LF
          & "  https://www.701.dev/tour.html#1590" & LF,
          "a construct names its title, document and page");

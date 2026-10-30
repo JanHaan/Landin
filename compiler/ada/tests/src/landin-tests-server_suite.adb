@@ -78,6 +78,27 @@ package body Landin.Tests.Server_Suite is
       return Unbounded.To_String (Text);
    end Codes_Of;
 
+   --  Refine's verdicts less L0500, which a bare check on Linux gives
+   --  for a static link's refusals (D280, D443): a C library asked for,
+   --  or a C symbol nothing defines.  They answer the build's `--link`,
+   --  which the server is never told, so it makes no claim about the
+   --  link, as it makes none about a firmware entry nobody selected.
+   function Without_Link_Request
+     (Found : Diag.Diagnostic_List) return Diag.Diagnostic_List;
+
+   function Without_Link_Request
+     (Found : Diag.Diagnostic_List) return Diag.Diagnostic_List
+   is
+      Kept : Diag.Diagnostic_List;
+   begin
+      for Index in 1 .. Found.Count loop
+         if Diag.Code (Found.Get (Index)) /= "L0500" then
+            Kept.Append (Found.Get (Index));
+         end if;
+      end loop;
+      return Kept;
+   end Without_Link_Request;
+
    --  Analyse Files as a module over Host, as a server would.
    function Analysed
      (Host  : Landin.Platform.Filesystem'Class;
@@ -429,7 +450,8 @@ package body Landin.Tests.Server_Suite is
                         Compared := Compared + 1;
                         Landin.Testing.Check_Equal
                           (Item, Codes_Of (Answer.Found),
-                           Codes_Of (Diag.Sorted (Ran.Found)),
+                           Codes_Of (Without_Link_Request
+                                       (Diag.Sorted (Ran.Found))),
                            Fixtures.Name (Fixture));
                      end if;
                   end;

@@ -337,7 +337,7 @@ package body Landin.Stages.Resolution is
                  & (if Prefix = "" then "; select `write_format` and `out`,"
                     & " and write" else ":")
                  & " `" & Prefix & "write_format(host, " & Prefix
-                 & "out(host), ""{}\n"", [any(addr x)])`"
+                 & "out(host), ""{}\n"", [any(addr x)]) else none`"
                  & ", `host` being `blocking.new()` of `hosted/blocking`"
                  & " on a hosted system"
             else Usual);

@@ -3,4 +3,4 @@ error[L0201]: module `stdio` has no member `printf`
   |
 7 |     stdio.printf("%u\n", count)
   |           ^^^^^^
-  = note: D527: one call prints values, each `{}` taking the next: `stdio.write_format(host, stdio.out(host), "{}\n", [any(addr x)])`, `host` being `blocking.new()` of `hosted/blocking` on a hosted system
+  = note: D527: one call prints values, each `{}` taking the next: `stdio.write_format(host, stdio.out(host), "{}\n", [any(addr x)]) else none`, `host` being `blocking.new()` of `hosted/blocking` on a hosted system
