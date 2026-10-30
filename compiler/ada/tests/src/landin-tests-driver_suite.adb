@@ -3759,6 +3759,76 @@ package body Landin.Tests.Driver_Suite is
       Link (In_Driver);
    end Missing_Library_Names_Where_It_Looked;
 
+   --  D525 on Darwin: Apple's driver does not answer -print-file-name
+   --  from its SDK, so the SDK's usr/lib, which xcrun names, is searched
+   --  last; a host whose xcrun cannot answer settles nothing, and the
+   --  linker's own text stands.
+   procedure Darwin_Library_Search_Reaches_The_SDK
+     (Item : in out Landin.Testing.Context);
+
+   procedure Darwin_Library_Search_Reaches_The_SDK
+     (Item : in out Landin.Testing.Context)
+   is
+      type Answer is (Holds_It, Lacks_It, Cannot_Say);
+
+      procedure Link (SDK : Answer);
+
+      procedure Link (SDK : Answer) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_File
+           ("main.ldn", "linker.library(""m"")" & LF & Entry_Program);
+         Host.Add_Directory ("/sdk/usr/lib");
+         if SDK = Holds_It then
+            Host.Add_File ("/sdk/usr/lib/libm.tbd", "--- !tapi-tbd");
+         end if;
+         Tools.Add_Result (1, "ld: undefined symbols for arm64" & LF);
+         Tools.Add_Result (0, "libm.tbd" & LF);
+         Tools.Add_Result (0, "libm.dylib" & LF);
+         Tools.Add_Result (0, "libm.a" & LF);
+         Tools.Add_Result
+           ((if SDK = Cannot_Say then 1 else 0), "/sdk" & LF);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute
+                (["--target=darwin-arm64", "--emit=exe", "main.ldn"],
+                 Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               SDK'Image & " fails the link: " & Report);
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 5,
+               SDK'Image & ": the link, three driver queries and xcrun");
+            if Tools.Run_Count = 5 then
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Tools.Call_At (5).Program),
+                  "xcrun",
+                  "the SDK is asked of xcrun last");
+            end if;
+            if SDK = Lacks_It then
+               Landin.Testing.Check
+                 (Item, Contains
+                    (Report, "error[L0509]: the link found no library `m`")
+                  and then not Contains (Report, "undefined symbols"),
+                  "a library the SDK lacks is named: " & Report);
+            else
+               Landin.Testing.Check
+                 (Item, Contains (Report, "error[L0501]")
+                  and then Contains (Report, "undefined symbols")
+                  and then not Contains (Report, "L0509"),
+                  SDK'Image & ": the linker's text stands: " & Report);
+            end if;
+         end;
+      end Link;
+   begin
+      Link (Holds_It);
+      Link (Lacks_It);
+      Link (Cannot_Say);
+   end Darwin_Library_Search_Reaches_The_SDK;
+
    procedure Builtin_Imports_Never_Search_Roots
      (Item : in out Landin.Testing.Context);
 
@@ -6406,6 +6476,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a missing library names where it looked",
          Missing_Library_Names_Where_It_Looked'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a Darwin library search reaches the SDK",
+         Darwin_Library_Search_Reaches_The_SDK'Access);
       Landin.Testing.Register
         (Into, "driver", "builtin imports never search roots",
          Builtin_Imports_Never_Search_Roots'Access);

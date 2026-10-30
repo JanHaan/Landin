@@ -20102,12 +20102,16 @@ looked nor how to add a place.
 library: in each named directory, in D524's order, for `libNAME.so` and
 `libNAME.a`, or `libNAME.tbd`, `libNAME.dylib` and `libNAME.a` on Darwin, and
 then through the driver's `-print-file-name`, which knows the driver's own
-directories and not the named ones. A library found nowhere is L0509, given
-instead of the linker's text. It names the library at its directive, every
-named directory with where it was named, and says that the C driver's own
-directories were searched as well; its note names `linker.directory` and
-`-L`. A failed link whose libraries are all found stays L0501 with the
-tool's output. A successful link searches nothing, so it runs no more tools
+directories and not the named ones. Apple's driver answers that query from
+its own directories and not from the SDK it links against, so on Darwin the
+SDK's `usr/lib`, which `xcrun --sdk macosx --show-sdk-path` names and
+`SDKROOT` overrides, is searched last; a host whose `xcrun` cannot answer
+settles nothing, and the library counts as found. A library found nowhere
+is L0509, given instead of the linker's text. It names the library at its
+directive, every named directory with where it was named, and says that
+the C driver's own directories were searched as well; its note names
+`linker.directory` and `-L`. A failed link whose libraries are all found
+stays L0501 with the tool's output. A successful link searches nothing, so it runs no more tools
 than before.
 
 **The alternatives:** searching before every link, which costs a tool run per
@@ -20120,7 +20124,9 @@ declined.
 the link and finds nothing, and the driver case `a missing library names
 where it looked`, which also holds that a library found in a named
 directory or by the driver leaves the linker's L0501, and that the driver is
-asked only after a failed link.
+asked only after a failed link; and `a Darwin library search reaches the
+SDK`, which holds a library the SDK holds to being found and an `xcrun` that
+cannot answer to settling nothing.
 
 ### D526 — `refine run` compiles to a temporary executable and runs it
 

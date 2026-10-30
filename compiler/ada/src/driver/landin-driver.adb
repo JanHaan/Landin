@@ -2185,6 +2185,72 @@ package body Landin.Driver is
                when Landin.External_Tool_Failed =>
                   return True;
             end Driver_Holds;
+
+            --  Apple's driver answers `-print-file-name` from its own
+            --  directories and not from the SDK it links against, where
+            --  `libm.tbd` and the system's other stubs are, so on Darwin
+            --  the SDK's `usr/lib` is asked of `xcrun` once, which honours
+            --  SDKROOT as the driver does.  A host that cannot say where
+            --  its SDK is cannot settle the search, and the library then
+            --  counts as found.
+            Darwin : constant Boolean :=
+              Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                = Landin.Targets.Capabilities.Darwin;
+            SDK_Asked : Boolean := False;
+            SDK_Library : Unbounded.Unbounded_String;
+
+            function SDK_Holds (File : String) return Boolean;
+
+            function SDK_Holds (File : String) return Boolean is
+            begin
+               if not SDK_Asked then
+                  SDK_Asked := True;
+                  declare
+                     Asked : Landin.Platform.Tool_Result;
+                     Arguments : Landin.Platform.Path_List;
+                  begin
+                     Arguments.Append ("--sdk");
+                     Arguments.Append ("macosx");
+                     Arguments.Append ("--show-sdk-path");
+                     Tools.Run
+                       ("xcrun", Arguments, Asked,
+                        Landin.Platform.Output_Only);
+                     if Asked.Ended = Landin.Platform.Exited
+                       and then Asked.Exit_Code = 0
+                     then
+                        declare
+                           Path : constant String := Ada.Strings.Fixed.Trim
+                             (Unbounded.To_String (Asked.Output),
+                              Ada.Strings.Maps.To_Set
+                                (ASCII.LF & ASCII.CR & ' '),
+                              Ada.Strings.Maps.To_Set
+                                (ASCII.LF & ASCII.CR & ' '));
+                        begin
+                           if Path'Length > 0
+                             and then Host.Is_Directory (Path & "/usr/lib")
+                           then
+                              SDK_Library :=
+                                Unbounded.To_Unbounded_String
+                                  (Path & "/usr/lib");
+                           end if;
+                        end;
+                     end if;
+                  exception
+                     when Landin.External_Tool_Failed =>
+                        null;
+                  end;
+               end if;
+               if Unbounded.Length (SDK_Library) = 0 then
+                  return True;
+               end if;
+               declare
+                  Candidate : constant String :=
+                    Unbounded.To_String (SDK_Library) & "/" & File;
+               begin
+                  return Host.Exists (Candidate)
+                    and then not Host.Is_Directory (Candidate);
+               end;
+            end SDK_Holds;
          begin
             for Index in 1 .. Landin.Configuration.Library_Count (Table) loop
                declare
@@ -2209,6 +2275,12 @@ package body Landin.Driver is
                         exit when Found;
                         Found := Driver_Holds (File);
                      end loop;
+                     if Darwin then
+                        for File of Files loop
+                           exit when Found;
+                           Found := SDK_Holds (File);
+                        end loop;
+                     end if;
                      if not Found then
                         Any := True;
                         Note_Missing_Library (Index, Files, Directories);
