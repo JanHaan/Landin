@@ -546,3 +546,39 @@ thread : i32 = 0
                         (unary_expression
                           (literal
                             (integer_literal)))))))))))))))
+
+==================
+Link attributes may stand before public
+==================
+
+link(thread) public mut first, second: i64
+link(symbol: "main") public main: () -> (code: i32) =
+end main
+
+---
+
+(source_file
+  (public_declaration
+    (link_symbol
+      (identifier)
+      (identifier))
+    (binding
+      (identifier_list
+        (identifier)
+        (identifier))
+      (scalar_type)))
+  (public_declaration
+    (link_symbol
+      (identifier)
+      (identifier)
+      (text_literal))
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (arrow)
+        (returns
+          (named_return
+            (identifier_list
+              (identifier))
+            (scalar_type))))
+      (identifier))))

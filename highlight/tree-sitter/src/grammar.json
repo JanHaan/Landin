@@ -262,46 +262,81 @@
       ]
     },
     "public_declaration": {
-      "type": "SEQ",
+      "type": "CHOICE",
       "members": [
         {
-          "type": "CHOICE",
+          "type": "SEQ",
           "members": [
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "public"
+                },
+                {
+                  "type": "BLANK"
+                }
+              ]
+            },
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "atom_declaration"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "binding"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "function_declaration"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "extern_declaration"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "type_declaration"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "concept_declaration"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "link_symbol"
+            },
             {
               "type": "STRING",
               "value": "public"
             },
             {
-              "type": "BLANK"
-            }
-          ]
-        },
-        {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SYMBOL",
-              "name": "atom_declaration"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "binding"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "function_declaration"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "extern_declaration"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "type_declaration"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "concept_declaration"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "binding"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "function_declaration"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "extern_declaration"
+                }
+              ]
             }
           ]
         }

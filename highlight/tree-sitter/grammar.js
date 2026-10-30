@@ -164,15 +164,24 @@ module.exports = grammar({
     // an ordinary call's list has, so a query reads both alike.
     directive_arguments: $ => commaSep1($._expression),
 
-    public_declaration: $ => seq(
-      optional('public'),
-      choice(
-        $.atom_declaration,
-        $.binding,
-        $.function_declaration,
-        $.extern_declaration,
-        $.type_declaration,
-        $.concept_declaration,
+    public_declaration: $ => choice(
+      seq(
+        optional('public'),
+        choice(
+          $.atom_declaration,
+          $.binding,
+          $.function_declaration,
+          $.extern_declaration,
+          $.type_declaration,
+          $.concept_declaration,
+        ),
+      ),
+      // The kernel's `link_attributes "public"?` order: a binding or a
+      // routine's link attributes may stand before `public` as well as
+      // after it.
+      seq(
+        $.link_symbol, 'public',
+        choice($.binding, $.function_declaration, $.extern_declaration),
       ),
     ),
 
