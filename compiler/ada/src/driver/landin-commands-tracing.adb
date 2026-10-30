@@ -21,6 +21,15 @@ package body Landin.Commands.Tracing is
       Host.Original.Run (Program, Arguments, Result, Capture);
    end Run;
 
+   overriding procedure Run_Attached
+     (Host : Runner; Program : String;
+      Arguments : Landin.Platform.Path_List;
+      Result : out Landin.Platform.Program_Result)
+   is
+   begin
+      Host.Original.Run_Attached (Program, Arguments, Result);
+   end Run_Attached;
+
    overriding procedure Prepare_Output
      (Host : Runner; Files : Landin.Platform.Filesystem'Class; Path : String)
    is

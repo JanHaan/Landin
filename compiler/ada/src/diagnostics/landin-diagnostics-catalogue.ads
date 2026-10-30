@@ -213,7 +213,8 @@ package Landin.Diagnostics.Catalogue is
       Image_Materialization_Limit,
       Panic_Contract_Invalid,
       Firmware_Frame_Exceeds_Stack,
-      Handler_Exceeds_Stack_Margin);
+      Handler_Exceeds_Stack_Margin,
+      Library_Not_Found);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -316,7 +317,8 @@ package Landin.Diagnostics.Catalogue is
             when Image_Materialization_Limit => "L0505",
             when Panic_Contract_Invalid    => "L0506",
             when Firmware_Frame_Exceeds_Stack => "L0507",
-            when Handler_Exceeds_Stack_Margin => "L0508");
+            when Handler_Exceeds_Stack_Margin => "L0508",
+            when Library_Not_Found => "L0509");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -346,7 +348,7 @@ package Landin.Diagnostics.Catalogue is
             when Call_Argument_Match .. Traversal_Source => Error,
             --  Stage warnings do not refuse; invocation policy is separate.
             when Mutable_Never_Written | Unused_Pure_Local => Warning,
-            when No_Toolchain .. Handler_Exceeds_Stack_Margin => Error);
+            when No_Toolchain .. Library_Not_Found => Error);
 
    --  Argument_Not_In_A_Register was retired by the internal scalar
    --  convention, which places every argument after the sixth in an aligned
@@ -387,7 +389,7 @@ package Landin.Diagnostics.Catalogue is
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable | Image_Materialization_Limit
                | Panic_Contract_Invalid | Firmware_Frame_Exceeds_Stack
-               | Handler_Exceeds_Stack_Margin
+               | Handler_Exceeds_Stack_Margin | Library_Not_Found
                => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
@@ -641,7 +643,10 @@ package Landin.Diagnostics.Catalogue is
             when Handler_Exceeds_Stack_Margin =>
                "[1670]: a selected panic handler in a program that"
                & " prepares a stack exceeds or cannot be measured against"
-               & " the target's stack margin");
+               & " the target's stack margin",
+            when Library_Not_Found =>
+               "[1590]/D525: a failed link's library that no named"
+               & " directory and none of the C driver's own holds");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -684,7 +689,9 @@ package Landin.Diagnostics.Catalogue is
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
             --  in an empty file or a source-free fallback.
-            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False);
+            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
+            --  D525: a library is asked for by its directive, always.
+            when Library_Not_Found => True);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -724,7 +731,8 @@ package Landin.Diagnostics.Catalogue is
             when Unused_Pure_Local => True,
             when Call_Argument_Match .. Traversal_Source
                => True,
-            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False);
+            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
+            when Library_Not_Found => True);
 
    --  The admitted secondary-label interval. Every code except L0201, L0300,
    --  L0304, L0305, L0306 and L0325 has one exact count. L0300 and L0306
@@ -864,6 +872,8 @@ package Landin.Diagnostics.Catalogue is
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.
             when No_Toolchain          => 1,
+            --  D525: how to name where the library is.
+            when Library_Not_Found     => 1,
             when others                => 0);
 
    function Warning_Enabled_By_Default (Of_Code : Code_Name) return Boolean

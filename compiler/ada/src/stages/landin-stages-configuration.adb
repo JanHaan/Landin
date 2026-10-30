@@ -1202,7 +1202,8 @@ package body Landin.Stages.Configuration is
          Value : Fixed_Value;
       begin
          if (Base /= "compiler" or else Member /= "assert")
-           and then (Base /= "linker" or else Member /= "library")
+           and then (Base /= "linker"
+                     or else Member not in "library" | "directory")
          then
             Landin.Diagnostics.Resolution.Report
               (Item => Landin.Diagnostics.Resolution.Reserved_Tool_Name,
@@ -1215,7 +1216,8 @@ package body Landin.Stages.Configuration is
             Report_Configuration_Rule
               (Bad.Invalid_Tool_Directive, Of_Tree, Node,
                "this tool directive needs one fixed argument",
-               Note => "D202: " & Base & "." & Member
+               Note => (if Member = "directory" then "D524: " else "D202: ")
+                 & Base & "." & Member
                  & " takes exactly one positional argument");
          else
             Argument := Syn.Nth_Argument (Of_Tree, Call, 1);
@@ -1259,9 +1261,46 @@ package body Landin.Stages.Configuration is
             elsif Syn.Kind (Of_Tree, Argument) /= Syn.Text_Literal then
                Report_Configuration_Rule
                  (Bad.Invalid_Tool_Directive, Of_Tree, Argument,
-                  "linker.library needs a fixed text literal",
-                  Note => "[1590]/D202: linker.library takes"
-                    & " one quoted library name");
+                  "linker." & Member & " needs a fixed text literal",
+                  Note =>
+                    (if Member = "directory"
+                     then "[1590]/D524: linker.directory takes one quoted"
+                       & " directory, relative to this file's or absolute"
+                     else "[1590]/D202: linker.library takes"
+                       & " one quoted library name"));
+            elsif Member = "directory" then
+               --  D524: the text as written; the driver resolves it
+               --  against this file's directory and asks whether it is
+               --  one, since only the driver asks the host.
+               declare
+                  Text : constant String := Landin.Source.Slice
+                    (Source (Context, Syn.Source_Of (Of_Tree)),
+                     Syn.Where (Of_Tree, Argument));
+                  Bytes : String (1 .. Text'Length);
+                  Length, Fault_First, Fault_Last : Natural;
+                  Fault : Landin.Tokens.Text.Problem;
+               begin
+                  Landin.Tokens.Text.Decode
+                    (Text, Bytes, Length, Fault, Fault_First, Fault_Last);
+                  if Fault /= Landin.Tokens.Text.Well_Formed
+                    or else Length = 0
+                    or else (for some Index in 1 .. Length =>
+                               Bytes (Index) = ASCII.NUL)
+                  then
+                     Report_Configuration_Rule
+                       (Bad.Invalid_Tool_Directive, Of_Tree, Argument,
+                        "this is not a directory name",
+                        Note => "[1590]/D524: name the directory that holds"
+                          & " the library, nonempty and without a NUL byte,"
+                          & " relative to this file's directory or"
+                          & " absolute");
+                  else
+                     Landin.Configuration.Add_Directory
+                       (Activity.all, Bytes (1 .. Length),
+                        Syn.Source_Of (Of_Tree),
+                        Syn.Where (Of_Tree, Node));
+                  end if;
+               end;
             else
                declare
                   Text : constant String := Landin.Source.Slice
@@ -1294,7 +1333,9 @@ package body Landin.Stages.Configuration is
                           & " with -, and must not consist only of dots");
                   else
                      Landin.Configuration.Add_Library
-                       (Activity.all, Bytes (1 .. Length));
+                       (Activity.all, Bytes (1 .. Length),
+                        Syn.Source_Of (Of_Tree),
+                        Syn.Where (Of_Tree, Node));
                   end if;
                end;
             end if;

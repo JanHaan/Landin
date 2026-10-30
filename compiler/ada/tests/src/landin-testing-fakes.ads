@@ -112,6 +112,23 @@ package Landin.Testing.Fakes is
       From, To : String;
       Status : out Landin.Platform.Move_Status);
 
+   --  D526: a private directory is /virtual/tmp/PREFIXn, n counting from
+   --  1, until Refuse_Private_Directories; Remove_Tree removes it and
+   --  every entry under it, unless Refuse_Removals.
+   procedure Refuse_Private_Directories (Host : in out Fake_Filesystem);
+   function Private_Directory_Count (Host : Fake_Filesystem) return Natural;
+
+   overriding procedure Make_Private_Directory
+     (Host   : Fake_Filesystem;
+      Prefix : String;
+      Path   : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Landin.Platform.Write_Status);
+
+   overriding procedure Remove_Tree
+     (Host   : Fake_Filesystem;
+      Path   : String;
+      Status : out Landin.Platform.Remove_Status);
+
    overriding procedure Lock_Output
      (Host : Fake_Filesystem; Path : String; Handle : out Integer);
    overriding procedure Unlock_Output
@@ -203,6 +220,8 @@ package Landin.Testing.Fakes is
       Program   : Ada.Strings.Unbounded.Unbounded_String;
       Arguments : Landin.Platform.Path_List;
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged;
+      --  Run_Attached's, a program `refine run` started, and not a tool.
+      Attached  : Boolean := False;
    end record;
 
    function Call_At
@@ -217,6 +236,21 @@ package Landin.Testing.Fakes is
       Arguments : Landin.Platform.Path_List;
       Result    : out Landin.Platform.Tool_Result;
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
+
+   --  D526: how every later Run_Attached says its program ended: exited
+   --  with Exit_Code, or, when Signal is not zero, killed by it.  It
+   --  records its call as Run does, and Raise_On_Run applies to it too.
+   procedure Set_Program_Result
+     (Host        : in out Fake_Tool_Runner;
+      Exit_Code   : Integer;
+      Signal      : Natural := 0;
+      Signal_Name : String := "");
+
+   overriding procedure Run_Attached
+     (Host      : Fake_Tool_Runner;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Result    : out Landin.Platform.Program_Result);
 
    --  A fake successful run stands in for writing the requested output.
    --  Cases about a lying tool can turn that promise off.
@@ -332,6 +366,8 @@ private
       Next_Identity : Interfaces.Unsigned_64 := 1;
       Output_Is_Locked : Boolean := False;
       Identity_Comparisons : Natural := 0;
+      Private_Made : Natural := 0;
+      Refuses_Private : Boolean := False;
    end record;
 
    type Store_Access is access Store;
@@ -378,6 +414,7 @@ private
       Run_Message : Unbounded.Unbounded_String;
       Next_Result : Positive := 1;
       Calls       : Call_Vectors.Vector;
+      Program     : Landin.Platform.Program_Result;
    end record;
 
    type Recorder_Access is access Recorder;

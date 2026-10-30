@@ -42,6 +42,14 @@ package Landin.Platform.Native.Tools is
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged);
 
+   --  Through `landin_tool_process.c`, which owns the signal dispositions
+   --  and their restoration.
+   overriding procedure Run_Attached
+     (Host      : Native_Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Result    : out Program_Result);
+
    overriding function Output_Produced
      (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
       return Boolean;

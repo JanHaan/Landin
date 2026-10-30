@@ -1,3 +1,4 @@
+with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Build_Identity;
@@ -13,6 +14,7 @@ with Landin.Driver.Library;
 with Landin.Json;
 with Landin.Source;
 with Landin.Source.Sets;
+with Landin.Targets;
 with Landin.Targets.Capabilities;
 with Landin.Targets.Levels;
 
@@ -70,8 +72,40 @@ package body Landin.Commands is
       Policy : WP.Policy := WP.Defaults;
       Forwarded : Landin.Platform.Path_List;
       Operands : Landin.Platform.Path_List;
+      --  D526: what follows `run`'s `--`, the program's, exactly.
+      Program_Arguments : Landin.Platform.Path_List;
       Problem : US.Unbounded_String;
    end record;
+
+   --  D526: what `refine run` names its executable, and what the bare
+   --  form's line suggests `-o` names: the entry operand's last name
+   --  without `.ldn`.
+   function Program_Name (Operand : String) return String;
+
+   function Program_Name (Operand : String) return String is
+      First : Positive := Operand'First;
+      Last : Natural := Operand'Last;
+   begin
+      while Last >= Operand'First and then Operand (Last) = '/' loop
+         Last := Last - 1;
+      end loop;
+      for Index in Operand'First .. Last loop
+         if Operand (Index) = '/' then
+            First := Index + 1;
+         end if;
+      end loop;
+      declare
+         Base : constant String := Operand (First .. Last);
+      begin
+         if Base'Length > 4 and then Base (Base'Last - 3 .. Base'Last) = ".ldn"
+         then
+            return Base (Base'First .. Base'Last - 4);
+         elsif Base = "" or else Base = "." or else Base = ".." then
+            return "program";
+         end if;
+         return Base;
+      end;
+   end Program_Name;
 
    function Parse
      (Arguments : Landin.Platform.Path_List;
@@ -120,7 +154,14 @@ package body Landin.Commands is
       end if;
       while Index <= Natural (Expanded.Length) loop
          declare
-            Text : constant String := Expanded.Element (Index);
+            Written : constant String := Expanded.Element (Index);
+            --  D524: `-LDIR`, as a C compiler takes it, is `-L DIR`.
+            Text : constant String :=
+              (if not Literal and then Written'Length > 2
+                 and then Written (Written'First .. Written'First + 1) = "-L"
+                 and then Written (Written'First + 2) /= '='
+               then "-L=" & Written (Written'First + 2 .. Written'Last)
+               else Written);
             Equal : constant Natural := Ada.Strings.Fixed.Index (Text, "=");
             Stem : constant String :=
               (if Equal = 0 then Text else Text (Text'First .. Equal - 1));
@@ -253,6 +294,10 @@ package body Landin.Commands is
               and then Result.Operands.Is_Empty and then Text = "build"
             then
                Refuse ("build is reserved for future project orchestration");
+            elsif Literal and then Result.Command = C.Run then
+               --  D526: after `run`'s `--`, every word is the program's,
+               --  an empty one too.
+               Result.Program_Arguments.Append (Text);
             else
                if Text = "" then
                   Refuse ("empty operand");
@@ -301,6 +346,11 @@ package body Landin.Commands is
          when C.Help | C.Completion =>
             if Natural (Result.Operands.Length) > 1 then
                Refuse (C.Name (Result.Command) & " takes one operand");
+            end if;
+         when C.Run =>
+            if Result.Operands.Is_Empty and then not Result.Wants_Help then
+               Refuse ("run needs a source to compile and run: refine run"
+                 & " program.ldn");
             end if;
          when others => null;
       end case;
@@ -396,6 +446,80 @@ package body Landin.Commands is
          Result.Report := US.To_Unbounded_String
            (Landin.Diagnostics.Text.Render (Result.Found, None));
       end Refuse;
+      --  D526: the private directory `run` writes the executable into.
+      Run_Directory : US.Unbounded_String;
+
+      --  D526: refuse another target, make the directory and name the
+      --  executable in it.  Refused, or without a directory, nothing runs.
+      procedure Prepare_Run;
+      procedure Prepare_Run is
+         Named : constant String := Effective (C.Target, "");
+         Made : Landin.Platform.Write_Status;
+         use type Landin.Platform.Write_Status;
+         use type Landin.Targets.Target_Facts;
+      begin
+         if not Landin.Targets.Selection.Has_Host_Default (Built_For) then
+            Refuse ("run runs a program on this compiler's host, "
+              & Built_For & ", which no target describes; build one with"
+              & " refine compile --target=NAME");
+            return;
+         elsif Named /= ""
+           and then Landin.Targets.Selection.Is_Described (Named)
+           and then Landin.Targets.Selection.Described (Named)
+             /= Landin.Targets.Selection.Host_Default (Built_For)
+         then
+            Refuse ("run runs a program on this compiler's own host, and"
+              & " not on " & Named & "; build one for " & Named
+              & " with refine compile --target=" & Named);
+            return;
+         end if;
+         Host.Make_Private_Directory ("refine-run-", Run_Directory, Made);
+         if Made /= Landin.Platform.Write_Ok then
+            declare
+               None : Landin.Source.Sets.Source_Set;
+            begin
+               Result.Status := Landin.Driver.Status_Reported;
+               Result.Found.Append
+                 (Landin.Diagnostics.Make
+                    (Code => Landin.Diagnostics.Catalogue.Code
+                       (Landin.Diagnostics.Catalogue.Unwritable_Output),
+                     Level => Landin.Diagnostics.Error,
+                     Source => Landin.Source.No_Source,
+                     Where => Landin.Source.Empty_Span,
+                     Message => "cannot make a private directory for the"
+                       & " program under TMPDIR or /tmp"));
+               Result.Report := US.To_Unbounded_String
+                 (Landin.Diagnostics.Text.Render (Result.Found, None));
+            end;
+            Run_Directory := US.Null_Unbounded_String;
+            return;
+         end if;
+         Forwarded.Append ("--emit=exe");
+         Forwarded.Append ("-o=" & US.To_String (Run_Directory) & "/"
+           & Program_Name (Asked.Operands.First_Element));
+      end Prepare_Run;
+
+      --  D526: a compiled program is run once its report is written; on
+      --  every other way out its directory goes now.
+      procedure Finish_Run;
+      procedure Finish_Run is
+         Removed : Landin.Platform.Remove_Status;
+         use type Landin.Platform.Remove_Status;
+      begin
+         if Result.Status = Landin.Driver.Status_Success then
+            Result.Launch_Program := Run_Directory & "/"
+              & Program_Name (Asked.Operands.First_Element);
+            Result.Launch_Arguments := Asked.Program_Arguments;
+            Result.Launch_Directory := Run_Directory;
+         else
+            Host.Remove_Tree (US.To_String (Run_Directory), Removed);
+            if Removed = Landin.Platform.Not_Removable then
+               US.Append (Result.Report, "refine: cannot remove "
+                 & US.To_String (Run_Directory) & LF);
+            end if;
+         end if;
+      end Finish_Run;
+
       procedure Identify;
       procedure Identify is
          B : J.Builder;
@@ -535,6 +659,58 @@ package body Landin.Commands is
                   Result.Output := US.To_Unbounded_String
                     (C.Shell_Completion (Asked.Operands.Element (1)));
                end if;
+            when C.Run =>
+               Prepare_Run;
+               if US.Length (Run_Directory) > 0 then
+                  for Text of Asked.Operands loop
+                     Forwarded.Append
+                       ((if Text'Length > 0 and then Text (Text'First) = '-'
+                         then "./" else "") & Text);
+                  end loop;
+                  begin
+                     if Asked.Verbosity >= 2 then
+                        declare
+                           Wrapped : Tracing.Runner
+                             (Tools'Access, Transcript'Access);
+                        begin
+                           Result := Landin.Driver.Execute
+                             (Forwarded, Host, Wrapped, Meter, Built_For,
+                              Warnings => Asked.Policy);
+                        end;
+                     else
+                        Result := Landin.Driver.Execute
+                          (Forwarded, Host, Tools, Meter, Built_For,
+                           Warnings => Asked.Policy);
+                     end if;
+                  exception
+                     when others =>
+                        declare
+                           Removed : Landin.Platform.Remove_Status;
+                        begin
+                           Host.Remove_Tree
+                             (US.To_String (Run_Directory), Removed);
+                        end;
+                        raise;
+                  end;
+                  if Asked.Verbosity > 0 then
+                     US.Append (Transcript, "refine run: host=" & Built_For
+                       & "; target="
+                       & Landin.Targets.Name
+                           (Landin.Targets.Selection.Host_Default (Built_For))
+                       & "; build-mode=" & Effective (C.Build_Mode, "debug")
+                       & "; optimize=" & Effective (C.Optimize, "size")
+                       & "; specialize=" & Effective (C.Specialize, "auto")
+                       & "; debug=" & Effective (C.Debug, "none")
+                       & "; link=" & Effective (C.Link, Default_Link)
+                       & "; executable=" & US.To_String (Run_Directory) & "/"
+                       & Program_Name (Asked.Operands.First_Element) & LF);
+                     for Text of Asked.Forwarded loop
+                        US.Append (Transcript, "  " & J.Quoted (Text) & LF);
+                     end loop;
+                  end if;
+                  Result.Trace := Transcript & Result.Trace;
+                  Finish_Run;
+               end if;
             when C.Check | C.Compile | C.Format | C.Explain | C.Server =>
                if Asked.Command = C.Compile and then not Asked.Legacy then
                   declare
@@ -612,6 +788,85 @@ package body Landin.Commands is
         (Result, Asked.Style,
          US.To_String (Asked.Color) = "always"
          or else (US.To_String (Asked.Color) = "auto" and Terminal_Color));
+      --  D526: bare `refine FILE` checked and wrote nothing, which a
+      --  reader looking for an executable is told, with how to make one.
+      if Asked.Legacy and then Asked.Command = C.Check
+        and then US.Length (Asked.Problem) = 0
+        and then not Asked.Wants_Help
+        and then Result.Status = Landin.Driver.Status_Success
+        and then not Asked.Quiet
+        and then Asked.Style not in Presentation.JSON
+        and then not Asked.Operands.Is_Empty
+      then
+         declare
+            Named : US.Unbounded_String;
+         begin
+            for Text of Asked.Operands loop
+               US.Append (Named,
+                 (if US.Length (Named) = 0 then "" else " ") & Text);
+            end loop;
+            US.Append (Result.Report, "refine: checked "
+              & US.To_String (Named) & " and wrote nothing; run it with"
+              & " `refine run " & US.To_String (Named) & "`, or build it"
+              & " with `refine compile " & US.To_String (Named) & " -o "
+              & Program_Name (Asked.Operands.First_Element) & "`" & LF);
+         end;
+      end if;
       return Result;
    end Execute;
+
+   procedure Launch
+     (Result : in out Landin.Driver.Outcome;
+      Host   : Landin.Platform.Filesystem'Class;
+      Tools  : Landin.Platform.Tool_Runner'Class)
+   is
+      use type Landin.Platform.Termination;
+      use type Landin.Platform.Remove_Status;
+      Program : constant String := US.To_String (Result.Launch_Program);
+      Directory : constant String := US.To_String (Result.Launch_Directory);
+      Arguments : constant Landin.Platform.Path_List :=
+        Result.Launch_Arguments;
+      Ran : Landin.Platform.Program_Result;
+      Removed : Landin.Platform.Remove_Status;
+      Why : US.Unbounded_String;
+      Started : Boolean := True;
+   begin
+      if Program = "" then
+         return;
+      end if;
+      Result.Output := US.Null_Unbounded_String;
+      Result.Report := US.Null_Unbounded_String;
+      Result.Trace := US.Null_Unbounded_String;
+      Result.Launch_Program := US.Null_Unbounded_String;
+      Result.Launch_Directory := US.Null_Unbounded_String;
+      Result.Launch_Arguments.Clear;
+      begin
+         Tools.Run_Attached (Program, Arguments, Ran);
+      exception
+         when Failure : Landin.External_Tool_Failed =>
+            Started := False;
+            Why := US.To_Unbounded_String
+              (Ada.Exceptions.Exception_Message (Failure));
+         when others =>
+            Host.Remove_Tree (Directory, Removed);
+            raise;
+      end;
+      Host.Remove_Tree (Directory, Removed);
+      if not Started then
+         Result.Status := Landin.Driver.Status_Reported;
+         Result.Report := "refine: " & Why & LF;
+      elsif Ran.Ended = Landin.Platform.Signaled then
+         Result.Status := 128 + Ran.Signal;
+         Result.Report := US.To_Unbounded_String
+           ("refine: " & Program_Name (Program) & " was ended by "
+            & US.To_String (Ran.Signal_Name) & " (signal"
+            & Natural'Image (Ran.Signal) & ")" & LF);
+      else
+         Result.Status := Natural (Ran.Exit_Code);
+      end if;
+      if Removed = Landin.Platform.Not_Removable then
+         US.Append (Result.Report,
+           "refine: cannot remove " & Directory & LF);
+      end if;
+   end Launch;
 end Landin.Commands;

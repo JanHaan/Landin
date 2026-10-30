@@ -8,7 +8,8 @@ package body Landin.Commands.Catalogue is
    function Name (Command : Action) return String is
      (case Command is
          when Overview => "", when Check => "check",
-         when Compile => "compile", when Format => "fmt",
+         when Compile => "compile", when Run => "run",
+         when Format => "fmt",
          when Explain => "explain", when Server => "lsp",
          when Version => "version", when Targets => "targets",
          when Completion => "completion", when Help => "help");
@@ -19,6 +20,8 @@ package body Landin.Commands.Catalogue is
          when Check => "Check a whole program without producing artifacts",
          when Compile =>
            "Compile a whole program to an executable or assembly",
+         when Run =>
+           "Compile a whole program to a temporary executable and run it",
          when Format =>
            "Format source files, or a directory's, in the one Landin layout",
          when Explain => "Explain diagnostic codes and their repairs",
@@ -48,7 +51,7 @@ package body Landin.Commands.Catalogue is
          when Quiet => "--quiet", when Color => "--color",
          when Diagnostics => "--diagnostics", when Target => "--target",
          when Level => "--level", when Root => "--root",
-         when Library => "--library",
+         when Library => "--library", when Library_Directory => "-L",
          when Build_Option => "--option", when Build_Mode => "--build-mode",
          when Optimize => "--optimize", when Specialize => "--specialize",
          when Emit => "--emit", when Output => "-o",
@@ -78,6 +81,8 @@ package body Landin.Commands.Catalogue is
          when Root => "Append an ordered module import root (repeatable)",
          when Library =>
            "Where core, hosted and platform are; default beside refine",
+         when Library_Directory =>
+           "Search DIR for linker.library's libraries (repeatable)",
          when Build_Option => "Override a declared NAME=VALUE build option",
          when Build_Mode =>
            "compiler.build_mode: debug (default), release; not optimization",
@@ -139,10 +144,16 @@ package body Landin.Commands.Catalogue is
           --  D383: check takes every option that says what program is
           --  compiled and how, and none that says what is written.
           when Check => Flag in Target | Level | Root | Library
-            | Build_Option | Build_Mode | Optimize | Specialize | Link
+            | Library_Directory | Build_Option | Build_Mode | Optimize
+            | Specialize | Link
             | Firmware_Entry | Build_Report | Stage_Report
             | Warnings | Warn | Allow | Deny,
           when Compile => Flag in Target .. Depfile
+            or else Flag in Warnings .. Deny,
+          --  D526: compile's, except those that say what is written.
+          when Run => (Flag in Target .. Depfile
+                         and then Flag not in Emit | Output | Keep_Asm
+                           | Dry_Run | Depfile)
             or else Flag in Warnings .. Deny,
           when Format => Flag in Format_Check | Format_Stdout,
           when Server => Flag = Stdio,
@@ -184,8 +195,8 @@ package body Landin.Commands.Catalogue is
    end First_Owner;
 
    function Repeatable (Flag : Option) return Boolean is
-     (Flag in Help_Flag | Verbose | Quiet | Root | Build_Option
-       | Warn | Allow | Deny);
+     (Flag in Help_Flag | Verbose | Quiet | Root | Library_Directory
+       | Build_Option | Warn | Allow | Deny);
 
    function Valid_Value (Flag : Option; Text : String) return Boolean is
    begin
@@ -233,6 +244,7 @@ package body Landin.Commands.Catalogue is
       Operands : constant String :=
         (case Command is
             when Check | Compile => " [options] source.ldn ...",
+            when Run => " [options] source.ldn ... [-- ARGUMENT ...]",
             when Format => " [options] source.ldn|DIR ...",
             when Explain => " [options] [CODE ...]",
             when Completion => " [options] bash|zsh|fish",
@@ -262,7 +274,8 @@ package body Landin.Commands.Catalogue is
                      when Quiet => "-q, --quiet",
                      when Output => "-o, --output",
                      when others => Name (Flag))
-                 & (if Takes_Value (Flag) then " VALUE" else "");
+                 & (if Flag = Library_Directory then " DIR"
+                    elsif Takes_Value (Flag) then " VALUE" else "");
             begin
                US.Append (Text, "  " & Spelling
                  & Ada.Strings.Fixed."*" (26 - Spelling'Length, ' ')
@@ -281,10 +294,11 @@ package body Landin.Commands.Catalogue is
               & "'refine help COMMAND'." & LF
               & "--version is an alias for 'refine version'." & LF
               & "Bare source requests and --identify remain compatibility"
-              & LF & "spellings; use check, compile, version and targets."
+              & LF & "spellings; use check, compile, run, version and"
+              & LF & "targets."
               & LF & "'build' is reserved for future project orchestration."
               & LF);
-         when Check | Compile =>
+         when Check | Compile | Run =>
             US.Append (Text, LF
               & "Sources form one whole program. With --root, the operand"
               & LF & "is one entry-module directory, or the entry module's"
@@ -303,6 +317,19 @@ package body Landin.Commands.Catalogue is
               & LF & "Example: refine " & Name (Command)
               & " program.ldn"
               & (if Command = Compile then " -o program" else "") & LF);
+            if Command = Run then
+               US.Append (Text, "Example: refine run program.ldn -- input.txt"
+                 & LF
+                 & "The executable is written into a new directory only you"
+                 & LF & "may enter, under TMPDIR or /tmp, and removed when the"
+                 & LF & "program ends. Arguments after -- are the program's,"
+                 & LF & "exactly; write a source beginning with - as"
+                 & LF & "./-name.ldn. The program runs in this directory with"
+                 & LF & "this terminal, and refine exits with its status, or"
+                 & LF & "with 128 and the number of the signal that ended it."
+                 & LF & "run runs this compiler's own host; build another"
+                 & LF & "target with refine compile --target=NAME." & LF);
+            end if;
             if Command = Compile then
                US.Append (Text, "Example: refine compile --emit asm "
                  & "program.ldn -o program.s" & LF
@@ -315,6 +342,16 @@ package body Landin.Commands.Catalogue is
                  & LF
                  & "Hosted targets use --debug full; Cortex-M uses --debug"
                  & LF & "lines and requires --firmware-entry for executables."
+                 & LF
+                 & "Example: refine compile --link=libc -L vendor/lib"
+                 & " program.ldn -o program" & LF
+                 & "linker.library(""NAME"") links libNAME, a shared"
+                 & LF & "library or an archive, as the C driver's -lNAME"
+                 & LF & "does; on Linux it needs --link=libc."
+                 & LF & "linker.directory(""DIR"") in the source, relative to"
+                 & LF & "its file, and -L DIR, relative to here, say where"
+                 & LF & "libraries are, -L's first; each is"
+                 & LF & "also where the program looks for them when it runs."
                  & LF);
             end if;
          when others => null;
@@ -413,6 +450,7 @@ package body Landin.Commands.Catalogue is
                US.Append (Text, "complete -c refine -n '"
                  & US.To_String (Conditions) & "' "
                  & (if Stem = "-o" then "-s o -l output"
+                    elsif Stem = "-L" then "-s L"
                     else "-l " & Stem (3 .. Stem'Last))
                  & (if Takes_Value (Flag) then " -r" else "") & LF);
             end;

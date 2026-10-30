@@ -3514,16 +3514,16 @@ package body Landin.Tests.Driver_Suite is
                  Tools.Call_At (1);
             begin
                Landin.Testing.Check_Equal
-                 (Item, Call.Arguments.Element (2), "-l:libfirst.a",
+                 (Item, Call.Arguments.Element (2), "-lfirst",
                   "entry first file precedes other modules");
                Landin.Testing.Check_Equal
-                 (Item, Call.Arguments.Element (3), "-l:libsecond.a",
+                 (Item, Call.Arguments.Element (3), "-lsecond",
                   "active arm keeps declaration order");
                Landin.Testing.Check_Equal
-                 (Item, Call.Arguments.Element (4), "-l:libthird.a",
+                 (Item, Call.Arguments.Element (4), "-lthird",
                   "directory files are canonical sorted");
                Landin.Testing.Check_Equal
-                 (Item, Call.Arguments.Element (5), "-l:libfirst.a",
+                 (Item, Call.Arguments.Element (5), "-lfirst",
                   "reached module repeats are preserved");
             end;
          else
@@ -3532,45 +3532,234 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Libraries_Keep_Their_Written_Order;
 
-   procedure Failed_Darwin_Archive_Reports_Stderr
+   --  D523/D524: the directories reach the driver before the assembly,
+   --  the command line's first, each again as the runtime path; then the
+   --  libraries as -lNAME, on Darwin as on Linux; and a successful link
+   --  searches nothing (D525).
+   procedure Library_Directories_Reach_The_Link
      (Item : in out Landin.Testing.Context);
 
-   procedure Failed_Darwin_Archive_Reports_Stderr
+   procedure Library_Directories_Reach_The_Link
      (Item : in out Landin.Testing.Context)
    is
-      Host  : Landin.Testing.Fakes.Fake_Filesystem;
-      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-      Args  : Landin.Platform.Path_List;
-   begin
-      Host.Add_File
-        ("main.ldn", "linker.library(""missing"")" & LF & Entry_Program);
-      Args.Append ("--target=darwin-arm64");
-      Args.Append ("--emit=exe");
-      Args.Append ("main.ldn");
-      Tools.Set_Result
-        (7, "", Error_Output => "archive query failed: invalid SDK" & LF);
+      procedure Link (Target : String; Expected : String);
 
-      declare
-         Result : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute (Args, Host, Tools);
-         Report : constant String := Unbounded.To_String (Result.Report);
+      procedure Link (Target : String; Expected : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
       begin
-         Landin.Testing.Check_Equal
-           (Item, Result.Status, Landin.Driver.Status_Reported,
-            "a failed archive query is reported");
-         Landin.Testing.Check
-           (Item, Contains (Report, "L0501")
-            and then Contains
-              (Report, "cannot resolve Darwin archive libmissing.a")
-            and then Contains (Report, "archive query failed: invalid SDK"),
-            "the diagnostic names the archive and carries tool stderr");
-         Landin.Testing.Check_Equal
-           (Item, Tools.Run_Count, 1, "linking stops after the failed query");
-         Landin.Testing.Check
-           (Item, Tools.Call_At (1).Capture = Landin.Platform.Output_Only,
-            "the archive query keeps stdout separate from stderr");
-      end;
-   end Failed_Darwin_Archive_Reports_Stderr;
+         Host.Add_Directory ("game");
+         Host.Add_Directory ("/virtual/compile/game/lib");
+         Host.Add_Directory ("/opt/shared");
+         Host.Add_Directory ("vendor");
+         Host.Add_File
+           ("game/main.ldn", "linker.library(""raylib"")" & LF
+            & "linker.directory(""lib"")" & LF
+            & "linker.directory(""/opt/shared/"")" & LF
+            & "fixed if false then" & LF
+            & "linker.directory(""absent"")" & LF
+            & "end if" & LF
+            & "linker.library(""m"")" & LF & Entry_Program);
+         Args.Append ("--target=" & Target);
+         Args.Append ("--emit=exe");
+         if Target = "linux-x86-64" then
+            Args.Append ("--link=libc");
+         end if;
+         Args.Append ("-L=vendor");
+         Args.Append ("-o=game/prog");
+         Args.Append ("game/main.ldn");
+         Tools.Set_Result (0, "");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Joined : Unbounded.Unbounded_String;
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               Target & " links: " & Unbounded.To_String (Result.Report));
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 1,
+               Target & ": a successful link searches nothing");
+            if Tools.Run_Count >= 1 then
+               for Argument of Tools.Call_At (1).Arguments loop
+                  Unbounded.Append (Joined, Argument & " ");
+               end loop;
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Joined), Expected),
+                  Target & " names directories, then the assembly, then"
+                  & " libraries: " & Unbounded.To_String (Joined));
+            end if;
+         end;
+      end Link;
+   begin
+      Link ("linux-x86-64",
+            "-L/virtual/compile/vendor -L/virtual/compile/game/lib"
+            & " -L/opt/shared -Wl,-rpath,/virtual/compile/vendor"
+            & " -Wl,-rpath,/virtual/compile/game/lib -Wl,-rpath,/opt/shared"
+            & " game/prog.s -lraylib -lm -o game/prog ");
+      Link ("darwin-arm64",
+            "-L/virtual/compile/vendor -L/virtual/compile/game/lib"
+            & " -L/opt/shared -Wl,-rpath,/virtual/compile/vendor"
+            & " -Wl,-rpath,/virtual/compile/game/lib -Wl,-rpath,/opt/shared"
+            & " game/prog.s -lraylib -lm -o game/prog ");
+   end Library_Directories_Reach_The_Link;
+
+   --  D524: a directive naming no directory is L0391 at the directive,
+   --  by a check too, and an `-L` naming none a usage error; a static
+   --  Linux link refuses both, as it refuses linker.library (D280).
+   procedure Library_Directories_Are_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Library_Directories_Are_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refused
+        (Program : String; Options : Landin.Platform.Path_List;
+         Status : Natural; Expected : String; What : String);
+
+      procedure Refused
+        (Program : String; Options : Landin.Platform.Path_List;
+         Status : Natural; Expected : String; What : String)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Options;
+      begin
+         Host.Add_Directory ("vendor");
+         Host.Add_Directory ("/virtual/compile/lib");
+         Host.Add_File ("main.ldn", Program & Entry_Program);
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("main.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Status, What & ": " & Report);
+            Landin.Testing.Check
+              (Item, Contains (Report, Expected), What & ": " & Report);
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, What & " before any tool runs");
+         end;
+      end Refused;
+   begin
+      Refused ("linker.directory(""missing"")" & LF,
+               ["--emit=exe", "--link=libc"], Landin.Driver.Status_Reported,
+               "error[L0391]: linker.directory names no directory:"
+               & " /virtual/compile/missing",
+               "a missing directive directory");
+      Refused ("linker.directory(""missing"")" & LF,
+               Landin.Platform.No_Arguments, Landin.Driver.Status_Reported,
+               "--> main.ldn:1:1", "a check refuses it at the directive");
+      Refused ("", ["--emit=exe", "--link=libc", "-L=absent"],
+               Landin.Driver.Status_Misuse,
+               "error[L0002]: -L absent is not a directory",
+               "an -L naming no directory");
+      Refused ("linker.directory(""lib"")" & LF,
+               Landin.Platform.No_Arguments, Landin.Driver.Status_Reported,
+               "error[L0500]: a static link of linux-x86-64 links no C"
+               & " library, so it searches no directory:"
+               & " linker.directory(""lib"")",
+               "a static link refuses a directive's directory");
+      Refused ("", ["-L=vendor"], Landin.Driver.Status_Reported,
+               "searches no directory: -L vendor",
+               "a static link refuses -L");
+   end Library_Directories_Are_Refused;
+
+   --  D525: only after a failed link, each library is looked for in the
+   --  named directories and through the driver's -print-file-name; one
+   --  found nowhere is L0509 at its directive, instead of the linker's
+   --  text, and one found leaves the linker's L0501.
+   procedure Missing_Library_Names_Where_It_Looked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Library_Names_Where_It_Looked
+     (Item : in out Landin.Testing.Context)
+   is
+      type Placement is (Nowhere, In_Directory, In_Driver);
+
+      procedure Link (Where : Placement);
+
+      procedure Link (Where : Placement) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_Directory ("vendor");
+         Host.Add_Directory ("/virtual/compile/lib");
+         Host.Add_File
+           ("main.ldn", "linker.library(""raylib"")" & LF
+            & "linker.directory(""lib"")" & LF & Entry_Program);
+         case Where is
+            when Nowhere => null;
+            when In_Directory =>
+               Host.Add_File ("/virtual/compile/lib/libraylib.a", "!<arch>");
+            when In_Driver =>
+               Host.Add_File ("/usr/lib/libraylib.so", "\x7fELF");
+         end case;
+         Tools.Add_Result (1, "ld: cannot find -lraylib" & LF);
+         if Where = In_Driver then
+            Tools.Add_Result (0, "/usr/lib/libraylib.so" & LF);
+         elsif Where = Nowhere then
+            Tools.Add_Result (0, "libraylib.so" & LF);
+            Tools.Add_Result (0, "libraylib.a" & LF);
+         end if;
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute
+                (["--target=linux-x86-64", "--emit=exe", "--link=libc",
+                  "-L=vendor", "main.ldn"], Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               Where'Image & " fails the link: " & Report);
+            if Where = Nowhere then
+               Landin.Testing.Check
+                 (Item, Contains
+                    (Report, "error[L0509]: the link found no library"
+                     & " `raylib`: no libraylib.so or libraylib.a in"
+                     & " /virtual/compile/vendor (-L),"
+                     & " /virtual/compile/lib (linker.directory at"
+                     & " main.ldn:2), or the C driver's own directories")
+                  and then Contains (Report, "--> main.ldn:1:1")
+                  and then Contains (Report, "-L DIR")
+                  and then not Contains (Report, "cannot find -lraylib"),
+                  "the library is named at its directive with every"
+                  & " directory searched: " & Report);
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 3,
+                  "the driver is asked for each file it might hold");
+               if Tools.Run_Count = 3 then
+                  Landin.Testing.Check_Equal
+                    (Item, Tools.Call_At (2).Arguments.Element (1),
+                     "-print-file-name=libraylib.so",
+                     "the shared library is asked for first");
+                  Landin.Testing.Check
+                    (Item,
+                     Tools.Call_At (3).Capture = Landin.Platform.Output_Only,
+                     "the query keeps its answer apart from its errors");
+               end if;
+            else
+               Landin.Testing.Check
+                 (Item, Contains (Report, "error[L0501]")
+                  and then Contains (Report, "cannot find -lraylib")
+                  and then not Contains (Report, "L0509"),
+                  Where'Image & ": a found library leaves the linker's"
+                  & " text: " & Report);
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count,
+                  (if Where = In_Directory then 1 else 2),
+                  Where'Image & " stops searching once it is found");
+            end if;
+         end;
+      end Link;
+   begin
+      Link (Nowhere);
+      Link (In_Directory);
+      Link (In_Driver);
+   end Missing_Library_Names_Where_It_Looked;
 
    procedure Builtin_Imports_Never_Search_Roots
      (Item : in out Landin.Testing.Context);
@@ -6094,8 +6283,14 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "libraries keep their written order",
          Libraries_Keep_Their_Written_Order'Access);
       Landin.Testing.Register
-        (Into, "driver", "failed Darwin archive reports stderr",
-         Failed_Darwin_Archive_Reports_Stderr'Access);
+        (Into, "driver", "library directories reach the link",
+         Library_Directories_Reach_The_Link'Access);
+      Landin.Testing.Register
+        (Into, "driver", "library directories are refused",
+         Library_Directories_Are_Refused'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a missing library names where it looked",
+         Missing_Library_Names_Where_It_Looked'Access);
       Landin.Testing.Register
         (Into, "driver", "builtin imports never search roots",
          Builtin_Imports_Never_Search_Roots'Access);

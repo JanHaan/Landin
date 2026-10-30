@@ -89,17 +89,20 @@ package Landin.Backend.Toolchain is
       Named : String;
       Native : Boolean) return String;
 
-   --  Apple ld has no GNU exact-archive -l form. Ask the selected
-   --  compiler driver to resolve each archive through its own search path.
-   --  Linux names pass through unchanged. An unresolved archive fails here.
-   procedure Resolve_Libraries
-     (Facts : Landin.Targets.Target_Facts;
-      Driver : String;
-      Host : Landin.Platform.Filesystem'Class;
-      Tools : Landin.Platform.Tool_Runner'Class;
-      Libraries : in out Landin.Platform.Path_List;
-      Result : out Landin.Platform.Tool_Result;
-      Ready : out Boolean);
+   --  D525: the files a failed link's `-lNAME` may have meant, in the
+   --  order the target's linker prefers them in one directory: on Darwin
+   --  `libNAME.tbd`, `libNAME.dylib` and `libNAME.a`, elsewhere
+   --  `libNAME.so` and `libNAME.a`.  Searched only after a link failed.
+   function Library_Files
+     (Facts : Landin.Targets.Target_Facts; Name : String)
+      return Landin.Platform.Path_List;
+
+   --  What asks the driver where its own directories hold File.  The
+   --  driver answers with a path when it found one and with File alone
+   --  when it did not; it does not search the `-L` directories.
+   function Print_File_Arguments (File : String)
+     return Landin.Platform.Path_List
+     is (Landin.Platform.Arguments ("-print-file-name=" & File));
 
    --  The whole command line, in the order a reader would write it.
    --  Relative file operands beginning with '-' or '@' gain './' so the
@@ -108,6 +111,14 @@ package Landin.Backend.Toolchain is
    --  `Static` (Linux only) links the program alone: no C runtime
    --  object or library, no dynamic loader and no position independence,
    --  starting at platform/linux's `_landin_start`.
+   --
+   --  `Libraries` are D523's: each `linker.library` NAME reaches the
+   --  driver as `-lNAME`, in source order with its repeats, after the
+   --  program's assembly, and the driver resolves it as it would for C.
+   --  `Directories` are D524's absolute directories, the command line's
+   --  first and then the directives', each passed before the assembly as
+   --  `-LDIR` and, in the same order, as the executable's runtime search
+   --  path.  Neither is admitted by a static or a firmware link.
    --
    --  `Threads` (FreeBSD only) links libthr, which holds FreeBSD's
    --  `pthread_create`: its libc has only stubs of the rest (D518).
@@ -144,7 +155,9 @@ package Landin.Backend.Toolchain is
       Full_Debug : Boolean := False;
       Level : Landin.Targets.Levels.Feature_Level;
       Static : Boolean := False;
-      Threads : Boolean := False)
+      Threads : Boolean := False;
+      Directories : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments)
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
 
@@ -158,7 +171,9 @@ package Landin.Backend.Toolchain is
         Landin.Platform.No_Arguments;
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False;
-      Static : Boolean := False)
+      Static : Boolean := False;
+      Directories : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments)
       return Landin.Platform.Path_List;
 
    --  The GNU assembler's `-march=` for an x86-64 level: `generic64`, the

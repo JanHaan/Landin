@@ -74,6 +74,18 @@ package Landin.Platform.Native is
       From, To : String;
       Status : out Move_Status);
 
+   --  Through `landin_file_identity.c`: mkdtemp, mode 0700.
+   overriding procedure Make_Private_Directory
+     (Host   : Native_Filesystem;
+      Prefix : String;
+      Path   : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Write_Status);
+
+   overriding procedure Remove_Tree
+     (Host   : Native_Filesystem;
+      Path   : String;
+      Status : out Remove_Status);
+
    overriding procedure Lock_Output
      (Host : Native_Filesystem; Path : String; Handle : out Integer);
    overriding procedure Unlock_Output

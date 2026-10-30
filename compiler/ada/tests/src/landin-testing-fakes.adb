@@ -1,3 +1,4 @@
+with Ada.Strings.Fixed;
 with Ada.Unchecked_Deallocation;
 
 package body Landin.Testing.Fakes is
@@ -410,6 +411,76 @@ package body Landin.Testing.Fakes is
       end if;
    end Remove_File;
 
+   procedure Refuse_Private_Directories (Host : in out Fake_Filesystem) is
+   begin
+      Host.Writes.Data.Refuses_Private := True;
+   end Refuse_Private_Directories;
+
+   function Private_Directory_Count (Host : Fake_Filesystem) return Natural
+     is (Host.Writes.Data.Private_Made);
+
+   overriding procedure Make_Private_Directory
+     (Host   : Fake_Filesystem;
+      Prefix : String;
+      Path   : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Landin.Platform.Write_Status)
+   is
+   begin
+      if Host.Writes.Data.Refuses_Private then
+         Path := Unbounded.Null_Unbounded_String;
+         Status := Landin.Platform.Not_Writable;
+         return;
+      end if;
+      Host.Writes.Data.Private_Made := Host.Writes.Data.Private_Made + 1;
+      Path := Unbounded.To_Unbounded_String
+        ("/virtual/tmp/" & Prefix
+         & Ada.Strings.Fixed.Trim
+             (Natural'Image (Host.Writes.Data.Private_Made),
+              Ada.Strings.Both));
+      Host.Writes.Data.Files.Append
+        (File_Entry'
+           (Path => Path, Content => Unbounded.Null_Unbounded_String,
+            Kind => A_Directory,
+            Identity => Host.Writes.Data.Next_Identity));
+      Host.Writes.Data.Next_Identity := Host.Writes.Data.Next_Identity + 1;
+      Status := Landin.Platform.Write_Ok;
+   end Make_Private_Directory;
+
+   overriding procedure Remove_Tree
+     (Host   : Fake_Filesystem;
+      Path   : String;
+      Status : out Landin.Platform.Remove_Status)
+   is
+      Under : constant String := Directory_Path (Path) & "/";
+      Index : Positive := 1;
+   begin
+      if Host.Writes.Data.Refuses_Removal then
+         Status := Landin.Platform.Not_Removable;
+         return;
+      elsif not Host.Is_Directory (Path) then
+         Status := Landin.Platform.Already_Absent;
+         return;
+      end if;
+      while Index <= Natural (Host.Writes.Data.Files.Length) loop
+         declare
+            Stored : constant String := Unbounded.To_String
+              (Host.Writes.Data.Files.Element (Index).Path);
+         begin
+            if Stored = Directory_Path (Path)
+              or else (Stored'Length >= Under'Length
+                       and then Stored
+                         (Stored'First .. Stored'First + Under'Length - 1)
+                           = Under)
+            then
+               Host.Writes.Data.Files.Delete (Index);
+            else
+               Index := Index + 1;
+            end if;
+         end;
+      end loop;
+      Status := Landin.Platform.Removed;
+   end Remove_Tree;
+
    overriding procedure Move_File
      (Host   : Fake_Filesystem;
       From, To : String;
@@ -665,6 +736,42 @@ package body Landin.Testing.Fakes is
       Host.State.Data.Run_Message := Unbounded.To_Unbounded_String (Message);
    end Raise_On_Run;
 
+   procedure Set_Program_Result
+     (Host        : in out Fake_Tool_Runner;
+      Exit_Code   : Integer;
+      Signal      : Natural := 0;
+      Signal_Name : String := "") is
+   begin
+      Host.State.Data.Program :=
+        (Ended => (if Signal = 0 then Landin.Platform.Exited
+                   else Landin.Platform.Signaled),
+         Exit_Code => (if Signal = 0 then Exit_Code else 0),
+         Signal => Signal,
+         Signal_Name => Unbounded.To_Unbounded_String (Signal_Name));
+   end Set_Program_Result;
+
+   overriding procedure Run_Attached
+     (Host      : Fake_Tool_Runner;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Result    : out Landin.Platform.Program_Result)
+   is
+   begin
+      Host.State.Data.Calls.Append
+        (Tool_Call'
+           (Program   => Unbounded.To_Unbounded_String (Program),
+            Arguments => Arguments,
+            Capture   => Landin.Platform.Merged,
+            Attached  => True));
+      if Host.State.Data.Raises then
+         Host.State.Data.Raises := False;
+         Ada.Exceptions.Raise_Exception
+           (Host.State.Data.Run_Exception,
+            Unbounded.To_String (Host.State.Data.Run_Message));
+      end if;
+      Result := Host.State.Data.Program;
+   end Run_Attached;
+
    overriding procedure Run
      (Host      : Fake_Tool_Runner;
       Program   : String;
@@ -700,7 +807,8 @@ package body Landin.Testing.Fakes is
         (Tool_Call'
            (Program   => Unbounded.To_Unbounded_String (Program),
             Arguments => Arguments,
-            Capture   => Capture));
+            Capture   => Capture,
+            Attached  => False));
       if Host.State.Data.Output_Store /= null then
          if Host.State.Data.Moves_Backup_Back
            and then Result.Ended = Landin.Platform.Exited

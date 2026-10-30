@@ -9,6 +9,7 @@
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -19,6 +20,9 @@ int landin_tool_start(char *const args[], int input, int capture, int errors,
                       int *child);
 int landin_tool_wait(int child, int *status, int no_hang);
 int landin_tool_stop(int child, int *status);
+int landin_program_run(char *const args[], int *signal_number,
+                       int *status, int *child);
+const char *landin_signal_name(int signal_number);
 
 /* Create one capture file under $TMPDIR, or /tmp when that is unset or
    empty, and return its open descriptor with its name in path. GNAT's own
@@ -165,4 +169,99 @@ int landin_tool_stop(int child, int *status)
     if (kill((pid_t)child, SIGKILL) != 0 && errno != ESRCH)
         return -1;
     return landin_tool_wait(child, status, 0);
+}
+
+/* D526: run the program refine run built, attached to the caller's
+   terminal: its standard descriptors, its process group, no limit.  The
+   child starts with the default action for the interrupt and quit signals,
+   which refine ignores while the child runs, so a terminal's ^C and ^\
+   reach the program and refine stays to remove its directory and report
+   how it ended.  Returns 0 with STATUS the exit status, or with
+   SIGNAL_NUMBER nonzero when a signal ended it; otherwise an errno value,
+   CHILD nonzero when the program was started and could not be waited
+   for. */
+int landin_program_run(char *const args[], int *signal_number,
+                       int *status, int *child)
+{
+    posix_spawnattr_t attributes;
+    struct sigaction ignore, old_interrupt, old_quit;
+    sigset_t defaults;
+    pid_t pid;
+    pid_t reaped;
+    int word = 0;
+    int error;
+
+    *signal_number = 0;
+    *status = 0;
+    *child = 0;
+    error = posix_spawnattr_init(&attributes);
+    if (error != 0)
+        return error;
+    sigemptyset(&defaults);
+    sigaddset(&defaults, SIGINT);
+    sigaddset(&defaults, SIGQUIT);
+    error = posix_spawnattr_setsigdefault(&attributes, &defaults);
+    if (error == 0)
+        error = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETSIGDEF);
+    if (error != 0) {
+        posix_spawnattr_destroy(&attributes);
+        return error;
+    }
+    memset(&ignore, 0, sizeof ignore);
+    ignore.sa_handler = SIG_IGN;
+    sigemptyset(&ignore.sa_mask);
+    sigaction(SIGINT, &ignore, &old_interrupt);
+    sigaction(SIGQUIT, &ignore, &old_quit);
+    error = posix_spawn(&pid, args[0], NULL, &attributes, args, environ);
+    posix_spawnattr_destroy(&attributes);
+    if (error == 0) {
+        *child = (int)pid;
+        do {
+            reaped = waitpid(pid, &word, 0);
+        } while (reaped < 0 && errno == EINTR);
+        if (reaped < 0)
+            error = errno;
+        else if (WIFSIGNALED(word))
+            *signal_number = WTERMSIG(word);
+        else
+            *status = WEXITSTATUS(word);
+    }
+    sigaction(SIGINT, &old_interrupt, NULL);
+    sigaction(SIGQUIT, &old_quit, NULL);
+    return error;
+}
+
+/* The host's name for a signal number, or NULL for one not listed. */
+const char *landin_signal_name(int signal_number)
+{
+    switch (signal_number) {
+    case SIGHUP: return "SIGHUP";
+    case SIGINT: return "SIGINT";
+    case SIGQUIT: return "SIGQUIT";
+    case SIGILL: return "SIGILL";
+    case SIGTRAP: return "SIGTRAP";
+    case SIGABRT: return "SIGABRT";
+    case SIGBUS: return "SIGBUS";
+    case SIGFPE: return "SIGFPE";
+    case SIGKILL: return "SIGKILL";
+    case SIGUSR1: return "SIGUSR1";
+    case SIGSEGV: return "SIGSEGV";
+    case SIGUSR2: return "SIGUSR2";
+    case SIGPIPE: return "SIGPIPE";
+    case SIGALRM: return "SIGALRM";
+    case SIGTERM: return "SIGTERM";
+    case SIGCHLD: return "SIGCHLD";
+    case SIGCONT: return "SIGCONT";
+    case SIGSTOP: return "SIGSTOP";
+    case SIGTSTP: return "SIGTSTP";
+    case SIGTTIN: return "SIGTTIN";
+    case SIGTTOU: return "SIGTTOU";
+    case SIGURG: return "SIGURG";
+    case SIGXCPU: return "SIGXCPU";
+    case SIGXFSZ: return "SIGXFSZ";
+    case SIGVTALRM: return "SIGVTALRM";
+    case SIGPROF: return "SIGPROF";
+    case SIGSYS: return "SIGSYS";
+    default: return NULL;
+    }
 }

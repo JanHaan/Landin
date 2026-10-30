@@ -180,9 +180,11 @@ package body Landin.Configuration is
            & "--firmware-entry; linker." & Member
            & " is not a module-call directive";
       elsif (Namespace = "compiler" and then Member = "assert")
-        or else (Namespace = "linker" and then Member = "library")
+        or else (Namespace = "linker"
+                 and then Member in "library" | "directory")
       then
-         return "D202: " & Namespace & "." & Member
+         return (if Member = "directory" then "D524: " else "D202: ")
+           & Namespace & "." & Member
            & " is a module-only fixed directive";
       elsif Namespace = "compiler" and then Member
         in "arch" | "os" | "byte_order" | "build_mode"
@@ -271,9 +273,14 @@ package body Landin.Configuration is
      is (Ada.Strings.Unbounded.To_String
            (In_Table.Settings.Element (Index).Value));
 
-   procedure Add_Library (Into : in out Table; Name : String) is
+   procedure Add_Library
+     (Into : in out Table; Name : String;
+      Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Where : Landin.Source.Span := Landin.Source.Empty_Span) is
    begin
-      Into.Linked.Append (Name);
+      Into.Linked.Append
+        (Link_Request'
+           (Ada.Strings.Unbounded.To_Unbounded_String (Name), Source, Where));
    end Add_Library;
 
    function Library_Count (In_Table : Table) return Natural
@@ -281,7 +288,42 @@ package body Landin.Configuration is
 
    function Library_Name
      (In_Table : Table; Index : Positive) return String
-     is (In_Table.Linked.Element (Index));
+     is (Ada.Strings.Unbounded.To_String
+           (In_Table.Linked.Element (Index).Text));
+
+   function Library_Source
+     (In_Table : Table; Index : Positive) return Landin.Source.Source_Id
+     is (In_Table.Linked.Element (Index).Source);
+
+   function Library_Where
+     (In_Table : Table; Index : Positive) return Landin.Source.Span
+     is (In_Table.Linked.Element (Index).Where);
+
+   procedure Add_Directory
+     (Into : in out Table; Written : String;
+      Source : Landin.Source.Source_Id; Where : Landin.Source.Span) is
+   begin
+      Into.Searched.Append
+        (Link_Request'
+           (Ada.Strings.Unbounded.To_Unbounded_String (Written), Source,
+            Where));
+   end Add_Directory;
+
+   function Directory_Count (In_Table : Table) return Natural
+     is (Natural (In_Table.Searched.Length));
+
+   function Directory_Written
+     (In_Table : Table; Index : Positive) return String
+     is (Ada.Strings.Unbounded.To_String
+           (In_Table.Searched.Element (Index).Text));
+
+   function Directory_Source
+     (In_Table : Table; Index : Positive) return Landin.Source.Source_Id
+     is (In_Table.Searched.Element (Index).Source);
+
+   function Directory_Where
+     (In_Table : Table; Index : Positive) return Landin.Source.Span
+     is (In_Table.Searched.Element (Index).Where);
 
    procedure Defer_Assertion
      (Into : in out Table;
@@ -308,6 +350,7 @@ package body Landin.Configuration is
       Into.Facts.Clear;
       Into.Inactive.Clear;
       Into.Linked.Clear;
+      Into.Searched.Clear;
       Into.Declared.Clear;
    end Prepare;
 

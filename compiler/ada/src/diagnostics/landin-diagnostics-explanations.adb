@@ -557,11 +557,17 @@ package body Landin.Diagnostics.Explanations is
                "A tool directive breaks [1510]/[1590]/D202 when it has o"
                & "ther than one positional argument, or when `linker.libra"
                & "ry` has an argument that is not a quoted text literal wi"
-               & "th a portable static library name. Give `compiler.assert"
-               & "` one fixed bool expression. Give `linker.library` one q"
-               & "uoted text literal containing a portable static library "
-               & "name; its argument must have the required form and name "
-               & "characters.",
+               & "th a portable library name, or `linker.directory` one th"
+               & "at is not a quoted, nonempty directory (D524). A `linker"
+               & ".directory` naming a directory that does not exist is re"
+               & "fused here too, before any tool runs, by `refine check` "
+               & "as well: a relative directory is read against the direct"
+               & "ory of the file that declares it. Give `compiler.assert`"
+               & " one fixed bool expression. Give `linker.library` one qu"
+               & "oted text literal containing a portable library name; it"
+               & "s argument must have the required form and name characte"
+               & "rs. Give `linker.directory` the directory that holds the"
+               & " library, relative to the declaring file or absolute.",
             when Catalogue.Mutable_Never_Written =>
                "A warning about legal source: a local binding is declare"
                & "d `mut` and nothing writes it, steps it, passes it `inou"
@@ -957,26 +963,27 @@ package body Landin.Diagnostics.Explanations is
                & "rget, settings or available toolchain [1550]. The diagno"
                & "stic and its note identify the cause: the target has no "
                & "backend, its source debug mode is unsupported, firmware "
-               & "forbids `linker.library`, a static Linux link cannot be "
-               & "made (no library holding `platform/linux` was found, or "
-               & "the program asks for `linker.library` or refers to C sym"
-               & "bols nothing in it defines, each named with the routine "
-               & "that refers to it, as `platform/posix`'s loader refers t"
-               & "o `dlopen`; `refine check` gives the last two as a compi"
-               & "lation would), no toolchain is selected, or no driver th"
-               & "e target names can be started. On Linux the message list"
-               & "s every driver looked for, the target's own GCC and the "
-               & "names Debian, Ubuntu and Fedora give it, and the note sa"
-               & "ys which package to install, through `nix-shell -p gcc` "
-               & "on Nix (D364), and that `refine check`, `fmt` and `lsp`,"
-               & " and `compile --emit=asm` or `--emit=ir`, need no C driv"
-               & "er (D384); the program's own refusals come first, so a s"
-               & "tatic link that meets a C symbol is refused for that bef"
-               & "ore anything asks for a driver. Choose a target with a b"
-               & "ackend, change the debug or firmware configuration, link"
-               & " with `--link=libc`, or select or install a toolchain as"
-               & " the note directs. `--toolchain=` only helps when a tool"
-               & "chain is absent or unavailable.",
+               & "forbids `linker.library`, `linker.directory` and `-L`, a"
+               & " static Linux link cannot be made (no library holding `p"
+               & "latform/linux` was found, or the program asks for `linke"
+               & "r.library`, `linker.directory` or `-L` (D524) or refers "
+               & "to C symbols nothing in it defines, each named with the "
+               & "routine that refers to it, as `platform/posix`'s loader "
+               & "refers to `dlopen`; `refine check` gives the last two as"
+               & " a compilation would), no toolchain is selected, or no d"
+               & "river the target names can be started. On Linux the mess"
+               & "age lists every driver looked for, the target's own GCC "
+               & "and the names Debian, Ubuntu and Fedora give it, and the"
+               & " note says which package to install, through `nix-shell "
+               & "-p gcc` on Nix (D364), and that `refine check`, `fmt` an"
+               & "d `lsp`, and `compile --emit=asm` or `--emit=ir`, need n"
+               & "o C driver (D384); the program's own refusals come first"
+               & ", so a static link that meets a C symbol is refused for "
+               & "that before anything asks for a driver. Choose a target "
+               & "with a backend, change the debug or firmware configurati"
+               & "on, link with `--link=libc`, or select or install a tool"
+               & "chain as the note directs. `--toolchain=` only helps whe"
+               & "n a toolchain is absent or unavailable.",
             when Catalogue.Toolchain_Failed =>
                "Executable emission failed [1550]. The assembler or link"
                & "er may have refused the emitted code, or the requested o"
@@ -1034,7 +1041,23 @@ package body Landin.Diagnostics.Explanations is
                & "prepare`, and one that selects no handler, is not refuse"
                & "d: the default report always fits. The rule is decided f"
                & "rom emitted frames, so `refine check` does not raise it "
-               & "(D474).");
+               & "(D474).",
+            when Catalogue.Library_Not_Found =>
+               "A link failed, and a library a `linker.library` directiv"
+               & "e asks for is in no directory the link searched (D525): "
+               & "not in a directory `-L` or `linker.directory` names, as "
+               & "`libNAME.so` or `libNAME.a` (on Darwin `libNAME.tbd`, `l"
+               & "ibNAME.dylib` or `libNAME.a`), and not where the C drive"
+               & "r's `-print-file-name` finds its own. The message names "
+               & "the library at its directive, every named directory with"
+               & " where it was named, and says that the driver's own dire"
+               & "ctories were searched as well. refine looks only after a"
+               & " link has failed; a failed link whose libraries are all "
+               & "found stays L0501 with the linker's own text. Name the d"
+               & "irectory that holds the library with `linker.directory(""D"
+               & "IR"")`, relative to the declaring file, or with `-L DIR` "
+               & "when building, or install the library where the C driver"
+               & " finds it.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -1619,6 +1642,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Firmware_Frame_Exceeds_Stack =>
                "",
             when Catalogue.Handler_Exceeds_Stack_Margin =>
+               "",
+            when Catalogue.Library_Not_Found =>
                "");
 
 end Landin.Diagnostics.Explanations;

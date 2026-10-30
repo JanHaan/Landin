@@ -42,6 +42,9 @@ int landin_overlaps_any(const char *left, const char *const *rights,
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules);
 int landin_directory_access_denied(const char *path);
+int landin_private_directory(const char *prefix, char *path,
+                             size_t capacity);
+int landin_remove_tree(const char *path);
 
 /* A failed Ada.Directories.Exists can mean either absence or a parent that
    refused traversal. Probe only that failure path, preserving the host's
@@ -132,6 +135,77 @@ int landin_unlink_file(const char *path)
     if (unlink(path) == 0)
         return 1;
     return errno == ENOENT ? 0 : -1;
+}
+
+/* D526: a new directory only its user may enter, under $TMPDIR, or /tmp
+   when that is unset or empty, its name PREFIX and six random characters.
+   mkdtemp makes it with mode 0700.  0 with its name in PATH, or -1. */
+int landin_private_directory(const char *prefix, char *path, size_t capacity)
+{
+    const char *directory = getenv("TMPDIR");
+    int written;
+
+    if (directory == NULL || directory[0] == '\0')
+        directory = "/tmp";
+    written = snprintf(path, capacity, "%s/%sXXXXXX", directory, prefix);
+    if (written < 0 || (size_t)written >= capacity) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    return mkdtemp(path) == NULL ? -1 : 0;
+}
+
+/* Remove what the directory open at FD holds, never following a link:
+   a link is removed as a name, and a directory is opened only with
+   O_NOFOLLOW.  0, or -1 at the first failure. */
+static int landin_empty_directory(int fd)
+{
+    DIR *listing = fdopendir(fd);
+    struct dirent *item;
+    struct stat about;
+    int failed = 0;
+
+    if (listing == NULL) {
+        close(fd);
+        return -1;
+    }
+    while (!failed && (errno = 0, item = readdir(listing)) != NULL) {
+        if (strcmp(item->d_name, ".") == 0 || strcmp(item->d_name, "..") == 0)
+            continue;
+        if (fstatat(dirfd(listing), item->d_name, &about,
+                    AT_SYMLINK_NOFOLLOW) != 0) {
+            failed = errno != ENOENT;
+            continue;
+        }
+        if (S_ISDIR(about.st_mode)) {
+            int inner = openat(dirfd(listing), item->d_name,
+                               O_RDONLY | O_DIRECTORY | O_NOFOLLOW
+                               | O_CLOEXEC);
+            if (inner < 0 || landin_empty_directory(inner) != 0
+                || unlinkat(dirfd(listing), item->d_name, AT_REMOVEDIR) != 0)
+                failed = 1;
+        } else if (unlinkat(dirfd(listing), item->d_name, 0) != 0
+                   && errno != ENOENT) {
+            failed = 1;
+        }
+    }
+    if (item == NULL && errno != 0)
+        failed = 1;
+    closedir(listing);
+    return failed ? -1 : 0;
+}
+
+/* D526: remove a directory refine made and everything in it.  1 when
+   removed, 0 when it was already absent, -1 otherwise. */
+int landin_remove_tree(const char *path)
+{
+    int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+
+    if (fd < 0)
+        return errno == ENOENT ? 0 : -1;
+    if (landin_empty_directory(fd) != 0)
+        return -1;
+    return rmdir(path) == 0 ? 1 : -1;
 }
 
 struct destination {

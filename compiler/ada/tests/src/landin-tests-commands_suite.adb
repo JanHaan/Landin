@@ -730,18 +730,18 @@ package body Landin.Tests.Commands_Suite is
    begin
       Host.Raise_On_Read;
       Refused (["--root=lib", "compile", "a.ldn"],
-               "--root=lib is an option of check and compile, and follows"
-               & " its command: refine compile --root=lib ...");
+               "--root=lib is an option of check, compile and run, and"
+               & " follows its command: refine compile --root=lib ...");
       Refused (["--library", "/opt/lib", "compile", "a.ldn"],
-               "--library=/opt/lib is an option of check, compile and"
+               "--library=/opt/lib is an option of check, compile, run and"
                & " version, and follows its command: refine compile"
                & " --library=/opt/lib ...");
       Refused (["--emit=asm", "check", "a.ldn"],
                "--emit=asm is an option of compile, not of check, and"
                & " follows its command: refine compile --emit=asm ...");
       Refused (["--target=linux-x86-64", "--version"],
-               "--target=linux-x86-64 is an option of check and compile,"
-               & " not of version");
+               "--target=linux-x86-64 is an option of check, compile and"
+               & " run, not of version");
       Refused (["-o", "x.s", "main.ldn"],
                "-o x.s is an option of compile; name the command first:"
                & " refine compile -o x.s ...");
@@ -862,6 +862,325 @@ package body Landin.Tests.Commands_Suite is
       end;
    end Check_Takes_What_Compile_Takes;
 
+   Linux_Host : constant String := "x86_64-pc-linux-gnu";
+
+   --  D526: `run` compiles into a private directory, names the program
+   --  after its entry, hands it what follows `--` exactly, exits with its
+   --  status and removes the directory once it has run.
+   procedure Run_Compiles_And_Runs (Item : in out Landin.Testing.Context);
+   procedure Run_Compiles_And_Runs (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Tools.Set_Result (0, "");
+      Tools.Set_Program_Result (7);
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "main.ldn", "--", "a", "", "-b", "--",
+          "@file"], Host, Tools, Meter, Built_For => Linux_Host);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, 0,
+         "the program compiles: " & US.To_String (Result.Report));
+      Landin.Testing.Check_Equal
+        (Item, US.To_String (Result.Launch_Program),
+         "/virtual/tmp/refine-run-1/main",
+         "the executable is named after its entry, in a private directory");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined (Result.Launch_Arguments),
+         "a" & ASCII.LF & ASCII.LF & "-b" & ASCII.LF & "--" & ASCII.LF
+         & "@file" & ASCII.LF,
+         "what follows the first -- is the program's, exactly");
+      Landin.Testing.Check
+        (Item, Tools.Run_Count = 1
+           and then (for some Argument of Tools.Call_At (1).Arguments =>
+                       Argument = "/virtual/tmp/refine-run-1/main"),
+         "the link writes the executable into the directory");
+      Landin.Testing.Check
+        (Item, Host.Is_Directory ("/virtual/tmp/refine-run-1"),
+         "the directory stays until the program has run");
+      Landin.Commands.Launch (Result, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, 7, "refine exits with the program's status");
+      Landin.Testing.Check_Equal
+        (Item, US.To_String (Result.Report), "",
+         "a program that exits is not described");
+      Landin.Testing.Check
+        (Item, Tools.Run_Count = 2 and then Tools.Call_At (2).Attached
+           and then US.To_String (Tools.Call_At (2).Program)
+             = "/virtual/tmp/refine-run-1/main"
+           and then Natural (Tools.Call_At (2).Arguments.Length) = 5,
+         "the program runs attached, with its arguments");
+      Landin.Testing.Check
+        (Item, not Host.Exists ("/virtual/tmp/refine-run-1")
+           and then not Host.Exists ("/virtual/tmp/refine-run-1/main"),
+         "the directory is removed once the program ends");
+      Landin.Commands.Launch (Result, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Tools.Run_Count, 2, "a launched outcome runs nothing again");
+
+      Host.Add_File ("./-tool.ldn", Source);
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "./-tool.ldn"], Host, Tools, Meter,
+         Built_For => Linux_Host);
+      Landin.Testing.Check_Equal
+        (Item, US.To_String (Result.Launch_Program),
+         "/virtual/tmp/refine-run-2/-tool",
+         "a source spelt with a leading hyphen is ./-name.ldn");
+   end Run_Compiles_And_Runs;
+
+   --  D526: a program a signal ended is named, with 128 and its number.
+   procedure Run_Reports_A_Signal (Item : in out Landin.Testing.Context);
+   procedure Run_Reports_A_Signal (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Add_File ("game.ldn", Source);
+      Tools.Set_Result (0, "");
+      Tools.Set_Program_Result (0, Signal => 11, Signal_Name => "SIGSEGV");
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "game.ldn"], Host, Tools, Meter,
+         Built_For => Linux_Host);
+      Landin.Commands.Launch (Result, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, 139, "128 and the signal's number");
+      Landin.Testing.Check_Equal
+        (Item, US.To_String (Result.Report),
+         "refine: game was ended by SIGSEGV (signal 11)" & ASCII.LF,
+         "one line names the signal");
+      Landin.Testing.Check
+        (Item, not Host.Exists ("/virtual/tmp/refine-run-1"),
+         "a killed program's directory is removed");
+   end Run_Reports_A_Signal;
+
+   --  D526: the directory goes on every way out before the program runs.
+   procedure Run_Removes_Its_Directory
+     (Item : in out Landin.Testing.Context);
+   procedure Run_Removes_Its_Directory
+     (Item : in out Landin.Testing.Context)
+   is
+      Meter : Landin.Platform.Unmetered;
+   begin
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("bad.ldn", "public main: () -> (code: i32) = end");
+         Result := Landin.Commands.Execute
+           (["run", "--link=libc", "bad.ldn"], Host, Tools, Meter,
+            Built_For => Linux_Host);
+         Landin.Testing.Check
+           (Item, Result.Status = 1
+              and then US.Length (Result.Launch_Program) = 0
+              and then Host.Private_Directory_Count = 1
+              and then not Host.Exists ("/virtual/tmp/refine-run-1")
+              and then Tools.Run_Count = 0,
+            "a refused program leaves no directory and runs nothing");
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Tools.Set_Result (1, "ld: refused" & ASCII.LF);
+         Result := Landin.Commands.Execute
+           (["run", "--link=libc", "main.ldn"], Host, Tools, Meter,
+            Built_For => Linux_Host);
+         Landin.Testing.Check
+           (Item, Result.Status = 1
+              and then Contains (US.To_String (Result.Report), "L0501")
+              and then not Host.Exists ("/virtual/tmp/refine-run-1")
+              and then Tools.Run_Count = 1,
+            "a failed link leaves no directory and runs nothing");
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Tools.Set_Result (0, "");
+         Result := Landin.Commands.Execute
+           (["run", "--link=libc", "main.ldn"], Host, Tools, Meter,
+            Built_For => Linux_Host);
+         Tools.Raise_On_Run
+           (Landin.External_Tool_Failed'Identity,
+            "cannot start /virtual/tmp/refine-run-1/main");
+         Landin.Commands.Launch (Result, Host, Tools);
+         Landin.Testing.Check
+           (Item, Result.Status = 1
+              and then US.To_String (Result.Report)
+                = "refine: cannot start /virtual/tmp/refine-run-1/main"
+                  & ASCII.LF
+              and then not Host.Exists ("/virtual/tmp/refine-run-1"),
+            "a program that cannot start leaves no directory");
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Host.Refuse_Private_Directories;
+         Result := Landin.Commands.Execute
+           (["run", "--link=libc", "main.ldn"], Host, Tools, Meter,
+            Built_For => Linux_Host);
+         Landin.Testing.Check
+           (Item, Result.Status = 1
+              and then Contains
+                (US.To_String (Result.Report),
+                 "cannot make a private directory")
+              and then Tools.Run_Count = 0,
+            "no directory, nothing compiled");
+      end;
+   end Run_Removes_Its_Directory;
+
+   --  D526: what run refuses, before it makes a directory.
+   procedure Run_Refusals (Item : in out Landin.Testing.Context);
+   procedure Run_Refusals (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      procedure Refused (Args : Landin.Platform.Path_List; Expected : String);
+      procedure Refused (Args : Landin.Platform.Path_List; Expected : String)
+      is
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (Args, Host, Tools, Meter, Built_For => Linux_Host);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Result.Report), Expected),
+            Expected & ": " & US.To_String (Result.Report));
+      end Refused;
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Refused (["run", "--target=linux-arm64", "main.ldn"],
+               "run runs a program on this compiler's own host, and not on"
+               & " linux-arm64; build one for linux-arm64 with"
+               & " refine compile --target=linux-arm64");
+      Refused (["run"], "run needs a source to compile and run");
+      Refused (["run", "--emit=exe", "main.ldn"],
+               "--emit is not an option of run");
+      Refused
+        (["run", "-o", "prog", "main.ldn"], "-o is not an option of run");
+      Refused (["run", "--keep-asm", "main.ldn"],
+               "--keep-asm is not an option of run");
+      Refused (["run", "--dry-run", "main.ldn"],
+               "--dry-run is not an option of run");
+      Refused (["run", "--depfile=x.d", "main.ldn"],
+               "--depfile is not an option of run");
+      Landin.Testing.Check_Equal
+        (Item, Host.Private_Directory_Count, 0,
+         "a refused request makes no directory");
+      Landin.Testing.Check_Equal
+        (Item, Tools.Run_Count, 0, "a refused request runs nothing");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["run", "--target=linux-x86-64", "--link=libc", "main.ldn"],
+              Host, Tools, Meter, Built_For => Linux_Host);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, US.To_String (Result.Launch_Program),
+            "/virtual/tmp/refine-run-1/main",
+            "the compiler's own host may be named");
+      end;
+   end Run_Refusals;
+
+   --  D526: bare `refine FILE` says it checked and wrote nothing, unless
+   --  -q; `refine check` stays silent.
+   procedure Bare_Form_Says_It_Only_Checked
+     (Item : in out Landin.Testing.Context);
+   procedure Bare_Form_Says_It_Only_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      procedure Said (Args : Landin.Platform.Path_List; Expected : String);
+      procedure Said (Args : Landin.Platform.Path_List; Expected : String) is
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute (Args, Host, Tools, Meter);
+      begin
+         Landin.Testing.Check_Equal (Item, Result.Status, 0, "it checks");
+         Landin.Testing.Check_Equal
+           (Item, US.To_String (Result.Report), Expected,
+            "what the check says on standard error");
+      end Said;
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Said (["main.ldn"],
+            "refine: checked main.ldn and wrote nothing; run it with"
+            & " `refine run main.ldn`, or build it with"
+            & " `refine compile main.ldn -o main`" & ASCII.LF);
+      Said (["-q", "main.ldn"], "");
+      Said (["main.ldn", "--quiet"], "");
+      Said (["check", "main.ldn"], "");
+      Landin.Testing.Check_Equal
+        (Item, Host.Write_Count, 0, "checking writes nothing");
+   end Bare_Form_Says_It_Only_Checked;
+
+   --  D524: -L takes its directory as a C compiler's does, after a
+   --  space, glued or after `=`, repeatably, on compile, run and check.
+   procedure Library_Directory_Option
+     (Item : in out Landin.Testing.Context);
+   procedure Library_Directory_Option
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Host.Add_Directory ("vendor");
+      Host.Add_Directory ("other");
+      Host.Add_Directory ("/opt/third");
+      declare
+         Result : constant Landin.Driver.Outcome := Landin.Commands.Execute
+           (["compile", "--target=linux-x86-64", "--link=libc", "--dry-run",
+             "-L", "vendor", "-Lother", "-L=/opt/third", "main.ldn", "-o",
+             "prog"], Host, Tools, Meter);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = 0
+              and then Contains
+                (US.To_String (Result.Output),
+                 "run [""x86_64-pc-linux-gnu-gcc"","
+                 & """-L/virtual/compile/vendor"","
+                 & """-L/virtual/compile/other"",""-L/opt/third"","
+                 & """-Wl,-rpath,/virtual/compile/vendor"","
+                 & """-Wl,-rpath,/virtual/compile/other"","
+                 & """-Wl,-rpath,/opt/third"",""prog.s"""),
+            "each spelling of -L reaches the link in order: "
+            & US.To_String (Result.Output) & US.To_String (Result.Report));
+      end;
+      declare
+         Result : constant Landin.Driver.Outcome := Landin.Commands.Execute
+           (["fmt", "-L", "vendor", "main.ldn"], Host, Tools, Meter);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then Contains
+                (US.To_String (Result.Report), "-L is not an option of fmt"),
+            "fmt takes no -L: " & US.To_String (Result.Report));
+      end;
+      declare
+         Result : constant Landin.Driver.Outcome := Landin.Commands.Execute
+           (["check", "--target=linux-x86-64", "--link=libc", "-L", "vendor",
+             "main.ldn"], Host, Tools, Meter);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "check takes -L: "
+            & US.To_String (Result.Report));
+      end;
+   end Library_Directory_Option;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -890,6 +1209,23 @@ package body Landin.Tests.Commands_Suite is
       Landin.Testing.Register (Into, "commands", "emission and dependencies",
                               Emission_And_Depfile'Access);
       Landin.Testing.Register (Into, "commands", "dry run", Dry_Run'Access);
+      Landin.Testing.Register
+        (Into, "commands", "run compiles and runs",
+         Run_Compiles_And_Runs'Access);
+      Landin.Testing.Register
+        (Into, "commands", "run reports a signal",
+         Run_Reports_A_Signal'Access);
+      Landin.Testing.Register
+        (Into, "commands", "run removes its directory",
+         Run_Removes_Its_Directory'Access);
+      Landin.Testing.Register
+        (Into, "commands", "run refusals", Run_Refusals'Access);
+      Landin.Testing.Register
+        (Into, "commands", "the bare form says it only checked",
+         Bare_Form_Says_It_Only_Checked'Access);
+      Landin.Testing.Register
+        (Into, "commands", "-L names a library directory",
+         Library_Directory_Option'Access);
       Landin.Testing.Register (Into, "commands", "diagnostic presentation",
                               Presentation'Access);
    end Register;
