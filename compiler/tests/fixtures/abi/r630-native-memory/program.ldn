@@ -23,14 +23,15 @@ public extern(c) publish: (data: ptr mut u32, flag: ptr mut u32) -> none =
     compiler.atomic_store(flag, 1, compiler.release)
 end publish
 
+--  Waits for the flag with no bound of its own: a count of loads timed
+--  the wait by how fast an acquire load is, which D499 made a single
+--  instruction, so a sender scheduled late was missed.  A publication
+--  that never arrives is the harness's timeout.
 public extern(c) consume: (data: ptr u32, flag: ptr u32) -> (value: u32) =
-    value = 0
-    for i in 0..<10000000 do
-        if compiler.atomic_load(flag, compiler.acquire) == 1 then
-            value = data.val
-            return
-        end if
-    end for
+    loop do
+        break when compiler.atomic_load(flag, compiler.acquire) == 1
+    end loop
+    value = data.val
 end consume
 
 public extern(c) alias_bytes: (p: ptr mut u32) -> (value: u32) =
