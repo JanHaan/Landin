@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import os
+import re
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -815,6 +816,91 @@ class BuildSourceTests(unittest.TestCase):
         self.assertIn(library[0], text)
         self.assertIn("reported:", text)
         self.assertIn("expected:", text)
+
+
+import lldb_batch as BATCH  # noqa: E402  (the module beside check.py)
+
+#  A Linux x86-64 LLDB 19 transcript of the source session, cut to the lines
+#  the verdict reads.
+SOURCE_SESSION = """\
+(lldb) breakpoint set --file debug.ldn --line {inner}
+(lldb) run
+* thread #1, name = 'debug', stop reason = breakpoint 1.1
+    frame #0: 0x00000000004001fb debug`inner(argument=40) at debug.ldn:{inner}:14
+(lldb) frame variable argument local
+(int) argument = 40
+(int) local = 41
+(lldb) thread backtrace
+  * frame #0: 0x00000000004001fb debug`inner(argument=40) at debug.ldn:{inner}:14
+    frame #1: 0x00000000004002d8 debug`outer(argument=30) at debug.ldn:11:14
+    frame #2: 0x00000000004003aa debug`main at debug.ldn:23:12
+(lldb) frame variable argument local
+(int) argument = 30
+(int) local = 40
+(lldb) thread step-out
+* thread #1, name = 'debug', stop reason = step out
+    frame #0: 0x00000000004002d8 debug`outer(argument=30) at debug.ldn:11:14
+(lldb) breakpoint set --file debug.ldn --line {ready}
+(lldb) frame variable result
+(int) result = 42
+Process 1 exited with status = 42 (0x0000002a)
+"""
+
+
+class LldbBatchTests(unittest.TestCase):
+    """The LLDB batch sessions FreeBSD's lane and lldb_linux.py share."""
+
+    def setUp(self):
+        self.lines = BATCH.source_lines()
+        self.text = SOURCE_SESSION.format(inner=self.lines["result = local + 1"],
+                                          ready=self.lines["result = ready"])
+
+    def test_the_commands_stop_where_the_verdict_looks(self):
+        commands = BATCH.source_commands(self.lines)
+        self.assertIn("breakpoint set --file debug.ldn --line %d"
+                      % self.lines["result = local + 1"], commands)
+        self.assertEqual(commands[-1], "continue")
+        self.assertEqual(BATCH.switch_commands(3)[:2],
+                         ["settings set target.disable-aslr false",
+                          "breakpoint set --file %s --line %d"
+                          % (SWITCH.SOURCE.name, SWITCH.fibre_line())])
+
+    def test_a_whole_session_passes(self):
+        BATCH.check_source(self.text, self.lines, "debug")
+
+    def test_each_missing_piece_is_named(self):
+        for cut, said in (("frame #2:", "stack frame missing: main"),
+                          ("(int) local = 41", "('local', 41)"),
+                          ("stop reason = step out", "no completed step-out stop"),
+                          ("exited with status = 42", "final execution status")):
+            with self.subTest(cut=cut):
+                broken = self.text.replace(cut, "elided")
+                with self.assertRaisesRegex(BATCH.Mismatch, re.escape(said)):
+                    BATCH.check_source(broken, self.lines, "debug")
+
+    def test_the_linux_runner_refuses_before_building(self):
+        spec = importlib.util.spec_from_file_location(
+            "lldb_linux", Path(__file__).with_name("lldb_linux.py"))
+        linux = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(linux)
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "earlier").write_text("")
+            for arguments in (["--output", directory],
+                              ["--output", directory + "/new", "--lldb", "no-such-lldb"]):
+                with self.subTest(arguments=arguments), \
+                        mock.patch("sys.stderr", io.StringIO()) as said, \
+                        self.assertRaises(SystemExit):
+                    linux.main(["--refine", "refine", *arguments])
+                self.assertTrue("not empty" in said.getvalue()
+                                or "no no-such-lldb on PATH" in said.getvalue()
+                                or "needs a Linux" in said.getvalue(), said.getvalue())
+            self.assertFalse((Path(directory) / "new").exists())
+
+    def test_the_freebsd_lane_runs_these_sessions(self):
+        lane = (CHECK.ROOT / "compiler/tests/freebsd/check.py").read_text()
+        for use in ("lldb_batch.source_commands(", "lldb_batch.check_source(",
+                    "lldb_batch.switch_commands(", "lldb_batch.check_switch("):
+            self.assertIn(use, lane)
 
 
 if __name__ == "__main__":

@@ -77,6 +77,21 @@ because nixpkgs' wrapper adds the host's glibc to a FreeBSD build; a host
 program gets the wrapper, as `bindings/test.py` needs. The shell does not
 provide the system emulators and firmware that run the guests.
 
+The debugger lane's sessions are `compiler/tests/debugging/lldb_batch.py`'s,
+and on a Linux host `nix develop` runs the same sessions against Linux images
+with its LLDB, LLVM 19's as the guests' is (see
+[the nix shell](../../../docs/environments.md#a-nix-shell-for-convenience)).
+To ask which symbol LLDB gives an address in a FreeBSD image, emit the
+payload with `--kind=debugger --prepare-only`, then in the shell
+
+```sh
+lldb --batch -o 'image lookup --address 0x401234' \
+    /tmp/freebsd-debugger/bundle/switch-speed-auto
+```
+
+with the address a session's transcript printed; LLDB reads a FreeBSD ELF
+image on Linux without running it.
+
 Select `arm64`, `abi` or `debugger` for the other lanes. `--case=NAME` is exact
 and visibly filtered. `--ssh-port=PORT` uses an existing development VM;
 `--prepare-only` emits and inspects a payload without executing it.
