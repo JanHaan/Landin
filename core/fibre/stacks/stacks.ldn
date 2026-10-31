@@ -153,54 +153,39 @@ public round_over: (inout state: round_space, entries: []mut usize,
     handle = (state: addr state, entries: entries, when_idle: when_idle)
 end round_over
 
---  The record entry `index` names.
-entry_record: (self: round, index: usize) -> (record: ptr mut fibre.space) =
-    --  [0810]: an entry is the address of a record the round was given.
-    record = ptr(self.entries[index])
-end entry_record
-
---  Whether entry `index` holds a fibre that has not ended; entry 0, the
---  stack the round was made on, never ends.
-running: (self: round, index: usize) -> (yes: bool) =
-    yes = false
-    return when self.entries[index] == 0
-    record: ptr mut fibre.space = entry_record(self, index)
-    yes = record.val.status <> 0
-end running
-
 --  Empty every entry whose fibre has ended since the last sweep, counting
---  each, so a later start may take its place.
-sweep: (self: round) -> none =
+--  each, so a later start may take its place, and say how many entries
+--  hold a fibre that has not ended, entry 0, the stack the round was made
+--  on and which never ends, among them.  It calls nothing, so that it is
+--  the only routine beneath a yield besides the idler and the switch
+--  (D571).
+sweep: (self: round) -> (live: usize) =
     state: ptr mut round_state = self.state
+    live = 1
     mut index: usize = 1
     while index < state.val.count do
-        if self.entries[index] <> 0 and not running(self, index) then
-            self.entries[index] = 0
-            inc state.val.ended
-            state.val.quiet = 0
+        held: usize = self.entries[index]
+        if held <> 0 then
+            --  [0810]: an entry is the address of a record the round was
+            --  given.
+            record: ptr mut fibre.space = ptr(held)
+            if record.val.status == 0 then
+                self.entries[index] = 0
+                inc state.val.ended
+                state.val.quiet = 0
+            else
+                inc live
+            end if
         end if
         inc index
     end while
 end sweep
 
---  How many entries hold a fibre that has not ended, entry 0 among them.
-unfinished: (self: round) -> (count: usize) =
-    state: ptr mut round_state = self.state
-    count = 0
-    mut index: usize = 0
-    while index < state.val.count do
-        if index == 0 or running(self, index) then
-            inc count
-        end if
-        inc index
-    end while
-end unfinished
-
 round_start: (self: round, escaping record: ptr mut fibre.space,
               escaping stack: []mut u8, escaping work: any fibre.task)
              -> none ! mem.out_of_memory =
     state: ptr mut round_state = self.state
-    sweep(self)
+    _ = sweep(self)
     mut index: usize = 1
     while index < state.val.count and self.entries[index] <> 0 do
         inc index
@@ -209,7 +194,8 @@ round_start: (self: round, escaping record: ptr mut fibre.space,
         fail mem.out_of_memory when index == lenof self.entries
         inc state.val.count
     end if
-    home: ptr mut fibre.space = entry_record(self, 0)
+    --  [0810]: entry 0 is the address of the round's own record.
+    home: ptr mut fibre.space = ptr(self.entries[0])
     try prepare(record, stack, work, home)
     self.entries[index] = usize(record)
     state.val.quiet = 0
@@ -220,23 +206,39 @@ round_finished: (self: round, record: fibre.space) -> (yes: bool) =
     yes = record.status == 0
 end round_finished
 
+--  D571: beneath a yield only `sweep`, which calls nothing, the idler and
+--  the switch take the yielding fibre's stack: the search for the next
+--  entry that can run is written out here, and the switch is the
+--  builtin's own.
 round_yield: (self: round) -> none =
     state: ptr mut round_state = self.state
-    sweep(self)
+    live: usize = sweep(self)
     inc state.val.quiet
-    if state.val.quiet >= unfinished(self) then
+    if state.val.quiet >= live then
         state.val.quiet = 0
         self.when_idle.idle()
     end if
     was: usize = state.val.current
     mut next: usize = was
     loop do
-        next = (next + 1) % state.val.count
-        break when next == was or next == 0 or running(self, next)
+        --  The next entry round the table, with no division, which
+        --  Cortex-M0 would call its runtime for.
+        inc next
+        if next == state.val.count then
+            next = 0
+        end if
+        break when next == was or next == 0
+        candidate: usize = self.entries[next]
+        if candidate <> 0 then
+            waiting: ptr mut fibre.space = ptr(candidate)
+            break when waiting.val.status <> 0
+        end if
     end loop
     return when next == was
     state.val.current = next
-    switch(entry_record(self, was), entry_record(self, next))
+    leaving: ptr mut fibre.space = ptr(self.entries[was])
+    entering: ptr mut fibre.space = ptr(self.entries[next])
+    compiler.stack_switch(addr leaving.val.saved, entering.val.saved)
     --  Whoever switched back here, a turn or a fibre that ended, this
     --  entry runs again.
     state.val.current = was
@@ -244,16 +246,16 @@ end round_yield
 
 round_wait: (self: round) -> none =
     state: ptr mut round_state = self.state
-    sweep(self)
+    mut live: usize = sweep(self)
     loop do
-        mut others: usize = unfinished(self) - 1
+        mut others: usize = live - 1
         if state.val.current <> 0 then
             others -= 1
         end if
         break when others == 0
         before: usize = state.val.ended
         round_yield(self)
-        sweep(self)
+        live = sweep(self)
         break when state.val.ended <> before
     end loop
 end round_wait

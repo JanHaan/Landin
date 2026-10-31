@@ -3,6 +3,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Driver;
 with Landin.Platform;
+with Landin.Platform.Native;
 with Landin.Testing.Fakes;
 
 --  D447's stack-depth report (D467, D468), through the driver on a fake
@@ -12,6 +13,8 @@ with Landin.Testing.Fakes;
 package body Landin.Tests.Stack_Report_Suite is
 
    package US renames Ada.Strings.Unbounded;
+   use type Landin.Platform.List_Status;
+   use type Landin.Platform.Read_Status;
 
    LF : constant Character := Character'Val (10);
 
@@ -22,6 +25,8 @@ package body Landin.Tests.Stack_Report_Suite is
    Native : constant array (Positive range <>) of Target_Name :=
      [new String'("linux-x86-64"), new String'("linux-arm64"),
       new String'("linux-rv64"), new String'("cortex-m0")];
+   Profiles : constant array (Positive range <>) of Target_Name :=
+     [new String'("none"), new String'("size"), new String'("speed")];
 
    --  A program emitted as assembly for Target, and the report it wrote.
    --  Linux links with libc so that no platform/linux is needed from a
@@ -892,6 +897,178 @@ package body Landin.Tests.Stack_Report_Suite is
       end loop;
    end A_Fibre_Entry_Through_Any_Is_Closed;
 
+   --  The library's own round of turns (D571): two tasks over a spinning
+   --  round, written against `core` alone so that every target emits it.
+   Round_Program : constant String :=
+     "import core/failure" & LF
+     & "import core/fibre" & LF
+     & "import core/fibre/stacks" & LF
+     & "mut steps: u32 = 0" & LF
+     & "turning: type = struct" & LF
+     & "    runs: any fibre.turns" & LF
+     & "end turning" & LF
+     & "twice: (inout state: turning) -> none ! failure.reason =" & LF
+     & "    steps += 1" & LF
+     & "    state.runs.yield()" & LF
+     & "    steps += 1" & LF
+     & "end twice" & LF
+     & "both: (runs: any fibre.turns) -> none ! failure.reason =" & LF
+     & "    mut backing: [2 * 2048]u8 = zeroed" & LF
+     & "    mut tasks := try fibre.turns_over(runs, backing, 2)" & LF
+     & "    defer fibre.join(tasks) else none" & LF
+     & "    one: turning = (runs: runs)" & LF
+     & "    try fibre.admit(tasks, twice, one)" & LF
+     & "    try fibre.admit(tasks, twice, one)" & LF
+     & "    try fibre.join(tasks)" & LF
+     & "end both" & LF
+     & "public main: () -> (code: i32) =" & LF
+     & "    code = 1" & LF
+     & "    mut state: stacks.round_space = zeroed" & LF
+     & "    mut entries: [3]usize = zeroed" & LF
+     & "    idler: stacks.spin = zeroed" & LF
+     & "    round := stacks.round_over(state, entries, any(addr idler))"
+     & " else (problem)" & LF
+     & "        _ = problem" & LF
+     & "        return" & LF
+     & "    end" & LF
+     & "    both(any(addr round)) else (problem)" & LF
+     & "        _ = problem" & LF
+     & "        return" & LF
+     & "    end" & LF
+     & "    code = i32(steps)" & LF
+     & "end main" & LF;
+
+   --  D571: beneath the round's yield only its sweep, which calls nothing,
+   --  the idler and the switch take the yielding fibre's stack, and the
+   --  yield goes no more than D465's 1 KiB deeper than its switch, on
+   --  every target at every profile; the round's wait goes no deeper than
+   --  through its yield.  The checkout's
+   --  `core` is read from the real host deliberately, from the test
+   --  program's working directory, compiler/ada, into the fake host's
+   --  library, so that the round measured is the library's own.
+   procedure A_Round_Yields_At_Its_Switch
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Round_Yields_At_Its_Switch
+     (Item : in out Landin.Testing.Context)
+   is
+      Real : Landin.Platform.Native.Native_Filesystem;
+      Library : constant String := "/opt/landin/lib/landin";
+
+      procedure Copy
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem;
+         From, To : String);
+
+      procedure Copy
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem;
+         From, To : String)
+      is
+         Entries : Landin.Platform.Path_List;
+         Listed : Landin.Platform.List_Status;
+      begin
+         Real.List_Directory (From, Entries, Listed);
+         if Listed /= Landin.Platform.List_Ok then
+            raise Program_Error with "the checkout's " & From
+              & " cannot be listed";
+         end if;
+         Host.Add_Directory (To);
+         for Name of Entries loop
+            if Real.Is_Directory (From & "/" & Name) then
+               Copy (Host, From & "/" & Name, To & "/" & Name);
+            elsif Name'Length > 4
+              and then Name (Name'Last - 3 .. Name'Last) = ".ldn"
+            then
+               declare
+                  Text : US.Unbounded_String;
+                  Status : Landin.Platform.Read_Status;
+               begin
+                  Real.Read_File (From & "/" & Name, Text, Status);
+                  if Status /= Landin.Platform.Read_Ok then
+                     raise Program_Error with "the checkout's " & From
+                       & "/" & Name & " cannot be read";
+                  end if;
+                  Host.Add_File (To & "/" & Name, US.To_String (Text));
+               end;
+            end if;
+         end loop;
+      end Copy;
+   begin
+      for Target of Native loop
+         for Optimize of Profiles loop
+            declare
+               Host : Landin.Testing.Fakes.Fake_Filesystem;
+               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+               Args : Landin.Platform.Path_List;
+               Result : Landin.Driver.Outcome;
+               What : constant String := Target.all & " at " & Optimize.all;
+            begin
+               Host.Set_Executable_Directory ("/opt/landin/bin");
+               Host.Add_Directory ("/opt/landin");
+               Host.Add_Directory ("/opt/landin/lib");
+               Host.Add_Directory (Library);
+               Copy (Host, "../../core", Library & "/core");
+               Host.Add_File ("main.ldn", Round_Program);
+               Args.Append ("--target=" & Target.all);
+               if Target.all /= "cortex-m0" then
+                  Args.Append ("--link=libc");
+               end if;
+               Args.Append ("--optimize=" & Optimize.all);
+               Args.Append ("--emit=asm");
+               Args.Append ("-o");
+               Args.Append ("out.s");
+               Args.Append ("--stack-report=stack.json");
+               Args.Append ("main.ldn");
+               Result := Landin.Driver.Execute (Args, Host, Tools);
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  What & ": the round emits: "
+                  & US.To_String (Result.Report));
+               declare
+                  Text : constant String := Host.Written ("stack.json");
+                  Yield : constant String :=
+                    Row (Text, "core.fibre.stacks.round_yield");
+                  Sweep : constant String :=
+                    Row (Text, "core.fibre.stacks.sweep");
+                  Wait : constant String :=
+                    Row (Text, "core.fibre.stacks.round_wait");
+                  Below_Switch : constant Integer :=
+                    Field (Yield, "depth_bytes")
+                    - Field (Yield, "frame_bytes")
+                    - Field (Text, "switch_bytes");
+               begin
+                  Landin.Testing.Check
+                    (Item, Contains (Yield, """closed"":true")
+                       and then
+                         (Contains
+                            (Yield, """path"":[""core.fibre.stacks."
+                             & "round_yield"",""(switch)""]")
+                          or else Contains
+                            (Yield, """path"":[""core.fibre.stacks."
+                             & "round_yield"",""core.fibre.stacks.sweep"""))
+                       and then
+                         (Contains
+                            (Sweep, """path"":[""core.fibre.stacks.sweep""]")
+                          or else Contains
+                            (Sweep, """path"":[""core.fibre.stacks.sweep"","
+                             & """(trap)""]")),
+                     What & ": beneath the yield only its sweep, which calls"
+                     & " nothing, and its switch: " & Yield & " " & Sweep);
+                  Landin.Testing.Check
+                    (Item, Below_Switch in 0 .. 1024,
+                     What & ": the yield goes" & Below_Switch'Image
+                     & " bytes deeper than its switch, within 1 KiB");
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Wait, """path"":[""core.fibre.stacks.round_wait"","
+                        & """core.fibre.stacks.round_yield"""),
+                     What & ": the wait goes no deeper than its yield: "
+                     & Wait);
+               end;
+            end;
+         end loop;
+      end loop;
+   end A_Round_Yields_At_Its_Switch;
+
    --  D474 applies only where a fibre can exist: without a
    --  `compiler.stack_prepare` the same large handler, and one that
    --  calls through `any`, are emitted on every target.
@@ -1032,6 +1209,9 @@ package body Landin.Tests.Stack_Report_Suite is
       Landin.Testing.Register
         (Into, "stack report", "an open handler is refused",
          An_Open_Handler_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "stack report", "a yield goes little deeper than its switch",
+         A_Round_Yields_At_Its_Switch'Access);
       Landin.Testing.Register
         (Into, "stack report", "a fibre's entry through any is closed",
          A_Fibre_Entry_Through_Any_Is_Closed'Access);

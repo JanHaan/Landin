@@ -28308,6 +28308,30 @@ package body Landin.Diagnostics.Citations.Texts is
                & "rror prints addresses, which a debugger or `addr2line` g"
                & "iven the debug asset resolves. Checkout, Nix and debug b"
                & "uilds keep their information.",
+            when 571 =>
+               "Chosen: `sweep` empties the ended entries and counts the"
+               & " unfinished in one pass that calls nothing; `round_yield"
+               & "` takes its count, searches for the next entry in its ow"
+               & "n body with no division, which Cortex-M0 would call its "
+               & "runtime for, and switches through `compiler.stack_switch"
+               & "` directly. Beneath a yield there are then only the swee"
+               & "p, the round's idler and the switch, and in the depth re"
+               & "port a yield with a spinning idler goes no more than D46"
+               & "5's 1 KiB deeper than its switch on every target at ever"
+               & "y profile, 688 bytes at most, on x86-64 at `none`; the r"
+               & "ound's wait goes no deeper than through its yield. With "
+               & "RV64 reusing its scalar homes, a yield takes, with what "
+               & "the switch saves, 456 bytes on x86-64 at `size` and 392 "
+               & "at `speed` where it took 552 and 600, 800 and 400 on arm"
+               & "64 where it took 960 and 560, 960 on RV64 where it took "
+               & "2,160 and 2,416, and 352 on Cortex-M0, its device idler "
+               & "included, where it took 504. At `none`, where every valu"
+               & "e keeps a home of its own, a yield takes about 2.1 KiB o"
+               & "n the 64-bit targets, as the chain did. The round's code"
+               & " is smaller than it was, which a 32 KiB Cortex-M0 image "
+               & "near its limit needs. The idler is the provider's to cho"
+               & "ose and runs where the yield does: the event provider wa"
+               & "its for its events there.",
             when others => "");
 
 end Landin.Diagnostics.Citations.Texts;

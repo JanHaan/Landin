@@ -35,8 +35,8 @@ end ask
 
 ask_both: (runs: any fibre.scheduler, clock: any time.clock,
            inout heard: answers) -> none ! failure.reason =
-    --  A task here takes about 4.4 KiB of its stack on RV64, whose
-    --  frames keep every scalar in a home of their own, at every profile.
+    --  A task here takes about 4.4 KiB of its stack on RV64 at `none`,
+    --  where every scalar keeps a home of its own.
     mut stacks: [2 * 8192]u8 = zeroed
     mut asks := try fibre.group_over(runs, stacks, 2)
     defer fibre.join(asks) else none

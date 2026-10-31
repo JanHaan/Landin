@@ -26987,3 +26987,51 @@ declined.
 with its debug information, and the gate's jobs that install a compiler
 outside the checkout, which package it the release's way; no fixture runs
 the release workflow itself.
+
+### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
+
+**The tour said** nothing. `core/fibre/stacks`' round of turns is the one
+provider of `fibre.turns` the library carries, and every task that waits
+through it pays for its yield on its own stack. The yield swept the ended
+entries through a chain of three small routines, counted the unfinished
+through two more and searched for the next entry through them again, so
+the deepest path beneath a yield was that chain, not the switch: at
+`size` it went 224 bytes deeper than the switch on x86-64 and 832 on RV64.
+D465's 1 KiB room was set from that chain, which on RV64 went past it,
+and D473 retired the room.
+
+**Chosen:** `sweep` empties the ended entries and counts the unfinished in
+one pass that calls nothing; `round_yield` takes its count, searches for
+the next entry in its own body with no division, which Cortex-M0 would
+call its runtime for, and switches through `compiler.stack_switch`
+directly. Beneath a yield there are then only the sweep, the round's idler
+and the switch, and in the depth report a yield with a spinning idler goes
+no more than D465's 1 KiB deeper than its switch on every target at every
+profile, 688 bytes at most, on x86-64 at `none`; the round's wait goes no
+deeper than through its yield. With RV64 reusing its scalar homes, a yield
+takes, with what the switch saves, 456 bytes on x86-64 at `size` and 392
+at `speed` where it took 552 and 600, 800 and 400 on arm64 where it took
+960 and 560, 960 on RV64 where it took 2,160 and 2,416, and 352 on
+Cortex-M0, its device idler included, where it took 504. At `none`, where
+every value keeps a home of its own, a yield takes about 2.1 KiB on the
+64-bit targets, as the chain did. The round's code is smaller than it was,
+which a 32 KiB Cortex-M0 image near its limit needs. The idler is the
+provider's to choose and runs where the yield does: the event provider
+waits for its events there.
+
+**The alternatives:** the sweep and the count written out in the yield
+too, which puts nothing but the switch beneath it at about the same depth
+but duplicates the sweep, so that `runtime/signals-fake-firmware` no longer fitted
+its 32 KiB at `none`; the chain kept and a room sized from it per target,
+which D473 declined with the room; the idler and the sweep run on the stack
+the round was made on, which needs a switch to it and back on every quiet
+round and changes which context answers events; and the compiler copying
+the helpers into the yield, which happens only at `speed`. All were
+declined.
+
+**Pinned by** the `stack report` suite's `a yield goes little deeper than its
+switch`, the library's own round on every native target at every profile;
+the fibre fixtures, `runtime/fibre-turns-interleave` and
+`runtime/fibre-join-first-failure` among them, on every hosted target and
+the Cortex-M corpus; and the `capacity` control of
+`environments/cortex-m/evidence.py` (D470).
