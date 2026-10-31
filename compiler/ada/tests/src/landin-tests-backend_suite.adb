@@ -2484,14 +2484,16 @@ package body Landin.Tests.Backend_Suite is
                         when 2 =>
                            --  D536: 100000000 is 0x05F5E100, so the row is
                            --  written once per nonzero base-256 digit, and
-                           --  the 32-bit row of three is one `.fill`.
+                           --  the 32-bit row of three is plain values.
                            declare
+                              --  Inside the repeated row, the 32-bit run of
+                              --  twelve bytes is plain values (D536).
                               Row : constant String :=
                                 (if Wide
                                  then HT & ".rept 3" & LF
                                    & HT & Width & " 37" & LF
                                    & HT & ".endr" & LF
-                                 else HT & ".fill 3, 4, 37" & LF);
+                                 else HT & ".long 37, 37, 37" & LF);
                               Wide_256 : constant String :=
                                 HT & ".rept 256" & LF;
                               Close : constant String :=
@@ -2518,7 +2520,7 @@ package body Landin.Tests.Backend_Suite is
                              (Item, Text'Length < 1024
                               and then Occurrences
                                 (Text, (if Wide then Width & " 37"
-                                        else ".fill 3, 4, 37")) = 3,
+                                        else ".long 37, 37, 37")) = 3,
                               "output is bounded by descriptors, not extent");
                         when 3 =>
                            Landin.Testing.Check
@@ -2594,17 +2596,26 @@ package body Landin.Tests.Backend_Suite is
               HT & ".zero " & (if Wide then "7" else "3") & LF;
             Padding : constant String :=
               HT & ".zero " & (if Wide then "5" else "1") & LF;
+            --  D536: inside a repeated body a short gap is plain bytes.
+            Plain_Gap : constant String :=
+              HT & (if Wide then ".byte 0, 0, 0, 0, 0, 0, 0"
+                    else ".byte 0, 0, 0") & LF;
+            Plain_Padding : constant String :=
+              HT & (if Wide then ".byte 0, 0, 0, 0, 0" else ".byte 0") & LF;
             Width : constant String := (if Wide then ".quad" else ".long");
             First : constant String :=
-              HT & ".byte 11" & LF & Gap & HT & Width & " 41" & LF
+              HT & ".byte 11" & LF & Plain_Gap & HT & Width & " 41" & LF
               & HT & ".byte 3" & LF & HT & ".byte 5" & LF
-              & HT & ".byte 7" & LF & Padding;
-            Second : constant String :=
-              HT & ".byte 13" & LF & Gap & HT & Width & " 43" & LF
+              & HT & ".byte 7" & LF & Plain_Padding;
+            Second_Fields : constant String :=
+              HT & Width & " 43" & LF
               & HT & ".byte 11" & LF & HT & ".byte 17" & LF
-              & HT & ".byte 19" & LF & Padding;
+              & HT & ".byte 19" & LF;
+            Second : constant String :=
+              HT & ".byte 13" & LF & Gap & Second_Fields & Padding;
             Repeated_Second : constant String :=
-              HT & ".rept 2" & LF & Second & HT & ".endr" & LF;
+              HT & ".rept 2" & LF & HT & ".byte 13" & LF & Plain_Gap
+              & Second_Fields & Plain_Padding & HT & ".endr" & LF;
             Packet_Image : constant String :=
               HT & ".byte 7" & LF & Gap
               & HT & ".rept 2" & LF & First & HT & ".endr" & LF

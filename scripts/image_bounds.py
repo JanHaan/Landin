@@ -44,8 +44,11 @@ REPEATED = 16 * 1024 * 1024
 #  whatever its image: GNU as holds it as one fragment.
 FLAT_CEILING = 96 * 1024 * 1024
 #  A repeated composite run's peak memory, per image byte, and its growth
-#  when the run doubles: linear, not the run times the body's text.
-PER_BYTE = 32
+#  when the run doubles: linear, not the run times the body's text.  Short
+#  zero gaps and runs inside a repeated body are plain values (D536), so a
+#  padded record costs what a repeated quad does, about three bytes per
+#  image byte; one `.zero` fragment per copy cost about twenty.
+PER_BYTE = 6
 GROWTH = 2.5
 #  The text the doubled image may add: digits, and a nested level per
 #  base-256 digit of a repeated run.
@@ -64,6 +67,10 @@ REACH = {
 
 HOSTED_MAIN = "public main: () -> (code: i32) = code = i32(%s) end main\n"
 CELL = "cell: type = struct\n    tag: u8\n    value: u32\nend cell\n"
+#  Twenty-four bytes: seven of padding after the tag, a run of three
+#  halves and two more of padding at the end.
+WIDE = ("wide: type = struct\n    tag: u8\n    value: u64\n    pair: [3]u16\n"
+        "end wide\n")
 
 
 def shapes(scale: int) -> dict[str, tuple[str, str, int, int]]:
@@ -97,6 +104,10 @@ def shapes(scale: int) -> dict[str, tuple[str, str, int, int]]:
             CELL + "mut image: [%d][1024]cell = [of [of cell(tag: 1, value: 2)]]\n"
             % (repeated // 8 // 1024),
             "image[1][1].value", repeated, 1),
+        "repeated-padded": (
+            WIDE + "mut image: [%d]wide = [of wide(tag: 1, value: 2, pair: [of 3])]\n"
+            % (REPEATED // 24 * scale),
+            "image[1].value", REPEATED // 24 * scale * 24, 1),
     }
 
 
@@ -170,6 +181,8 @@ def check_shape(refine: str, driver: str, target: str, name: str,
         faults.append("%s: a run one directive writes took %.0f MiB of the assembler"
                       % (name, max(peak_1, peak_2) / 2 ** 20))
     if kind == 1:
+        print("  %-17s %.1f bytes of assembler memory per image byte"
+              % ("", peak_2 / written_2))
         if peak_2 > GROWTH * peak_1:
             faults.append("%s: doubling the run grew the assembler from %.0f to %.0f MiB"
                           % (name, peak_1 / 2 ** 20, peak_2 / 2 ** 20))

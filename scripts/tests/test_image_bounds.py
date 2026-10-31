@@ -23,11 +23,10 @@ class Shapes(unittest.TestCase):
             self.assertEqual(written_1 == 0, kind == 2, name)
 
     def test_written_bytes_are_the_declared_extent(self):
-        sizes = {"u8": 1, "u16": 2, "u32": 4, "u64": 8}
+        sizes = {"u8": 1, "u16": 2, "u32": 4, "u64": 8, "cell": 8, "wide": 24}
         for name, (source, _, written, kind) in image_bounds.shapes(1).items():
-            match = re.search(r"\[(\d+)\](?:\[(\d+)\])?(u8|u16|u32|u64|cell)", source)
-            extent = int(match.group(1)) * int(match.group(2) or 1) * sizes.get(
-                match.group(3), 8)
+            match = re.search(r"mut image: \[(\d+)\](?:\[(\d+)\])?(\w+)", source)
+            extent = int(match.group(1)) * int(match.group(2) or 1) * sizes[match.group(3)]
             self.assertEqual(written, 0 if kind == 2 else extent, name)
 
     def test_a_program_reads_what_it_declares(self):

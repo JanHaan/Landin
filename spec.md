@@ -5821,6 +5821,9 @@ Darwin alike, agree on its form:
   each nonzero digit, a `.rept` of that digit around as many nested
   `.rept 256` as its place, around the body. A count up to 256 is one `.rept`
   as before.
+- Inside a body that is itself repeated, a zero gap or a scalar run of at
+  most 16 bytes is written as plain values, `.byte 0, 0, 0` for a record's
+  padding, and only a longer one as `.zero` or `.fill`.
 
 A body is therefore written once per nonzero digit, at most eight times, and
 the text an assembler expands at once is the body's own times at most 256.
@@ -5833,10 +5836,22 @@ whose repetition the assembler writes out only into the object, so an image of
 hundreds of megabytes costs it a few megabytes. A repeated body is expanded,
 however it is nested, and is what D537 counts against the budget.
 
+**Why plain values inside a repeated body, up to 16 bytes:** each `.zero` or
+`.fill` opens a fragment of its own, about 140 bytes of GNU as's memory, and a
+repeated body opens one per copy. A record of a byte, three of padding and a
+`u32` then cost the assembler 20 bytes per image byte, against 3 for a
+repeated `u64`, and within a 2 GiB reach some 40 GB. Plain values cost their
+expanded text instead, about four bytes per zero byte, so they win while the
+gap is shorter than the fragment's share; at 16 bytes the two are close, and
+a longer gap is rare in a record and cheaper as one fragment. With the
+threshold a padded record costs what a repeated quad does.
+
 **The alternatives:** emit every element, which makes the assembly as large as
 the image; keep one `.rept` of the whole count, whose expansion is the count
-times the body's text and which GNU as retains; or use `.fill` for eight-byte
-patterns, which loses their high half. Writing a composite run's bytes out as
+times the body's text and which GNU as retains; use `.fill` for eight-byte
+patterns, which loses their high half; or keep `.zero` gaps in repeated bodies
+and give composite repetition a budget of its own below the target's reach,
+which bounds the cost by refusing images the target can hold. Writing a composite run's bytes out as
 `.byte` lists was declined for the first reason.
 
 **Pinned by** `backend/module repetition uses compact full-width directives`,
@@ -5844,7 +5859,8 @@ patterns, which loses their high half. Writing a composite run's bytes out as
 `backend scale/compact images emit compact assembly` on every native target,
 `runtime/static-image-runs` on every target and the Cortex-M corpus, and
 `scripts/image_bounds.py`, which assembles the compact shapes and holds the
-assembler's peak memory and the object's size to the image.
+assembler's peak memory and the object's size to the image, a repeated padded
+record among them at six bytes of memory per image byte.
 
 ### D39 — A written module scalar gives `zeroed` its context
 
