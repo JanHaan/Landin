@@ -72,6 +72,14 @@ alone. An input marked `"fetch": "by hand"`, RM0433, is one a person puts in
 the cache; the fetcher verifies it when named or with `--all` and never
 downloads it.
 
+Such a manual stays supplied by hand: www.st.com resets a script's HTTP/2
+stream and times out over HTTP/1.1, and its terms do not let the tree carry
+the file. A reviewer opens the pinned URL in a browser, saves the PDF as
+`CACHE/rm0433/RM0433.pdf` and runs `python3 scripts/fetch_inputs.py
+rm0433/RM0433.pdf`, whose refusal names the path and hash wanted. The URL
+serves the current revision, so once ST publishes a newer one than the
+pinned Rev 9, the copy wanted is the maintainer's, and no job verifies it.
+
 | Input | Source | Licence |
 |---|---|---|
 | `rp2040/RP2040.svd` | official [pico-sdk 2.2.0](https://github.com/raspberrypi/pico-sdk/tree/2.2.0), commit `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`; device `RP2040`, version `0.1`, SVD schema `1.1` | BSD-3-Clause, Raspberry Pi Ltd 2024 |
