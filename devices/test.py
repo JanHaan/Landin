@@ -114,6 +114,27 @@ class Offline(unittest.TestCase):
                 for named in re.findall(r'devices/notices/[\w.-]+', line):
                     self.assertTrue((ROOT / named).is_file(), named)
 
+    def test_the_evaluator_reads_stores_and_their_widths(self):
+        import struct
+        import thumb
+
+        class Built:
+            code = struct.pack('<II', 0x20001000, 0x9) + struct.pack(
+                '<6H', 0x4802, 0x2105, 0x6041, 0x8101, 0xbf30, 0) \
+                + struct.pack('<I', 0x40000000)
+            segments = [(0, code, len(code))]
+            symbols = {'_landin_firmware_vectors': 0}
+
+        # ldr r0, =0x40000000; movs r1, #5; str r1, [r0, #4];
+        # strh r1, [r0, #8]; wfi
+        evaluation = thumb.Evaluation(Built(), [(0x40000000, 0x100)],
+                                      (0x20000000, 0x1000))
+        self.assertEqual(evaluation.run(), [('w', 0x40000004, 4, 5),
+                                            ('w', 0x40000008, 2, 5)])
+        broken = thumb.Evaluation(Built(), [], (0x20000000, 0x1000))
+        with self.assertRaisesRegex(thumb.Refused, 'outside the image'):
+            broken.run()
+
     def test_no_vendor_input_is_vendored(self):
         self.assertFalse((HERE / 'inputs').exists())
         for path in HERE.rglob('*'):
@@ -651,8 +672,15 @@ class Stm32h753Oracles(unittest.TestCase):
                image.symbols['_landin_firmware_stack_top']
                - image.symbols['_landin_firmware_data_start'])
         windows = [(0x58024400, 0x400), (0x58020c00, 0x400), (0x40004800, 0x400),
-                   (0x40020000, 0x400), (0x40020800, 0x400)]
+                   (0x40020000, 0x400), (0x40020800, 0x400), (0xe000e000, 0x1000)]
         stores = [a for a in thumb.accesses(data, windows, ram) if a[0] != 'barrier']
+        # The cacheless profile: nothing enables the M7's caches, through
+        # SCB_CCR's IC and DC bits, or maintains them, through SCB's cache
+        # operations at 0xE000EF50 to 0xE000EF78.
+        system = [a for a in stores if a[1] >= 0xe000e000]
+        self.assertFalse([a for a in system if a[1] == 0xe000ed14 and a[3] & 0x30000
+                          or 0xe000ef50 <= a[1] <= 0xe000ef78], system)
+        stores = [a for a in stores if a[1] < 0xe000e000]
         message = image.symbols['message']
         # Reviewed from RM0433's memory map and register descriptions: the
         # address, the width and the value of every store, in order.
@@ -672,6 +700,50 @@ class Stm32h753Oracles(unittest.TestCase):
             ('w', 0x40004800, 4, 0x00000009),   # USART3_CR1: TE, UE
             ('w', 0x40020010, 4, 0x00000441),   # DMA_S0CR: EN
         ])
+
+    @requires_refine
+    def test_the_hand_written_memory_against_the_header(self):
+        header = CmsisHeader(fetch_inputs.fetch('stm32h753/stm32h753xx.h')
+                             .read_text())
+        text = (DESCRIPTIONS / 'stm32h753/memory.ldn').read_text()
+
+        def number(expression):
+            value = 1
+            for factor in expression.split('*'):
+                value *= int(factor.strip().replace('_', ''), 0)
+            return value
+
+        regions = {name: (number(origin), number(length), access)
+                   for name, origin, length, access in re.findall(
+                       r'^linker\.region\("(\w+)", ([^,]+), ([^,]+), "(\w+)"\)$',
+                       text, re.MULTILINE)}
+        places = dict(re.findall(r'^linker\.place\("(\w+)", "(\w+)"', text,
+                                 re.MULTILINE))
+        kib = 1024
+        d2 = header.value('D2_AHBSRAM_BASE')
+        # Bases from the header's macros, sizes from its own comments on
+        # them and from RM0433's memory map; FLASH_END bounds the flash.
+        self.assertEqual(regions, {
+            'FLASH': (header.value('D1_AXIFLASH_BASE'),
+                      header.value('FLASH_END') + 1 - header.value('FLASH_BASE'), 'rx'),
+            'ITCM': (header.value('D1_ITCMRAM_BASE'), 64 * kib, 'rwx'),
+            'DTCM': (header.value('D1_DTCMRAM_BASE'), 128 * kib, 'rw'),
+            'AXI_SRAM': (header.value('D1_AXISRAM_BASE'), 512 * kib, 'rwx'),
+            'SRAM1': (d2, 128 * kib, 'rw'),
+            'SRAM2': (d2 + 128 * kib, 128 * kib, 'rw'),
+            'SRAM3': (d2 + 256 * kib, 32 * kib, 'rw'),
+            'SRAM4': (header.value('D3_SRAM_BASE'), 64 * kib, 'rw'),
+        })
+        for macro, size in (('D1_ITCMRAM_BASE', '64KB'), ('D1_DTCMRAM_BASE', '128KB'),
+                            ('D1_AXISRAM_BASE', '512KB'), ('D2_AHBSRAM_BASE', '288KB'),
+                            ('D3_SRAM_BASE', '64 KB')):
+            self.assertRegex(header.text, r'#define %s\s.*%s' % (macro, size))
+        self.assertIn('compiler.boot("vector-table")\n', text)
+        self.assertEqual(places['vectors'], 'FLASH')
+        # DMA1 and DMA2 reach neither tightly coupled memory, so nothing
+        # a stream may read or write is placed in one.
+        for kind in ('data', 'bss', 'stack'):
+            self.assertNotIn(places[kind], ('DTCM', 'ITCM'), kind)
 
 
 def main():

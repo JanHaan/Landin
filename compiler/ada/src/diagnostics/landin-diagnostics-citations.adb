@@ -2168,6 +2168,15 @@ package body Landin.Diagnostics.Citations is
                "`refine svd` replaces its outputs whole or not at all",
             when 559 =>
                "Vendor inputs are pinned by URL and SHA-256 and fetched",
+            when 560 =>
+               "The STM32H753 is learnt for prototype 1's UART and DMA, "
+               & "with reviewed corrections",
+            when 561 =>
+               "A consumer's device accesses are read from its linked im"
+               & "age",
+            when 562 =>
+               "The STM32H753's description is cacheless and keeps DMA o"
+               & "ut of the TCMs",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 151 =>
@@ -3270,6 +3279,12 @@ package body Landin.Diagnostics.Citations is
             when 558 =>
                "Decisions: The toolchain, C and the machine",
             when 559 =>
+               "Decisions: The toolchain, C and the machine",
+            when 560 =>
+               "Decisions: The toolchain, C and the machine",
+            when 561 =>
+               "Decisions: The toolchain, C and the machine",
+            when 562 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4669,6 +4684,16 @@ package body Landin.Diagnostics.Citations is
             when 559 =>
                "https://www.701.dev/spec.html#d559-vendor-inputs-are-pin"
                & "ned-by-url-and-sha-256-and-fetched",
+            when 560 =>
+               "https://www.701.dev/spec.html#d560-the-stm32h753-is-lear"
+               & "nt-for-prototype-1-s-uart-and-dma-with-reviewed-correcti"
+               & "ons",
+            when 561 =>
+               "https://www.701.dev/spec.html#d561-a-consumer-s-device-a"
+               & "ccesses-are-read-from-its-linked-image",
+            when 562 =>
+               "https://www.701.dev/spec.html#d562-the-stm32h753-s-descr"
+               & "iption-is-cacheless-and-keeps-dma-out-of-the-tcms",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

@@ -20298,7 +20298,9 @@ they are generated; one access policy per selected register, its `read`
 `write_mask`; `numeric_enums`, the fields whose vendor enumeration is read
 as a number; `reset_mask_overrides`, the reset knowledge a reviewer
 promises instead of the SVD's; and `reset_corrections`, a reviewed reset
-value with the source it was read from. Any other member is refused, except
+value with the source it was read from; and `field_corrections`, a field's
+reviewed `bits` or that it is to be omitted, with its `source`, which the
+correspondence records beside the SVD's. Any other member is refused, except
 `provenance`, the reviewer's notes, which is not read. A policy refine
 cannot read is L0526, and one that selects what the SVD lacks L0530.
 
@@ -20419,6 +20421,98 @@ maintainer declined; and fetching inside `check.py`, which runs offline.
 
 **Pinned by** `scripts/tests/test_fetch_inputs.py`, `devices/test.py`'s
 offline tests, and the gate's `cortex-m` steps that fetch and regenerate.
+
+### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
+
+**The tour said** nothing of a second family. Prototype 1 drives a UART
+through DMA beside a timer; the maintainer's rig has a NUCLEO-H753ZI, whose
+ST-LINK virtual COM port is USART3 on PD8 and PD9.
+
+**Chosen:** the STM32H753 is learnt from ST's own SVD, the copy in Arm's
+`STM32H7xx_DFP` at tag `v4.1.3`, under Apache-2.0, pinned by hash and not
+vendored. Its policy selects the RCC clock enables for GPIO port D, USART3
+and DMA1 (`AHB4ENR`, `APB1LENR`, `AHB1ENR`); port D's `MODER` and `AFRH`, for
+PD8 and PD9's alternate function 7; USART3's `CR1`, `CR3`, `BRR`, `ISR`,
+`ICR`, `RDR` and `TDR`; DMA1's `LISR`, `LIFCR` and stream 0's `S0CR`,
+`S0NDTR`, `S0PAR` and `S0M0AR`; DMAMUX1's channel 0, `DMAMUX_C0CR`; and
+TIM2's `CCMR1_Input`, prototype 1's timer and the selection's alternate
+register. These use every form D557 reads: GPIOD and USART3 are derived
+from GPIOA and USART1, every reset mask is the device's, and no selected
+field but DMAMUX1's enumerates values, which are read as numbers. Status is
+read and not written, a clear register written as one-clears and not read,
+and USART3's receive register read with one load.
+
+Where the SVD and ST's CMSIS header disagree, the header's reading is a
+reviewed correction in the policy, with its source: DMAMUX1's `DMAREQ_ID`
+is bits 7:0 and `SYNC_ID` bits 28:24, not 6:0 and 26:24, and `AHB1ENR`'s bit
+18 is no field. Port D's mode register resets to 0xFFFF FFFF, all analog,
+where the SVD gives port A's 0xABFF FFFF by deriving port D from it, which
+RM0433's GPIO register description corrects. The two disagree on two
+interrupts the selection does not use, 143 and 145; `interrupts.ldn` is
+D542's text from the SVD, and the check names both.
+
+**The alternatives:** `cmsis-svd-data`'s copy, a third party's collection
+of the same files; ST's own download, whose licence is ST's agreement and
+whose URL serves whatever is current; and correcting nothing, which
+generates a DMA request field one bit short.
+
+**Pinned by** `devices/policies/stm32h753.json` and `devices/test.py`'s
+`Stm32h753Oracles`, which compares every selected register and field's
+address and layout with ST's header, the reset values and access policies
+with literals reviewed from RM0433, and the interrupts with the header's
+IRQ numbers.
+
+### D561 — A consumer's device accesses are read from its linked image
+
+**The tour said** nothing. No emulator models the STM32H753, and a board
+run is R12's, not the importer's, yet the generated modules must be shown to
+make the accesses their names promise.
+
+**Chosen:** `devices/consumers/stm32h753` configures the UART transmit with
+whole images computed in the program, and `devices/thumb.py` reads the
+linked image: from its reset vector it evaluates the ARMv6-M instructions
+the backend emits over memory that is the image's own bytes, and records
+each store to a device window, with its address, width and value, until the
+first WFI. The check compares that list, in order, with one reviewed from
+RM0433's memory map and register descriptions, and requires that nothing
+enables or maintains the M7's caches. The evaluation models no peripheral,
+exception or clock: it reads the image, it does not run a chip.
+
+**The alternatives:** QEMU's core with a recording model at the device's
+addresses, which the reference profile's map allows and the STM32H753's,
+from 0x0800_0000, does not; disassembling the image and matching patterns,
+which a change of instruction selection breaks; and checking the IR, which
+is not what is linked.
+
+**Pinned by** `devices/test.py`'s `the consumer's linked accesses` and the
+offline `the evaluator reads stores and their widths`.
+
+### D562 — The STM32H753's description is cacheless and keeps DMA out of the TCMs
+
+**The tour said** nothing; the R12 phase admits a cached profile only with
+its maintenance provider.
+
+**Chosen:** `devices/descriptions/stm32h753/memory.ldn` describes 2 MiB of
+flash from 0x0800_0000, the 64 KiB ITCM at 0, the 128 KiB DTCM at
+0x2000_0000, 512 KiB of AXI SRAM at 0x2400_0000, SRAM1, SRAM2 and SRAM3 at
+0x3000_0000, 0x3002_0000 and 0x3004_0000, and SRAM4's 64 KiB at
+0x3800_0000, each checked against the base addresses of ST's header. The
+boot kind is `vector-table`, the plain table at 0x0800_0000. The profile is
+cacheless: compiler-owned startup leaves the M7's caches disabled, as reset
+leaves them. DMA1 and DMA2 reach neither TCM, so initialized data, BSS and
+the stack, where prototype 1's buffers are, are placed in the AXI SRAM,
+which both streams reach; the DTCM is described and holds only what a
+program places there by name.
+
+**The alternatives:** the stack in DTCM, which is faster and puts any
+buffer a routine passes to DMA where DMA cannot reach it; enabling the
+caches, which needs the maintenance provider the phase requires first; and
+placing data in SRAM1, which reaches no further and is smaller.
+
+**Pinned by** `devices/test.py`'s `the hand-written memory against the
+header`, which holds each region to the header and every placement DMA may
+touch out of the TCMs, and the cache check of `the consumer's linked
+accesses`.
 
 ### D530 — `refine explain` answers a construct and a decision
 

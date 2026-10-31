@@ -1,0 +1,31 @@
+-- The STM32H753's memory, from RM0433's memory map and the base addresses
+-- of ST's stm32h753xx.h: 2 MiB of flash in two 1 MiB banks from
+-- 0x0800_0000, the M7's 64 KiB ITCM and 128 KiB DTCM, 512 KiB of AXI SRAM,
+-- SRAM1, SRAM2 and SRAM3 in the D2 domain and SRAM4 in D3. Written by hand;
+-- see devices/README.md for the sources it was checked against.
+--
+-- The profile is cacheless: compiler-owned startup leaves the M7's
+-- instruction and data caches disabled, as reset leaves them, so no DMA
+-- buffer needs cache maintenance. A cached profile is not admitted.
+--
+-- DMA1 and DMA2 cannot reach the DTCM or the ITCM, which only the CPU and
+-- the MDMA reach, so initialized data, BSS and the stack, where prototype
+-- 1's DMA buffers are, are placed in the AXI SRAM, which both reach. A
+-- declaration placed in DTCM with link(region: "DTCM") must not be a
+-- buffer a DMA stream reads or writes.
+
+linker.region("FLASH", 0x0800_0000, 2 * 1024 * 1024, "rx")
+linker.region("ITCM", 0x0000_0000, 64 * 1024, "rwx")
+linker.region("DTCM", 0x2000_0000, 128 * 1024, "rw")
+linker.region("AXI_SRAM", 0x2400_0000, 512 * 1024, "rwx")
+linker.region("SRAM1", 0x3000_0000, 128 * 1024, "rw")
+linker.region("SRAM2", 0x3002_0000, 128 * 1024, "rw")
+linker.region("SRAM3", 0x3004_0000, 32 * 1024, "rw")
+linker.region("SRAM4", 0x3800_0000, 64 * 1024, "rw")
+compiler.boot("vector-table")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "AXI_SRAM")
+linker.place("bss", "AXI_SRAM")
+linker.place("stack", "AXI_SRAM", 16 * 1024)

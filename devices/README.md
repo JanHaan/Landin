@@ -94,6 +94,7 @@ reviewer's notes and is not read.
 | `numeric_enums` | the `PERIPHERAL.REGISTER.FIELD`s whose enumeration is read as a plain number |
 | `reset_mask_overrides` | the reset knowledge a reviewer promises for a register, replacing the SVD's |
 | `reset_corrections` | a reviewed reset `value` and the `source` it was read from, where the SVD is wrong |
+| `field_corrections` | for a `PERIPHERAL.REGISTER.FIELD`, its reviewed `bits` as `[HIGH:LOW]`, or `omit: true`, and the `source` |
 
 A refused read or write leaves no accessor, so a program that tries one is
 refused by name resolution. `modify` reads with one volatile load, for a FIFO
@@ -145,6 +146,64 @@ and field with the vendor's own C headers, which refine never reads. The
 gate's `cortex-m` job runs it with the release compiler. The two vendor
 formats may share an upstream database; they are independent of the
 projection, not a claim of independent silicon verification.
+
+## STM32H753: the selected surface
+
+The STM32H753 is learnt for prototype 1's UART and DMA on the
+NUCLEO-H753ZI (D560), whose ST-LINK virtual COM port is USART3 on PD8 and
+PD9. Its modules are under `generated/stm32h753`, its correspondence and
+manifest beside them, and its description in `descriptions/stm32h753`.
+
+| Module | Selected registers | Why |
+|---|---|---|
+| `rcc` | AHB1ENR, AHB4ENR, APB1LENR | the clock enables of DMA1, GPIO port D and USART3 |
+| `gpiod` | MODER, AFRH | PD8 and PD9 to alternate function 7; port D is derived from port A |
+| `usart3` | CR1, CR3, BRR, ISR, ICR, RDR, TDR | enable, DMA transmit, the divisor, status, clears and data; USART3 is derived from USART1 |
+| `dma1` | LISR, LIFCR, S0CR, S0NDTR, S0PAR, S0M0AR | stream 0's configuration, count and addresses, its status and clears |
+| `dmamux1` | DMAMUX_C0CR | channel 0's request, 46 for usart3_tx_dma |
+| `tim2` | CCMR1_Input | the timer's capture view, the selection's alternate register |
+
+Status registers have no writer, the clear registers LIFCR and ICR no
+reader and a one-clears writer, and RDR one volatile load. DMAMUX1's
+single-bit and polarity fields enumerate values named `B_0x0` and so on,
+which the policy reads as numbers.
+
+The check compares every selected register and field's address and
+layout with ST's `stm32h753xx.h`, through a reviewed table of the header's
+structure members and the names it spells differently, and finds three
+disagreements, each a correction in the policy with its source:
+DMAMUX1's `DMAREQ_ID` is bits 7:0 and `SYNC_ID` bits 28:24, where the SVD
+says 6:0 and 26:24, and `RCC_AHB1ENR` has no bit 18, where the SVD puts a
+`USB2OTGHSULPIEN`. Reset values and access policies are compared with
+literals reviewed from RM0433: every selected register resets to zero but
+`USART3_ISR`, 0x0000 00C0, and `GPIOD_MODER`, 0xFFFF FFFF, which the SVD
+gets wrong by deriving port D from port A and the policy corrects. The SVD
+and the header also disagree on two interrupts the selection does not use:
+the SVD names `WWDG1_RST` at 143, which the header lacks, and the header
+`ECC_IRQn` at 145, which the SVD lacks. `interrupts.ldn` is the SVD's (D542),
+166 slots, and the check names both.
+
+The [consumer](consumers/stm32h753/main.ldn) enables the clocks, sets
+the pins, programs USART3 at 115200 baud from the 64 MHz HSI and transmits
+four bytes through DMA1 stream 0. No emulator models the chip, so
+[`thumb.py`](thumb.py) reads the linked image's instructions from its reset
+vector and lists every store it makes to a device, and the check compares
+the list, address, width and value in order, with one reviewed from
+RM0433, and requires that nothing enables or maintains the caches (D561).
+
+The description's [`memory.ldn`](descriptions/stm32h753/memory.ldn) is
+written by hand and checked against the header's base addresses (D562):
+2 MiB of flash from 0x0800_0000, ITCM 64 KiB at 0, DTCM 128 KiB at
+0x2000_0000, AXI SRAM 512 KiB at 0x2400_0000, SRAM1, SRAM2 and SRAM3 at
+0x3000_0000, 0x3002_0000 and 0x3004_0000, and SRAM4 64 KiB at 0x3800_0000.
+It boots from the plain vector table at 0x0800_0000. The profile is
+cacheless: startup leaves the M7's caches disabled, as reset leaves them,
+and a cached profile is not admitted. DMA1 and DMA2 reach neither TCM, so
+data, BSS and the stack are placed in the AXI SRAM.
+
+RM0433 itself could not be fetched by URL and hash when this was written:
+ST's site refused the download. Its literals above were transcribed in
+review and are not yet held to a pinned copy.
 
 ## RP2040: the selected surface and its prototype derivation
 
