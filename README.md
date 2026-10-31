@@ -202,7 +202,7 @@ short:
 | Linux RV64 | hosted executables | under QEMU's user emulation, with GDB |
 | macOS arm64 | hosted executables | natively, with LLDB |
 | FreeBSD x86-64 and arm64 | hosted executables, emitted on Linux | in FreeBSD VMs, with LLDB |
-| Cortex-M0 | firmware within 32 KiB flash and 16 KiB RAM | under the pinned QEMU, with GDB |
+| Cortex-M0 | firmware for the device description it imports, or within the 32 KiB flash and 16 KiB RAM reference; RP2040 compiles and links | under the pinned QEMU, with GDB, for the reference |
 
 - **The language kernel:** functions, aggregates and variants, declared
   failures with `else` and `try`, `defer` and `undo`, generics and concepts

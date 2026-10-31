@@ -264,7 +264,10 @@ def refusal(run, elf, name):
             files = sorted((source / line[7:]).glob('*.ldn'))
             require(len(files) == 1, 'panic oracle module is not one file: ' + line[7:])
             paths += files
-    require(set(paths) == set(source.rglob('*.ldn')),
+    #  The reference description the program is given (D543) is read
+    #  after everything it imports, so it moves no site before it.
+    reference = sorted((source / 'platform/cortex_m/reference').glob('*.ldn'))
+    require(set(paths) | set(reference) == set(source.rglob('*.ldn')),
             'panic oracle source inventory changed')
     offset = 0
     for path in paths:
