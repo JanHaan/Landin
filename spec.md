@@ -19485,6 +19485,12 @@ annotations, which the language has none of; and reading every assembly
 block as open, which would open every hosted program at its system calls.
 All were declined.
 
+**Amended by D570:** a call through `any`, a generic's table or a function
+value is no longer an opening when the program holds a routine it can
+reach: it reaches every such routine, which is not an assumed cost but the
+set the program fixes. The kinds stay for a call that reaches none, and for
+a C function value.
+
 **Pinned by** the `stack report` suite's `each opening is named` and `a
 helper opens the graph`.
 
@@ -21006,6 +21012,55 @@ description makes unnecessary.
 **Pinned by** `negative/region-placement-unknown` and
 `environments/cortex-m/descriptions.py`, which finds a datum placed in
 RP2040's `SCRATCH_X` inside that region in the linked image.
+
+### D570 — The depth report closes a call through a table or a function value
+
+**The tour said** nothing. D468 opened a call graph at every call through
+`any`, through a generic's table and through a function value, and
+declined, as a guess about what a run-time value holds, a bound from the
+providers of the call's concept. A fibre's task is reached only through
+such calls: `core/fibre`'s first frame calls its task through `any
+fibre.task`, the task's routine is a function value, and what the task waits
+on is `any` again, so every task's depth was open on every target and a
+stack was sized by bisecting until it no longer trapped.
+
+**Chosen:** the report closes such a call over the routines the whole
+program holds that it can be. A call through a table read from a value
+reaches entry N of every table of the same concept, direct and erased apart,
+which is the set D374 already relies on: a left-out entry is a zero word,
+so a table outside it could not be called through at all. A call through
+any other function value, however the value was kept, reaches every routine
+whose address the program exposes, by a function address, an image, an
+export or an import, and every table entry it may project, whose signature
+agrees with the call's, which is what the checker and the IR's verifier
+require of every function value that reaches a call. A routine that is
+neither emitted nor supplied by the link is left out, since nothing that
+names it was kept. A call stays open when it has no such routine, when its
+signature is a C function type, whose value may be one C made, and through
+a code address; recursion, foreign calls, runtime helpers and assembly stay
+open as D468 has them, and a closed call may meet recursion through what it
+reaches. A value made from integers or written by foreign code is outside
+the bound, as it is outside D374. The depth is then a bound over every task
+the program can start on a stack, not a measure of one run: the deepest
+provider of the concept counts wherever the call is, and on a hosted
+Linux target the vDSO's clock, a foreign call, still opens a task that may
+reach it.
+
+**The alternatives:** D468's openings, which leave no number for any task;
+the providers of a concept that the call's own routine can be shown to
+receive, which needs a whole-program flow analysis of values the report
+does not have and which `any` exists to avoid; closing only calls whose
+table or value is traced to one routine, which D468 already does and which
+reaches no task; and every exposed routine whatever its signature, which
+puts each task's own entry beneath every call through a value and makes
+every task recursive. All were declined.
+
+**Pinned by** the `stack report` suite's `each opening is named`, whose
+calls through a function value, `any` and a generic's table are closed by
+the one routine each can reach; `a fibre's entry through any is closed`, on
+every target; and `an open handler is refused`, whose handler reaches a
+recursion and whose same handler through `any` is judged against the
+margin instead.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

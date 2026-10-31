@@ -2200,6 +2200,9 @@ package body Landin.Diagnostics.Citations is
                & "t",
             when 547 =>
                "A declaration can be placed in a named region",
+            when 570 =>
+               "The depth report closes a call through a table or a func"
+               & "tion value",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3324,6 +3327,8 @@ package body Landin.Diagnostics.Citations is
             when 546 =>
                "Decisions: The toolchain, C and the machine",
             when 547 =>
+               "Decisions: The toolchain, C and the machine",
+            when 570 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -4760,6 +4765,9 @@ package body Landin.Diagnostics.Citations is
             when 547 =>
                "https://www.701.dev/spec.html#d547-a-declaration-can-be-"
                & "placed-in-a-named-region",
+            when 570 =>
+               "https://www.701.dev/spec.html#d570-the-depth-report-clos"
+               & "es-a-call-through-a-table-or-a-function-value",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",
