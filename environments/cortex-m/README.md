@@ -718,6 +718,9 @@ holds its handler, and the reference refuses slot 21 as L0347 and links zero
 there. It then links RP2040's program with a copy of the derived script and
 with four scripts each breaking one clause of D546's contract, each refused
 as L0519 naming its clause, and refuses `link(region: "NOWHERE")` as L0517.
+Last, a 100,000-byte static image links for RP2040, inside its 256 KiB RAM,
+and overflows the reference's: the image budget (D537) is the selected
+profile's.
 
 ```sh
 python3 environments/cortex-m/descriptions.py --refine PATH_TO_REFINE --output NEW_DIRECTORY
@@ -727,7 +730,11 @@ The lanes that stage their own library, `devices.py`, `driver.py` and
 `freestanding.py`, stage `platform/cortex_m/reference` beside the modules
 their programs import, since the reference is part of every program that
 imports no description. The corpus still links with its probe script, which
-holds the reference's map; its capacity verdicts are the reference's.
+holds the reference's map, so its capacity verdicts are linked against the
+reference; `backend_corpus.py` then holds every limited verdict's measured
+image, largest frame or materialization to each description's capacities in
+`descriptions.json` and records them under `profiles` in its result. Against
+RP2040 that is a measurement, not a link or a run against its map.
 
 ## Complete derived driver
 

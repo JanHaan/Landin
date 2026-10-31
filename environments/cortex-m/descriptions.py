@@ -171,6 +171,23 @@ def contract(run, refine):
             'an unknown region is not refused')
 
 
+def larger_than_the_reference(run, refine):
+    """D537/D543: RP2040's budget is its own, so an image the reference's
+    16 KiB RAM cannot hold links for it, inside its RAM region."""
+    body = ('mut table: [100000]u8 = zeroed\n'
+            'mut out: u8 = 0\n'
+            'start: () -> none =\n    table[5] = 3\n    out = table[99999]\nend start\n')
+    image = compile_firmware(run, refine, 'import descriptions/rp2040\n' + body, name='large.elf')
+    report = json.loads((run.out / 'large.elf.json').read_text())['firmware']
+    ram = next(r for r in EXPECTED['rp2040']['regions'] if r['name'] == 'RAM')
+    require(report['static_ram_used'] > 100000 and report['static_ram_limit'] == ram['length'],
+            'RP2040 does not hold a 100,000-byte image in its RAM: %r' % report)
+    require(ram['origin'] <= image.symbols.get('_landin_firmware_bss_end', 0)
+            <= ram['origin'] + ram['length'], 'the image is not in RP2040\'s RAM')
+    said = compile_firmware(run, refine, body, name='reference-large.elf', check=False)
+    require("region `RAM' overflowed" in said, 'the reference holds a 100,000-byte image')
+
+
 def execute_suite(parent, refine):
     root = parent.out / 'descriptions'
     root.mkdir()
@@ -187,6 +204,10 @@ def execute_suite(parent, refine):
     out.mkdir()
     contract(Run(out, parent.tools), refine)
     controls.append({'contract': 'four clauses and an unknown region', 'status': 'passed'})
+    out = root / 'larger-than-the-reference'
+    out.mkdir()
+    larger_than_the_reference(Run(out, parent.tools), refine)
+    controls.append({'image': 'RP2040 holds what the reference cannot', 'status': 'passed'})
     print('description: linker script contract held', flush=True)
     require(sha(refine) == compiler_hash, 'compiler changed')
     record = {'status': 'passed', 'compiler_sha256': compiler_hash, 'controls': controls,
