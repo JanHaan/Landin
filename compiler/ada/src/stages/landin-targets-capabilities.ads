@@ -49,6 +49,29 @@ package Landin.Targets.Capabilities is
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
 
+   --  D537: how far the backend's addressing of static data reaches, which
+   --  bounds the written images of a program with no firmware profile:
+   --  2 GiB under x86-64's small code model, Darwin's static image and
+   --  RV64's AUIPC, 4 GiB under arm64's ADRP on ELF, and the 32-bit address
+   --  space on Cortex-M, whose literal pools hold whole addresses.
+   function Image_Reach (Facts : Target_Facts) return Byte_Count
+     with Pre => Backend_For (Facts) /= No_Backend;
+
+   --  What sets Image_Reach, as a refusal names it: "x86-64's small code
+   --  model reaches on linux-x86-64".
+   function Image_Reach_Source (Facts : Target_Facts) return String
+     with Pre => Backend_For (Facts) /= No_Backend;
+
+   --  The budget of a program with no firmware profile: its written images
+   --  within Image_Reach, and its zero images within the address space.
+   function Image_Budget_Of (Facts : Target_Facts) return Image_Budget
+     with Pre => Backend_For (Facts) /= No_Backend;
+
+   --  Whether the backend writes an immutable image that is wholly zero
+   --  into the object, as Cortex-M does into flash, rather than reserving
+   --  it as it reserves a mutable one.
+   function Writes_Zero_Constants (Facts : Target_Facts) return Boolean;
+
    --  The operating system whose C library a hosted program runs on, which
    --  `compiler.os` names to source: `platform/libc` selects its errno
    --  function and `open` flags by it.  Neither the object format nor the

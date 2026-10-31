@@ -118,6 +118,19 @@ package Landin.Targets is
    function Maximum_Object_Size (Facts : Target_Facts) return Byte_Count
      with Pre => Pointer_Width (Facts) <= 64;
 
+   --  D537: what one program's static images may hold, in target bytes,
+   --  before anything is emitted.  Initialized bounds every image written
+   --  into the object, Writable those of them a program may change, which
+   --  firmware also copies into RAM, and Reserved the zero images the
+   --  loader or the startup clears, which take no object bytes.  A hosted
+   --  target's budget is Landin.Targets.Capabilities.Image_Budget_Of; a
+   --  firmware image's is its profile's capacities.
+   type Image_Budget is record
+      Initialized : Byte_Count;
+      Writable    : Byte_Count;
+      Reserved    : Byte_Count;
+   end record;
+
    ---------------------------------------------------------------------
    --  Physical evidence-table representation
    --

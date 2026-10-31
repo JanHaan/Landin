@@ -10389,13 +10389,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "urce surface. The derived script checks flash bounds, st"
                & "atic RAM/stack overlap and the vector address/size; unre"
                & "solved symbols and relocation or encoding failures remai"
-               & "n reported tool failures. An 8 MiB static-image material"
-               & "ization guard applies before firmware emission, includin"
-               & "g unreachable images, independently of the much smaller "
-               & "physical map and section GC. Hosted placement annotation"
-               & "s, arbitrary section addresses, weak symbols, inline hin"
-               & "ts and general tool directives remain explicit refusals."
-               & " No request is silently ignored.",
+               & "n reported tool failures. Before emission the program's "
+               & "static images are held to the selected profile's capacit"
+               & "ies (D537): every written image, including one section G"
+               & "C would drop, to the region text is placed in, 32 KiB in"
+               & " the reference, and every mutable written image to the d"
+               & "ata region, 16 KiB in the reference. The linker stays th"
+               & "e authority for the map itself. Hosted placement annotat"
+               & "ions, arbitrary section addresses, weak symbols, inline "
+               & "hints and general tool directives remain explicit refusa"
+               & "ls. No request is silently ignored.",
             when 1995 =>
                "[1675] teaches fibres through `core/fibre` and leaves un"
                & "said what the two stack builtins under it do, where a fi"
@@ -12470,14 +12473,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "g, verification nor dumping enumerates the extent."
                & LF
                & LF
-               & "The Linux x86-64 backend emits a constant-size `.rept`/w"
-               & "idth-specific-directive/ `.endr` sequence for a nonzero "
-               & "repeated image. The scalar directive is `.byte`, `.word`"
-               & ", `.long` or `.quad` according to the target element wid"
-               & "th. In particular, the eight-byte form does not use GNU "
-               & "`.fill`, whose value operand contributes at most four by"
-               & "tes and would discard the high half of a `u64` pattern. "
-               & "An absent zero image stays `.bss`."
+               & "The Linux x86-64 backend emitted a constant-size `.rept`"
+               & "/width-specific-directive/ `.endr` sequence for a nonzer"
+               & "o repeated image. The scalar directive is `.byte`, `.wor"
+               & "d`, `.long` or `.quad` according to the target element w"
+               & "idth. In particular, the eight-byte form does not use GN"
+               & "U `.fill`, whose value operand contributes at most four "
+               & "bytes and would discard the high half of a `u64` pattern"
+               & ". An absent zero image stays `.bss`. D536 later writes a"
+               & " pattern of four bytes or fewer as one `.fill` on every "
+               & "target and keeps the repetition for eight-byte patterns."
                & LF
                & LF
                & "A repetition whose written contextual length is zero is "
@@ -12633,12 +12638,45 @@ package body Landin.Diagnostics.Citations.Texts is
                & "s zero, because its nonempty written prefix makes it exp"
                & "licit `.data`; Linux x86-64 emits the prefix with width-"
                & "matched scalar directives and then a constant-size `.rep"
-               & "t N - k` around one zero directive. A full repetition of"
-               & " zero retains D34's absent image and loader-zeroed `.bss"
-               & "`. For every nonzero suffix the backend uses the same `."
-               & "byte`, `.word`, `.long` or `.quad` directive, so a 64-bi"
-               & "t pattern reaches the assembler with all eight bytes rat"
-               & "her than GNU `.fill`'s truncated value field.",
+               & "t N - k` around one zero directive, which D536 writes as"
+               & " one `.zero`. A full repetition of zero retains D34's ab"
+               & "sent image and loader-zeroed `.bss`. For every nonzero s"
+               & "uffix the backend uses the same `.byte`, `.word`, `.long"
+               & "` or `.quad` directive, so a 64-bit pattern reaches the "
+               & "assembler with all eight bytes rather than GNU `.fill`'s"
+               & " truncated value field.",
+            when 536 =>
+               "Chosen: every native backend writes a run of one element"
+               & " through the one set of helpers in `Landin.Backend`, so "
+               & "the four, arm64 for Linux, FreeBSD and Darwin alike, agr"
+               & "ee on its form:"
+               & LF
+               & LF
+               & "- A run that writes only zero bytes is one `.zero`: a re"
+               & "peated zero scalar, a hybrid's zero suffix, and a repeat"
+               & "ed aggregate or array element whose whole image is zero,"
+               & " with its padding."
+               & LF
+               & "- A run of a scalar of one, two or four bytes is one `.f"
+               & "ill count, size, value`, which both assemblers hold as o"
+               & "ne fragment."
+               & LF
+               & "- What is left, a run of a nonzero composite element, of"
+               & " an address, of an atom, or of an eight-byte scalar whos"
+               & "e high half `.fill`'s four-byte value field would drop, "
+               & "is repeated. A count above 256 is written in base 256: f"
+               & "or each nonzero digit, a `.rept` of that digit around as"
+               & " many nested `.rept 256` as its place, around the body. "
+               & "A count up to 256 is one `.rept` as before."
+               & LF
+               & LF
+               & "A body is therefore written once per nonzero digit, at m"
+               & "ost eight times, and the text an assembler expands at on"
+               & "ce is the body's own times at most 256. Nested runs mult"
+               & "iply their digits, which D537's budget bounds: within 4 "
+               & "GiB at most three dimensions of an image exceed 256. The"
+               & " object bytes are those the earlier `.rept` sequences as"
+               & "sembled to.",
             when 39 =>
                "Chosen: `zeroed` may directly initialize an explicitly t"
                & "yped module scalar binding: `[mut] name: T = zeroed`. Th"
@@ -18259,11 +18297,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 che"
                & "ck target, machine signatures, placement, fixed assembly"
                & " and scalar transport; D248 checks named operands agains"
-               & "t each target's registers; L0505 bounds static image mat"
-               & "erialization before section GC | `positive/r660-machine-"
-               & "directives`, `positive/r670-scalar-assembly`, `positive/"
-               & "assembly-operand-forms`, `negative/r660-materialization`"
-               & ", `negative/assembly-synthetic-target` |"
+               & "t each target's registers; L0505 holds static images to "
+               & "D537's budget before section GC | `positive/r660-machine"
+               & "-directives`, `positive/r670-scalar-assembly`, `positive"
+               & "/assembly-operand-forms`, `negative/r660-materialization"
+               & "`, `negative/assembly-synthetic-target` |"
                & LF
                & "| `firmware.return` | trap | 1550, 1570, 1650, 1990 | D2"
                & "32 dispatches entry return as unreachable/site zero; D22"
@@ -21864,8 +21902,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "nd one-frame check | A larger board hides overflows; a g"
                & "eneral script/build ecosystem exceeds this slice; materi"
                & "alizing giant unreachable images before GC wastes unboun"
-               & "ded resources | flash/stack overflow, L0505/L0507 and mi"
-               & "splaced-vector controls |"
+               & "ded resources; D537 replaces the 8 MiB bound with the pr"
+               & "ofile's capacities | flash/stack overflow, L0505/L0507 a"
+               & "nd misplaced-vector controls |"
                & LF
                & LF
                & "The physical startup/exception premises are outside lang"
@@ -22103,6 +22142,57 @@ package body Landin.Diagnostics.Citations.Texts is
                & "it. Caller coordinates remain their separate three-scala"
                & "r D192 contract; they do not become panic numbers. Corte"
                & "x source debugging is separate evidence.",
+            when 537 =>
+               "Chosen: one check, before anything is emitted, holds eve"
+               & "ry target's static images to a budget in target bytes. I"
+               & "t counts every datum the compilation lowers, before opti"
+               & "mization and before section GC: a program with a public "
+               & "`main` lowers what that reaches, and one without, a firm"
+               & "ware image or an object, lowers everything. Written imag"
+               & "es, those with bytes in the object, count against the in"
+               & "itialized budget; mutable written images also against th"
+               & "e writable one; zero images the loader or startup clears"
+               & " count only against the address space."
+               & LF
+               & LF
+               & "| Target | Written images | Mutable written images | Zer"
+               & "o images |"
+               & LF
+               & "| --- | --- | --- | --- |"
+               & LF
+               & "| linux-x86-64, freebsd-x86-64 | 2 GiB, the small code m"
+               & "odel's reach | 2 GiB | 2^64 - 1 bytes |"
+               & LF
+               & "| darwin-arm64 | 2 GiB, a Darwin static image | 2 GiB | "
+               & "2^64 - 1 bytes |"
+               & LF
+               & "| linux-arm64, freebsd-arm64 | 4 GiB, ADRP's reach | 4 G"
+               & "iB | 2^64 - 1 bytes |"
+               & LF
+               & "| linux-rv64 | 2 GiB, AUIPC's reach | 2 GiB | 2^64 - 1 b"
+               & "ytes |"
+               & LF
+               & "| cortex-m0 without a firmware request | 2^32 - 1 bytes,"
+               & " the address space | 2^32 - 1 bytes | 2^32 - 1 bytes |"
+               & LF
+               & "| cortex-m0 firmware, reference profile | 32 KiB, its fl"
+               & "ash | 16 KiB, its RAM | 2^32 - 1 bytes |"
+               & LF
+               & LF
+               & "A firmware image takes its profile's capacities as the c"
+               & "heck's argument, so a profile with more flash raises its"
+               & " budget without another rule. A scalar datum counts as w"
+               & "ritten whatever it folds to. The refusal is L0505, which"
+               & " names the bytes the images take, the budget they exceed"
+               & " and what sets it, the code model, the address space or "
+               & "the profile's flash or RAM."
+               & LF
+               & LF
+               & "This states the per-target limits that the roadmap's emi"
+               & "ssion policy left open. The check is not a placement ver"
+               & "dict: code is not counted, and the linker remains the au"
+               & "thority for the map, the stack reservation and a zero im"
+               & "age past a code model's reach.",
             when 248 =>
                "Chosen: [1990]'s operand form. An operand has a directio"
                & "n, a name, an integer type and a register, and the regis"
@@ -23920,7 +24010,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & " `CM0`, `CM0PLUS`, `CM3`, `CM4` and `CM7` are the five c"
                & "ores above; and `compiler.vectors(N)`, N being 16 plus t"
                & "he larger of `cpu/deviceNumInterrupts` and one more than"
-               & " the highest interrupt value."
+               & " the highest interrupt value, or plus the latter alone w"
+               & "hen the SVD has no `deviceNumInterrupts`."
                & LF
                & "6. One `compiler.interrupt(""NAME"", VALUE)` for each dist"
                & "inct pair of an `interrupt` element's name and value in "

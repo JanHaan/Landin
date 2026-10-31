@@ -1441,6 +1441,8 @@ package body Landin.Diagnostics.Citations is
             when 38 =>
                "A typed module mixed repetition has a compact hybrid ima"
                & "ge",
+            when 536 =>
+               "A static image's runs are written without expansion",
             when 39 =>
                "A written module scalar gives `zeroed` its context",
             when 40 =>
@@ -1985,6 +1987,8 @@ package body Landin.Diagnostics.Citations is
                "Scalar transport through the ordinary assembly boundary",
             when 232 =>
                "Compiler-check panic dispatch and optional site identity",
+            when 537 =>
+               "One image budget on every target, before emission",
             when 248 =>
                "Assembly operands name their registers",
             when 252 =>
@@ -2691,6 +2695,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Arrays, slices and text",
             when 38 =>
                "Decisions: Arrays, slices and text",
+            when 536 =>
+               "Decisions: Arrays, slices and text",
             when 39 =>
                "Decisions: Arrays, slices and text",
             when 40 =>
@@ -3132,6 +3138,8 @@ package body Landin.Diagnostics.Citations is
             when 230 =>
                "Decisions: The toolchain, C and the machine",
             when 232 =>
+               "Decisions: The toolchain, C and the machine",
+            when 537 =>
                "Decisions: The toolchain, C and the machine",
             when 248 =>
                "Decisions: The toolchain, C and the machine",
@@ -3790,6 +3798,9 @@ package body Landin.Diagnostics.Citations is
             when 38 =>
                "https://www.701.dev/spec.html#d38-a-typed-module-mixed-r"
                & "epetition-has-a-compact-hybrid-image",
+            when 536 =>
+               "https://www.701.dev/spec.html#d536-a-static-image-s-runs"
+               & "-are-written-without-expansion",
             when 39 =>
                "https://www.701.dev/spec.html#d39-a-written-module-scala"
                & "r-gives-zeroed-its-context",
@@ -4458,6 +4469,9 @@ package body Landin.Diagnostics.Citations is
             when 232 =>
                "https://www.701.dev/spec.html#d232-compiler-check-panic-"
                & "dispatch-and-optional-site-identity",
+            when 537 =>
+               "https://www.701.dev/spec.html#d537-one-image-budget-on-e"
+               & "very-target-before-emission",
             when 248 =>
                "https://www.701.dev/spec.html#d248-assembly-operands-nam"
                & "e-their-registers",

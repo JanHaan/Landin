@@ -6,6 +6,7 @@ with Ada.Strings.Maps;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Firmware;
+with Landin.Backend.Images;
 with Landin.Backend.Toolchain;
 with Landin.Backend.Dispatch;
 with Landin.Build_Reports;
@@ -42,6 +43,7 @@ with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 
 package body Landin.Driver is
@@ -2946,14 +2948,6 @@ package body Landin.Driver is
                      & " with --library=DIR (D543)");
                   return;
                end if;
-               if not Landin.Backend.Firmware.Materialization_Fits
-                 (Landin.Stages.Code (Context).all)
-               then
-                  Note_Failure
-                    (Rows.Code (Rows.Image_Materialization_Limit),
-                     "firmware static images exceed 8 MiB before section GC");
-                  return;
-               end if;
                if Landin.Configuration.Library_Count
                  (Landin.Stages.Configurations (Context).all) /= 0
                then
@@ -2986,6 +2980,72 @@ package body Landin.Driver is
                   & Landin.Targets.Name (Facts),
                   "describe a target with a backend, or drop --emit");
                return;
+            end if;
+
+            --  D537: every static image against one budget before
+            --  anything is emitted, so a few lines of source cannot ask
+            --  the assembler for more than the image could hold: a
+            --  firmware image's profile, or the target's reach.
+            if Emit in Emit_Assembly | Emit_Executable then
+               declare
+                  package Images renames Landin.Backend.Images;
+                  use type Images.Excess;
+                  Firmware : constant Boolean :=
+                    Cortex and then (Emit = Emit_Executable or Firmware_Seen);
+                  Budget : constant Landin.Targets.Image_Budget :=
+                    (if Firmware then Landin.Targets.Firmware.Budget
+                       (Landin.IR.Firmware_Profile
+                          (Landin.Stages.Code (Context).all))
+                     else Landin.Targets.Capabilities.Image_Budget_Of
+                       (Facts));
+                  Used : constant Images.Usage :=
+                    Images.Measure (Landin.Stages.Code (Context).all, Facts);
+                  Over : constant Images.Excess :=
+                    Images.Exceeded (Used, Budget);
+               begin
+                  if Over /= Images.Within then
+                     declare
+                        Profile : constant String :=
+                          Landin.Targets.Name (Facts) & "'s "
+                          & Landin.Targets.Firmware.Profile_Name
+                              (Landin.IR.Firmware_Profile
+                                 (Landin.Stages.Code (Context).all));
+                        Refused : Landin.Diagnostics.Diagnostic :=
+                          Landin.Diagnostics.Make
+                            (Code    => Rows.Code
+                                          (Rows.Image_Budget_Exceeded),
+                             Level   => Landin.Diagnostics.Error,
+                             Source  => Landin.Source.No_Source,
+                             Where   => Landin.Source.Empty_Span,
+                             Message => Images.Refusal
+                               (Used, Budget, Over,
+                                (case Over is
+                                    when Images.Reserved =>
+                                       Landin.Targets.Name (Facts)
+                                       & "'s address space holds",
+                                    when Images.Writable =>
+                                       (if Firmware
+                                        then "the RAM of " & Profile
+                                          & " holds"
+                                        else Landin.Targets.Capabilities
+                                          .Image_Reach_Source (Facts)),
+                                    when others =>
+                                       (if Firmware
+                                        then "the flash of " & Profile
+                                          & " holds"
+                                        else Landin.Targets.Capabilities
+                                          .Image_Reach_Source (Facts)))));
+                     begin
+                        Landin.Diagnostics.Add_Note
+                          (Refused,
+                           "every image the program lowers counts before"
+                           & " section GC; make the static data smaller,"
+                           & " or allocate it when the program runs (D537)");
+                        Landin.Stages.Report (Context, Refused);
+                     end;
+                     return;
+                  end if;
+               end;
             end if;
 
             --  [1970]'s entry is required before anything is written, so a

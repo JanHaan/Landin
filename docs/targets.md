@@ -964,8 +964,9 @@ section, so section garbage collection can discard an unused table and its
 provider references independently of live tables.
 Startup copies both load images and clears BSS before source entry. GNU ARM
 veneers handle out-of-range calls between flash and RAM. Link assertions bound
-physical images; L0505 independently bounds pre-GC static materialization to
-8 MiB. Explicit symbol/section collisions and alignment/convention violations
+physical images; before emission L0505 independently holds every image the
+compilation lowers, before GC, to the profile's 32 KiB flash, and the mutable
+ones to its 16 KiB RAM (D537). Explicit symbol/section collisions and alignment/convention violations
 refuse rather than silently changing requested placement. Section retention
 is independent of calling convention, and a kept vector image retains its
 referenced handlers. Linker symbols are private fixed assembly inputs, not

@@ -118,6 +118,17 @@ package body Landin.Targets.Firmware is
       elsif Of_Profile.Placed (Stack) = Of_Profile.Placed (Data)
       then Placed_Region (Of_Profile, Data).Length - Of_Profile.Stack_Size
       else Placed_Region (Of_Profile, Data).Length);
+
+   function Budget (Of_Profile : Profile) return Image_Budget is
+     ((Initialized => Flash_Capacity (Of_Profile),
+       Writable    => (if Of_Profile.Placed (Data) = 0 then 0
+                       else Placed_Region (Of_Profile, Data).Length),
+       Reserved    => Maximum_Object_Size (Cortex_M)));
+
+   function Profile_Name (Of_Profile : Profile) return String is
+     (if Of_Profile.Reference then "constrained reference profile"
+      else Spelling (Of_Profile.Device) & " profile");
+
    function Assembly_Error
      (Text : String; Naked : Boolean;
       Level : Landin.Targets.Levels.Feature_Level) return String

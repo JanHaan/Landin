@@ -109,6 +109,35 @@ package body Landin.Targets.Capabilities is
       end if;
    end Backend_For;
 
+   function Image_Reach (Facts : Target_Facts) return Byte_Count is
+     (case Backend_For (Facts) is
+         when X86_64_ELF | Darwin_Arm64_Mach_O | RV64_ELF => 2 ** 31,
+         when Arm64_ELF => 2 ** 32,
+         when Cortex_M0_ELF => Maximum_Object_Size (Facts),
+         when No_Backend =>
+            raise Compiler_Defect with "no backend, so no reach");
+
+   function Reach_Source (Facts : Target_Facts) return String is
+     (case Backend_For (Facts) is
+         when X86_64_ELF => "x86-64's small code model reaches",
+         when Darwin_Arm64_Mach_O => "a Darwin static image holds",
+         when Arm64_ELF => "arm64's ADRP reaches",
+         when RV64_ELF => "RV64's AUIPC reaches",
+         when Cortex_M0_ELF => "the 32-bit address space holds",
+         when No_Backend =>
+            raise Compiler_Defect with "no backend, so no reach");
+
+   function Image_Reach_Source (Facts : Target_Facts) return String is
+     (Reach_Source (Facts) & " on " & Name (Facts));
+
+   function Image_Budget_Of (Facts : Target_Facts) return Image_Budget is
+     ((Initialized => Image_Reach (Facts),
+       Writable    => Image_Reach (Facts),
+       Reserved    => Maximum_Object_Size (Facts)));
+
+   function Writes_Zero_Constants (Facts : Target_Facts) return Boolean is
+     (Backend_For (Facts) = Cortex_M0_ELF);
+
    function Hosted_System_Of (Facts : Target_Facts) return Hosted_System is
    begin
       if Facts = Linux_X86_64 or else Facts = Linux_Arm64

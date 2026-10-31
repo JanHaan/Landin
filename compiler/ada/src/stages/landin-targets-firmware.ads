@@ -146,6 +146,17 @@ package Landin.Targets.Firmware is
    function Flash_Capacity (Of_Profile : Profile) return Byte_Count;
    function Static_RAM_Capacity (Of_Profile : Profile) return Byte_Count;
 
+   --  D537: a profile's capacities as the image budget takes them.  The
+   --  text region holds every written image and the data region every
+   --  mutable one, which reset copies there; zero images are bounded by
+   --  the 32-bit address space, and the linker places them in the RAM
+   --  left over.  For the reference: 32 KiB and 16 KiB.
+   function Budget (Of_Profile : Profile) return Image_Budget;
+
+   --  The profile as a refusal names it, after the target's name: the
+   --  "constrained reference profile", or "rp2040 profile".
+   function Profile_Name (Of_Profile : Profile) return String;
+
    function Assembly_Error
      (Text : String; Naked : Boolean;
       Level : Landin.Targets.Levels.Feature_Level) return String;

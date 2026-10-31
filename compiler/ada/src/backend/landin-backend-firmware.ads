@@ -6,8 +6,6 @@ with Landin.Targets.Firmware;
 --  regions, where each part of the image is placed, its vector table and
 --  its boot image kind.
 package Landin.Backend.Firmware is
-   function Materialization_Fits (Of_Unit : Landin.IR.Unit) return Boolean;
-
    --  D547: which of the profile's regions a `link(region: ...)` places
    --  something in.  Only those get sections of their own in the script
    --  and loops of their own in reset.

@@ -45,7 +45,7 @@ def render(raw):
         for interrupt in peripheral.findall("interrupt"):
             pairs.add((int(text_of(interrupt, "value"), 0),
                        text_of(interrupt, "name")))
-    declared = int(text_of(cpu, "deviceNumInterrupts"), 0)
+    declared = int(text_of(cpu, "deviceNumInterrupts") or "0", 0)
     count = 16 + max(declared, max(value for value, _ in pairs) + 1)
     lines += ['compiler.device("%s")' % name.lower(),
               'compiler.core("%s")' % CORES[text_of(cpu, "name")],

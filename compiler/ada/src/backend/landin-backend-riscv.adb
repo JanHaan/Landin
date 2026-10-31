@@ -4589,6 +4589,39 @@ package body Landin.Backend.RiscV is
                when Landin.Targets.Byte_4 => ".long",
                when Landin.Targets.Byte_8 => ".quad");
 
+      --  D536: Count copies of one scalar, as `.zero` or `.fill` where one
+      --  directive writes them and as nested repetitions of the scalar's
+      --  own directive where `.fill` cannot carry its eight bytes.
+      procedure Emit_Scalar_Run
+        (Count : Landin.IR.Element_Total;
+         Held  : Held_Size;
+         Value : Landin.Types.Folded);
+
+      procedure Emit_Scalar_Run
+        (Count : Landin.IR.Element_Total;
+         Held  : Held_Size;
+         Value : Landin.Types.Folded)
+      is
+         procedure Emit_Value;
+
+         procedure Emit_Value is
+         begin
+            Emit (Directive (Held) & " "
+                  & Trimmed (Landin.Types.Folded'Image (Value)));
+         end Emit_Value;
+
+         procedure Emit_Copies is new Landin.Backend.Repeat
+           (Emit, Emit_Value);
+      begin
+         if Count = 0 then
+            return;
+         elsif Landin.Backend.Is_Filled (Held, Value) then
+            Emit (Landin.Backend.Scalar_Run (Count, Held, Value));
+         else
+            Emit_Copies (Count);
+         end if;
+      end Emit_Scalar_Run;
+
       procedure Emit_Datum (Item : Landin.IR.Item_Id);
       procedure End_Object (Item : Landin.IR.Item_Id);
 
@@ -4719,6 +4752,51 @@ package body Landin.Backend.RiscV is
             end if;
          end Emit_Zero;
 
+         --  D536: Copies of one element after the first, as one directive
+         --  when the element is a plain scalar or writes only zeros, and
+         --  as nested repetitions of its image otherwise.
+         procedure Emit_Run
+           (Element : Landin.IR.Field_Shape;
+            Child   : Landin.IR.Aggregate_Field_Image;
+            Copies  : Landin.IR.Element_Total);
+
+         procedure Emit_Run
+           (Element : Landin.IR.Field_Shape;
+            Child   : Landin.IR.Aggregate_Field_Image;
+            Copies  : Landin.IR.Element_Total)
+         is
+            procedure Emit_Element;
+
+            procedure Emit_Element is
+            begin
+               Emit_Field (Element, Child, Child.Value);
+            end Emit_Element;
+
+            procedure Emit_Copies is new Landin.Backend.Repeat
+              (Emit, Emit_Element);
+
+            Element_Size : Landin.Targets.Byte_Count;
+            Element_Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            if Element.Kind = Landin.IR.Scalar_Field_Shape
+              and then Child.Target = Landin.IR.No_Item
+              and then Element.Atoms = Landin.IR.No_Atom_Set
+            then
+               Emit_Scalar_Run
+                 (Copies, Size_Of (Element.Element, Facts), Child.Value);
+            elsif Element.Kind /= Landin.IR.Scalar_Field_Shape
+              and then Landin.Backend.Is_Zero_Image
+                (Of_Unit, Item, Element, Child)
+            then
+               Landin.Backend.Field_Extent
+                 (Of_Unit, Element, Facts, Element_Size, Element_Alignment);
+               pragma Unreferenced (Element_Alignment);
+               Emit_Zero (Landin.Targets.Byte_Count (Copies) * Element_Size);
+            else
+               Emit_Copies (Copies);
+            end if;
+         end Emit_Run;
+
          procedure Emit_Array
            (Shape : Landin.IR.Field_Shape;
             Image : Landin.IR.Aggregate_Field_Image)
@@ -4786,18 +4864,14 @@ package body Landin.Backend.RiscV is
                        (if Position = Image.Count then Image.Value else 1);
                   begin
                      --  A zero suffix was evaluated but stores nothing.
-                     if Copies > 0 then
-                        if Copies > 1 then
-                           Emit
-                             (".rept " & Trimmed
-                                (Landin.Types.Folded'Image (Copies)));
-                        end if;
+                     if Copies = 1 then
                         Emit_Field
                           (Landin.IR.Array_Element_Shape (Of_Unit, Shape),
                            Child, Child.Value);
-                        if Copies > 1 then
-                           Emit (".endr");
-                        end if;
+                     elsif Copies > 1 then
+                        Emit_Run
+                          (Landin.IR.Array_Element_Shape (Of_Unit, Shape),
+                           Child, Landin.IR.Element_Total (Copies));
                      end if;
                   end;
                end loop;
@@ -4830,18 +4904,9 @@ package body Landin.Backend.RiscV is
                                    Landin.IR.Part_Position (Position)))));
                   end loop;
                end if;
-               if Shape.Length > Landin.IR.Element_Total (Image.Count) then
-                  Emit
-                    (".rept "
-                     & Trimmed
-                         (Landin.IR.Element_Total'Image
-                            (Shape.Length
-                             - Landin.IR.Element_Total (Image.Count))));
-                  Emit
-                    (Directive (Size_Of (Shape.Element, Facts)) & " "
-                     & Trimmed (Landin.Types.Folded'Image (Image.Value)));
-                  Emit (".endr");
-               end if;
+               Emit_Scalar_Run
+                 (Shape.Length - Landin.IR.Element_Total (Image.Count),
+                  Size_Of (Shape.Element, Facts), Image.Value);
             else
                raise Landin.Compiler_Defect with
                  "a malformed recursive array image reached RV64";
@@ -5181,8 +5246,8 @@ package body Landin.Backend.RiscV is
       end Emit_Array_Datum;
 
       --  D24/D34: an array datum with an image.  Each literal element becomes
-      --  one directive of its own size; a repetition becomes one directive
-      --  inside `.rept`.  Nonzero or mixed images reach `.data`, while
+      --  one directive of its own size; a repetition becomes one run
+      --  (D536).  Nonzero or mixed images reach `.data`, while
       --  omitted, explicit-zero and repeated-zero images stay in `.bss`.  A
       --  negative fold is written as the number
       --  the assembler encodes at this width -- the same spelling
@@ -5217,11 +5282,10 @@ package body Landin.Backend.RiscV is
             Put (Symbol (Item) & ":");
 
             if Landin.IR.Is_Repeated_Image (Of_Unit, Item) then
-               --  D34 uses `.rept` around one width-specific scalar directive.
-               --  D38 writes its finite prefix first, then repeats one suffix
-               --  value for N - k positions.  Assembly size depends on
-               --  the written prefix, never the target-sized extent; `.quad`
-               --  preserves all eight bytes unlike GNU `.fill`.
+               --  D38 writes its finite prefix first, then one run of the
+               --  suffix value for N - k positions (D536).  Assembly size
+               --  depends on the written prefix, never the target-sized
+               --  extent.
                declare
                   Prefix : constant Landin.IR.Element_Total :=
                     Landin.IR.Image_Prefix_Length (Of_Unit, Item);
@@ -5238,19 +5302,9 @@ package body Landin.Backend.RiscV is
                                      (Of_Unit, Item, Position))));
                      end loop;
                   end if;
-                  if Length > Prefix then
-                     Emit
-                       (".rept "
-                        & Trimmed
-                            (Landin.IR.Element_Total'Image (Length - Prefix)));
-                     Emit
-                       (Directive (Held) & " "
-                        & Trimmed
-                            (Landin.Types.Folded'Image
-                               (Landin.IR.Repeated_Image_Value
-                                  (Of_Unit, Item))));
-                     Emit (".endr");
-                  end if;
+                  Emit_Scalar_Run
+                    (Length - Prefix, Held,
+                     Landin.IR.Repeated_Image_Value (Of_Unit, Item));
                end;
             else
                for Position in Landin.IR.Part_Position'(1)

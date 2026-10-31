@@ -219,7 +219,7 @@ package Landin.Diagnostics.Catalogue is
       Entry_Point_Missing,
       Argument_Not_In_A_Register,
       Frame_Not_Addressable,
-      Image_Materialization_Limit,
+      Image_Budget_Exceeded,
       Panic_Contract_Invalid,
       Firmware_Frame_Exceeds_Stack,
       Handler_Exceeds_Stack_Margin,
@@ -332,7 +332,7 @@ package Landin.Diagnostics.Catalogue is
             when Entry_Point_Missing       => "L0502",
             when Argument_Not_In_A_Register => "L0503",
             when Frame_Not_Addressable      => "L0504",
-            when Image_Materialization_Limit => "L0505",
+            when Image_Budget_Exceeded => "L0505",
             when Panic_Contract_Invalid    => "L0506",
             when Firmware_Frame_Exceeds_Stack => "L0507",
             when Handler_Exceeds_Stack_Margin => "L0508",
@@ -406,7 +406,7 @@ package Landin.Diagnostics.Catalogue is
             when Unused_Pure_Local => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
-            when Frame_Not_Addressable | Image_Materialization_Limit
+            when Frame_Not_Addressable | Image_Budget_Exceeded
                | Panic_Contract_Invalid | Firmware_Frame_Exceeds_Stack
                | Handler_Exceeds_Stack_Margin | Library_Not_Found
                | Linker_Script_Contract
@@ -671,9 +671,9 @@ package Landin.Diagnostics.Catalogue is
             when Frame_Not_Addressable =>
                "a verified frame outside x86-64's signed displacement"
                & " encoding",
-            when Image_Materialization_Limit =>
-               "[1640]: firmware static images exceed the bounded"
-               & " assembler materialization budget",
+            when Image_Budget_Exceeded =>
+               "D537: static images exceed the image budget of the target"
+               & " or the firmware profile",
             when Panic_Contract_Invalid =>
                "[1670]: invalid panic handler or unrepresentable site space",
             when Firmware_Frame_Exceeds_Stack =>

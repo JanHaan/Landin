@@ -21373,12 +21373,12 @@ item 1 DATUM base result u8 params 0 slots 0 blocks 1 values 2
     1 NUMBER u8 39
     2 LEAVE <- 1
 item 2 DATUM through result array params 0 slots 0 blocks 1 values 1
-  elements 4294967295 of u8
+  elements 1000000000 of u8
   image prefix 40 41 repeat 42
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 item 3 DATUM huge result array params 0 slots 0 blocks 1 values 1
-  elements 4294967295 of u8
+  elements 1000000000 of u8
   image prefix 40 41 repeat 42
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
@@ -21395,12 +21395,12 @@ item 5 DATUM zero_suffix result array params 0 slots 0 blocks 1 values 1
 file positive/module-array-repetition/program.ldn
 unit signatures 0 items 5
 item 1 DATUM through result array params 0 slots 0 blocks 1 values 1
-  elements 4294967295 of u8
+  elements 1000000000 of u8
   image repeat 165
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 item 2 DATUM huge result array params 0 slots 0 blocks 1 values 1
-  elements 4294967295 of u8
+  elements 1000000000 of u8
   image repeat 165
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
