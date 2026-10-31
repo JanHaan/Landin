@@ -1196,15 +1196,31 @@ class Transcriptions(unittest.TestCase):
             table = root / ("compiler/ada/src/diagnostics"
                             "/landin-diagnostics-catalogue.ads")
             text = table.read_text()
-            marker = "function Fixes (Of_Code : Code_Name) return Fix_Admission"
+            marker = "      Unknown_Bytes =>\n"
             head, _, rest = text.partition(marker)
-            rest = rest.replace("is (case Of_Code is",
-                                "is (case Of_Code is\n"
-                                "            when Unknown_Bytes => May_Fix,",
-                                1)
+            rest = rest.replace("Fixes => No_Fix", "Fixes => May_Fix", 1)
             table.write_text(head + marker + rest)
             said = [why for _, _, why in checker.check_diagnostic_matrix(True)]
         self.assertIn("L0012 admits a fix and no fixture applies one", said)
+
+    def test_a_row_shown_by_a_fixture_needs_a_negative_fixture(self):
+        #  One table: what shows a code is its row's Shown_By, so a code no
+        #  program is refused with says so there rather than in check.py.
+        from check_controls import tree
+        inputs = ["compiler/tests/diagnostics.matrix", "compiler/ada/src",
+                  "compiler/ada/tests", "compiler/tests/fixtures",
+                  "spec.md", "tour.md"]
+        with tree(copied=inputs) as root:
+            table = root / ("compiler/ada/src/diagnostics"
+                            "/landin-diagnostics-catalogue.ads")
+            marker = "      Unknown_Target =>\n"
+            head, _, rest = table.read_text().partition(marker)
+            rest = rest.replace("Shown_By => Invocation",
+                                "Shown_By => Negative_Fixture", 1)
+            table.write_text(head + marker + rest)
+            said = [why for _, _, why in checker.check_diagnostic_matrix(True)]
+        self.assertTrue(any(why.startswith("L0004 has no negative source"
+                                           " fixture") for why in said), said)
 
     def test_a_fixture_naming_a_missing_fix_result_is_reported(self):
         from check_controls import tree

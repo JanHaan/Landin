@@ -273,7 +273,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   `escaping into` (D445), `from` and consume checks.
 - **Modules.** Directory modules have file-local imports, aliases, selected
   imports, typed global options and ordered roots. Your own modules are
-  found under the roots given with `--root` [1480].
+  found under the roots given with `--root` [1480]; an import whose first
+  directory holds no source while a later root holds the module is refused
+  naming both (D563).
 - **Hardware.** D227's memory model supplies scalar atomics, volatile
   accesses and barriers, each atomic fenced only as its ordering asks on
   every backend (D499), and D228 packed register images with checked
@@ -282,7 +284,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   `compiler.stack_switch`, run on every target with a native backend. On
   Cortex-M0 a prepared stack runs on the process stack pointer, and an
   interrupt in a fibre runs its handler on the main one (D460, D461).
-  Synthetic-32 refuses both builtins.
+  Synthetic-32 refuses both builtins, where the program reaches them
+  (D564): a module that offers a switch nothing calls is admitted.
 - **Stack limits.** In a program that prepares a stack, every routine checks
   its frame against the current stack's limit in its prologue and traps
   D451's fifth panic kind, `stack_exhausted`, at its own site before it

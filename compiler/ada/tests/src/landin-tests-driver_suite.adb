@@ -5,6 +5,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
+with Landin.Commands.Catalogue;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Source;
@@ -913,6 +914,105 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Roots_Are_Searched_In_Order;
 
+   --  D563: a first directory that holds no source is refused as the
+   --  import's module when a later root's directory of the same path
+   --  holds one, naming both; an empty module no later root rivals stays
+   --  legal, and a first directory with a source still wins.
+   procedure Empty_First_Directories_Name_A_Later_Root
+     (Item : in out Landin.Testing.Context);
+
+   procedure Empty_First_Directories_Name_A_Later_Root
+     (Item : in out Landin.Testing.Context)
+   is
+      type Second_Holds is (Nothing, Empty_Directory, A_Source);
+
+      function Run
+        (First_Source : Boolean; Second : Second_Holds;
+         Third : Boolean := False) return Landin.Driver.Outcome;
+
+      function Run
+        (First_Source : Boolean; Second : Second_Holds;
+         Third : Boolean := False) return Landin.Driver.Outcome
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_File
+           ("entry/main.ldn",
+            "import rp2040" & LF
+            & "public main: () -> (code: i32) =" & LF
+            & "    code = 0" & LF
+            & "end main" & LF);
+         Host.Add_Directory ("generated");
+         Host.Add_Directory ("generated/rp2040");
+         Host.Add_Directory ("generated/rp2040/sio");
+         Host.Add_File
+           ("generated/rp2040/sio/sio.ldn", "public width: u32 = 32" & LF);
+         if First_Source then
+            Host.Add_File
+              ("generated/rp2040/first.ldn", "public first: u32 = 1" & LF);
+         end if;
+         Host.Add_Directory ("devices");
+         if Second /= Nothing then
+            Host.Add_Directory ("devices/rp2040");
+         end if;
+         if Second = A_Source then
+            Host.Add_File
+              ("devices/rp2040/rp2040.ldn", "public second: u32 = 2" & LF);
+         end if;
+         Host.Add_Directory ("third");
+         if Third then
+            Host.Add_Directory ("third/rp2040");
+            Host.Add_File
+              ("third/rp2040/rp2040.ldn", "public third: u32 = 3" & LF);
+         end if;
+         Args.Append ("--root=generated");
+         Args.Append ("--root=devices");
+         Args.Append ("--root=third");
+         Args.Append ("entry");
+         return Landin.Driver.Execute (Args, Host, Tools);
+      end Run;
+
+      Refused : constant Landin.Driver.Outcome := Run (False, A_Source);
+      Report : constant String := Unbounded.To_String (Refused.Report);
+      Passed_Over : constant Landin.Driver.Outcome :=
+        Run (False, Empty_Directory, Third => True);
+      Over_Report : constant String :=
+        Unbounded.To_String (Passed_Over.Report);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Refused.Status, Landin.Driver.Status_Reported,
+         "an empty first directory with a rival refuses the import");
+      Landin.Testing.Check
+        (Item, Contains (Report, "L0532")
+         and then Contains (Report, "generated/rp2040, which holds no .ldn")
+         and then Contains (Report, "the later root devices holds the"
+                            & " module: devices/rp2040")
+         and then Contains (Report, "--root=devices before"
+                            & " --root=generated")
+         and then Occurrences (Report, "error[") = 1,
+         "the refusal names the empty directory and the root that holds"
+         & " the module: " & Report);
+      Landin.Testing.Check
+        (Item, Passed_Over.Status = Landin.Driver.Status_Reported
+         and then Contains (Over_Report, "the later root third holds the"
+                            & " module: third/rp2040"),
+         "an empty later directory is passed over for the next root's: "
+         & Over_Report);
+      Landin.Testing.Check_Equal
+        (Item, Run (False, Nothing).Status, Landin.Driver.Status_Success,
+         "an empty module no later root rivals stays legal");
+      Landin.Testing.Check_Equal
+        (Item, Run (False, Empty_Directory).Status,
+         Landin.Driver.Status_Success,
+         "an empty module rivalled only by an empty one stays legal");
+      Landin.Testing.Check_Equal
+        (Item, Run (True, A_Source).Status, Landin.Driver.Status_Success,
+         "a first directory with a source still wins");
+   end Empty_First_Directories_Name_A_Later_Root;
+
    procedure Unlistable_Import_Roots_Are_Reported
      (Item : in out Landin.Testing.Context);
 
@@ -1527,12 +1627,14 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check_Equal
         (Item, Unbounded.To_String (Asked.Output), Landin.Driver.Usage,
          "help prints exactly the usage text");
+      --  D565: one text, the command catalogue's, whichever is asked.
+      Landin.Testing.Check_Equal
+        (Item, Landin.Driver.Usage, Landin.Commands.Catalogue.Usage,
+         "the driver's usage is the command catalogue's");
       Landin.Testing.Check
-        (Item, Contains (Landin.Driver.Usage, "--target=NAME"),
-         "the usage text lists the target option");
-      Landin.Testing.Check
-        (Item, Contains (Landin.Driver.Usage, "source.ldn"),
-         "the usage text says what it takes");
+        (Item, Contains (Landin.Driver.Usage, "  check ")
+         and then Contains (Landin.Driver.Usage, "  compile "),
+         "the usage text lists the commands");
 
       --  And no arguments prints the same text, with the misuse status.
       declare
@@ -5996,7 +6098,7 @@ package body Landin.Tests.Driver_Suite is
                          "lsp takes no argument but --stdio"),
          "and says so");
       Landin.Testing.Check
-        (Item, Contains (Landin.Driver.Usage, "refine lsp"),
+        (Item, Contains (Landin.Driver.Usage, "  lsp "),
          "the usage names it");
    end Lsp_Is_A_Subcommand;
 
@@ -6576,6 +6678,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "roots are searched in order",
          Roots_Are_Searched_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "driver", "an empty first directory names a later root",
+         Empty_First_Directories_Name_A_Later_Root'Access);
       Landin.Testing.Register
         (Into, "driver", "the library is found beside the compiler",
          Library_Is_Found_Beside_The_Compiler'Access);

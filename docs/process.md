@@ -134,7 +134,8 @@ reducing orchestration overhead.
 Several exact suites or cases can be selected in one developer invocation.
 The wrapper performs the build check once, then the harness runs the union
 of the selections. Do not replace that union with a narrower selection to
-make feedback faster. A fixture selector remains a single-fixture operation.
+make feedback faster. `--fixture` repeats as well, and may join them: each
+named fixture executes in turn within one case.
 For example, on the appropriate Linux development host:
 
 ```sh

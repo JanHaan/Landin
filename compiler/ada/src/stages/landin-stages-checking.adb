@@ -24668,9 +24668,12 @@ package body Landin.Stages.Checking is
                   function Refuse
                     (Message : String; At_Node : Syn.Node_Id := Syn.No_Node)
                      return Ty.Type_Kind;
-                  function Refuse
-                    (Message : String; At_Node : Syn.Node_Id := Syn.No_Node)
-                     return Ty.Type_Kind is
+                  procedure Report_Into
+                    (Message : String; At_Node : Syn.Node_Id;
+                     Into : in out Landin.Diagnostics.Diagnostic_List);
+                  procedure Report_Into
+                    (Message : String; At_Node : Syn.Node_Id;
+                     Into : in out Landin.Diagnostics.Diagnostic_List) is
                   begin
                      Bad.Report
                        (Item => Bad.Memory_Contract,
@@ -24685,9 +24688,26 @@ package body Landin.Stages.Checking is
                                 & " state its whole contract, and each must"
                                 & " be one the intrinsic takes",
                         Related => Syn.Origin (Of_Tree, Node),
-                        Because => "this memory operation", Into => Found);
+                        Because => "this memory operation", Into => Into);
+                  end Report_Into;
+                  function Refuse
+                    (Message : String; At_Node : Syn.Node_Id := Syn.No_Node)
+                     return Ty.Type_Kind is
+                  begin
+                     Report_Into (Message, At_Node, Found);
                      return Kept (Ty.Ill_Typed);
                   end Refuse;
+                  --  D564: a target's refusal, held against the call until
+                  --  the lowering knows whether the program reaches it.
+                  procedure Hold (Message : String);
+                  procedure Hold (Message : String) is
+                     Into : Landin.Diagnostics.Diagnostic_List;
+                  begin
+                     Report_Into (Message, Syn.No_Node, Into);
+                     Hold_Until_Reached
+                       (Context, Syn.Source_Of (Of_Tree), Node,
+                        Landin.Diagnostics.Get (Into, 1));
+                  end Hold;
 
                   --  D450's two stack builtins.  Their arguments are typed
                   --  by their own contract rather than by a memory scalar:
@@ -24706,6 +24726,10 @@ package body Landin.Stages.Checking is
                      function Refuse_Stack
                        (Message : String; At_Node : Syn.Node_Id := Syn.No_Node;
                         Target : Boolean := False) return Ty.Type_Kind is
+                        --  D564: the target's refusal is held until the
+                        --  lowering knows whether the program reaches
+                        --  this call, and the call is otherwise admitted.
+                        Into : Landin.Diagnostics.Diagnostic_List;
                      begin
                         Bad.Report
                           (Item => Bad.Memory_Contract,
@@ -24729,7 +24753,15 @@ package body Landin.Stages.Checking is
                                      & " through and the usize stack pointer"
                                      & " to resume"),
                            Related => Syn.Origin (Of_Tree, Node),
-                           Because => "this stack builtin", Into => Found);
+                           Because => "this stack builtin", Into => Into);
+                        if Target then
+                           Hold_Until_Reached
+                             (Context, Syn.Source_Of (Of_Tree), Node,
+                              Landin.Diagnostics.Get (Into, 1));
+                           return Kept
+                             (if Prepare then Ty.Usize else Ty.No_Value);
+                        end if;
+                        Found.Append (Landin.Diagnostics.Get (Into, 1));
                         return Kept (Ty.Ill_Typed);
                      end Refuse_Stack;
 
@@ -24950,10 +24982,13 @@ package body Landin.Stages.Checking is
                            end;
                         end;
                      end if;
+                     --  D564: held until the lowering knows whether the
+                     --  program reaches this call; the rest of the
+                     --  contract is still checked here.
                      if not Landin.Targets.Capabilities.Memory_Access
                        (Facts, Op, Ty.Storage_Size (Scalar, Facts))
                      then
-                        return Refuse
+                        Hold
                           ("memory operation or width unavailable on target");
                      end if;
                      if Register_Read or else Register_Write then
@@ -40574,6 +40609,7 @@ package body Landin.Stages.Checking is
       end Refuse_Oversized;
 
    begin
+      Clear_Held (Context);
       Refuse_Oversized;
       if Landin.Diagnostics.Has_Errors (Found) then
          goto Publish_Diagnostics;

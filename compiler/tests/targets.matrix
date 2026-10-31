@@ -395,6 +395,7 @@ negative/duplicate-in-a-module | linux-x86-64, linux-arm64, darwin-arm64, freebs
 negative/duplicate-parameter | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/else-before-an-elsif-divides-nothing | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/else-none-on-a-call-that-returns-a-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/empty-first-directory-hides-a-later-root | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/empty-slice-names-the-declared-type | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/end-before-a-one-line-value | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/end-before-else-continues-the-branch | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
@@ -1368,6 +1369,7 @@ negative/sunk-inout-field-in-loop | linux-x86-64, linux-arm64, darwin-arm64, fre
 negative/sunk-inout-not-restored | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/system-compared-with-architecture | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
 negative/system-outside-configuration | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
+negative/target-builtin-refused-only-where-reached | synthetic-32
 negative/temporary-outlives-buffer | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-conversion-exact-identities | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-conversion-mutable-source | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

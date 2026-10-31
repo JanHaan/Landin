@@ -19,7 +19,6 @@ with Landin.Backend.Toolchain;
 with Landin.Commands.Catalogue;
 with Landin.Json;
 with Landin.Optimization;
-with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
 with Landin.Targets;
@@ -49,7 +48,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
    use type Landin.Targets.Capabilities.Hosted_System;
 
    Fixture_Root : constant String := "../tests/fixtures";
-   Selected     : Unbounded.Unbounded_String;
+   Selected     : Landin.Platform.Path_List;
 
    package Lanes renames Landin.Testing.Lanes;
 
@@ -142,10 +141,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
    end Run_Program;
 
-   procedure Select_Fixture (Path : String) is
+   procedure Select_Fixtures (Paths : Landin.Platform.Path_List) is
    begin
-      Selected := Unbounded.To_Unbounded_String (Path);
-   end Select_Fixture;
+      Selected := Paths;
+   end Select_Fixtures;
 
    function Lane_Command (Label, Target : String) return String is
      (if Target = "linux-x86-64" then
@@ -3482,17 +3481,88 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Item, ABI_Ran > 0, "the ABI obligation remains present");
    end Runtime_Fixtures_Execute;
 
-   procedure Selected_Fixture_Executes
+   procedure Selected_Fixtures_Execute
      (Item : in out Landin.Testing.Context);
 
-   procedure Selected_Fixture_Executes
+   procedure Selected_Fixtures_Execute
      (Item : in out Landin.Testing.Context)
    is
       Host    : Landin.Platform.Native.Native_Filesystem;
-      Found   : Catalogue;
       Program : constant String := Refine_Path;
-      Wanted  : constant String := Unbounded.To_String (Selected);
-      Ran     : Natural := 0;
+
+      --  One selected fixture, held to the verdict the corpus case gives.
+      procedure Execute (Wanted : String);
+
+      procedure Execute (Wanted : String) is
+         Found : Catalogue;
+         Ran   : Natural := 0;
+      begin
+         Discover (Found, Fixture_Root, Host, Only => Wanted);
+         Landin.Testing.Check_Equal
+           (Item, Problem_Count (Found), 0,
+            "the selected fixture metadata is valid");
+         Landin.Testing.Check_Equal
+           (Item, Count (Found), 1,
+            Wanted & ": exactly one fixture was selected");
+
+         if Problem_Count (Found) /= 0 or else Count (Found) /= 1 then
+            return;
+         end if;
+
+         for Index in 1 .. Count (Found) loop
+            declare
+               Case_Item : constant Fixture := Nth (Found, Index);
+            begin
+               if Label_Of (Case_Item) = Wanted
+                 and then not Recorded_In_Lane (Case_Item)
+               then
+                  Landin.Testing.Fail
+                    (Item, Wanted & ": names no " & Lanes.Fixture_Label
+                     & " target, so the " & Lanes.Target_Name
+                     & " lane does not run it");
+               elsif Label_Of (Case_Item) = Wanted
+                 and then Class (Case_Item) in Runtime | Abi
+                 and then Lane_Runner_Problem (Host) /= ""
+               then
+                  Ran := Ran + 1;
+                  Landin.Testing.Fail (Item, Lane_Runner_Problem (Host));
+               elsif Label_Of (Case_Item) = Wanted then
+                  Ran := Ran + 1;
+
+                  if Class (Case_Item) = Abi then
+                     for Profile in 1 .. Profile_Count (Case_Item) loop
+                        Run_ABI (Case_Item, Host, Program, Profile, Item);
+                     end loop;
+                  elsif Expect (Case_Item) /= "" then
+                     Run_Recorded (Case_Item, Host, Program, Item);
+                  elsif Class (Case_Item) = Positive_Program then
+                     Emit_Positive (Case_Item, Host, Program, Item);
+                  elsif Class (Case_Item) = Negative_Program then
+                     Run_Negative (Case_Item, Program, Item);
+                  elsif Class (Case_Item) = Runtime then
+                     if not Lane_Levels (Case_Item).Is_Empty then
+                        Ask_Lane_Processor (Host);
+                        Report_Levels (Lane_Levels (Case_Item));
+                     end if;
+                     for Profile in 1 .. Profile_Count (Case_Item) loop
+                        Run_Runtime (Case_Item, Host, Program, Profile, Item);
+                        for Level of Lane_Levels (Case_Item) loop
+                           Run_Runtime
+                             (Case_Item, Host, Program, Profile, Item, Level);
+                        end loop;
+                     end loop;
+                  else
+                     Landin.Testing.Fail
+                       (Item, Wanted & ": this fixture class has no focused"
+                        & " execution contract");
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check_Equal
+           (Item, Ran, 1, Wanted & ": one fixture was executed");
+      end Execute;
    begin
       if not Host.Exists (Program) then
          Landin.Testing.Fail
@@ -3501,73 +3571,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
             & "; run the harness through scripts/test.sh");
          return;
       end if;
-
-      Discover (Found, Fixture_Root, Host, Only => Wanted);
-      Landin.Testing.Check_Equal
-        (Item, Problem_Count (Found), 0,
-         "the selected fixture metadata is valid");
-      Landin.Testing.Check_Equal
-        (Item, Count (Found), 1,
-         Wanted & ": exactly one fixture was selected");
-
-      if Problem_Count (Found) /= 0 or else Count (Found) /= 1 then
-         return;
-      end if;
-
-      for Index in 1 .. Count (Found) loop
-         declare
-            Case_Item : constant Fixture := Nth (Found, Index);
-         begin
-            if Label_Of (Case_Item) = Wanted
-              and then not Recorded_In_Lane (Case_Item)
-            then
-               Landin.Testing.Fail
-                 (Item, Wanted & ": names no " & Lanes.Fixture_Label
-                  & " target, so the " & Lanes.Target_Name
-                  & " lane does not run it");
-            elsif Label_Of (Case_Item) = Wanted
-              and then Class (Case_Item) in Runtime | Abi
-              and then Lane_Runner_Problem (Host) /= ""
-            then
-               Ran := Ran + 1;
-               Landin.Testing.Fail (Item, Lane_Runner_Problem (Host));
-            elsif Label_Of (Case_Item) = Wanted then
-               Ran := Ran + 1;
-
-               if Class (Case_Item) = Abi then
-                  for Profile in 1 .. Profile_Count (Case_Item) loop
-                     Run_ABI (Case_Item, Host, Program, Profile, Item);
-                  end loop;
-               elsif Expect (Case_Item) /= "" then
-                  Run_Recorded (Case_Item, Host, Program, Item);
-               elsif Class (Case_Item) = Positive_Program then
-                  Emit_Positive (Case_Item, Host, Program, Item);
-               elsif Class (Case_Item) = Negative_Program then
-                  Run_Negative (Case_Item, Program, Item);
-               elsif Class (Case_Item) = Runtime then
-                  if not Lane_Levels (Case_Item).Is_Empty then
-                     Ask_Lane_Processor (Host);
-                     Report_Levels (Lane_Levels (Case_Item));
-                  end if;
-                  for Profile in 1 .. Profile_Count (Case_Item) loop
-                     Run_Runtime (Case_Item, Host, Program, Profile, Item);
-                     for Level of Lane_Levels (Case_Item) loop
-                        Run_Runtime
-                          (Case_Item, Host, Program, Profile, Item, Level);
-                     end loop;
-                  end loop;
-               else
-                  Landin.Testing.Fail
-                    (Item, Wanted & ": this fixture class has no focused"
-                     & " execution contract");
-               end if;
-            end if;
-         end;
+      for Wanted of Selected loop
+         Execute (Wanted);
       end loop;
-
-      Landin.Testing.Check_Equal
-        (Item, Ran, 1, Wanted & ": one fixture was executed");
-   end Selected_Fixture_Executes;
+   end Selected_Fixtures_Execute;
 
    --  Exercise the shared verdict against fake metadata and outcomes.
    --  No fixture program, compiler or host tool is started by this case.
@@ -4323,10 +4330,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Runtime_Fixtures_Execute'Access, Divided => True);
       end if;
 
-      if Unbounded.Length (Selected) > 0 then
+      if not Selected.Is_Empty then
          Landin.Testing.Register
-           (Into, "fixture execution", "selected fixture executes",
-            Selected_Fixture_Executes'Access);
+           (Into, "fixture execution", "selected fixtures execute",
+            Selected_Fixtures_Execute'Access);
       end if;
    end Register;
 

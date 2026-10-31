@@ -1,0 +1,4 @@
+--  The module the import means, under the later root.
+public answer: () -> (code: i32) =
+    code = 0
+end answer

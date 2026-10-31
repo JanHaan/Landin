@@ -318,8 +318,8 @@ package body Landin.Tests.Newcomer_Suite is
             & Unbounded.To_String (Planned.Output));
          Landin.Testing.Check
            (Item, Refused.Status = Landin.Driver.Status_Misuse
-              and then Contains (Report (Refused), "--keep-asm keeps an"
-                                 & " executable's assembly"),
+              and then Contains (Report (Refused), "--keep-asm describes an"
+                                 & " executable"),
             "--keep-asm without an executable is a misuse: "
             & Report (Refused));
       end;

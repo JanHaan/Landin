@@ -59,6 +59,7 @@ with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
+with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Levels;
@@ -175,6 +176,34 @@ package Landin.Stages is
 
    function Failed (Context : Compilation) return Boolean;
 
+   --  D564: a refusal that holds only where the program reaches the code
+   --  it is about, a target-limited builtin's.  The checker builds it and
+   --  holds it here against the node it is about, so it joins no report
+   --  and fails nothing; the lowering, once it knows which code the
+   --  program keeps, reports each one whose node is kept.  Holding it
+   --  again replaces nothing: the checker clears them as it starts.
+   procedure Hold_Until_Reached
+     (Context : in out Compilation;
+      Source  : Landin.Source.Source_Id;
+      Node    : Landin.Syntax.Node_Id;
+      Item    : Landin.Diagnostics.Diagnostic);
+
+   procedure Clear_Held (Context : in out Compilation);
+
+   function Held_Count (Context : Compilation) return Natural;
+
+   function Held_Source (Context : Compilation; Index : Positive)
+     return Landin.Source.Source_Id
+     with Pre => Index <= Held_Count (Context);
+
+   function Held_Node (Context : Compilation; Index : Positive)
+     return Landin.Syntax.Node_Id
+     with Pre => Index <= Held_Count (Context);
+
+   function Held_Report (Context : Compilation; Index : Positive)
+     return Landin.Diagnostics.Diagnostic
+     with Pre => Index <= Held_Count (Context);
+
    --  Rendering lives here because the report and the sources it points at
    --  are held together, and a caller must not be handed the source set to
    --  copy or outlive.
@@ -225,6 +254,15 @@ private
    package Stage_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Stage_Reference);
 
+   type Held_Refusal is record
+      Source : Landin.Source.Source_Id;
+      Node   : Landin.Syntax.Node_Id;
+      Item   : Landin.Diagnostics.Diagnostic;
+   end record;
+
+   package Held_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Held_Refusal);
+
    type Pipeline is limited record
       Items : Stage_Vectors.Vector;
    end record;
@@ -237,6 +275,7 @@ private
       Assumed : Landin.Targets.Levels.Feature_Level;
       Held    : aliased Landin.Source.Sets.Source_Set;
       Reports : Landin.Diagnostics.Diagnostic_List;
+      Holding : Held_Vectors.Vector;
       Named   : aliased Landin.Source.Names.Table;
       Grouped : aliased Landin.Modules.Table;
       Written : aliased Landin.Provenance.Table;

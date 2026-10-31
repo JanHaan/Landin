@@ -1956,6 +1956,9 @@ package body Landin.Diagnostics.Citations is
             when 505 =>
                "A thread's instance lives as long as its thread, and is "
                & "tracked as module storage",
+            when 563 =>
+               "An empty first directory does not hide a later root's mo"
+               & "dule",
             when 267 =>
                "Library source namespaces declare target availability",
             when 575 =>
@@ -2094,6 +2097,9 @@ package body Landin.Diagnostics.Citations is
             when 453 =>
                "The stack builtins' refusals, and a backend that does no"
                & "t emit them yet",
+            when 564 =>
+               "A target-limited builtin is refused where the program re"
+               & "aches it",
             when 460 =>
                "On Cortex-M0 a saved context records which stack pointer"
                & " it uses",
@@ -2159,6 +2165,9 @@ package body Landin.Diagnostics.Citations is
             when 526 =>
                "`refine run` compiles to a temporary executable and runs"
                & " it",
+            when 565 =>
+               "What an option needs of its request is the command catal"
+               & "ogue's",
             when 528 =>
                "An identifier with capitals is one L0012, and a C name's"
                & " says `link(symbol: ...)`",
@@ -3140,6 +3149,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Modules and compile time",
             when 505 =>
                "Decisions: Modules and compile time",
+            when 563 =>
+               "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
             when 575 =>
@@ -3254,6 +3265,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 453 =>
                "Decisions: The toolchain, C and the machine",
+            when 564 =>
+               "Decisions: The toolchain, C and the machine",
             when 460 =>
                "Decisions: The toolchain, C and the machine",
             when 461 =>
@@ -3301,6 +3314,8 @@ package body Landin.Diagnostics.Citations is
             when 525 =>
                "Decisions: The toolchain, C and the machine",
             when 526 =>
+               "Decisions: The toolchain, C and the machine",
+            when 565 =>
                "Decisions: The toolchain, C and the machine",
             when 528 =>
                "Decisions: The toolchain, C and the machine",
@@ -4478,6 +4493,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d505-a-thread-s-instance-l"
                & "ives-as-long-as-its-thread-and-is-tracked-as-module-stor"
                & "age",
+            when 563 =>
+               "https://www.701.dev/spec.html#d563-an-empty-first-direct"
+               & "ory-does-not-hide-a-later-root-s-module",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
@@ -4651,6 +4669,9 @@ package body Landin.Diagnostics.Citations is
             when 453 =>
                "https://www.701.dev/spec.html#d453-the-stack-builtins-re"
                & "fusals-and-a-backend-that-does-not-emit-them-yet",
+            when 564 =>
+               "https://www.701.dev/spec.html#d564-a-target-limited-buil"
+               & "tin-is-refused-where-the-program-reaches-it",
             when 460 =>
                "https://www.701.dev/spec.html#d460-on-cortex-m0-a-saved-"
                & "context-records-which-stack-pointer-it-uses",
@@ -4724,6 +4745,9 @@ package body Landin.Diagnostics.Citations is
             when 526 =>
                "https://www.701.dev/spec.html#d526-refine-run-compiles-t"
                & "o-a-temporary-executable-and-runs-it",
+            when 565 =>
+               "https://www.701.dev/spec.html#d565-what-an-option-needs-"
+               & "of-its-request-is-the-command-catalogue-s",
             when 528 =>
                "https://www.701.dev/spec.html#d528-an-identifier-with-ca"
                & "pitals-is-one-l0012-and-a-c-name-s-says-link-symbol",

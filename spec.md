@@ -16039,7 +16039,8 @@ The request supplies one entry directory, or the entry module's source files
 the bytewise-sorted direct regular `.ldn` children; other entries are ignored
 and an empty module is legal. Each import segment must match a listed directory
 entry exactly. Roots are tested in request order and the first complete
-directory wins without merging. Discovery visits the entry first, imports in
+directory wins without merging; D563 amends this for a first directory that
+holds no source while a later root's holds the module. Discovery visits the entry first, imports in
 source order and newly selected modules FIFO. A selected directory is loaded
 once, so cycles are legal. Symlink identity and root defaults are outside this
 guarantee. The explicit-file request remains a compatibility mode forming one
@@ -16635,6 +16636,45 @@ every target; and the negative fixtures `thread-storage-takes-no-value`,
 `thread-storage-is-mutable`, `thread-storage-takes-no-link-symbol`,
 `thread-storage-takes-no-section`, `thread-storage-places-no-routine` and
 `thread-storage-needs-a-zero-image`.
+
+### D563 — An empty first directory does not hide a later root's module
+
+**The tour said** that an import searches ordered roots [1420] and that the
+compiler receives roots rather than acquiring packages [1480]. D150 made a
+module a directory's direct `.ldn` sources, an empty module legal and the
+first complete directory the import's, so with `--root=a --root=b` an
+`import x` found `a/x` whenever that directory existed. When `a/x` held no
+source and `b/x` was the module meant, the program compiled against an
+empty module and said nothing: a device's register modules are
+directories beneath the device's own, so `import rp2040` with the
+generated register modules' root first selected no description and built
+for the constrained reference.
+
+**Chosen:** first-root precedence stands, and the directory the first root
+supplies is still the import's. When that directory holds no direct
+regular `.ldn` source and a root after it holds a directory of the same
+path that does, the import is refused as L0532, at the import, naming the
+empty directory, the later root and its directory, and saying to name that
+root first or give the empty directory a source. A later directory that is
+empty too is passed over for the next; an empty module that no later root
+rivals stays legal, and so does one rivalled only by empty directories. A
+first directory holding a source wins as before, whatever later roots
+hold. An import of the library searches the library alone (D275), so it
+has no rival. This amends D150's discovery paragraph.
+
+**The alternatives:** passing over an empty directory for the next root,
+which makes adding a source to one root silently change which module
+another program reads, and gives an empty directory a meaning no other
+place in discovery has; merging the two directories, which D150 declined;
+and leaving the import alone with a warning, which still builds the wrong
+firmware.
+
+**Pinned by** `negative/empty-first-directory-hides-a-later-root`, whose
+first root's `device` holds only a register module's directory, and the
+driver case `an empty first directory names a later root`, which holds the
+refusal, the next root's module beyond an empty second directory, and the
+empty module that stays legal with no rival, with an empty one, and when
+the first directory has a source.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
@@ -19324,7 +19364,8 @@ recovery, and a target that does not admit them. A target whose backend does
 not emit them yet refuses both by name, "not yet emitted on" the target,
 rather than admitting a call its backend cannot carry; each backend lifts the
 refusal for its targets as it lands, which leaves D450's admission the rule
-once all have. An argument that is not a `usize` is the ordinary type
+once all have. D564 amends where a target's refusal is made: only where the
+program reaches the call. An argument that is not a `usize` is the ordinary type
 disagreement, L0301, as an atomic's value operand is.
 
 **The alternatives:** a code of the stack builtins' own, which would split
@@ -19337,6 +19378,42 @@ breaks a program at emission that checking accepted. Both were declined.
 the stack fixtures with L0344, and a negative fixture refused them on
 linux-arm64, until each backend emitted the builtins; both were retired
 then.
+
+### D564 — A target-limited builtin is refused where the program reaches it
+
+**The tour said** nothing; D453 refused a stack builtin by name on a target
+that does not emit it, and D227 a memory intrinsic, or a width, that a
+target does not have, wherever it was written: in a routine of an imported
+module the program never calls as well, so a module that offered a switch
+refused every program that imported it on such a target, and D463 put
+`core/fibre`'s switch in a submodule of its own for that reason alone.
+
+**Chosen:** this amends D453. A refusal that names the target, L0344's
+"needs a native backend", "is not yet emitted on" and "memory operation or
+width unavailable on target", is made by the checker as before, with the
+same message, site, second place and note, and held against its call
+rather than reported; the call is otherwise checked and typed as an
+admitted one. Once the lowering knows which code the program keeps, which
+D296's walk from the entry module's routines decides, it reports each held
+refusal whose call is in kept code, and lowers nothing when any is. A
+compilation with no `main` to root the walk keeps everything, so a module
+checked on its own still reports every one, as a firmware image does. A
+refusal of the call's own form, an argument outside the contract, a
+missing argument or a recovery, is reported where it is written, as every
+other checker refusal is. A held refusal joins the report only when the
+checker accepted the rest of the program.
+
+**The alternatives:** the submodule rule written into `core/README.md` for
+every module that calls such a builtin, which makes the library's layout
+answer for the checker; and a reachability walk of the checker's own, which
+would be a second account of what a program keeps beside the lowering's.
+Both were declined.
+
+**Pinned by** `negative/target-builtin-refused-only-where-reached`, which on
+synthetic-32 imports `core/fibre/stacks` and a module with a routine that
+prepares a stack, neither called, and is refused once, at the switch
+`main` reaches; and `negative/stack-builtins-target-synthetic-32`, whose
+two builtins `main` calls.
 
 ### D460 — On Cortex-M0 a saved context records which stack pointer it uses
 
@@ -20356,6 +20433,44 @@ started at all is refine's own status 1, with a line saying why.
 signal`, `run removes its directory`, `run refusals` and `the bare form says
 it only checked`; `end-to-end/run-another-target`; and the outside-user
 check's `refine run` of the first program.
+
+### D565 — What an option needs of its request is the command catalogue's
+
+**The tour said** nothing of the command line. `refine`'s commands parse
+their options from `Landin.Commands.Catalogue` and hand the driver a
+request it parses again, and the driver kept its own usage text, its own
+list of the options it reads and of the values each takes, and its own
+rules for which options a request can hold together, each with sentences
+of its own: `--debug` with nothing emitted was "describe what is emitted"
+to one and "not an option of check" to the other, and an option given
+twice was "option may be given once: --target" to one and "--target may
+be given once" to the other.
+
+**Chosen:** the catalogue says, for each option, what it needs of the rest
+of its request: nothing, a source to compile (`--optimize`,
+`--specialize`, `--build-report`, `--firmware-entry`, `--link`), emitted
+machine code (`--debug`, `--panic-map`, `--stack-report`), an executable
+(`--keep-asm`), or something emitted at all (`-o`); and it writes the one
+sentence for a request that does not meet it, for an option given twice,
+for a value an option does not take, naming the values it does, and for a
+compilation option beside `--help` or `--identify`. `refine compile` and
+`refine run` hold their requests to those requirements as they parse, and
+the driver holds the request it is handed to them, so both refuse one
+combination with one sentence. The options the driver reads are the
+catalogue's compile options less the commands' own, and its usage is the
+catalogue's overview. A command-line change is a change to the catalogue.
+
+**The alternatives:** a second parser that only translates, which leaves
+the driver's own callers, the test program's driver cases among them,
+reading a request nothing checked; and generating the driver's parse from
+the catalogue, which a hand-written classification of each option's value
+does not need. Both were declined.
+
+**Pinned by** the commands case `option requirements are one`, which holds
+the commands' parse and the driver to the catalogue's sentence for each
+requirement, a value and a repeated option, and the driver's usage to the
+catalogue's; and the debugging, stack report and driver cases whose
+refusals now read it.
 
 ### D528 — An identifier with capitals is one L0012, and a C name's says `link(symbol: ...)`
 
@@ -23264,7 +23379,8 @@ its providers and, for an erased table, D145's parent conformances.
 `public` alone is not a use, and neither is a native routine's link
 symbol, which [1975] makes its linker identity rather than an export.
 Every declaration is still checked, so an unreached declaration's errors
-are still errors. Reachability can keep too much but never too little, and
+are still errors, except a target-limited builtin's refusal, which D564
+makes where the call is reached. Reachability can keep too much but never too little, and
 kept items are numbered in declaration order, so the output stays a
 function of the sources. Any compilation without a public `main` keeps
 everything.
@@ -25690,7 +25806,8 @@ the host's conformance in a module a program imports to get it, which leaves
 `any(addr host)` refused where prototype 5 writes it, for a reason the source
 does not show; and the checker refusing a builtin only in a routine the
 program reaches, which would change D453 for one library's sake. All were
-declined.
+declined. D564 later made that change for every module that calls such a
+builtin; the submodule stands.
 
 **Pinned by** `runtime/library-shared-fibre`, a group over `whole` executed on
 every target Cortex-M0 included; `runtime/fibre-same-source-any-provider`,

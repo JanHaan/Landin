@@ -3032,41 +3032,40 @@ def fixed_results(meta):
 def frontend_codes():
     """The code strings the scan and the parse can raise.
 
-    Read from Landin.Diagnostics.Lexical and Landin.Diagnostics.Syntactic,
-    the only two packages that turn a scanner fault or a parse failure into
-    a code, and never from the number: the catalogue's own header forbids
+    Read from Landin.Diagnostics.Lexical's Code_For and from the failures
+    the parser names through Landin.Diagnostics.Syntactic, the only two
+    packages that turn a scanner fault or a parse failure into a code, and
+    never from the number: the catalogue's own header forbids
     reading a stage off a code, because "a code is a name, not an address",
     and L0010 is the standing proof, born in lexical refusal and now raised
     only by the parser.
     """
     rows = catalogue_rows()
-    if rows is None:
+    parsed = reported_through("Syntactic")
+    if rows is None or parsed is None:
         return set()
     by_name = {row["name"]: row["code"] for row in rows}
 
-    out = set()
-    for path in ("compiler/ada/src/diagnostics"
-                 "/landin-diagnostics-lexical.adb",
-                 "compiler/ada/src/diagnostics"
-                 "/landin-diagnostics-syntactic.ads"):
-        full = os.path.join(ROOT, path)
-        if not os.path.exists(full):
-            #  Empty rather than partial.  A smaller set here silently
-            #  reclassifies fixtures, and check_grammar_corpus reads this
-            #  set to decide whether the grammar must derive a negative
-            #  program: half an answer is worse than none, and none makes
-            #  it fail closed.
-            return set()
-        found = re.search(r"function Code_For[^;]*?is \(case .*?\);",
-                          io.open(full, encoding="utf-8").read(), re.S)
-        if not found:
-            #  The same fail-closed answer as a missing file: a table that
-            #  moved is not a table with fewer rows.
-            return set()
-        for name in re.findall(r"(?:Rows|Catalogue)\.([A-Za-z0-9_]+)",
-                               found.group(0)):
-            if name in by_name:
-                out.add(by_name[name])
+    out = {by_name[name] for name in parsed}
+    path = ("compiler/ada/src/diagnostics/landin-diagnostics-lexical.adb")
+    full = os.path.join(ROOT, path)
+    if not os.path.exists(full):
+        #  Empty rather than partial.  A smaller set here silently
+        #  reclassifies fixtures, and check_grammar_corpus reads this set
+        #  to decide whether the grammar must derive a negative program:
+        #  half an answer is worse than none, and none makes it fail
+        #  closed.
+        return set()
+    found = re.search(r"function Code_For[^;]*?is \(case .*?\);",
+                      io.open(full, encoding="utf-8").read(), re.S)
+    if not found or not parsed:
+        #  The same fail-closed answer as a missing file: a table that
+        #  moved is not a table with fewer rows.
+        return set()
+    for name in re.findall(r"(?:Rows|Catalogue)\.([A-Za-z0-9_]+)",
+                           found.group(0)):
+        if name in by_name:
+            out.add(by_name[name])
     return out
 
 
@@ -4254,94 +4253,51 @@ def check_refused_constructs(full_run):
 
 
 def catalogue_rows():
-    """The catalogue, read out of the Ada table that owns it."""
+    """The catalogue, read out of the Ada table that owns it.
+
+    Table is one named aggregate over Code_Name, a row per code with every
+    column of it, so a row is read whole: its fields by name, and its rule
+    as the string literals after `Rule =>` joined.
+    """
     spec = os.path.join(ROOT,
                         "compiler/ada/src/diagnostics"
                         "/landin-diagnostics-catalogue.ads")
     if not os.path.exists(spec):
         return None
 
-    text = io.open(spec, encoding="utf-8").read()
+    text = ada_without_comments(io.open(spec, encoding="utf-8").read())
 
     names = re.search(r"type Code_Name is\s*\((.*?)\);", text, re.S)
-    if not names:
+    table = re.search(r"Table : constant array \(Code_Name\) of Row :=\s*"
+                      r"\[(.*)\];", text, re.S)
+    if not names or not table:
         return None
 
-    order = [n.strip() for n in re.sub(r"--[^\n]*", "", names.group(1))
-             .replace("\n", " ").split(",") if n.strip()]
-
-    def choices(head):
-        """The code names one `when` stands for, ranges expanded.
-
-        A band of codes sharing a value is written as a range, because
-        twelve identical arms is twelve chances to mistype one.  The
-        reading copy has to see through that, or a whole band shows up as
-        unknown and nobody notices the column stopped being read.
-        """
-        out = []
-        for part in re.sub(r"--[^\n]*", "", head).split("|"):
-            part = part.strip()
-            if ".." in part:
-                low, _, high = (bit.strip() for bit in part.partition(".."))
-                if low in order and high in order:
-                    out.extend(order[order.index(low):order.index(high) + 1])
-            elif part:
-                out.append(part)
-        return out
-
-    def column(name):
-        found = re.search(r"function %s \(Of_Code : Code_Name\)[^;]*?"
-                          r"is \(case Of_Code is(.*?)\);" % name, text, re.S)
-        if not found:
-            return {}
-        arms = {}
-        #  Every arm begins a line, and a value may run over several with
-        #  `&`, so the arms are cut at the line each `when` starts and the
-        #  value is whatever follows the arrow.  Cutting on the bare word
-        #  would cut inside a string that happened to contain it.
-        for piece in re.split(r"\n\s*when\b", "\n" + found.group(1))[1:]:
-            head, arrow, value = piece.partition("=>")
-            if not arrow:
-                continue
-            value = value.strip().rstrip(";").strip().rstrip(")").strip()
-            value = value.rstrip(",").strip()
-            if '"' in value:
-                value = "".join(re.findall(r'"([^"]*)"', value))
-            else:
-                value = value.split("\n")[0].strip()
-            value = value.rstrip(",").strip()
-            for one in choices(head):
-                arms[one] = value
-        return arms
-
-    def read(arms, name, fallback="?"):
-        return arms.get(name, arms.get("others", fallback))
-
-    codes = column("Code")
-    levels = column("Level")
-    states = column("State")
-    rules = column("Rule")
-    needs_source = column("Needs_Source")
-    nonempty = column("Needs_Non_Empty_Span")
-    minimum = column("Minimum_Secondaries")
-    maximum = column("Maximum_Secondaries")
-    notes = column("Required_Notes")
-    fixes = column("Fixes")
+    order = [n.strip() for n in names.group(1).replace("\n", " ").split(",")
+             if n.strip()]
+    fields = {"Code": "code", "Level": "level", "State": "state",
+              "Source": "source", "Bytes": "nonempty", "Least": "minimum",
+              "Most": "maximum", "Notes": "notes", "Fixes": "fixes",
+              "Shown_By": "shown_by"}
+    read = {}
+    pieces = re.split(r"(?:^|,)\s*(\w+) =>\s*\(", table.group(1))
+    for name, body in zip(pieces[1::2], pieces[2::2]):
+        head, _, rule = body.partition("Rule =>")
+        row = {"name": name,
+               "rule": "".join(s.replace('""', '"') for s in
+                               re.findall(r'"((?:[^"]|"")*)"', rule))}
+        for key, value in re.findall(r'(\w+) => ("[^"]*"|\w+)', head):
+            if key in fields:
+                row[fields[key]] = value.strip('"')
+        read[name] = row
 
     rows = []
     for name in order:
-        rows.append(dict(
-            name=name,
-            code=read(codes, name),
-            level=read(levels, name),
-            state=read(states, name),
-            rule=read(rules, name),
-            source=read(needs_source, name, "?"),
-            nonempty=read(nonempty, name, "?"),
-            minimum=read(minimum, name, "?"),
-            maximum=read(maximum, name, "?"),
-            notes=read(notes, name, "?"),
-            fixes=read(fixes, name, "?")))
+        row = dict(code="?", level="?", state="?", rule="?", source="?",
+                   nonempty="?", minimum="?", maximum="?", notes="?",
+                   fixes="?", shown_by="?")
+        row.update(read.get(name, {"name": name}))
+        rows.append(row)
     return rows
 
 
@@ -4488,7 +4444,14 @@ def ada_call_arguments(text, opening):
 
 
 def reporting_failures():
-    """Each reporting package's failures, mapped to the catalogue's names."""
+    """Each reporting package's failures, mapped to the catalogue's names.
+
+    A package's Failure is the catalogue's Code_Name derived, so each of
+    its failures is the code of the same name.
+    """
+    rows = catalogue_rows()
+    if rows is None:
+        return None
     out = {}
     for package in REPORTING_PACKAGES:
         path = os.path.join(ROOT, "compiler/ada/src/diagnostics",
@@ -4497,17 +4460,43 @@ def reporting_failures():
             return None
         with io.open(path, encoding="utf-8") as stream:
             text = ada_without_comments(stream.read())
-        found = re.search(r"function Code_For \(Item : Failure\).*?"
-                          r"is \(case Item is(.*?)\);", text, re.S)
-        if not found:
+        if not re.search(r"type Failure is new Landin\.Diagnostics"
+                         r"\.Catalogue\.Code_Name;", text):
             return None
-        arms = {}
-        for piece in re.split(r"\bwhen\b", found.group(1))[1:]:
-            head, _, value = piece.partition("=>")
-            value = value.strip().rstrip(",").strip().split(".")[-1].strip()
-            for one in head.split("|"):
-                arms[one.strip()] = value
-        out[package] = arms
+        out[package] = {row["name"]: row["name"] for row in rows}
+    return out
+
+
+def reported_through(package):
+    """The catalogue names a reporting package is asked to report.
+
+    A stage names a failure through its own renaming of the package, as
+    the parser's `Syn.Stray_Token` does, so the names written after any
+    renaming of it, or after its full name, outside the package itself,
+    are the codes that stage raises.  None when the catalogue or the
+    sources cannot be read, which a caller must treat as no answer.
+    """
+    rows = catalogue_rows()
+    if rows is None:
+        return None
+    known = {row["name"] for row in rows}
+    full = "Landin.Diagnostics." + package
+    own = "landin-diagnostics-%s." % package.lower()
+    out = set()
+    source_root = os.path.join(ROOT, "compiler/ada/src")
+    for here, _, files in os.walk(source_root):
+        for name in files:
+            if not name.endswith((".ads", ".adb")) or name.startswith(own):
+                continue
+            with io.open(os.path.join(here, name), encoding="utf-8") as stream:
+                text = ada_without_comments(stream.read())
+            prefixes = [re.escape(full)] + [
+                re.escape(found) for found in re.findall(
+                    r"package (\w+) renames %s;" % re.escape(full), text)]
+            for found in re.finditer(r"(?<![\w.])(?:%s)\s*\.\s*(\w+)"
+                                     % "|".join(prefixes), text):
+                if found.group(1) in known:
+                    out.add(found.group(1))
     return out
 
 
@@ -6664,16 +6653,20 @@ def diagnostic_matrix_dump():
     rows = catalogue_rows()
     if rows is None:
         return None
-    adapters = ("compiler/ada/src/driver/landin-driver.adb",
-                "compiler/ada/src/driver/landin-driver-checking.adb",
-                "compiler/ada/src/driver/landin-driver-loading.adb",
-                "compiler/ada/src/driver/landin-commands-devices.adb",
-                "compiler/ada/src/diagnostics/landin-diagnostics-lexical.adb",
-                "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads",
-                "compiler/ada/src/diagnostics/landin-diagnostics-resolution.ads",
-                "compiler/ada/src/diagnostics/landin-diagnostics-checking.ads")
-    contents = {path: io.open(os.path.join(ROOT, path), encoding="utf-8").read()
-                for path in adapters if os.path.exists(os.path.join(ROOT, path))}
+    #  A code's emitters are the source directories that name it, its
+    #  row and the explanations generated from docs/diagnostics.md apart:
+    #  a stage names it through its reporting package, and the driver,
+    #  the backend and the commands through the catalogue.
+    generated = ("landin-diagnostics-catalogue.ads",
+                 "landin-diagnostics-explanations.adb")
+    contents = {}
+    source_root = os.path.join(ROOT, "compiler/ada/src")
+    for here, _, files in os.walk(source_root):
+        for name in files:
+            if name.endswith((".ads", ".adb")) and name not in generated:
+                path = os.path.join(here, name)
+                with io.open(path, encoding="utf-8") as stream:
+                    contents[path] = ada_without_comments(stream.read())
     fixtures = fixture_records()
     tests = {}
     test_root = os.path.join(ROOT, "compiler/ada/tests/src")
@@ -6690,7 +6683,8 @@ def diagnostic_matrix_dump():
              "# code state level fix source primary labels notes emitters"
              " evidence"]
     for row in rows:
-        emitters = [os.path.basename(path) for path, text in contents.items()
+        emitters = [os.path.basename(os.path.dirname(path))
+                    for path, text in contents.items()
                     if re.search(r"\b%s\b" % row["name"], text)]
         evidence = []
         for fixture, (_, fields) in fixtures.items():
@@ -7326,21 +7320,6 @@ def check_diagnostic_matrix(full_run):
     out = []
     lines = {line[:5]: line for line in fresh.splitlines()
              if re.match(r"L\d{4}", line)}
-    #  L0008 refuses no program: its evidence is the driver case that
-    #  checks a file out of the layout.  L0009 refuses none either: its
-    #  evidence is the driver case that names a level another family has.
-    #  L0509 refuses no source either: only a failed link raises it, so its
-    #  evidence is end-to-end/link-missing-library and the driver case.
-    #  L0518 is raised only where the library holds no reference
-    #  description, which every corpus run has, and L0519 only by a linked
-    #  image: their evidence is the cortex ABI cases and the Cortex-M
-    #  descriptions lane.  L0525-L0531 refuse no program either: `refine
-    #  svd` raises them for an SVD, its policy or its outputs, and the
-    #  devices suite owns them.
-    driver = {"L0002", "L0003", "L0004", "L0005", "L0008", "L0009",
-              "L0500", "L0501", "L0502", "L0504", "L0509", "L0518",
-              "L0519", "L0525", "L0526", "L0527", "L0528", "L0529",
-              "L0530", "L0531"}
     fixed = set()
     for _, fields in fixture_records().values():
         if fields.get("fixed"):
@@ -7358,19 +7337,33 @@ def check_diagnostic_matrix(full_run):
             if evidence == "-":
                 out.append(("compiler/tests/diagnostics.matrix", 1,
                             "%s has no test owner" % row["code"]))
-            #  An implementation limit is met only by a program too large to
-            #  keep in the corpus, so its owner is the unit case that
-            #  generates one at and past the limit.
-            limits = {"L0111": "unit/parser-nesting-limit",
-                      "L0325": "unit/checker-size-bounds"}
-            if row["code"] not in driver and row["code"] not in limits \
+            #  The row's Shown_By says what shows the code: a program it
+            #  refuses, a case of the invocation that raises it, or, for an
+            #  implementation limit met only by a program too large to keep
+            #  in the corpus, the unit case that generates one at and past
+            #  the limit.
+            shown_by = row["shown_by"]
+            if shown_by == "Negative_Fixture" \
                     and not re.search(r"(?:^|,)negative/", evidence):
                 out.append(("compiler/tests/diagnostics.matrix", 1,
-                            "%s has no negative source fixture" % row["code"]))
-            if row["code"] in limits and limits[row["code"]] \
-                    not in evidence:
+                            "%s has no negative source fixture; give it one,"
+                            " or say in its catalogue row that it is"
+                            " Shown_By => Invocation" % row["code"]))
+            elif shown_by == "Invocation" \
+                    and not re.search(r"(?:^|,)(?:test:|end-to-end/)",
+                                      evidence):
+                out.append(("compiler/tests/diagnostics.matrix", 1,
+                            "%s has no case of the invocation that raises it"
+                            % row["code"]))
+            elif shown_by == "Implementation_Limit" \
+                    and not re.search(r"(?:^|,)unit/", evidence):
                 out.append(("compiler/tests/diagnostics.matrix", 1,
                             "%s has no implementation-limit unit owner"
+                            % row["code"]))
+            elif shown_by not in ("Negative_Fixture", "Invocation",
+                                  "Implementation_Limit"):
+                out.append(("compiler/tests/diagnostics.matrix", 1,
+                            "%s's catalogue row says nothing shows it"
                             % row["code"]))
         elif emitters != "-":
             out.append(("compiler/tests/diagnostics.matrix", 1,

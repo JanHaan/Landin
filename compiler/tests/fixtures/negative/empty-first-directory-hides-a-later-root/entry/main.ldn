@@ -1,0 +1,7 @@
+--  D563: `device` under the first root is a directory of register
+--  modules alone, and the second root's `device` is the module meant.
+import device
+
+public main: () -> (code: i32) =
+    code = device.answer()
+end main

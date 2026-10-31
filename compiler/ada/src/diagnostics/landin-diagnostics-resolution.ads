@@ -28,24 +28,14 @@ with Landin.Source;
 
 package Landin.Diagnostics.Resolution is
 
-   --  The rules the resolver can find broken.  The names are the
-   --  catalogue's, so a reader comparing the two files compares names
-   --  rather than numbers.
-   type Failure is
-     (Duplicate_Declaration, Unresolved_Name, Inaccessible_Name,
-      Reserved_Tool_Name);
+   --  A code this package reports.  Failure is the catalogue's Code_Name
+   --  derived, so it has the catalogue's names and a new code needs no
+   --  second list here; Code_For is the conversion back.
+   type Failure is new Landin.Diagnostics.Catalogue.Code_Name;
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
-     is (case Item is
-            when Duplicate_Declaration =>
-               Catalogue.Duplicate_Declaration,
-            when Unresolved_Name       =>
-               Catalogue.Unresolved_Name,
-            when Inaccessible_Name     =>
-               Catalogue.Inaccessible_Name,
-            when Reserved_Tool_Name    =>
-               Catalogue.Reserved_Tool_Name);
+     is (Landin.Diagnostics.Catalogue.Code_Name (Item));
 
    --  What the resolver hands over: a rule, the name it was looking at, and
    --  the sentence a user reads.  Related is the earlier declaration and is

@@ -1063,6 +1063,60 @@ package body Landin.Tests.Commands_Suite is
       end;
    end Run_Removes_Its_Directory;
 
+   --  D565: what an option needs of its request is the catalogue's, so
+   --  the commands' parse and the driver refuse one combination with one
+   --  sentence, and the catalogue's sentence is what a refusal says.
+   procedure Option_Requirements_Are_One
+     (Item : in out Landin.Testing.Context);
+   procedure Option_Requirements_Are_One
+     (Item : in out Landin.Testing.Context)
+   is
+      package Cat renames Landin.Commands.Catalogue;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      procedure Same
+        (Command, Direct : Landin.Platform.Path_List; Expected : String);
+      procedure Same
+        (Command, Direct : Landin.Platform.Path_List; Expected : String)
+      is
+         Parsed : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (Command, Host, Tools, Meter, Built_For => Linux_Host);
+         Driven : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Direct, Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Parsed.Status = Landin.Driver.Status_Misuse
+              and then Driven.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Parsed.Report), Expected)
+              and then Contains (US.To_String (Driven.Report), Expected),
+            Expected & ": " & US.To_String (Parsed.Report)
+            & US.To_String (Driven.Report));
+      end Same;
+   begin
+      Host.Add_File ("main.ldn", Source);
+      Same (["compile", "--emit=ir", "--debug=full", "main.ldn"],
+            ["--emit=ir", "--debug=full", "main.ldn"],
+            Cat.Requirement_Problem (Cat.Debug, Cat.Emit_IR, True));
+      Same (["compile", "--emit=asm", "--keep-asm", "main.ldn", "-o", "a.s"],
+            ["--emit=asm", "--keep-asm", "main.ldn", "-o", "a.s"],
+            Cat.Requirement_Problem (Cat.Keep_Asm, Cat.Emit_Asm, True));
+      Same (["compile", "--optimize=speed"],
+            ["--emit=exe", "--optimize=speed"],
+            Cat.Requirement_Problem (Cat.Optimize, Cat.Emit_Exe, False));
+      Same (["compile", "--optimize=fast", "main.ldn"],
+            ["--optimize=fast", "main.ldn"],
+            "--optimize does not take `fast`; it takes none, size or speed");
+      Same (["compile", "--target=linux-x86-64", "--target=linux-arm64",
+             "main.ldn"],
+            ["--target=linux-x86-64", "--target=linux-arm64", "main.ldn"],
+            Cat.Given_Twice ("--target"));
+      Landin.Testing.Check_Equal
+        (Item, Landin.Driver.Usage, Cat.Usage,
+         "the driver's usage is the catalogue's overview");
+   end Option_Requirements_Are_One;
+
    --  D526: what run refuses, before it makes a directory.
    procedure Run_Refusals (Item : in out Landin.Testing.Context);
    procedure Run_Refusals (Item : in out Landin.Testing.Context) is
@@ -1243,6 +1297,9 @@ package body Landin.Tests.Commands_Suite is
          Run_Removes_Its_Directory'Access);
       Landin.Testing.Register
         (Into, "commands", "run refusals", Run_Refusals'Access);
+      Landin.Testing.Register
+        (Into, "commands", "option requirements are one",
+         Option_Requirements_Are_One'Access);
       Landin.Testing.Register
         (Into, "commands", "the bare form says it only checked",
          Bare_Form_Says_It_Only_Checked'Access);

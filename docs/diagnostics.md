@@ -195,6 +195,18 @@ namespaces, so a project's copy of `core` never replaces it. To compile against
 that copy instead, name its directory with `--library=DIR`; to silence the
 warning, rename or remove the project's directory.
 
+### L0532
+
+An import named a directory under the first root that holds one, that
+directory holds no `.ldn` source, and a later root holds a directory of the
+same path that does (D563). Roots are searched in the order given and the
+first directory found is the module, so the empty one would hide the module
+that was meant: an `import rp2040` under `--root=devices/generated`, whose
+`rp2040/` holds only register-module directories, would select no device
+description. The message names the empty directory and the later one. Name
+the root that holds the module first, or give the empty directory its source.
+An empty module no later root rivals is still legal.
+
 ## Lexical, and what is not enabled
 
 ### L0010
@@ -1276,7 +1288,10 @@ support it, and an intrinsic cannot fail. `compiler.stack_prepare` takes a
 `[]mut u8`, an ordinary `(argument: usize) -> noreturn` entry and a `usize`;
 `compiler.stack_switch` takes a `ptr mut usize` and a `usize` (D472); a target
 whose backend does not emit them yet refuses both by name. Use an ordering and
-operand the operation admits on this target.
+operand the operation admits on this target. A refusal that names the target
+is made only where the program reaches the call (D564): a builtin in an
+imported routine nothing calls refuses nothing, and a module compiled with no
+`main` reaches everything it holds.
 
 A `core/atomic` cell the target's atomics cannot carry is refused the same
 way where the program uses it (D510): on Cortex-M0 a `u64` cell, and a

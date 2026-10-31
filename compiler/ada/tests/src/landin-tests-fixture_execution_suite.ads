@@ -1,11 +1,13 @@
 with Ada.Strings.Unbounded;
 
+with Landin.Platform;
 with Landin.Testing;
 
 package Landin.Tests.Fixture_Execution_Suite is
-   --  Configures the one end-to-end fixture case registered for a focused
-   --  developer run.  The ordinary complete suite never calls this.
-   procedure Select_Fixture (Path : String);
+   --  Configures the end-to-end fixture case registered for a focused
+   --  developer run, which executes each of PATHS in turn.  The ordinary
+   --  complete suite never calls this.
+   procedure Select_Fixtures (Paths : Landin.Platform.Path_List);
 
    --  What a focused run of fixture PATH says instead of running it when
    --  none of its `targets:` is this run's lane, and its `args` select no

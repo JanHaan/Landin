@@ -5,11 +5,11 @@
 #  Arguments are passed through.  --record writes compiler/tests/lowering.ir,
 #  compiler/tests/layout.targets and the server sessions' transcripts and runs
 #  no case; --record=lowering, --record=layout, --record=server/NAME and
-#  --record=CLASS/NAME each write one of them, the last a fixture's report.
-#  --record-and-run does
-#  both invocations after one build.  --suite and --case, each as often as
-#  wanted, or one --fixture select a visibly FILTERED developer run; none
-#  replaces the no-argument gate.
+#  --record=CLASS/NAME each write one of them, the last a fixture's report,
+#  and repeat to write several in one run.  --record-and-run does
+#  both invocations after one build.  --suite, --case and --fixture, each as
+#  often as wanted, select a visibly FILTERED developer run; none replaces
+#  the no-argument gate.
 #  --host explicitly excludes native target workload emission/execution and reports
 #  HOST-ONLY scope; it can combine with --suite and --case selections.
 #  --shard=I/N runs shard I of N of the complete (or --host) run; only all N

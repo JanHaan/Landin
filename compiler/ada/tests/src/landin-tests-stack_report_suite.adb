@@ -511,14 +511,14 @@ package body Landin.Tests.Stack_Report_Suite is
    begin
       Unemitted.Append ("--stack-report=stack.json");
       Landin.Testing.Check
-        (Item, Contains (Refusal (Unemitted), "--stack-report measures the"
-           & " frames of emitted machine code: add --emit=asm or"
-           & " --emit=exe"),
+        (Item, Contains (Refusal (Unemitted), "--stack-report describes"
+           & " emitted machine code: add --emit=asm or --emit=exe"),
          "a check has no frames to report");
       As_IR.Append ("--emit=ir");
       As_IR.Append ("--stack-report=stack.json");
       Landin.Testing.Check
-        (Item, Contains (Refusal (As_IR), "--stack-report measures"),
+        (Item, Contains (Refusal (As_IR), "--stack-report describes machine"
+                         & " code, and --emit=ir"),
          "the IR has no frames either");
       Twice.Append ("--emit=asm");
       Twice.Append ("--stack-report=a.json");

@@ -7,20 +7,14 @@ with Landin.Source;
 
 package Landin.Diagnostics.Modules is
 
-   type Failure is
-     (Module_Not_Found, Module_Directory_Invalid,
-      Module_Unavailable_For_Target, Root_Holds_Library_Module);
+   --  A code this package reports.  Failure is the catalogue's Code_Name
+   --  derived, so it has the catalogue's names and a new code needs no
+   --  second list here; Code_For is the conversion back.
+   type Failure is new Landin.Diagnostics.Catalogue.Code_Name;
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
-     is (case Item is
-            when Module_Not_Found => Catalogue.Module_Not_Found,
-            when Module_Directory_Invalid =>
-               Catalogue.Module_Directory_Invalid,
-            when Module_Unavailable_For_Target =>
-               Catalogue.Module_Unavailable_For_Target,
-            when Root_Holds_Library_Module =>
-               Catalogue.Root_Holds_Library_Module);
+     is (Landin.Diagnostics.Catalogue.Code_Name (Item));
 
    --  D262's refusal of an import no root can supply, one sentence for
    --  the loader and resolution alike.

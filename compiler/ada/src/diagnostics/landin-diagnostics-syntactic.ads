@@ -32,55 +32,14 @@ package Landin.Diagnostics.Syntactic is
    --  The rules the parser can find broken.  One per rule, not one per
    --  place: Token_Expected covers a `then` that is not there and an `end`
    --  that is not there, and the secondary label says which construct went
-   --  unclosed.  The names are the catalogue's, so a reader comparing the
-   --  two files compares names rather than numbers.
-   type Failure is
-     (Name_Expected,
-      Type_Expected,
-      Expression_Expected,
-      Token_Expected,
-      Unclosed_Construct,
-      Assignment_In_Expression,
-      Comparison_Chained,
-      Return_Carries_Value,
-      Public_On_Statement,
-      End_Name_Mismatch,
-      Stray_Token,
-      Nesting_Too_Deep,
-      Positional_After_Named,
-      Construct_Not_Enabled);
+   --  unclosed.  Failure is the catalogue's Code_Name derived, so it has
+   --  the catalogue's names and a new code needs no second list here;
+   --  Code_For is the conversion back.
+   type Failure is new Landin.Diagnostics.Catalogue.Code_Name;
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
-     is (case Item is
-            when Name_Expected        =>
-               Catalogue.Name_Expected,
-            when Type_Expected        =>
-               Catalogue.Type_Expected,
-            when Expression_Expected  =>
-               Catalogue.Expression_Expected,
-            when Token_Expected       =>
-               Catalogue.Token_Expected,
-            when Unclosed_Construct   =>
-               Catalogue.Unclosed_Construct,
-            when Assignment_In_Expression =>
-               Catalogue.Assignment_In_Expression,
-            when Comparison_Chained   =>
-               Catalogue.Comparison_Chained,
-            when Return_Carries_Value =>
-               Catalogue.Return_Carries_Value,
-            when Public_On_Statement  =>
-               Catalogue.Public_On_Statement,
-            when End_Name_Mismatch    =>
-               Catalogue.End_Name_Mismatch,
-            when Stray_Token          =>
-               Catalogue.Stray_Token,
-            when Positional_After_Named =>
-               Catalogue.Positional_After_Named,
-            when Nesting_Too_Deep     =>
-               Catalogue.Nesting_Too_Deep,
-            when Construct_Not_Enabled =>
-               Catalogue.Construct_Not_Enabled);
+     is (Landin.Diagnostics.Catalogue.Code_Name (Item));
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  parser can recognise.  Each is a shape rather than a token: the same

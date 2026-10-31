@@ -1,0 +1,5 @@
+--  A register module beneath a device's directory, which holds no source
+--  of its own.
+public width: () -> (bits: i32) =
+    bits = 32
+end width

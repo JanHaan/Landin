@@ -103314,6 +103314,38 @@ file negative/system-outside-configuration/main.ldn tokens 19
   53 55 os
   56 59 end
   60 64 main
+file negative/target-builtin-refused-only-where-reached/main.ldn tokens 31
+  316 322 import
+  323 327 core
+  327 328 /
+  328 333 fibre
+  333 334 /
+  334 340 stacks
+  341 347 import
+  348 357 switching
+  359 365 public
+  366 370 main
+  370 371 :
+  372 373 (
+  373 374 )
+  375 377 ->
+  378 379 (
+  379 383 code
+  383 384 :
+  385 388 i32
+  388 389 )
+  390 391 =
+  396 405 switching
+  405 406 .
+  406 410 used
+  410 411 (
+  411 412 0
+  412 413 )
+  418 422 code
+  423 424 =
+  425 426 0
+  427 430 end
+  431 435 main
 file negative/temporary-outlives-buffer/main.ldn tokens 76
   146 152 import
   153 157 core

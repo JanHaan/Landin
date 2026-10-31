@@ -17089,6 +17089,23 @@ package body Landin.Stages.Lowering is
          end if;
       end Retain_Reachable;
 
+      --  D564: a target-limited builtin's refusal the checker held is
+      --  reported where the program keeps the call, at the call the
+      --  checker made it for, and nothing is lowered then.  With no entry
+      --  to root the walk, everything is kept and every one is reported.
+      for Index in 1 .. Held_Count (Context) loop
+         if Is_Live
+           (Tree_For (Held_Source (Context, Index)).all,
+            Held_Node (Context, Index))
+         then
+            Report (Context, Held_Report (Context, Index));
+         end if;
+      end loop;
+      if Failed (Context) then
+         Outcome := Stop;
+         return;
+      end if;
+
       --  Pass one: every active item, over every tree, before any is
       --  filled.  D139's shared declaration traversal flattens selected
       --  runs before this action sees them.
