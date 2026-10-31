@@ -11,6 +11,7 @@ with Landin.Diagnostics;
 with Landin.Driver.Library;
 with Landin.Formatting;
 with Landin.Json;
+with Landin.Modules;
 with Landin.Server.Analysis;
 with Landin.Server.Answers;
 with Landin.Server.Documents;
@@ -443,16 +444,29 @@ package body Landin.Server.Sessions is
                   Version : constant Long_Long_Integer :=
                     (if Path_Maps.Has_Element (Position)
                      then Path_Maps.Element (Position).Version else -1);
+                  Modules : constant not null access Landin.Modules.Table :=
+                    Landin.Stages.Modules (Context);
+                  --  A module the loader added and no import names is not
+                  --  the analysed module's; it is published only to report
+                  --  something wrong in it (D543's reference description).
+                  Implicit : constant Boolean :=
+                    Natural (Id) <= Landin.Modules.Source_Count (Modules.all)
+                    and then Landin.Modules.Is_Implicit
+                      (Modules.all,
+                       Landin.Modules.Module_Of (Modules.all, Id))
+                    and then Buckets (Positive (Id)).Is_Empty;
                begin
-                  Now.Include (Path);
-                  Send (Landin.Server.Answers.Diagnostics
-                    (URI      => URI,
-                     Version  => Version,
-                     Found    => Answer.Found,
-                     Indexes  => Buckets (Positive (Id)),
-                     Sources  => Landin.Stages.Sources (Context),
-                     Store    => Store,
-                     Unit     => Unit));
+                  if not Implicit then
+                     Now.Include (Path);
+                     Send (Landin.Server.Answers.Diagnostics
+                       (URI      => URI,
+                        Version  => Version,
+                        Found    => Answer.Found,
+                        Indexes  => Buckets (Positive (Id)),
+                        Sources  => Landin.Stages.Sources (Context),
+                        Store    => Store,
+                        Unit     => Unit));
+                  end if;
                end;
             end loop;
 

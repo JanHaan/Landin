@@ -14,7 +14,8 @@ package body Landin.Modules is
         (Module_Record'
            (Logical    => Unbounded.Null_Unbounded_String,
             Directory  => Unbounded.Null_Unbounded_String,
-            Root_Index => 0));
+            Root_Index => 0,
+            Implicit   => False));
       Into.Logical_Index.Insert ("", Entry_Module);
    end Initialize;
 
@@ -27,7 +28,8 @@ package body Landin.Modules is
          Module_Record'
            (Logical    => Unbounded.Null_Unbounded_String,
             Directory  => Unbounded.To_Unbounded_String (Directory),
-            Root_Index => 0));
+            Root_Index => 0,
+            Implicit   => False));
    end Set_Entry_Directory;
 
    function Find_Logical (Of_Table : Table; Logical : String) return Module_Id
@@ -64,7 +66,8 @@ package body Landin.Modules is
         (Module_Record'
            (Logical    => Unbounded.To_Unbounded_String (Logical),
             Directory  => Unbounded.To_Unbounded_String (Directory),
-            Root_Index => Root_Index));
+            Root_Index => Root_Index,
+            Implicit   => False));
       Into.Logical_Index.Insert (Logical, Module_Id (Into.Modules.Length));
       return Module_Id (Into.Modules.Length);
    end Add_Module;
@@ -79,6 +82,14 @@ package body Landin.Modules is
 
    function Root_Ordinal (Of_Table : Table; Id : Module_Id) return Natural
      is (Of_Table.Modules.Element (Positive (Id)).Root_Index);
+
+   procedure Mark_Implicit (Into : in out Table; Id : Module_Id) is
+   begin
+      Into.Modules (Positive (Id)).Implicit := True;
+   end Mark_Implicit;
+
+   function Is_Implicit (Of_Table : Table; Id : Module_Id) return Boolean
+     is (Of_Table.Modules.Element (Positive (Id)).Implicit);
 
    procedure Attach_Source
      (Into   : in out Table;

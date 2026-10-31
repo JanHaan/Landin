@@ -183,6 +183,10 @@ package body Landin.Testing.Sessions is
       if Real.Is_Directory (Directory & "/workspace") then
          Load_Tree (Real, Host, Directory & "/workspace", "/workspace");
       end if;
+      --  A server finds its library beside itself, and a Cortex-M module
+      --  that imports no description reaches the library's reference
+      --  (D543), so a session holds the server to not publishing it.
+      Host.Add_Firmware_Library;
 
       for Line of Lines loop
          if Starts (Line, "-> ")

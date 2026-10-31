@@ -82,6 +82,15 @@ package Landin.Modules is
    function Root_Ordinal (Of_Table : Table; Id : Module_Id) return Natural
      with Pre => Contains (Of_Table, Id);
 
+   --  A module the loader adds that no import names: the static Linux
+   --  program's platform/linux, and D543's reference description.  It is
+   --  part of the program, and no editor has a document of it open, so
+   --  the language server reports on it only when something is wrong there.
+   procedure Mark_Implicit (Into : in out Table; Id : Module_Id)
+     with Pre => Contains (Into, Id);
+   function Is_Implicit (Of_Table : Table; Id : Module_Id) return Boolean
+     with Pre => Contains (Of_Table, Id);
+
    --  Source identities are attached in the reached program's canonical
    --  order: entry first, sorted files, source-order imports and FIFO module
    --  discovery.  All later stages retain that order by walking Source_Id.
@@ -120,6 +129,7 @@ private
       Logical    : Ada.Strings.Unbounded.Unbounded_String;
       Directory  : Ada.Strings.Unbounded.Unbounded_String;
       Root_Index : Natural := 0;
+      Implicit   : Boolean := False;
    end record;
 
    package Module_Vectors is new Ada.Containers.Vectors

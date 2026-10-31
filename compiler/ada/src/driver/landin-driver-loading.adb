@@ -793,6 +793,7 @@ package body Landin.Driver.Loading is
            Landin.Modules.Add_Module
              (Graph.all, Logical, Directory, Positive (Library_Position));
       begin
+         Landin.Modules.Mark_Implicit (Graph.all, Added);
          Remember_Directory (Added, Host.Existing_Identity (Directory));
          Queue.Append (Added);
       end Add_Implicit;
