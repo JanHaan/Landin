@@ -848,7 +848,7 @@ class DeveloperScripts(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn(
                         "usage: " + name + " [--record | --fixture=CLASS/NAME"
-                        " | --suite=NAME ... --case=SUITE/NAME ...]",
+                        " ... --suite=NAME ... --case=SUITE/NAME ...]",
                         result.stdout)
                     self.assertIn("--shard=I/N", result.stdout)
         source = (ROOT / "compiler/ada/tests/src/landin_tests.adb").read_text()

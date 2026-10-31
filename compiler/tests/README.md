@@ -85,8 +85,7 @@ rather than the harness's process-output fixture contract.
 
 ## Focused developer runs
 
-The harness can select one suite, one case, or one recorded fixture by exact
-name. The developer wrapper combines that with checksum-based minimum
+The harness can select suites, cases and fixtures by exact name. The developer wrapper combines that with checksum-based minimum
 recompilation:
 
 ```sh
@@ -106,6 +105,20 @@ in the order a complete run sorts them, and the transcript begins with a
 ```sh
 ./scripts/dev-test.sh --suite=fixtures --suite=harness \
     --case='parser/reports carry the pinned codes'
+```
+
+`--fixture` repeats too, and joins `--suite` and `--case`: the fixtures run in
+the order named, in the one case `fixture execution/selected fixtures
+execute`, and the transcript begins with a `FILTERED fixture=` line for each.
+A fixture another lane runs is not run, and the run ends with the command of
+each lane that does. `--record=CLASS/NAME`, and each other `--record=`, repeat
+likewise, so a change that adds ten fixtures records their reports in one run:
+
+```sh
+./scripts/dev-test.sh --fixture=negative/variant-match-duplicate \
+    --fixture=runtime/variant-match-selects-tag --suite=fixtures
+./scripts/dev-test.sh --record=negative/variant-match-duplicate \
+    --record=negative/module-not-found
 ```
 
 A case is named `SUITE/NAME`, its suite's name and its own as the

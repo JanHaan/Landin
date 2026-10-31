@@ -114,8 +114,9 @@ result, then choose the next step. Keep edits, dependent operations and checks
 over shared mutable build outputs ordered. A shell command that gathers several
 independent facts avoids a model round trip per fact.
 
-Use one `dev-test.sh` invocation with all affected exact `--suite` and `--case`
-selectors, rather than a shell loop invoking it once per selector. It already
+Use one `dev-test.sh` invocation with all affected exact `--suite`, `--case`
+and `--fixture` selectors, and one with every `--record=` a change needs,
+rather than a shell loop invoking it once per selector. It already
 checks the build; run `dev-build.sh` separately when compilation feedback or an
 explicit build-worker bound is needed. Enter `nix develop` once around related
 commands. Keep the existing host, worker, target and verification requirements.

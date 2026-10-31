@@ -12,6 +12,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
+with Landin.Platform;
 with Landin.Testing;
 with Landin.Testing.Lanes;
 with Landin.Tests.Arm64_Selection_Suite;
@@ -75,10 +76,15 @@ procedure Landin_Tests is
    Host_Only    : Boolean := False;
    --  Every --suite and --case of a focused run, in the order given.
    Selected     : Landin.Testing.Selector_Vectors.Vector;
-   Fixture      : Unbounded.Unbounded_String;
-   --  What --record=WHAT names, or empty for every recorded artefact.
-   Recording    : Unbounded.Unbounded_String;
+   --  Every --fixture, in the order given.
+   Fixtures     : Landin.Platform.Path_List;
+   --  What each --record=WHAT names, in the order given, an empty one for
+   --  a bare --record and so every recorded artefact.
+   Recordings   : Landin.Platform.Path_List;
    Of_Shard     : Landin.Testing.Shard := Landin.Testing.Whole;
+   --  A fixture run's FILTERED line for each fixture, and the note of each
+   --  another lane runs, around the transcript.
+   Fixture_Lines, Fixture_Notes : Unbounded.Unbounded_String;
 
    --  Every suite resolves the repository's trees relative to compiler/ada
    --  and writes its scratch files under build/ there.  Run from anywhere
@@ -160,20 +166,23 @@ procedure Landin_Tests is
    begin
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
-         "usage: landin_tests [--record | --fixture=CLASS/NAME |"
-         & " --suite=NAME ... --case=SUITE/NAME ...]");
+         "usage: landin_tests [--record | --fixture=CLASS/NAME"
+         & " ... --suite=NAME ... --case=SUITE/NAME ...]");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       landin_tests --record=lowering | --record=layout |"
-         & " --record=server/NAME | --record=CLASS/NAME");
+         & " --record=server/NAME | --record=CLASS/NAME ...");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       landin_tests --host"
          & " [--suite=NAME ... --case=SUITE/NAME ...]");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
-         "       --suite and --case repeat, and one run runs every case"
-         & " any of them names");
+         "       --suite, --case and --fixture repeat, and one run runs"
+         & " every case any of them names");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       and --record=WHAT repeats, recording each in turn");
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       and any of --target=NAME --runner=PROGRAM"
@@ -190,7 +199,6 @@ procedure Landin_Tests is
       Kept : Natural := 0;
       Seen_Target, Seen_Runner, Seen_Toolchain : Boolean := False;
       Seen_Shard : Boolean := False;
-      Chosen : Positive := 1;
       Selecting : Boolean := False;
 
       function Value (Argument, Prefix : String) return String
@@ -276,6 +284,17 @@ procedure Landin_Tests is
                    (Suite => Unbounded.To_Unbounded_String
                      (Value (Argument, "--suite=")),
                    Name  => Unbounded.Null_Unbounded_String));
+            elsif Starts_With (Argument, "--fixture=")
+              and then Argument'Length > 10
+            then
+               Selecting := True;
+               Fixtures.Append (Value (Argument, "--fixture="));
+            elsif Argument = "--record" then
+               Recordings.Append ("");
+            elsif Starts_With (Argument, "--record=")
+              and then Argument'Length > 9
+            then
+               Recordings.Append (Value (Argument, "--record="));
             elsif Starts_With (Argument, "--case=")
               and then Argument'Length > 7
             then
@@ -323,18 +342,29 @@ procedure Landin_Tests is
          return;
       end if;
 
+      --  Recording writes and runs nothing else, so it takes no selection.
+      if not Recordings.Is_Empty then
+         Mode :=
+           (if Selecting or else Kept > 0 or else Seen_Shard then Misuse
+            else Record_Artefacts);
+         return;
+      end if;
+
       if Selecting then
-         --  Suites and cases select alone, or with --host and nothing
-         --  else; a shard is a share of the complete run.
+         --  Suites, cases and fixtures select alone, or suites and cases
+         --  with --host and nothing else, since a fixture is a target
+         --  workload; a shard is a share of the complete run.
          if Kept > 1 or else Seen_Shard
            or else (Kept = 1
-                    and then Ada.Command_Line.Argument (Rest (1)) /= "--host")
+                    and then (Ada.Command_Line.Argument (Rest (1)) /= "--host"
+                              or else not Fixtures.Is_Empty))
          then
             Mode := Misuse;
             return;
          end if;
          Host_Only := Kept = 1;
-         Mode := (if Unbounded.Length (Selected.Last_Element.Name) = 0
+         Mode := (if not Fixtures.Is_Empty then Run_Fixture
+                  elsif Unbounded.Length (Selected.Last_Element.Name) = 0
                     and then Natural (Selected.Length) = 1
                   then Run_Suite else Run_Case);
          return;
@@ -342,48 +372,10 @@ procedure Landin_Tests is
 
       if Kept = 0 then
          return;
-      elsif Kept = 2 then
-         if Ada.Command_Line.Argument (Rest (1)) = "--host" then
-            Chosen := Rest (2);
-         elsif Ada.Command_Line.Argument (Rest (2)) /= "--host" then
-            Mode := Misuse;
-            return;
-         else
-            Chosen := Rest (1);
-         end if;
-         Host_Only := True;
+      elsif Kept = 1 and then Ada.Command_Line.Argument (Rest (1)) = "--host"
+      then
+         Mode := Run_Host;
       else
-         Chosen := Rest (1);
-      end if;
-
-      declare
-         Argument : constant String := Ada.Command_Line.Argument (Chosen);
-      begin
-         if Argument = "--record" then
-            Mode := Record_Artefacts;
-         elsif Starts_With (Argument, "--record=")
-           and then Argument'Length > 9
-         then
-            Mode := Record_Artefacts;
-            Recording := Unbounded.To_Unbounded_String
-              (Argument (Argument'First + 9 .. Argument'Last));
-         elsif Argument = "--host" then
-            Mode := Run_Host;
-         elsif Starts_With (Argument, "--fixture=")
-           and then Argument'Length > 10
-         then
-            Mode := Run_Fixture;
-            Fixture := Unbounded.To_Unbounded_String
-              (Argument (Argument'First + 10 .. Argument'Last));
-         else
-            Mode := Misuse;
-         end if;
-      end;
-      if Host_Only and then Mode not in Run_Suite | Run_Case then
-         Mode := Misuse;
-      end if;
-      --  A shard is a share of the complete run, so it takes no selection.
-      if Seen_Shard and then Mode not in Run_All | Run_Host then
          Mode := Misuse;
       end if;
    end Read_Arguments;
@@ -410,74 +402,80 @@ begin
          return;
       end if;
 
-      declare
-         What  : constant String := Unbounded.To_String (Recording);
-         Wrote : Boolean := True;
+      for What of Recordings loop
+         declare
+            Wrote : Boolean := True;
 
-         procedure Wrote_Or_Not (Done : Boolean; Name : String);
+            procedure Wrote_Or_Not (Done : Boolean; Name : String);
 
-         procedure Wrote_Or_Not (Done : Boolean; Name : String) is
-         begin
-            if Done then
-               Text_IO.Put_Line ("wrote " & Name);
-            else
-               Text_IO.Put_Line
-                 (Text_IO.Standard_Error, "could not write " & Name);
-               Wrote := False;
-            end if;
-         end Wrote_Or_Not;
-      begin
-         --  Each artefact on its own, so re-recording one never rewrites
-         --  the others; with nothing named, all three as before.
-         if What = "" or else What = "lowering" then
-            Landin.Tests.Lowering_Suite.Record_Artefact
-              ("../tests/lowering.ir", Wrote);
-            Wrote_Or_Not (Wrote, "compiler/tests/lowering.ir");
-         end if;
-         if Wrote and then (What = "" or else What = "layout") then
-            Landin.Tests.Targets_Suite.Record_Artefact
-              ("../tests/layout.targets", Wrote);
-            Wrote_Or_Not (Wrote, "compiler/tests/layout.targets");
-         end if;
-         if Wrote and then What = "" then
-            Landin.Tests.Server_Suite.Record_Sessions (Wrote);
-            Wrote_Or_Not (Wrote, "compiler/tests/server");
-         elsif Starts_With (What, "server/") then
-            declare
-               Name  : constant String := What (What'First + 7 .. What'Last);
-               Found : Boolean;
+            procedure Wrote_Or_Not (Done : Boolean; Name : String) is
             begin
-               Landin.Tests.Server_Suite.Record_Session (Name, Found, Wrote);
-               if Found then
-                  Wrote_Or_Not
-                    (Wrote, "compiler/tests/server/" & Name & "/session.lsp");
+               if Done then
+                  Text_IO.Put_Line ("wrote " & Name);
                else
                   Text_IO.Put_Line
-                    (Text_IO.Standard_Error,
-                     "landin_tests: no session compiler/tests/server/" & Name
-                     & "/session.lsp to record");
+                    (Text_IO.Standard_Error, "could not write " & Name);
                   Wrote := False;
                end if;
-            end;
-         elsif What /= "" and then What /= "lowering" and then What /= "layout"
-         then
-            declare
-               Said : Unbounded.Unbounded_String;
-            begin
-               Landin.Tests.Fixture_Execution_Suite.Record_Report
-                 (What, Wrote, Said);
-               if Wrote then
-                  Text_IO.Put_Line (Unbounded.To_String (Said));
-               else
-                  Text_IO.Put_Line
-                    (Text_IO.Standard_Error, Unbounded.To_String (Said));
-               end if;
-            end;
-         end if;
-         if not Wrote then
-            Ada.Command_Line.Set_Exit_Status (1);
-         end if;
-      end;
+            end Wrote_Or_Not;
+         begin
+            --  Each artefact on its own, so re-recording one never
+            --  rewrites the others; with nothing named, all three as
+            --  before.  A failure is the run's, and the rest still record.
+            if What = "" or else What = "lowering" then
+               Landin.Tests.Lowering_Suite.Record_Artefact
+                 ("../tests/lowering.ir", Wrote);
+               Wrote_Or_Not (Wrote, "compiler/tests/lowering.ir");
+            end if;
+            if Wrote and then (What = "" or else What = "layout") then
+               Landin.Tests.Targets_Suite.Record_Artefact
+                 ("../tests/layout.targets", Wrote);
+               Wrote_Or_Not (Wrote, "compiler/tests/layout.targets");
+            end if;
+            if Wrote and then What = "" then
+               Landin.Tests.Server_Suite.Record_Sessions (Wrote);
+               Wrote_Or_Not (Wrote, "compiler/tests/server");
+            elsif Starts_With (What, "server/") then
+               declare
+                  Name  : constant String :=
+                    What (What'First + 7 .. What'Last);
+                  Found : Boolean;
+               begin
+                  Landin.Tests.Server_Suite.Record_Session
+                    (Name, Found, Wrote);
+                  if Found then
+                     Wrote_Or_Not
+                       (Wrote,
+                        "compiler/tests/server/" & Name & "/session.lsp");
+                  else
+                     Text_IO.Put_Line
+                       (Text_IO.Standard_Error,
+                        "landin_tests: no session compiler/tests/server/"
+                        & Name & "/session.lsp to record");
+                     Wrote := False;
+                  end if;
+               end;
+            elsif What /= "" and then What /= "lowering"
+              and then What /= "layout"
+            then
+               declare
+                  Said : Unbounded.Unbounded_String;
+               begin
+                  Landin.Tests.Fixture_Execution_Suite.Record_Report
+                    (What, Wrote, Said);
+                  if Wrote then
+                     Text_IO.Put_Line (Unbounded.To_String (Said));
+                  else
+                     Text_IO.Put_Line
+                       (Text_IO.Standard_Error, Unbounded.To_String (Said));
+                  end if;
+               end;
+            end if;
+            if not Wrote then
+               Ada.Command_Line.Set_Exit_Status (1);
+            end if;
+         end;
+      end loop;
 
       return;
    end if;
@@ -491,23 +489,43 @@ begin
       return;
    end if;
 
+   --  Each fixture another lane runs is not a failure here: say where it
+   --  runs and run it not, which a FILTERED run already says is not the
+   --  complete suite.  The fixtures this lane runs are one case, run with
+   --  whatever --suite and --case also select.
    if Mode = Run_Fixture then
-      --  A fixture another lane runs is not a failure here: say where it
-      --  runs and run nothing, which a FILTERED run already says is not
-      --  the complete suite.
       declare
-         Note : constant String :=
-           Landin.Tests.Fixture_Execution_Suite.Lane_Note
-             (Unbounded.To_String (Fixture));
+         Applicable : Landin.Platform.Path_List;
       begin
-         if Note /= "" then
-            Text_IO.Put ("FILTERED fixture=" & Unbounded.To_String (Fixture)
-                         & ASCII.LF & ASCII.LF & Note);
+         for Path of Fixtures loop
+            Unbounded.Append (Fixture_Lines, "FILTERED fixture=" & Path
+                              & ASCII.LF);
+            declare
+               Note : constant String :=
+                 Landin.Tests.Fixture_Execution_Suite.Lane_Note (Path);
+            begin
+               if Note = "" then
+                  Applicable.Append (Path);
+               else
+                  Unbounded.Append (Fixture_Notes, ASCII.LF & Note);
+               end if;
+            end;
+         end loop;
+         if Applicable.Is_Empty and then Selected.Is_Empty then
+            Text_IO.Put (Unbounded.To_String (Fixture_Lines)
+                         & Unbounded.To_String (Fixture_Notes));
             return;
          end if;
+         if not Applicable.Is_Empty then
+            Landin.Tests.Fixture_Execution_Suite.Select_Fixtures (Applicable);
+            Selected.Append
+              (Landin.Testing.Selector'
+                 (Suite => Unbounded.To_Unbounded_String
+                    ("fixture execution"),
+                  Name  => Unbounded.To_Unbounded_String
+                    ("selected fixtures execute")));
+         end if;
       end;
-      Landin.Tests.Fixture_Execution_Suite.Select_Fixture
-        (Unbounded.To_String (Fixture));
    end if;
 
    Landin.Tests.Arm64_Selection_Suite.Register (Cases);
@@ -597,16 +615,12 @@ begin
             Record_Timings =>
               Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
             Progress       => Landin.Testing.Write_Progress'Access);
-      when Run_Suite | Run_Case =>
+      when Run_Suite | Run_Case | Run_Fixture =>
          Landin.Testing.Run
            (Cases, Selected, Transcript, Result,
             Record_Timings =>
               Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
             Progress       => Landin.Testing.Write_Progress'Access);
-      when Run_Fixture =>
-         Landin.Testing.Run
-           (Cases, "fixture execution", "selected fixture executes",
-            Transcript, Result);
       when Record_Artefacts | Misuse =>
          raise Landin.Compiler_Defect with "test mode reached the runner";
    end case;
@@ -623,7 +637,9 @@ begin
       Text_IO.Put_Line ("LANE " & Landin.Testing.Lanes.Describe);
       Text_IO.New_Line;
    end if;
-   Text_IO.Put (Unbounded.To_String (Transcript));
+   Text_IO.Put (Unbounded.To_String (Fixture_Lines)
+                & Unbounded.To_String (Transcript)
+                & Unbounded.To_String (Fixture_Notes));
 
    --  Where the run went, on standard error, when asked.  Not in the
    --  transcript: that is parsed, and is the one thing promised to be the
