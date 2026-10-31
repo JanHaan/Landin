@@ -2159,6 +2159,9 @@ package body Landin.Diagnostics.Citations is
                "L0346 names the record that is not `layout(c)`",
             when 530 =>
                "`refine explain` answers a construct and a decision",
+            when 542 =>
+               "A device description is a module of directives, and its "
+               & "generated half has one text",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3251,6 +3254,8 @@ package body Landin.Diagnostics.Citations is
             when 529 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
+               "Decisions: The toolchain, C and the machine",
+            when 542 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -4636,6 +4641,10 @@ package body Landin.Diagnostics.Citations is
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",
+            when 542 =>
+               "https://www.701.dev/spec.html#d542-a-device-description-"
+               & "is-a-module-of-directives-and-its-generated-half-has-one"
+               & "-text",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",

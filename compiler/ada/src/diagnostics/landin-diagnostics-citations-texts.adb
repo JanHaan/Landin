@@ -23819,6 +23819,115 @@ package body Landin.Diagnostics.Citations.Texts is
                & "-full` may stand anywhere among what is asked, and a dec"
                & "ision's `Chosen` text runs to the next paragraph that op"
                & "ens with a bold label.",
+            when 542 =>
+               "Chosen: a device is described in Landin source, as one m"
+               & "odule made only of tool directives in [1740]'s `tool_dir"
+               & "ective` form. Each argument is positional: a text is a t"
+               & "ext literal, decoded by the ordinary text decoder as `li"
+               & "nker.library`'s is, and an integer is a fixed integer ex"
+               & "pression in D202's closed fold, so `0x2000_0000` and `25"
+               & "6 * 1024` are both written as they read. The directives "
+               & "are:"
+               & LF
+               & LF
+               & "| directive | arguments | says |"
+               & LF
+               & "|---|---|---|"
+               & LF
+               & "| `compiler.device(name)` | lowercase ASCII letters, dig"
+               & "its and hyphens, beginning with a letter, at most 32 byt"
+               & "es | the device's identity; the module holding it is a d"
+               & "escription |"
+               & LF
+               & "| `compiler.core(name)` | `cortex-m0`, `cortex-m0plus`, "
+               & "`cortex-m3`, `cortex-m4` or `cortex-m7` | the core, and "
+               & "through it the architecture level: `armv6-m`, `armv6-m`,"
+               & " `armv7-m`, `armv7e-m` and `armv7e-m` |"
+               & LF
+               & "| `compiler.vectors(count)` | an integer | the vector ta"
+               & "ble's whole length in words, the initial SP and reset in"
+               & "cluded |"
+               & LF
+               & "| `compiler.interrupt(name, irq)` | an ASCII letter, the"
+               & "n letters, digits and underscores, at most 64 bytes; an "
+               & "integer | that external interrupt `irq` is implemented, "
+               & "at absolute slot 16 + `irq` |"
+               & LF
+               & "| `compiler.boot(kind)` | a boot image kind | how the im"
+               & "age begins |"
+               & LF
+               & "| `linker.region(name, origin, length, access)` | an ASC"
+               & "II letter, then letters, digits and underscores, at most"
+               & " 32 bytes; two integers; `""rx""`, `""rw""` or `""rwx""` | o"
+               & "ne memory region |"
+               & LF
+               & "| `linker.place(kind, region[, size])` | `""vectors""`, `"""
+               & "text""`, `""rodata""`, `""data""`, `""bss""` or `""stack""`;"
+               & " a region's name; for `""stack""` alone, its size in bytes"
+               & " | where the compiler places that part of the image |"
+               & LF
+               & LF
+               & "A slot no `compiler.interrupt` names is reserved and hol"
+               & "ds zero. The directives' order carries no meaning."
+               & LF
+               & LF
+               & "A description is usually two files, which the compiler d"
+               & "oes not tell apart. `interrupts.ldn` holds `compiler.dev"
+               & "ice`, `compiler.core`, `compiler.vectors` and the interr"
+               & "upts, and is generated from the device's CMSIS-SVD file;"
+               & " `memory.ldn` holds the regions, the placements and `com"
+               & "piler.boot`, and is written by the developer, since an S"
+               & "VD says nothing of either. A generated `interrupts.ldn` "
+               & "has exactly this text, so that whatever generates it, an"
+               & "d a reviewer, can compare bytes:"
+               & LF
+               & LF
+               & "1. Line 1 is `-- Interrupts of the NAME, from its SVD: v"
+               & "endor VENDOR, version VERSION.`, with the SVD's `device/"
+               & "name`, `vendor` and `version` as written, surrounding wh"
+               & "itespace removed; a clause whose element the SVD lacks i"
+               & "s left out with its comma."
+               & LF
+               & "2. Line 2 is `-- SVD SHA-256 HEX.`, the lowercase SHA-25"
+               & "6 of the SVD file's bytes."
+               & LF
+               & "3. Each nonempty line of the SVD's `licenseText`, its su"
+               & "rrounding whitespace removed, follows as `-- LINE`."
+               & LF
+               & "4. Then `-- Generated from the SVD; memory.ldn beside it"
+               & " is written by hand.` and one empty line."
+               & LF
+               & "5. `compiler.device(""ID"")`, ID being `device/name` in lo"
+               & "wercase; `compiler.core(""CORE"")`, from `cpu/name`, where"
+               & " `CM0`, `CM0PLUS`, `CM3`, `CM4` and `CM7` are the five c"
+               & "ores above; and `compiler.vectors(N)`, N being 16 plus t"
+               & "he larger of `cpu/deviceNumInterrupts` and one more than"
+               & " the highest interrupt value."
+               & LF
+               & "6. One `compiler.interrupt(""NAME"", VALUE)` for each dist"
+               & "inct pair of an `interrupt` element's name and value in "
+               & "any peripheral, derived ones included, ordered by value "
+               & "and then by the name's bytes; VALUE is decimal with no s"
+               & "eparators."
+               & LF
+               & LF
+               & "The file is ASCII with LF line ends, one directive or co"
+               & "mment per line, no trailing spaces, no other empty line,"
+               & " and it ends with one LF. It is the form `refine fmt` le"
+               & "aves unchanged. RP2040's SVD gives 48 slots: it says 26 "
+               & "interrupts and names 32, the last six its spare software"
+               & " interrupts, and pico-sdk's vector table has 48 words."
+               & LF
+               & LF
+               & "The repository keeps a description in `devices/descripti"
+               & "ons/DEVICE/`, beside and apart from the register modules"
+               & " under `devices/generated`, which are regenerated byte f"
+               & "or byte; a program imports it as `descriptions/DEVICE` w"
+               & "ith `--root=devices`, a name no root of register modules"
+               & " can hold. The constrained reference profile is a descri"
+               & "ption in refine's own library, `platform/cortex_m/refere"
+               & "nce`, so an installed compiler finds it as it finds `pla"
+               & "tform/cortex_m`.",
             when 151 =>
                "Chosen: the repository-owned `core/mem` module declares "
                & "a private parameterized nominal `raw(item)` with an allo"
