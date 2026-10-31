@@ -107,6 +107,15 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   the line as the layout writes it and marking where it differs; `--stdout`
   prints one source in the layout. The library roots, the examples and the
   tour's examples are kept in that layout.
+- `refine svd --policy=POLICY.json --out-dir=DIR DEVICE.svd` reads a
+  vendor's CMSIS-SVD file and a reviewed selection policy, requires the SVD
+  to be the file the policy names by SHA-256, and writes a register module
+  per selected peripheral, their correspondence and manifest, and the
+  device description's generated `interrupts.ldn` (D555-D558). It stages
+  every output beside its destination and reads it back before replacing
+  any, leaves unchanged files alone and removes what its old manifest names
+  and it no longer makes. [The device guide](../devices/README.md)
+  describes the policy.
 - `refine lsp` is a language server over standard input and output: an
   editor started with it gets diagnostics, definitions, hover types,
   formatting and quick fixes from the compiler's own stages, as

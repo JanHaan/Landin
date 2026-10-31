@@ -185,6 +185,7 @@ it names.
 | `refine fmt main.ldn` | rewrite a source in the one layout; `--check` only reports |
 | `refine explain L0301` | explain a diagnostic code and what to change; `[1760]` or `D275`, a cited rule or decision |
 | `refine lsp` | the language server an editor starts |
+| `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD; see [devices](devices/README.md) |
 | `refine version` | name the compiler and the library it uses |
 | `refine --help`, `refine compile --help` | every command, and one command's options |
 
