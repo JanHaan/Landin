@@ -1,0 +1,4 @@
+compiler.device("plain")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.interrupt("ONE", 1)
