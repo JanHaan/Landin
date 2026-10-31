@@ -1564,10 +1564,12 @@ margin a prepared stack keeps above its base (D472): 640 bytes on x86-64 and
 arm64, 768 on RV64 and 384 on Cortex-M0. The message gives what the handler
 needs, the margin and the target: what the margin pays before the handler,
 and the handler's depth from the stack report's `trap` figure, by its
-deepest path. When the handler's calls reach an `any` call, a call through a
-generic's table or a function value, a foreign call, recursion, a runtime
-helper or assembly that moves the stack, its depth cannot be known, and the
-message names the opening's kind and points at it. Make the handler's frame
+deepest path. When the handler's calls reach a foreign call, recursion, a
+runtime helper or assembly that moves the stack, its depth cannot be known,
+and the message names the opening's kind and points at it; a call through
+`any`, a generic's table or a function value counts the deepest routine of
+the program it can reach (D570), and opens the graph only when there is
+none. Make the handler's frame
 smaller, call less from it, or call through nothing that opens its graph; a
 handler that only records the kind and switches away fits on every target.
 A program with no `compiler.stack_prepare`, and one that selects no

@@ -856,6 +856,14 @@ package body Landin.Tests.Stack_Report_Suite is
                  (US.To_String (Erased.Said), "its depth cannot be known"),
                Target & ": a call through `any` is closed by its concept's"
                & " tables: " & US.To_String (Erased.Said));
+            --  Where the provider's depth fits the margin, the handler
+            --  through `any` is emitted.
+            if Target in "linux-x86-64" | "linux-arm64" then
+               Landin.Testing.Check_Equal
+                 (Item, Erased.Status, Landin.Driver.Status_Success,
+                  Target & ": a handler through `any` that fits is emitted: "
+                  & US.To_String (Erased.Said));
+            end if;
          end;
       end loop;
    end An_Open_Handler_Is_Refused;
