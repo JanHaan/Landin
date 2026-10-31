@@ -1088,14 +1088,14 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations: firmware has no network stack here."
+      "reason": "Firmware has no network stack here."
     },
     "runtime/events-signal-during-sleep": {
       "codes": [
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/events and hosted/thread on the freestanding target before checking declarations: firmware has no event provider or threads; runtime/signals-fake-firmware waits for signals over the fake on Cortex-M0."
+      "reason": "Firmware has no event provider or threads; runtime/signals-fake-firmware waits for signals over the fake on Cortex-M0."
     },
     "runtime/events-signal-stops-server": {
       "codes": [
@@ -1996,7 +1996,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here."
+      "reason": "Firmware has no network stack here."
     },
     "runtime/network-datagram-memory-firmware": {
       "mode": "execute"
@@ -2033,7 +2033,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-addresses-firmware and runtime/network-addresses-written-firmware read and write a zoned address on Cortex-M0."
+      "reason": "Firmware has no network stack here. runtime/network-addresses-firmware and runtime/network-addresses-written-firmware read and write a zoned address on Cortex-M0."
     },
     "runtime/network-listen-beside-accepted": {
       "codes": [
@@ -3035,7 +3035,7 @@
         "L0015"
       ],
       "mode": "refuse",
-      "reason": "Source namespace checking refuses hosted/blocking, hosted/thread and platform/libc on the freestanding target before checking declarations: firmware has no system clock, threads or C runtime."
+      "reason": "Firmware has no system clock, threads or C runtime."
     },
     "runtime/slice-half-open-upper-traps": {
       "mode": "execute"
