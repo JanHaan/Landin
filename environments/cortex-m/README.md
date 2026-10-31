@@ -582,10 +582,17 @@ The six optimization/specialization profiles each exercise:
 This adds 49 QEMU sessions (48 generated, one independent C/assembly control)
 and 24 generated device runs. The independent control establishes PSP/MSP,
 four-byte interrupted SP with hardware alignment padding, nested exception
-returns and C callee saves independently of Landin emission. Ten retained
-failure programs cover flash overflow, stack overlap, materialization budget,
-missing symbol, invalid instruction encoding, later-core instruction, wrong
-vector placement, owned reset slot, invalid entry and reserved symbol.
+returns and C callee saves independently of Landin emission. Twelve retained
+failure programs cover flash overflow, stack overlap, the image budget's
+giant image, flash and RAM (D537), missing symbol, invalid instruction
+encoding, later-core instruction, wrong vector placement, owned reset slot,
+invalid entry and reserved symbol. The flash overflow is an image the budget
+admits and the linker refuses once the vectors and reset code are added, so
+the linker stays the map's authority. A `compact-images` case runs
+`scripts/image_bounds.py` with this lane's assembler: compact shapes at two
+sizes keep the assembly and the assembler's memory to the source's size and
+the object to the image (D536), and the giant image is refused before any tool
+runs.
 Source unit controls additionally refuse incompatible conventions/calls,
 invalid naked bodies, duplicate directives, unavailable slots and hosted use.
 

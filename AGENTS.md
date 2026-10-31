@@ -32,7 +32,8 @@ python3 check.py
 
 # Build the release compiler and hold it to its scaling bound: the median
 # frontend and emission times, and peak compiler memory, may each grow at
-# most 2.5 times per doubling of the program.
+# most 2.5 times per doubling of the program.  Then scripts/image_bounds.py
+# assembles compact static images and holds the assembler to the source's size.
 ./scripts/scaling.sh
 
 # Every scripts/tests module at once, check.py's controls in shards, as the
@@ -194,7 +195,7 @@ still succeed. The linked full run contains the target-test results.
 | `bindings` | `ubuntu-24.04` | the C binding generator against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
 | `cortex-m` | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, keeping the stack-switch consumer's capacity report (D470) as an artifact |
-| `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling |
+| `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
 | `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
 | `darwin-release-build` | `macos-26` | build the release executables once for the Darwin host, parity and LLDB jobs |
 | `darwin-host` | `macos-26` | the debug compiler host suite, determinism, report identity and the scripted server sessions |

@@ -5,6 +5,7 @@ import contextlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 from backend import image_contract
@@ -611,6 +612,16 @@ def execute_suite(parent, refine, profiles=PROFILES):
     out.mkdir()
     with case('independent-c-assembly'):
         independent(Run(out, parent.tools))
+    out = root / 'compact-images'
+    out.mkdir()
+    with case('compact-images'):
+        #  D536/D537 with this lane's assembler: compact sources cost the
+        #  assembly and the assembler the source's size, and the giant
+        #  firmware image is refused before any tool runs.
+        Run(out, parent.tools).command('image-bounds', [
+            sys.executable, Path(__file__).resolve().parents[2] / 'scripts/image_bounds.py',
+            '--refine=' + str(refine), '--target=cortex-m0',
+            '--toolchain=' + str(parent.arm / 'arm-eabi-gcc')], timeout=900)
     for optimize, specialize in profiles:
         profile = root / (optimize + '-' + specialize)
         profile.mkdir()
