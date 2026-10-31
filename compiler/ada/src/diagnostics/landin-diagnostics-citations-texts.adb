@@ -12669,6 +12669,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & " many nested `.rept 256` as its place, around the body. "
                & "A count up to 256 is one `.rept` as before."
                & LF
+               & "- Inside a body that is itself repeated, a zero gap or a"
+               & " scalar run of at most 16 bytes is written as plain valu"
+               & "es, `.byte 0, 0, 0` for a record's padding, and only a l"
+               & "onger one as `.zero` or `.fill`."
+               & LF
                & LF
                & "A body is therefore written once per nonzero digit, at m"
                & "ost eight times, and the text an assembler expands at on"
