@@ -8,9 +8,9 @@ is a decision rather than an accident.  Key holds the key to every other
 difference.  Decide holds reuse to GitHub's record of a push run, of main
 or of another branch, that ran every lane, never to anything a pull
 request writes, and to a trusted `Gate: explanatory` on every commit
-since, so a semantic edit nobody declared runs everything.  Flake holds
-the flake job to building unless a push run built the same flake inputs.
-Verdict holds the gate to the one shape a reused pass may have.
+since, so a semantic edit nobody declared runs everything.  Workflow
+holds the reuse list to every job the aggregate needs.  Verdict holds the
+gate to the one shape a reused pass may have.
 """
 from datetime import datetime, timedelta, timezone
 import importlib.util
@@ -426,113 +426,6 @@ class Candidate(unittest.TestCase):
         self.assertFalse(self.decide())
 
 
-STEP = "Build the flake"
-
-
-class Flake(unittest.TestCase):
-    """The flake job builds unless a push run built these very inputs."""
-
-    def setUp(self):
-        #  The record need not be a passing run: its flake job's own build
-        #  step is the evidence, whatever another lane did.
-        self.run = {"id": 7, "head_sha": BASE, "event": "push",
-                    "head_branch": "topic", "conclusion": "failure",
-                    "html_url": "https://example/run/7",
-                    "run_started_at": (NOW - timedelta(days=1)).isoformat()}
-        self.jobs = [{"name": "flake", "conclusion": "success", "steps": [
-                         {"name": "Install nix", "conclusion": "success"},
-                         {"name": STEP, "conclusion": "success"}]},
-                     {"name": "compiler-1", "conclusion": "failure", "steps": []}]
-        self.total = None
-        self.keys = {BASE: "k", "HEAD": "k"}
-        self.asked = []
-
-    def api(self, path):
-        self.asked.append(path)
-        if path.startswith("actions/workflows/"):
-            return {"workflow_runs": [self.run]}
-        if path.startswith("actions/runs/"):
-            total = len(self.jobs) if self.total is None else self.total
-            return {"total_count": total, "jobs": self.jobs}
-        raise AssertionError(path)
-
-    def build(self, event_name="push"):
-        return gate_inputs.decide_flake(event_name, self.api, self.keys.get,
-                                        "gate.yml", "flake", STEP, NOW)[0]
-
-    def test_a_build_of_these_inputs_spares_the_next(self):
-        self.assertFalse(self.build())
-        self.assertIn("actions/workflows/gate.yml/runs?event=push&per_page=30",
-                      self.asked)
-
-    def test_a_pull_request_relies_on_a_push_record(self):
-        self.assertFalse(self.build("pull_request"))
-
-    def test_changed_inputs_build(self):
-        self.keys["HEAD"] = "a changed lock"
-        self.assertTrue(self.build())
-
-    #  A diff against the parent would skip here: the earlier run changed
-    #  the flake and its build failed, and this push changed nothing in it.
-    def test_a_failed_or_skipped_build_is_no_record(self):
-        for conclusion in ("failure", "skipped", "cancelled"):
-            with self.subTest(conclusion=conclusion):
-                self.jobs[0]["steps"][1]["conclusion"] = conclusion
-                self.assertTrue(self.build())
-        self.jobs[0]["steps"][1]["conclusion"] = "success"
-        self.jobs[0]["conclusion"] = "failure"
-        self.assertTrue(self.build())
-
-    def test_a_job_that_relied_on_a_record_is_none(self):
-        self.jobs[0]["steps"] = self.jobs[0]["steps"][:1]
-        self.assertTrue(self.build())
-
-    def test_a_step_or_job_named_twice_is_no_record(self):
-        self.jobs[0]["steps"].append({"name": STEP, "conclusion": "success"})
-        self.assertTrue(self.build())
-        self.setUp()
-        self.jobs.append(dict(self.jobs[0]))
-        self.assertTrue(self.build())
-
-    def test_old_future_and_pull_request_runs_are_no_record(self):
-        for started in (NOW - timedelta(days=8), NOW + timedelta(seconds=1)):
-            with self.subTest(started=started):
-                self.run["run_started_at"] = started.isoformat()
-                self.assertTrue(self.build())
-        self.setUp()
-        self.run["event"] = "pull_request"
-        self.assertTrue(self.build())
-
-    def test_a_truncated_listing_is_no_record(self):
-        self.total = len(self.jobs) + 1
-        self.assertTrue(self.build())
-
-    def test_manual_dispatch_always_builds(self):
-        self.assertTrue(self.build("workflow_dispatch"))
-        self.assertEqual(self.asked, [])
-
-    def test_an_error_says_build_true(self):
-        environment = {"GITHUB_EVENT_NAME": "push", "GITHUB_API_URL": "http://0.0.0.0:9",
-                       "GITHUB_REPOSITORY": "x/y", "GH_TOKEN": "t"}
-        result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/gate_inputs.py"), "flake",
-             "gate.yml", "flake", STEP], cwd=ROOT, text=True,
-            env=dict(os.environ, **environment), stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
-        self.assertEqual((result.returncode, result.stdout), (0, "build=true\n"))
-
-    def test_the_workflow_names_the_job_and_step_it_asks_about(self):
-        workflow = (ROOT / ".github/workflows/gate.yml").read_text()
-        flake = workflow.split("\n  flake:\n", 1)[1].split("\n  #", 1)[0]
-        self.assertIn('scripts/gate_inputs.py flake gate.yml flake "%s"' % STEP, flake)
-        self.assertIn("      - name: %s\n" % STEP, flake)
-        self.assertIn("if: needs.inputs.outputs.reuse != 'true'", flake)
-        reuse = workflow.split("gate_inputs.py reuse gate.yml", 1)[1].split(">>", 1)[0]
-        self.assertIn(" flake ", reuse)
-        needs = workflow.split("\n  gate:\n", 1)[1].split("runs-on", 1)[0]
-        self.assertIn(" flake,", needs)
-
-
 class Workflow(unittest.TestCase):
     """The reuse list in gate.yml names every job the aggregate needs.
 
@@ -562,44 +455,6 @@ class Workflow(unittest.TestCase):
                         and name.startswith(prefix)]
                 self.assertTrue(legs, "%s is needed by gate and required by no"
                                       " name in the reuse list" % job)
-
-
-class FlakeKey(unittest.TestCase):
-    def setUp(self):
-        self.root = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.root)
-        git(self.root, "init", "-q")
-        for name in gate_inputs.FLAKE_INPUTS + ("compiler/main.adb", "README.md"):
-            path = self.root / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("first\n")
-        self.first = self.commit()
-
-    def commit(self):
-        git(self.root, "add", "-A")
-        git(self.root, "commit", "-q", "--allow-empty", "-m", "x")
-        return git(self.root, "rev-parse", "HEAD")
-
-    def same(self):
-        return (gate_inputs.flake_key(self.first, self.root)
-                == gate_inputs.flake_key(self.commit(), self.root))
-
-    def test_each_input_counts(self):
-        for name in gate_inputs.FLAKE_INPUTS:
-            with self.subTest(name=name):
-                (self.root / name).write_text("changed\n")
-                self.assertFalse(self.same())
-                git(self.root, "reset", "-q", "--hard", self.first)
-        (self.root / "flake.nix").chmod(0o755)
-        self.assertFalse(self.same())
-        git(self.root, "reset", "-q", "--hard", self.first)
-        (self.root / "environments/pins.sh").unlink()
-        self.assertFalse(self.same())
-
-    def test_the_source_it_builds_does_not(self):
-        (self.root / "compiler/main.adb").write_text("changed\n")
-        (self.root / "README.md").write_text("changed\n")
-        self.assertTrue(self.same())
 
 
 def job(result, **outputs):

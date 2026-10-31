@@ -118,9 +118,8 @@ the mirror holds and how a deletion reaches it); the Pages and
 GitHub-mirror manifests are retired with the SourceHut gate, and
 `scripts/site.sh` renders and packages without publishing.
 `.github/workflows/pages.yml` is the only publisher. The former automatic Nix manifest was
-retired earlier, and the gate's `flake` job now builds the flake whenever no
-push run in the last week built the same `flake.nix`, `flake.lock` and
-`environments/pins.sh` (D585).
+retired earlier, and the gate's `flake` job now builds the flake on every run
+that does not reuse a pass (D585).
 
 Native macOS arm64 began as a *development* loop and became a validated
 target of its own, with its own compiler build, platform tools and
@@ -458,8 +457,8 @@ driver the archive ships at the wrapper.
 Both of those were found by hand. The former automatic Nix manifest checked
 the shell at builds.sr.ht as a non-gate only when shell inputs changed.
 That automatic manifest is now retired; the gate's `flake` job builds both
-packages and runs `scripts/toolchain.sh` inside the shell when its inputs
-change (D585). Run `scripts/test.sh` explicitly inside `nix develop` on
+packages and runs `scripts/toolchain.sh` inside the shell on every gate run
+that does not reuse a pass (D585). Run `scripts/test.sh` explicitly inside `nix develop` on
 native Linux after shell-input changes; this remains supplemental
 environment validation.
 Its first run settles both halves. The shell built on x86-64 nix with the

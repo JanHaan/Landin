@@ -42,16 +42,10 @@ A run that itself reused a pass skipped its lanes, so neither rule ever
 takes it as a full pass.  Manual dispatch always runs the lanes.  Anything
 uncertain runs every lane.
 
-The flake job asks a narrower question of the same record: whether a push
-run of this workflow built the flake, in the last week, from the inputs
-this checkout has (FLAKE_INPUTS).  When none did, or anything is in doubt,
-it builds.
-
     key [REV]                       print the key of REV, HEAD by default
     same A B                        succeed only when A and B have one key
     reuse WORKFLOW JOB ...          print reuse=true or reuse=false, and why;
                                     each JOB is an exact job name
-    flake WORKFLOW JOB STEP         print build=true or build=false, and why
     verdict [--always JOB ...]      judge the `needs` context in $NEEDS
 """
 from datetime import datetime, timedelta, timezone
@@ -70,13 +64,6 @@ MAX_AGE = timedelta(days=7)
 #  Exact repository paths.  scripts/tests/test_gate_inputs.py names every
 #  file that mentions one of these by name, so a new reader is a decision.
 CONTENT_FREE = ("AGENTS.md", "README.md", "ROADMAP.md", "handoff.md")
-
-#  What decides whether the flake job builds: the flake, its lock, and the
-#  pins it reads (D585).  The rest of the tree is the source the flake
-#  builds, which the other lanes build and test; flake.nix also reads
-#  README.md's status line, for a version string, which no edit can make
-#  fail to build.
-FLAKE_INPUTS = ("environments/pins.sh", "flake.lock", "flake.nix")
 
 
 def entries(rev, cwd=None):
@@ -248,69 +235,6 @@ def decide(event_name, event, api, key_of, checked_out, workflow, required, now)
     return False, "; ".join(reasons) or "no recent push run ran every lane"
 
 
-def flake_key(rev="HEAD", cwd=None):
-    """The mode and object of each FLAKE_INPUTS path in REV, absent ones too."""
-    listing = subprocess.run(["git", "ls-tree", "-z", "--full-tree", rev, "--",
-                              *FLAKE_INPUTS], cwd=cwd, check=True,
-                             stdout=subprocess.PIPE).stdout
-    found = {}
-    for record in listing.split(b"\0"):
-        if record:
-            head, path = record.split(b"\t", 1)
-            mode, unused_kind, name = head.split(b" ")
-            found[path.decode("utf-8", "surrogateescape")] = (mode, name)
-    digest = hashlib.sha256()
-    for path in FLAKE_INPUTS:
-        mode, name = found.get(path, (b"-", b"absent"))
-        digest.update(b"%s %s\t%s\0" % (mode, name, path.encode()))
-    return digest.hexdigest()
-
-
-def built(listing, job, step):
-    """Whether the job named JOB in LISTING ran STEP and both succeeded.
-
-    The step is the build itself: a job that found an earlier build and
-    skipped its step succeeded without building, and is no record.
-    """
-    jobs = complete(listing)
-    if jobs is None:
-        return False
-    found = [entry for entry in jobs if entry["name"] == job]
-    if len(found) != 1 or found[0].get("conclusion") != "success":
-        return False
-    steps = [entry for entry in found[0].get("steps", []) if entry["name"] == step]
-    return len(steps) == 1 and steps[0].get("conclusion") == "success"
-
-
-def decide_flake(event_name, api, key_of, workflow, job, step, now):
-    """(build, reason): whether the flake job must build (D585).
-
-    "Changed" is decided against what was built rather than against a
-    parent: the flake is rebuilt unless a push run of WORKFLOW in the last
-    week ran JOB's STEP to success from these very FLAKE_INPUTS.  A diff
-    against the event's base would skip after a run whose flake build
-    failed, after a force push, or on a branch's first push; this asks
-    the same question of a branch push, a pull request's merge checkout
-    and a push to main, and fails towards building.  Only push runs are
-    records, as for reuse, so a fork's pull request cannot supply one.
-    Manual dispatch always builds.
-    """
-    if event_name not in ("push", "pull_request"):
-        return True, "a %s run always builds the flake" % event_name
-    here = key_of("HEAD")
-    runs = api("actions/workflows/%s/runs?event=push&per_page=30" % workflow)
-    for run in runs.get("workflow_runs", []):
-        if not recent_push(run, now):
-            continue
-        listing = api("actions/runs/%d/jobs?filter=latest&per_page=100" % run["id"])
-        if not built(listing, job, step):
-            continue
-        if key_of(run["head_sha"]) == here:
-            return False, "%s built the flake from these inputs on %s" % (
-                run["html_url"], run["head_sha"][:12])
-    return True, "no push run in the last week built the flake from these inputs"
-
-
 def github(path):
     url = "%s/repos/%s/%s" % (os.environ["GITHUB_API_URL"],
                               os.environ["GITHUB_REPOSITORY"], path)
@@ -340,13 +264,6 @@ def fetched_key(rev, content_free=CONTENT_FREE):
 
 def fetched_candidate_key(rev):
     return fetched_key(rev, content_free=())
-
-
-def fetched_flake_key(rev):
-    if rev != "HEAD":
-        subprocess.run(["git", "fetch", "-q", "--no-tags", "--depth=1",
-                        "origin", rev], check=True)
-    return flake_key(rev)
 
 
 def verdict(needs, always):
@@ -396,16 +313,6 @@ def main(argv):
         print("gate_inputs: " + why, file=sys.stderr)
         print("reuse=" + ("true" if reuse else "false"))
         return 0
-    if len(argv) == 4 and argv[0] == "flake":
-        try:
-            build, why = decide_flake(
-                os.environ["GITHUB_EVENT_NAME"], github, fetched_flake_key,
-                argv[1], argv[2], argv[3], datetime.now(timezone.utc))
-        except Exception as error:  # noqa: BLE001 -- any doubt builds
-            build, why = True, "%s: %s" % (type(error).__name__, error)
-        print("gate_inputs: " + why, file=sys.stderr)
-        print("build=" + ("true" if build else "false"))
-        return 0
     if argv[:1] == ["verdict"] and argv[1:2] in ([], ["--always"]):
         always = ("inputs",) + tuple(argv[2:])
         needs = json.loads(os.environ["NEEDS"])
@@ -416,8 +323,7 @@ def main(argv):
             print("gate_inputs: " + problem, file=sys.stderr)
         return 1 if problems else 0
     print("usage: gate_inputs.py key [REV] | same A B"
-          " | reuse WORKFLOW JOB ... | flake WORKFLOW JOB STEP"
-          " | verdict [--always JOB ...]",
+          " | reuse WORKFLOW JOB ... | verdict [--always JOB ...]",
           file=sys.stderr)
     return 2
 

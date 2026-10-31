@@ -18,7 +18,7 @@ what they cost.
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
-| candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; the RV64 Linux test program under QEMU's user emulation, its physical runtime, GDB, C ABI and ISA-level verdicts on RISE runners suspended until further notice; every QEMU lane on Cortex-M; the editor grammar, the flake unless its inputs were built in the last week, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
+| candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; the RV64 Linux test program under QEMU's user emulation, its physical runtime, GDB, C ABI and ISA-level verdicts on RISE runners suspended until further notice; every QEMU lane on Cortex-M; the editor grammar, the flake, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
 | promotion to main | verify the candidate's complete successful gate and promote the unchanged tree | the gate reuses the full candidate pass; documents and script controls still run |
 | closing an item | `python3 scripts/activations.py`, then the steps in [closing an item](#closing-an-item) | the register rows whose activation the item's changes met, and the passes only the gate runs that the changes reach |
 
@@ -347,9 +347,8 @@ packages, one built from the checkout and one fetched from a release. It does
 not define the project's test derivations. More `nix develop` invocations
 alone would not remove repeated compilation. The gate's `flake` job builds
 both packages, evaluates every output of every system and enters the shell
-whenever no push run in the last seven days built the same `flake.nix`,
-`flake.lock` and `environments/pins.sh` (D585); that is the whole of Nix CI
-today, and what follows is what it does not do.
+on every gate run that does not reuse a pass (D585); that is the whole of
+Nix CI today, and what follows is what it does not do.
 
 Nix could later own compiler packages and suitable `checks` with narrow,
 complete inputs, and schedule them on the correct native builders. Its flake
