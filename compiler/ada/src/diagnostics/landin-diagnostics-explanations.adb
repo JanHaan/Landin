@@ -106,11 +106,17 @@ package body Landin.Diagnostics.Explanations is
                "An import names a source namespace unavailable for the s"
                & "elected target (D267). `hosted/*` requires a hosted targ"
                & "et; `platform/c` requires one of the currently enabled L"
-               & "P64 C ABIs; `platform/cortex_m` requires an M-profile ta"
-               & "rget, including its higher supported feature levels. Sel"
-               & "ect an applicable target or remove the import. Project-f"
-               & "irst root selection cannot change namespace availability"
-               & ".",
+               & "P64 C ABIs; the submodules of `platform/cortex_m`, its c"
+               & "onstrained reference description among them, require an "
+               & "M-profile target, including its higher supported feature"
+               & " levels. `platform/cortex_m` itself is available on ever"
+               & "y target and declares its operations only on an M-profil"
+               & "e one (D575), so a program for every target imports it a"
+               & "nd calls it from a `fixed if compiler.arch == cortex_m0`"
+               & " arm; a call outside one is L0201 on a hosted target. Se"
+               & "lect an applicable target or remove the import. Project-"
+               & "first root selection cannot change namespace availabilit"
+               & "y.",
             when Catalogue.Root_Holds_Library_Module =>
                "A warning: an import of `core`, `hosted` or `platform` w"
                & "as read from the compiler's own library, and a `--root=`"

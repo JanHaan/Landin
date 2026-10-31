@@ -28,13 +28,26 @@ class AddFixtureTest(unittest.TestCase):
             {"codes": ["L0015", "L0201"], "mode": "refuse",
              "reason": "hosted only"})
         with self.assertRaises(SystemExit):
-            add_fixture.corpus_row(meta("runtime/new"), "L0015", None)
+            add_fixture.corpus_row(meta("runtime/new"), "L0346", None)
+
+    def test_a_namespace_refusal_needs_no_reason(self):
+        #  The corpus reads the refused modules from the refusal itself.
+        self.assertEqual(add_fixture.corpus_row(
+            meta("runtime/new"), "L0015", None),
+            {"codes": ["L0015"], "mode": "refuse"})
 
     def test_standard_input_cannot_execute_on_firmware(self):
         with self.assertRaises(SystemExit) as raised:
             add_fixture.corpus_row(meta("runtime/new", stdin="in.txt"),
                                    None, None)
         self.assertIn("--refuse=CODES", str(raised.exception))
+
+    def test_an_output_oracle_cannot_execute_on_firmware(self):
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.corpus_row(meta("runtime/new", run_expect="out.txt"),
+                                   None, None)
+        self.assertIn("run_expect:", str(raised.exception))
+        self.assertIn("status oracle", str(raised.exception))
 
     def test_an_abi_fixture_is_a_restriction_with_its_reason(self):
         self.assertEqual(add_fixture.corpus_row(

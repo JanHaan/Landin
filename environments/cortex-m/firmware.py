@@ -589,7 +589,20 @@ def case(name):
         raise RuntimeError('compiler firmware ' + name + ': ' + str(error)) from error
 
 
-def execute_suite(parent, refine, profiles=PROFILES):
+#  The lane's cases, in the order it runs them: four once, the rest at each
+#  profile.  `boot` is the cold-booted image built twice.
+ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images')
+KINDS = ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images',
+         'hole', 'byte')
+CASES = ONCE + ('boot',) + KINDS
+
+
+def execute_suite(parent, refine, profiles=PROFILES, cases=None):
+    """Every case, or CASES, at PROFILES; a selection is FILTERED."""
+    unknown = sorted(set(cases or ()) - set(CASES))
+    require(not unknown, 'unknown firmware case %s; the cases are %s'
+            % (', '.join(unknown), ', '.join(CASES)))
+    chosen = set(cases or CASES)
     root = parent.out / 'firmware'
     root.mkdir()
     refine = refine.resolve(strict=True)
@@ -600,45 +613,51 @@ def execute_suite(parent, refine, profiles=PROFILES):
         '-mfloat-abi=soft', '-print-libgcc-file-name']).strip()
     require(helper.endswith('/thumb/v6-m/nofp/libgcc.a'),
             'firmware selected the wrong runtime archive')
-    out = root / 'cpu-levels'
-    out.mkdir()
-    with case('cpu-levels'):
-        controls = cpu_levels(Run(out, parent.tools), refine)
-    out = root / 'refusals'
-    out.mkdir()
-    with case('refusals'):
-        failures(Run(out, parent.tools), refine)
-    out = root / 'independent-c-assembly'
-    out.mkdir()
-    with case('independent-c-assembly'):
-        independent(Run(out, parent.tools))
-    out = root / 'compact-images'
-    out.mkdir()
-    with case('compact-images'):
-        #  D536/D537 with this lane's assembler: compact sources cost the
-        #  assembly and the assembler the source's size, and the giant
-        #  firmware image is refused before any tool runs.
-        Run(out, parent.tools).command('image-bounds', [
-            sys.executable, Path(__file__).resolve().parents[2] / 'scripts/image_bounds.py',
-            '--refine=' + str(refine), '--target=cortex-m0',
-            '--toolchain=' + str(parent.arm / 'arm-eabi-gcc')], timeout=900)
-    for optimize, specialize in profiles:
+    controls = []
+    if 'cpu-levels' in chosen:
+        out = root / 'cpu-levels'
+        out.mkdir()
+        with case('cpu-levels'):
+            controls += cpu_levels(Run(out, parent.tools), refine)
+    if 'refusals' in chosen:
+        out = root / 'refusals'
+        out.mkdir()
+        with case('refusals'):
+            failures(Run(out, parent.tools), refine)
+    if 'independent-c-assembly' in chosen:
+        out = root / 'independent-c-assembly'
+        out.mkdir()
+        with case('independent-c-assembly'):
+            independent(Run(out, parent.tools))
+    if 'compact-images' in chosen:
+        out = root / 'compact-images'
+        out.mkdir()
+        with case('compact-images'):
+            #  D536/D537 with this lane's assembler: compact sources cost the
+            #  assembly and the assembler the source's size, and the giant
+            #  firmware image is refused before any tool runs.
+            Run(out, parent.tools).command('image-bounds', [
+                sys.executable, Path(__file__).resolve().parents[2] / 'scripts/image_bounds.py',
+                '--refine=' + str(refine), '--target=cortex-m0',
+                '--toolchain=' + str(parent.arm / 'arm-eabi-gcc')], timeout=900)
+    for optimize, specialize in profiles if chosen - set(ONCE) else ():
         profile = root / (optimize + '-' + specialize)
         profile.mkdir()
-        images = []
-        for name in ('first', 'fresh'):
-            out = profile / name
-            out.mkdir()
-            run = Run(out, parent.tools)
-            with case('%s at %s/%s' % (name, optimize, specialize)):
-                elf = build(run, refine, optimize=optimize, specialize=specialize)
-                execute(run, elf)
-            images.append(out)
-        for suffix in ('', '.o', '.s', '.ld', '.map'):
-            require((images[0] / ('firmware.elf' + suffix)).read_bytes() ==
-                    (images[1] / ('firmware.elf' + suffix)).read_bytes(),
-                    'fresh firmware artifact differs: ' + suffix)
-        for kind in ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images', 'hole', 'byte'):
+        if 'boot' in chosen:
+            images = []
+            for name in ('first', 'fresh'):
+                out = profile / name
+                out.mkdir()
+                run = Run(out, parent.tools)
+                with case('%s at %s/%s' % (name, optimize, specialize)):
+                    elf = build(run, refine, optimize=optimize, specialize=specialize)
+                    execute(run, elf)
+                images.append(out)
+            for suffix in ('', '.o', '.s', '.ld', '.map'):
+                require((images[0] / ('firmware.elf' + suffix)).read_bytes() ==
+                        (images[1] / ('firmware.elf' + suffix)).read_bytes(),
+                        'fresh firmware artifact differs: ' + suffix)
+        for kind in (kind for kind in KINDS if kind in chosen):
             out = profile / kind
             out.mkdir()
             run = Run(out, parent.tools)
@@ -675,11 +694,14 @@ def execute_suite(parent, refine, profiles=PROFILES):
                             'fresh ' + kind + ' artifact differs: ' + suffix)
             controls.append({'kind': kind, 'optimize': optimize,
                              'specialize': specialize, 'status': 'passed'})
-        controls.append({'kind': 'cold-boot-reset-fresh', 'optimize': optimize,
-                         'specialize': specialize, 'status': 'passed'})
+        if 'boot' in chosen:
+            controls.append({'kind': 'cold-boot-reset-fresh', 'optimize': optimize,
+                             'specialize': specialize, 'status': 'passed'})
         print('compiler firmware: ' + profile.name + ' passed', flush=True)
     require(sha(refine) == compiler_hash, 'compiler changed during firmware execution')
     record = {'status': 'passed', 'compiler_sha256': compiler_hash,
+              'scope': 'every case' if cases is None else 'FILTERED: ' + ', '.join(
+                  one for one in CASES if one in chosen),
               'runtime_archive': helper, 'runtime_archive_sha256': sha(Path(helper)),
               'controls': controls,
               'artifacts': {str(p.relative_to(root)): sha(p)
@@ -694,8 +716,11 @@ def main():
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--all-profiles', action='store_true')
+    parser.add_argument('--case', action='append', choices=CASES,
+                        help='run only this case; repeat for more.  The four run once,'
+                             ' the rest at each profile; a selection is FILTERED')
     args = parser.parse_args()
-    supported_host()
+    supported_host(args.output)
     args.tools = installed_tools(args.tools)
     before = inventory(args.tools)
     args.output = args.output.resolve()
@@ -704,14 +729,15 @@ def main():
               'scope': 'development compiler-owned firmware; not acceptance'}
     try:
         record['firmware'] = execute_suite(Run(args.output, args.tools.resolve()),
-            args.refine, PROFILES if args.all_profiles else PROFILES[:1])
+            args.refine, PROFILES if args.all_profiles else PROFILES[:1], args.case)
         require(inventory(args.tools) == before, 'embedded tool inventory changed')
         record['status'] = 'passed'
     finally:
         record['files'] = {str(p.relative_to(args.output)): sha(p)
                           for p in sorted(args.output.rglob('*')) if p.is_file()}
         (args.output / 'result.json').write_text(json.dumps(record, indent=2)+'\n')
-    print('DEVELOPMENT / NOT ACCEPTANCE: compiler firmware controls passed')
+    print('DEVELOPMENT / NOT ACCEPTANCE: compiler firmware controls passed'
+          + ('' if not args.case else ' (FILTERED: the cases %s only)' % ', '.join(args.case)))
 
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Make a new fixture known everywhere a fixture has to be known.
 
-    python3 scripts/add_fixture.py CLASS/NAME [--refuse=L0015 --reason=TEXT]
+    python3 scripts/add_fixture.py CLASS/NAME [--refuse=CODES [--reason=TEXT]]
 
 Write the fixture first, `compiler/tests/fixtures/CLASS/NAME/fixture.meta`
 and its files, as compiler/tests/README.md says.  This then
@@ -11,8 +11,10 @@ and its files, as compiler/tests/README.md says.  This then
    compiler/tests/cortex-m/corpus.json: `execute` for a runtime fixture,
    `refuse` with the codes `--refuse` names for one the Cortex-M0 source
    check refuses, and for an ABI fixture, which needs a hosted C peer, a
-   `restriction` row whose witness is its own metadata -- each refusal and
-   restriction with the `--reason` it is given;
+   `restriction` row whose witness is its own metadata -- each restriction,
+   and each refusal but one whose only code is L0015, with the `--reason`
+   it is given; the corpus reads an L0015 refusal's modules from the
+   refusal itself, so its reason says only why, if anything;
 3. regenerates the files the corpus is read into, `check.py --coverage`,
    `--matrix` and `--tokens`;
 4. says what is left that only a person can decide: a Linux x86-64
@@ -53,17 +55,24 @@ def corpus_row(meta, refuse, reason):
                 "witness": "compiler/tests/fixtures/%s/fixture.meta"
                            % meta.label}
     if refuse:
-        if not reason:
-            raise SystemExit("%s: a refusal needs --reason=TEXT"
-                             % meta.label)
-        return {"codes": [one.strip() for one in refuse.split(",")],
-                "mode": "refuse", "reason": reason}
-    if meta.get("stdin"):
+        codes = [one.strip() for one in refuse.split(",")]
+        #  An import outside the target's namespace scope explains itself:
+        #  the corpus reads the refused modules from the refusal.
+        if not reason and codes != ["L0015"]:
+            raise SystemExit("%s: a refusal needs --reason=TEXT unless its"
+                             " only code is L0015" % meta.label)
+        row = {"codes": codes, "mode": "refuse"}
+        if reason:
+            row["reason"] = reason
+        return row
+    hosted = [key + ":" for key in ("stdin", "run_args", "run_files",
+                                    "run_expect") if meta.get(key)]
+    if hosted:
         raise SystemExit(
-            "%s reads standard input, which firmware has none of; name the"
-            " codes its Cortex-M0 compilation refuses it with,"
-            " --refuse=CODES --reason=TEXT, as runtime/word-count's row"
-            " does" % meta.label)
+            "%s names %s, which firmware cannot give a program; give it a"
+            " status oracle, or name the codes its Cortex-M0 compilation"
+            " refuses it with, --refuse=CODES, as runtime/word-count's row"
+            " does" % (meta.label, " and ".join(hosted)))
     return {"mode": "execute"}
 
 

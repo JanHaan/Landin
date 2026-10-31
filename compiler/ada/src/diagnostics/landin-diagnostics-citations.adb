@@ -1958,6 +1958,9 @@ package body Landin.Diagnostics.Citations is
                & "tracked as module storage",
             when 267 =>
                "Library source namespaces declare target availability",
+            when 575 =>
+               "`platform/cortex_m` declares nothing off an M-profile ta"
+               & "rget",
             when 12 =>
                "The first hosted path accepts one `main` shape",
             when 203 =>
@@ -3138,6 +3141,8 @@ package body Landin.Diagnostics.Citations is
             when 505 =>
                "Decisions: Modules and compile time",
             when 267 =>
+               "Decisions: The toolchain, C and the machine",
+            when 575 =>
                "Decisions: The toolchain, C and the machine",
             when 12 =>
                "Decisions: The toolchain, C and the machine",
@@ -4476,6 +4481,9 @@ package body Landin.Diagnostics.Citations is
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
+            when 575 =>
+               "https://www.701.dev/spec.html#d575-platform-cortex-m-dec"
+               & "lares-nothing-off-an-m-profile-target",
             when 12 =>
                "https://www.701.dev/spec.html#d12-the-first-hosted-path-"
                & "accepts-one-main-shape",

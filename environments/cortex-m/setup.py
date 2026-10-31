@@ -9,6 +9,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import urllib.request
 
 HERE = Path(__file__).resolve().parent
@@ -55,7 +56,11 @@ def inventory(root):
 GLIBC = (2, 38)
 
 
-def supported_host():
+def supported_host(output=None):
+    """Refuse a host the locked tools cannot run on, before anything builds.
+
+    OUTPUT is the lane's --output, which must outlive the run.
+    """
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise RuntimeError("embedded probes require native Linux x86-64")
     library, version = platform.libc_ver()
@@ -63,6 +68,52 @@ def supported_host():
     if (library != 'glibc' or not all(part.isdigit() for part in parts)
             or tuple(map(int, parts)) < GLIBC):
         raise RuntimeError("embedded profile requires glibc %d.%d or later" % GLIBC)
+    nixos_route(output)
+
+
+LOADER = '/lib64/ld-linux-x86-64.so.2'
+
+
+def nixos_route(output=None):
+    """On NixOS, refuse what the locked Debian binaries cannot run under,
+    naming the route that runs them.
+
+    NixOS's own loader path holds a stub that refuses a binary built for
+    another distribution, so QEMU and GDB start only inside an FHS
+    environment such as steam-run's.  That environment gives /tmp a
+    private namespace: a TMPDIR the outer shell set into it does not exist
+    inside, so refine cannot make its files, and an --output under /tmp
+    vanishes when the lane ends.
+    """
+    lane = 'environments/cortex-m/' + os.path.basename(sys.argv[0] or 'run.py')
+    route = (
+        'mkdir -p $HOME/.cache/landin/tmp\n'
+        '  NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 --run \\\n'
+        '    "TMPDIR=$HOME/.cache/landin/tmp steam-run python3 %s'
+        ' --tools DIR --refine REFINE --output $HOME/NEW-DIRECTORY ..."\n'
+        'See environments/cortex-m/README.md#on-nixos.' % lane)
+    stub = 'stub-ld' in os.path.realpath(LOADER) or (
+        os.path.exists('/etc/NIXOS') and not os.path.exists(LOADER))
+    if stub:
+        raise SystemExit(
+            'cortex-m: the locked QEMU and GDB are Debian binaries, and this NixOS host\'s'
+            ' %s is its stub loader, which refuses them.  Run the lane inside steam-run\'s'
+            ' FHS environment, with TMPDIR and --output under $HOME, because steam-run'
+            ' gives /tmp a private namespace:\n  %s' % (LOADER, route))
+    inside = not os.path.exists('/etc/NIXOS') and os.path.isdir('/run/current-system')
+    if not inside:
+        return
+    temporary = os.environ.get('TMPDIR')
+    if temporary and not os.path.isdir(temporary):
+        raise SystemExit(
+            'cortex-m: TMPDIR is %s, which does not exist inside this FHS environment:'
+            ' steam-run gives /tmp a private namespace, so set TMPDIR under $HOME:\n  %s'
+            % (temporary, route))
+    if output is not None and Path(os.path.abspath(output)).is_relative_to('/tmp'):
+        raise SystemExit(
+            'cortex-m: --output %s is under /tmp, which this FHS environment keeps private'
+            ' and discards when the lane ends; give an --output under $HOME:\n  %s'
+            % (output, route))
 
 
 def installed_tools(path):
@@ -113,7 +164,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     args = parser.parse_args()
-    supported_host()
+    supported_host(args.tools)
     root = args.tools.resolve()
     if root.exists():
         raise RuntimeError("installation already exists; choose a fresh --tools directory")

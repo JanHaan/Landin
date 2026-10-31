@@ -156,6 +156,43 @@ python3 environments/cortex-m/run.py \
   --output /absolute/new/evidence-directory
 ```
 
+`run.py` runs every lane, in the order the sections below describe them,
+and reports each one's verdict whether or not an earlier one failed: a
+transient debugger error in one lane no longer hides the others, and the
+run fails afterwards, naming each lane that did not pass. `--lane NAME`,
+repeated, runs only those lanes, and the lanes they need: `evidence`
+compares its images with the `driver` lane's, so `--lane evidence` runs
+both, and a lane whose prerequisite failed is reported as not run. The
+lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`,
+`backend`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`
+and `evidence`. A run that selects lanes says `FILTERED` in its last line
+and its `result.json`, and is not the gate's run.
+
+### On NixOS
+
+The locked QEMU and GDB are Debian binaries, and NixOS's own
+`/lib64/ld-linux-x86-64.so.2` is a stub that refuses them, so on NixOS a
+lane runs inside an FHS environment such as steam-run's. That environment
+gives `/tmp` a private namespace: a `TMPDIR` the outer shell set there does
+not exist inside it, so refine cannot write its files, and an `--output`
+under `/tmp` vanishes when the lane ends. Keep both under `$HOME`:
+
+```sh
+mkdir -p $HOME/.cache/landin/tmp
+NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 --run \
+  "TMPDIR=$HOME/.cache/landin/tmp steam-run python3 environments/cortex-m/run.py \
+   --tools $HOME/.cache/landin/cortex-m --refine $PWD/compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
+   --output $HOME/.cache/landin/NEW-DIRECTORY"
+```
+
+Every lane refuses these three hosts before it builds anything and prints
+this route: NixOS's stub loader, a `TMPDIR` that does not exist inside the
+environment, and an `--output` under its `/tmp`. The firmware link driver
+is not among the Debian binaries: `nix develop` carries the pinned
+`arm-eabi-gcc` (D532), so `refine compile --target=cortex-m0
+--firmware-entry=NAME` links in the shell itself, and the locked
+installation keeps its own copy for the lanes.
+
 The default private tool root is `~/work/.cortex-m`; `--tools` selects another
 installation. Every lane refuses a root holding no installation before it
 builds anything, naming the directory it looked in and `--tools`. Setup
@@ -430,44 +467,107 @@ the refusal names each one and the row to write. A row's `mode` is one of:
 |---|---|---|
 | `execute` | built and run at every profile, and at each M-profile level its `levels:` names | nothing; a fixture that names `cortex-m0` in its `targets:` needs this row, and one with a `trap_report:` may not name it |
 | `execute` with `"profile_limit": "selected-image"` | every profile is still built and attempted; a profile whose image fits runs and must pass, and one that does not is recorded with its sizes | a `reason`; the fixture does *not* name `cortex-m0` in its `targets:`, since an image that overflows is no execution, and `check.py` refuses the claim |
-| `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes` and a `reason` |
+| `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes`, and a `reason` unless the only code is L0015 |
 | `restriction` | a target restriction, the disabled general C surface or a hosted heap, not attempted | a `reason` and a `witness` file that shows it |
 
-A fixture that reads standard input cannot be `execute`: firmware has none
-to give it. A fixture with a `trap_report:` keeps an `execute` row and does
+Firmware gives a program no standard input, arguments, files beside it or
+output, so a fixture whose metadata names `stdin:`, `run_args:`,
+`run_files:` or `run_expect:` cannot be `execute`. The inventory refuses
+every such row while it is read, before anything builds, naming what each
+fixture asks for and the two ways out: give the fixture a status oracle,
+or write a `refuse` or `restriction` row. A counterpart cannot help, since
+the original's metadata is what is read.
+
+A refusal whose only code is L0015, an import outside the target's
+namespace scope (D267), explains itself: the corpus reads the refused
+modules from the diagnostics, records them as `refused_imports` and prints
+them on the fixture's line, and the reason it records names them. The
+row's `reason`, if it has one, says only why firmware has no such thing or
+what runs instead, and may not name a refused module, which the corpus
+refuses, so renaming or splitting a module leaves no reason stale.
+
+A fixture with a `trap_report:` keeps an `execute` row and does
 not name `cortex-m0`: firmware keeps D232's bare trap and writes no report
 (D361), so the corpus runs it to its trap and checks no line, which is less
 than the fixture's oracle; `runtime/computed-array-index-traps` is one.
-`check.py` refuses such a fixture that names `cortex-m0`, naming this rule. Every program's line gives its verdict and its image against
-the map: `FLASH used of 32768`, `RAM used of 12288` (the 16 KiB less the
-4 KiB stack), each with the sections inside it, how far over the region
-an image that overflowed is, which the corpus measures by relinking the
-same objects against an enlarged copy of the map that never runs, and its
-three largest routines, `largest routines every_kind 2940, ...`. Each
-program's `result.json` under the output gives every routine's size,
-`image.routines`, read with the pinned `nm` from the image that ran or from
-the measured one, so where an overflowing image's bytes go is read from
-the corpus rather than from tools run by hand. A
+`check.py` refuses such a fixture that names `cortex-m0`, naming this rule.
+
+Every program links with the constrained reference's own derived linker
+script (D545), the one refine writes for a firmware build of a program that
+imports no description, and its limits are that build's report: `FLASH used
+of 32768`, the text region, and `RAM used of 12288`, the data region less
+the 4 KiB stack it holds. The corpus derives each described profile once,
+under `profiles/DEVICE` in its output, from a firmware build of a program
+that selects it and places nothing, and holds the facts to
+[`descriptions.json`](descriptions.json). Every program's line gives its
+verdict and its image against those limits, each with the sections inside
+it, how far over the region an image that overflowed is, which the corpus
+measures by relinking the same objects against a copy of the script whose
+text and data regions are enlarged and whose assertions are removed, which
+never runs, and its three largest routines, `largest routines every_kind
+2940, ...`. Each program's `result.json` under the output gives every
+routine's size, `image.routines`, read with the pinned `nm` from the image
+that ran or from the measured one, so where an overflowing image's bytes go
+is read from the corpus rather than from tools run by hand. A
 profile limit no profile meets any more fails an unfiltered run, naming the
 fixture, its largest image, and the row to change: remove `profile_limit`
 and `reason`, and add `cortex-m0` to the fixture's `targets:`. An overflow
 in a row with no limit fails naming its sizes and the same row.
 
+Each limited verdict is then linked again for every other described
+device, RP2040 and the STM32H753, with that device's derived script and a
+harness start assembled for its vector table and boot prefix, under
+`DEVICE/` in the program's output, and held to its build report's limits
+and stack; nothing runs there, since QEMU has no such chip. The corpus
+prints, for each device, how many limited verdicts still exceed it, and
+records each program's verdict under `profiles` in its result. A program
+that fits the reference fits every described device, whose flash past its
+vector table and boot prefix, static RAM and stack are each no smaller,
+which the corpus checks rather than assumes; an image past the harness's
+8 MiB materialization guard is past every region of each.
+
 `--profile` takes `none-off` or `none/off`, as the corpus line prints it.
 A filtered run judges no limit stale, because the profile that still
-overflows may be one it did not run.
+overflows may be one it did not run, and says `FILTERED` last.
 
-`backend-start.S` and `backend-memory.ld` are small external test support:
-reset/vector words, bytewise initialized-data copying, BSS clearing, a stack
-watermark and result/fault observation. Its reset, fault and unexpected
-entries are `_landin_harness_reset`, `_landin_harness_hardfault` and
-`_landin_harness_unexpected`, in the `_landin` prefix the compiler keeps for
-its own symbols, so a program's own public `reset` links beside them. The
-compiler emits ordinary routines, not reset or interrupt entries. The map
-remains 32 KiB flash, 16 KiB RAM and 4 KiB stack. A single routine requiring
-more than that stack reservation is recorded as a profile limit. Returned SP, terminated r11 chain, callee-saved
-sentinels and a bottom watermark are asserted. The lowest changed watermark
-word is retained as an observation, explicitly not a proved stack bound.
+`--program PATH` runs a program of your own, a `.ldn` file or a module
+directory, with `--root DIR` for the roots it imports from, at the corpus's
+four profiles, or the `--profile`s named, on the constrained reference,
+and prints what each returned, or where it trapped, with its image against
+the map; no oracle is held, so a measured value comes back as a value:
+
+```sh
+python3 environments/cortex-m/backend_corpus.py --refine PATH_TO_REFINE \
+  --output NEW_DIRECTORY --program answer.ldn --profile none-off
+cortex program: answer.ldn none/off returned 36 (r12 0): FLASH 1036 of 32768 (.isr_vector 192, .text 844); RAM 12 of 12288 (.bss 12); largest routines __udivsi3 266, depth 250, main 144
+```
+
+A program that traps says `trapped: HardFault at` the faulting routine and
+line, and whether it was the UDF #1 a check emits; one that does not fit
+says by how much, as a corpus line does; a compile failure gives the
+compiler's first diagnostic; and a stack overrun names its routine. Each
+profile's `observed.json` holds the status, r12 and the stop. The run
+fails only when a profile could not be built or run.
+
+`backend-start.S` is small external test support: the vector table,
+bytewise initialized-data and RAM-code copying, BSS clearing, a stack
+watermark and result/fault observation. It supplies what the derived
+script places and reads, assembled with the profile's table length and
+boot prefix: `.boot2` for RP2040's second stage, `.isr_vector`, its entry
+`_landin_firmware_reset`, and the `_landin_firmware_*` symbols the script
+defines. Its fault and unexpected entries are `_landin_harness_hardfault`
+and `_landin_harness_unexpected`, in the `_landin` prefix the compiler
+keeps for its own symbols, so a program's own public `reset` links beside
+them. The compiler emits ordinary routines, not reset or interrupt
+entries. A single routine requiring more than the stack reservation is
+recorded as a profile limit. Returned SP, terminated r11 chain,
+callee-saved sentinels and a bottom watermark are asserted. Once the stack
+is painted, a write watchpoint covers its reservation's lowest 16 bytes,
+so a stack that overruns its reservation stops at the instruction that
+reached the guard, and the failure names that routine, its caller, the
+stack pointer and how many bytes of which stack, main or process, were in
+use. The lowest changed watermark word is retained as an observation,
+explicitly not a proved stack bound.
 Freestanding evidence below records measured stack/firmware and source debugging.
 
 QEMU uses exactly `microbit`, single-threaded TCG and a loopback-only GDB port.
@@ -530,8 +630,8 @@ expansion or new DMA ownership model is introduced.
 `firmware` output directory, separate from every earlier lane. It invokes the
 compiler with
 `--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
-path. The compiler generates reset, vectors and the linker script; neither
-`backend-start.S` nor `backend-memory.ld` supplies these semantics. The older
+path. The compiler generates reset, vectors and the linker script; `backend-start.S`
+supplies none of these semantics. The older
 533-fixture corpus, 72 generated controls and independent controls remain
 mandatory and retain their own startup and applicability records.
 
@@ -607,7 +707,14 @@ For a focused development run on the supported Linux host:
 
 ```sh
 python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
+python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles --case fibre
 ```
+
+`--case`, repeated, runs only the cases named: `cpu-levels`, `refusals`,
+`independent-c-assembly` and `compact-images` once, and `boot`, the
+cold-booted image built twice, `interrupts`, `fibre`, `dma`, `machine`,
+`veneers`, `fallthrough`, `images`, `hole` and `byte` at each profile. A
+selection is marked `FILTERED` in its last line and its `result.json`.
 
 The contract was checked against Arm's [ARMv6-M Architecture Reference Manual DDI0419E](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),
 [Cortex-M0 Devices Generic User Guide](https://documentation-service.arm.com/static/5ea6ce5e9931941038def8c1),
@@ -729,13 +836,12 @@ python3 environments/cortex-m/descriptions.py --refine PATH_TO_REFINE --output N
 The lanes that stage their own library, `devices.py`, `driver.py` and
 `freestanding.py`, stage `platform/cortex_m/reference` beside the modules
 their programs import, since the reference is part of every program that
-imports no description. The corpus still links with its probe script, which
-holds the reference's map, so its capacity verdicts are linked against the
-reference; `backend_corpus.py` then holds every limited verdict's measured
-image, largest frame or materialization to each description's capacities in
-`descriptions.json` and records them under `profiles` in its result. Against
-RP2040 and the STM32H753 that is a measurement from the images' sizes and
-frames, not a link or a run against their maps.
+imports no description. The corpus links every program with the
+reference's derived script and links each limited verdict again with RP2040's
+and the STM32H753's, reading every limit from the build report of a
+firmware build that selects the device ([the corpus inventory](#the-corpus-inventory)),
+so its capacity verdicts against those two devices are links against their
+maps, not measurements from sizes; none runs there.
 
 ## Complete derived driver
 
@@ -871,6 +977,21 @@ image keeps every scalar's cell entries, since a program without a public
 main stack. Every profile fits the
 32 KiB flash, 16 KiB RAM profile. Paint is this run's deepest write, not a
 bound.
+
+`evidence.py` runs on its own with the programs and controls named and the
+profiles to run them at, so the consumer is re-measured alone:
+
+```sh
+python3 environments/cortex-m/evidence.py --refine PATH_TO_REFINE \
+  --output NEW_DIRECTORY --control capacity --profile none-off --profile size-auto
+```
+
+`--control` takes `pool`, `vec`, `cpu`, `noreturn`, `panic`, `veneer`,
+`irq`, `machine`, `leaf`, `switch` or `capacity`, and `--program` `app`,
+`protocol` or `layout`, which builds the driver lane's image of the same
+program first, since the debug image is compared with it. Each repeats;
+`--all-profiles` runs all six. The run is `FILTERED`; `capacity.json` and
+`capacity.txt` under its `evidence` directory hold each profile's report.
 
 Artifacts under the `run.py` output's `evidence` directory retain sources,
 identities, commands/assertions/timeouts,

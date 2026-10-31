@@ -235,7 +235,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     args = parser.parse_args()
-    supported_host()
+    supported_host(args.output)
     args.tools = installed_tools(args.tools)
     before = inventory(args.tools)
     args.output.mkdir(parents=True, exist_ok=False)

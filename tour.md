@@ -2756,13 +2756,16 @@ Four source namespaces belong to the repository:
 |---|---|---|
 | `core` | the shared freestanding library: `core/mem`, `core/text`, `core/vec` | every module and interface on every target |
 | `hosted` | hosted providers such as `hosted/heap`, `hosted/system` and `hosted/blocking` | on hosted systems |
-| `platform` | scoped freestanding interfaces | `platform/c` with an enabled LP64 C ABI; `platform/cortex_m` on M-profile targets, higher feature levels included |
+| `platform` | scoped freestanding interfaces | `platform/c` with an enabled LP64 C ABI; `platform/cortex_m` everywhere, declaring its operations only on M-profile targets, higher feature levels included, and its device descriptions only there |
 | `landin` | the toolchain modules of [1560]: `landin/compiler`, `landin/assembler`, `landin/linker` | everywhere, without an import |
 
 Fine print:
 
 - An import outside its target's scope is refused by name when the target
   is checked, for example `hosted/heap` in firmware.
+- A module that declares nothing on some targets can be imported on all of
+  them: a program for every target imports `platform/cortex_m` and calls it
+  from a `fixed if compiler.arch == cortex_m0` arm ([1500]).
 - The toolchain modules are always there, so the bare names `compiler`,
   `assembler` and `linker` cannot be declared or bound by an import, and
   an explicit `import landin/compiler` (or `assembler`, or `linker`) is

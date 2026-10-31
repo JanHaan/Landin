@@ -452,7 +452,9 @@ process ignores SIGPIPE and gives its children the default back.
   naming every directory searched. The static Linux link and firmware
   refuse all three.
 - `platform/c` supplies aliases for the supported LP64 C ABIs, and
-  `platform/cortex_m` supplies M-profile CPU operations.
+  `platform/cortex_m` supplies M-profile CPU operations; it declares nothing
+  on another target, so a program for every target imports it and calls it
+  from a `fixed if compiler.arch == cortex_m0` arm (D575).
 - An import outside a module's target scope is refused by name, including
   through a project-root override.
 - A failed check in a hosted program with no `panic_handler` writes its kind
@@ -570,6 +572,15 @@ C ABI and debugger verdicts; RV64 Linux runs under QEMU's user emulation, as
 above. [`AGENTS.md`](../AGENTS.md#the-mechanical-gate) describes every job.
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0, and is retired. The recorded boundaries stand as
-measured: the 32 KiB capacity verdicts, the lines-and-functions Cortex-M
+measured: the 32 KiB capacity verdicts, linked again against RP2040's and
+the STM32H753's derived scripts, the lines-and-functions Cortex-M
 debugging contract and the Darwin shared-region placement limit observed on
 some hosts.
+
+The Cortex-M lanes also run one thing at a time on a developer's Linux
+host, under the same locked QEMU and GDB: a program of one's own at the
+corpus's profiles, printing what it returned or where it trapped, a single
+lane, a firmware case or an evidence control, each marked `FILTERED`; a
+stack that overruns its reservation is named with its routine. On NixOS
+they run under steam-run, and refuse otherwise naming that route
+([the lane's guide](../environments/cortex-m/README.md#on-nixos)).

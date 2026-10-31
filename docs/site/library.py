@@ -1321,25 +1321,32 @@ def write(root, destination, render):
                                        html.escape(' '.join(p.split()), quote=False)) + '</p>'
                         for p in paragraphs if p.strip()) + '</div>')
             return '\n'.join(out) + '\n</div></div>\n'
+        assertions, arms = [], []
+        if module.startswith('platform/'):
+            # A module declares its scope once, in one of its files; a
+            # generated file or one implementing a single system need not
+            # repeat it.  One available everywhere that declares nothing
+            # off its targets (D575) says so by its module-level arm.
+            own = [text for path, text in sorted(sources.items())
+                   if str(Path(path).parent) == module]
+            assertions = [found[0].strip() for text in own
+                          for found in [re.search(r'compiler\.assert\([\s\S]*?\)\s*', text)]
+                          if found]
+            arms = [found[1] for text in own
+                    for found in [re.search(r'^fixed if (.+) then$', text, re.M)] if found]
+            if not assertions and not arms:
+                raise ValueError(f'{module}: no target assertion and no module-level fixed if')
         availability = ('Shared: available on every enabled target.' if module.startswith('core/')
                         else 'Hosted targets only.' if module.startswith('hosted/')
-                        else 'Target scope is enforced by the module assertion below.')
+                        else 'Target scope is enforced by the module assertion below.' if assertions
+                        else 'Importable on every target; it declares its items only where '
+                             '<code>' + html.escape(arms[0], quote=False) + '</code>.')
         # The opening is a section of its own, untitled, so the bar says
         # what the page is until the reader reaches the overview's first
         # section: the shared script otherwise names the first one at once.
         body = ('<section class="api-opening">\n' + on_this_page()
                 + '<p class="api-condition">' + availability + '</p>\n')
-        if module.startswith('platform/'):
-            # A module declares its scope once, in one of its files; a
-            # generated file or one implementing a single system need not
-            # repeat it.
-            assertions = [found[0].strip()
-                          for path, text in sorted(sources.items())
-                          if str(Path(path).parent) == module
-                          for found in [re.search(r'compiler\.assert\([\s\S]*?\)\s*', text)]
-                          if found]
-            if not assertions:
-                raise ValueError(f'{module}: no target assertion')
+        if assertions:
             body += signature(assertions[0])
         body += '</section>\n'
         # A `###` of the overview is a section of the page, beside the

@@ -231,8 +231,68 @@ class ProbeFailures(unittest.TestCase):
             record['fixtures']['runtime/word-count'] = {'mode': 'execute'}
             (root / 'corpus.json').write_text(json.dumps(record))
             with patch('backend_corpus.COUNTERPARTS', root):
-                with self.assertRaisesRegex(RuntimeError, 'cannot execute on firmware'):
+                with self.assertRaisesRegex(RuntimeError, '(?s)runtime/word-count reads standard'
+                                            ' input .*status oracle.*"refuse" row'):
                     backend_corpus.inventory()
+
+    def test_an_output_oracle_never_executes_and_the_refusal_says_the_ways_out(self):
+        import shutil
+        import backend_corpus
+        from unittest.mock import patch
+        name = 'runtime/benchmark-game-binary-trees'
+        self.assertTrue(backend_corpus.metadata(
+            backend_corpus.ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
+            .get('run_expect'))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'cortex-m'
+            shutil.copytree(backend_corpus.COUNTERPARTS, root)
+            record = json.loads((root / 'corpus.json').read_text())
+            record['fixtures'][name] = {'mode': 'execute'}
+            (root / 'corpus.json').write_text(json.dumps(record))
+            #  Refused while the inventory is read, before anything builds.
+            with patch('backend_corpus.COUNTERPARTS', root), \
+                    patch('backend_corpus.fixture') as built:
+                with self.assertRaises(RuntimeError) as refused:
+                    backend_corpus.execute(Path(directory), root, root / 'refine')
+            built.assert_not_called()
+            text = str(refused.exception)
+            self.assertIn(name + ' takes arguments (run_args:) and has its output as its'
+                          ' oracle (run_expect:)', text)
+            self.assertIn('Give each fixture a status oracle', text)
+            self.assertIn('"refuse" row', text)
+            self.assertIn('"restriction" row', text)
+
+    def test_a_namespace_refusal_reads_its_modules_from_the_refusal(self):
+        import backend_corpus
+        from unittest.mock import patch
+        log = ('error[L0015]: module unavailable for target: hosted/heap\n'
+               'error[L0015]: module unavailable for target: hosted/blocking\n')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = Run(root, root)
+            def refused(name, argv, timeout=30, env=None):
+                (root / (name + '.log')).write_text(log)
+                run.commands.append({'name': name, 'exit': 1})
+                raise RuntimeError(name + ' failed with exit 1')
+            row = {'mode': 'refuse', 'codes': ['L0015'], 'reason': 'Firmware has no heap.'}
+            with patch.object(run, 'command', side_effect=refused):
+                result = backend_corpus.source_refusal(run, root / 'refine',
+                                                       'runtime/word-count', row)
+                self.assertEqual(result['refused_imports'], ['hosted/blocking', 'hosted/heap'])
+                self.assertEqual(result['reason'], 'Source namespace checking refuses'
+                                 ' hosted/blocking and hosted/heap on the freestanding target'
+                                 ' before checking declarations. Firmware has no heap.')
+                #  A reason repeating a refused import goes stale when the
+                #  module is renamed, so the row may not say it.
+                row['reason'] = 'Firmware has no hosted/heap.'
+                with self.assertRaisesRegex(RuntimeError, 'names hosted/heap, which the corpus'
+                                            ' reads from the refusal'):
+                    backend_corpus.source_refusal(run, root / 'refine', 'runtime/word-count', row)
+        rows = backend_corpus.inventory()
+        self.assertFalse([name for name, row in rows.items()
+                          if backend_corpus.namespace_only(row)
+                          and 'refuses' in row.get('reason', '')
+                          and 'freestanding target' in row.get('reason', '')])
 
     def test_corpus_hashes_compiler_once_and_direct_fixture_retains_digest(self):
         import backend
@@ -253,8 +313,11 @@ class ProbeFailures(unittest.TestCase):
                     'sections': {'.isr_vector': 192, '.text': 208},
                     'routines': {'main': 120}}))
                 return root / 'program.elf'
+            from backend import recorded
             with (patch('backend.build', side_effect=build),
                   patch('backend.execute'),
+                  patch('backend_corpus.derived',
+                        side_effect=lambda run, refine, device, where: recorded(device)),
                   patch('backend.sha', wraps=sha) as fixture_digest,
                   patch('backend_corpus.sha', wraps=sha) as corpus_digest,
                   patch('backend_corpus.inventory', return_value={name: {'mode': 'execute'}})):
@@ -291,7 +354,10 @@ class ProbeFailures(unittest.TestCase):
 
     def test_image_limit_does_not_hide_codegen_failure(self):
         from unittest.mock import patch
-        from backend_corpus import image_limit
+        from backend import recorded
+        from backend_corpus import image_limit as limit
+        def image_limit(run, row, error):
+            return limit(run, row, error, recorded())
         from run import CommandFailed
         row = {'profile_limit': 'selected-image', 'reason': 'test physical map'}
         sizes = {'regions': {'FLASH': {'used': 32776, 'limit': 32768},
@@ -672,6 +738,117 @@ class ProbeFailures(unittest.TestCase):
         model.feed(1)
         self.assertEqual((model.remaining, model.events[-1]), (7, 'dma8:0:01'))
 
+    def test_an_overflow_is_named_by_its_part_of_the_profile(self):
+        from backend import recorded
+        from backend_corpus import overflowed
+        from run import CommandFailed
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'assemble-link.log'
+            failed = CommandFailed('assemble-link', log, 'failed with exit 1')
+            log.write_text("region `AXI_SRAM' overflowed by 40 bytes\n"
+                           "region `FLASH' overflowed by 8 bytes\n")
+            self.assertEqual(overflowed(None, failed, recorded('stm32h753')),
+                             {'RAM': 40, 'FLASH': 8})
+            #  A region the program's parts are not placed in is no
+            #  capacity verdict.
+            self.assertIsNone(overflowed(None, failed, recorded()))
+            log.write_text('ld: RAM image overlaps the reserved 4 KiB stack\n')
+            self.assertEqual(overflowed(None, failed, recorded()), {'RAM': None})
+
+    def test_each_description_holds_what_the_reference_holds(self):
+        from backend import DESCRIPTIONS, REFERENCE, recorded
+        from backend_corpus import dominates
+        reference = recorded()
+        self.assertEqual((reference['flash_limit'], reference['static_ram_limit'],
+                          reference['stack_reserved'], reference['stack_top']),
+                         (32768, 12288, 4096, 0x20004000))
+        for device in DESCRIPTIONS:
+            self.assertTrue(dominates(recorded(device), reference), device)
+        smaller = dict(recorded('rp2040'), static_ram_limit=4096)
+        self.assertFalse(dominates(smaller, reference))
+
+    def test_every_lane_runs_and_is_reported_after_one_fails(self):
+        from contextlib import ExitStack
+        from unittest.mock import patch
+        from run import LANES, selection
+        from setup import arm_archive, sha
+        self.assertEqual(selection(['evidence']), ['driver', 'evidence'])
+        self.assertEqual(selection(None), list(LANES))
+        with self.assertRaisesRegex(RuntimeError, 'unknown lane nowhere; the lanes are cpu'):
+            selection(['nowhere'])
+        ran = []
+        def lane(self, name, refine):
+            ran.append(name)
+            if name in ('abi', 'driver'):
+                raise RuntimeError(name + ' broke')
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory)
+            (root/'installation.json').write_text(json.dumps({
+                'lock_sha256': sha(HERE/'tools.lock.json'),
+                'arm': {key: arm_archive()[key] for key in ('version', 'sha256')},
+                'files': {'root': {}, 'gnat-arm-elf': {}}}))
+            stack.enter_context(patch('run.supported_host'))
+            stack.enter_context(patch('run.inventory', return_value={}))
+            stack.enter_context(patch.object(Run, 'command', return_value=
+                '10.0.13 (GNAT-FSF-builds) %s 2.46.1 16.3'
+                % arm_archive()['version'].rsplit('-', 1)[0]))
+            stack.enter_context(patch.object(Run, 'lane', lane))
+            run = Run(root, root)
+            with self.assertRaises(RuntimeError) as failed:
+                run.execute(Path('refine'))
+        self.assertEqual(ran, [name for name in LANES if name != 'evidence'])
+        self.assertEqual(run.verdicts['abi'], {'status': 'failed', 'error': 'abi broke'})
+        self.assertEqual(run.verdicts['evidence']['status'], 'not run')
+        self.assertEqual(run.verdicts['firmware'], {'status': 'passed'})
+        self.assertIn('3 of 13 lanes did not pass', str(failed.exception))
+
+    def test_a_stack_overrun_is_watched_and_named(self):
+        from backend import recorded, session
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), HERE)
+            text = session(run, 1234, 42, False, profile=recorded())
+            painted = text.index('break backend_painted')
+            watched = text.index('*(unsigned char (*)[16])%d' % 0x20003000)
+            self.assertLess(painted, watched)
+            self.assertIn('BP_HARDWARE_WATCHPOINT', text)
+            self.assertIn('the stack overran its 4096-byte reservation: %s wrote into its'
+                          ' lowest 16 bytes at 0x20003000, called from %s', text)
+            self.assertIn('main stack (MSP)', text)
+            #  Observing holds no result.
+            observed = session(run, 1234, None, False, profile=recorded())
+            self.assertNotIn('expected 42', observed)
+            self.assertIn('observed.json', observed)
+
+    def test_nixos_names_the_route_to_the_locked_tools(self):
+        from unittest.mock import patch
+        import setup
+        def host(nixos, loader, run=True, tmp=None):
+            paths = {'/etc/NIXOS': nixos, '/run/current-system': run}
+            return (patch('setup.os.path.realpath', return_value=loader),
+                    patch('setup.os.path.exists', side_effect=lambda p: paths.get(p, True)),
+                    patch('setup.os.path.isdir', side_effect=lambda p:
+                          paths.get(p, p != tmp)),
+                    patch.dict('setup.os.environ', {'TMPDIR': tmp} if tmp else {}, clear=False))
+        for patches, said in (
+                (host(True, '/nix/store/x-stub-ld-x86_64'), 'stub loader'),
+                (host(False, '/usr/lib/ld-linux-x86-64.so.2', tmp='/tmp/nix-shell-1'),
+                 'TMPDIR is /tmp/nix-shell-1, which does not exist')):
+            with patches[0], patches[1], patches[2], patches[3]:
+                with self.assertRaises(SystemExit) as refused:
+                    setup.nixos_route('/home/u/out')
+            self.assertIn(said, str(refused.exception))
+            self.assertIn('steam-run', str(refused.exception))
+            self.assertIn('TMPDIR=$HOME', str(refused.exception))
+        patches = host(False, '/usr/lib/ld-linux-x86-64.so.2')
+        with patches[0], patches[1], patches[2], patches[3]:
+            with self.assertRaisesRegex(SystemExit, '--output /tmp/out is under /tmp'):
+                setup.nixos_route('/tmp/out')
+            setup.nixos_route('/home/u/out')
+        #  An ordinary distribution has a loader of its own.
+        patches = host(False, '/usr/lib/ld-linux-x86-64.so.2', run=False)
+        with patches[0], patches[1], patches[2], patches[3]:
+            setup.nixos_route('/tmp/out')
+
     def test_unsupported_host(self):
         from unittest.mock import patch
         from setup import supported_host
@@ -688,7 +865,8 @@ class ProbeFailures(unittest.TestCase):
         for libc in (('glibc', '2.38'), ('glibc', '2.39'), ('glibc', '3.0')):
             with patch('platform.system', return_value='Linux'), \
                     patch('platform.machine', return_value='x86_64'), \
-                    patch('platform.libc_ver', return_value=libc):
+                    patch('platform.libc_ver', return_value=libc), \
+                    patch('setup.nixos_route'):
                 supported_host()
 
     def test_wrong_tool_lock(self):
