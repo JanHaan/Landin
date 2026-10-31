@@ -26,6 +26,7 @@ with Landin.Stages.Configuration;
 with Landin.Stages.Resolution;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 with Landin.Targets.Layouts;
 with Landin.Types;
 
@@ -1547,6 +1548,32 @@ package body Landin.Tests.Cortex_Suite is
    end Backend_Boundaries;
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context);
+   --  [1990]'s constrained profile, written out here as the expectation
+   --  platform/cortex_m/reference must select, apart from its source.
+   function Reference return Landin.Targets.Firmware.Profile;
+   function Reference return Landin.Targets.Firmware.Profile is
+      package F renames Landin.Targets.Firmware;
+      Result : F.Profile;
+   begin
+      Result.Present := True;
+      Result.Reference := True;
+      Result.Device := F.To_Name ("constrained-reference");
+      Result.Core := F.Cortex_M0;
+      Result.Vector_Count := 48;
+      for Slot in 16 .. 41 loop
+         Result.Interrupts (Slot) := Slot /= 21;
+      end loop;
+      Result.Boot := F.Vector_Table;
+      Result.Count := 2;
+      Result.Regions (1) :=
+        (F.To_Name ("FLASH"), 0, 32 * 1024, F.Read_Execute);
+      Result.Regions (2) :=
+        (F.To_Name ("RAM"), 16#2000_0000#, 16 * 1024, F.Read_Write_Execute);
+      Result.Placed := [F.Vectors | F.Text | F.Rodata => 1, others => 2];
+      Result.Stack_Size := 4 * 1024;
+      return Result;
+   end Reference;
+
    procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context);
 
    procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context)
@@ -1600,7 +1627,8 @@ package body Landin.Tests.Cortex_Suite is
         & "/tool/libgcc.a(_muldi3.o)" & LF
         & "/tool/libgcc.a(_udivsi3.o)" & LF);
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Result, Valid);
+        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+         Result => Result);
       Landin.Testing.Check (Item, Valid, "ELF load extents are measured");
       Landin.Testing.Check_Equal
         (Item, U.To_String (Result),
@@ -1608,9 +1636,18 @@ package body Landin.Tests.Cortex_Suite is
          & """flash_remaining"":31984,""static_ram_used"":40,"
          & """static_ram_limit"":12288,""static_ram_remaining"":12248,"
          & """stack_reserved"":4096,""runtime_members"":"
-         & "[""_muldi3.o"",""_udivsi3.o""]}",
+         & "[""_muldi3.o"",""_udivsi3.o""],"
+         & """device"":""constrained-reference"",""core"":""cortex-m0"","
+         & """boot"":""vector-table"",""vector_address"":0,"
+         & """vector_words"":48,""regions"":[{""name"":""FLASH"","
+         & """origin"":0,""length"":32768,""access"":""rx""},"
+         & "{""name"":""RAM"",""origin"":536870912,""length"":16384,"
+         & """access"":""rwx""}],""placed"":{""vectors"":""FLASH"","
+         & """text"":""FLASH"",""rodata"":""FLASH"",""data"":""RAM"","
+         & """bss"":""RAM"",""stack"":""RAM""}}",
          "occupied extents include gaps and archive members are sorted");
 
+      Host.Add_Firmware_Library;
       Host.Add_File ("p.ldn", "start: () -> none = end start");
       Args.Append ("--target=cortex-m0");
       Args.Append ("--firmware-entry=start");
@@ -1637,12 +1674,14 @@ package body Landin.Tests.Cortex_Suite is
       end;
       Host.Add_File ("p.elf", "invalid ELF");
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Result, Valid);
+        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+         Result => Result);
       Landin.Testing.Check (Item, not Valid, "invalid ELF is refused");
       Host.Add_File ("p.elf", Data);
       Host.Add_File ("p.elf.map", "");
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Result, Valid);
+        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+         Result => Result);
       Landin.Testing.Check (Item, not Valid, "empty map is refused");
    end Linked_Firmware_Evidence;
 
@@ -1654,6 +1693,7 @@ package body Landin.Tests.Cortex_Suite is
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args : Landin.Platform.Path_List;
          begin
+            Host.Add_Firmware_Library;
             Host.Add_File ("p.ldn",
               (case Mode is
                  when 1 => "mut result: u32 = 1 "
@@ -1767,6 +1807,7 @@ package body Landin.Tests.Cortex_Suite is
                                 elsif Mode = 5 then "4072" else "5000")
               & "]u8 = zeroed bytes[0] = 1 _ = bytes[0] ";
          begin
+            Host.Add_Firmware_Library;
             Host.Add_File ("p.ldn",
               (if Mode = 2 then
                  "large: () -> none = " & Body_Text & "end large "
@@ -1946,6 +1987,7 @@ package body Landin.Tests.Cortex_Suite is
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args : Landin.Platform.Path_List;
          begin
+            Host.Add_Firmware_Library;
             Host.Add_File ("p.ldn", Program (Case_Number)
               & " start: () -> none = end start");
             if Case_Number = 1 then

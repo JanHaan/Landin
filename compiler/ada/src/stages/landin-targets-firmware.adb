@@ -2,6 +2,122 @@ with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
 
 package body Landin.Targets.Firmware is
+
+   function To_Name (Text : String) return Name_Text is
+      Result : Name_Text;
+   begin
+      Result.Length := Text'Length;
+      Result.Text (1 .. Text'Length) := Text;
+      return Result;
+   end To_Name;
+
+   function Spelling (Name : Name_Text) return String is
+     (Name.Text (1 .. Name.Length));
+
+   function Is_Core_Name (Text : String) return Boolean is
+     (Text in "cortex-m0" | "cortex-m0plus" | "cortex-m3" | "cortex-m4"
+        | "cortex-m7");
+
+   function Core_Named (Text : String) return Core_Kind is
+     (if Text = "cortex-m0" then Cortex_M0
+      elsif Text = "cortex-m0plus" then Cortex_M0plus
+      elsif Text = "cortex-m3" then Cortex_M3
+      elsif Text = "cortex-m4" then Cortex_M4
+      else Cortex_M7);
+
+   function Spelling (Core : Core_Kind) return String is
+     (case Core is
+        when Cortex_M0 => "cortex-m0",
+        when Cortex_M0plus => "cortex-m0plus",
+        when Cortex_M3 => "cortex-m3",
+        when Cortex_M4 => "cortex-m4",
+        when Cortex_M7 => "cortex-m7");
+
+   function Level_Name (Core : Core_Kind) return String is
+     (case Core is
+        when Cortex_M0 | Cortex_M0plus => "armv6-m",
+        when Cortex_M3 => "armv7-m",
+        when Cortex_M4 | Cortex_M7 => "armv7e-m");
+
+   function Is_Boot_Name (Text : String) return Boolean is
+     (Text in "vector-table" | "rp2040-boot2" | "rp2350-image-block"
+        | "esp-app-image");
+
+   function Boot_Named (Text : String) return Boot_Kind is
+     (if Text = "vector-table" then Vector_Table
+      elsif Text = "rp2040-boot2" then RP2040_Boot2
+      elsif Text = "rp2350-image-block" then RP2350_Image_Block
+      else ESP_App_Image);
+
+   function Spelling (Boot : Boot_Kind) return String is
+     (case Boot is
+        when Vector_Table => "vector-table",
+        when RP2040_Boot2 => "rp2040-boot2",
+        when RP2350_Image_Block => "rp2350-image-block",
+        when ESP_App_Image => "esp-app-image");
+
+   function Is_Section_Name (Word : String) return Boolean is
+     (Word in "vectors" | "text" | "rodata" | "data" | "bss" | "stack");
+
+   function Section_Named (Word : String) return Section_Kind is
+     (if Word = "vectors" then Vectors
+      elsif Word = "text" then Text
+      elsif Word = "rodata" then Rodata
+      elsif Word = "data" then Data
+      elsif Word = "bss" then BSS
+      else Stack);
+
+   function Spelling (Section : Section_Kind) return String is
+     (case Section is
+        when Vectors => "vectors",
+        when Text => "text",
+        when Rodata => "rodata",
+        when Data => "data",
+        when BSS => "bss",
+        when Stack => "stack");
+
+   function Access_Named (Text : String) return Access_Kind is
+     (if Text = "rx" then Read_Execute
+      elsif Text = "rw" then Read_Write
+      else Read_Write_Execute);
+
+   function Region_Named
+     (Of_Profile : Profile; Name : String) return Region_Count is
+   begin
+      for Index in 1 .. Of_Profile.Count loop
+         if Spelling (Of_Profile.Regions (Index).Name) = Name then
+            return Index;
+         end if;
+      end loop;
+      return 0;
+   end Region_Named;
+
+   function Placed_Region
+     (Of_Profile : Profile; Section : Section_Kind) return Region is
+     (Of_Profile.Regions (Of_Profile.Placed (Section)));
+
+   function Vector_Alignment (Of_Profile : Profile) return Byte_Count is
+      Result : Byte_Count := 128;
+   begin
+      while Result < Vector_Bytes (Of_Profile) loop
+         Result := Result * 2;
+      end loop;
+      return Result;
+   end Vector_Alignment;
+
+   function Vector_Address (Of_Profile : Profile) return Byte_Count is
+     (Placed_Region (Of_Profile, Vectors).Origin
+      + Boot_Prefix (Of_Profile.Boot));
+
+   function Flash_Capacity (Of_Profile : Profile) return Byte_Count is
+     (if Of_Profile.Placed (Text) = 0 then 0
+      else Placed_Region (Of_Profile, Text).Length);
+
+   function Static_RAM_Capacity (Of_Profile : Profile) return Byte_Count is
+     (if Of_Profile.Placed (Data) = 0 then 0
+      elsif Of_Profile.Placed (Stack) = Of_Profile.Placed (Data)
+      then Placed_Region (Of_Profile, Data).Length - Of_Profile.Stack_Size
+      else Placed_Region (Of_Profile, Data).Length);
    function Assembly_Error
      (Text : String; Naked : Boolean;
       Level : Landin.Targets.Levels.Feature_Level) return String

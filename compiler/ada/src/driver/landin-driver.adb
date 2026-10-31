@@ -805,6 +805,9 @@ package body Landin.Driver is
       Link_Seen : Boolean := False;
       Firmware_Name : Unbounded.Unbounded_String;
       Firmware_Seen : Boolean := False;
+      --  D546: a developer's linker script, linked in place of OUT.ld.
+      Script_Path : Unbounded.Unbounded_String;
+      Script_Seen : Boolean := False;
       Library_Path : Unbounded.Unbounded_String;
       Library_Seen : Boolean := False;
       --  D524: each `-L` as written, in the order written.
@@ -1003,6 +1006,17 @@ package body Landin.Driver is
                Firmware_Seen := True;
                Firmware_Name := Unbounded.To_Unbounded_String
                  (After (Argument, "--firmware-entry="));
+
+            elsif Starts_With (Argument, "--linker-script=") then
+               if Script_Seen
+                 or else After (Argument, "--linker-script=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Script_Seen := True;
+               Script_Path := Unbounded.To_Unbounded_String
+                 (After (Argument, "--linker-script="));
 
             elsif Starts_With (Argument, "--toolchain=") then
                if Toolchain_Seen
@@ -1278,7 +1292,7 @@ package body Landin.Driver is
                      | "--stack-report" | "--root"
                      | "--library" | "--emit" | "-o" | "--toolchain"
                      | "--linker" | "--link" | "--firmware-entry"
-                     | "--keep-asm" | "-L");
+                     | "--linker-script" | "--keep-asm" | "-L");
 
          --  How many times an option with this stem was written.
          function Times_Written (Stem : String) return Natural;
@@ -1328,6 +1342,7 @@ package body Landin.Driver is
               new String'("--emit"),
               new String'("--toolchain"), new String'("--linker"),
               new String'("--link"), new String'("--firmware-entry"),
+              new String'("--linker-script"),
               new String'("--keep-asm"), new String'("-L")];
 
          --  Why the options given cannot be one request.
@@ -2400,7 +2415,13 @@ package body Landin.Driver is
                   if Cortex then
                      Host.Write_File
                        (Product_Path & ".ld",
-                        Landin.Backend.Firmware.Linker_Script, Written);
+                        Landin.Backend.Firmware.Linker_Script
+                          (Landin.IR.Firmware_Profile
+                             (Landin.Stages.Code (Context).all),
+                           Landin.Backend.Firmware.Used_Regions
+                             (Landin.Stages.Code (Context).all,
+                              Landin.Stages.Identities (Context).all)),
+                        Written);
                      if Written /= Landin.Platform.Write_Ok then
                         Note_Failure
                           (Code_Unwritable,
@@ -2516,7 +2537,8 @@ package body Landin.Driver is
                           Level => Landin.Stages.Level (Context),
                           Static => Static_Link,
                           Threads => Starts_C_Threads,
-                          Directories => Directories),
+                          Directories => Directories,
+                          Script => Unbounded.To_String (Script_Path)),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -2719,6 +2741,8 @@ package body Landin.Driver is
                   if Cortex and then Emit = Emit_Executable then
                      Landin.Build_Reports.Firmware.Measure
                        (Host, Product_Path, Product_Path & ".map",
+                        Landin.IR.Firmware_Profile
+                          (Landin.Stages.Code (Context).all),
                         Firmware, Valid);
                      if not Valid then
                         Note_Failure
@@ -2885,6 +2909,19 @@ package body Landin.Driver is
                   Note_No_Entry (For_Firmware => True);
                   return;
                end if;
+               if not Landin.Configuration.Profile
+                 (Landin.Stages.Configurations (Context).all).Present
+               then
+                  --  D543: no description reached, and no library holds
+                  --  the reference.
+                  Note_Failure
+                    (Rows.Code (Rows.No_Description),
+                     "firmware needs a device profile, and the program"
+                     & " selects none: import the device's description, or"
+                     & " name a library holding platform/cortex_m/reference"
+                     & " with --library=DIR (D543)");
+                  return;
+               end if;
                if not Landin.Backend.Firmware.Materialization_Fits
                  (Landin.Stages.Code (Context).all)
                then
@@ -2992,6 +3029,18 @@ package body Landin.Driver is
                Spellings : Landin.Source.Names.Table renames
                  Landin.Stages.Identities (Context).all;
                Refused : Boolean := False;
+               --  The selected profile's stack, as [1990] says "4 KiB".
+               Stack_Bytes : constant Landin.Targets.Byte_Count :=
+                 Landin.IR.Firmware_Profile (Unit).Stack_Size;
+               use type Landin.Targets.Byte_Count;
+               Stack_Words : constant String :=
+                 (if Stack_Bytes mod 1024 = 0
+                  then Ada.Strings.Fixed.Trim
+                    (Landin.Targets.Byte_Count'Image (Stack_Bytes / 1024),
+                     Ada.Strings.Both) & " KiB"
+                  else Ada.Strings.Fixed.Trim
+                    (Landin.Targets.Byte_Count'Image (Stack_Bytes),
+                     Ada.Strings.Both) & "-byte");
             begin
                for Index in 1 .. Landin.IR.Item_Count (Unit) loop
                   declare
@@ -3028,7 +3077,8 @@ package body Landin.Driver is
                                   (Known,
                                    Landin.IR.Declares (Unit, Item)))
                            & "` has a frame larger than the selected "
-                           & "4 KiB firmware stack reservation");
+                           & Stack_Words
+                           & " firmware stack reservation");
                         Refused := True;
                      end if;
                   end;
@@ -3805,6 +3855,17 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Unknown_Option,
                      "--firmware-entry requires --target=cortex-m0");
+                  Target_Option_Refused := True;
+               elsif Script_Seen
+                 and then (not Cortex or else Emit /= Emit_Executable
+                           or else not Firmware_Seen)
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--linker-script links firmware: it needs"
+                     & " --target=cortex-m0, --firmware-entry=NAME and"
+                     & " --emit=exe (D546)");
                   Target_Option_Refused := True;
                elsif Link_Seen
                  and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)

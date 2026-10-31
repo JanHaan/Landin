@@ -1,4 +1,5 @@
 with Ada.Strings.Fixed;
+with Landin.Platform.Native;
 with Ada.Unchecked_Deallocation;
 
 package body Landin.Testing.Fakes is
@@ -186,6 +187,37 @@ package body Landin.Testing.Fakes is
    begin
       Host.Executable := Unbounded.To_Unbounded_String (Directory);
    end Set_Executable_Directory;
+
+   procedure Add_Firmware_Library (Host : in out Fake_Filesystem) is
+      --  Deliberate real-host read of the checkout's library, from the
+      --  test program's working directory, compiler/ada.
+      Real : Landin.Platform.Native.Native_Filesystem;
+      Library : constant String := "/opt/landin/lib/landin";
+      Text : Ada.Strings.Unbounded.Unbounded_String;
+      Status : Landin.Platform.Read_Status;
+   begin
+      Host.Set_Executable_Directory ("/opt/landin/bin");
+      Host.Add_Directory (Library);
+      Host.Add_Directory (Library & "/platform");
+      Host.Add_Directory (Library & "/platform/cortex_m");
+      Host.Add_Directory (Library & "/platform/cortex_m/reference");
+      for Which in 1 .. 2 loop
+         declare
+            File : constant String :=
+              (if Which = 1 then "interrupts.ldn" else "memory.ldn");
+         begin
+            Real.Read_File
+              ("../../platform/cortex_m/reference/" & File, Text, Status);
+            if Status /= Landin.Platform.Read_Ok then
+               raise Program_Error with "the checkout's reference"
+                 & " description cannot be read: " & File;
+            end if;
+            Host.Add_File
+              (Library & "/platform/cortex_m/reference/" & File,
+               Ada.Strings.Unbounded.To_String (Text));
+         end;
+      end loop;
+   end Add_Firmware_Library;
 
    overriding function Executable_Directory
      (Host : Fake_Filesystem) return String

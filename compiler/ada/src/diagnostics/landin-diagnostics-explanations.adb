@@ -971,6 +971,63 @@ package body Landin.Diagnostics.Explanations is
                & " selects infallible `iterable`; `try for` prefers `falli"
                & "ble_iterable` when both exist and may use ordinary `iter"
                & "able` when there is no fallible conformance.",
+            when Catalogue.Invalid_Description_Directive =>
+               "A device description's directive has arguments that are "
+               & "not the forms its row in D542 says: the wrong number of "
+               & "them, a text where an integer belongs or the reverse, a "
+               & "name outside its spelling, a core, boot image kind, plac"
+               & "ement or access the compiler does not know, an integer o"
+               & "utside the 32-bit address space, a stack that is not a p"
+               & "ositive multiple of 8 bytes, or a size given to a placem"
+               & "ent other than the stack's. The message says which argum"
+               & "ent and the note how the directive is written, such as `"
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)`.",
+            when Catalogue.Description_Structure =>
+               "A device description is not one module of its own direct"
+               & "ives (D542, D543): a description directive stands in a m"
+               & "odule that names no device with `compiler.device`, or in"
+               & "side a fixed arm, active or not; a description module ho"
+               & "lds an import or a declaration other than its directives"
+               & "; a description names its device, core, vector table or "
+               & "boot image kind twice, or none, names an interrupt or IR"
+               & "Q twice, repeats a region's name, or places a part of th"
+               & "e image twice or not at all; or the program reaches a se"
+               & "cond description. A program is built for one device, and"
+               & " selects it by importing its description; write each dir"
+               & "ective once, beside `compiler.device`.",
+            when Catalogue.Description_Layout =>
+               "A device description's parts do not fit together (D543):"
+               & " two regions overlap, a placement names a region the des"
+               & "cription does not have or one whose access does not fit,"
+               & " as code in an `""rw""` region or data in an `""rx""` one, t"
+               & "he vector table does not fit its region or would start u"
+               & "naligned, an interrupt's slot lies past the vector table"
+               & ", the table is longer than the core's architecture allow"
+               & "s, or the stack is larger than its region. The message n"
+               & "ames the region or the slot.",
+            when Catalogue.Description_Core_Mismatch =>
+               "A device description's core is not what the request buil"
+               & "ds for (D543): the target is not `cortex-m0`, or `--leve"
+               & "l` is not the core's level, `armv6-m` for `cortex-m0` an"
+               & "d `cortex-m0plus`, `armv7-m` for `cortex-m3` and `armv7e"
+               & "-m` for `cortex-m4` and `cortex-m7`. Build with the targ"
+               & "et and level the note names. The constrained reference p"
+               & "rofile, which applies when no description is imported, i"
+               & "s the one description used at every level.",
+            when Catalogue.Boot_Kind_Reserved =>
+               "A device description selects a boot image kind refine re"
+               & "serves but does not build yet (D545): `rp2350-image-bloc"
+               & "k` or `esp-app-image`. This compiler builds `vector-tabl"
+               & "e` and `rp2040-boot2` images.",
+            when Catalogue.Region_Placement =>
+               "A `link(region: ""NAME"")` placement cannot be met (D547):"
+               & " the selected description has no region of that name, th"
+               & "e declaration also names its section, which a region pla"
+               & "cement chooses itself, or the region's access does not h"
+               & "old it: a routine needs a region code runs in, and a mut"
+               & "able datum a writable one. On a hosted target placement "
+               & "is refused as L0347 is.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -1082,7 +1139,26 @@ package body Landin.Diagnostics.Explanations is
                & "irectory that holds the library with `linker.directory("""
                & "DIR"")`, relative to the declaring file, or with `-L DIR`"
                & " when building, or install the library where the C drive"
-               & "r finds it.");
+               & "r finds it.",
+            when Catalogue.No_Description =>
+               "A firmware request, a vector placement or a region place"
+               & "ment needs a device profile, and none can be selected (D"
+               & "543): the program imports no description, and the librar"
+               & "y refine found holds no `platform/cortex_m/reference`, o"
+               & "r no library was found. Import the device's description,"
+               & " or name a library that holds the reference with `--libr"
+               & "ary=DIR`.",
+            when Catalogue.Linker_Script_Contract =>
+               "A firmware image linked with `--linker-script=FILE` brea"
+               & "ks the contract a developer's script must keep (D546), a"
+               & "nd the message names the clause: the vector table at the"
+               & " description's boot address with its whole length, a `_l"
+               & "andin_firmware_*` startup symbol missing, the stack outs"
+               & "ide a writable region of the description or of another s"
+               & "ize, or an initialized image whose load address is not i"
+               & "n the region text is placed in. Change the script so the"
+               & " clause holds; the derived script refine writes beside t"
+               & "he image as `OUT.ld` meets every clause.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -1643,6 +1719,19 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end main"
                & LF,
+            when Catalogue.Invalid_Description_Directive =>
+               "compiler.device(""RP2040"")"
+               & LF,
+            when Catalogue.Description_Structure =>
+               "",
+            when Catalogue.Description_Layout =>
+               "",
+            when Catalogue.Description_Core_Mismatch =>
+               "",
+            when Catalogue.Boot_Kind_Reserved =>
+               "",
+            when Catalogue.Region_Placement =>
+               "",
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="
                & LF
@@ -1669,6 +1758,10 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Handler_Exceeds_Stack_Margin =>
                "",
             when Catalogue.Library_Not_Found =>
+               "",
+            when Catalogue.No_Description =>
+               "",
+            when Catalogue.Linker_Script_Contract =>
                "");
 
 end Landin.Diagnostics.Explanations;

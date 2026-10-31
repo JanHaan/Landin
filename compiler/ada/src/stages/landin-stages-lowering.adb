@@ -16413,6 +16413,10 @@ package body Landin.Stages.Lowering is
          Outcome := Stop;
          return;
       end if;
+      --  D543: the profile the description selected travels with the IR,
+      --  which the verifier and the backend read its vector slots from.
+      IR.Set_Firmware_Profile
+        (Unit.all, Landin.Configuration.Profile (Activity.all));
 
       IR.Prepare (Unit.all, Meanings.all);
 

@@ -7,6 +7,7 @@ with Ada.Unchecked_Deallocation;
 with Landin.Types;
 with Landin.Targets.Assembly;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 
 package body Landin.IR.Verifier is
 
@@ -5071,7 +5072,8 @@ package body Landin.IR.Verifier is
                  Placement_Of (Of_Unit, Id);
                Present : constant Boolean := Attr.Keep
                  or else Attr.Alignment /= 0 or else Attr.Vector /= 0
-                 or else Attr.Section /= Landin.Source.Names.No_Name;
+                 or else Attr.Section /= Landin.Source.Names.No_Name
+                 or else Attr.Region /= Landin.Source.Names.No_Name;
             begin
                if (Is_Immutable (Of_Unit, Id) and then not Is_Datum)
                  or else Attr.Alignment not in
@@ -5084,9 +5086,10 @@ package body Landin.IR.Verifier is
                           Item => Id, others => <>);
                end if;
                if Attr.Vector /= 0 then
+                  --  D544: the slots the unit's own profile admits.
                   if Is_Datum or else Is_External (Of_Unit, Id)
-                    or else Attr.Vector not in
-                      2 | 3 | 11 | 14 | 15 | 16 .. 20 | 22 .. 41
+                    or else not Landin.Targets.Firmware.Admits
+                      (Firmware_Profile (Of_Unit), Attr.Vector)
                     or else Signature_Machine
                       (Of_Unit, Signature_Of (Of_Unit, Id))
                         not in Landin.Machine.Interrupt_Handler

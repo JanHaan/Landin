@@ -1,6 +1,5 @@
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Strings.Fixed;
-with Landin.Targets.Firmware;
 
 package body Landin.Build_Reports.Firmware is
    package US renames Ada.Strings.Unbounded;
@@ -14,14 +13,43 @@ package body Landin.Build_Reports.Firmware is
    procedure Measure
      (Host : Landin.Platform.Filesystem'Class;
       Executable, Link_Map : String;
+      Profile : Landin.Targets.Firmware.Profile;
       Result : out US.Unbounded_String;
       Valid : out Boolean)
    is
+      package Firmware renames Landin.Targets.Firmware;
+      use type Firmware.Section_Kind;
       ELF, Map : US.Unbounded_String;
       Status : Landin.Platform.Read_Status;
-      Flash_End : Landin.Targets.Byte_Count := 0;
-      RAM_End : Landin.Targets.Byte_Count :=
-        Landin.Targets.Firmware.RAM_Base;
+      Flash : constant Firmware.Region :=
+        Firmware.Placed_Region (Profile, Firmware.Text);
+      RAM : constant Firmware.Region :=
+        Firmware.Placed_Region (Profile, Firmware.Data);
+      RAM_Limit : constant Landin.Targets.Byte_Count :=
+        Firmware.Static_RAM_Capacity (Profile);
+      Flash_End : Landin.Targets.Byte_Count := Flash.Origin;
+      RAM_End : Landin.Targets.Byte_Count := RAM.Origin;
+
+      --  Whether [FIRST, FIRST + SIZE) lies in a region of the profile,
+      --  and which: a region placement (D547) is outside the two the
+      --  capacity figures describe and is still the image's.
+      function Region_Of
+        (First, Size : Landin.Targets.Byte_Count)
+         return Firmware.Region_Count;
+      function Region_Of
+        (First, Size : Landin.Targets.Byte_Count) return Firmware.Region_Count
+      is
+      begin
+         for Index in 1 .. Profile.Count loop
+            if First >= Profile.Regions (Index).Origin
+              and then First + Size <= Profile.Regions (Index).Origin
+                + Profile.Regions (Index).Length
+            then
+               return Index;
+            end if;
+         end loop;
+         return 0;
+      end Region_Of;
       Selected : Members.Set;
       Prefix : constant String := "libgcc.a(";
    begin
@@ -107,37 +135,42 @@ package body Landin.Build_Reports.Firmware is
                      then
                         return;
                      end if;
-                     if Virtual < Landin.Targets.Firmware.Flash_Size then
-                        if Virtual + Memory_Size >
-                          Landin.Targets.Firmware.Flash_Size
+                     if Region_Of (Virtual, Memory_Size)
+                       = Profile.Placed (Firmware.Text)
+                     then
+                        null;
+                     elsif Region_Of (Virtual, Memory_Size)
+                       = Profile.Placed (Firmware.Data)
+                     then
+                        if Virtual + Memory_Size > RAM.Origin + RAM_Limit
                         then
                            return;
                         end if;
-                     elsif Virtual >= Landin.Targets.Firmware.RAM_Base
-                       and then Virtual + Memory_Size <=
-                         Landin.Targets.Firmware.RAM_Base
-                           + Landin.Targets.Firmware.RAM_Size
-                           - Landin.Targets.Firmware.Stack_Size
-                     then
                         RAM_End := Landin.Targets.Byte_Count'Max
                           (RAM_End, Virtual + Memory_Size);
-                     else
+                     elsif Region_Of (Virtual, Memory_Size) = 0 then
                         return;
                      end if;
                      if File_Size > 0 then
-                        if Physical + File_Size >
-                          Landin.Targets.Firmware.Flash_Size
+                        if Region_Of (Physical, File_Size) = 0
+                          or else Firmware.Writable
+                            (Profile.Regions
+                               (Region_Of (Physical, File_Size)).Mode)
                         then
                            return;
                         end if;
-                        Flash_End := Landin.Targets.Byte_Count'Max
-                          (Flash_End, Physical + File_Size);
+                        if Region_Of (Physical, File_Size)
+                          = Profile.Placed (Firmware.Text)
+                        then
+                           Flash_End := Landin.Targets.Byte_Count'Max
+                             (Flash_End, Physical + File_Size);
+                        end if;
                      end if;
                   end if;
                end;
             end loop;
          end;
-         if Flash_End = 0 then
+         if Flash_End = Flash.Origin then
             return;
          end if;
 
@@ -178,22 +211,15 @@ package body Landin.Build_Reports.Firmware is
          end;
       end;
 
-      US.Append (Result, "{""flash_used"":" & Image (Flash_End)
-        & ",""flash_limit"":"
-        & Image (Landin.Targets.Firmware.Flash_Size)
+      US.Append (Result, "{""flash_used"":" & Image (Flash_End - Flash.Origin)
+        & ",""flash_limit"":" & Image (Flash.Length)
         & ",""flash_remaining"":"
-        & Image (Landin.Targets.Firmware.Flash_Size - Flash_End)
-        & ",""static_ram_used"":"
-        & Image (RAM_End - Landin.Targets.Firmware.RAM_Base)
-        & ",""static_ram_limit"":"
-        & Image (Landin.Targets.Firmware.RAM_Size
-          - Landin.Targets.Firmware.Stack_Size)
+        & Image (Flash.Origin + Flash.Length - Flash_End)
+        & ",""static_ram_used"":" & Image (RAM_End - RAM.Origin)
+        & ",""static_ram_limit"":" & Image (RAM_Limit)
         & ",""static_ram_remaining"":"
-        & Image (Landin.Targets.Firmware.RAM_Base
-          + Landin.Targets.Firmware.RAM_Size
-          - Landin.Targets.Firmware.Stack_Size - RAM_End)
-        & ",""stack_reserved"":"
-        & Image (Landin.Targets.Firmware.Stack_Size)
+        & Image (RAM.Origin + RAM_Limit - RAM_End)
+        & ",""stack_reserved"":" & Image (Profile.Stack_Size)
         & ",""runtime_members"":[");
       for Member of Selected loop
          if Member /= Selected.First_Element then
@@ -201,7 +227,34 @@ package body Landin.Build_Reports.Firmware is
          end if;
          US.Append (Result, """" & Member & """");
       end loop;
-      US.Append (Result, "]}");
+      --  D543: what the description selected, so that a check can compare
+      --  each fact with one recorded apart from the compiler.
+      US.Append (Result, "],""device"":"""
+        & Firmware.Spelling (Profile.Device)
+        & """,""core"":""" & Firmware.Spelling (Profile.Core)
+        & """,""boot"":""" & Firmware.Spelling (Profile.Boot)
+        & """,""vector_address"":" & Image (Firmware.Vector_Address (Profile))
+        & ",""vector_words"":" & Image
+          (Landin.Targets.Byte_Count (Profile.Vector_Count))
+        & ",""regions"":[");
+      for Index in 1 .. Profile.Count loop
+         US.Append (Result, (if Index = 1 then "" else ",")
+           & "{""name"":"""
+           & Firmware.Spelling (Profile.Regions (Index).Name)
+           & """,""origin"":" & Image (Profile.Regions (Index).Origin)
+           & ",""length"":" & Image (Profile.Regions (Index).Length)
+           & ",""access"":"""
+           & Firmware.Spelling (Profile.Regions (Index).Mode) & """}");
+      end loop;
+      US.Append (Result, "],""placed"":{");
+      for Section in Firmware.Section_Kind loop
+         US.Append (Result,
+           (if Section = Firmware.Section_Kind'First then "" else ",")
+           & """" & Firmware.Spelling (Section) & """:"""
+           & Firmware.Spelling
+               (Firmware.Placed_Region (Profile, Section).Name) & """");
+      end loop;
+      US.Append (Result, "}}");
       Valid := True;
    exception
       when Constraint_Error =>

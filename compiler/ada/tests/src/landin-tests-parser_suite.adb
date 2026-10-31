@@ -1766,6 +1766,14 @@ package body Landin.Tests.Parser_Suite is
                            begin
                               Host.Add_File
                                 (Path, Unbounded.To_String (Content));
+                              --  D543: firmware is given the library's
+                              --  reference description.
+                              if Ada.Strings.Fixed.Index
+                                (Fixtures.Args (Fixture),
+                                 "--target=cortex-m0") /= 0
+                              then
+                                 Host.Add_Firmware_Library;
+                              end if;
                               Check_Outcome
                                 (Landin.Driver.Execute
                                    (Arguments_Of

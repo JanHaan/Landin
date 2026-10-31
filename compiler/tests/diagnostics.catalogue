@@ -89,6 +89,12 @@ L0345  Live     [1570]: an interrupt or naked routine outside its machine-entry 
 L0346  Live     [1580]: a C boundary signature, layout or variadic call the C ABI cannot carry
 L0347  Live     [1610]/[1640]: a link symbol, helper import or placement outside its contract
 L0348  Live     [1150]/D180: a for source is a range, a traversable value or one exact iterable conformance
+L0399  Live     D542: a device description directive whose arguments are not the forms its row says
+L0513  Live     D542/D543: a description directive outside one description, a repeated or missing one, or a second description
+L0514  Live     D543: regions that overlap, or a placement, vector table or stack its regions cannot hold
+L0515  Live     D543: a description whose core is not the request's target and level
+L0516  Live     D545: a reserved boot image kind refine does not build
+L0517  Live     D547: a link(region: ...) the selected description cannot hold
 L0349  Live     D251: an unused local with an effect-free literal initializer
 L0500  Live     [1550]: the requested output cannot be made with the target, settings or available toolchain
 L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure
@@ -100,3 +106,5 @@ L0506  Live     [1670]: invalid panic handler or unrepresentable site space
 L0507  Live     [1990]: one Cortex-M0 firmware frame exceeds the selected stack reservation
 L0508  Live     [1670]: a selected panic handler in a program that prepares a stack exceeds or cannot be measured against the target's stack margin
 L0509  Live     [1590]/D525: a failed link's library that no named directory and none of the C driver's own holds
+L0518  Live     D543: firmware or a placement that needs a profile, with no description reached and none in the library
+L0519  Live     D546: a linked firmware image that breaks a clause of the linker script contract

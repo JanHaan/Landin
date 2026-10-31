@@ -112,6 +112,14 @@ package Landin.Diagnostics.Checking is
       Foreign_Boundary,
       Linkage_Contract,
       Traversal_Source,
+      --  D542-D547: a device description and a placement in its regions.
+      Invalid_Description_Directive,
+      Description_Structure,
+      Description_Layout,
+      Description_Core_Mismatch,
+      Boot_Kind_Reserved,
+      Region_Placement,
+      No_Description,
       Unused_Pure_Local);
 
    function Code_For (Item : Failure)
@@ -213,6 +221,20 @@ package Landin.Diagnostics.Checking is
                Catalogue.Linkage_Contract,
             when Traversal_Source =>
                Catalogue.Traversal_Source,
+            when Invalid_Description_Directive =>
+               Catalogue.Invalid_Description_Directive,
+            when Description_Structure =>
+               Catalogue.Description_Structure,
+            when Description_Layout =>
+               Catalogue.Description_Layout,
+            when Description_Core_Mismatch =>
+               Catalogue.Description_Core_Mismatch,
+            when Boot_Kind_Reserved =>
+               Catalogue.Boot_Kind_Reserved,
+            when Region_Placement =>
+               Catalogue.Region_Placement,
+            when No_Description =>
+               Catalogue.No_Description,
             when Unused_Pure_Local =>
                Catalogue.Unused_Pure_Local);
 

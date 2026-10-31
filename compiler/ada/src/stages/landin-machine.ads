@@ -8,5 +8,8 @@ package Landin.Machine is
       Alignment : Natural := 0;
       Vector : Natural := 0;
       Keep : Boolean := False;
+      --  D547: `link(region: "NAME")`, the region of the selected
+      --  description the declaration is placed in.
+      Region : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
    end record;
 end Landin.Machine;

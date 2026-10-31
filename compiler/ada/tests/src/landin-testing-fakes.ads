@@ -78,6 +78,13 @@ package Landin.Testing.Fakes is
    procedure Set_Executable_Directory
      (Host : in out Fake_Filesystem; Directory : String);
 
+   --  D543: a firmware request on a fake host needs the library's
+   --  constrained reference description, which a Cortex-M program that
+   --  imports no other is given.  This puts the checkout's own two files,
+   --  read from the real host deliberately, into a library at
+   --  /opt/landin/lib/landin beside an executable in /opt/landin/bin.
+   procedure Add_Firmware_Library (Host : in out Fake_Filesystem);
+
    overriding function Executable_Directory
      (Host : Fake_Filesystem) return String;
 

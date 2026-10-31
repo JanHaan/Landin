@@ -13,6 +13,7 @@ with Landin.Source;
 with Landin.Source.Names;
 with Landin.Provenance;
 with Landin.Syntax;
+with Landin.Targets.Firmware;
 with Landin.Types;
 
 package Landin.Configuration is
@@ -54,6 +55,13 @@ package Landin.Configuration is
    --  `compiler.c_runtime` that the target alone does not decide.
    procedure Set_C_Runtime (Into : in out Table; Linked : Boolean);
    function C_Runtime_Requested (In_Table : Table) return Boolean;
+
+   --  D542: the members a device description is written in.
+   function Is_Description_Member (Namespace, Member : String) return Boolean
+     is ((Namespace = "compiler"
+          and then Member in "device" | "core" | "vectors" | "interrupt"
+            | "boot")
+         or else (Namespace = "linker" and then Member in "region" | "place"));
 
    --  Shared explanation for a tool member outside its enabled context.
    function Tool_Advice (Namespace, Member : String) return String;
@@ -156,6 +164,14 @@ package Landin.Configuration is
       Source : Landin.Source.Source_Id;
       Node : Landin.Syntax.Node_Id) return Landin.Types.Folded;
 
+   --  D543: the firmware profile the program's one description selects,
+   --  the library's constrained reference when it reaches no other, or
+   --  none (Present False) when it reaches neither.
+   procedure Set_Profile
+     (Into : in out Table; Selected : Landin.Targets.Firmware.Profile);
+   function Profile
+     (In_Table : Table) return Landin.Targets.Firmware.Profile;
+
    procedure Prepare (Into : in out Table);
 
    procedure Mark_Inactive
@@ -233,6 +249,7 @@ private
       Declared : Option_Sites.Vector;
       Selected_Mode : Build_Mode := Debug;
       C_Runtime_Linked : Boolean := False;
+      Selected_Profile : Landin.Targets.Firmware.Profile;
    end record;
 
 end Landin.Configuration;

@@ -397,9 +397,10 @@ package body Landin.Backend.Cortex_M is
       then
          return True;
       end if;
-      return Extent (Allocated_Frame
-        (Of_Unit, Item, Facts, 16#FFFF_FFC0#)) <=
-          Landin.Targets.Firmware.Stack_Size - Overhead;
+      return Landin.IR.Firmware_Profile (Of_Unit).Stack_Size >= Overhead
+        and then Extent (Allocated_Frame
+          (Of_Unit, Item, Facts, 16#FFFF_FFC0#)) <=
+            Landin.IR.Firmware_Profile (Of_Unit).Stack_Size - Overhead;
    exception
       when Stack_Limit_Exceeded => return False;
    end Frame_Fits_Firmware_Stack;
@@ -1330,15 +1331,41 @@ package body Landin.Backend.Cortex_M is
       is
          Attr : constant Landin.Machine.Placement :=
            Landin.IR.Placement_Of (Of_Unit, Item);
+         --  D547: a region placement's section names the region and what
+         --  the region does with it: run or read in place, or copy from
+         --  its load image, or clear, when the region is writable.
+         function Region_Section return String;
+         function Region_Section return String is
+            Region : constant String :=
+              Landin.Source.Names.Spelling (Names, Attr.Region);
+            Profile : constant Landin.Targets.Firmware.Profile :=
+              Landin.IR.Firmware_Profile (Of_Unit);
+            Writable : constant Boolean :=
+              Landin.Targets.Firmware.Writable
+                (Profile.Regions (Landin.Targets.Firmware.Region_Named
+                   (Profile, Region)).Mode);
+            Kind : constant String :=
+              (if Prefix = ".bss." then "bss"
+               elsif Writable then "data"
+               elsif Prefix = ".text." then "text"
+               else "rodata");
+         begin
+            return ".landin_region." & Region & "." & Kind & ".landin_"
+              & Trimmed (Item'Image);
+         end Region_Section;
          Name : constant String :=
-           (if Attr.Section = Landin.Source.Names.No_Name
+           (if Attr.Region /= Landin.Source.Names.No_Name
+            then Region_Section
+            elsif Attr.Section = Landin.Source.Names.No_Name
             then Prefix & "landin_" & Trimmed (Item'Image)
             else Landin.Source.Names.Spelling (Names, Attr.Section));
          Retained : constant Boolean := Attr.Keep or else
            (Attr.Section /= Landin.Source.Names.No_Name
             and then Retained_Sections.Contains (Attr.Section));
          BSS : constant Boolean :=
-           Ada.Strings.Fixed.Index (Name, ".bss.") = Name'First;
+           Ada.Strings.Fixed.Index (Name, ".bss.") = Name'First
+           or else (Attr.Region /= Landin.Source.Names.No_Name
+             and then Ada.Strings.Fixed.Index (Name, ".bss.") /= 0);
       begin
          Emit (".section " & Name & ",""" & Flags
            & (if Retained then "R" else "") & """,%"
@@ -1350,8 +1377,12 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit_Vectors;
       procedure Emit_Vectors is
-         Handlers : array (2 .. 47) of Landin.IR.Item_Id :=
-           [others => Landin.IR.No_Item];
+         --  D544: the selected profile's table.  A slot it admits takes its
+         --  handler or the unhandled loop, and every other slot is zero.
+         Profile : constant Landin.Targets.Firmware.Profile :=
+           Landin.IR.Firmware_Profile (Of_Unit);
+         Handlers : array (2 .. Landin.Targets.Firmware.Slot_Capacity - 1)
+           of Landin.IR.Item_Id := [others => Landin.IR.No_Item];
       begin
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
@@ -1365,13 +1396,14 @@ package body Landin.Backend.Cortex_M is
             end;
          end loop;
          Emit (".section .isr_vector,""a"",%progbits");
-         Emit (".balign 256");
+         Emit (".balign " & Trimmed (Landin.Targets.Firmware.Vector_Alignment
+           (Profile)'Image));
          Emit (".globl _landin_firmware_vectors");
          Put ("_landin_firmware_vectors:");
          Emit (".word _landin_firmware_stack_top");
          Emit (".word _landin_firmware_reset");
-         for Slot in Handlers'Range loop
-            if Slot in 4 .. 10 | 12 | 13 | 21 | 42 .. 47 then
+         for Slot in 2 .. Profile.Vector_Count - 1 loop
+            if not Landin.Targets.Firmware.Admits (Profile, Slot) then
                Emit (".word 0");
             elsif Handlers (Slot) /= Landin.IR.No_Item then
                Emit (".word " & Symbol (Handlers (Slot)));
@@ -6156,6 +6188,8 @@ package body Landin.Backend.Cortex_M is
          Emit_Vectors;
          Put (Landin.Backend.Firmware.Startup
            (Symbol (Firmware_Entry),
+            Landin.IR.Firmware_Profile (Of_Unit),
+            Landin.Backend.Firmware.Used_Regions (Of_Unit, Names),
             (if Panic = null or else Landin.Panics.Handler (Panic.all)
                = Landin.IR.No_Item then "udf #1"
              else "ldr r0, =" & Trimmed (Positive'Image

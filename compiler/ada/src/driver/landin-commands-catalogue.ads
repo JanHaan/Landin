@@ -17,7 +17,8 @@ package Landin.Commands.Catalogue is
       Target, Level, Root, Library, Library_Directory, Build_Option,
       Build_Mode, Optimize, Specialize, Emit, Output, Keep_Asm, Debug,
       Panic_Map, Toolchain, Linker, Link,
-      Firmware_Entry, Build_Report, Stage_Report, Stack_Report, Dry_Run,
+      Firmware_Entry, Linker_Script, Build_Report, Stage_Report,
+      Stack_Report, Dry_Run,
       Depfile,
       Format_Check, Format_Stdout, Explain_Full, Stdio, JSON, Warnings, Warn,
       Allow, Deny);

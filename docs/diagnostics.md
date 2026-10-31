@@ -1423,6 +1423,21 @@ every unnamed bit for `write_one`. A whole-image write cannot repair those
 bits by reading the device. The image may fit its carrier type; L0300 instead
 reports a value that its type or target cannot hold.
 
+### L0399
+
+A device description's directive has arguments that are not the forms its
+row in D542 says: the wrong number of them, a text where an integer belongs
+or the reverse, a name outside its spelling, a core, boot image kind,
+placement or access the compiler does not know, an integer outside the
+32-bit address space, a stack that is not a positive multiple of 8 bytes, or
+a size given to a placement other than the stack's. The message says which
+argument and the note how the directive is written, such as
+`linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")`.
+
+```landin
+compiler.device("RP2040")
+```
+
 ### L0349
 
 An immutable local that is never used and is initialized by a direct scalar
@@ -1540,3 +1555,68 @@ link has failed; a failed link whose libraries are all found stays L0501
 with the linker's own text. Name the directory that holds the library with
 `linker.directory("DIR")`, relative to the declaring file, or with
 `-L DIR` when building, or install the library where the C driver finds it.
+
+### L0513
+
+A device description is not one module of its own directives (D542, D543): a
+description directive stands in a module that names no device with
+`compiler.device`, or inside a fixed arm, active or not; a description module
+holds an import or a declaration other than its directives; a description
+names its device, core, vector table or boot image kind twice, or none, names
+an interrupt or IRQ twice, repeats a region's name, or places a part of the
+image twice or not at all; or the program reaches a second description. A
+program is built for one device, and selects it by importing its
+description; write each directive once, beside `compiler.device`.
+
+### L0514
+
+A device description's parts do not fit together (D543): two regions
+overlap, a placement names a region the description does not have or one
+whose access does not fit, as code in an `"rw"` region or data in an `"rx"`
+one, the vector table does not fit its region or would start unaligned, an
+interrupt's slot lies past the vector table, the table is longer than the
+core's architecture allows, or the stack is larger than its region. The
+message names the region or the slot.
+
+### L0515
+
+A device description's core is not what the request builds for (D543): the
+target is not `cortex-m0`, or `--level` is not the core's level, `armv6-m`
+for `cortex-m0` and `cortex-m0plus`, `armv7-m` for `cortex-m3` and
+`armv7e-m` for `cortex-m4` and `cortex-m7`. Build with the target and level
+the note names. The constrained reference profile, which applies when no
+description is imported, is the one description used at every level.
+
+### L0516
+
+A device description selects a boot image kind refine reserves but does not
+build yet (D545): `rp2350-image-block` or `esp-app-image`. This compiler
+builds `vector-table` and `rp2040-boot2` images.
+
+### L0517
+
+A `link(region: "NAME")` placement cannot be met (D547): the selected
+description has no region of that name, the declaration also names its
+section, which a region placement chooses itself, or the region's access does
+not hold it: a routine needs a region code runs in, and a mutable datum a
+writable one. On a hosted target placement is refused as L0347 is.
+
+### L0518
+
+A firmware request, a vector placement or a region placement needs a device
+profile, and none can be selected (D543): the program imports no
+description, and the library refine found holds no
+`platform/cortex_m/reference`, or no library was found. Import the device's
+description, or name a library that holds the reference with
+`--library=DIR`.
+
+### L0519
+
+A firmware image linked with `--linker-script=FILE` breaks the contract a
+developer's script must keep (D546), and the message names the clause: the
+vector table at the description's boot address with its whole length, a
+`_landin_firmware_*` startup symbol missing, the stack outside a writable
+region of the description or of another size, or an initialized image whose
+load address is not in the region text is placed in. Change the script so the
+clause holds; the derived script refine writes beside the image as `OUT.ld`
+meets every clause.

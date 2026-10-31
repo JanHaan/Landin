@@ -20,6 +20,8 @@ with Landin.Source;
 with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
+with Landin.Targets;
+with Landin.Targets.Firmware;
 
 package body Landin.Driver.Loading is
 
@@ -29,6 +31,8 @@ package body Landin.Driver.Loading is
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
+   use type Landin.Syntax.Node_Kind;
+   use type Landin.Targets.Architecture;
    use type Unbounded.Unbounded_String;
 
    package Module_Vectors is new Ada.Containers.Vectors
@@ -694,6 +698,12 @@ package body Landin.Driver.Loading is
       Known_Directories : Directory_Maps.Map;
       Unknown_Directories : Module_Vectors.Vector;
       Next  : Positive := 1;
+      Reference_Description : constant String :=
+        Landin.Targets.Firmware.Reference_Module;
+
+      function Spelling (Name : Landin.Source.Names.Name_Id) return String
+        is (Landin.Source.Names.Spelling
+              (Landin.Stages.Identities (Context).all, Name));
 
       procedure Remember_Directory
         (Module : Landin.Modules.Module_Id;
@@ -766,6 +776,67 @@ package body Landin.Driver.Loading is
          end if;
          return Landin.Modules.No_Module;
       end Loaded_Directory;
+
+      --  Whether the library holds LOGICAL and no module has brought it.
+      function Library_Present (Logical : String) return Boolean
+        is (Library /= ""
+            and then Library_Position /= 0
+            and then not Landin.Stages.Failed (Context)
+            and then Landin.Modules.Find_Logical (Graph.all, Logical)
+              = Landin.Modules.No_Module
+            and then Host.Is_Directory (Joined_Path (Library, Logical)));
+
+      procedure Add_Implicit (Logical : String);
+      procedure Add_Implicit (Logical : String) is
+         Directory : constant String := Joined_Path (Library, Logical);
+         Added : constant Landin.Modules.Module_Id :=
+           Landin.Modules.Add_Module
+             (Graph.all, Logical, Directory, Positive (Library_Position));
+      begin
+         Remember_Directory (Added, Host.Existing_Identity (Directory));
+         Queue.Append (Added);
+      end Add_Implicit;
+
+      --  D542: whether a read source names a device, which makes its
+      --  module a description.
+      function Reaches_Description return Boolean;
+      function Reaches_Description return Boolean is
+      begin
+         for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+            declare
+               Tree : constant not null access constant Landin.Syntax.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Landin.Stages.Trees (Context).all,
+                    Landin.Stages.Nth_Source (Context, Index));
+            begin
+               for Which in 1 .. Landin.Syntax.Declaration_Count (Tree.all)
+               loop
+                  declare
+                     Node : constant Landin.Syntax.Node_Id :=
+                       Landin.Syntax.Nth_Declaration (Tree.all, Which);
+                     Callee : Landin.Syntax.Node_Id;
+                  begin
+                     if Landin.Syntax.Kind (Tree.all, Node)
+                       = Landin.Syntax.Tool_Directive
+                     then
+                        Callee := Landin.Syntax.Callee_Of
+                          (Tree.all, Landin.Syntax.Directive_Call
+                             (Tree.all, Node));
+                        if Spelling (Landin.Syntax.Name
+                             (Tree.all, Landin.Syntax.Target_Of
+                                (Tree.all, Callee))) = "compiler"
+                          and then Spelling (Landin.Syntax.Name
+                            (Tree.all, Callee)) = "device"
+                        then
+                           return True;
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+         return False;
+      end Reaches_Description;
    begin
       if not Named_Files and then not Host.Is_Directory (Entry_Directory)
       then
@@ -1151,27 +1222,22 @@ package body Landin.Driver.Loading is
          end;
          Next := Next + 1;
          --  The implicit module comes after everything the imports reach,
-         --  from the library, unless an import already brought it.
+         --  from the library, unless an import already brought it; and on
+         --  Cortex-M, once that is read, the constrained reference
+         --  description when the program reaches no description (D543).
          if Next > Natural (Queue.Length)
-           and then Implicit /= "" and then Library /= ""
-           and then Library_Position /= 0
-           and then not Landin.Stages.Failed (Context)
-           and then Landin.Modules.Find_Logical (Graph.all, Implicit)
-             = Landin.Modules.No_Module
-           and then Host.Is_Directory (Joined_Path (Library, Implicit))
+           and then Implicit /= ""
+           and then Library_Present (Implicit)
          then
-            declare
-               Directory : constant String :=
-                 Joined_Path (Library, Implicit);
-               Added : constant Landin.Modules.Module_Id :=
-                 Landin.Modules.Add_Module
-                   (Graph.all, Implicit, Directory,
-                    Positive (Library_Position));
-            begin
-               Remember_Directory
-                 (Added, Host.Existing_Identity (Directory));
-               Queue.Append (Added);
-            end;
+            Add_Implicit (Implicit);
+         end if;
+         if Next > Natural (Queue.Length)
+           and then Landin.Targets.Architecture_Of
+             (Landin.Stages.Target (Context)) = Landin.Targets.Cortex_M0
+           and then Library_Present (Reference_Description)
+           and then not Reaches_Description
+         then
+            Add_Implicit (Reference_Description);
          end if;
       end loop;
    end Discover;
