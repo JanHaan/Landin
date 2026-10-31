@@ -65445,14 +65445,43 @@ file negative/library-evidence-collision/main.ldn tokens 55
   365 367 42
   368 371 end
   372 376 main
-file negative/library-platform-cortex-m-hosted/main.ldn tokens 7
+file negative/library-platform-cortex-m-hosted/main.ldn tokens 26
   0 6 import
   7 15 platform
   15 16 /
   16 24 cortex_m
-  26 32 answer
-  33 35 :=
-  36 43 missing
+  26 32 public
+  33 37 main
+  37 38 :
+  39 40 (
+  40 41 )
+  42 44 ->
+  45 46 (
+  46 50 code
+  50 51 :
+  52 55 i32
+  55 56 )
+  57 58 =
+  63 71 cortex_m
+  71 72 .
+  72 90 wait_for_interrupt
+  90 91 (
+  91 92 )
+  97 101 code
+  102 103 =
+  104 105 0
+  106 109 end
+  110 114 main
+file negative/library-platform-cortex-m-reference-hosted/main.ldn tokens 9
+  0 6 import
+  7 15 platform
+  15 16 /
+  16 24 cortex_m
+  24 25 /
+  25 34 reference
+  36 42 answer
+  43 45 :=
+  46 53 missing
 file negative/line-leading-minus-continues-the-value/program.ldn tokens 21
   0 7 lowered
   7 8 :

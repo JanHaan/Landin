@@ -177,9 +177,14 @@ no level to select. `refine --identify` lists each target's levels.
 
 An import names a source namespace unavailable for the selected target (D267).
 `hosted/*` requires a hosted target; `platform/c` requires one of the currently
-enabled LP64 C ABIs; `platform/cortex_m` requires an M-profile target, including its
-higher supported feature levels. Select an applicable target or remove the
-import. Project-first root selection cannot change namespace availability.
+enabled LP64 C ABIs; the submodules of `platform/cortex_m`, its constrained
+reference description among them, require an M-profile target, including its
+higher supported feature levels. `platform/cortex_m` itself is available on
+every target and declares its operations only on an M-profile one (D575), so
+a program for every target imports it and calls it from a `fixed if
+compiler.arch == cortex_m0` arm; a call outside one is L0201 on a hosted
+target. Select an applicable target or remove the import. Project-first root
+selection cannot change namespace availability.
 
 ### L0016
 

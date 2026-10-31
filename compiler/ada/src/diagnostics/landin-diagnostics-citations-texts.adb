@@ -3277,8 +3277,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "sted/system` and `hosted/blocking` | on hosted systems |"
                & LF
                & "| `platform` | scoped freestanding interfaces | `platfor"
-               & "m/c` with an enabled LP64 C ABI; `platform/cortex_m` on "
-               & "M-profile targets, higher feature levels included |"
+               & "m/c` with an enabled LP64 C ABI; `platform/cortex_m` eve"
+               & "rywhere, declaring its operations only on M-profile targ"
+               & "ets, higher feature levels included, and its device desc"
+               & "riptions only there |"
                & LF
                & "| `landin` | the toolchain modules of [1560]: `landin/co"
                & "mpiler`, `landin/assembler`, `landin/linker` | everywher"
@@ -3291,6 +3293,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- An import outside its target's scope is refused by nam"
                & "e when the target is checked, for example `hosted/heap` "
                & "in firmware."
+               & LF
+               & "- A module that declares nothing on some targets can be "
+               & "imported on all of them: a program for every target impo"
+               & "rts `platform/cortex_m` and calls it from a `fixed if co"
+               & "mpiler.arch == cortex_m0` arm ([1500])."
                & LF
                & "- The toolchain modules are always there, so the bare na"
                & "mes `compiler`, `assembler` and `linker` cannot be decla"
@@ -21200,6 +21207,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "larations cannot make an import available or unavailable"
                & ". Runtime helpers are selected only by reached operation"
                & "s; moving modules does not add an implicit import.",
+            when 575 =>
+               "Chosen: the module `platform/cortex_m` is available on e"
+               & "very target and declares its operations only on an M-pro"
+               & "file one, inside one `fixed if compiler.arch == cortex_m"
+               & "0`, as `platform/linux` declares nothing off Linux (D350"
+               & "). A hosted program may import it and call it from an ar"
+               & "m that selects Cortex-M; a call outside such an arm on a"
+               & " hosted target is L0201, saying the module declares that"
+               & " routine only for another target. Its submodules keep D2"
+               & "67's scope: `platform/cortex_m/reference` is a device de"
+               & "scription (D543), and a description has no meaning on a "
+               & "hosted target, so it is still refused there by name as L"
+               & "0015.",
             when 12 =>
                "Chosen: [1970]. The minimal Linux x86-64 path accepts on"
                & "e public no-argument `main` and returns its host status "

@@ -60,8 +60,11 @@ Darwin and FreeBSD. The compiler names none of it. These `platform`
 modules' scope is the hosted POSIX systems, and firmware refuses each by
 name. `platform/c` holds the
 currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
-synthetic-32. `platform/cortex_m` holds M-profile CPU operations and admits the
-armv6-m, armv7-m and armv7e-m feature levels. Namespace availability is checked
+synthetic-32. `platform/cortex_m` holds M-profile CPU operations for the
+armv6-m, armv7-m and armv7e-m feature levels; it is importable on every target
+and declares them only on an M-profile one, so a shared program calls it from a
+`fixed if compiler.arch == cortex_m0` arm (D575), while its device descriptions
+keep the M-profile scope. Namespace availability is checked
 by import name independently of project-first root selection (D267).
 
 The `runtime/library-shared-*` consumers are separate small programs, one per
@@ -301,7 +304,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
 | `core/io` network | Reading and writing addresses run in `runtime/network-addresses-firmware`'s 29.8 KB image at size/auto, 31.9 KB at none/off, of which the address code is about 17 KB, `ipv6_octets` alone 4.6 KB. The memory network does not fit the profile: a provider's conformance table links every entry, about 40 KB of code, so its echo, `runtime/network-echo-memory`, needs about 135 KB and is a recorded image limit, as every form of address text, `runtime/network-addresses`, at about 45 KB, is. |
 | `core/io` file system | The names `make_temporary` tries and the memory terminals run in `runtime/file-system-firmware`'s 18.7 KB image at size/auto, 22.2 KB at none/off. The memory volume does not fit the profile: its conformances link every entry of `reader`, `writer`, `files`, `directories` and `file_system`, so `runtime/volume-memory` needs about 106 KB at size/auto and is a recorded image limit, and a program over the volume alone that makes, writes, renames and reads one file still needed about 61 KB. |
-| `platform/cortex_m` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
+| `platform/cortex_m` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers, declared only on an M-profile target; other targets import it and see nothing (D575). |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one
 mean byte alignment; other `usize` alignments are honored when representable.

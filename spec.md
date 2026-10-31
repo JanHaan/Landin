@@ -16684,6 +16684,41 @@ preserves root selection while making availability explicit.
 `source namespaces enforce target availability` and the separately sized
 shared-library consumers.
 
+D575 makes `platform/cortex_m` itself available on every target.
+
+### D575 — `platform/cortex_m` declares nothing off an M-profile target
+
+**The tour said** at [1480] that `platform/cortex_m` is available on
+M-profile targets, and D267 refused it by namespace elsewhere, with a
+`compiler.assert` in the module besides. Landin has no conditional import,
+so a program written for every target could not call
+`cortex_m.wait_for_interrupt` from a `fixed if compiler.arch == cortex_m0`
+arm: importing the module at all refused the hosted targets, and prototype
+5's tick wrote its WFI in an assembly block of its own.
+
+**Chosen:** the module `platform/cortex_m` is available on every target and
+declares its operations only on an M-profile one, inside one `fixed if
+compiler.arch == cortex_m0`, as `platform/linux` declares nothing off Linux
+(D350). A hosted program may import it and call it from an arm that
+selects Cortex-M; a call outside such an arm on a hosted target is L0201,
+saying the module declares that routine only for another target. Its
+submodules keep D267's scope: `platform/cortex_m/reference` is a device
+description (D543), and a description has no meaning on a hosted target,
+so it is still refused there by name as L0015.
+
+**The alternatives:** a conditional import, which the language does not
+have and D350 declined for `platform/linux`; a compiler fact for the
+M profile beside `compiler.arch`, which the arm already states; and keeping
+the namespace refusal and writing the shared program's firmware arm in
+assembly, which duplicates the library's operations.
+
+**Pinned by** `runtime/atomic-tick-firmware`, which imports
+`platform/cortex_m` on every target and waits for an interrupt through it
+on Cortex-M0, `negative/library-platform-cortex-m-hosted`, a hosted call
+outside an arm refused as L0201, and
+`negative/library-platform-cortex-m-reference-hosted`, the description
+still refused by namespace.
+
 
 ### D12 — The first hosted path accepts one `main` shape
 
@@ -24915,6 +24950,9 @@ which leaves the name to say the wrong thing.
 **Pinned by** `negative/library-platform-cortex-m-hosted`, the firmware
 lane's `core-cpu.ldn` probe, the generated device consumers and the derived
 driver.
+
+D575 keeps the name and lifts the refusal: the module is available on every
+target and declares its operations only on an M-profile one.
 
 ### D350 — A closed set the library carries is an atom set, and a counter a plural noun
 

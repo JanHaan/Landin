@@ -197,6 +197,8 @@ def session(run, port, expected, traps, before=(), profile=None):
         'break backend_painted', 'continue', 'delete breakpoints', *before,
         'delete breakpoints',
         'python', 'import gdb',
+        #  An ordinary watchpoint, which the server's discard between
+        #  sessions removes; an internal one would outlive this session.
         f'guard = gdb.Breakpoint("*(unsigned char (*)[16]){bottom}", gdb.BP_WATCHPOINT, gdb.WP_WRITE)',
         #  A software watchpoint would single-step the whole program.
         'assert guard.type == gdb.BP_HARDWARE_WATCHPOINT, "the stack guard is no hardware watchpoint"',

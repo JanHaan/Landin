@@ -6266,11 +6266,15 @@ package body Landin.Tests.Driver_Suite is
          Host.Add_Directory ("project/platform");
          Host.Add_Directory ("project/platform/c");
          Host.Add_Directory ("project/platform/cortex_m");
+         Host.Add_Directory ("project/platform/cortex_m/reference");
          --  Harmless project overrides cannot bypass namespace policy.
          Host.Add_File ("project/hosted/heap/heap.ldn", "public x := 1");
          Host.Add_File ("project/platform/c/c.ldn", "public x := 1");
          Host.Add_File
            ("project/platform/cortex_m/cortex_m.ldn", "public x := 1");
+         Host.Add_File
+           ("project/platform/cortex_m/reference/memory.ldn",
+            "public x := 1");
          Host.Add_File
            ("project/bridge/bridge.ldn", "import " & Logical & LF
             & "public x := 1");
@@ -6327,6 +6331,39 @@ package body Landin.Tests.Driver_Suite is
                & ": " & Unbounded.To_String (Result.Report));
          end;
       end CPU_Accepted;
+      --  D575: the module itself is available on a hosted target, where it
+      --  declares nothing, so a shared program imports it there.
+      procedure Hosted_Accepted;
+      procedure Hosted_Accepted is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/app");
+         Host.Add_Directory ("root/platform");
+         Host.Add_Directory ("root/platform/cortex_m");
+         Host.Add_File
+           ("root/platform/cortex_m/cortex_m.ldn",
+            "fixed if compiler.arch == cortex_m0 then" & LF
+            & "    public answer: u32 = 42" & LF & "end if");
+         Host.Add_File
+           ("root/app/main.ldn", "import platform/cortex_m" & LF
+            & "public main: () -> (code: i32) = code = 42 end main");
+         Args.Append ("--root=root");
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("root/app");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+               and then Unbounded.Length (Result.Report) = 0,
+               "a hosted target imports platform/cortex_m: "
+               & Unbounded.To_String (Result.Report));
+         end;
+      end Hosted_Accepted;
       procedure Explicit_Preflight;
       procedure Explicit_Preflight is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -6378,8 +6415,9 @@ package body Landin.Tests.Driver_Suite is
       Refused ("cortex-m0", "platform/kqueue", True);
       Refused ("synthetic-32", "platform/kqueue", False);
       Refused ("synthetic-32", "platform/posix", True);
-      Refused ("linux-x86-64", "platform/cortex_m", True);
-      Refused ("linux-x86-64", "platform/cortex_m", False);
+      Hosted_Accepted;
+      Refused ("linux-x86-64", "platform/cortex_m/reference", True);
+      Refused ("linux-x86-64", "platform/cortex_m/reference", False);
    end Namespace_Availability;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

@@ -1,3 +1,6 @@
 import platform/cortex_m
 
-answer := missing
+public main: () -> (code: i32) =
+    cortex_m.wait_for_interrupt()
+    code = 0
+end main

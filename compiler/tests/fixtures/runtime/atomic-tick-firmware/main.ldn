@@ -3,9 +3,18 @@
 --  read-modify-write, which Cortex-M0 has not: sole_add is a relaxed load
 --  and a release store, and a reader's load acquires.  A runtime fixture
 --  places no vector, so the program is the writer here and counts where
---  it would wait; environments/cortex-m/probes/fibre-capacity.ldn runs the
+--  it waits; environments/cortex-m/probes/fibre-capacity.ldn runs the
 --  same writer as SysTick's handler on Cortex-M0.
+--
+--  On Cortex-M0 the wait is the one a fibre waiting on the clock makes:
+--  with interrupts masked, an interrupt is made pending and
+--  cortex_m.wait_for_interrupt returns for it, as WFI does for a pending
+--  interrupt PRIMASK masks, and it is cleared again before the mask is
+--  restored, since a runtime fixture has no handler for it.
+--  platform/cortex_m declares nothing on the hosted targets (D575), so
+--  the program imports it everywhere and calls it from the firmware arm.
 import core/atomic
+import platform/cortex_m
 
 mut ticks: atomic.cell(u32) = zeroed
 
@@ -17,6 +26,29 @@ now_ticks: () -> (count: u32) =
     count = atomic.load(addr ticks)
 end now_ticks
 
+fixed if compiler.arch == cortex_m0 then
+    wait_for_tick: () -> none =
+        saved := cortex_m.disable_interrupts()
+        enable: ptr mut u32 = ptr(0xe000e100)
+        pending: ptr mut u32 = ptr(0xe000e200)
+        unpend: ptr mut u32 = ptr(0xe000e280)
+        disable: ptr mut u32 = ptr(0xe000e180)
+        compiler.volatile_store(enable, 1)
+        compiler.volatile_store(pending, 1)
+        cortex_m.completion_barrier()
+        cortex_m.wait_for_interrupt()
+        compiler.volatile_store(disable, 1)
+        compiler.volatile_store(unpend, 1)
+        cortex_m.completion_barrier()
+        cortex_m.restore_interrupts(saved)
+        count_tick()
+    end wait_for_tick
+else
+    wait_for_tick: () -> none =
+        count_tick()
+    end wait_for_tick
+end if
+
 --  Wait for three ticks after the first reading, as a fibre waiting on the
 --  clock does, with a bound so that a count that never moves fails.
 public main: () -> (code: i32) =
@@ -25,7 +57,7 @@ public main: () -> (code: i32) =
     mut seen: u32 = first
     mut waits: u32 = 0
     while seen - first < 3 and waits < 1000 do
-        count_tick()
+        wait_for_tick()
         seen = now_ticks()
         inc waits
     end while
