@@ -162,13 +162,20 @@ and updates to a pull request are cancelled; manual runs have independent
 concurrency groups, and unrelated forks' pull requests cannot cancel each other.
 
 A declared explanatory edit confined to the content of `README.md`,
-`ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a full successful `main`
-gate from the preceding seven days. Live GitHub verification of a full main
+`ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a complete successful
+push run of this repository from the preceding seven days, of `main` or of
+any other branch, whose commit is an ancestor of the edit (D586). So a
+documents-only commit that closes an item after its branch's full gate
+reuses that gate on the branch and again when main is promoted to it. A
+branch's run is as trustworthy a base as main's: only someone with write
+access can push to a branch, and the tree key covers the workflow that run
+executed and every tool pin. Live GitHub verification of a full main
 run, the classifier output and a skipped-lane aggregate gate completed before
 this path was enabled.
 Every intervening commit must carry the exact line `Gate: explanatory`;
-the event must be a push to `main` or a same-repository pull request whose
-author has write access. Declare only changes to explanation, with no
+the event must be a push to a branch of this repository, `main` or another,
+or a same-repository pull request whose author has write access. Declare
+only changes to explanation, with no
 change to language rules, targets, scope or acceptance claims. The source
 tree key preserves all other bytes, paths and modes. Missing, partial,
 expired or mismatching evidence runs everything. Documents and script
@@ -182,7 +189,7 @@ still succeed. The linked full run contains the target-test results.
 
 | job | runner | runs |
 |---|---|---|
-| `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full main pass for a declared explanatory edit |
+| `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full push pass of main or a branch for a declared explanatory edit |
 | `documents` | `ubuntu-24.04` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, and the determinism, quality and debugging controls |
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
@@ -194,6 +201,7 @@ still succeed. The linked full run contains the target-test results.
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2` |
 | `bindings` | `ubuntu-24.04` | the C binding generator against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
+| `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, every flake output of every system evaluated and the development shell entered, unless a push run built the same `flake.nix`, `flake.lock` and `environments/pins.sh` in the last seven days (D585); manual dispatch always builds |
 | `cortex-m` | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, keeping the stack-switch consumer's capacity report (D470) as an artifact |
 | `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
 | `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
@@ -278,8 +286,10 @@ before deleting, and delete what is only on one of them from that one by its
 URL. Nothing reports a disagreement between the two. `pages.yml` fetches the licensed code
 face from object storage because it is not in this repository; it renders and
 verifies, and runs no compiler test. `scripts/site.sh` renders and packages
-and does not publish. Nix CI is deferred: the flake is built by hand, and the
-former automatic Nix manifest is retired. Historical SourceHut gate links
+and does not publish. Nix CI is limited to the gate's `flake` job, which
+builds the flake when its inputs have not been built in the last week
+(D585); no derivation is cached, `rv64-qemu` takes only its emulator from
+the flake, and the former automatic Nix manifest is retired. Historical SourceHut gate links
 remain evidence for their original revisions.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
@@ -370,7 +380,7 @@ Use the repository documents in this order:
 5. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
 6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the other live documents — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
-`check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
+`check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. `check.py` does not parse the corpus with the structural editor grammar in `highlight/tree-sitter`; the gate's `editor-grammar` job does, and `./highlight/test.sh --integration` runs that pass inside `nix develop`, which `python3 scripts/activations.py` names whenever the changes reach the grammar, a positive, runtime or ABI fixture or `core/`. A change to the editor grammar or its queries takes two commits, the second moving the editors' pins with `python3 highlight/grammar_pin.py` (`highlight/README.md`). Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
 A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` began in lexical refusal and is now raised only by the parser.
 

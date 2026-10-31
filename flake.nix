@@ -391,10 +391,13 @@
               pkgs.qemu-user;
 
           #  The GNAT archive bundles a GDB for its own architecture, and
-          #  it comes first on PATH, so the multi-target GDB a cross lane
-          #  debugs through QEMU's stub is named as Debian names it.
-          #  nixpkgs' `<triplet>-gdb` is not that debugger: it refuses the
-          #  sessions' `set disable-randomization off`.
+          #  it is the shell's `gdb`: the one the gate's GDB sessions run,
+          #  scripts/debug.sh's on this host.  It has no Python.  The
+          #  package set's GDB, with Python and every architecture, is the
+          #  multi-target GDB a cross lane debugs through QEMU's stub,
+          #  named as Debian names it.  nixpkgs' `<triplet>-gdb` is not
+          #  that debugger: it refuses the sessions' `set
+          #  disable-randomization off`.
           gdbMultiarch = pkgs.runCommand "landin-gdb-multiarch" { } ''
             mkdir -p "$out/bin"
             ln -s ${pkgs.gdb}/bin/gdb "$out/bin/gdb-multiarch"
@@ -666,7 +669,12 @@
               #  package set matches Debian stable's versioned clang-19 rather
               #  than following nixpkgs' moving default Clang.
               pkgs.llvmPackages_19.clang
-              pkgs.gdb #  scripts/debug.sh; native Linux source debugging
+              #  LLDB, from the same LLVM 19 package set, for the LLDB
+              #  sessions FreeBSD's lane runs in its VM, run here against
+              #  a Linux image by compiler/tests/debugging/lldb_linux.py.
+              #  FreeBSD 14.4's base LLDB is LLVM 19's too.  The Darwin
+              #  shell takes Apple's, which its sessions need.
+              pkgs.llvmPackages_19.lldb
               #  Profiling refine, or a program it emitted, to the routine,
               #  and counting calls per routine and per caller: perf
               #  samples, valgrind's callgrind counts.  Neither is pinned in
@@ -711,8 +719,15 @@
               #  On standard error: `nix develop -c cmd > file` runs this hook
               #  too, and the banner written to standard output went into the
               #  file -- a source rewritten that way was silently corrupted.
-              echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix-${system}'" >&2
-              echo "landin: ./scripts/toolchain.sh prints what is actually on PATH" >&2
+              #  And only in an interactive shell: before every command of
+              #  `nix develop -c`, the banner was two more lines between the
+              #  person and what the command printed.
+              case $- in
+                *i*)
+                  echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix-${system}'" >&2
+                  echo "landin: ./scripts/toolchain.sh prints what is actually on PATH" >&2
+                  ;;
+              esac
             '';
           };
         }

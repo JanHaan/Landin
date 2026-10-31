@@ -519,7 +519,9 @@ Add `--target=darwin-arm64` for native macOS output, then open
 - **Per target.** DWARF and GDB on Linux; native LLDB in both FreeBSD VMs
   for source-line stops, frames, local values and unwinding; LLDB with dSYM
   and exact Mach-O identity on Darwin; and line and function debugging on
-  Cortex-M0.
+  Cortex-M0. FreeBSD's LLDB sessions also run against Linux images with the
+  development shell's LLDB, `compiler/tests/debugging/lldb_linux.py`, as
+  feedback before the VM lanes run them.
 - **Optimized code.** At speed a local held in a register is described past
   its last use until the register is written over, and the GDB and LLDB
   sessions read such locals there.

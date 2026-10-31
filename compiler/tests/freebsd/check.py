@@ -21,6 +21,7 @@ from vm import Guest, LOCK, boot, prepare, require, sha
 import fixture_meta
 sys.path.insert(0, str(ROOT / 'compiler/tests/debugging'))
 import switch_frames  # noqa: E402
+import lldb_batch  # noqa: E402
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
 SPECIALIZED = [('none', 'all'), ('speed', 'all')]
@@ -389,9 +390,10 @@ class Lane:
             del result['meta'], result['base']
 
     def build_debugger(self):
-        source = HERE / 'debug.ldn'
-        lines = {needle: next(i for i, line in enumerate(source.read_text().splitlines(), 1)
-                              if needle in line) for needle in ('result = local + 1', 'result = step(local)', 'result = ready')}
+        #  The sessions are lldb_batch.py's, which lldb_linux.py also runs
+        #  on a Linux host.
+        source = lldb_batch.SOURCE
+        lines = lldb_batch.source_lines()
         results = []
         for optimize, specialize in PROFILES:
             label = 'debug-' + optimize + '-' + specialize
@@ -400,15 +402,7 @@ class Lane:
                           '--toolchain=' + str(self.driver), '--debug=full', '--emit=exe',
                           '--optimize=' + optimize, '--specialize=' + specialize,
                           source, '-o', executable], label + '-build')
-            commands = ['settings set target.disable-aslr false',
-                        f'breakpoint set --file debug.ldn --line {lines["result = local + 1"]}',
-                        'run', 'frame info', 'frame variable argument local', 'thread backtrace',
-                        'frame select 1', 'frame variable argument local',
-                        'frame select 2', 'frame info', 'frame select 0',
-                        'thread step-out', 'frame info',
-                        f'breakpoint set --file debug.ldn --line {lines["result = ready"]}',
-                        'continue', 'frame info', 'frame variable result',
-                        'breakpoint delete --force', 'continue']
+            commands = lldb_batch.source_commands(lines)
             (self.bundle / (label + '.lldb')).write_text('\n'.join(commands) + '\n')
             results.append({'label': label, 'lines': lines, 'executable_sha256': sha(executable)})
         #  The stack switch's session (D469).  The guest's LLDB has
@@ -432,7 +426,7 @@ class Lane:
                                    label + '-symbols').decode()
             shadows = switch_frames.shadowing_symbols(symbols)
             require(not shadows, f'{label}: ' + '; '.join(shadows))
-            commands = switch_frames.lldb_commands(switch_frames.fibre_line(), count)
+            commands = lldb_batch.switch_commands(count)
             (self.bundle / (label + '.lldb')).write_text('\n'.join(commands) + '\n')
             results.append({'label': label, 'switch_instructions': count,
                             'executable_sha256': sha(executable)})
@@ -447,14 +441,7 @@ class Lane:
         text = (completed.stdout + completed.stderr).decode(errors='replace')
         (self.output / (label + '-session.log')).write_text(text)
         require(completed.returncode == 0, label + ': LLDB failed\n' + text[-4000:])
-        require(re.search(r'exited with status = ' + str(switch_frames.STATUS) + r'\b', text),
-                label + ': the workload did not exit ' + str(switch_frames.STATUS))
-        try:
-            result['frames'] = switch_frames.check(switch_frames.lldb_stops(text),
-                                                   switch_frames.ARCH[self.target],
-                                                   self.target)
-        except switch_frames.Mismatch as error:
-            raise ValueError(label + ': ' + str(error)) from None
+        result['frames'] = lldb_batch.check_switch(text, label, self.target)
         print(self.target + ': ' + label + ' backtraces through the stack switch passed', flush=True)
         result['status'] = 'passed'
 
@@ -470,19 +457,7 @@ class Lane:
             text = (completed.stdout + completed.stderr).decode(errors='replace')
             (self.output / (label + '-session.log')).write_text(text)
             require(completed.returncode == 0, label + ': LLDB failed\n' + text[-4000:])
-            require(re.search(r'debug.ldn:' + str(lines['result = local + 1']) + r'[:\s]', text),
-                    label + ': no source-line stop')
-            for frame, name in ((0, 'inner'), (1, 'outer'), (2, 'main')):
-                require(re.search(r'frame #' + str(frame) + r':.*\b' + name + r'\b', text),
-                        label + ': stack frame missing: ' + name)
-            for name, value in (('argument', 40), ('local', 41), ('argument', 30), ('local', 40), ('result', 42)):
-                require(re.search(r'\b' + name + r' = ' + str(value) + r'\b', text),
-                        label + ': local/caller/return value missing: ' + str((name, value)))
-            unwound = text.split('(lldb) thread step-out', 1)[-1].split('(lldb) breakpoint set', 1)[0]
-            require('stop reason = step out' in unwound, label + ': no completed step-out stop')
-            require(re.search(r'frame #0:.*\bouter\b', unwound),
-                    label + ': step-out failed to unwind to caller')
-            require(re.search(r'exited with status = 42', text), label + ': final execution status missing')
+            lldb_batch.check_source(text, lines, label)
             print(self.target + ': ' + label + ' source stops, frames, locals and unwinding passed', flush=True)
             result['status'] = 'passed'
         return results

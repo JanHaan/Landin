@@ -449,8 +449,13 @@ Current deliberate limits are visible rather than completion shortcuts:
 python3 bindings/test.py
 ```
 
-The suite requires an external Clang; the pinned Linux Nix development shell
-provides one. Syntax-only adapter checks keep C warnings fatal while allowing
+The suite requires an external Clang, and the gate and the development shell
+run different builds of Clang 19. The gate's `bindings` job installs Ubuntu
+24.04's `clang-19` at the version `environments/pins.sh` pins as
+`LANDIN_CLANG_UBUNTU`, 19.1.1. The Linux Nix development shell's `clang-19`
+is LLVM 19 from the package set `flake.lock` fixes, 19.1.7 at the time of
+writing, which nothing pins to the gate's. The suite passes with both, and
+the gate's is the one a regenerated fixture is answered for. Syntax-only adapter checks keep C warnings fatal while allowing
 unused command-line options from the Nix Clang wrapper to remain warnings.
 It uses an empty explicit Linux sysroot,
 self-contained headers, and Clang's explicitly named resource headers. It

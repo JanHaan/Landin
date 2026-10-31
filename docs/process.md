@@ -18,8 +18,9 @@ what they cost.
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
-| candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; the RV64 Linux test program under QEMU's user emulation, its physical runtime, GDB, C ABI and ISA-level verdicts on RISE runners suspended until further notice; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
+| candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; the RV64 Linux test program under QEMU's user emulation, its physical runtime, GDB, C ABI and ISA-level verdicts on RISE runners suspended until further notice; every QEMU lane on Cortex-M; the editor grammar, the flake unless its inputs were built in the last week, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
 | promotion to main | verify the candidate's complete successful gate and promote the unchanged tree | the gate reuses the full candidate pass; documents and script controls still run |
+| closing an item | `python3 scripts/activations.py`, then the steps in [closing an item](#closing-an-item) | the register rows whose activation the item's changes met, and the passes only the gate runs that the changes reach |
 
 Every event runs every lane on GitHub-hosted images; the FreeBSD lanes boot
 their VMs inside the job.
@@ -48,13 +49,13 @@ last lane ends, so follow it with `python3 scripts/gate_watch.py`, which
 returns at the first failed job with its step and log command; a pushed fix
 cancels the superseded run. Before promotion, verify the complete job
 listing and the tested tree; a changed merge tree needs its own full pass.
-Close the item on its branch before that gate: the `Done:` paragraph and the
-register rows it settles go into `ROADMAP.md` in the candidate itself, so the
-tree promoted is the tree the full gate passed and main reuses that pass. A
-closing commit made after the branch's gate is a new tree, and the
-explanatory exception cannot help it: that exception takes its base only from
-a full run of a push to main, so a documents-only close on the branch costs
-one more full gate before main can reuse it.
+The item may be closed in the candidate itself or after its gate. A closing
+commit made after the branch's full gate that changes only the content of
+`README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md`, and says
+`Gate: explanatory`, reuses that gate under the explanatory exception, on
+the branch and again when main is promoted to it (D586). A close that changes
+any other file, `docs/capabilities.md` among them, is a new tree and needs
+its own full gate.
 The identical-candidate reuse policy in `AGENTS.md` compares all tracked
 bytes, paths and modes, including workflow definitions and tool pins, with
 a recent complete successful push run from this repository. It never uses
@@ -62,8 +63,9 @@ local filtered transcripts or build caches as test evidence. Manual dispatch
 requests a fresh full matrix. Superseded runs on a branch are cancelled.
 
 The verified explanatory-only remote reuse policy in `AGENTS.md` permits
-qualifying edits to reuse a full successful main gate from the preceding
-seven days. Document and script checks always run.
+qualifying edits to reuse a complete successful push run, of main or of a
+branch, from the preceding seven days, whose commit is an ancestor of the
+edit. Document and script checks always run.
 
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and let the full CI gate validate the
@@ -77,6 +79,49 @@ diagnostic output if present and retain it for 14 days. The called determinism w
 artifacts. These are not a successful exact-revision acceptance record; green says the tree passed there, not that
 a revision is accepted. Documentation changes still receive the full
 `check.py`; its mechanical checks do not establish prose accuracy.
+
+## Closing an item
+
+Before an item closes:
+
+1. Run `python3 scripts/activations.py --base REV`, with REV the commit the
+   item started from (`main` by default). It lists every `open` or
+   `scheduled` register row whose Activation names a path the item changed
+   since REV, uncommitted changes included, and the passes only the gate
+   runs that those paths reach: the editor grammar's corpus,
+   `./highlight/test.sh --integration`, when the grammar, a positive,
+   runtime or ABI fixture or `core/` changed, and the flake's build when
+   `flake.nix`, `flake.lock` or `environments/pins.sh` did. Take each row it
+   lists, or restate its activation, in the item; run each pass it names
+   inside `nix develop`, or add `--run` to have it run them.
+
+   It is a heuristic and says so: it matches paths an activation writes,
+   in backticks or bare, base names of tracked files, Ada unit names and a
+   few names of an area that always mean one file. A row that names an area
+   in words is counted and not matched; `--unmatched` lists those rows, to
+   be read against the item's changes by hand.
+2. When the item changed the compiler's lowering, emission or backends,
+   run the two checks only the gate otherwise runs on them, both of which
+   have found defects after a merge: the build-modes comparison, which
+   needs the debug and the release compiler of the same tree
+   (`./scripts/dev-build.sh`, then `LANDIN_BUILD_MODE=release
+   ./scripts/dev-build.sh`),
+
+   ```sh
+   python3 scripts/emit_manifest.py modes \
+       "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" \
+       "compiler/ada/build/$LANDIN_BUILD_TAG/release/bin/refine" .
+   ```
+
+   and `./scripts/scaling.sh`, alone on its host, since it measures time.
+3. Write the `Done:` paragraph and remove the register rows the item
+   settled, as `ROADMAP.md`'s mechanics ask.
+
+An item worked in parallel streams merges each stream's branch with git.
+When a stream's work is passed as a patch instead, make it with
+`git add -N . && git diff HEAD --binary`: `git diff --binary` alone compares
+the working tree with the index, so a change already staged, a file removed
+with `git rm` among them, is silently missing from the patch.
 
 ## Local agent feedback
 
@@ -300,7 +345,11 @@ introducing nested worker pools into the routine gate.
 The current `flake.nix` supplies development shells and two `refine`
 packages, one built from the checkout and one fetched from a release. It does
 not define the project's test derivations. More `nix develop` invocations
-alone would not remove repeated compilation.
+alone would not remove repeated compilation. The gate's `flake` job builds
+both packages, evaluates every output of every system and enters the shell
+whenever no push run in the last seven days built the same `flake.nix`,
+`flake.lock` and `environments/pins.sh` (D585); that is the whole of Nix CI
+today, and what follows is what it does not do.
 
 Nix could later own compiler packages and suitable `checks` with narrow,
 complete inputs, and schedule them on the correct native builders. Its flake
@@ -310,8 +359,8 @@ job/core controls provide the scheduling mechanisms.
 [distributed builds](https://nix.dev/tutorials/nixos/distributed-builds-setup.html),
 [job/core controls](https://nix.dev/manual/nix/2.32/advanced-topics/cores-vs-jobs).
 
-Nix CI is explicitly deferred. A later evaluation must account for the pinned
-Apple SDK, native debugger permissions, input selection, cache provenance and
+Nix CI beyond building the flake is explicitly deferred. A later evaluation
+must account for the pinned Apple SDK, native debugger permissions, input selection, cache provenance and
 the existing native acceptance record. Build reuse cannot replace the native
 Darwin, Linux or freestanding executions required at a milestone.
 

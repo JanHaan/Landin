@@ -20569,6 +20569,77 @@ maintainer declined; and fetching inside `check.py`, which runs offline.
 **Pinned by** `scripts/tests/test_fetch_inputs.py`, `devices/test.py`'s
 offline tests, and the gate's `cortex-m` steps that fetch and regenerate.
 
+### D585 — The gate builds the flake unless a recent push run built the same flake inputs
+
+**The tour said** nothing. `nix build .#refine`, the documented default,
+failed unnoticed from 2026-10-08, "build/nix/release/generated is not a valid
+directory", because nothing in CI built the flake: it was built by hand,
+and Nix CI was deferred.
+
+**Chosen:** the gate has a `flake` job. It runs `nix build .#refine
+.#refine-bin`, `nix flake check --no-build --all-systems`, which evaluates
+every package and the development shell of every system, and
+`nix develop --command ./scripts/toolchain.sh` on Linux x86-64. That is the
+whole of Nix CI: no derivation is cached, and the only other job that uses
+nix, `rv64-qemu`, takes its emulator from the flake. The job builds unless
+a push run of the gate, in the last seven days, ran the job's build step
+to success from the same
+`flake.nix`, `flake.lock` and `environments/pins.sh`: the same mode and
+object of each, an absent one included. That record is GitHub's job
+listing, read by `scripts/gate_inputs.py flake`; only push runs count, so
+a fork's pull request cannot supply one, and a job that relied on an
+earlier build is not itself a record. One rule serves a branch push, a pull
+request's merge checkout and a push to main; manual dispatch always builds,
+and any failure to read the record builds. Under a reused pass the job is
+skipped with the other lanes, and the run reused had it succeed on the same
+flake inputs, since its tree key covers them. The source the flake builds is
+not an input to the decision: the other lanes build and test it, and the
+first push more than seven days after the last build builds it again.
+
+**The alternatives:** a diff against the event's base, the parent of a
+push or a pull request's base: it skips wrongly after a run whose flake
+build failed, since the next push changes nothing in the flake, and it has
+no base on a branch's first push or after a force push. Building on every
+run, which costs every gate the toolchain's 478 MB and a compilation the
+other lanes already make. And the whole of Nix CI, cached derivations and
+the test suite under nix, which the maintainer limited to building the
+flake.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s `Flake` and
+`FlakeKey` cases, which also hold the workflow to the job and step names
+the record is read by.
+
+### D586 — An explanatory edit may take its base from any branch's full run
+
+**The tour said** nothing. The explanatory exception took its base only
+from a full run of a push to main, so a documents-only commit that closed
+an item after its branch's full gate cost one more full run before main
+could reuse it.
+
+**Chosen:** under the explanatory exception the base is any complete
+successful push run of this repository from the preceding seven days, of
+main or of another branch, and a push to any branch of this repository may
+itself use the exception, as a push to main and a same-repository pull
+request by an author with write access could. Everything else stands: the
+tree differs from the base only in the content of the four top-level
+documents no lane reads, which `scripts/gate_inputs.py` lists; the base is
+an ancestor of every tip; every commit since it says `Gate: explanatory`; every required
+job, every matrix leg by its name, succeeded in a complete listing; and a
+run that itself reused a pass never supplies one. A branch's run is as
+trustworthy a base as main's because only someone with write access can
+push to a branch, and the tree key covers the workflow that run executed
+and every tool pin: a run of a weakened workflow can be reused only by a
+tree that still carries it, as with identical-tree reuse.
+
+**The alternatives:** closing every item before its gate, which the
+process asked and which a finding after the gate defeats; and keeping main
+as the only base, which spends a full run on prose.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s
+`test_a_full_run_of_another_branch_is_a_record` and
+`test_a_branch_push_may_use_the_exception`, and the `Decide` cases that
+hold ancestry, declarations and the complete listing.
+
 ### D560 — The STM32H753 is learnt for prototype 1's UART and DMA, with reviewed corrections
 
 **The tour said** nothing of a second family. Prototype 1 drives a UART

@@ -22,6 +22,12 @@ npm test
 tree-sitter highlight ../tests/structural.ldn
 ```
 
+A change to `grammar.js` or `queries/` takes two commits, because Helix, Zed
+and Emacs fetch this grammar by commit: commit the change, then run
+`python3 ../grammar_pin.py` and commit the three manifests it rewrites on
+their own ([`../README.md`](../README.md#installing-editor-and-ide-support)).
+Until then `../test.sh` gives its other verdicts and fails on the pins.
+
 The generated C parser is checked in so consumers do not need Node.js. The
 external scanner handles nested block comments and the three tokens beginning
 with `-`. `queries/` is canonical; `../generate.py` copies the relevant
