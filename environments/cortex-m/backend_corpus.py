@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import sys
 
-from backend import (ROOT, COUNTERPARTS, describe_routines, describe_sizes, fixture,
+from backend import (HERE, ROOT, COUNTERPARTS, describe_routines, describe_sizes, fixture,
                      levels_of, measure_overflow, metadata)
 from run import CommandFailed, Run, require, workers
 from setup import DEFAULT, installed_tools, sha, supported_host
@@ -193,6 +193,58 @@ def divide_lowering(run):
     return {'hardware_divides': divides, 'helper_divides': 0}
 
 
+def capacities():
+    """Each description's capacities, from descriptions.json: the flash its
+    text region gives after the boot kind's prefix, the static RAM its data
+    region gives beside a stack it holds, and the stack (D543, D545)."""
+    devices = json.loads((HERE / 'descriptions.json').read_text())['devices']
+    out = {}
+    for device, facts in devices.items():
+        regions = {r['name']: r for r in facts['regions']}
+        flash = regions[facts['placed']['text']]['length']
+        if 'boot2_bytes' in facts:
+            flash -= facts['boot2_bytes']
+        ram = regions[facts['placed']['data']]['length']
+        if facts['placed']['stack'] == facts['placed']['data']:
+            ram -= facts['stack_reserved']
+        out[device] = {'FLASH': flash, 'RAM': ram, 'stack': facts['stack_reserved']}
+    return out
+
+
+def profile_verdicts(results):
+    """Every capacity verdict again against each described profile.
+
+    A limited image's measured extents, from the enlarged probe map, its
+    largest frame, or its materialization, are held to each profile's
+    capacities; the reference's must agree with the verdict the corpus
+    reached by linking.  A measurement: nothing here is linked or run
+    against the other profiles' maps.
+    """
+    verdicts = {}
+    for device, limit in capacities().items():
+        fits, exceeds = [], []
+        for result in results:
+            if result.get('verdict') != 'selected-image-limit':
+                continue
+            tag = '%s %s/%s' % (result['fixture'], result['optimize'], result['specialize'])
+            if 'minimum_frame_bytes' in result:
+                over = result['minimum_frame_bytes'] > limit['stack']
+            elif 'image' in result:
+                used = {region: result['image']['regions'][region]['used']
+                        for region in ('FLASH', 'RAM')}
+                over = used['FLASH'] > limit['FLASH'] or used['RAM'] > limit['RAM']
+            else:
+                over = True
+            (exceeds if over else fits).append(tag)
+        verdicts[device] = {'verdicts': len(fits) + len(exceeds),
+                            'exceed': len(exceeds), 'fit': sorted(fits),
+                            'programs_exceeding': len({t.split()[0] for t in exceeds})}
+    require(verdicts['constrained-reference']['fit'] == [],
+            'the reference capacities disagree with the linked verdicts: '
+            + ', '.join(verdicts['constrained-reference']['fit']))
+    return verdicts
+
+
 def execute(output, tools, refine, selected=(), profiles=()):
     rows = inventory()
     profiles = [profile_name(p) for p in profiles]
@@ -265,7 +317,12 @@ def execute(output, tools, refine, selected=(), profiles=()):
     #  holds at a profile it did not run.
     stale = [] if profiles else stale_limits(rows, results)
     summary = {'scope': 'development-filtered' if selected or profiles else 'complete-inventory',
-               'compiler_sha256': sha(refine), 'results': results, 'stale_limits': stale}
+               'compiler_sha256': sha(refine), 'results': results, 'stale_limits': stale,
+               'profiles': profile_verdicts(results)}
+    for device, verdict in summary['profiles'].items():
+        print('cortex corpus capacity against %s: %d of %d limited verdicts still exceed it,'
+              ' in %d programs' % (device, verdict['exceed'], verdict['verdicts'],
+                                   verdict['programs_exceeding']), flush=True)
     (output / 'result.json').write_text(json.dumps(summary, indent=2)+'\n')
     failed = [r for r in results if r['status'] != 'passed']
     require(not failed, 'Cortex corpus has %d failures:\n%s' % (len(failed), '\n'.join(
