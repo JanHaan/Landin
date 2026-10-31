@@ -47,7 +47,7 @@ accepting: () -> none ! ... =
     listener: posix.descriptor = try posix.socket(posix.internet,
                                                   posix.stream)
     try posix.bind(listener,
-                   posix.internet_address(net.loopback(net.ipv4, 0)))
+                   try posix.internet_address(net.loopback(net.ipv4, 0)))
     try posix.listen(listener, 4)
     fail wrong when try posix.non_blocking(listener)
     try posix.set_non_blocking(listener, true)
@@ -106,7 +106,7 @@ refusing: () -> none ! ... =
     listener: posix.descriptor = try posix.socket(posix.internet,
                                                   posix.stream)
     try posix.bind(listener,
-                   posix.internet_address(net.loopback(net.ipv4, 0)))
+                   try posix.internet_address(net.loopback(net.ipv4, 0)))
     try posix.listen(listener, 4)
     to: posix.socket_address = try posix.socket_name(listener)
     try posix.close(listener)

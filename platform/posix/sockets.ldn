@@ -92,10 +92,13 @@ unix_path_offset: usize = 2
 
 --- The system's record of the internet address `at`: C's `struct
 --- sockaddr_in`, 16 bytes, for an IPv4 address and `struct sockaddr_in6`,
---- 28 bytes, for an IPv6 one, the port in network order and the IPv6 flow
---- label and scope zero.
+--- 28 bytes, for an IPv6 one, the port in network order, the IPv6 flow
+--- label zero and its scope the interface the address's zone names: a
+--- zone of decimal digits is the interface's number as it stands, and a
+--- name is looked up with `interface_index` (D581).  `enodev` when the
+--- zone names no interface here, or is a number past 32 bits.
 public internet_address:
-    (at: net.address) -> (made: socket_address) =
+    (at: net.address) -> (made: socket_address) ! errno =
     made = (bytes: zeroed, length: 16)
     made.bytes[2] = u8(at.port >> 8)
     made.bytes[3] = u8(at.port & 255)
@@ -110,8 +113,79 @@ public internet_address:
         for index in usize(0)..<16 do
             made.bytes[8 + index] = at.octets[index]
         end for
+        --  `sin6_scope_id`, in the host's order, which is little-endian
+        --  on every hosted target.
+        scope: u32 = try scope_of(at)
+        for index in usize(0)..<4 do
+            made.bytes[24 + index] = u8((scope >> u32(8 * index)) & 255)
+        end for
     end if
 end internet_address
+
+--  The interface number an IPv6 address's zone names, zero for none.
+scope_of: (at: net.address) -> (scope: u32) ! errno =
+    scope = 0
+    length: usize = net.zone_length(at)
+    return when length == 0
+    name: []u8 = at.zone[0..<length]
+    scope = text.parse_u32(name) else (problem)
+        _ = problem
+        mut digits: bool = true
+        for index in usize(0)..<length do
+            if name[index] < u8('0') or name[index] > u8('9') then
+                digits = false
+            end if
+        end for
+        fail enodev when digits
+        scope = try interface_index(name)
+        return
+    end
+end scope_of
+
+--- The number this system gives the network interface named `name`, as
+--- C's `if_nametoindex` gives it: `enodev` when no interface has that
+--- name.  Linux asks with `SIOCGIFINDEX` on a Unix-domain socket made for
+--- the question; Darwin and FreeBSD ask their C library.
+public interface_index:
+    (name: []u8) -> (index: u32) ! errno =
+    fail enodev when lenof name == 0 or lenof name > net.zone_room
+    mut terminated: [16]u8 = zeroed
+    for at in usize(0)..<lenof name do
+        fail enodev when name[at] == 0
+        terminated[at] = name[at]
+    end for
+    index = try system_interface_index(terminated)
+    fail enodev when index == 0
+end interface_index
+
+--- The name of the network interface this system numbers `index`, its
+--- bytes and zeros after them, as a `net.address` keeps a zone: `enodev`
+--- when no interface has that number.  Linux asks with `SIOCGIFNAME`;
+--- Darwin and FreeBSD ask their C library's `if_indextoname`.
+public interface_name:
+    (index: u32) -> (name: [16]u8) ! errno =
+    fail enodev when index == 0
+    name = try system_interface_name(index)
+    --  Nothing after the name's NUL, and a NUL in the last byte.
+    mut ended: bool = false
+    for at in usize(0)..<16 do
+        if name[at] == 0 then ended = true end if
+        if ended or at == 15 then name[at] = 0 end if
+    end for
+    fail enodev when name[0] == 0
+end interface_name
+
+--  The zone a received address's scope names: its interface's name, or,
+--  for an interface that has gone, its number in decimal.
+zone_named: (scope: u32) -> (zone: [16]u8) =
+    zone = interface_name(scope) else (problem)
+        _ = problem
+        zone = zeroed
+        mut room := text.over(zone[0..<net.zone_room])
+        text.append_u32(room, scope) else none
+        return
+    end
+end zone_named
 
 --- The system's record of the Unix-domain socket at `path`, C's `struct
 --- sockaddr_un`: `enametoolong` when the path and its NUL do not fit its
@@ -144,9 +218,10 @@ public family_of:
     fail eafnosupport when number <> system_family_number(family)
 end family_of
 
---- The internet address and port the socket address `at` holds, its IPv6
---- scope dropped: `eafnosupport` for a Unix-domain one, or a record too
---- short for its family.
+--- The internet address and port the socket address `at` holds, an IPv6
+--- scope as its zone, the interface's name, or its number in decimal when
+--- no interface has that number now: `eafnosupport` for a Unix-domain
+--- one, or a record too short for its family.
 public address_of:
     (at: socket_address) -> (result: net.address) ! errno =
     family: socket_family = try family_of(at)
@@ -162,6 +237,13 @@ public address_of:
         for index in usize(0)..<16 do
             result.octets[index] = at.bytes[8 + index]
         end for
+        if at.length >= 28 then
+            mut scope: u32 = 0
+            for index in usize(0)..<4 do
+                scope = scope | (u32(at.bytes[24 + index]) << u32(8 * index))
+            end for
+            if scope <> 0 then result.zone = zone_named(scope) end if
+        end if
     else
         fail eafnosupport
     end if
@@ -619,6 +701,38 @@ fixed if compiler.os == linux then
         span = (seconds: limit.seconds,
                 nanoseconds: u32(limit.microseconds) * 1000)
     end system_get_time
+
+    --  Ask the system about an interface, as glibc's `if_nametoindex`
+    --  and `if_indextoname` do: an `ioctl` on a socket made for the
+    --  question, which any family's socket answers.
+    interface_asked: (request: u64, inout record: linux.interface_record)
+                     -> none ! errno =
+        asking: i32 = linux.socket(linux.af_unix,
+                                   linux.sock_dgram | linux.sock_cloexec, 0)
+        fail errno_of(-asking) when asking < 0
+        result: i32 = linux.ioctl(asking, request, i64(usize(addr record)))
+        _ = linux.close(asking)
+        fail errno_of(-result) when result < 0
+    end interface_asked
+
+    system_interface_index: (name: [16]u8) -> (index: u32) ! errno =
+        mut record: linux.interface_record = zeroed
+        for at in usize(0)..<16 do
+            record.name[at] = name[at]
+        end for
+        try interface_asked(linux.siocgifindex, record)
+        index = u32(record.index)
+    end system_interface_index
+
+    system_interface_name: (index: u32) -> (name: [16]u8) ! errno =
+        mut record: linux.interface_record = zeroed
+        record.index = i32(index)
+        interface_asked(linux.siocgifname, record) else (problem)
+            fail enodev when problem == enxio or problem == enodev
+            fail problem
+        end
+        name = record.name
+    end system_interface_name
 elsif compiler.os == darwin or compiler.os == freebsd then
     system_family_number: (family: socket_family) -> (number: i32) =
         number = match family
@@ -939,4 +1053,14 @@ elsif compiler.os == darwin or compiler.os == freebsd then
         span = (seconds: limit.seconds,
                 nanoseconds: u32(microseconds) * 1000)
     end system_get_time
+
+    system_interface_index: (name: [16]u8) -> (index: u32) ! errno =
+        index = libc.if_nametoindex(addr name[0])
+    end system_interface_index
+
+    system_interface_name: (index: u32) -> (name: [16]u8) ! errno =
+        name = zeroed
+        found: libc.address_filled = libc.if_indextoname(index, addr name[0])
+        fail enodev when found == libc.no_address
+    end system_interface_name
 end if

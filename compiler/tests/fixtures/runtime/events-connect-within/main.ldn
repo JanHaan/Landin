@@ -1,0 +1,199 @@
+--  D580 under hosted/events: a connection with a limit of its own, which
+--  parks its fibre on the loop with the limit as its deadline.  The cases
+--  are runtime/network-connect-within's: `net.connect_within` connects to
+--  a listener with a limit and with none, is refused at once by a port
+--  nothing listens on, and fails `timed_out` against a peer that never
+--  answers once its limit has passed, while another fibre, sleeping
+--  twenty milliseconds at a time, goes on counting; a connection made
+--  afterwards is unharmed.  The peer that never answers is a full
+--  listener of backlog 0 on Linux and `fe80::2%lo0` on Darwin and FreeBSD,
+--  as there.
+import core/io
+import core/net
+import core/time
+import core/failure
+import core/fibre
+import hosted/events
+import platform/posix
+
+--  The limit each bounded attempt is given.
+limit: u64 = 200
+
+--  The connections an attempt made, kept until the end.
+kept: type = struct
+    files: [8]io.file
+    count: usize
+end kept
+
+--  Connect to `at` within the limit: kept in `held` when it connects, or
+--  `ended` when it timed out after the limit and well before a system's
+--  own wait.  Any other failure is the caller's.
+attempt: (host: events.host, at: net.address, inout held: kept)
+         -> (ended: bool) ! ... =
+    ended = false
+    start: time.instant = time.now(host)
+    made: io.file = net.connect_within(host, at, time.milliseconds(limit))
+        else (problem)
+        took: time.duration = time.elapsed(start, time.now(host))
+        fail problem when problem <> net.timed_out
+        fail io.io_failed when took < time.milliseconds(limit)
+          or took >= time.seconds(10)
+        ended = true
+        return
+    end
+    held.files[held.count] = made
+    inc held.count
+end attempt
+
+--  Attempt connections to `at` until one times out, at most eight.
+times_out: (host: events.host, at: net.address) -> (yes: bool) ! ... =
+    mut held: kept = zeroed
+    yes = false
+    while held.count < 8 and not yes do
+        yes = try attempt(host, at, held)
+    end while
+    for index in usize(0)..<held.count do
+        closing: io.file = held.files[index]
+        try net.close_socket(host, closing)
+    end for
+end times_out
+
+fixed if compiler.os == linux then
+    --  A listener of backlog 0 that nothing accepts from.
+    unanswered: (host: events.host) -> (yes: bool) ! ... =
+        held: posix.descriptor = try posix.socket(posix.internet,
+                                                  posix.stream)
+        defer posix.close(held) else none
+        try posix.bind(held,
+                       try posix.internet_address(net.loopback(net.ipv4, 0)))
+        try posix.listen(held, 0)
+        at: net.address = try posix.address_of(try posix.socket_name(held))
+        yes = try times_out(host, at)
+    end unanswered
+else
+    --  An address on the loopback's link-local prefix that nothing holds.
+    unanswered: (host: events.host) -> (yes: bool) ! ... =
+        yes = try times_out(host, try net.parse_address("[fe80::2%lo0]:9"))
+    end unanswered
+end if
+
+--  A connection made within a limit, and one with none, to a listener
+--  that accepts them, and a byte sent over the first.
+connects: (host: events.host) -> (yes: bool) ! ... =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    defer net.close_socket(host, listener) else none
+    at: net.address = try net.local_address(host, listener)
+    client: io.file = try net.connect_within(host, at, time.seconds(5))
+    defer net.close_socket(host, client) else none
+    server: io.file = try net.accept(host, listener)
+    defer net.close_socket(host, server) else none
+    try net.send(host, client, "!")
+    mut buffer: [1]u8 = zeroed
+    got: usize = try net.receive(host, server, buffer)
+    unlimited: io.file = try net.connect_within(host, at, time.nanoseconds(0))
+    defer net.close_socket(host, unlimited) else none
+    other: io.file = try net.accept(host, listener)
+    defer net.close_socket(host, other) else none
+    yes = got == 1 and buffer[0] == u8('!')
+          and net.same_address(try net.peer_address(host, client), at)
+end connects
+
+--  A connection within a limit to a port nothing listens on is refused,
+--  at once.
+refused: (host: events.host) -> (yes: bool) ! ... =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(host, listener)
+    try net.close_socket(host, listener)
+    yes = false
+    start: time.instant = time.now(host)
+    made: io.file = net.connect_within(host, at, time.seconds(5))
+        else (problem)
+        yes = problem == net.refused
+              and time.elapsed(start, time.now(host)) < time.seconds(5)
+        return
+    end
+    try net.close_socket(host, made)
+end refused
+
+--  Ticks the other fibre counted, and whether the connecting fibre has
+--  finished.
+mut ticks: u32 = 0
+mut finished: bool = false
+--  The ticks counted while the bounded connection waited for nothing.
+mut waited_ticks: u32 = 0
+mut outcome: i32 = 0
+
+--  Let the ticking fibre end.
+finish: () -> none =
+    finished = true
+end finish
+
+connecting: type = struct
+    host: events.host
+end connecting
+
+--  Every case in turn, each an outcome when it fails.
+connect_all: (inout state: connecting) -> none ! failure.reason =
+    defer finish()
+    outcome = 1
+    return when not try connects(state.host)
+    outcome = 2
+    return when not try refused(state.host)
+    outcome = 3
+    before: u32 = ticks
+    --  The system's own errors, Linux's listener's, are no reason here.
+    timed: bool = unanswered(state.host) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    return when not timed
+    waited_ticks = ticks - before
+    outcome = 4
+    return when not try connects(state.host)
+    outcome = 42
+end connect_all
+
+ticking: type = struct
+    host: events.host
+end ticking
+
+--  Count a tick every twenty milliseconds until the other fibre ends.
+tick: (inout state: ticking) -> none ! failure.reason =
+    while not finished do
+        time.sleep(state.host, time.milliseconds(20))
+        inc ticks
+    end while
+end tick
+
+mut backing: [2 * 32768]u8 = zeroed
+
+run: (host: events.host) -> none ! failure.reason =
+    mut tasks := try fibre.turns_over(any(addr host), backing, 2)
+    defer fibre.join(tasks) else none
+    try fibre.admit(tasks, connect_all, connecting(host: host))
+    try fibre.admit(tasks, tick, ticking(host: host))
+    try fibre.join(tasks)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    --  Two fibres, and one more for the routine that joins them.
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else (problem)
+        _ = problem
+        return
+    end
+    code = 10 + outcome
+    return when outcome <> 42
+    --  The other fibre ran while the bounded connection waited: two
+    --  hundred milliseconds hold about ten of its ticks.
+    code = 5
+    return when waited_ticks < 3
+    code = 42
+end main

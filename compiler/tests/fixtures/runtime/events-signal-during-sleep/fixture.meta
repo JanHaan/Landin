@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: core/time's rule that a sleep a signal interrupts sleeps on for what is left, on hosted/events' clock: a fibre watching SIGUSR1 and a fibre sleeping half a second, and a thread of hosted/thread sending SIGUSR1 to the process a tenth of a second into the sleep; the loop, waiting for the sleeper's deadline, is woken by the signal through signalfd or kqueue and answers the watcher, the signal arrives after the sleep began and before it ended, and the sleep still lasts at least half a second
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 1380, 1620, 1660, 1675, 1910
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

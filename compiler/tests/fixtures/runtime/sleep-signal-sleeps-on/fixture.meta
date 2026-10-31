@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: core/time's rule that a sleep a signal interrupts sleeps on for what is left, on hosted/blocking's clock: a handler installed through the C library's sigaction catches SIGUSR1, which a thread of hosted/thread sends to the process a tenth of a second into the first thread's half-second sleep; the first thread alone takes it, in nanosleep, which ends with EINTR, and the handler runs once, the signal is sent after the sleep began and before it ended, and the sleep still lasts at least half a second
+program: main.ldn
+root: ../../../../..
+link: libc
+status: 42
+constructs: 0870, 1600, 1650, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

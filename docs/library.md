@@ -1074,11 +1074,11 @@ The network concept, whose connections are readers and writers, and internet add
 
 | Call | What it does |
 |---|---|
-| `net.connect` | Connect to an address. |
+| `net.connect`, `net.connect_within` | Connect to an address, the second within a limit. |
 | `net.listen`, `net.accept` | Listen at an address and take the next connection. |
 | `net.send`, `net.receive` | Send and receive on a connection. |
 | `net.open_datagram`, `net.send_to`, `net.receive_from` | A UDP socket and its datagrams. |
-| `net.parse_address`, `net.append_address` | Read and write `192.0.2.1:80` and `[2001:db8::1]:80`. |
+| `net.parse_address`, `net.append_address` | Read and write `192.0.2.1:80`, `[2001:db8::1]:80` and `[fe80::1%eth0]:80`. |
 | `net.close_socket` | Close a socket. |
 
 ### Sockets
@@ -1098,6 +1098,7 @@ sends.
 | `listen` | Takes an address and returns a listener. Port 0 asks for a free port, which `local_address` then gives. It may take an address its own closed connections still hold, never one another socket listens at, which is `address_in_use`. |
 | `accept` | Takes the next connection. |
 | `connect` | Makes one: `refused` where nothing listens and `unreachable` where no route leads. |
+| `connect_within` | Makes one as `connect` does, or fails `timed_out` once its limit has passed with no answer, as from a peer that never answers; zero is no limit. |
 | `open_datagram` | Binds a UDP socket. |
 | `send_to` | Sends a datagram whole. |
 | `receive_from` | Gives the next datagram with its `sender`, cutting one longer than the buffer. |
@@ -1107,26 +1108,38 @@ sends.
 | `set_no_delay` | Turns Nagle's algorithm off. |
 | `close_socket` | Closes a socket. |
 
-An address the system does not have, or a family it lacks, is
-`address_unavailable`.
+An address the system does not have, a zone that names none of its
+interfaces, or a family it lacks, is `address_unavailable`.
 
-Every call waits as a blocking socket does. One thread can connect to its
+Every call waits as a blocking socket does, `connect` as long as the
+system does, which is over a minute on Linux; `connect_within` gives a
+connection a limit of its own. One thread can connect to its
 own listener and send before it accepts, since the system completes the
 handshake, but a receive waits for its peer.
 
 ### Addresses
 
-An `address` is a family, `ipv4` or `ipv6`, sixteen bytes and a port.
+An `address` is a family, `ipv4` or `ipv6`, sixteen bytes, a port and an
+IPv6 address's zone.
 
 - `loopback`, `unspecified`, `ipv4_address`, `ipv6_address` and
-  `with_port` make one.
+  `with_port` make one, and `with_zone` gives an IPv6 one a zone.
 - `same_address` and `is_unspecified` compare.
-- `parse_ip` reads `192.0.2.1` or `2001:db8::1`, and `parse_address`
-  reads `192.0.2.1:80` or `[2001:db8::1]:80`. Both refuse a leading zero,
-  a zone and anything else with `invalid_address`.
+- `parse_ip` reads `192.0.2.1`, `2001:db8::1` or `fe80::1%eth0`, and
+  `parse_address` reads `192.0.2.1:80`, `[2001:db8::1]:80` or
+  `[fe80::1%eth0]:80`. Both refuse a leading zero, an empty zone, one
+  longer than `zone_room`'s 15 bytes, a zone after an IPv4 address and
+  anything else with `invalid_address`.
 - `append_ip` and `append_address` write them back as RFC 5952 does: lower
   case, the longest run of zero groups shortened, and an IPv4-mapped
-  address in dotted decimal.
+  address in dotted decimal, with the zone as it was written.
+
+A zone names the interface a link-local address is reached through: its
+name, `eth0`, or its number in decimal, `2`. The address keeps it as text,
+`zone`'s bytes before the first zero, `zone_length` of them, so reading and
+writing an address needs no system; the hosted provider looks a name up
+when the address is used and names the interface again in an address it
+reads back, a peer's among them.
 - An address is `text.formattable`.
 
 Nothing here resolves a name.
@@ -1449,7 +1462,7 @@ entries that wait, and only in those:
 | `io.reader`, `io.writer` | `read`, `write`, `write_some`, which wait for input or for room | none |
 | `io.programs` | `wait`, for a child to end, and the child's `read_child` and `write_child` | `spawn`, `close_input` |
 | `time.clock` | `sleep` | `now` |
-| `net.network` | `connect`, `accept`, `send`, `receive`, `send_to`, `receive_from` | `listen`, `open_datagram`, `shutdown`, `local_address`, `peer_address`, `set_timeouts`, `set_no_delay`, `close_socket` |
+| `net.network` | `connect`, `connect_within`, `accept`, `send`, `receive`, `send_to`, `receive_from` | `listen`, `open_datagram`, `shutdown`, `local_address`, `peer_address`, `set_timeouts`, `set_no_delay`, `close_socket` |
 | `signal.signals` | `next_signal` | `watch`, `stop_watching` |
 
 Every other entry of `core/io`, `core/time` and `core/net` never
@@ -1468,7 +1481,7 @@ The library's own providers of turns switch in fewer:
 | `stacks.round` | `yield` and `wait`; its `start` prepares the fibre and returns |
 | `fake.network` over turns | `accept`, `send`, `receive`, `receive_from`, `read`, `write` and `write_some`, and only where the call would wait |
 | `fake.signals` | `next_signal` when nothing waits to be read, and its round's `yield` and `wait` |
-| `events.host` | `yield` and `wait`; `read`, `write` and `write_some` when the file is not ready; `read_child` and `write_child` when the pipe is not; the programs' `wait`, for the child's end; `sleep` until its deadline; `accept`, `connect`, `send`, `receive`, `send_to` and `receive_from` where the socket would wait; and `next_signal` when no arrival waits to be read. Its `start` prepares the fibre and returns, and `close`, `close_socket`, `shutdown`, `close_input` and `stop_watching` wake the fibres waiting on what they end without switching |
+| `events.host` | `yield` and `wait`; `read`, `write` and `write_some` when the file is not ready; `read_child` and `write_child` when the pipe is not; the programs' `wait`, for the child's end; `sleep` until its deadline; `accept`, `connect`, `connect_within`, `send`, `receive`, `send_to` and `receive_from` where the socket would wait; and `next_signal` when no arrival waits to be read. Its `start` prepares the fibre and returns, and `close`, `close_socket`, `shutdown`, `close_input` and `stop_watching` wake the fibres waiting on what they end without switching |
 
 A `fake.clock` made by `clock_over` advances the clock in its `sleep`
 and returns, and switches nowhere. One made `clock_beside` a network that
@@ -1640,6 +1653,9 @@ Interruptions and partial results are handled for you:
 - an interrupted call is made again;
 - a connection a signal interrupted is waited out with `poll`, and its
   outcome read from the socket;
+- a connection within a limit is made on a socket that does not block,
+  waited for with `poll` until the limit has passed, and the socket blocks
+  again once it is made;
 - an accept refused because its connection was reset before it was taken
   accepts the next;
 - a send goes on after a short one until every byte is sent.
@@ -1659,7 +1675,10 @@ A clock the system cannot read ends the program, since no hosted system
 fails to.
 
 A sleep a signal interrupts, or the system ends early, sleeps on: it
-never returns before the deadline as `now` reads it.
+never returns before the deadline as `now` reads it. A signal reaches a
+sleep only through a handler, which only C installs, since a Landin program
+waits for signals as events; `runtime/sleep-signal-sleeps-on` installs one
+through the C library and shows the sleep ended with EINTR going on.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-system-arguments/main.ldn)
 
@@ -1702,7 +1721,8 @@ own accord. With nothing waiting it returns at once.
 - Closing a file or a socket, or shutting a socket's side, through the
   provider wakes every fibre waiting on it, whose call fails `io_failed`.
 - A socket's limits from `set_timeouts` bound each wait, and their
-  passing is `timed_out`. A connect has no limit.
+  passing is `timed_out`. A `connect` has no limit; a `connect_within`
+  waits with its limit as the deadline.
 - `sleep` waits for its deadline in the loop, never early: no timer or
   descriptor is made for it.
 - A child's end is waited for on a pidfd on Linux and with kqueue's
@@ -2139,7 +2159,10 @@ passes.
 A `socket_address` is the system's own record, laid out here for each
 system, Darwin's and FreeBSD's length byte included.
 
-- `internet_address` makes one from a `net.address`.
+- `internet_address` makes one from a `net.address`, its zone the
+  interface `interface_index` finds, `enodev` when there is none.
+- `interface_index` and `interface_name` turn an interface's name into
+  its number and back, as C's `if_nametoindex` and `if_indextoname` do.
 - `unix_address` makes one from a path, refusing one too long for the
   system.
 - `family_of`, `address_of` and `unix_path` read one back.

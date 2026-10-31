@@ -121,7 +121,10 @@ end network_value
 --- never do.  A send to a connection whose peer has closed is
 --- `disconnected` at once, where a real one may take one send before it
 --- says so.  It does not model loss on a connection, a peer's reset,
---- partial reads, a port held after its socket closed, nor a zone.
+--- partial reads, nor a port held after its socket closed.  It reads no
+--- zone: `::1%lo` is its loopback address, and `fe80::1%lo`, as every
+--- other address, none of its interfaces.  A connection is made at once
+--- or refused, so `connect_within`'s limit is never reached.
 public network: type = network_value
 
 --  The scheduler of a network that does not take turns: it runs nothing
@@ -398,6 +401,16 @@ network_connect: (self: network, to: net.address) -> (connected: io.file)
     moved(self)
     connected = io.file(client)
 end network_connect
+
+--  A connection here is made at once or refused, so no limit is reached.
+network_connect_within: (self: network, to: net.address,
+                         limit: time.duration) -> (connected: io.file)
+                        ! net.refused | net.unreachable
+                        | net.address_unavailable | net.timed_out
+                        | io.io_failed =
+    _ = limit
+    connected = try network_connect(self, to)
+end network_connect_within
 
 network_accept: (self: network, listener: io.file) -> (accepted: io.file)
                 ! net.timed_out | io.io_failed =
@@ -716,7 +729,8 @@ network is io.reader (read: network_read)
 network is io.writer (write: network_write,
                       write_some: network_write_some)
 network is net.network
-    (connect: network_connect, listen: network_listen,
+    (connect: network_connect, connect_within: network_connect_within,
+     listen: network_listen,
      accept: network_accept, open_datagram: network_open_datagram,
      send: network_send, receive: network_receive,
      send_to: network_send_to, receive_from: network_receive_from,

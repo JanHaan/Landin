@@ -24227,7 +24227,11 @@ fails in a chroot; and `getentropy`, limited to 256 bytes a call.
 
 **Pinned by** `runtime/clock-system`, whose oracles are monotonic order and a
 sleep's lower bound, `runtime/clock-manual`, `runtime/run-shell`, which times
-its child, `runtime/run-shell-memory` and `abi/clock-agrees-with-c`.
+its child, `runtime/run-shell-memory`, `abi/clock-agrees-with-c`,
+`runtime/sleep-signal-sleeps-on`, a caught SIGUSR1 ending a sleep's
+`nanosleep` with EINTR a tenth of a second in and the sleep lasting its half
+second, and `runtime/events-signal-during-sleep`, the same signal waking the
+event loop while a fibre sleeps, on every hosted target.
 
 ### D317 — Linux reads its clock through the vDSO
 
@@ -24301,7 +24305,7 @@ on a connection, `disconnected`; anything else `io_failed` with its errno kept.
 The calls block. `set_timeouts(receive, send)` sets limits, zero meaning none;
 a limit passing leaves the socket usable, and `accept` keeps the receive
 limit on every system, by `poll` on Darwin and FreeBSD. `connect` has no limit
-of its own. Every listener reuses its address and every IPv6 socket is IPv6
+of its own; D580 adds `connect_within`, which has. Every listener reuses its address and every IPv6 socket is IPv6
 only, so an address names one family everywhere; the backlog is 128. The
 hosted provider retries EINTR, waits out an interrupted connect and reads its
 error, takes the next connection after ECONNABORTED and sends until every byte
@@ -24327,7 +24331,7 @@ record's in the roadmap's register.
 **Chosen:** `net.address` is a public record, as D293's directory is, so a
 provider in another module builds one, of an `ipv4` or `ipv6` family, sixteen
 bytes and a port; it has no zone, so `%zone` is `invalid_address` and a
-link-local address waits. IPv4 is four decimal parts with no leading zero, as
+link-local address waits. D581 amends this: an IPv6 address has a zone. IPv4 is four decimal parts with no leading zero, as
 `inet_pton` reads them. IPv6 is RFC 4291's form in either case, with one `::`
 and an IPv4 tail; it is written as RFC 5952 says, in lower case with the
 longest run of two or more zero groups compressed, the first on a tie, and
@@ -24338,8 +24342,9 @@ only an IPv4-mapped address dotted. With a port it is `a.b.c.d:p` or
 **The alternatives:** an opaque type; a scope identifier; `inet_aton`'s
 shorthands, whose leading zero is octal; and dotted IPv4-compatible addresses.
 
-**Pinned by** `runtime/network-addresses` and
-`runtime/network-addresses-firmware`, which runs on Cortex-M0.
+**Pinned by** `runtime/network-addresses`, and
+`runtime/network-addresses-firmware` and
+`runtime/network-addresses-written-firmware`, which run on Cortex-M0.
 
 ### D321 — A loopback network in memory never waits
 
@@ -24410,6 +24415,110 @@ are designed.
 **Pinned by** `runtime/posix-sockets`, which fails when close-on-exec is
 removed, and `abi/libc-socket-facts`, which holds each system's constants and
 layouts to its headers.
+
+### D580 — A connection's limit is a second entry, `connect_within`
+
+**The tour said** at [1660] that authority is passed, and D319 left `connect`
+without a limit of its own: a socket's limits are `set_timeouts`', and there
+is no socket before a connection is made, so a program reaching a peer that
+never answers waited as long as the system does, over a minute on Linux.
+
+**Chosen:** `net.network` gains an entry, `connect_within(to, limit)`, and
+`core/net` its free function: a connection made as `connect` makes it, or
+`timed_out` once `limit` has passed with no answer, the socket it began
+closed. The limit is a `time.duration`, and zero is none, as `set_timeouts`
+reads one; the connection made has no limit of its own on what it sends and
+receives. `connect` stays as it was. The blocking provider makes the socket
+non-blocking for the connection alone, waits with `poll` for what is left
+of the limit on the monotonic clock, rounded up to the millisecond and asked
+again after EINTR, takes the outcome from `SO_ERROR`, and makes the socket
+block again; the limit passing is ETIMEDOUT, which D319 maps to
+`timed_out`. The event provider parks the connecting fibre on the loop with
+the limit's deadline, so its other fibres run while it waits. The fake
+network connects or refuses at once, so its limit is never reached.
+
+**Settled in implementing it:** a peer that never answers is each system's
+own, and the fixtures say which. Linux drops a connection's first segment
+while a listener's queue of finished handshakes is full, so once a
+listener of backlog 0 holds one connection nothing accepts, the next is not
+answered. FreeBSD answers such a connection from its SYN cache and resets
+it when the queue has no room, which is no timeout; there, and on Darwin, a
+segment for an address on the loopback interface's link-local prefix that
+no interface holds, `fe80::2%lo0`, is carried to nobody (D581).
+
+**The alternatives:** a `limit` parameter on `connect` itself, zero for none,
+which is one entry where this is two but makes every connection name a
+limit, `time.nanoseconds(0)` for most of them; an absolute deadline, a
+`time.instant`, which the rest of `core/net` never takes; and a limit set on
+the provider, which one fibre's connection would change for another's.
+
+**Pinned by** `runtime/network-connect-within`, over `hosted/blocking`, and
+`runtime/events-connect-within`, over `hosted/events` with a second fibre
+counting while the connection waits: each connects within a limit and with
+none, is refused at once by a port nothing listens on, and times out against
+a peer that never answers after the limit and well before the system's own
+wait, on every hosted target.
+
+### D581 — An IPv6 address keeps its zone as text, and the provider looks it up
+
+**The tour said** nothing, and D320 left an address without a zone, so a
+link-local address, `fe80::1%eth0`, could be neither written nor reached.
+
+**Chosen:** `net.address` gains `zone: [16]u8`, the zone's bytes and zeros
+after them, at most `net.zone_room`, 15, of them: an interface's name on
+every hosted system, whose IFNAMSIZ counts a NUL after them. All zeros is
+none, which every IPv4 address has, so `zeroed`, the constructors and
+`same_address` keep working, and two addresses differing only by zone are
+not the same. A zone is text in the address rather than the system's
+interface number, because `core/net` reads and writes addresses on every
+target, firmware included, with no system to ask: `parse_ip` reads
+`fe80::1%eth0`, `parse_address` reads `[fe80::1%eth0]:80`, the zone inside
+the brackets as it is written rather than as a URL escapes it, `%25eth0`,
+and `append_ip` and `append_address` write them back. A zone is one to 15
+bytes, none of them NUL, kept as written, Go's rule; an empty zone, a longer
+one and a zone after an IPv4 address are `invalid_address`. `with_zone`
+gives an IPv6 address a zone, or takes it away given an empty one, and
+`zone_length` measures it. A zone of decimal digits is the interface's
+number, RFC 4007's numeric form.
+
+Where an address meets a socket, `posix.internet_address` writes the zone's
+interface into `sin6_scope_id`: digits as the number they spell, and a name
+as `posix.interface_index` finds it, which is `SIOCGIFINDEX` on a
+Unix-domain socket on Linux and the C library's `if_nametoindex` on Darwin
+and FreeBSD. It now fails, `enodev` for a zone that names no interface, and
+each provider makes that `address_unavailable`, as it does ENODEV and ENXIO
+from the system, and `unreachable` for `send_to`, whose atoms have no
+other. A record read back, a peer's, a socket's own or a datagram's
+sender's, gives its scope as a zone through `posix.interface_name`,
+`SIOCGIFNAME` or `if_indextoname`: the interface's name, or its number in
+decimal for an interface that has gone.
+
+**Settled in implementing it:** reading and writing addresses with zones
+did not fit Cortex-M0's 32 KiB profile at `none/off` beside each other, by
+about 2.6 KiB, so the firmware fixture is two, one reading and one writing.
+Linux's loopback holds no link-local address, so on Linux a zoned
+connection to the loopback is shown reaching the socket by the system's
+answers: `fe80::1%lo` is ENETUNREACH, where `fe80::1` without its zone is
+EINVAL.
+
+**The alternatives:** the interface's number in the address, D320's
+declined scope identifier, which no firmware image could read from `%eth0`;
+the name looked up when the text is read, through a provider, which makes
+reading an address an operation of the system's; a zone of printable ASCII
+only, which costs a comparison per byte on every target and refuses names
+some systems give; a separate zoned type, which every routine that takes an
+address would need twice; and the URL's `%25`, which is the URL's escape and
+not the address's text.
+
+**Pinned by** `runtime/network-addresses`, which reads, writes and refuses
+zones on every target; `runtime/network-addresses-firmware` and
+`runtime/network-addresses-written-firmware`, which read and write a zoned
+address on Cortex-M0; `runtime/network-link-local-zone`, a connection and a
+datagram at `fe80::1%lo0` by name and by number on Darwin and FreeBSD, the
+system's answers for `fe80::1%lo` on Linux and a zone naming no interface
+refused everywhere; and `abi/libc-socket-facts`, which holds the scope's
+place in the record, the interface requests and their record, and the
+lookups both ways to the C library's.
 
 ### D325 — The rest of the file system is a concept of its own
 

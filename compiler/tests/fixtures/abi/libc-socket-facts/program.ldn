@@ -74,6 +74,19 @@ fixed if compiler.os == linux then
               and sizeof linux.time_limit == sizeof libc.time_limit
     end l_linux_agrees
 
+    --- The interface requests and their record: SIOCGIFINDEX,
+    --- SIOCGIFNAME, `struct ifreq`'s size and where its number lies.
+    public extern(c) l_interface_fact: (index: i32) -> (value: i64) =
+        mut record: linux.interface_record = zeroed
+        facts: [4]i64 =
+            [i64(linux.siocgifindex), i64(linux.siocgifname),
+             i64(sizeof linux.interface_record),
+             i64(usize(addr record.index) - usize(addr record))]
+        value = -1
+        return when index < 0 or index > 3
+        value = facts[usize(index)]
+    end l_interface_fact
+
     public extern(c) l_cloexec_flag: () -> (value: i32) =
         value = libc.sock_cloexec
     end l_cloexec_flag
@@ -134,10 +147,9 @@ end l_offset
 public extern(c) l_encoded: (index: i32, into: ptr mut u8) -> (length: u32) =
     groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]
     record: posix.socket_address =
-        if index == 0 then posix.internet_address(net.ipv4_address(192, 0, 2,
-                                                                   1, 8080))
-        elsif index == 1 then posix.internet_address(net.ipv6_address(groups,
-                                                                      443))
+        if index == 0 then laid_out(net.ipv4_address(192, 0, 2, 1, 8080))
+        elsif index == 1 then laid_out(net.ipv6_address(groups, 443))
+        elsif index == 3 then zoned()
         else unix_record() end if
     length = record.length
     for at in usize(0)..<usize(length) do
@@ -146,10 +158,64 @@ public extern(c) l_encoded: (index: i32, into: ptr mut u8) -> (length: u32) =
     end for
 end l_encoded
 
+--  The record of an address with no zone, which names no interface for
+--  the system to look up and so cannot fail.
+laid_out: (at: net.address) -> (record: posix.socket_address) =
+    record = posix.internet_address(at) else (problem)
+        _ = problem
+        posix.socket_address(bytes: zeroed, length: 0)
+    end
+end laid_out
+
+--  `[fe80::1%7]:1`, whose zone is an interface's number as it stands.
+zoned: () -> (record: posix.socket_address) =
+    record = (bytes: zeroed, length: 0)
+    at: net.address = net.parse_address("[fe80::1%7]:1") else (problem)
+        _ = problem
+        return
+    end
+    record = laid_out(at)
+end zoned
+
+--- The number platform/posix finds for the interface named by the
+--- `length` bytes at `name`, or 0 when it finds none.
+public extern(c) l_index_of: (name: ptr u8, length: u32) -> (index: u32) =
+    mut bytes: [16]u8 = zeroed
+    index = 0
+    return when length > 16
+    for at in usize(0)..<usize(length) do
+        slot: ptr u8 = ptr(usize(name) + at)
+        bytes[at] = slot.val
+    end for
+    index = posix.interface_index(bytes[0..<usize(length)]) else (problem)
+        _ = problem
+        0
+    end
+end l_index_of
+
+--- The zone platform/posix reads from a record whose scope is `index`,
+--- copied with its NUL into the 16 bytes at `into`.
+public extern(c) l_zone_of: (index: u32, into: ptr mut u8) -> none =
+    mut record: posix.socket_address = laid_out(net.loopback(net.ipv6, 1))
+    for at in usize(0)..<4 do
+        record.bytes[24 + at] = u8((index >> u32(8 * at)) & 255)
+    end for
+    mut zone: [16]u8 = zeroed
+    at: net.address = posix.address_of(record) else (problem)
+        _ = problem
+        net.loopback(net.ipv6, 1)
+    end
+    zone = at.zone
+    for place in usize(0)..<16 do
+        slot: ptr mut u8 = ptr(usize(into) + place)
+        slot.val = zone[place]
+    end for
+end l_zone_of
+
 unix_record: () -> (record: posix.socket_address) =
     record = posix.unix_address(text.host_over("/tmp/landin.sock")) else (problem)
         _ = problem
-        posix.internet_address(net.unspecified(net.ipv4, 0))
+        laid_out(net.unspecified(net.ipv4, 0))
     end
 end unix_record
 

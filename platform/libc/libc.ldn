@@ -521,6 +521,16 @@ public extern(c) ioctl: (descriptor: i32, request: u64, ...) -> (result: i32)
 --- ENOTTY for any other open file.
 public extern(c) isatty: (descriptor: i32) -> (yes: i32)
 
+--- The number of the network interface named by the NUL-terminated
+--- `name`, or 0 when no interface has that name.
+public extern(c) if_nametoindex: (name: ptr u8) -> (index: u32)
+
+--- Write the name of the interface numbered `index`, and its NUL, into
+--- the 16 bytes, IFNAMSIZ, at `name`, and return `name`, or `no_address`
+--- when no interface has that number.
+public extern(c) if_indextoname: (index: u32, name: ptr mut u8)
+                                 -> (found: address_filled)
+
 --- The process's real user ID.  It cannot fail.
 public extern(c) getuid: () -> (user: u32)
 --- The process's effective user ID, which permission checks use.

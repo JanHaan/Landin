@@ -1,6 +1,6 @@
 class: abi
 profiles: standard
-summary: the socket domains, kinds, levels, options and shutdown sides, SIGPIPE, SIG_DFL, SIG_IGN and F_GETFD, the address record sizes, the time limit's and the signal action's layouts that platform/libc keeps, on Linux platform/linux's copies, SOCK_CLOEXEC and MSG_NOSIGNAL on Linux and FreeBSD and SO_NOSIGPIPE, POSIX_SPAWN_SETSIGDEF and POSIX_SPAWN_SETSIGMASK on Darwin and FreeBSD, each held to the system's own C headers; and platform/posix's IPv4, IPv6 and Unix-domain records byte for byte as C builds them, length byte and all, and C's records read back by platform/posix
+summary: the socket domains, kinds, levels, options and shutdown sides, SIGPIPE, SIG_DFL, SIG_IGN and F_GETFD, the address record sizes, the time limit's and the signal action's layouts that platform/libc keeps, on Linux platform/linux's copies, SOCK_CLOEXEC and MSG_NOSIGNAL on Linux and FreeBSD and SO_NOSIGPIPE, POSIX_SPAWN_SETSIGDEF and POSIX_SPAWN_SETSIGMASK on Darwin and FreeBSD, each held to the system's own C headers; and platform/posix's IPv4, IPv6 and Unix-domain records byte for byte as C builds them, length byte and all, and C's records read back by platform/posix; an IPv6 address's numeric zone laid out as C's sin6_scope_id, a scope read back as the interface's name if_indextoname gives, platform/posix's interface lookup agreeing with if_nametoindex, and on Linux SIOCGIFINDEX, SIOCGIFNAME and struct ifreq's size and index offset held to the headers (D581)
 program: program.ldn
 root: ../../../../..
 c-sources: peer.c

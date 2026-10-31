@@ -880,6 +880,22 @@ fixed if compiler.os == linux then
         spare: i32
     end lock_record
 
+    --- `ioctl` request on a socket: the number of the network interface
+    --- an `interface_record`'s name names, SIOCGIFINDEX, ENODEV for none.
+    public siocgifindex: u64 = 0x8933
+    --- `ioctl` request on a socket: the name of the network interface an
+    --- `interface_record`'s number numbers, SIOCGIFNAME, ENODEV for none.
+    public siocgifname: u64 = 0x8910
+
+    --- C's `struct ifreq` as the two requests above read and fill it: an
+    --- interface's name, NUL-terminated in IFNAMSIZ bytes, and its number,
+    --- in the union's first four of its 24 bytes.
+    public interface_record: type = struct
+        name: [16]u8
+        index: i32
+        rest: [20]u8
+    end interface_record
+
     --- `ioctl` request: read a terminal's `terminal_record`.
     public tcgets: u64 = 0x5401
     --- `ioctl` request: set a terminal's `terminal_record` at once.

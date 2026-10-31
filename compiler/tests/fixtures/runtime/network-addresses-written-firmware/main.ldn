@@ -1,0 +1,45 @@
+--  Addresses on firmware, written: an IPv4 address, a compressed IPv6
+--  address and a link-local one with its zone written as their text, and
+--  the link-local one with its port in brackets, within a Cortex-M0 image.
+--  Reading them is runtime/network-addresses-firmware's, since both
+--  together do not fit the profile at none/off, and
+--  runtime/network-addresses holds every form on the hosted targets.
+import core/cmp
+import core/net
+import core/text
+
+--  Whether AT is written as WANTED, with its port when PORT.
+written_as: (at: net.address, port: bool, wanted: []u8) -> (yes: bool)
+            ! ... =
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    if port then
+        try net.append_address(line, at)
+    else
+        try net.append_ip(line, at)
+    end if
+    yes = cmp.compare(text.used(line), wanted) == cmp.equal
+end written_as
+
+checked: () -> (yes: bool) ! ... =
+    yes = try written_as(net.ipv4_address(192, 0, 2, 1, 80), false,
+                         "192.0.2.1")
+    groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0xff00, 0x42, 0x8329]
+    yes = yes and try written_as(net.ipv6_address(groups, 0), false,
+                                 "2001:db8::ff00:42:8329")
+    link: [8]u16 = [0xfe80, 0, 0, 0, 0, 0, 0, 1]
+    zoned: net.address = try net.with_zone(net.ipv6_address(link, 80),
+                                           "eth0")
+    yes = yes and try written_as(zoned, false, "fe80::1%eth0")
+    yes = yes and try written_as(zoned, true, "[fe80::1%eth0]:80")
+end checked
+
+public main: () -> (code: i32) =
+    code = 1
+    yes: bool = checked() else (problem)
+        _ = problem
+        return
+    end
+    return when not yes
+    code = 42
+end main
