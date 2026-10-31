@@ -1,0 +1,69 @@
+--  D536's runs, read back element by element: `.fill` for scalars of
+--  four bytes or fewer, `.zero` for a written zero run, nested
+--  repetitions of an eight-byte scalar and of a record past 256 copies,
+--  and reserved storage.  Immutable, so Cortex-M holds them in flash.
+cell: type = struct
+    tag: u8
+    value: u32
+end cell
+
+bytes: [300]u8 = [1, 2, of 165]
+halves: [1000]u16 = [of 4660]
+words: [500]u32 = [7, of 0]
+quads: [600]u64 = [of 0x123456789ABCDEF0]
+grid: [3][300]cell = [of [of cell(tag: 1, value: 0x01020304)]]
+zeros: [2][300]cell = [of [of cell(tag: 0, value: 0)]]
+mut reserved: [4000]u8 = zeroed
+
+public main: () -> (code: i32) =
+    mut byte_sum: u32 = 0
+    for i in usize(0)..<300 do
+        byte_sum = byte_sum + u32(bytes[i])
+    end for
+    mut half_sum: u32 = 0
+    for i in usize(0)..<1000 do
+        half_sum = half_sum + u32(halves[i])
+    end for
+    mut word_sum: u32 = 0
+    for i in usize(0)..<500 do
+        word_sum = word_sum + words[i]
+    end for
+    mut quad_count: u32 = 0
+    for i in usize(0)..<600 do
+        if quads[i] == 0x123456789ABCDEF0 then
+            quad_count = quad_count + 1
+        end if
+    end for
+    mut cell_count: u32 = 0
+    for row in usize(0)..<3 do
+        for column in usize(0)..<300 do
+            if grid[row][column].tag == 1
+              and grid[row][column].value == 0x01020304
+            then
+                cell_count = cell_count + 1
+            end if
+        end for
+    end for
+    mut zero_count: u32 = 0
+    for row in usize(0)..<2 do
+        for column in usize(0)..<300 do
+            if zeros[row][column].tag == 0 and zeros[row][column].value == 0
+            then
+                zero_count = zero_count + 1
+            end if
+        end for
+    end for
+    mut reserved_count: u32 = 0
+    for i in usize(0)..<4000 do
+        if reserved[i] == 0 then
+            reserved_count = reserved_count + 1
+        end if
+    end for
+    code = 1
+    if byte_sum == 49173 and half_sum == 4660000 and word_sum == 7
+      and quad_count == 600 and cell_count == 900 and zero_count == 600
+      and reserved_count == 4000
+    then
+        code = 42
+    end if
+end main

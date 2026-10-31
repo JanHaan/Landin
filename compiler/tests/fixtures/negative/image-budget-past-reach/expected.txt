@@ -1,0 +1,2 @@
+error[L0505]: static images write 2147483649 bytes before section GC, past the 2147483648 bytes that x86-64's small code model reaches on linux-x86-64
+  = note: every image the program lowers counts before section GC; make the static data smaller, or allocate it when the program runs (D537)

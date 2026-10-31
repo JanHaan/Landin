@@ -489,9 +489,14 @@ def independent(run):
 
 def failures(parent, refine):
     cases = [
-        ('flash-overflow', 'link(keep) image: [33000]u8 = [of 1]', 'L0501', 'FLASH'),
+        #  Within D537's budget but past the map once the vectors and the
+        #  reset code are added: the linker remains the map's authority.
+        ('flash-overflow', 'link(keep) image: [32700]u8 = [of 1]', 'L0501', 'FLASH'),
         ('stack-overlap', 'link(keep) mut image: [12289]u8 = zeroed', 'L0501', 'reserved 4 KiB stack'),
-        ('bounded-materialization', 'link(keep) image: [8388609]u8 = [of 1]', 'L0505', '8 MiB'),
+        ('bounded-materialization', 'link(keep) image: [8388609]u8 = [of 1]', 'L0505',
+         'past the 32768 bytes that the flash of'),
+        ('flash-budget', 'image: [32769]u8 = [of 1]', 'L0505', 'constrained reference profile holds'),
+        ('ram-budget', 'link(keep) mut image: [16385]u8 = [of 1]', 'L0505', '16384 bytes that the RAM of'),
         ('missing-symbol', 'link(keep) extern(naked) h: () -> none = assembler.block("bl missing_firmware_symbol") end h', 'L0501', 'missing_firmware_symbol'),
         ('unsupported-encoding', 'link(keep) h: () -> none = assembler.block("ldr r0, [r1, #4096]") end h', 'L0501', 'firmware assembly failed'),
         ('reserved-instruction', 'h: () -> none = assembler.block("ldrex r0, [r1]") end h', 'L0330', 'M0 instructions'),

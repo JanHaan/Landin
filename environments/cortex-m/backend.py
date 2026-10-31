@@ -279,8 +279,11 @@ def measure_overflow(run, level='armv6-m'):
 def preflight(assembly):
     """Bound materialization before invoking as, even for giant .rept images.
 
-    This is a resource guard, not an encoding or physical-image verdict.
-    The linker remains authoritative for the selected flash/RAM map.
+    This is a resource guard, not an encoding or physical-image verdict,
+    and independent of the compiler's own image budget (D537), which
+    holds assembly without a firmware request to the 32-bit address space.
+    It counts what .rept, .zero, .space and .fill materialize.  The
+    linker remains authoritative for the selected flash/RAM map.
     """
     total = 0
     nesting = []
@@ -296,6 +299,9 @@ def preflight(assembly):
             factor = nesting.pop()
         elif text.startswith(('.zero ', '.space ')):
             total += factor * int(text.split()[1].split(',')[0])
+        elif text.startswith('.fill '):
+            count, size = (int(part) for part in text[6:].split(',')[:2])
+            total += factor * count * size
         elif text.startswith(('.byte ', '.short ', '.long ', '.quad ', '.word ')):
             width = {'.byte': 1, '.short': 2, '.long': 4, '.quad': 8, '.word': 4}
             directive, values = text.split(None, 1)

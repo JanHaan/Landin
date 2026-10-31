@@ -460,12 +460,15 @@ class ProbeFailures(unittest.TestCase):
         from backend import preflight
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'image.s'
-            for text in ('.zero 2147483688', '.rept 4294967295\n.quad 0\n.endr'):
+            for text in ('.zero 2147483688', '.rept 4294967295\n.quad 0\n.endr',
+                         '.fill 8388609, 1, 1', '.rept 256\n.fill 8193, 4, 7\n.endr'):
                 path.write_text(text)
                 with self.assertRaisesRegex(RuntimeError, 'materialization exceeds'):
                     preflight(path)
             path.write_text('.rept 0\n.quad 1\n.endr\n.byte 42')
             self.assertEqual(preflight(path), 1)
+            path.write_text('.rept 3\n.fill 5, 2, 4660\n.endr\n.zero 2')
+            self.assertEqual(preflight(path), 32)
             path.write_text('.endr')
             with self.assertRaisesRegex(RuntimeError, 'unbalanced'):
                 preflight(path)
