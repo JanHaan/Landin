@@ -914,6 +914,10 @@ package body Landin.Tests.Backend_Scale_Suite is
          Result : Landin.Driver.Outcome;
       begin
          Host.Add_File ("images.ldn", Program);
+         if Target = "cortex-m0" then
+            --  D543: the reference profile is the library's description.
+            Host.Add_Firmware_Library;
+         end if;
          Args.Append ("--target=" & Target);
          if Firmware then
             Args.Append ("--firmware-entry=start");
@@ -1028,6 +1032,7 @@ package body Landin.Tests.Backend_Scale_Suite is
          Args : Landin.Platform.Path_List;
          Result : Landin.Driver.Outcome;
       begin
+         Host.Add_Firmware_Library;
          Host.Add_File
            ("images.ldn", "link(keep) image: [30000]u8 = [of 1]"
             & Entry_Point);
