@@ -69,14 +69,14 @@ def build(run, refine, program, optimize, specialize, debug='none'):
     run.command('compile', [refine, '--root=source', '--library=source',
         '--target=cortex-m0',
         '--firmware-entry=start', '--emit=exe', '--debug='+debug,
-        '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
+        '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize,
         *(['--panic-map'] if 'import core/panic' in program else []),
         'source/app', '-o', elf.name], timeout=60)
-    run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
-    run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
-    symbols = run.command('symbols', [run.bin / 'arm-none-eabi-nm', '-n', elf])
-    require(not run.command('undefined', [run.bin / 'arm-none-eabi-nm', '-u', elf]).strip(),
+    run.command('elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
+    run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
+    symbols = run.command('symbols', [run.arm / 'arm-eabi-nm', '-n', elf])
+    require(not run.command('undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
             'unresolved freestanding symbols')
     names = {line.split()[-1] for line in symbols.splitlines() if line.split()}
     #  A C runtime routine would be global; a Landin routine is a local
@@ -90,7 +90,7 @@ def build(run, refine, program, optimize, specialize, debug='none'):
     mapping = (run.out / 'core.elf.map').read_text()
     require('libc.a' not in mapping and 'crt0.o' not in mapping,
             'hosted archive in freestanding closure')
-    helper = run.command('runtime-archive', [run.bin / 'arm-none-eabi-gcc',
+    helper = run.command('runtime-archive', [run.arm / 'arm-eabi-gcc',
         '-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft',
         '-print-libgcc-file-name']).strip()
     require(helper.endswith('/thumb/v6-m/nofp/libgcc.a'), 'wrong private runtime')

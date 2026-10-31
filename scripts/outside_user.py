@@ -22,7 +22,9 @@ With `--stock`, the system is a stock distribution with only its own GCC
 installs, never the pinned image's `x86_64-pc-linux-gnu-gcc`, a program
 that traps must report its kind and site (D361) before it ends, and a
 program links a C archive the distribution's `gcc` and `ar` built beside
-it, found through `linker.directory` (D523, D524).
+it, found through `linker.directory` (D523, D524).  Firmware links with the
+distribution's `arm-none-eabi-gcc` while the pinned `arm-eabi-gcc` is
+unreachable (D532), into a 32-bit Arm ELF.
 
 The first program is read from its runtime fixture, not from the README
 that shows it: the gate may skip this lane for an edit confined to the
@@ -215,6 +217,50 @@ def stock_checks(refine, work, env):
     return failures
 
 
+#  The firmware lanes' smallest image: initialized, cleared and immutable
+#  data the entry reads.
+FIRMWARE = """mut initialized: u32 = 0x12345678
+mut cleared: u32 = 0
+mut observed: u32 = 0
+immutable: [2]u32 = [5, 8]
+start: () -> none =
+    observed = initialized + cleared + immutable[0] + immutable[1]
+end start
+"""
+
+
+def firmware_checks(refine, work, env):
+    """D532: with no --toolchain, firmware links through the GCC a stock
+    distribution installs for Cortex-M, never the pinned archive's."""
+    failures = []
+    project = work / "firmware"
+    project.mkdir(exist_ok=True)
+    (project / "main.ldn").write_text(FIRMWARE, encoding="utf-8")
+    request = [str(refine), "compile", "--target=cortex-m0",
+               "--firmware-entry=start", "main.ldn", "-o", "firmware.elf"]
+    planned, report = run(request[:2] + ["--dry-run"] + request[2:], project,
+                          env, "firmware plan")
+    drivers = re.findall(r'^run \["([^"]+)"', planned.stdout.decode(
+        "utf-8", "replace"), re.M)
+    if planned.returncode != 0 or not drivers:
+        failures.append("no firmware link was planned\n%s" % report)
+    elif drivers[-1] != "arm-none-eabi-gcc":
+        failures.append("the plan does not name the distribution's "
+                        "arm-none-eabi-gcc\n%s" % report)
+    built, report = run(request, project, env, "firmware")
+    if built.returncode != 0:
+        failures.append(report)
+        return failures
+    header = (project / "firmware.elf").read_bytes()[:20]
+    #  ELF, 32-bit, little endian, EM_ARM.
+    if (header[:4] != b"\x7fELF" or header[4] != 1 or header[5] != 1
+            or int.from_bytes(header[18:20], "little") != 0x28):
+        failures.append("firmware.elf is not a 32-bit Arm ELF\n%s" % report)
+    else:
+        print("ok   firmware through %s" % drivers[-1])
+    return failures
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--prefix", required=True, type=pathlib.Path)
@@ -266,6 +312,8 @@ def main():
         programs.append(("stock driver and trap report",))
         failures += archive_checks(refine, work, env)
         programs.append(("a C archive beside the source",))
+        failures += firmware_checks(refine, work, env)
+        programs.append(("firmware through the distribution's Arm GCC",))
 
     for failure in failures:
         print("FAIL " + failure, file=sys.stderr)

@@ -13,7 +13,7 @@ import sys
 import time
 
 from run import FLAGS, CommandFailed, Run, gdb_listener, oracle, require, stop
-from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
+from setup import DEFAULT, HERE, arm_archive, installed_tools, inventory, sha, supported_host
 
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT / 'compiler/tests'))
@@ -215,7 +215,7 @@ def image_sizes(run, elf, name='sections'):
     """Each region's use against its limit, each allocated section's size
     and each routine's, so where an image's bytes go is read from the
     corpus rather than from hand-run tools, overflowing or not."""
-    listing = run.command(name, [run.bin / 'arm-none-eabi-size', '-A', elf])
+    listing = run.command(name, [run.arm / 'arm-eabi-size', '-A', elf])
     sections = {}
     for line in listing.splitlines():
         parts = line.split()
@@ -223,7 +223,7 @@ def image_sizes(run, elf, name='sections'):
             if parts[0] in ('.isr_vector', '.text', '.data', '.bss') and int(parts[1]):
                 sections[parts[0]] = int(parts[1])
     routines = routine_sizes(run.command(
-        name + '-routines', [run.bin / 'arm-none-eabi-nm', '-S', '--defined-only', elf]))
+        name + '-routines', [run.arm / 'arm-eabi-nm', '-S', '--defined-only', elf]))
     used = load_extents(elf)
     return {'regions': {region: {'used': used[region], 'limit': limit}
                         for region, limit in REGIONS.items()},
@@ -271,7 +271,7 @@ def measure_overflow(run, level='armv6-m'):
     script.write_text('/* Measurement only: never executed. */\n' + text + '\n')
     objects = sorted(run.out.glob('input-*.o'), key=lambda p: int(p.stem.split('-')[1]))
     elf = run.out / 'measure.elf'
-    run.command('measure-link', [run.bin / 'arm-none-eabi-gcc', *level_flags(level),
+    run.command('measure-link', [run.arm / 'arm-eabi-gcc', *level_flags(level),
                 '-Wl,-T,' + str(script) + ',--gc-sections', *objects, '-lgcc', '-o', elf])
     return image_sizes(run, elf, 'measure-sections')
 
@@ -359,33 +359,33 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     objects = []
     for index, source in enumerate([HERE / 'probes/backend-start.S', assembly, *extra]):
         obj = run.out / ('input-' + str(index) + '.o')
-        run.command('assemble-' + str(index), [run.bin / 'arm-none-eabi-gcc', *flags,
+        run.command('assemble-' + str(index), [run.arm / 'arm-eabi-gcc', *flags,
                     '-c', source, '-o', obj])
         objects.append(obj)
-    run.command('object-disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', objects[1]])
-    run.command('assemble-link', [run.bin / 'arm-none-eabi-gcc', *flags,
+    run.command('object-disassembly', [run.arm / 'arm-eabi-objdump', '-dr', objects[1]])
+    run.command('assemble-link', [run.arm / 'arm-eabi-gcc', *flags,
                 '-Wl,-T,' + str(linker or HERE / 'probes/backend-memory.ld') +
                 ',--gc-sections,-Map,program.map', *objects, '-lgcc', '-o', elf])
     image = image_contract(elf)
     image.update(image_sizes(run, elf))
     (run.out / 'image.json').write_text(json.dumps(image, indent=2)+'\n')
-    attributes = run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', elf])
+    attributes = run.command('elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', elf])
     require(all(tag in attributes for tag in LEVELS[level]['attributes']),
             'ELF does not describe the selected ' + level + ' profile')
     require('Tag_ARM_ISA_use: Yes' not in attributes and 'VFP registers' not in attributes,
             'ELF requires an unsupported instruction or floating ABI')
-    run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
-    run.command('size', [run.bin / 'arm-none-eabi-size', elf])
-    require(not run.command('undefined', [run.bin / 'arm-none-eabi-nm', '-u', elf]).strip(),
+    run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
+    run.command('size', [run.arm / 'arm-eabi-size', elf])
+    require(not run.command('undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
             'freestanding test image has unresolved dependencies')
-    library = Path(run.command('libgcc-path', [run.bin / 'arm-none-eabi-gcc',
+    library = Path(run.command('libgcc-path', [run.arm / 'arm-eabi-gcc',
                    *LEVELS[level]['flags'], '-mthumb', '-mfloat-abi=soft',
                    '-print-libgcc-file-name']).strip()).resolve(strict=True)
     require(LEVELS[level]['multilib'] in str(library), 'wrong Arm runtime multilib')
     (run.out / 'helpers.json').write_text(json.dumps({
         'library': str(library), 'sha256': sha(library),
         'requested': sorted(set(re.findall(r'\bbl (__aeabi_\w+)', assembly.read_text()))),
-        'unresolved': [], 'provenance': 'pinned gcc-arm-none-eabi_14.2.rel1-1',
+        'unresolved': [], 'provenance': 'pinned ' + arm_archive()['file'],
     }, indent=2) + '\n')
     return elf
 

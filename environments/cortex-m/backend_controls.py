@@ -51,10 +51,10 @@ def instruction_controls(run):
     # Independent assembly uses no generated Landin instructions.
     from run import FLAGS, require
     elf = run.out / 'instructions.elf'
-    run.command('assemble-instructions', [run.bin / 'arm-none-eabi-gcc', *FLAGS,
+    run.command('assemble-instructions', [run.arm / 'arm-eabi-gcc', *FLAGS,
                 '-Wl,-T,' + str(HERE / 'probes/backend-memory.ld') + ',--gc-sections,-Map,instructions.map',
                 HERE / 'probes/backend-start.S', HERE / 'probes/backend-instructions.S', '-o', elf])
-    run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
+    run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
     execute(run, elf, 42, False)
     illegal = {
         'later-thumb': 'movw r0, #1', 'exclusive': 'ldrex r0, [r1]',
@@ -69,7 +69,7 @@ def instruction_controls(run):
         source = run.out / (name + '.s')
         source.write_text('.syntax unified\n.cpu cortex-m0\n.thumb\n.text\n.balign 4\n' + body + '\n')
         try:
-            run.command(name, [run.bin / 'arm-none-eabi-as', '-mcpu=cortex-m0', '-mthumb',
+            run.command(name, [run.arm / 'arm-eabi-as', '-mcpu=cortex-m0', '-mthumb',
                         source, '-o', run.out / (name + '.o')])
         except RuntimeError:
             require(run.commands[-1].get('exit') == 1, 'assembler refusal was not a diagnostic')

@@ -33,7 +33,7 @@ def selection_controls(run, elf):
         else:
             raise RuntimeError('debug selector accepted '+name)
     stripped=run.out/'stripped.elf'
-    run.command('strip-debug',[run.bin/'arm-none-eabi-objcopy','--strip-debug',elf,stripped])
+    run.command('strip-debug',[run.arm / 'arm-eabi-objcopy','--strip-debug',elf,stripped])
     check(executable=stripped)
     refuses('missing-debug',symbols=stripped)
     bad=run.out/'mismatched.elf'
@@ -52,7 +52,7 @@ def selection_controls(run, elf):
     stale_id.write_bytes(data)
     refuses('same-code-mismatched-identity',executable=stale_id)
     anonymous=run.out/'missing-identity.elf'
-    run.command('remove-identity',[run.bin/'arm-none-eabi-objcopy',
+    run.command('remove-identity',[run.arm / 'arm-eabi-objcopy',
         '--remove-section=.landin_id',elf,anonymous])
     refuses('missing-executable-identity',executable=anonymous)
     altered=run.out/'stale.sources.json'
@@ -158,7 +158,7 @@ def fibre_capacity(run, refine, optimize, specialize):
     """
     program=(driver.HERE/'probes/fibre-capacity.ldn').read_text()
     elf=freestanding.build(run,refine,program,optimize,specialize)
-    listing=run.command('symbol-extents',[run.bin/'arm-none-eabi-nm','-S','-n',elf])
+    listing=run.command('symbol-extents',[run.arm / 'arm-eabi-nm','-S','-n',elf])
     sized=sized_symbols(listing)
     symbols={f[2]:int(f[0],16) for line in listing.splitlines()
              if len(f:=line.split())>=3}
@@ -273,8 +273,8 @@ def execute_suite(parent, refine, profiles=PROFILES):
                 'debugging altered firmware load or initialization: '+profile+'/'+name)
         record=source_debug.checked(run,elf)
         record['resources']=accounting(elf,symbols)
-        run.command('symbol-extents',[run.bin/'arm-none-eabi-nm','-S','--size-sort',elf])
-        run.command('debug-records',[run.bin/'arm-none-eabi-readelf',
+        run.command('symbol-extents',[run.arm / 'arm-eabi-nm','-S','--size-sort',elf])
+        run.command('debug-records',[run.arm / 'arm-eabi-readelf',
                     '--debug-dump=info,decodedline,frames',elf])
         record.update(profile=profile,program=name,
             baseline_sha256=sha(baseline),load_identity='identical',

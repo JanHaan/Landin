@@ -47,14 +47,14 @@ def build(run, refine, program, optimize, specialize):
     run.command('compile', [refine, '--root=source', '--library=source',
         '--target=cortex-m0',
         '--firmware-entry=start', '--emit=exe',
-        '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
+        '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize,
         *(['--panic-map'] if 'import core/panic' in program else []),
         'source/app', '-o', elf.name], timeout=60)
-    run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
-    run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
-    symbols = run.command('symbols', [run.bin / 'arm-none-eabi-nm', '-n', elf])
-    require(not run.command('undefined', [run.bin / 'arm-none-eabi-nm', '-u', elf]).strip(),
+    run.command('elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
+    run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
+    symbols = run.command('symbols', [run.arm / 'arm-eabi-nm', '-n', elf])
+    require(not run.command('undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
             'unresolved freestanding symbols')
     names = {line.split()[-1] for line in symbols.splitlines() if line.split()}
     #  A C runtime routine would be global; a Landin routine is a local
@@ -68,7 +68,7 @@ def build(run, refine, program, optimize, specialize):
     mapping = (run.out / 'core.elf.map').read_text()
     require('libc.a' not in mapping and 'crt0.o' not in mapping,
             'hosted archive in freestanding closure')
-    helper = run.command('runtime-archive', [run.bin / 'arm-none-eabi-gcc',
+    helper = run.command('runtime-archive', [run.arm / 'arm-eabi-gcc',
         '-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft',
         '-print-libgcc-file-name']).strip()
     require(helper.endswith('/thumb/v6-m/nofp/libgcc.a'), 'wrong private runtime')
@@ -123,7 +123,7 @@ TAIL = (';w32:1008:00000004;w32:100c:000a8020;w32:1404:00000001;'
 
 
 def peripheral(run, elf, model=None, name='device'):
-    text = run.command('device-symbols', [run.bin / 'arm-none-eabi-nm', elf])
+    text = run.command('device-symbols', [run.arm / 'arm-eabi-nm', elf])
     symbols = {s[2]: int(s[0], 16) for line in text.splitlines()
                if len(s := line.split()) == 3}
     stage = symbols['stage']
@@ -217,12 +217,12 @@ def faults(run, elf):
 
 def independent(run):
     elf = run.out / 'control.elf'
-    run.command('independent-build', [run.bin / 'arm-none-eabi-gcc', *FLAGS,
+    run.command('independent-build', [run.arm / 'arm-eabi-gcc', *FLAGS,
         '-Wl,-T,'+str(HERE / 'probes/memory.ld')+',--gc-sections,-Map,control.map',
         HERE / 'probes/start.S', HERE / 'probes/device-control.c', '-o', elf])
-    run.command('independent-elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
-    run.command('independent-disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
-    require(not run.command('independent-undefined', [run.bin / 'arm-none-eabi-nm', '-u', elf]).strip(),
+    run.command('independent-elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
+    run.command('independent-disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
+    require(not run.command('independent-undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
             'independent control unresolved symbols')
     (run.out / 'image.json').write_text(json.dumps(image_contract(elf), indent=2)+'\n')
     peripheral(run, elf)
@@ -272,7 +272,7 @@ def refusal(run, elf, name):
     else:
         raise RuntimeError('missing panic oracle input')
     site = offset*5+3
-    text = run.command('refusal-symbols', [run.bin / 'arm-none-eabi-nm', elf])
+    text = run.command('refusal-symbols', [run.arm / 'arm-eabi-nm', elf])
     symbols = {s[2]: int(s[0], 16) for line in text.splitlines() if len(s := line.split()) == 3}
     trace = {'hole':'r32:4:00000008','reserved':'r32:4:00000800','alignment':''}[name]
     model = FixturePeripheral()

@@ -15,7 +15,7 @@ TRACE = ('r32:0:a50000f0;w32:0:a50000d0;r32:0:a50000d0;'
 def execute(run):
     symbols = run.build('packed')
     run.command('disassembly-packed',
-                [run.bin / 'arm-none-eabi-objdump', '-dr', 'packed.elf'])
+                [run.arm / 'arm-eabi-objdump', '-dr', 'packed.elf'])
     model = EncodingPeripheral()
     with Machine(run, run.out / 'packed.elf', 'packed') as m:
         m.map(0x40030000, 0x20, model)

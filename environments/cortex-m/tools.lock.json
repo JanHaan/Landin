@@ -1,11 +1,5 @@
 [
   {
-    "url": "https://deb.debian.org/debian/pool/main/b/binutils-arm-none-eabi/binutils-arm-none-eabi_2.44-3%2b23%2bb1_amd64.deb",
-    "file": "binutils-arm-none-eabi_2.44-3+23+b1_amd64.deb",
-    "sha256": "c9c4944e54de852536b4f6a238a682c38a6243cdc2843dd1c4f587e046c0615b",
-    "kind": "deb"
-  },
-  {
     "url": "https://deb.debian.org/debian/pool/main/c/capstone/libcapstone5_5.0.7-1%7edeb13u1_amd64.deb",
     "file": "libcapstone5_5.0.7-1~deb13u1_amd64.deb",
     "sha256": "775187a7be26bb0b076d1979a02163b943dbc13eb4adb0efc503223a03c75422",
@@ -24,12 +18,6 @@
     "kind": "deb"
   },
   {
-    "url": "https://deb.debian.org/debian/pool/main/g/gcc-arm-none-eabi/gcc-arm-none-eabi_14.2.rel1-1_amd64.deb",
-    "file": "gcc-arm-none-eabi_15%3a14.2.rel1-1_amd64.deb",
-    "sha256": "99252fdda02ad134e8c3c344d3c843f7aa5c0d006e92a5b3d53daf4bd935b5d3",
-    "kind": "deb"
-  },
-  {
     "url": "https://deb.debian.org/debian/pool/main/g/gdb/gdb_16.3-1_amd64.deb",
     "file": "gdb_16.3-1_amd64.deb",
     "sha256": "f0cd9b3e7b47685cbc43ebfe3207760830cb7b570e615daee6dc91e50040c127",
@@ -39,12 +27,6 @@
     "url": "https://deb.debian.org/debian/pool/main/g/gdb/gdb-multiarch_16.3-1_amd64.deb",
     "file": "gdb-multiarch_16.3-1_amd64.deb",
     "sha256": "36f4251601833ce2f9dd3d289f4201372bc517699273ba35db87772bbe2d5463",
-    "kind": "deb"
-  },
-  {
-    "url": "https://deb.debian.org/debian/pool/main/i/isl/libisl23_0.27-1_amd64.deb",
-    "file": "libisl23_0.27-1_amd64.deb",
-    "sha256": "ac8518042e81c00de1effb72bba7e88ac4ecd488f7ea8b9e3ebc63159cb53b35",
     "kind": "deb"
   },
   {
@@ -99,12 +81,6 @@
     "url": "https://deb.debian.org/debian/pool/main/libu/liburing/liburing2_2.9-1_amd64.deb",
     "file": "liburing2_2.9-1_amd64.deb",
     "sha256": "4b589c00c7a51172aace2cb2fb3d3ff32daf86c644023126dcfcaa840cc941ea",
-    "kind": "deb"
-  },
-  {
-    "url": "https://deb.debian.org/debian/pool/main/m/mpclib3/libmpc3_1.3.1-1%2bb3_amd64.deb",
-    "file": "libmpc3_1.3.1-1+b3_amd64.deb",
-    "sha256": "2af0a5c128e03694a41c0b011bd8a958b7297436cdb3a15ddad7866dae8c300b",
     "kind": "deb"
   },
   {

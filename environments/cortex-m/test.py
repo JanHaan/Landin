@@ -16,7 +16,7 @@ class ProbeFailures(unittest.TestCase):
         import importlib
         from unittest.mock import patch
         from run import HERE
-        from setup import sha
+        from setup import arm_archive, sha
         calls=[]
         lanes=[('abi','execute'),('memory','execute'),('packed','execute'),
                ('packed_native','execute'),('backend_acceptance','execute'),
@@ -27,11 +27,13 @@ class ProbeFailures(unittest.TestCase):
             root=Path(directory)
             (root/'installation.json').write_text(json.dumps({
                 'lock_sha256':sha(HERE/'tools.lock.json'),
-                'files':{'root':{}}}))
+                'arm':{key:arm_archive()[key] for key in ('version','sha256')},
+                'files':{'root':{},'gnat-arm-elf':{}}}))
             stack.enter_context(patch('run.supported_host'))
             stack.enter_context(patch('run.inventory',return_value={}))
             stack.enter_context(patch.object(Run,'command',return_value=
-                '10.0.13 14.2.1 20241119 2.44 16.3'))
+                '10.0.13 (GNAT-FSF-builds) %s 2.46.1 16.3'
+                % arm_archive()['version'].rsplit('-', 1)[0]))
             stack.enter_context(patch.object(Run,'qemu',side_effect=lambda:calls.append('qemu')))
             stack.enter_context(patch.object(Run,'peripheral',side_effect=lambda:calls.append('peripheral')))
             for name, entry in lanes:
@@ -395,7 +397,7 @@ class ProbeFailures(unittest.TestCase):
                 installed_tools(Path(directory) / 'absent')
             self.assertIn(str(Path(directory).resolve() / 'absent'), str(refused.exception))
             self.assertIn('--tools', str(refused.exception))
-            self.assertIn('arm-none-eabi-gcc', str(refused.exception))
+            self.assertIn('arm-eabi-gcc', str(refused.exception))
 
     def test_a_failed_command_names_its_log(self):
         with tempfile.TemporaryDirectory() as directory:

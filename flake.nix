@@ -115,6 +115,7 @@
 
           releases = pin "LANDIN_RELEASES";
           gnatVersion = pin "LANDIN_GNAT_VERSION";
+          armElfVersion = pin "LANDIN_GNAT_ARM_ELF_VERSION";
           gprbuildVersion = pin "LANDIN_GPRBUILD_VERSION";
 
           #  The archives are prebuilt, so on Linux they need their
@@ -177,6 +178,25 @@
                 isGNU = true;
               };
             });
+
+          #  The Cortex-M lane's GCC and binutils, GNAT's arm-elf
+          #  archive from the same release, whose driver is `arm-eabi-gcc`.
+          #  Only the shell carries it: the refine package links hosted
+          #  programs, and refine finds a distribution's `arm-none-eabi-gcc`
+          #  for firmware without it (D532).
+          armElfSystem =
+            {
+              x86_64-linux = "linux64-x86_64";
+              aarch64-linux = "linux64-aarch64";
+              aarch64-darwin = "darwin-aarch64";
+            }
+            .${system};
+          gnatArmElf = fromArchive {
+            pname = "landin-gnat-arm-elf";
+            version = armElfVersion;
+            url = "${releases}/gnat-${armElfVersion}/gnat-arm-elf-${armElfSystem}-${armElfVersion}.tar.gz";
+            sha256 = pin "LANDIN_GNAT_ARM_ELF_SHA256_${suffix}";
+          };
 
           #  The pinned Linux archive bundles its own binutils, and the
           #  pin covers them as much as it covers GCC: without this the
@@ -631,6 +651,7 @@
             ] ++ [
               gnat
               gprbuild
+              gnatArmElf
               pkgs.python3 #  check.py and docs/site/render_html.py
               #  The structural editor grammar's corpus, highlight/test.sh
               #  --integration, at the gate's pinned version.

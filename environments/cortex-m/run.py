@@ -18,7 +18,7 @@ import threading
 import time
 
 from gdb_server import GdbServer
-from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
+from setup import AREAS, DEFAULT, HERE, arm_archive, installed_tools, inventory, sha, supported_host
 
 #  The GDB every session on one thread shares; `Run.debug` starts it.  One
 #  per thread, because a GDB serves one session at a time and the corpus
@@ -107,6 +107,7 @@ class Run:
         self.env = dict(os.environ, LC_ALL='C', LANG='C')
         self.env['LD_LIBRARY_PATH'] = str(tools / 'root/usr/lib/x86_64-linux-gnu')
         self.bin = tools / 'root/usr/bin'
+        self.arm = tools / 'gnat-arm-elf/bin'
 
     def debug(self, name, elf, script, timeout=20):
         """One debugger session, recorded like a command.
@@ -174,12 +175,12 @@ class Run:
         return (self.out / (name + '.log')).read_text(errors='replace')
 
     def build(self, name, extra=()):
-        self.command('build-' + name, [self.bin / 'arm-none-eabi-gcc', *FLAGS,
+        self.command('build-' + name, [self.arm / 'arm-eabi-gcc', *FLAGS,
                      '-Wl,-T,' + str(HERE / 'probes/memory.ld') + ',--gc-sections,-Map,' + name + '.map',
                      HERE / 'probes/start.S', HERE / ('probes/' + name + '.c'), *extra, '-o', name + '.elf'])
-        self.command('elf-' + name, [self.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', name + '.elf'])
-        self.command('size-' + name, [self.bin / 'arm-none-eabi-size', name + '.elf'])
-        symbols = self.command('symbols-' + name, [self.bin / 'arm-none-eabi-nm', name + '.elf'])
+        self.command('elf-' + name, [self.arm / 'arm-eabi-readelf', '-h', '-A', '-S', name + '.elf'])
+        self.command('size-' + name, [self.arm / 'arm-eabi-size', name + '.elf'])
+        symbols = self.command('symbols-' + name, [self.arm / 'arm-eabi-nm', name + '.elf'])
         return {s[2]: int(s[0], 16) for line in symbols.splitlines() if len(s := line.split()) == 3}
 
     def qemu(self):
@@ -303,13 +304,16 @@ class Run:
         supported_host()
         installed = json.loads((self.tools / 'installation.json').read_text())
         require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'), 'tool lock mismatch')
-        before = {area: inventory(self.tools / area) for area in ('root',)}
+        require(installed.get('arm') == {key: arm_archive()[key] for key in ('version', 'sha256')},
+                'the installed arm-elf archive is not the one environments/pins.sh pins')
+        before = {area: inventory(self.tools / area) for area in AREAS}
         require(before == installed['files'], 'installed tools changed')
         (self.out / 'tools.json').write_text(json.dumps(installed, sort_keys=True)+'\n')
         for name, tool, expected in [
             ('qemu-version', self.bin / 'qemu-system-arm', '10.0.13'),
-            ('gcc-version', self.bin / 'arm-none-eabi-gcc', '14.2.1 20241119'),
-            ('binutils-version', self.bin / 'arm-none-eabi-as', '2.44'),
+            ('gcc-version', self.arm / 'arm-eabi-gcc',
+             '(GNAT-FSF-builds) ' + arm_archive()['version'].rsplit('-', 1)[0]),
+            ('binutils-version', self.arm / 'arm-eabi-as', '2.46.1'),
             ('gdb-version', self.bin / 'gdb-multiarch', '16.3')]:
             require(expected in self.command(name, [tool, '--version']), name + ' mismatch')
         self.qemu()

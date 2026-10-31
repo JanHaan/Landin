@@ -197,6 +197,13 @@ package body Landin.Backend.Toolchain is
          if Native then
             Add ("gcc");
          end if;
+      elsif Named = ""
+        and then Landin.Targets.Capabilities.Backend_For (Facts)
+          = Landin.Targets.Capabilities.Cortex_M0_ELF
+      then
+         --  D532: the same bare-metal GCC under the name Debian, Ubuntu,
+         --  Fedora, Homebrew and Arm's own releases give it.
+         Add ("arm-none-eabi-gcc");
       end if;
       return Result;
    end Driver_Candidates;
@@ -230,8 +237,10 @@ package body Landin.Backend.Toolchain is
         = Landin.Targets.Capabilities.Cortex_M0_ELF
       then
          return "install the Arm embedded GCC (Debian and Ubuntu:"
-           & " `apt install gcc-arm-none-eabi`), or name a driver with"
-           & " --toolchain=NAME" & Without;
+           & " `apt install gcc-arm-none-eabi`; Fedora:"
+           & " `dnf install arm-none-eabi-gcc-cs`; or the GNAT arm-elf"
+           & " archive refine is tested with, which gives arm-eabi-gcc),"
+           & " or name a driver with --toolchain=NAME" & Without;
       elsif Landin.Targets.Capabilities.Hosted_System_Of (Facts)
         = Landin.Targets.Capabilities.Linux
       then

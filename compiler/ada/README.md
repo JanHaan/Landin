@@ -998,7 +998,7 @@ DWARF records them in `comp_dir` and `.file` (see
 [Deterministic artifacts](../../docs/targets.md#deterministic-artifacts)).
 The finishing
 half depends on the selected target's driver: Linux uses
-`x86_64-pc-linux-gnu-gcc` or `aarch64-linux-gnu-gcc`, Cortex-M uses `arm-none-eabi-gcc`, and Darwin uses
+`x86_64-pc-linux-gnu-gcc` or `aarch64-linux-gnu-gcc`, Cortex-M uses `arm-eabi-gcc` and then `arm-none-eabi-gcc`, and Darwin uses
 `/usr/bin/clang` with `-arch arm64`. A host where that driver is absent
 reports `L0500` rather than falling back to whatever bare `gcc` names.
 The supported Linux finishing path is the triplet-selected GNU driver and

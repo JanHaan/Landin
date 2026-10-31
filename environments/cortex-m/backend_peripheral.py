@@ -12,7 +12,7 @@ from run import Run, require
 from setup import DEFAULT, HERE, installed_tools, sha, supported_host
 
 def symbols(run, elf):
-    text = run.command('symbols', [run.bin / 'arm-none-eabi-nm', elf])
+    text = run.command('symbols', [run.arm / 'arm-eabi-nm', elf])
     return {s[2]: int(s[0], 16) for line in text.splitlines() if len(s := line.split()) == 3}
 
 

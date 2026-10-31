@@ -7,12 +7,12 @@ from run import HERE, require
 
 def run(control):
     elf=control.out/'stack.elf'
-    control.command('compile',[control.bin/'arm-none-eabi-gcc','-mcpu=cortex-m0',
+    control.command('compile',[control.arm / 'arm-eabi-gcc','-mcpu=cortex-m0',
         '-mthumb','-mfloat-abi=soft','-nostdlib','-nostartfiles','-static',
         '-Wl,--build-id=none,-Map,stack.map,-T,'+str(HERE/'probes/memory.ld'),
         HERE/'probes/start.S',HERE/'probes/stack-control.S','-o',elf])
-    control.command('elf',[control.bin/'arm-none-eabi-readelf','-h','-S','-l',elf])
-    control.command('disassembly',[control.bin/'arm-none-eabi-objdump','-dr',elf])
+    control.command('elf',[control.arm / 'arm-eabi-readelf','-h','-S','-l',elf])
+    control.command('disassembly',[control.arm / 'arm-eabi-objdump','-dr',elf])
     execute(control,elf,[
         'break *probe','continue','delete breakpoints','python',
         'assert v("$sp") == 0x20004000',
@@ -41,7 +41,7 @@ def run(control):
     from machine import Machine
     from resources import install
     symbols = {p[2]: int(p[0], 16) for line in control.command(
-        'observer-symbols', [control.bin/'arm-none-eabi-nm', elf]).splitlines()
+        'observer-symbols', [control.arm / 'arm-eabi-nm', elf]).splitlines()
         if len(p := line.split()) == 3}
     with Machine(control, elf, 'observer-control') as m:
         m.trap(symbols['hardfault'], 'hard fault')

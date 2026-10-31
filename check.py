@@ -2607,6 +2607,7 @@ def check_pinned_toolchain(full_run):
                         % (name, value)))
 
     out += gate_tool_pin_problems(pins, pins_text, record, record_text)
+    out += arm_elf_pin_problems(pins, pins_text, record, record_text)
 
     #  A workflow need not install the toolchain itself -- the shared
     #  action and release.yml source pins.sh -- but every one is still a
@@ -2642,6 +2643,57 @@ CROSS_LANE_PINS = ("LANDIN_CROSS_QEMU_NIX", "LANDIN_CROSS_GCC_NIX")
 #  pinned version and checked against the pinned sha256 for its system.
 SHELL_TREE_SITTER_READS = ('pin "LANDIN_TREE_SITTER_VERSION"',
                            'pin "LANDIN_TREE_SITTER_SHA256_${suffix}"')
+
+
+#  The Cortex-M lane's GCC and binutils, read from the pins by the
+#  nix shell and the lane's installer, and never written in either.
+ARM_ELF_SYSTEMS = ("linux64-x86_64", "linux64-aarch64", "darwin-aarch64")
+ARM_ELF_READERS = {
+    "flake.nix": ('pin "LANDIN_GNAT_ARM_ELF_VERSION"',
+                  'pin "LANDIN_GNAT_ARM_ELF_SHA256_${suffix}"'),
+    "environments/cortex-m/setup.py": ('"LANDIN_GNAT_ARM_ELF_VERSION"',
+                                       '"LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX"'),
+}
+
+
+def arm_elf_pin_problems(pins, pins_text, record, record_text):
+    """The Cortex-M lane's toolchain is pinned once and read everywhere.
+
+    GNAT's arm-elf archive is pinned in environments/pins.sh beside the
+    host GNAT, recorded in TOOLCHAIN.md, and fetched by the nix shell and
+    environments/cortex-m/setup.py; a reader that names the version itself
+    installs whatever it was last edited to say.
+    """
+    values = dict(re.findall(r"^(LANDIN_\w+)=(\S+)$", pins_text, re.M))
+    version = values.get("LANDIN_GNAT_ARM_ELF_VERSION")
+    if version is None:
+        return [(pins, 1, "LANDIN_GNAT_ARM_ELF_VERSION is not pinned in "
+                          "environments/pins.sh")]
+    out = []
+    #  The version alone also spells the host GNAT's archives, so the record
+    #  must name each arm-elf archive by its file.
+    for system in ARM_ELF_SYSTEMS:
+        archive = "gnat-arm-elf-%s-%s.tar.gz" % (system, version)
+        if archive not in record_text:
+            out.append((record, 1, "LANDIN_GNAT_ARM_ELF_VERSION %s's %s is not "
+                                   "recorded in compiler/ada/TOOLCHAIN.md"
+                        % (version, archive)))
+    for relative, reads in sorted(ARM_ELF_READERS.items()):
+        path = os.path.join(ROOT, relative)
+        missing = absent([path])
+        if missing:
+            out += missing
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        for read in reads:
+            if read not in text:
+                out.append((path, 1, "%s does not read %s from "
+                                     "environments/pins.sh" % (relative, read)))
+        if version in text:
+            out.append((path, 1, "%s names the arm-elf archive's %s literally "
+                                 "instead of reading it from "
+                                 "environments/pins.sh" % (relative, version)))
+    return out
 
 
 def gate_tool_pin_problems(pins, pins_text, record, record_text):

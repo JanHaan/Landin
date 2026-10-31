@@ -80,8 +80,8 @@ def execute(run):
     shutil.copyfile(CONTRACT, run.out / 'cortex-m.contract')
     shutil.copyfile(GOLDEN, run.out / 'layout.targets')
     run.build('abi', extra=[HERE / 'probes/abi.S'])
-    run.command('disassemble-abi', [run.bin / 'arm-none-eabi-objdump', '-d', 'abi.elf'])
-    run.command('macros-abi', [run.bin / 'arm-none-eabi-gcc', '-mcpu=cortex-m0',
+    run.command('disassemble-abi', [run.arm / 'arm-eabi-objdump', '-d', 'abi.elf'])
+    run.command('macros-abi', [run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m0',
                 '-mthumb', '-mfloat-abi=soft', '-mabi=aapcs', '-dM', '-E', '-x', 'c', '/dev/null'])
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))

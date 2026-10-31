@@ -201,7 +201,7 @@ def application(run, elf, symbols, scenario):
 
 def terminated(control, elf, expected):
     """Separate helper/veneer controls, including the default return trap."""
-    names=control.command('control-symbols',[control.bin/'arm-none-eabi-nm','-n',elf])
+    names=control.command('control-symbols',[control.arm / 'arm-eabi-nm','-n',elf])
     symbols={s[2]:int(s[0],16) for line in names.splitlines() if len(s:=line.split())==3}
     # These controls end in the firmware's terminal trap on purpose: it is
     # the idle WFI they settle at, not a failure.

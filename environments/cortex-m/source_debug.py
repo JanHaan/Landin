@@ -66,7 +66,7 @@ def relayed(run, elf, commands):
     Selection precedes any debugger attachment.
     """
     checked(run, elf)
-    names = run.command('relay-symbols', [run.bin/'arm-none-eabi-nm', elf])
+    names = run.command('relay-symbols', [run.arm / 'arm-eabi-nm', elf])
     symbols = {p[2]: int(p[0], 16) for line in names.splitlines() if len(p := line.split()) == 3}
     m, model = machine(run, elf, symbols, 'source-debug-qemu')
     with m:
@@ -294,7 +294,7 @@ mut observed: u32 = 0
 start: () -> none = observed = u32(main()) end start
 '''
     elf = firmware_build(run, refine, program, optimize, specialize, 'lines')
-    symbols = run.command('switch-extent', [run.bin/'arm-none-eabi-nm', '-S', elf])
+    symbols = run.command('switch-extent', [run.arm / 'arm-eabi-nm', '-S', elf])
     low, high = switch_frames.symbol_extent(symbols)
     low, high = low & ~1, high & ~1
     location = 'boot.ldn:%d' % switch_frames.fibre_line()

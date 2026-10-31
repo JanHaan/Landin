@@ -2236,6 +2236,9 @@ package body Landin.Diagnostics.Citations is
                & "embly file links",
             when 364 =>
                "Linux links through the GCC a distribution installs",
+            when 532 =>
+               "Cortex-M links through the pinned arm-elf GCC or a distr"
+               & "ibution's",
             when 281 =>
                "RV64's system call has the standing of `syscall` and `sv"
                & "c`",
@@ -3310,6 +3313,8 @@ package body Landin.Diagnostics.Citations is
             when 362 =>
                "Decisions: The core library and the derived programs",
             when 364 =>
+               "Decisions: The core library and the derived programs",
+            when 532 =>
                "Decisions: The core library and the derived programs",
             when 281 =>
                "Decisions: The core library and the derived programs",
@@ -4729,6 +4734,9 @@ package body Landin.Diagnostics.Citations is
             when 364 =>
                "https://www.701.dev/spec.html#d364-linux-links-through-t"
                & "he-gcc-a-distribution-installs",
+            when 532 =>
+               "https://www.701.dev/spec.html#d532-cortex-m-links-throug"
+               & "h-the-pinned-arm-elf-gcc-or-a-distribution-s",
             when 281 =>
                "https://www.701.dev/spec.html#d281-rv64-s-system-call-ha"
                & "s-the-standing-of-syscall-and-svc",

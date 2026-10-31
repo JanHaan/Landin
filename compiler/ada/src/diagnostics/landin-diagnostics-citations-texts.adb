@@ -11020,13 +11020,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "256 `137aa204587d2cefcc3eea90685a29d1e2f058a0a9cbdc29329"
                & "e6f27c6249903`) has binary16 conversions (`__gnu_h2f_iee"
                & "e`, `__gnu_f2h_ieee`, `__gnu_d2h_ieee`) but no 128-bit m"
-               & "ultiply, divide or shift helper. A u128 there is four wo"
-               & "rds whose multiplication and division this compiler woul"
-               & "d emit itself. At the Linux x86-64 baseline ISA, GCC 16."
-               & "1 compiles a binary16 addition to two `__extendhfsf2` ca"
-               & "lls and one `__truncsfhf2`, and a 128-bit division to `_"
-               & "_udivti3`; neither is an instruction. arm64 alone conver"
-               & "ts binary16 in hardware."
+               & "ultiply, divide or shift helper. Remeasured on 2026-10-3"
+               & "1 with the lane's `arm-eabi-gcc` 16.1.0, whose multilib'"
+               & "s SHA-256 is `df72e583b667e1a7df6f366078f930ac0f0dd80b2d"
+               & "7950667f30f2aef776c16e`: the same two refusals, the same"
+               & " three conversions and no 128-bit helper. A u128 there i"
+               & "s four words whose multiplication and division this comp"
+               & "iler would emit itself. At the Linux x86-64 baseline ISA"
+               & ", GCC 16.1 compiles a binary16 addition to two `__extend"
+               & "hfsf2` calls and one `__truncsfhf2`, and a 128-bit divis"
+               & "ion to `__udivti3`; neither is an instruction. arm64 alo"
+               & "ne converts binary16 in hardware."
                & LF
                & "- Compiler. The checker's folding domain is the two Ada "
                & "range types `Magnitude` and `Folded`, with 848 occurrenc"
@@ -25492,8 +25496,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "irst one the host can start is the one run; a dry run na"
                & "mes it, or the first looked for when none can be. `--too"
                & "lchain=NAME` is still the only one tried. Darwin keeps A"
-               & "pple's `/usr/bin/clang`, FreeBSD its triplet's Clang and"
-               & " Cortex-M `arm-none-eabi-gcc`."
+               & "pple's `/usr/bin/clang` and FreeBSD its triplet's Clang;"
+               & " D532 gives Cortex-M its two names."
                & LF
                & LF
                & "Whether a driver can be started is asked once the progra"
@@ -25508,6 +25512,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "iler for another Linux machine (`apt install gcc-aarch64"
                & "-linux-gnu`), Apple's command line tools on Darwin, and "
                & "the Arm embedded GCC for Cortex-M.",
+            when 532 =>
+               "Chosen: the Cortex-M toolchain identity is `arm-eabi`. W"
+               & "ith no `--toolchain`, a Cortex-M link tries `arm-eabi-gc"
+               & "c` and then `arm-none-eabi-gcc`, and runs the first the "
+               & "host can start, as D364's Linux candidates are tried; a "
+               & "dry run, `-v` and the build report name the one run. `--"
+               & "toolchain=NAME` is still the only one tried. With neithe"
+               & "r, L0500 names both and what installs each: a distributi"
+               & "on's package, or the arm-elf archive. The archive's GDB "
+               & "is built without Python, which the debugger sessions run"
+               & ", so the lane keeps its pinned `gdb-multiarch` and QEMU.",
             when 281 =>
                "Chosen: an ordinary RV64 assembly block admits `ecall`. "
                & "Like x86-64's `syscall` and arm64's `svc`, it enters the"

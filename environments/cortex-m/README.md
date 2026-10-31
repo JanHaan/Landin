@@ -10,20 +10,23 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 
 | Component | Exact selection |
 |---|---|
-| Probe host | native Linux x86-64 with glibc 2.38 or later and `dpkg-deb`; the gate runs it on GitHub's `ubuntu-24.04` |
+| Probe host | native Linux x86-64 with glibc 2.38 or later, `dpkg-deb` and `tar`; the gate runs it on GitHub's `ubuntu-24.04` |
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | the same QEMU, with `machine.py` serving `models.py`'s synthetic devices through its debugger stub; `-icount shift=0` |
-| EABI compiler | `arm-none-eabi-gcc` 14.2.1 20241119, Debian `15:14.2.rel1-1` |
-| Assembler/linker | GNU Arm binutils 2.44, Debian `2.44-3+23+b1` |
+| EABI compiler | `arm-eabi-gcc` 16.1.0, GNAT's arm-elf archive `16.1.0-1` from the host GNAT's release, pinned in `environments/pins.sh` |
+| Assembler/linker | GNU Binutils 2.46.1, from the same archive |
 | Debugger | `gdb-multiarch` 16.3, Debian `16.3-1`, loopback QEMU remote stub |
 | Probe options | `-mcpu=cortex-m0 -mthumb -mfloat-abi=soft -mabi=aapcs -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
 
-`tools.lock.json` pins URLs and SHA-256 for every downloaded package: the
-tools, and the whole Debian 13 runtime closure QEMU and GDB load, down to
+`tools.lock.json` pins URLs and SHA-256 for every downloaded package: QEMU
+and GDB, and the whole Debian 13 runtime closure they load, down to
 the libraries and embedded Python 3.13 a Debian 13 base image would have
-supplied. The installer verifies archives before extraction. Each probe verifies the
+supplied. GCC and binutils come from the arm-elf archive whose version and
+checksum `environments/pins.sh` holds beside the host GNAT's; its GDB is
+built without the Python the debugger sessions run, so GDB stays Debian's.
+The installer verifies archives before extraction. Each probe verifies the
 installation inventory and versions before execution, checks it again afterward,
 and retains that inventory. The host supplies only the C and C++ runtimes
 and the Python that drives the probes, so any glibc 2.38 host runs the same
@@ -142,7 +145,7 @@ by itself establish language concurrency semantics.
 
 ## Reproduction and evidence
 
-On the documented native Linux host, with Python 3 and `dpkg-deb`:
+On the documented native Linux host, with Python 3, `dpkg-deb` and `tar`:
 
 ```sh
 python3 environments/cortex-m/setup.py

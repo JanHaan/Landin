@@ -227,7 +227,7 @@ class Machine:
         self.observer = None
         self.stops = 0
         self.relayed = None
-        disassembly = run.command(name + '-idle-sites', [run.bin / 'arm-none-eabi-objdump', '-d', elf])
+        disassembly = run.command(name + '-idle-sites', [run.arm / 'arm-eabi-objdump', '-d', elf])
         self.record['decoder_agreed'] = agree(disassembly)
         for line in disassembly.splitlines() if idle else ():
             site = re.match(r'^\s*([0-9a-f]+):\s+([0-9a-f]{4})\s', line)

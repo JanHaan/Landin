@@ -259,23 +259,37 @@ with LLDB sessions and Mach-O debug artifacts.
 
 ## External embedded environment tools
 
-The Cortex-M execution profile separately pins Arm EABI GCC, binutils, GDB
-and QEMU in `environments/cortex-m/tools.lock.json`. The
+The Cortex-M lane assembles and links with GNAT's arm-elf archive from the
+release the host GNAT comes from, GCC `16.1.0` with GNU Binutils
+`2.46.1`, whose driver is `arm-eabi-gcc`. `environments/pins.sh` pins it as
+`LANDIN_GNAT_ARM_ELF_VERSION` `16.1.0-1` with a checksum per host, which
+`environments/cortex-m/setup.py` and the nix shell read; its multilibs
+cover ARMv6-M through Armv8.1-M with MVE. Its GDB is built without Python,
+which the debugger sessions run, so QEMU and `gdb-multiarch` stay pinned
+in `environments/cortex-m/tools.lock.json`. The
 [profile guide](../../environments/cortex-m/README.md) gives exact versions,
-options and reproduction on any glibc 2.38 Linux x86-64 host. They compile only small environment
-controls, are not Ada bootstrap dependencies and do not enable a Landin
-Cortex-M backend.
+options and reproduction on any glibc 2.38 Linux x86-64 host. None of them
+is an Ada bootstrap dependency.
+
+`refine` itself looks for `arm-eabi-gcc` and then `arm-none-eabi-gcc`, the
+name Debian, Ubuntu, Fedora, Homebrew and Arm's own releases give the same
+bare-metal GCC (D532), so a distribution's links without a flag; the gate's
+`outside-user-stock` job links firmware with Ubuntu's.
+
+| platform | archive | sha256 |
+|---|---|---|
+| Linux x86-64 | `gnat-arm-elf-linux64-x86_64-16.1.0-1.tar.gz` | `9e6bb6696de1b84e26a3fbeebd67d5e7c9aad28a6bdee4cb8e59328b6fd99078` |
+| Linux arm64 | `gnat-arm-elf-linux64-aarch64-16.1.0-1.tar.gz` | `6f09f8efe4f36cc4a8c1f9da1c554bca043722fd11bb8475dbe100f03543b2a3` |
+| macOS arm64 | `gnat-arm-elf-darwin-aarch64-16.1.0-1.tar.gz` | `10fc8bc6b6a67def53c2497e21b06289bfadf845a609f6a3679cad06c8bbf5d4` |
 
 
 ## Cortex-M emitted-code runtime
 
-The Cortex-M backend's external execution harness uses the existing pinned
-Arm tools in
-[`environments/cortex-m/tools.lock.json`](../../environments/cortex-m/tools.lock.json).
-Generated arithmetic may require the GCC 14.2.1 `thumb/v6-m/nofp/libgcc.a`
-multilib. This is a target runtime dependency, not an Ada bootstrap dependency
+The Cortex-M backend's external execution harness uses the pinned arm-elf
+archive above. Generated arithmetic may require its GCC 16.1.0
+`thumb/v6-m/nofp/libgcc.a` multilib. This is a target runtime dependency, not an Ada bootstrap dependency
 or a C backend. Each linked test records its archive hash, requested helpers,
 map members, ELF attributes and unresolved-symbol check. The
 [target guide](../../docs/targets.md#runtime-helper-boundary) records provenance,
 calling conventions and the handoff to compiler-owned startup and the
-freestanding core. Cortex executable linking through `refine` remains refused.
+freestanding core.

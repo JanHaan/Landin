@@ -13,7 +13,7 @@ def execute(run):
     (run.out / 'memory-model.json').write_text(json.dumps(model(), indent=2)+'\n')
     run.build('memory')
     disassembly = run.command('disassemble-memory',
-        [run.bin / 'arm-none-eabi-objdump', '-d', 'memory.elf'])
+        [run.arm / 'arm-eabi-objdump', '-d', 'memory.elf'])
     require(all(op in disassembly for op in ('dmb', 'dsb', 'isb', 'strb', 'strh', 'ldrb', 'ldrh')),
             'missing memory width/barrier controls')
     require('__atomic_' not in disassembly, 'unexpected atomic runtime helper')
@@ -21,10 +21,10 @@ def execute(run):
     # requires an external helper rather than inventing an M0 exclusive pair.
     source = run.out / 'unsupported-rmw.c'
     source.write_text('unsigned bump(unsigned *p) { return __atomic_fetch_add(p,1,5); }\n')
-    run.command('compile-unsupported-rmw', [run.bin / 'arm-none-eabi-gcc',
+    run.command('compile-unsupported-rmw', [run.arm / 'arm-eabi-gcc',
         '-mcpu=cortex-m0', '-mthumb', '-O2', '-c', source, '-o', 'unsupported-rmw.o'])
     symbols = run.command('unsupported-rmw-symbols',
-        [run.bin / 'arm-none-eabi-nm', '-u', 'unsupported-rmw.o'])
+        [run.arm / 'arm-eabi-nm', '-u', 'unsupported-rmw.o'])
     require('__atomic_fetch_add_4' in symbols, 'M0 RMW helper control changed')
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))

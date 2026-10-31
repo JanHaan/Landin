@@ -762,7 +762,7 @@ package body Landin.Tests.Cortex_Suite is
            = T.Capabilities.Cortex_M0_ELF
          and then T.Capabilities.Debug_Format_Of (T.Cortex_M)
            = T.Capabilities.ELF_DWARF_Lines
-         and then T.Capabilities.Triplet (T.Cortex_M) = "arm-none-eabi",
+         and then T.Capabilities.Triplet (T.Cortex_M) = "arm-eabi",
          "assembly does not advertise C or source debugging");
       for Kind in Ty.Scalar_Name loop
          C := ABI.Classify (Unit, Part (Kind), T.Cortex_M, ABI.External_C);

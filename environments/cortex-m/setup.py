@@ -6,17 +6,42 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import urllib.request
 
 HERE = Path(__file__).resolve().parent
 DEFAULT = Path.home() / "work/.cortex-m"
+PINS = HERE.parent / "pins.sh"
+#  GCC and binutils are GNAT's arm-elf archive, from the release the
+#  host GNAT comes from, and pinned beside it in environments/pins.sh; the
+#  lock keeps QEMU and the GDB whose Python the sessions run.
+ARM = "gnat-arm-elf"
+
+
+def pins():
+    """environments/pins.sh's assignments, which this file never repeats."""
+    return dict(re.findall(r"^(LANDIN_\w+)=(\S+)$", PINS.read_text(), re.M))
+
+
+def arm_archive():
+    """The pinned arm-elf archive for this host: its URL, file and sha256."""
+    values = pins()
+    version = values["LANDIN_GNAT_ARM_ELF_VERSION"]
+    name = "gnat-arm-elf-linux64-x86_64-%s.tar.gz" % version
+    return {"url": "%s/gnat-%s/%s" % (values["LANDIN_RELEASES"], version, name),
+            "file": name, "version": version,
+            "sha256": values["LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX"]}
 
 
 def sha(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+#  What an installation holds, each inventoried whole.
+AREAS = ('root', ARM)
 
 
 def inventory(root):
@@ -43,14 +68,14 @@ def supported_host():
 def installed_tools(path):
     """The resolved tool root, refused before any build if nothing is installed there.
 
-    Every lane runs `root/usr/bin/arm-none-eabi-gcc` and friends under the
+    Every lane runs `gnat-arm-elf/bin/arm-eabi-gcc` and friends under the
     root its --tools names, which defaults to DEFAULT; without this a host
     whose tools are elsewhere failed each profile with "No such file or
     directory" from a compile, naming neither where it looked nor how to
     look elsewhere.
     """
     root = Path(path).expanduser().resolve()
-    missing = [relative for relative in ('installation.json', 'root/usr/bin/arm-none-eabi-gcc',
+    missing = [relative for relative in ('installation.json', ARM + '/bin/arm-eabi-gcc',
                                          'root/usr/bin/qemu-system-arm', 'root/usr/bin/gdb-multiarch')
                if not (root / relative).is_file()]
     if missing:
@@ -104,9 +129,19 @@ def main():
         if item['kind'] != 'deb':
             raise RuntimeError('unknown archive kind: ' + item['kind'])
         subprocess.run(['dpkg-deb', '-x', str(dest), str(root / 'root')], check=True, timeout=30)
+    archive = arm_archive()
+    dest = packages / archive['file']
+    with urllib.request.urlopen(archive['url'], timeout=60) as src, dest.open('wb') as out:
+        shutil.copyfileobj(src, out)
+    if sha(dest) != archive['sha256']:
+        raise RuntimeError('archive hash mismatch: ' + archive['file'])
+    (root / ARM).mkdir()
+    subprocess.run(['tar', '-xzf', str(dest), '-C', str(root / ARM), '--strip-components=1'],
+                   check=True, timeout=600)
     compile_gdb_python(root)
     record = {'lock_sha256': sha(HERE / 'tools.lock.json'),
-              'files': {area: inventory(root / area) for area in ('root',)}}
+              'arm': {key: archive[key] for key in ('version', 'sha256')},
+              'files': {area: inventory(root / area) for area in AREAS}}
     (root / 'installation.json').write_text(json.dumps(record, sort_keys=True) + '\n')
     print('installed pinned Cortex-M environment at', root)
 

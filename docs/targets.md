@@ -576,7 +576,10 @@ little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
 checks source and emits ARMv6-M assembly at the default `armv6-m` level;
 selecting `armv7-m` or `armv7e-m` permits instructions from that higher level
 while retaining the same layout and ABI. The toolchain identity is
-`arm-none-eabi`. Executable requests require the explicit
+`arm-eabi`, the pinned GNAT arm-elf archive's; with no `--toolchain`, a
+link tries `arm-eabi-gcc` and then `arm-none-eabi-gcc`, the name the
+distributions and Arm's own releases give the same GCC (D532). Executable
+requests require the explicit
 `--firmware-entry=NAME` source identity (D229); missing or invalid entries report
 L0502. C signatures, records, varargs and standalone object output remain
 disabled; the explicit `lines` source-debug contract is described above.
@@ -857,9 +860,9 @@ retain map/module/helper closure evidence under the same fixed image profile.
 
 ### Runtime helper boundary
 
-The external test link selects the pinned GCC 14.2.1
+The external test link selects the pinned GCC 16.1.0
 `thumb/v6-m/nofp/libgcc.a` (SHA-256
-`137aa204587d2cefcc3eea90685a29d1e2f058a0a9cbdc29329e6f27c6249903`).
+`df72e583b667e1a7df6f366078f930ac0f0dd80b2d7950667f30f2aef776c16e`).
 Helpers use the Arm base runtime ABI, not Landin's r12 failure outcome.
 The [Arm runtime ABI](https://github.com/ARM-software/abi-aa/blob/2025Q4/rtabi32/rtabi32.rst)
 and [GCC runtime description](https://gcc.gnu.org/onlinedocs/gccint/Libgcc.html)

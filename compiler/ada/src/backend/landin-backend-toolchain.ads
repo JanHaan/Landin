@@ -16,7 +16,7 @@
 --  The Linux and Cortex-M drivers follow the GNU triplet-prefix convention:
 --  `Landin.Targets.Capabilities.Triplet` supplies the prefix and `-gcc`
 --  completes the name.  The pinned Linux image has
---  `x86_64-pc-linux-gnu-gcc`; Cortex-M uses `arm-none-eabi-gcc`.  Darwin
+--  `x86_64-pc-linux-gnu-gcc`; Cortex-M uses `arm-eabi-gcc`.  Darwin
 --  instead defaults to Apple's `/usr/bin/clang`, with `-arch arm64` in its
 --  link arguments.  A named driver overrides any of these defaults.
 --
@@ -74,8 +74,9 @@ package Landin.Backend.Toolchain is
    --  Every driver a link may use, in the order tried: Named alone when
    --  it is given, Driver_For's otherwise and, on Linux, the other
    --  distributions' spellings of the same GCC, then `gcc` when Native
-   --  says the target is the compiler's own host.  Empty exactly when
-   --  Driver_For is.
+   --  says the target is the compiler's own host.  Cortex-M follows the
+   --  pinned `arm-eabi-gcc` with the `arm-none-eabi-gcc` the distributions
+   --  and Arm ship (D532).  Empty exactly when Driver_For is.
    function Driver_Candidates
      (Facts : Landin.Targets.Target_Facts;
       Named : String;

@@ -3320,7 +3320,11 @@ New evidence answers D190's reason, and it is of three kinds.
   supported on this target, and its pinned `thumb/v6-m/nofp/libgcc.a`
   (SHA-256 `137aa204587d2cefcc3eea90685a29d1e2f058a0a9cbdc29329e6f27c6249903`)
   has binary16 conversions (`__gnu_h2f_ieee`, `__gnu_f2h_ieee`,
-  `__gnu_d2h_ieee`) but no 128-bit multiply, divide or shift helper. A u128
+  `__gnu_d2h_ieee`) but no 128-bit multiply, divide or shift helper.
+  Remeasured on 2026-10-31 with the lane's `arm-eabi-gcc` 16.1.0, whose
+  multilib's SHA-256 is
+  `df72e583b667e1a7df6f366078f930ac0f0dd80b2d7950667f30f2aef776c16e`: the
+  same two refusals, the same three conversions and no 128-bit helper. A u128
   there is four words whose multiplication and division this compiler would
   emit itself. At the Linux x86-64 baseline ISA, GCC 16.1 compiles a binary16
   addition to two `__extendhfsf2` calls and one `__truncsfhf2`, and a 128-bit
@@ -22270,8 +22274,8 @@ compiler, which would assemble for the wrong machine. It is `gcc` and not
 `cc` because the link passes the GNU assembler's options. The first one the
 host can start is the one run; a dry run names it, or the first looked for
 when none can be. `--toolchain=NAME` is still the only one tried. Darwin
-keeps Apple's `/usr/bin/clang`, FreeBSD its triplet's Clang and Cortex-M
-`arm-none-eabi-gcc`.
+keeps Apple's `/usr/bin/clang` and FreeBSD its triplet's Clang; D532 gives
+Cortex-M its two names.
 
 Whether a driver can be started is asked once the program is known to need
 it, after every refusal of the program itself, D280's static refusals of a C
@@ -22297,6 +22301,41 @@ driver`, `a stock driver links`, `a missing driver says what to install` and
 `outside-user-stock` job, which runs `scripts/outside_user.py --stock` on a
 stock Ubuntu with only its own GCC and fails if the pinned driver is
 reachable.
+
+### D532 — Cortex-M links through the pinned arm-elf GCC or a distribution's
+
+**The tour said** nothing about which program finishes a firmware image;
+D364 named `arm-none-eabi-gcc` for Cortex-M alone, the Arm embedded GCC
+Debian's package installed for the lane. The lane now uses GNAT's
+arm-elf archive from the release the host GNAT comes from, which pins
+Cortex-M's GCC, binutils and every multilib from ARMv6-M to Armv8.1-M with
+MVE beside the host toolchain, on each host the host toolchain has. Its
+driver is `arm-eabi-gcc`, the same bare-metal GNU configuration under the
+triplet without a vendor field, and the GCC a newcomer installs from
+Debian, Ubuntu, Fedora, Homebrew or Arm is still `arm-none-eabi-gcc`.
+
+**Chosen:** the Cortex-M toolchain identity is `arm-eabi`. With no
+`--toolchain`, a Cortex-M link tries `arm-eabi-gcc` and then
+`arm-none-eabi-gcc`, and runs the first the host can start, as D364's Linux
+candidates are tried; a dry run, `-v` and the build report name the one
+run. `--toolchain=NAME` is still the only one tried. With neither, L0500
+names both and what installs each: a distribution's package, or the arm-elf
+archive. The archive's GDB is built without Python, which the debugger
+sessions run, so the lane keeps its pinned `gdb-multiarch` and QEMU.
+
+**The alternatives:** `arm-eabi-gcc` alone, which refuses the GCC every
+distribution installs until its reader finds the flag; `arm-none-eabi-gcc`
+alone, so that the name refine looks for first is never the one the gate
+links with; and keeping the lane on Debian's package, a second publisher
+with its own version on Linux x86-64 only, which no other host can run.
+
+**Pinned by** the `newcomer` case `linux names every distribution's driver`,
+which holds the two names in order, the named driver alone and the advice;
+the `cortex ABI` case `capabilities and refusals`, which holds the toolchain
+identity; the Cortex-M lanes, which link with the
+pinned archive; and the gate's `outside-user-stock` job, which links
+firmware with Ubuntu's `gcc-arm-none-eabi` while the pinned driver is
+unreachable.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 

@@ -108,6 +108,24 @@ package body Landin.Tests.Newcomer_Suite is
       Landin.Testing.Check_Equal
         (Item, Listed (Landin.Targets.Darwin_Arm64, "", True),
          "/usr/bin/clang" & LF, "Darwin keeps Apple's driver alone");
+      --  D532: the pinned bare-metal GCC, then the distributions' name.
+      Landin.Testing.Check_Equal
+        (Item, Listed (Landin.Targets.Cortex_M, "", False),
+         "arm-eabi-gcc" & LF & "arm-none-eabi-gcc" & LF,
+         "Cortex-M tries the pinned name, then the distributions'");
+      Landin.Testing.Check_Equal
+        (Item, Listed (Landin.Targets.Cortex_M, "my-arm-gcc", False),
+         "my-arm-gcc" & LF, "a named Cortex-M driver is the only one tried");
+      Landin.Testing.Check
+        (Item, Contains
+           (Landin.Backend.Toolchain.Install_Advice
+              (Landin.Targets.Cortex_M, "", False),
+            "apt install gcc-arm-none-eabi")
+           and then Contains
+             (Landin.Backend.Toolchain.Install_Advice
+                (Landin.Targets.Cortex_M, "", False),
+              "arm-eabi-gcc"),
+         "Cortex-M's advice names both spellings' sources");
       Landin.Testing.Check
         (Item, Contains
            (Landin.Backend.Toolchain.Install_Advice

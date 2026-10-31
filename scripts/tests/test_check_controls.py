@@ -191,7 +191,10 @@ PINS = ["environments/linux-amd64/Containerfile",
         "compiler/ada/TOOLCHAIN.md",
         "environments/pins.sh",
         "highlight/tree-sitter/package.json",
-        "highlight/tree-sitter/package-lock.json"]
+        "highlight/tree-sitter/package-lock.json",
+        #  The Cortex-M lane's arm-elf archive's two readers.
+        "flake.nix",
+        "environments/cortex-m/setup.py"]
 
 
 class PinnedToolchain(unittest.TestCase):
@@ -251,9 +254,35 @@ class PinnedToolchain(unittest.TestCase):
                 self.assertTrue(any(fragment in why for why in said), said)
 
 
+    def test_the_arm_elf_archive_is_read_from_the_pins(self):
+        #  Each break is named: the record missing the version, a reader
+        #  writing it out, and a reader no longer reading its pin.
+        from check_controls import tree
+        for relative, old, new, fragment in (
+                ("compiler/ada/TOOLCHAIN.md",
+                 "`gnat-arm-elf-darwin-aarch64-16.1.0-1.tar.gz`",
+                 "`gnat-arm-elf-darwin-aarch64-16.1.0-2.tar.gz`",
+                 "gnat-arm-elf-darwin-aarch64-16.1.0-1.tar.gz is not recorded"),
+                ("flake.nix", 'armElfVersion = pin "LANDIN_GNAT_ARM_ELF_VERSION";',
+                 'armElfVersion = "16.1.0-1";',
+                 "flake.nix does not read pin \"LANDIN_GNAT_ARM_ELF_VERSION\""),
+                ("flake.nix", 'armElfVersion = pin "LANDIN_GNAT_ARM_ELF_VERSION";',
+                 'armElfVersion = pin "LANDIN_GNAT_ARM_ELF_VERSION"; # 16.1.0-1',
+                 "names the arm-elf archive's 16.1.0-1 literally"),
+                ("environments/cortex-m/setup.py",
+                 '"LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX"', '"9e6bb669"',
+                 "does not read \"LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX\"")):
+            with self.subTest(fragment=fragment), tree(copied=PINS) as root:
+                path = root / relative
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new, 1))
+                said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
+
     def test_the_cross_lane_is_read_from_the_pins(self):
         from check_controls import tree
-        copied = PINS + ["flake.nix"]
+        copied = PINS
         self.assertEqual(faults(checker.check_pinned_toolchain, copied=copied), [])
         for old, new, fragment in (
                 ('pin "LANDIN_CROSS_QEMU_NIX"', '"11.1.0"',

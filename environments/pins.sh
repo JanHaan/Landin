@@ -42,6 +42,13 @@ LANDIN_TREE_SITTER_SHA256_AARCH64_DARWIN=e46725b2417c085b0761948abc0cc240bff6a3a
 LANDIN_CROSS_QEMU_NIX=11.1.0
 LANDIN_CROSS_GCC_NIX=15.3.0
 
+#  The Cortex-M lane's GCC and binutils: GNAT's arm-elf archive from
+#  the release the host GNAT comes from, whose driver is `arm-eabi-gcc`.
+#  environments/cortex-m/setup.py installs the Linux x86-64 one and the nix
+#  shell its own system's; QEMU and the GDB whose Python the debugger
+#  sessions run stay in environments/cortex-m/tools.lock.json.
+LANDIN_GNAT_ARM_ELF_VERSION=16.1.0-1
+
 #  sha256 of each archive, verified before it is unpacked.
 LANDIN_GNAT_SHA256_X86_64_LINUX=9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703
 LANDIN_GPRBUILD_SHA256_X86_64_LINUX=e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b
@@ -49,6 +56,9 @@ LANDIN_GNAT_SHA256_AARCH64_DARWIN=657cf254323eb91f79768918e8bd8887d6da7ac6056732
 LANDIN_GPRBUILD_SHA256_AARCH64_DARWIN=6bf7d80c8a9702d851c5b992d7c72a07a9dbf13e8de9947b80927ea2667b6be8
 LANDIN_GNAT_SHA256_AARCH64_LINUX=8e297497f2d6d6845920a363a277b6ef5bc454e48a66d0d606b89d71e31ee623
 LANDIN_GPRBUILD_SHA256_AARCH64_LINUX=c125424447144944973d24de43a53b3e7008dbda306e0d540db07e635dea24e4
+LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX=9e6bb6696de1b84e26a3fbeebd67d5e7c9aad28a6bdee4cb8e59328b6fd99078
+LANDIN_GNAT_ARM_ELF_SHA256_AARCH64_LINUX=6f09f8efe4f36cc4a8c1f9da1c554bca043722fd11bb8475dbe100f03543b2a3
+LANDIN_GNAT_ARM_ELF_SHA256_AARCH64_DARWIN=10fc8bc6b6a67def53c2497e21b06289bfadf845a609f6a3679cad06c8bbf5d4
 
 #  Installs the pinned toolchain for one platform into $1, verifying each
 #  archive against the checksum above before unpacking it.  A mismatch is

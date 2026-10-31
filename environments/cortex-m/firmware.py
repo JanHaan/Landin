@@ -103,12 +103,12 @@ end start
     elf = run.out / 'firmware.elf'
     run.command('compile', [refine, '--target=cortex-m0', '--level='+level,
         *(['--root='+str(root)] if root is not None else []), '--firmware-entry=start',
-        '--emit=exe', '--debug='+debug, '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
+        '--emit=exe', '--debug='+debug, '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize,
         'app' if root is not None else source.name, '-o', elf.name], timeout=60)
-    run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
-    run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
-    symbols = run.command('symbols', [run.bin / 'arm-none-eabi-nm', '-n', elf])
+    run.command('elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
+    run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
+    symbols = run.command('symbols', [run.arm / 'arm-eabi-nm', '-n', elf])
     names = {line.split()[-1] for line in symbols.splitlines() if line.split()}
     #  A C runtime routine would be global; a Landin routine is a local
     #  symbol under its own name (D415), an instance of `free` among them
@@ -121,7 +121,7 @@ end start
     mapping = (run.out / 'firmware.elf.map').read_text()
     require('libc.a' not in mapping and 'crt0.o' not in mapping,
             'firmware linked an implicit hosted startup or libc')
-    require(not run.command('undefined', [run.bin / 'arm-none-eabi-nm', '-u', elf]).strip(),
+    require(not run.command('undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
             'firmware contains unresolved symbols')
     (run.out / 'image.json').write_text(json.dumps(image_contract(elf), indent=2)+'\n')
     return elf
@@ -333,7 +333,7 @@ def dma(run, refine, optimize="none", specialize="off"):
 
 
 def dma_execute(run, elf):
-    text = run.command('dma-symbols', [run.bin / 'arm-none-eabi-nm', elf])
+    text = run.command('dma-symbols', [run.arm / 'arm-eabi-nm', elf])
     symbols = {parts[2]: int(parts[0],16) for line in text.splitlines()
                if len(parts := line.split()) == 3}
     stage = symbols['stage']
@@ -454,7 +454,7 @@ def fallthrough(run, refine, optimize, specialize):
 def independent(run):
     here = Path(__file__).resolve().parent / 'probes'
     elf = run.out / 'control.elf'
-    run.command('independent-build', [run.bin / 'arm-none-eabi-gcc',
+    run.command('independent-build', [run.arm / 'arm-eabi-gcc',
         '-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft', '-mabi=aapcs',
         '-Os', '-Wall', '-Wextra', '-Werror', '-ffreestanding',
         '-fno-builtin', '-ffunction-sections', '-fdata-sections',
@@ -462,8 +462,8 @@ def independent(run):
         here / 'firmware-control.S', here / 'firmware-control.c',
         '-Wl,--gc-sections,--build-id=none,-T,' + str(here / 'firmware-control.ld'),
         '-Wl,-Map,control.map', '-o', elf])
-    run.command('independent-elf', [run.bin / 'arm-none-eabi-readelf', '-h','-A','-S','-l','-r', elf])
-    run.command('independent-disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
+    run.command('independent-elf', [run.arm / 'arm-eabi-readelf', '-h','-A','-S','-l','-r', elf])
+    run.command('independent-disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
     execute(run, elf, [
         'set *(unsigned*)&control_initial = 0xaaaaaaaa',
         'set *(unsigned*)&control_calls = 0xbbbbbbbb',
@@ -510,7 +510,7 @@ def failures(parent, refine):
         try:
             run.command('refusal', [refine, '--target=cortex-m0',
                 '--firmware-entry=start', '--emit=exe',
-                '--toolchain='+str(run.bin / 'arm-none-eabi-gcc'),
+                '--toolchain='+str(run.arm / 'arm-eabi-gcc'),
                 '-o', 'refused.elf', source.name], timeout=60)
         except RuntimeError:
             record = run.commands[-1]
@@ -552,7 +552,7 @@ start: () -> none =
 end start
 '''
     elf = build(run, refine, program, optimize, specialize)
-    text = run.command('peripheral-symbols', [run.bin / 'arm-none-eabi-nm', elf])
+    text = run.command('peripheral-symbols', [run.arm / 'arm-eabi-nm', elf])
     symbols = {parts[2]: int(parts[0],16) for line in text.splitlines()
                if len(parts := line.split()) == 3}
     trace = ('r32:4:0000009b' if kind == 'hole' else
@@ -590,7 +590,7 @@ def execute_suite(parent, refine, profiles=PROFILES):
     compiler_hash = sha(refine)
     parent.command('firmware-refine-identity', [refine, '--identify'])
     helper = parent.command('firmware-runtime-archive', [
-        parent.bin / 'arm-none-eabi-gcc', '-mcpu=cortex-m0', '-mthumb',
+        parent.arm / 'arm-eabi-gcc', '-mcpu=cortex-m0', '-mthumb',
         '-mfloat-abi=soft', '-print-libgcc-file-name']).strip()
     require(helper.endswith('/thumb/v6-m/nofp/libgcc.a'),
             'firmware selected the wrong runtime archive')

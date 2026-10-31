@@ -139,7 +139,7 @@ package body Landin.Targets.Capabilities is
       elsif Facts = Linux_RV64 then
          return "riscv64-linux-gnu";
       elsif Facts = Cortex_M then
-         return "arm-none-eabi";
+         return "arm-eabi";
       elsif Facts = Synthetic_32 then
          return "";
       else

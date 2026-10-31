@@ -60,7 +60,7 @@ package Landin.Targets.Capabilities is
 
    --  The target's toolchain triplet.  Linux and Cortex-M use it as the
    --  prefix of their GNU compiler driver: `x86_64-pc-linux-gnu-gcc`,
-   --  `aarch64-linux-gnu-gcc` or `arm-none-eabi-gcc`.  Darwin carries
+   --  `aarch64-linux-gnu-gcc` or `arm-eabi-gcc`.  Darwin carries
    --  `arm64-apple-darwin` as target metadata but defaults independently
    --  to Apple's `/usr/bin/clang`.
    --
