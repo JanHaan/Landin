@@ -8,17 +8,17 @@ public base: usize = 0x40020800
 
 public dmamux_c0cr_offset: usize = 0x0
 public dmamux_c0cr_address: usize = 0x40020800
-public dmamux_c0cr_named_mask: u32 = 0x1fff03ff
-public dmamux_c0cr_reset_mask: u32 = 0x1fff03ff
+public dmamux_c0cr_named_mask: u32 = 0x07ff037f
+public dmamux_c0cr_reset_mask: u32 = 0x07ff037f
 public dmamux_c0cr_reset_value: u32 = 0x00000000
 public dmamux_c0cr_image: type = layout(packed, u32) struct
-    f_dmareq_id: u8 at 0..7
+    f_dmareq_id: u7 at 0..6
     f_soie: u1 at 8..8
     f_ege: u1 at 9..9
     f_se: u1 at 16..16
     f_spol: u2 at 17..18
     f_nbreq: u5 at 19..23
-    f_sync_id: u5 at 24..28
+    f_sync_id: u3 at 24..26
 end dmamux_c0cr_image
 
 public dmamux_c0cr_decode: (raw: u32) -> (image: dmamux_c0cr_image) =
@@ -40,5 +40,5 @@ end dmamux_c0cr_read
 public dmamux_c0cr_write: (device_base: usize, raw: u32) -> none =
     port: ptr mut u32 = ptr(device_base + dmamux_c0cr_offset)
     compiler.register_write(port, raw, compiler.normal_write,
-                            compiler.write_zero, 0x1fff03ff)
+                            compiler.write_zero, 0x07ff037f)
 end dmamux_c0cr_write

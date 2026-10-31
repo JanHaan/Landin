@@ -1,6 +1,7 @@
 -- Interrupts of the STM32H753, from its SVD: version 2.0.
 -- SVD SHA-256 816c5073dfbfcb63749630fd73b5f5c65d99a8acbd98851e4935e936eff5133a.
 -- Generated from the SVD; memory.ldn beside it is written by hand.
+-- The policy adds ECC at 145: RM0433 Rev 9, Table 147, p. 759, position 145, ECC diagnostic global interrupt for RAMECC D1, D2 and D3, which the SVD omits; named as stm32h753xx.h's ECC_IRQn.
 
 compiler.device("stm32h753")
 compiler.core("cortex-m7")
@@ -143,5 +144,6 @@ compiler.interrupt("LPTIM5", 141)
 compiler.interrupt("LPUART", 142)
 compiler.interrupt("WWDG1_RST", 143)
 compiler.interrupt("CRS", 144)
+compiler.interrupt("ECC", 145)
 compiler.interrupt("SAI4", 146)
 compiler.interrupt("WKUP", 149)

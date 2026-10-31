@@ -67,6 +67,18 @@ package Landin.Devices.Policies is
    package Correction_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Field_Correction);
 
+   --  A reviewed correction of the SVD's interrupts: one added or moved
+   --  to Value, or every pair of its name removed, with its source.
+   type Interrupt_Correction is record
+      Name : US.Unbounded_String;
+      Omit : Boolean := False;
+      Value : Word := 0;
+      Source : US.Unbounded_String;
+   end record;
+
+   package Interrupt_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Interrupt_Correction);
+
    type Policy is record
       Device : US.Unbounded_String;
       Svd_Version : US.Unbounded_String;
@@ -88,6 +100,8 @@ package Landin.Devices.Policies is
       Numeric : Text_Vectors.Vector;
       --  `PERIPHERAL.REGISTER.FIELD`'s reviewed corrections.
       Fields : Correction_Vectors.Vector;
+      --  The interrupts' reviewed corrections, in the policy's order.
+      Interrupts : Interrupt_Vectors.Vector;
    end record;
 
    procedure Read

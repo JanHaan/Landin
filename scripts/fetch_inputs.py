@@ -10,7 +10,14 @@ the path of each.  A cached file is verified every time it is used; one
 whose bytes differ is fetched again, and a download whose bytes differ is
 refused and never put in the cache.
 
-    python3 scripts/fetch_inputs.py                 # every input
+An input whose pin says `"fetch": "by hand"` is one its publisher will not
+serve to a script, such as ST's RM0433: a person downloads it from its URL
+and puts it at CACHE/NAME.  This verifies a copy put there and never tries
+to download one; without a copy it says where to put it.  Such an input is
+fetched only when named, or with --all.
+
+    python3 scripts/fetch_inputs.py                 # every input a script may fetch
+    python3 scripts/fetch_inputs.py --all           # and verify those supplied by hand
     python3 scripts/fetch_inputs.py rp2040/RP2040.svd
     python3 scripts/fetch_inputs.py --offline NAME  # refuse to download
 
@@ -51,8 +58,10 @@ def read_lock(path=LOCK):
         if (not name or name.startswith('/') or '\\' in name
                 or any(part in ('', '.', '..') for part in parts)):
             raise InputError(name + ': not a relative input name')
-        if set(pin) != {'url', 'sha256'}:
-            raise InputError(name + ': a pin is a url and a sha256')
+        if not {'url', 'sha256'} <= set(pin) <= {'url', 'sha256', 'fetch'} \
+                or pin.get('fetch', 'by script') not in ('by script', 'by hand'):
+            raise InputError(name + ': a pin is a url, a sha256 and, for an'
+                             ' input a person supplies, "fetch": "by hand"')
         if not pin['url'].startswith('https://'):
             raise InputError(name + ': fetched only over https')
         digest = pin['sha256']
@@ -74,6 +83,13 @@ def fetch(name, inputs=None, cache=None, offline=False, opener=None):
     target = (cache_root() if cache is None else Path(cache)) / name
     if target.is_file() and digest(target.read_bytes()) == pin['sha256']:
         return target
+    if pin.get('fetch') == 'by hand':
+        found = (' The copy there has SHA-256 ' + digest(target.read_bytes())
+                 + '.') if target.is_file() else ''
+        raise InputError(name + ' is supplied by hand: its publisher does not'
+                         ' serve it to a script. Download it from ' + pin['url']
+                         + ' and put it at ' + str(target) + '; its SHA-256 must be '
+                         + pin['sha256'] + '.' + found)
     if offline:
         raise InputError(name + ': not in the cache at ' + str(target)
                          + ', and --offline forbids fetching it')
@@ -102,12 +118,17 @@ def main(argv=None):
     parser.add_argument('names', nargs='*',
                         help='inputs to fetch, as devices/inputs.json names them;'
                         ' every one when none is named')
+    parser.add_argument('--all', action='store_true',
+                        help='also verify the inputs supplied by hand')
     parser.add_argument('--offline', action='store_true',
                         help='use the cache only, and fail on a missing input')
     args = parser.parse_args(argv)
     try:
         inputs = read_lock()
-        for name in args.names or sorted(inputs):
+        chosen = args.names or sorted(
+            name for name in inputs
+            if args.all or inputs[name].get('fetch') != 'by hand')
+        for name in chosen:
             print(fetch(name, inputs, offline=args.offline))
     except InputError as error:
         print('fetch_inputs: ' + str(error), file=sys.stderr)

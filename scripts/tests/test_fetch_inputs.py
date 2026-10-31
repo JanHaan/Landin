@@ -85,6 +85,34 @@ class FetchInputs(unittest.TestCase):
                 with self.assertRaises(fetch_inputs.InputError):
                     fetch_inputs.read_lock(lock)
 
+    def test_a_hand_supplied_input_is_verified_and_never_fetched(self):
+        pin = dict(PIN, fetch='by hand')
+        with tempfile.TemporaryDirectory() as cache:
+            opener = Opener(GOOD)
+            with self.assertRaisesRegex(fetch_inputs.InputError,
+                                        'supplied by hand.*put it at'):
+                fetch_inputs.fetch('m/manual.pdf', {'m/manual.pdf': pin}, cache,
+                                   opener=opener)
+            self.assertEqual(opener.calls, 0, 'a hand-supplied input is downloaded')
+            copy = Path(cache) / 'm/manual.pdf'
+            copy.parent.mkdir()
+            copy.write_bytes(b'another revision')
+            with self.assertRaisesRegex(fetch_inputs.InputError,
+                                        'The copy there has SHA-256'):
+                fetch_inputs.fetch('m/manual.pdf', {'m/manual.pdf': pin}, cache,
+                                   opener=opener)
+            copy.write_bytes(GOOD)
+            self.assertEqual(fetch_inputs.fetch('m/manual.pdf',
+                                                {'m/manual.pdf': pin}, cache,
+                                                opener=opener), copy)
+            self.assertEqual(opener.calls, 0)
+
+    def test_rm0433_is_pinned_and_supplied_by_hand(self):
+        pin = fetch_inputs.read_lock()['rm0433/RM0433.pdf']
+        self.assertEqual(pin['fetch'], 'by hand')
+        self.assertEqual(pin['sha256'], '672a9433d6602da224e5215f571beed2'
+                                        'be0e683cb025526f4afe9db61c26b6a0')
+
 
 if __name__ == '__main__':
     unittest.main()

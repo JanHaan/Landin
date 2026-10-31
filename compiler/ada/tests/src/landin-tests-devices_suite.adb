@@ -375,6 +375,18 @@ package body Landin.Tests.Devices_Suite is
                                   "0x00000100"));
       Expect (Svd, Dev.Invalid_Policy, "not a relative path",
               Policy => Policy_For (Svd, ", ""prefix"": ""../up"""));
+      Expect (Svd, Dev.Not_In_Svd, "removes an interrupt the SVD",
+              Policy => Policy_For
+                (Svd, ", ""interrupt_corrections"": {""NOWHERE"": {""omit"":"
+                 & " true, ""source"": ""p. 1""}}"));
+      Expect (Svd, Dev.Invalid_Policy, "which the SVD gives UARTA_IRQ",
+              Policy => Policy_For
+                (Svd, ", ""interrupt_corrections"": {""NEW_IRQ"": {""value"":"
+                 & " 2, ""source"": ""p. 1""}}"));
+      Expect (Svd, Dev.Invalid_Policy, "the value the SVD already gives",
+              Policy => Policy_For
+                (Svd, ", ""interrupt_corrections"": {""UARTA_IRQ"":"
+                 & " {""value"": 2, ""source"": ""p. 1""}}"));
       Expect (Svd, Dev.Invalid_Policy, "where its reviewer read it",
               Policy => Policy_For
                 (Svd, ", ""reset_corrections"": {""UARTA.CR"":"
@@ -420,6 +432,37 @@ package body Landin.Tests.Devices_Suite is
         (Item, Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
                          "public cr_reset_mask: u32 = 0x00000001"),
          "an overridden reset mask");
+      Dev.Projection.Project
+        (Svd, Policy_For
+           (Svd, ", ""interrupt_corrections"": {""EXTRA_IRQ"": {""value"": 9,"
+            & " ""source"": ""the manual, p. 3""}, ""UARTB_IRQ"": {""value"":"
+            & " 1, ""source"": ""the manual, p. 4""}, ""UARTA_IRQ"":"
+            & " {""omit"": true, ""source"": ""the manual, p. 5""}}"),
+         Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault, US.To_String (Problem.Message));
+      if Problem.Kind /= Dev.No_Fault then
+         return;
+      end if;
+      Landin.Testing.Check_Equal
+        (Item, Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+         "-- Interrupts of the TOY1, from its SVD: vendor Example, version"
+         & " 1.0." & LF
+         & "-- SVD SHA-256 " & GNAT.SHA256.Digest (Svd) & "." & LF
+         & "-- Copyright the vendor." & LF
+         & "-- SPDX-License-Identifier: Apache-2.0" & LF
+         & "-- Generated from the SVD; memory.ldn beside it is written by"
+         & " hand." & LF
+         & "-- The policy adds EXTRA_IRQ at 9: the manual, p. 3." & LF
+         & "-- The policy moves UARTB_IRQ from 3 to 1: the manual, p. 4." & LF
+         & "-- The policy removes UARTA_IRQ at 2: the manual, p. 5." & LF
+         & LF
+         & "compiler.device(""toy1"")" & LF
+         & "compiler.core(""cortex-m7"")" & LF
+         & "compiler.vectors(26)" & LF
+         & "compiler.interrupt(""UARTB_IRQ"", 1)" & LF
+         & "compiler.interrupt(""EXTRA_IRQ"", 9)" & LF,
+         "D542's text with the policy's interrupt corrections, each said");
    end A_Correction_Is_Recorded;
 
    function Content_Of

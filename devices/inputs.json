@@ -32,6 +32,11 @@
     "stm32h753/stm32h753xx.h": {
       "url": "https://raw.githubusercontent.com/STMicroelectronics/cmsis-device-h7/81db1ec63cdc191fae1565b772da3ea5aa29a683/Include/stm32h753xx.h",
       "sha256": "4f6def439a9fa94705303fe227d34308048c44bd36263d311aa54cc94f8398f5"
+    },
+    "rm0433/RM0433.pdf": {
+      "url": "https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf",
+      "sha256": "672a9433d6602da224e5215f571beed2be0e683cb025526f4afe9db61c26b6a0",
+      "fetch": "by hand"
     }
   }
 }

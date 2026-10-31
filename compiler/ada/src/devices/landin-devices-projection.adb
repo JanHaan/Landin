@@ -1135,6 +1135,7 @@ package body Landin.Devices.Projection is
          Vendor : constant String := Value_Of (Device, "vendor");
          Version : constant String := Value_Of (Device, "version");
          Clauses : US.Unbounded_String;
+         Notes : US.Unbounded_String;
          Declared_Count : Word := 0;
          Highest : Word := 0;
 
@@ -1186,9 +1187,6 @@ package body Landin.Devices.Projection is
                end loop;
             end;
          end if;
-         Line ("-- Generated from the SVD; memory.ldn beside it is written"
-               & " by hand.");
-         Line ("");
          if not X.Is_Present (Cpu) then
             Fail (Inconsistent_Device, "the SVD names no cpu, so the"
                   & " description's core is not known", Device);
@@ -1267,6 +1265,83 @@ package body Landin.Devices.Projection is
                Current := X.Next_Sibling (Document, Current);
             end loop;
          end;
+         --  D542: the policy's reviewed corrections, each said in a line.
+         for Correction of Chosen.Interrupts loop
+            declare
+               Named : constant String := US.To_String (Correction.Name);
+               Source : constant String := US.To_String (Correction.Source);
+               Where : constant String := "interrupt_corrections." & Named;
+               Old : Interrupt_Vectors.Vector;
+               Index : Positive := 1;
+               Place : Positive;
+               Olds : US.Unbounded_String;
+            begin
+               while Index <= Pairs.Last_Index loop
+                  if Pairs (Index).Name = Correction.Name then
+                     Old.Append (Pairs (Index));
+                     Pairs.Delete (Index);
+                  else
+                     Index := Index + 1;
+                  end if;
+               end loop;
+               for Pair of Old loop
+                  US.Append (Olds, (if US.Length (Olds) = 0 then ""
+                                    else " and ") & Decimal (Pair.Value));
+               end loop;
+               if Correction.Omit then
+                  if Old.Is_Empty then
+                     Fail (Not_In_Svd, Where & " removes an interrupt the SVD"
+                           & " does not name");
+                  end if;
+                  US.Append (Notes, "-- The policy removes " & Named & " at "
+                             & US.To_String (Olds) & ": " & Source & "." & LF);
+               else
+                  if Natural (Old.Length) = 1
+                    and then Old.First_Element.Value = Correction.Value
+                  then
+                     Fail (Invalid_Policy, Where & " gives the value the SVD"
+                           & " already gives it");
+                  end if;
+                  Place := Pairs.Last_Index + 1;
+                  for At_Index in 1 .. Pairs.Last_Index loop
+                     if Pairs (At_Index).Value = Correction.Value then
+                        Fail (Invalid_Policy, Where & " numbers it "
+                              & Decimal (Correction.Value) & ", which the SVD"
+                              & " gives "
+                              & US.To_String (Pairs (At_Index).Name)
+                              & "; correct that one too");
+                     elsif Pairs (At_Index).Value > Correction.Value
+                       and then Place > Pairs.Last_Index
+                     then
+                        Place := At_Index;
+                     end if;
+                  end loop;
+                  Pairs.Insert (Place, Interrupt'(Value => Correction.Value,
+                                                   Name => Correction.Name));
+                  US.Append (Notes, "-- The policy "
+                             & (if Old.Is_Empty
+                                then "adds " & Named & " at "
+                                else "moves " & Named & " from "
+                                  & US.To_String (Olds) & " to ")
+                             & Decimal (Correction.Value) & ": " & Source
+                             & "." & LF);
+               end if;
+            end;
+         end loop;
+         Line ("-- Generated from the SVD; memory.ldn beside it is written"
+               & " by hand.");
+         declare
+            First : Positive := 1;
+            Text_Of_Notes : constant String := US.To_String (Notes);
+         begin
+            for At_Index in Text_Of_Notes'Range loop
+               if Text_Of_Notes (At_Index) = LF then
+                  Line (Text_Of_Notes (First .. At_Index - 1));
+                  First := At_Index + 1;
+               end if;
+            end loop;
+         end;
+         Line ("");
          if not Pairs.Is_Empty then
             Highest := Pairs.Last_Element.Value + 1;
          end if;

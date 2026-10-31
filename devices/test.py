@@ -314,8 +314,9 @@ CORES = {'CM0': 'cortex-m0', 'CM0PLUS': 'cortex-m0plus',
          'CM3': 'cortex-m3', 'CM4': 'cortex-m4', 'CM7': 'cortex-m7'}
 
 
-def render_d542(raw):
-    """D542's generated half from an SVD's bytes, with nothing of refine's."""
+def render_d542(raw, corrections=()):
+    """D542's generated half from an SVD's bytes and a policy's interrupt
+    corrections, with nothing of refine's."""
     import xml.etree.ElementTree as ElementTree
 
     def text_of(element, name):
@@ -334,14 +335,28 @@ def render_d542(raw):
     if licence is not None and licence.text:
         lines += ['-- ' + line.strip() for line in licence.text.splitlines()
                   if line.strip()]
-    lines += ['-- Generated from the SVD; memory.ldn beside it is written'
-              ' by hand.', '']
     cpu = device.find('cpu')
     pairs = set()
     for peripheral in device.iter('peripheral'):
         for interrupt in peripheral.findall('interrupt'):
             pairs.add((int(text_of(interrupt, 'value'), 0),
                        text_of(interrupt, 'name')))
+    notes = []
+    for named_irq, correction in dict(corrections).items():
+        old = sorted(value for value, named in pairs if named == named_irq)
+        pairs = {pair for pair in pairs if pair[1] != named_irq}
+        olds = ' and '.join(str(value) for value in old)
+        if correction.get('omit'):
+            notes.append('-- The policy removes %s at %s: %s.'
+                         % (named_irq, olds, correction['source']))
+        else:
+            pairs.add((correction['value'], named_irq))
+            notes.append('-- The policy %s %d: %s.' % (
+                ('adds %s at' % named_irq) if not old else
+                ('moves %s from %s to' % (named_irq, olds)),
+                correction['value'], correction['source']))
+    lines += ['-- Generated from the SVD; memory.ldn beside it is written'
+              ' by hand.'] + notes + ['']
     declared = int(text_of(cpu, 'deviceNumInterrupts') or '0', 0)
     count = 16 + max(declared, max(value for value, _ in pairs) + 1)
     lines += ['compiler.device("%s")' % name.lower(),
@@ -365,7 +380,8 @@ class D542Form(unittest.TestCase):
                 raw = fetch_inputs.fetch(svd_input(policy)).read_bytes()
                 self.assertEqual(
                     (HERE / policy['description'] / 'interrupts.ldn').read_bytes(),
-                    render_d542(raw).encode('ascii'))
+                    render_d542(raw, policy.get('interrupt_corrections', {}))
+                    .encode('ascii'))
 
 
 class Rp2040Oracles(unittest.TestCase):
@@ -603,6 +619,15 @@ H753_FIELD_SPELLINGS = {
 }
 
 
+#  Where the header's mask is not the field's, and RM0433 Rev 9 says the
+#  SVD is right: 17.6.1, p. 708, gives DMAMUX1_CxCR's DMAREQ_ID[6:0] and
+#  SYNC_ID[2:0]; the header's masks are DMAMUX2's wider ones, 17.6.2, p. 709.
+H753_HEADER_DISAGREEMENTS = {
+    'DMAMUX1.DMAMUX_C0CR.DMAREQ_ID': 0x000000ff,
+    'DMAMUX1.DMAMUX_C0CR.SYNC_ID': 0x1f000000,
+}
+
+
 class Stm32h753Oracles(unittest.TestCase):
     """The STM32H753's selection against ST's CMSIS header and reviewed
     literals, neither of them the SVD or the generator."""
@@ -634,17 +659,34 @@ class Stm32h753Oracles(unittest.TestCase):
                         candidates.append(prefix + '_' + digits.group(1) + '_'
                                           + digits.group(2))
                     mask = header.mask(*candidates)
+                    if name in H753_HEADER_DISAGREEMENTS:
+                        self.assertEqual(mask, H753_HEADER_DISAGREEMENTS[name])
+                        self.assertNotEqual(field['mask'], mask)
+                        continue
                     with self.subTest(field=name):
                         self.assertEqual(field['mask'], mask)
                         self.assertEqual(field['low'], (mask & -mask).bit_length() - 1)
                         self.assertEqual(field['high'], mask.bit_length() - 1)
 
     def test_reset_values(self):
-        # Reviewed from RM0433's register descriptions, never the SVD: every
-        # selected register resets to zero but these.  GPIOD's mode register
-        # is all analog, 0xFFFF FFFF; 0xABFF FFFF is port A's, which the SVD
-        # gives port D by deriving it from port A.
-        expected = {'GPIOD.MODER': 0xffffffff, 'USART3.ISR': 0x000000c0}
+        # Reviewed from RM0433 Rev 9, pinned by its SHA-256 in
+        # devices/inputs.json, never the SVD: every selected register resets
+        # to zero but these two.
+        expected = {
+            # 11.4.1, p. 541: 0xFFFF FFFF for ports other than A and B;
+            # 0xABFF FFFF is port A's, which the SVD gives port D by
+            # deriving it from port A.
+            'GPIOD.MODER': 0xffffffff,
+            # 48.8.10, p. 2091, the FIFO-disabled view, which reset selects;
+            # 48.8.9, p. 2085, the FIFO-enabled one, is 0x0X80 00C0.
+            'USART3.ISR': 0x000000c0,
+        }
+        # The zeros: RCC 8.7.41, p. 454, 8.7.43, p. 458, 8.7.45, p. 462;
+        # GPIOx_AFRH 11.4.10, p. 546; USART 48.8.1, p. 2067, 48.8.4,
+        # p. 2078, 48.8.5, p. 2082, 48.8.11, p. 2096, 48.8.12 and 48.8.13,
+        # p. 2098; DMA 15.5.1, p. 659, 15.5.3, p. 660, 15.5.5, p. 662,
+        # 15.5.6 and 15.5.7, p. 665, 15.5.8, p. 666; DMAMUX1 17.6.1,
+        # p. 708; TIM2 39.4.7, p. 1688.
         for row in self.rows():
             with self.subTest(register=row['source']):
                 self.assertEqual(row['known_reset_mask'], row['named_mask'])
@@ -655,9 +697,12 @@ class Stm32h753Oracles(unittest.TestCase):
         self.assertIn('RM0433', rows['GPIOD.MODER']['reset_correction']['source'])
 
     def test_access_policies(self):
-        # Reviewed from RM0433's access types, never the policy: status is
-        # read-only, a clear register is write-1-to-clear and read as
-        # nothing, and a receive register's read takes a byte from its FIFO.
+        # Reviewed from RM0433 Rev 9's access types, never the policy: status
+        # is read-only (USART_ISR 48.8.10, p. 2091; DMA_LISR 15.5.1,
+        # p. 659), a clear register is write-only, written as one to clear
+        # (USART_ICR 48.8.11, p. 2096; DMA_LIFCR 15.5.3, p. 660), and the
+        # receive register is read-only and its read takes a byte from its
+        # FIFO (USART_RDR 48.8.12, p. 2098).
         for row in self.rows():
             key = row['source']
             read = ('refused' if key in {'USART3.ICR', 'DMA1.LIFCR'}
@@ -671,10 +716,13 @@ class Stm32h753Oracles(unittest.TestCase):
     def test_reviewed_field_corrections(self):
         rows = {row['source']: row for row in self.rows()}
         fields = {f['name']: f for f in rows['DMAMUX1.DMAMUX_C0CR']['fields']}
-        self.assertEqual((fields['DMAREQ_ID']['mask'],
-                          fields['DMAREQ_ID']['correction']['svd_high']),
-                         (0xff, 6))
-        self.assertEqual(fields['SYNC_ID']['mask'], 0x1f000000)
+        # RM0433 Rev 9, 17.6.1, p. 708: DMAMUX1_CxCR's DMAREQ_ID is bits 6:0
+        # and SYNC_ID bits 26:24, as the SVD says; the header's wider masks
+        # are DMAMUX2's (17.6.2, p. 709), and nothing corrects them.
+        self.assertEqual((fields['DMAREQ_ID']['mask'], fields['SYNC_ID']['mask']),
+                         (0x7f, 0x07000000))
+        self.assertNotIn('correction', fields['DMAREQ_ID'])
+        # 8.7.41, p. 454: RCC_AHB1ENR's bit 18 is reserved.
         self.assertEqual([f['name'] for f in rows['RCC.AHB1ENR']['omitted_fields']],
                          ['USB2OTGHSULPIEN'])
         self.assertEqual(rows['TIM2.CCMR1_Input']['alternate_register'],
@@ -691,13 +739,20 @@ class Stm32h753Oracles(unittest.TestCase):
         given = {int(value): name for name, value in re.findall(
             r'^compiler\.interrupt\("(\w+)", (\d+)\)$', text, re.MULTILINE)}
         external = {n for n in numbers if n >= 0}
-        # The two the SVD and the header disagree on: the SVD names a
-        # window watchdog reset at 143, which the header does not, and the
-        # header names the RAM ECC interrupt at 145, which the SVD does not.
+        # The two the SVD and the header disagree on, as RM0433 Rev 9's
+        # vector table, Table 147, p. 759, settles them: position 143 is
+        # WWDG1_RST, which the SVD has and the header lacks, and position
+        # 145 the RAMECC diagnostic interrupt, which the header has as
+        # ECC_IRQn and the policy adds to the SVD's.
         self.assertEqual(set(given) - external, {143})
-        self.assertEqual(external - set(given), {145})
+        self.assertEqual(external - set(given), set())
+        self.assertEqual((given[143], given[145]), ('WWDG1_RST', 'ECC'))
+        self.assertIn('-- The policy adds ECC at 145: RM0433 Rev 9, Table 147,'
+                      ' p. 759,', text)
         self.assertIn('compiler.vectors(%d)\n' % (16 + max(external) + 1), text)
         self.assertIn('compiler.core("cortex-m7")\n', text)
+        # Table 147: TIM2 28 and DMA_STR0 11 on p. 754, USART3 39 on p. 755,
+        # DMAMUX1_OV 102 on p. 758.
         for name, value in (('USART3', 39), ('DMA_STR0', 11), ('DMAMUX1_OV', 102),
                             ('TIM2', 28)):
             self.assertEqual(given[value], name)
@@ -746,8 +801,12 @@ class Stm32h753Oracles(unittest.TestCase):
                           or 0xe000ef50 <= a[1] <= 0xe000ef78], system)
         stores = [a for a in stores if a[1] < 0xe000e000]
         message = image.symbols['message']
-        # Reviewed from RM0433's memory map and register descriptions: the
-        # address, the width and the value of every store, in order.
+        # Reviewed from RM0433 Rev 9, never the generator: each base from
+        # Table 8's register boundary addresses, pp. 132 to 135, each offset
+        # and bit from the register's section, cited at test_reset_values,
+        # and the request from Table 124, p. 697, usart3_tx_dma being
+        # dmamux1_req_in46; the address, the width and the value of every
+        # store, in order.
         self.assertEqual(stores, [
             ('w', 0x580244e0, 4, 0x00000008),   # RCC_AHB4ENR: GPIODEN
             ('w', 0x580244e8, 4, 0x00040000),   # RCC_APB1LENR: USART3EN
@@ -786,7 +845,10 @@ class Stm32h753Oracles(unittest.TestCase):
         kib = 1024
         d2 = header.value('D2_AHBSRAM_BASE')
         # Bases from the header's macros, sizes from its own comments on
-        # them and from RM0433's memory map; FLASH_END bounds the flash.
+        # them and from RM0433 Rev 9: 2.4, p. 136, the SRAMs and TCMs and
+        # which masters reach them; Table 7, pp. 130 and 131, the memory
+        # map; p. 153, the flash's two 1 MiB banks from 0x0800 0000; 2.6,
+        # p. 138, the boot address 0x0800 0000.  FLASH_END bounds the flash.
         self.assertEqual(regions, {
             'FLASH': (header.value('D1_AXIFLASH_BASE'),
                       header.value('FLASH_END') + 1 - header.value('FLASH_BASE'), 'rx'),
@@ -804,8 +866,9 @@ class Stm32h753Oracles(unittest.TestCase):
             self.assertRegex(header.text, r'#define %s\s.*%s' % (macro, size))
         self.assertIn('compiler.boot("vector-table")\n', text)
         self.assertEqual(places['vectors'], 'FLASH')
-        # DMA1 and DMA2 reach neither tightly coupled memory, so nothing
-        # a stream may read or write is placed in one.
+        # DMA1 and DMA2 reach neither tightly coupled memory (2.4, p. 136;
+        # Table 3, p. 104), so nothing a stream may read or write is placed
+        # in one.
         for kind in ('data', 'bss', 'stack'):
             self.assertNotIn(places[kind], ('DTCM', 'ITCM'), kind)
 

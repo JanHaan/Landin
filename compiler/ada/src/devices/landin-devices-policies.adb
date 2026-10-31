@@ -120,7 +120,7 @@ package body Landin.Devices.Policies is
               | "prefix" | "correspondence" | "manifest" | "description"
               | "selection" | "policies" | "numeric_enums"
               | "reset_mask_overrides" | "reset_corrections"
-              | "field_corrections"
+              | "field_corrections" | "interrupt_corrections"
             then
                Fail ("the policy's member """ & Name & """ is not one"
                  & " refine svd reads; the reviewer's notes go under"
@@ -550,6 +550,81 @@ package body Landin.Devices.Policies is
                      end;
                   end if;
                   Into.Fields.Append (Made);
+               end;
+            end loop;
+         end if;
+      end;
+      declare
+         Corrections : constant J.Value :=
+           J.Member (Document, Root, "interrupt_corrections");
+      begin
+         if J.Is_Present (Corrections) then
+            if not J.Is_Kind (Document, Corrections, J.Object_Value) then
+               Fail ("the policy's interrupt_corrections is not an object");
+            end if;
+            for Position in 1 .. J.Length (Document, Corrections) loop
+               declare
+                  Name : constant String :=
+                    J.Key (Document, Corrections, Position);
+                  Item : constant J.Value :=
+                    J.Member_Value (Document, Corrections, Position);
+                  Where : constant String := "interrupt_corrections." & Name;
+                  Made : Interrupt_Correction;
+               begin
+                  if not Is_Vendor_Name (Name) or else Name'Length > 64 then
+                     Fail (Where & " does not name an interrupt as D542"
+                       & " spells one: an ASCII letter and then at most 63"
+                       & " letters, digits and underscores");
+                  elsif not J.Is_Kind (Document, Item, J.Object_Value) then
+                     Fail (Where & " is not an object of value or omit, and"
+                       & " source");
+                  end if;
+                  for Member in 1 .. J.Length (Document, Item) loop
+                     if J.Key (Document, Item, Member) not in "value" | "omit"
+                       | "source"
+                     then
+                        Fail (Where & " has the member '"
+                          & J.Key (Document, Item, Member) & "'; a"
+                          & " correction says value or omit, and source");
+                     end if;
+                  end loop;
+                  Made.Name := US.To_Unbounded_String (Name);
+                  Made.Source := US.To_Unbounded_String
+                    (Member_String (Item, "source", Where));
+                  if Made.Source = ""
+                    or else (for some C of US.To_String (Made.Source) =>
+                               Character'Pos (C) < 32
+                               or else Character'Pos (C) > 126)
+                  then
+                     Fail (Where & ".source is not printable ASCII text"
+                       & " saying where its reviewer read it");
+                  end if;
+                  if J.Is_Present (J.Member (Document, Item, "omit")) then
+                     if not J.Is_Kind
+                         (Document, J.Member (Document, Item, "omit"),
+                          J.True_Value)
+                       or else J.Is_Present
+                         (J.Member (Document, Item, "value"))
+                     then
+                        Fail (Where & " says omit: true, or gives a value");
+                     end if;
+                     Made.Omit := True;
+                  else
+                     declare
+                        Said : constant J.Value :=
+                          J.Member (Document, Item, "value");
+                     begin
+                        if not J.Is_Integer (Document, Said)
+                          or else J.Integer_Of (Document, Said) < 0
+                          or else J.Integer_Of (Document, Said) > 495
+                        then
+                           Fail (Where & ".value is not an interrupt number"
+                             & " from 0 to 495");
+                        end if;
+                        Made.Value := Word (J.Integer_Of (Document, Said));
+                     end;
+                  end if;
+                  Into.Interrupts.Append (Made);
                end;
             end loop;
          end if;

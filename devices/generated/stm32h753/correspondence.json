@@ -122,7 +122,7 @@
     "omitted_fields": [
       {
         "name": "USB2OTGHSULPIEN",
-        "source": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683: RCC_AHB1ENR defines no bit 18, and its USB2OTGHSULPIEN is bit 28, which the SVD gives as USB2ULPIEN"
+        "source": "RM0433 Rev 9, 8.7.41, p. 454: RCC_AHB1ENR's bit 18 is reserved and USB2OTGHSULPIEN is bit 28, which the SVD gives as USB2ULPIEN; the revision history, p. 3313, records the move from bit 18 to bit 28"
       }
     ],
     "policy": {
@@ -811,7 +811,7 @@
     },
     "register_access": "read-write",
     "reset_correction": {
-      "source": "RM0433, GPIO port mode register (GPIOx_MODER): 0xFFFF FFFF for ports C to K; 0xABFF FFFF is port A's, which the SVD gives port D by deriving it from port A",
+      "source": "RM0433 Rev 9, 11.4.1, p. 541: GPIOx_MODER resets to 0xFFFF FFFF for ports other than A and B; 0xABFF FFFF is port A's, which the SVD gives port D by deriving it from port A",
       "value": 4294967295
     },
     "source": "GPIOD.MODER",
@@ -3012,15 +3012,10 @@
     "fields": [
       {
         "access": "read-write",
-        "correction": {
-          "source": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683: DMAMUX_CxCR_DMAREQ_ID_Msk is 0x000000FF, where the SVD gives bits 6:0",
-          "svd_high": 6,
-          "svd_low": 0
-        },
         "encodings": [],
-        "high": 7,
+        "high": 6,
         "low": 0,
-        "mask": 255,
+        "mask": 127,
         "modified_write": null,
         "name": "DMAREQ_ID",
         "read_action": null,
@@ -3127,24 +3122,19 @@
       },
       {
         "access": "read-write",
-        "correction": {
-          "source": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683: DMAMUX_CxCR_SYNC_ID_Msk is 0x1F000000, where the SVD gives bits 26:24",
-          "svd_high": 26,
-          "svd_low": 24
-        },
         "encodings": [],
-        "high": 28,
+        "high": 26,
         "low": 24,
-        "mask": 520093696,
+        "mask": 117440512,
         "modified_write": null,
         "name": "SYNC_ID",
         "read_action": null,
         "representation": "unsigned"
       }
     ],
-    "known_reset_mask": 536806399,
+    "known_reset_mask": 134153087,
     "known_reset_value": 0,
-    "named_mask": 536806399,
+    "named_mask": 134153087,
     "offset": 0,
     "policy": {
       "read": "normal",

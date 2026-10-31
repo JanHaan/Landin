@@ -20423,7 +20423,9 @@ as a number; `reset_mask_overrides`, the reset knowledge a reviewer
 promises instead of the SVD's; and `reset_corrections`, a reviewed reset
 value with the source it was read from; and `field_corrections`, a field's
 reviewed `bits` or that it is to be omitted, with its `source`, which the
-correspondence records beside the SVD's. Any other member is refused, except
+correspondence records beside the SVD's; and `interrupt_corrections`, an
+interrupt to add or move to a `value`, or to `omit`, with its `source`,
+which `interrupts.ldn` says in a line of its own (D542). Any other member is refused, except
 `provenance`, the reviewer's notes, which is not read. A policy refine
 cannot read is L0526, and one that selects what the SVD lacks L0530.
 
@@ -20527,7 +20529,13 @@ SVD and each vendor header the generated modules are checked against by the
 URL it is fetched from and its SHA-256, and `scripts/fetch_inputs.py`,
 standard-library Python, fetches each into `$LANDIN_INPUTS` or
 `~/.cache/landin/inputs`, verifies it every time it is used, and never
-caches bytes of another hash. A licence's notice stays in the tree, as a
+caches bytes of another hash. An input its publisher will not serve to
+a script, ST's RM0433, is pinned the same way and marked `"fetch": "by
+hand"`: a person downloads it and puts it in the cache, and the fetcher
+verifies that copy, never downloads one, and without one says where to put
+it. No test reads a manual; the literals reviewed from one stay in the
+tests, each citing its section and page, and its pinned hash names the
+document they were reviewed against. A licence's notice stays in the tree, as a
 notice: the generated modules are derivatives of the SVD, BSD-3-Clause asks
 that a redistribution of source in any form keep the licence's whole text,
 and Apache-2.0 that a recipient be given a copy, so
@@ -20565,25 +20573,40 @@ field but DMAMUX1's enumerates values, which are read as numbers. Status is
 read and not written, a clear register written as one-clears and not read,
 and USART3's receive register read with one load.
 
-Where the SVD and ST's CMSIS header disagree, the header's reading is a
-reviewed correction in the policy, with its source: DMAMUX1's `DMAREQ_ID`
-is bits 7:0 and `SYNC_ID` bits 28:24, not 6:0 and 26:24, and `AHB1ENR`'s bit
-18 is no field. Port D's mode register resets to 0xFFFF FFFF, all analog,
-where the SVD gives port A's 0xABFF FFFF by deriving port D from it, which
-RM0433's GPIO register description corrects. The two disagree on two
-interrupts the selection does not use, 143 and 145; `interrupts.ldn` is
-D542's text from the SVD, and the check names both.
+Where the SVD and ST's CMSIS header disagree, the reference manual decides:
+RM0433 Rev 9, pinned by its SHA-256 and supplied by hand (D559). Where it
+says the SVD is wrong, the policy carries a reviewed correction with the
+section and page it was read at: `RCC_AHB1ENR`'s bit 18 is reserved, not a
+field (8.7.41, p. 454); port D's mode register resets to 0xFFFF FFFF, all
+analog, where the SVD gives port A's 0xABFF FFFF by deriving port D from it
+(11.4.1, p. 541); and the RAMECC diagnostic interrupt is at 145, which the
+SVD omits (Table 147, p. 759). It is named `ECC`, the header's `ECC_IRQn`,
+because the manual gives that one line three acronyms, `RAMECC1` to
+`RAMECC3`. Where it says the SVD is right, nothing is corrected and the
+check names the header's disagreement: DMAMUX1's `DMAREQ_ID` is bits 6:0
+and `SYNC_ID` bits 26:24 (17.6.1, p. 708), where the header's masks are
+DMAMUX2's, and `WWDG1_RST` is at 143, which the header omits.
+
+A policy may so add, move or remove an interrupt, each with a cited
+source, as it corrects a field. `interrupts.ldn` then carries the corrected
+table, and D542's form says each correction in a line of its own after the
+line that says the file is generated from the SVD, so a reader of the
+description sees which interrupt is not the SVD's and why.
 
 **The alternatives:** `cmsis-svd-data`'s copy, a third party's collection
 of the same files; ST's own download, whose licence is ST's agreement and
-whose URL serves whatever is current; and correcting nothing, which
-generates a DMA request field one bit short.
+whose URL serves whatever is current; taking the header's reading wherever
+it disagrees, which would have widened two DMAMUX1 fields to DMAMUX2's;
+and correcting no interrupt, which leaves a handler for the RAMECC
+interrupt refused at its own slot.
 
 **Pinned by** `devices/policies/stm32h753.json` and `devices/test.py`'s
 `Stm32h753Oracles`, which compares every selected register and field's
 address and layout with ST's header, the reset values and access policies
-with literals reviewed from RM0433, and the interrupts with the header's
-IRQ numbers.
+with literals reviewed from RM0433 Rev 9, each citing its section and page,
+and the interrupts with the header's IRQ numbers and the manual's table;
+and the `devices` suite's `a correction is recorded`, which holds an
+interrupt correction's line and table.
 
 ### D561 — A consumer's device accesses are read from its linked image
 
@@ -20725,8 +20748,13 @@ whatever generates it, and a reviewer, can compare bytes:
    bytes.
 3. Each nonempty line of the SVD's `licenseText`, its surrounding whitespace
    removed, follows as `-- LINE`.
-4. Then `-- Generated from the SVD; memory.ldn beside it is written by hand.`
-   and one empty line.
+4. Then `-- Generated from the SVD; memory.ldn beside it is written by hand.`;
+   then, for each interrupt correction of the generator's reviewed policy
+   (D556), in the policy's order, one line: `-- The policy adds NAME at
+   VALUE: SOURCE.` for an interrupt the SVD does not name, `-- The policy
+   moves NAME from OLD to VALUE: SOURCE.` for one it numbers otherwise, or
+   `-- The policy removes NAME at OLD: SOURCE.`, OLD being each value the SVD
+   gives it, joined by ` and `; and one empty line.
 5. `compiler.device("ID")`, ID being `device/name` in lowercase;
    `compiler.core("CORE")`, from `cpu/name`, where `CM0`, `CM0PLUS`, `CM3`,
    `CM4` and `CM7` are the five cores above; and `compiler.vectors(N)`, N being
@@ -20735,8 +20763,9 @@ whatever generates it, and a reviewer, can compare bytes:
    `deviceNumInterrupts`.
 6. One `compiler.interrupt("NAME", VALUE)` for each distinct pair of an
    `interrupt` element's name and value in any peripheral, derived ones
-   included, ordered by value and then by the name's bytes; VALUE is
-   decimal with no separators.
+   included, as the corrections leave them, ordered by value and then by
+   the name's bytes; VALUE is decimal with no separators. The count of
+   step 5 is of the corrected pairs.
 
 The file is ASCII with LF line ends, one directive or comment per line, no
 trailing spaces, no other empty line, and it ends with one LF. It is the
@@ -20762,9 +20791,11 @@ whose directory is the generator's to rewrite.
 
 **Pinned by** `devices/descriptions/rp2040/interrupts.ldn`, first written by
 hand in this form from the pinned SVD and now generated by `refine svd`
-(D557), and `devices/test.py`'s `D542Form`, which renders the form from each
-fetched SVD with nothing of the compiler's and requires each device's file to
-be the rendering, beside its regeneration of the same files by refine.
+(D557); `devices/descriptions/stm32h753/interrupts.ldn`, which carries one
+correction; and `devices/test.py`'s `D542Form`, which renders the form from
+each fetched SVD and its policy's corrections with nothing of the
+compiler's and requires each device's file to be the rendering, beside its
+regeneration of the same files by refine.
 
 ### D543 — A program selects its device by importing its description
 

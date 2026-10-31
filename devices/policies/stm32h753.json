@@ -153,6 +153,24 @@
     "DMAMUX1.DMAMUX_C0CR.SE",
     "DMAMUX1.DMAMUX_C0CR.SPOL"
   ],
+  "field_corrections": {
+    "RCC.AHB1ENR.USB2OTGHSULPIEN": {
+      "omit": true,
+      "source": "RM0433 Rev 9, 8.7.41, p. 454: RCC_AHB1ENR's bit 18 is reserved and USB2OTGHSULPIEN is bit 28, which the SVD gives as USB2ULPIEN; the revision history, p. 3313, records the move from bit 18 to bit 28"
+    }
+  },
+  "reset_corrections": {
+    "GPIOD.MODER": {
+      "value": "0xffffffff",
+      "source": "RM0433 Rev 9, 11.4.1, p. 541: GPIOx_MODER resets to 0xFFFF FFFF for ports other than A and B; 0xABFF FFFF is port A's, which the SVD gives port D by deriving it from port A"
+    }
+  },
+  "interrupt_corrections": {
+    "ECC": {
+      "value": 145,
+      "source": "RM0433 Rev 9, Table 147, p. 759, position 145, ECC diagnostic global interrupt for RAMECC D1, D2 and D3, which the SVD omits; named as stm32h753xx.h's ECC_IRQn"
+    }
+  },
   "provenance": {
     "vendor": "STMicroelectronics",
     "svd_url": "https://raw.githubusercontent.com/Open-CMSIS-Pack/STM32H7xx_DFP/4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d/CMSIS/SVD/STM32H753.svd",
@@ -162,26 +180,11 @@
       "commit": "4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d"
     },
     "header_url": "https://raw.githubusercontent.com/STMicroelectronics/cmsis-device-h7/81db1ec63cdc191fae1565b772da3ea5aa29a683/Include/stm32h753xx.h",
-    "scenario": "prototype 1's UART and DMA: the NUCLEO-H753ZI's ST-LINK virtual COM port is USART3 on PD8 (TX) and PD9 (RX), alternate function 7; DMA1 stream 0 through DMAMUX1 channel 0; TIM2's capture view as the timer's alternate register"
-  },
-  "field_corrections": {
-    "RCC.AHB1ENR.USB2OTGHSULPIEN": {
-      "omit": true,
-      "source": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683: RCC_AHB1ENR defines no bit 18, and its USB2OTGHSULPIEN is bit 28, which the SVD gives as USB2ULPIEN"
-    },
-    "DMAMUX1.DMAMUX_C0CR.DMAREQ_ID": {
-      "bits": "[7:0]",
-      "source": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683: DMAMUX_CxCR_DMAREQ_ID_Msk is 0x000000FF, where the SVD gives bits 6:0"
-    },
-    "DMAMUX1.DMAMUX_C0CR.SYNC_ID": {
-      "bits": "[28:24]",
-      "source": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683: DMAMUX_CxCR_SYNC_ID_Msk is 0x1F000000, where the SVD gives bits 26:24"
-    }
-  },
-  "reset_corrections": {
-    "GPIOD.MODER": {
-      "value": "0xffffffff",
-      "source": "RM0433, GPIO port mode register (GPIOx_MODER): 0xFFFF FFFF for ports C to K; 0xABFF FFFF is port A's, which the SVD gives port D by deriving it from port A"
+    "scenario": "prototype 1's UART and DMA: the NUCLEO-H753ZI's ST-LINK virtual COM port is USART3 on PD8 (TX) and PD9 (RX), alternate function 7; DMA1 stream 0 through DMAMUX1 channel 0; TIM2's capture view as the timer's alternate register",
+    "manual": {
+      "document": "RM0433 Rev 9",
+      "input": "rm0433/RM0433.pdf",
+      "sha256": "672a9433d6602da224e5215f571beed2be0e683cb025526f4afe9db61c26b6a0"
     }
   }
 }

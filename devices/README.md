@@ -68,7 +68,9 @@ pins each input by the URL it is fetched from and its SHA-256, and
 `$LANDIN_INPUTS`, or `~/.cache/landin/inputs`, as `CACHE/NAME`, verifies it,
 and prints its path. A cached file is verified every time it is used; bytes
 of another hash are refused and never cached. `--offline` uses the cache
-alone.
+alone. An input marked `"fetch": "by hand"`, RM0433, is one a person puts in
+the cache; the fetcher verifies it when named or with `--all` and never
+downloads it.
 
 | Input | Source | Licence |
 |---|---|---|
@@ -122,6 +124,7 @@ reviewer's notes and is not read.
 | `reset_mask_overrides` | the reset knowledge a reviewer promises for a register, replacing the SVD's |
 | `reset_corrections` | a reviewed reset `value` and the `source` it was read from, where the SVD is wrong |
 | `field_corrections` | for a `PERIPHERAL.REGISTER.FIELD`, its reviewed `bits` as `[HIGH:LOW]`, or `omit: true`, and the `source` |
+| `interrupt_corrections` | for an interrupt's name, the `value` it is added or moved to, or `omit: true`, and the `source`; `interrupts.ldn` says each in a line (D542) |
 
 A refused read or write leaves no accessor, so a program that tries one is
 refused by name resolution. `modify` reads with one volatile load, for a FIFO
@@ -197,18 +200,23 @@ which the policy reads as numbers.
 
 The check compares every selected register and field's address and
 layout with ST's `stm32h753xx.h`, through a reviewed table of the header's
-structure members and the names it spells differently, and finds three
-disagreements, each a correction in the policy with its source:
-DMAMUX1's `DMAREQ_ID` is bits 7:0 and `SYNC_ID` bits 28:24, where the SVD
-says 6:0 and 26:24, and `RCC_AHB1ENR` has no bit 18, where the SVD puts a
-`USB2OTGHSULPIEN`. Reset values and access policies are compared with
-literals reviewed from RM0433: every selected register resets to zero but
-`USART3_ISR`, 0x0000 00C0, and `GPIOD_MODER`, 0xFFFF FFFF, which the SVD
-gets wrong by deriving port D from port A and the policy corrects. The SVD
-and the header also disagree on two interrupts the selection does not use:
-the SVD names `WWDG1_RST` at 143, which the header lacks, and the header
-`ECC_IRQn` at 145, which the SVD lacks. `interrupts.ldn` is the SVD's (D542),
-166 slots, and the check names both.
+structure members and the names it spells differently. Where the two
+disagree, RM0433 Rev 9 decides, and where it says the SVD is wrong the
+policy corrects it with the section and page (D560): `RCC_AHB1ENR` has no
+bit 18 (8.7.41, p. 454), where the SVD puts a `USB2OTGHSULPIEN`; and the
+RAMECC diagnostic interrupt is at 145 (Table 147, p. 759), which the SVD
+omits and the policy adds as `ECC`, the header's `ECC_IRQn`, the manual
+giving that one line three acronyms. Where it says the SVD is right the
+check names the header's disagreement instead: DMAMUX1's `DMAREQ_ID` is
+bits 6:0 and `SYNC_ID` bits 26:24 (17.6.1, p. 708), where the header's
+masks are DMAMUX2's, and `WWDG1_RST` is at 143, which the header lacks.
+Reset values and access policies are compared with literals reviewed from
+RM0433 Rev 9, each citing its section and page: every selected register
+resets to zero but `USART3_ISR`, 0x0000 00C0 in its FIFO-disabled view
+(48.8.10, p. 2091), and `GPIOD_MODER`, 0xFFFF FFFF (11.4.1, p. 541), which
+the SVD gets wrong by deriving port D from port A and the policy corrects.
+`interrupts.ldn` has 166 slots and says its one correction in a line of
+its own (D542).
 
 The [consumer](consumers/stm32h753/main.ldn) enables the clocks, sets
 the pins, programs USART3 at 115200 baud from the 64 MHz HSI and transmits
@@ -239,9 +247,17 @@ corpus links with the reference's probe map, so its verdicts against the
 STM32H753 are a measurement from each limited image's sizes and frames, not
 a link against its map.
 
-RM0433 itself could not be fetched by URL and hash when this was written:
-ST's site refused the download. Its literals above were transcribed in
-review and are not yet held to a pinned copy.
+The literals were reviewed against
+[RM0433](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+Rev 9, SHA-256
+`672a9433d6602da224e5215f571beed2be0e683cb025526f4afe9db61c26b6a0`,
+66,378,901 bytes, which `inputs.json` pins. ST's site does not serve it to a
+script, so it is marked `"fetch": "by hand"`: download it in a browser and
+put it at `~/.cache/landin/inputs/rm0433/RM0433.pdf`, where
+`scripts/fetch_inputs.py --all` verifies it, and says where it goes when it
+is absent. No test reads it, as no test reads the RP2040 datasheet; the
+literals stay in `test.py`, and the hash names the document they were
+reviewed against.
 
 ## RP2040: the selected surface and its prototype derivation
 

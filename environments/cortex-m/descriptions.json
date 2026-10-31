@@ -29,7 +29,7 @@
     "stm32h753": {
       "sources": {
         "memory map": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683, SHA-256 4f6def439a9fa94705303fe227d34308048c44bd36263d311aa54cc94f8398f5: D1_AXIFLASH_BASE 0x08000000 to FLASH_END 0x081FFFFF, D1_ITCMRAM_BASE 0 64KB, D1_DTCMRAM_BASE 0x20000000 128KB, D1_AXISRAM_BASE 0x24000000 512KB, D2_AHBSRAM_BASE 0x30000000 288KB as SRAM1 128K, SRAM2 128K and SRAM3 32K, D3_SRAM_BASE 0x38000000 64 KB",
-        "interrupts": "the same header's IRQn_Type: external interrupts 0 to 149, of which the SVD-generated interrupts.ldn lacks ECC 145 and adds WWDG1_RST 143 (D542, D560); USART3_IRQn 39",
+        "interrupts": "the same header's IRQn_Type: external interrupts 0 to 149, and RM0433 Rev 9 Table 147, p. 759, which has WWDG1_RST at 143, where the header has none, and the RAMECC interrupt ECC at 145, which the SVD lacks and the policy adds (D560); USART3_IRQn 39",
         "core slots": "ARMv7-M: MemManage 4, BusFault 5, UsageFault 6 and DebugMonitor 12 taken, 7 to 10 and 13 reserved"
       },
       "core": "cortex-m7",
@@ -50,7 +50,7 @@
       "vector_words": 166,
       "stack_top": 604504064,
       "stack_reserved": 16384,
-      "reserved_slots": [7, 8, 9, 10, 13, 58, 80, 81, 82, 83, 139, 142, 161, 163, 164],
+      "reserved_slots": [7, 8, 9, 10, 13, 58, 80, 81, 82, 83, 139, 142, 163, 164],
       "handler_slot": 55,
       "handler_symbol": "usart3",
       "placed_datum": {"symbol": "fast", "region": "DTCM"}
