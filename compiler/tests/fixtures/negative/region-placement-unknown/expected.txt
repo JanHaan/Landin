@@ -1,0 +1,6 @@
+error[L0517]: constrained-reference has no region named NOWHERE
+  --> ../tests/fixtures/negative/region-placement-unknown/program.ldn:1:25
+  |
+1 | link(region: "NOWHERE") table: u32 = 1
+  |                         ^^^^^
+  = note: D547: link(region: "NAME") places a routine or module datum in a region of the selected description, without a section of its own

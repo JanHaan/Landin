@@ -37,6 +37,11 @@ def build(run, refine, program, optimize, specialize):
         modules.add(module)
         origin = ROOT / module if module.startswith(('core/', 'platform/')) else DEVICES / 'generated' / module
         shutil.copytree(origin, source / module)
+    #  A program that imports no device description is given the
+    #  library's constrained reference (D543), so the staged library
+    #  holds it too.
+    shutil.copytree(ROOT / 'platform/cortex_m/reference',
+                    source / 'platform/cortex_m/reference', dirs_exist_ok=True)
     inputs = {str(p.relative_to(source)): sha(p)
               for p in sorted(source.rglob('*.ldn'))}
     (run.out / 'inputs.json').write_text(json.dumps(inputs, indent=2)+'\n')

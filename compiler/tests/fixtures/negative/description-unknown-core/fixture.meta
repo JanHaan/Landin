@@ -1,0 +1,9 @@
+class: negative
+summary: D542: a description names one of the cores refine builds for
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0399
+args: --target=cortex-m0 ../tests/fixtures/negative/description-unknown-core/program.ldn
+expect: expected.txt
+status: 1

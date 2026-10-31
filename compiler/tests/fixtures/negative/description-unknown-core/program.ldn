@@ -1,0 +1,3 @@
+compiler.device("plain")
+compiler.core("cortex-m99")
+compiler.vectors(48)

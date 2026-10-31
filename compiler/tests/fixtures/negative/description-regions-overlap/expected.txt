@@ -1,0 +1,6 @@
+error[L0514]: region MORE overlaps region RAM; the region it overlaps is at ../tests/fixtures/negative/description-regions-overlap/program.ldn:6
+  --> ../tests/fixtures/negative/description-regions-overlap/program.ldn:7:1
+  |
+7 | linker.region("MORE", 0x2000_2000, 16 * 1024, "rw")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D543: no byte is in two regions; make one end where the next begins

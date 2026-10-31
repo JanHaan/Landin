@@ -1,0 +1,1 @@
+linker.region("FLASH", 0, 32 * 1024, "rx")

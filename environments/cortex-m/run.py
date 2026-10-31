@@ -335,6 +335,8 @@ class Run:
         freestanding_execute(self, refine)
         from devices import execute_suite as devices_execute
         devices_execute(self, refine)
+        from descriptions import execute_suite as descriptions_execute
+        descriptions_execute(self, refine)
         from driver import execute_suite as driver_execute
         driver_execute(self, refine)
         from evidence import execute_suite as evidence_execute

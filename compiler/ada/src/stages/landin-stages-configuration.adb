@@ -1224,6 +1224,9 @@ package body Landin.Stages.Configuration is
       Interrupts : Interrupt_Vectors.Vector;
       Built : Firmware.Profile;
       Arm_Depth : Natural := 0;
+      --  A directive refused for its own arguments leaves the description
+      --  short of it; Finish_Profile does not report that again.
+      Description_Refused : Boolean := False;
 
       function Module_For
         (Source : Landin.Source.Source_Id) return Landin.Modules.Module_Id
@@ -1457,10 +1460,12 @@ package body Landin.Stages.Configuration is
          Value : Fixed_Value;
       begin
          if not Validate (Of_Tree, Node) then
+            Description_Refused := True;
             return -2;
          end if;
          Value := Evaluate (Of_Tree, Node);
          if Value.Kind = Bad_Value then
+            Description_Refused := True;
             return -2;
          elsif Value.Kind /= Number
            or else Value.Integer_Value < 0
@@ -1510,6 +1515,7 @@ package body Landin.Stages.Configuration is
          procedure Refuse (At_Node : Syn.Node_Id; Message, Note : String);
          procedure Refuse (At_Node : Syn.Node_Id; Message, Note : String) is
          begin
+            Description_Refused := True;
             Report_Configuration_Rule
               (Bad.Invalid_Description_Directive, Of_Tree, At_Node,
                Message, "D542: " & Note);
@@ -1554,6 +1560,7 @@ package body Landin.Stages.Configuration is
             Highest := 1;
          end if;
          if Count not in Lowest .. Highest then
+            Description_Refused := True;
             Report_Configuration_Rule
               (Bad.Invalid_Description_Directive, Of_Tree, Node,
                Directive & " takes "
@@ -1852,6 +1859,7 @@ package body Landin.Stages.Configuration is
       begin
          if Described = Landin.Modules.No_Module
            or else Device_Site = No_Site
+           or else Description_Refused
          then
             return;
          end if;
