@@ -2,6 +2,11 @@ with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
 
 package body Landin.Targets.Firmware is
+   function Budget return Image_Budget is
+     ((Initialized => Flash_Size,
+       Writable    => RAM_Size,
+       Reserved    => Maximum_Object_Size (Cortex_M)));
+
    function Assembly_Error
      (Text : String; Naked : Boolean;
       Level : Landin.Targets.Levels.Feature_Level) return String

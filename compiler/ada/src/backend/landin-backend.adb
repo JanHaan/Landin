@@ -1,5 +1,6 @@
 with Ada.Containers;
 with Ada.Containers.Generic_Array_Sort;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Backend.Work_Arrays;
 with Landin.Machine;
@@ -10,11 +11,15 @@ package body Landin.Backend is
 
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Element_Total;
+   use type Landin.IR.Atom_Set_Id;
+   use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
    use type Landin.IR.Field_Shape;
    use type Landin.IR.Item_Id;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Byte_Alignment;
+   use type Landin.Layouts.Policy;
+   use type Landin.Types.Folded;
    use type Landin.Types.Type_Kind;
 
    package IR renames Landin.IR;
@@ -1734,5 +1739,122 @@ package body Landin.Backend is
         and then Symbol (Symbol'First .. Symbol'First + Prefix'Length - 1)
           = Prefix;
    end Runs_Before_Thread_Pointer;
+
+   function Scalar_Run
+     (Count : Landin.IR.Element_Total;
+      Size  : Landin.Targets.Scalar_Size;
+      Value : Landin.Types.Folded) return String
+   is
+      function Image (Number : Landin.IR.Element_Total) return String is
+        (Ada.Strings.Fixed.Trim (Number'Image, Ada.Strings.Both));
+      Bytes : constant Landin.IR.Element_Total :=
+        Landin.IR.Element_Total (Landin.Targets.Bytes (Size));
+   begin
+      if Value = 0 then
+         return ".zero " & Image (Count * Bytes);
+      end if;
+      return ".fill " & Image (Count) & ", " & Image (Bytes) & ", "
+        & Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both);
+   end Scalar_Run;
+
+   function Is_Zero_Image
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Shape   : Landin.IR.Field_Shape;
+      Image   : Landin.IR.Aggregate_Field_Image) return Boolean is
+   begin
+      --  A scalar leaf holds its value whatever its form says.
+      if Shape.Kind = IR.Scalar_Field_Shape then
+         return Image.Target = IR.No_Item
+           and then Shape.Atoms = IR.No_Atom_Set
+           and then Image.Value = 0;
+      elsif Image.Form = IR.Absent then
+         return True;
+      end if;
+      case Shape.Kind is
+         when IR.Scalar_Field_Shape =>
+            return False;
+         when IR.Variant_Field_Shape =>
+            return False;
+         when IR.Aggregate_Field_Shape =>
+            if Image.Form /= IR.Nested
+              or else IR.Layout_Of (Of_Unit, Shape) = Landin.Layouts.Packed
+            then
+               return False;
+            end if;
+            for Child in 1 .. Image.Count loop
+               if not Is_Zero_Image
+                 (Of_Unit, Item,
+                  IR.Nth_Aggregate_Field (Of_Unit, Shape, Child),
+                  IR.Descendant_Image_Of (Of_Unit, Item, Image, Child))
+               then
+                  return False;
+               end if;
+            end loop;
+            return True;
+         when IR.Array_Field_Shape =>
+            if Image.Slice then
+               return False;
+            elsif Image.Form = IR.Element_Sequence then
+               for Child in 1 .. Image.Count loop
+                  if not Is_Zero_Image
+                    (Of_Unit, Item, IR.Array_Element_Shape (Of_Unit, Shape),
+                     IR.Descendant_Image_Of (Of_Unit, Item, Image, Child))
+                  then
+                     return False;
+                  end if;
+               end loop;
+               return True;
+            elsif Image.Form not in IR.Finite | IR.Repeated | IR.Hybrid
+              or else IR.Array_Element_Is_Aggregate (Of_Unit, Shape)
+            then
+               return False;
+            end if;
+            if Image.Form in IR.Finite | IR.Hybrid then
+               for Position in 1 .. Image.Count loop
+                  if IR.Nth_Descriptor_Element
+                    (Of_Unit, Item, Image, IR.Part_Position (Position)) /= 0
+                  then
+                     return False;
+                  end if;
+               end loop;
+            end if;
+            return Image.Form = IR.Finite or else Image.Value = 0;
+      end case;
+   end Is_Zero_Image;
+
+   procedure Repeat (Count : Landin.IR.Element_Total) is
+      Width : constant Landin.IR.Element_Total := Repetition_Width;
+      Width_Image : constant String :=
+        Ada.Strings.Fixed.Trim (Width'Image, Ada.Strings.Both);
+      --  Element_Total's 2 ** 64 - 1 has eight base-256 digits.
+      Places : array (0 .. 7) of Landin.IR.Element_Total := [others => 0];
+      Rest : Landin.IR.Element_Total := Count;
+      Highest : Integer := -1;
+   begin
+      while Rest > 0 loop
+         Highest := Highest + 1;
+         Places (Highest) := Rest mod Width;
+         Rest := Rest / Width;
+      end loop;
+      for Place in reverse 0 .. Highest loop
+         if Places (Place) > 0 then
+            if Places (Place) > 1 then
+               Emit (".rept " & Ada.Strings.Fixed.Trim
+                 (Places (Place)'Image, Ada.Strings.Both));
+            end if;
+            for Level in 1 .. Place loop
+               Emit (".rept " & Width_Image);
+            end loop;
+            Emit_Body;
+            for Level in 1 .. Place loop
+               Emit (".endr");
+            end loop;
+            if Places (Place) > 1 then
+               Emit (".endr");
+            end if;
+         end if;
+      end loop;
+   end Repeat;
 
 end Landin.Backend;

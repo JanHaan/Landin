@@ -2,46 +2,6 @@ with Ada.Strings.Fixed;
 with Landin.Targets.Firmware;
 
 package body Landin.Backend.Firmware is
-   use type Landin.Targets.Byte_Count;
-   use type Landin.IR.Item_Kind;
-   use type Landin.Types.Type_Kind;
-
-   function Materialization_Fits (Of_Unit : Landin.IR.Unit) return Boolean is
-      Budget : Landin.Targets.Byte_Count := 8 * 1024 * 1024;
-   begin
-      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
-         declare
-            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
-            Bytes : Landin.Targets.Byte_Count;
-            Alignment : Landin.Targets.Byte_Alignment;
-         begin
-            if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
-               if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Aggregate
-               then
-                  Bytes := Datum_Layout
-                    (Of_Unit, Item, Landin.Targets.Cortex_M).Size;
-               elsif Landin.IR.Result_Of (Of_Unit, Item)
-                 = Landin.Types.Fixed_Array
-               then
-                  Field_Extent
-                    (Of_Unit, Landin.IR.Whole_Array_Shape (Of_Unit, Item),
-                     Landin.Targets.Cortex_M, Bytes, Alignment);
-               else
-                  Bytes := Landin.Targets.Byte_Count
-                    (Landin.Targets.Bytes (Landin.Types.Storage_Size
-                      (Landin.IR.Result_Of (Of_Unit, Item),
-                       Landin.Targets.Cortex_M)));
-               end if;
-               if Bytes > Budget then
-                  return False;
-               end if;
-               Budget := Budget - Bytes;
-            end if;
-         end;
-      end loop;
-      return True;
-   end Materialization_Fits;
-
    LF : constant Character := Character'Val (10);
 
    function Number (Value : Landin.Targets.Byte_Count) return String is

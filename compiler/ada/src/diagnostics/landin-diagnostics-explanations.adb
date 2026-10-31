@@ -1032,10 +1032,25 @@ package body Landin.Diagnostics.Explanations is
                "A verified frame is larger than x86-64's signed 32-bit d"
                & "isplacement reaches. Move the large local storage into a"
                & " module value or an allocation.",
-            when Catalogue.Image_Materialization_Limit =>
-               "Firmware static images exceed what the assembler is give"
-               & "n to materialize [1640]. Make the static data smaller, o"
-               & "r hold it in fewer, larger values.",
+            when Catalogue.Image_Budget_Exceeded =>
+               "The program's static images exceed the image budget, whi"
+               & "ch every target checks before anything is emitted (D537)"
+               & ". The budget counts every module value, reached or not a"
+               & "nd before section garbage collection, because the assemb"
+               & "ler is given every one. A firmware image is held to its "
+               & "profile: its written images to the profile's flash and i"
+               & "ts mutable ones to its RAM, 32 KiB and 16 KiB in the con"
+               & "strained reference profile. Any other image is held to h"
+               & "ow far the target addresses static data: 2 GiB under x86"
+               & "-64's small code model, Darwin's static image and RV64's"
+               & " AUIPC, 4 GiB under arm64's ADRP, and the 32-bit address"
+               & " space on Cortex-M. Zero images, which take no object by"
+               & "tes, are held only to the address space. The message giv"
+               & "es what the images take, the part of the budget they exc"
+               & "eed and what sets it. Make the static data smaller, or a"
+               & "llocate it when the program runs; a value that is zero u"
+               & "ntil the program writes it reserves its bytes rather tha"
+               & "n writing them.",
             when Catalogue.Panic_Contract_Invalid =>
                "The panic handler is invalid, or the program has more ch"
                & "eck sites than their identifier space holds [1670].",
@@ -1660,7 +1675,7 @@ package body Landin.Diagnostics.Explanations is
                "",
             when Catalogue.Frame_Not_Addressable =>
                "",
-            when Catalogue.Image_Materialization_Limit =>
+            when Catalogue.Image_Budget_Exceeded =>
                "",
             when Catalogue.Panic_Contract_Invalid =>
                "",

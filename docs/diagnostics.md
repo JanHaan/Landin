@@ -1494,8 +1494,19 @@ Move the large local storage into a module value or an allocation.
 
 ### L0505
 
-Firmware static images exceed what the assembler is given to materialize
-[1640]. Make the static data smaller, or hold it in fewer, larger values.
+The program's static images exceed the image budget, which every target
+checks before anything is emitted (D537). The budget counts every module
+value, reached or not and before section garbage collection, because the
+assembler is given every one. A firmware image is held to its profile: its
+written images to the profile's flash and its mutable ones to its RAM, 32 KiB
+and 16 KiB in the constrained reference profile. Any other image is held to
+how far the target addresses static data: 2 GiB under x86-64's small code
+model, Darwin's static image and RV64's AUIPC, 4 GiB under arm64's ADRP, and
+the 32-bit address space on Cortex-M. Zero images, which take no object
+bytes, are held only to the address space. The message gives what the images
+take, the part of the budget they exceed and what sets it. Make the static
+data smaller, or allocate it when the program runs; a value that is zero
+until the program writes it reserves its bytes rather than writing them.
 
 ### L0506
 
