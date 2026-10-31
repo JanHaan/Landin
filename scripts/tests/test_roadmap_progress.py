@@ -236,8 +236,13 @@ Depends on: none
             assert_next(headings[title], title)
             complete([headings[title]])
         assert_next(devices, "Describe devices")
-        complete([devices, headings["The first board"],
-                  headings["Thumb-2, Cortex-M33 and M4F"]])
+        complete([devices])
+        #  Learning a chip from its SVD follows the descriptions it fills.
+        assert_next(headings["Learn a device from its SVD"],
+                    "Learn a device from its SVD")
+        complete([headings["Learn a device from its SVD"],
+                  headings["The first board"],
+                  headings["Thumb-2, Cortex-M33 and M7"]])
         assert_next(headings["RISC-V microcontrollers"], "RISC-V microcontrollers")
         #  Completion of the newer Cortex cores alone cannot open the
         #  freestanding library before the agreed device-phase boundary.
