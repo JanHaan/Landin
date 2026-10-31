@@ -1,7 +1,10 @@
---  D474: a program that prepares a stack selects a handler that calls
---  through an `any` value.  What the call reaches is a run-time fact, so
---  the handler's depth on the margin it runs on cannot be known, and the
---  compiler refuses it, naming the opening and where it is.
+--  D474: a program that prepares a stack selects a handler that calls a
+--  C routine.  What the C library's routine takes of the stack is not the
+--  compiler's to know, so the handler's depth on the margin it runs on
+--  cannot be known, and the compiler refuses it, naming the opening and
+--  where it is.  Its call through `any counter` would not open it: the
+--  program holds one provider of `counter`, which closes that call
+--  (D570).
 import core/panic
 
 counter: type = concept (provider: type)
@@ -24,12 +27,14 @@ mut fibre_saved: usize = 0
 mut held: tally = (sum: 3)
 mut seen: i32 = 0
 
+extern(c) labs: (value: i64) -> (result: i64)
+
 erased: (item: any counter) -> (sum: u32) =
     sum = item.total()
 end erased
 
 public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
-    seen = i32(erased(any(addr held)))
+    seen = i32(erased(any(addr held))) + i32(labs(-4))
     _ = kind
     _ = site
     compiler.stack_switch(addr fibre_saved, main_saved)

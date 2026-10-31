@@ -19681,7 +19681,8 @@ twice for a check failing in its own calls (D467); the margin is 640, 640,
 the handler's deepest path, at the handler. A handler whose calls reach an
 opening of D468, `any`, `evidence`, `function value`, `foreign`,
 `recursion`, `helper` or `assembly`, has no depth to compare and is refused
-too, naming the first opening's kind and routine and pointing at it, with
+too, though since D570 a call through `any`, a table or a function value
+opens it only when the program holds no routine it can reach, naming the first opening's kind and routine and pointing at it, with
 how many more there are. The depth is the emitted code's, on the target and
 profile being compiled, so the rule is decided after emission and before
 anything is written, for `--emit=asm` and `--emit=exe` alike, a dry run
@@ -19715,10 +19716,12 @@ a handler that switches away and the default report on every target with
 a native backend, each within its margin; `a handler past the margin is
 refused`, a handler with a 512-byte frame refused on every one of those
 targets with its own figures; `an open handler is refused`, a handler that
-calls through an `any` value, named where the call is; and `without a
+reaches a recursion, named where the call is, and the same handler through
+an `any` value emitted on x86-64 and arm64, where it fits; and `without a
 prepared stack any handler is emitted`, both handlers accepted with no
 `compiler.stack_prepare`; `negative/stack-handler-exceeds-margin` and
-`negative/stack-handler-opens-its-graph` on Linux x86-64; and the two
+`negative/stack-handler-opens-its-graph`, whose handler calls a C routine,
+on Linux x86-64; and the two
 runtime fixtures above, which run on every target and fit.
 
 ### D475 — The switch routines' names stand alone, and the switch keeps a frame record
@@ -21058,9 +21061,11 @@ every task recursive. All were declined.
 **Pinned by** the `stack report` suite's `each opening is named`, whose
 calls through a function value, `any` and a generic's table are closed by
 the one routine each can reach; `a fibre's entry through any is closed`, on
-every target; and `an open handler is refused`, whose handler reaches a
+every target; `an open handler is refused`, whose handler reaches a
 recursion and whose same handler through `any` is judged against the
-margin instead.
+margin instead, and emitted where it fits; and
+`negative/stack-handler-opens-its-graph`, whose handler is refused for its
+C call and not for its call through `any`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
