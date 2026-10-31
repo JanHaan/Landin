@@ -4610,8 +4610,10 @@ def third_party_notices():
             ("The Nunito Sans Project Authors", "SIL Open Font License"),
         "highlight/tree-sitter/src/tree_sitter/LICENSE":
             ("The MIT License (MIT)", "Copyright (c) 2018 Max Brunsfeld"),
-        "devices/inputs/LICENSE.pico-sdk":
+        "devices/notices/LICENSE.pico-sdk":
             ("Raspberry Pi (Trading) Ltd", "Redistribution and use"),
+        "devices/notices/LICENSE-Apache-2.0.stm32h7":
+            ("Apache License", "Version 2.0, January 2004"),
     }
     for relative, markers in notices.items():
         if relative not in inventory:

@@ -291,9 +291,12 @@ def refusal(run, elf, name):
 def execute_suite(parent, refine, profiles=PROFILES, cases=None):
     root = parent.out / 'devices'
     root.mkdir()
-    parent.command('device-regeneration', [sys.executable, DEVICES / 'generate.py'])
-    parent.command('device-oracles', [sys.executable, DEVICES / 'test.py'])
     refine = refine.resolve(strict=True)
+    # refine svd regenerates every device file from its pinned SVD, which
+    # the test fetches by hash, and the vendor headers check what it made.
+    parent.command('device-regeneration-and-oracles',
+                   [sys.executable, DEVICES / 'test.py', '--refine', refine,
+                    '--require-inputs'])
     compiler_hash = sha(refine)
     parent.command('device-refine-identity', [refine, '--identify'])
     parent.command('device-source-refusals', [sys.executable, DEVICES / 'check_sources.py',

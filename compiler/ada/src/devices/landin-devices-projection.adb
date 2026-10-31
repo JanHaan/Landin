@@ -501,6 +501,8 @@ package body Landin.Devices.Projection is
          end loop;
       end Read_Encodings;
 
+      type Owners is array (1 .. 4) of X.Element;
+
       --  What a register's fields have made so far.
       type Register_State is record
          Key : US.Unbounded_String;
@@ -597,9 +599,15 @@ package body Landin.Devices.Projection is
                     & Decimal (Word (High)) & LF);
          Open (Rows, In_Object);
          Member (Rows, "access");
-         String_Value (Rows, (if Has (Field, "access")
-                              then Value_Of (Field, "access")
-                              else US.To_String (State.Register_Access)));
+         if Has (Field, "access") then
+            String_Value (Rows, Value_Of (Field, "access"));
+         elsif US.Length (State.Register_Access) > 0 then
+            String_Value (Rows, US.To_String (State.Register_Access));
+         else
+            Fail (Inconsistent_Device, "the SVD gives " & Where & " no"
+                  & " access, at the field, its register, its peripheral or"
+                  & " the device", Field);
+         end if;
          Member (Rows, "encodings");
          Open (Rows, In_Array);
          for Value of Values loop
@@ -785,9 +793,16 @@ package body Landin.Devices.Projection is
             Key & "'s resetMask");
          State.Key := US.To_Unbounded_String (Key);
          State.Reg := US.To_Unbounded_String (Reg);
-         State.Register_Access := US.To_Unbounded_String
-           (Trimmed (X.Text (Document, Inherited
-              ("access", Key, Element, Instance, Template))));
+         --  A register may leave its access to its fields, which must
+         --  then each say theirs.
+         for Owner of Owners'(Element, Instance, Template, Device) loop
+            if US.Length (State.Register_Access) = 0
+              and then Has (Owner, "access")
+            then
+               State.Register_Access := US.To_Unbounded_String
+                 (Value_Of (Owner, "access"));
+            end if;
+         end loop;
          Open (Rows, In_Object);
          Member (Rows, "address");
          Number_Value (Rows, Base + Offset);
@@ -868,7 +883,11 @@ package body Landin.Devices.Projection is
          end if;
          Close (Rows, In_Object);
          Member (Rows, "register_access");
-         String_Value (Rows, US.To_String (State.Register_Access));
+         if US.Length (State.Register_Access) > 0 then
+            String_Value (Rows, US.To_String (State.Register_Access));
+         else
+            Raw (Rows, "null");
+         end if;
          if Policy.Has_Reset_Value then
             Member (Rows, "reset_correction");
             Open (Rows, In_Object);

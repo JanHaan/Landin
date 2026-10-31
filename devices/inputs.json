@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "inputs": {
+    "rp2040/RP2040.svd": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/RP2040.svd",
+      "sha256": "49f53398e0496b6de0849faf17a9f4e58565af311b98b727e4ebeee964619bc6"
+    },
+    "rp2040/dma.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/dma.h",
+      "sha256": "bf7892e0df82439f896ffae07eca3e08181800fd3b537c04450192c31ce9144f"
+    },
+    "rp2040/io_bank0.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/io_bank0.h",
+      "sha256": "1a17be1e3e721d8e74bd31d5ef46e23691db52d23147a92cf31219a108949990"
+    },
+    "rp2040/sio.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/sio.h",
+      "sha256": "362bab775397e8c886a33adc010f76bec24701bf753d17dab1d95accc5a259e5"
+    },
+    "rp2040/timer.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/timer.h",
+      "sha256": "6ff25121664b3a3057c4271b48b2980d31f2ab3ea74bc4310eea8183bad35def"
+    },
+    "rp2040/uart.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/uart.h",
+      "sha256": "da0efa09d5130e0584a50a75694d28a64311d5435656ef3e02c15e33ce259f98"
+    },
+    "stm32h753/STM32H753.svd": {
+      "url": "https://raw.githubusercontent.com/Open-CMSIS-Pack/STM32H7xx_DFP/4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d/CMSIS/SVD/STM32H753.svd",
+      "sha256": "816c5073dfbfcb63749630fd73b5f5c65d99a8acbd98851e4935e936eff5133a"
+    },
+    "stm32h753/stm32h753xx.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/cmsis-device-h7/81db1ec63cdc191fae1565b772da3ea5aa29a683/Include/stm32h753xx.h",
+      "sha256": "4f6def439a9fa94705303fe227d34308048c44bd36263d311aa54cc94f8398f5"
+    }
+  }
+}
