@@ -5508,6 +5508,26 @@ package body Landin.Backend.Cortex_M is
          end if;
       end Emit_Scalar_Run;
 
+      --  Every module datum is typed and sized in the symbol table, as the
+      --  other ELF backends' are, so that the image's symbol table says
+      --  each one's extent, with an initial image or without: the
+      --  Cortex-M lane identifies fibre backing in static RAM by it
+      --  (D470).  The type precedes the label and the size, measured from
+      --  the label, follows the datum's last byte.
+      procedure Begin_Object (Item : Landin.IR.Item_Id);
+
+      procedure Begin_Object (Item : Landin.IR.Item_Id) is
+      begin
+         Emit (".type " & Symbol (Item) & ", %object");
+      end Begin_Object;
+
+      procedure End_Object (Item : Landin.IR.Item_Id);
+
+      procedure End_Object (Item : Landin.IR.Item_Id) is
+      begin
+         Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
+      end End_Object;
+
       procedure Emit_Datum (Item : Landin.IR.Item_Id);
 
       procedure Emit_Slice_Image_Datum (Item : Landin.IR.Item_Id);
@@ -5959,11 +5979,13 @@ package body Landin.Backend.Cortex_M is
          Put
            (Character'Val (9) & ".balign "
             & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
+         Begin_Object (Item);
          Put (Symbol (Item) & ":");
          if not Is_Array
            and then Landin.IR.Layout_Of (Of_Unit, Item) = Landin.Layouts.Packed
          then
             Emit_Packed ((others => <>), (others => <>), Top => True);
+            End_Object (Item);
             return;
          end if;
 
@@ -6002,6 +6024,7 @@ package body Landin.Backend.Cortex_M is
          if Size > Written then
             Emit_Zero (Size - Written);
          end if;
+         End_Object (Item);
       end Emit_Recursive_Image_Datum;
 
       --  Whether a module value has an absent zero image, and so is storage
@@ -6108,10 +6131,11 @@ package body Landin.Backend.Cortex_M is
                Put (Character'Val (9) & ".globl " & Symbol (Item));
             end if;
 
-               Put (Character'Val (9) & ".balign "
+            Put (Character'Val (9) & ".balign "
                  & Trimmed
                      (Landin.Targets.Byte_Alignment'Image
                         (Landin.Targets.Alignment_Of (Facts, Held))));
+            Begin_Object (Item);
             Put (Symbol (Item) & ":");
 
             if Landin.IR.Is_Repeated_Image (Of_Unit, Item) then
@@ -6151,7 +6175,7 @@ package body Landin.Backend.Cortex_M is
                                (Of_Unit, Item, Position))));
                end loop;
             end if;
-
+            End_Object (Item);
          end;
       end Emit_Array_Image_Datum;
 
@@ -6169,6 +6193,7 @@ package body Landin.Backend.Cortex_M is
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
          Put (Character'Val (9) & ".balign 8");
+         Begin_Object (Item);
          Put (Symbol (Item) & ":");
          declare
             Offset : constant Landin.Targets.Byte_Count :=
@@ -6191,6 +6216,7 @@ package body Landin.Backend.Cortex_M is
             & Trimmed
                 (Landin.IR.Element_Total'Image
                    (Landin.IR.Slice_Image_Length (Of_Unit, Item))));
+         End_Object (Item);
       end Emit_Slice_Image_Datum;
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
@@ -6218,8 +6244,10 @@ package body Landin.Backend.Cortex_M is
               & Trimmed
                   (Landin.Targets.Byte_Alignment'Image
                      (Landin.Targets.Alignment_Of (Facts, Held))));
+         Begin_Object (Item);
          Put (Symbol (Item) & ":");
          Emit (Directive (Held) & " " & Written);
+         End_Object (Item);
       end Emit_Datum;
 
    begin
@@ -6235,8 +6263,12 @@ package body Landin.Backend.Cortex_M is
       then
          Emit (".section .bss.landin_panic,""aw"",%nobits");
          Emit (".balign 4");
+         --  Cortex-M's local prefix is kept in the symbol table (D469),
+         --  so the compiler's own cells are typed and sized as data are.
+         Emit (".type " & Local_Prefix & "landin_panic_active, %object");
          Put (Local_Prefix & "landin_panic_active:");
          Emit (".space 4");
+         Emit (".size " & Local_Prefix & "landin_panic_active, 4");
       end if;
       Emit (".syntax unified");
       --  ARMv6-M keeps naming its core.  A higher level names its
@@ -6418,8 +6450,10 @@ package body Landin.Backend.Cortex_M is
          --  D471's cell, zero until a switch resumes a prepared stack.
          Emit (".pushsection .bss.landin_stack_limit,""aw"",%nobits");
          Emit (".balign 4");
+         Emit (".type " & Stack_Limit & ", %object");
          Put (Stack_Limit & ":");
          Emit (".space 4");
+         Emit (".size " & Stack_Limit & ", 4");
          Emit (".popsection");
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
@@ -6504,6 +6538,12 @@ package body Landin.Backend.Cortex_M is
                      Emit (".section .rodata.landin_evidence_"
                        & Trimmed (Id'Image) & ",""a"",%progbits");
                      Emit (".balign 4");
+                     --  Typed and sized as data are, the alias with it.
+                     Emit (".type " & Evidence_Symbol (Id) & ", %object");
+                     if Alias_Next then
+                        Emit (".type " & Evidence_Symbol
+                          (Landin.IR.Evidence_Id (Index + 1)) & ", %object");
+                     end if;
                      Put (Evidence_Symbol (Id) & ":");
                      if Alias_Next then
                         Put (Evidence_Symbol
@@ -6524,6 +6564,16 @@ package body Landin.Backend.Cortex_M is
                            Emit (".long 0");
                         end if;
                      end loop;
+                     Emit (".size " & Evidence_Symbol (Id) & ", . - "
+                       & Evidence_Symbol (Id));
+                     if Alias_Next then
+                        declare
+                           Alias : constant String := Evidence_Symbol
+                             (Landin.IR.Evidence_Id (Index + 1));
+                        begin
+                           Emit (".size " & Alias & ", . - " & Alias);
+                        end;
+                     end if;
                   end if;
                end;
             end loop;

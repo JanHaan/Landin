@@ -6802,7 +6802,8 @@ package body Landin.Tests.Backend_Suite is
                        (Text, HT & ".section .rodata.landin_evidence_"
                         & Suffix & ",""a"",%progbits" & LF
                         & HT & ".balign 4" & LF
-                        & "Llandin_evidence_" & Suffix & ":" & LF),
+                        & HT & ".type Llandin_evidence_" & Suffix
+                        & ", %object" & LF),
                      "physical table and section identities agree");
                end;
             end if;
@@ -6813,6 +6814,12 @@ package body Landin.Tests.Backend_Suite is
                & "Llandin_evidence_2:" & LF & HT & ".long 4" & LF
                & HT & ".long 4" & LF & HT & ".long read_first" & LF),
             "identical direct and erased tables share one complete section");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, HT & ".size Llandin_evidence_1, . - Llandin_evidence_1"
+               & LF & HT
+               & ".size Llandin_evidence_2, . - Llandin_evidence_2" & LF),
+            "both identities of a table are typed and sized as data are");
          Landin.Testing.Check
            (Item, not Contains (Text, HT & ".long read_second" & LF)
              and then Contains

@@ -188,25 +188,138 @@ package body Landin.Backend.RiscV is
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Allocation_Plan
    is
-      pragma Unreferenced (Options);
+      Value_Count : constant Natural := Landin.IR.Value_Count (Of_Unit, Item);
       Result : Allocation_Plan;
    begin
       Result.Values := Location_Vectors.To_Vector
         (Value_Location'(others => <>),
-         Ada.Containers.Count_Type (Landin.IR.Value_Count (Of_Unit, Item)));
+         Ada.Containers.Count_Type (Value_Count));
       Result.Saves := Declared (Of_Unit, Item);
-      for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
-         declare
-            Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
-              (Of_Unit, Item, Landin.IR.Value_Id (Index));
-         begin
-            if Kind in Landin.Types.Scalar_Name then
-               Result.Homes := Result.Homes + 1;
-               Result.Values (Index).Home := Result.Homes;
-               Result.Values (Index).Size := Size_Of (Kind, Facts);
-            end if;
-         end;
-      end loop;
+      if Options.Optimize = Landin.Optimization.None then
+         for Index in 1 .. Value_Count loop
+            declare
+               Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Index));
+            begin
+               if Kind in Landin.Types.Scalar_Name then
+                  Result.Homes := Result.Homes + 1;
+                  Result.Values (Index).Home := Result.Homes;
+                  Result.Values (Index).Size := Size_Of (Kind, Facts);
+               end if;
+            end;
+         end loop;
+         return Result;
+      end if;
+      --  Size and speed reuse a scalar value's home once the value is
+      --  dead, as arm64 does: a value lives within its block (the
+      --  verifier refuses an operand from another), from the operation
+      --  that defines it through its last reader, so a home freed after
+      --  that reader may hold a later value of the same width.  A home
+      --  is released only after the operation that reads it last, so an
+      --  operation never writes its result over an operand it still
+      --  reads.  Evidence_Self reads its projection's receiver, which is
+      --  therefore live until it.
+      declare
+         type Counts is array (Positive range <>) of Natural;
+         package Count_Buffers is new Landin.Backend.Work_Arrays
+           (Natural, Counts, 0);
+         Start_Data, Last_Data, Sequence_Data, Next_Release_Data,
+           Next_Free_Data : Count_Buffers.Buffer (Value_Count);
+         Release_Data : Count_Buffers.Buffer (Value_Count + 1);
+         Starts : Counts renames Start_Data.Data.all;
+         Lasts : Counts renames Last_Data.Data.all;
+         Sequence : Counts renames Sequence_Data.Data.all;
+         Releases : Counts renames Release_Data.Data.all;
+         Next_Release : Counts renames Next_Release_Data.Data.all;
+         Next_Free : Counts renames Next_Free_Data.Data.all;
+         Free_Homes : array (Held_Size) of Natural := [others => 0];
+         Tick : Natural := 0;
+      begin
+         for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+            for Position in 1 .. Landin.IR.Length
+              (Of_Unit, Item, Landin.IR.Block_Id (Block))
+            loop
+               declare
+                  Index : constant Positive := Positive
+                    (Landin.IR.Nth_Value
+                       (Of_Unit, Item, Landin.IR.Block_Id (Block),
+                        Position));
+               begin
+                  Tick := Tick + 1;
+                  Sequence (Tick) := Index;
+                  Starts (Index) := Tick;
+                  Lasts (Index) := Tick;
+               end;
+            end loop;
+         end loop;
+         for Position in 1 .. Tick loop
+            declare
+               Index : constant Positive := Sequence (Position);
+               Value : constant Landin.IR.Value_Id :=
+                 Landin.IR.Value_Id (Index);
+            begin
+               for Which in 1 .. Landin.IR.Operand_Count
+                 (Of_Unit, Item, Value)
+               loop
+                  declare
+                     Operand : constant Positive := Positive
+                       (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Which));
+                  begin
+                     Lasts (Operand) :=
+                       Natural'Max (Lasts (Operand), Position);
+                  end;
+               end loop;
+               if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                 = Landin.IR.Evidence_Self
+               then
+                  declare
+                     Receiver : constant Positive := Positive
+                       (Landin.IR.Nth_Operand
+                          (Of_Unit, Item,
+                           Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1),
+                           1));
+                  begin
+                     Lasts (Receiver) :=
+                       Natural'Max (Lasts (Receiver), Position);
+                  end;
+               end if;
+            end;
+         end loop;
+         for Position in 1 .. Tick loop
+            declare
+               Index : constant Positive := Sequence (Position);
+               Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Index));
+               Released : Natural := Releases (Position);
+            begin
+               while Released /= 0 loop
+                  declare
+                     Old : Value_Location renames Result.Values (Released);
+                  begin
+                     Next_Free (Old.Home) := Free_Homes (Old.Size);
+                     Free_Homes (Old.Size) := Old.Home;
+                     Released := Next_Release (Released);
+                  end;
+               end loop;
+               if Kind in Landin.Types.Scalar_Name then
+                  declare
+                     Place : Value_Location renames Result.Values (Index);
+                  begin
+                     Place.Size := Size_Of (Kind, Facts);
+                     if Free_Homes (Place.Size) /= 0 then
+                        Place.Home := Free_Homes (Place.Size);
+                        Free_Homes (Place.Size) := Next_Free (Place.Home);
+                     else
+                        Result.Homes := Result.Homes + 1;
+                        Place.Home := Result.Homes;
+                     end if;
+                     Next_Release (Index) := Releases (Lasts (Index) + 1);
+                     Releases (Lasts (Index) + 1) := Index;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
       return Result;
    end Allocate;
 

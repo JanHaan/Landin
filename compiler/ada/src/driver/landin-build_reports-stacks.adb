@@ -1,5 +1,6 @@
 with Ada.Characters.Handling;
 with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Hash;
@@ -18,6 +19,7 @@ package body Landin.Build_Reports.Stacks is
    package IR renames Landin.IR;
    use type IR.Item_Id;
    use type IR.Item_Kind;
+   use type IR.Signature_Id;
    use type IR.Opcode;
    use type IR.Declaration_Id;
    use type Landin.Memory.Operation;
@@ -275,6 +277,126 @@ package body Landin.Build_Reports.Stacks is
       procedure Call
         (From, To : IR.Item_Id; Site : Landin.Provenance.Origin);
 
+      --  D570: the routines a call through a table or a function value
+      --  may reach, which the program fixes.  A table's entry is a
+      --  routine of its concept's tables (D374); a function value is a
+      --  routine whose address the program exposes, or an entry it may
+      --  project, with the call's signature.  Each list is made once.
+      package Signature_Maps is new Ada.Containers.Ordered_Maps
+        (Key_Type => Natural, Element_Type => Index_Vectors.Vector,
+         "=" => Index_Vectors."=");
+      Exposed : Index_Vectors.Vector;
+      Exposure_Read : Boolean := False;
+      By_Signature : Signature_Maps.Map;
+
+      procedure Note_Exposed (Id : IR.Item_Id);
+
+      procedure Note_Exposed (Id : IR.Item_Id) is
+      begin
+         if not Exposed.Contains (Positive (Id)) then
+            Exposed.Append (Positive (Id));
+         end if;
+      end Note_Exposed;
+
+      --  A routine a call may reach: an emitted routine, or one the link
+      --  supplies, whose call is then foreign.  A routine nothing emitted
+      --  cannot be reached, since what named it was left out (D374).
+      function Reachable (Id : IR.Item_Id) return Boolean
+        is (Id /= IR.No_Item
+            and then IR.Kind_Of (Unit, Id) = IR.Routine
+            and then (Emitted (Id) or else IR.Is_External (Unit, Id)));
+
+      function In_Family
+        (Table : IR.Evidence_Id; Which : Natural)
+         return Index_Vectors.Vector;
+
+      function In_Family
+        (Table : IR.Evidence_Id; Which : Natural)
+         return Index_Vectors.Vector
+      is
+         Found : Index_Vectors.Vector;
+         Family : constant Natural := IR.Evidence_Family (Unit, Table);
+         Erased : constant Boolean := IR.Evidence_Is_Erased (Unit, Table);
+      begin
+         if Family = 0 or else Which = 0 then
+            return Found;
+         end if;
+         for Other in 1 .. IR.Evidence_Count (Unit) loop
+            declare
+               Id : constant IR.Evidence_Id := IR.Evidence_Id (Other);
+            begin
+               if IR.Evidence_Family (Unit, Id) = Family
+                 and then IR.Evidence_Is_Erased (Unit, Id) = Erased
+                 and then Which <= IR.Evidence_Entry_Count (Unit, Id)
+               then
+                  declare
+                     Target : constant IR.Item_Id :=
+                       IR.Evidence_Entry_Target (Unit, Id, Which);
+                  begin
+                     if Reachable (Target)
+                       and then not Found.Contains (Positive (Target))
+                     then
+                        Found.Append (Positive (Target));
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+         return Found;
+      end In_Family;
+
+      function With_Signature
+        (Signature : IR.Signature_Id) return Index_Vectors.Vector;
+
+      function With_Signature
+        (Signature : IR.Signature_Id) return Index_Vectors.Vector
+      is
+         Found : Index_Vectors.Vector;
+
+         procedure Offer (Id : IR.Item_Id; Held : IR.Signature_Id);
+
+         procedure Offer (Id : IR.Item_Id; Held : IR.Signature_Id) is
+         begin
+            if Reachable (Id) and then IR.Holds (Unit, Held)
+              and then not Found.Contains (Positive (Id))
+              and then IR.Signatures_Agree (Unit, Signature, Held)
+            then
+               Found.Append (Positive (Id));
+            end if;
+         end Offer;
+      begin
+         if By_Signature.Contains (Natural (Signature)) then
+            return By_Signature (Natural (Signature));
+         end if;
+         if not Exposure_Read then
+            IR.Visit_Address_Exposures_Beside_Evidence
+              (Unit, Note_Exposed'Access);
+            Exposure_Read := True;
+         end if;
+         for Id of Exposed loop
+            Offer (IR.Item_Id (Id),
+                   IR.Signature_Of (Unit, IR.Item_Id (Id)));
+         end loop;
+         --  A projected entry is a function value too: an erased table's
+         --  with the signature its dispatch takes.
+         for Table in 1 .. IR.Evidence_Count (Unit) loop
+            for Which in 1 .. IR.Evidence_Entry_Count
+              (Unit, IR.Evidence_Id (Table))
+            loop
+               if IR.Evidence_Entry_Target
+                 (Unit, IR.Evidence_Id (Table), Which) /= IR.No_Item
+               then
+                  Offer (IR.Evidence_Entry_Target
+                           (Unit, IR.Evidence_Id (Table), Which),
+                         IR.Evidence_Entry_Dispatch_Signature
+                           (Unit, IR.Evidence_Id (Table), Which));
+               end if;
+            end loop;
+         end loop;
+         By_Signature.Insert (Natural (Signature), Found);
+         return Found;
+      end With_Signature;
+
       procedure Call
         (From, To : IR.Item_Id; Site : Landin.Provenance.Origin) is
       begin
@@ -351,6 +473,24 @@ package body Landin.Build_Reports.Stacks is
          Op : constant IR.Opcode := IR.Op_Of (Unit, Within, Callee);
          Source : constant IR.Value_Id := Traced (Within, Callee);
          Kind : constant IR.Opcode := IR.Op_Of (Unit, Within, Source);
+         --  Each routine of Candidates, or the opening Kind when there is
+         --  none.
+         procedure Call_Each
+           (Candidates : Index_Vectors.Vector; Kind : Opening_Kind);
+
+         procedure Call_Each
+           (Candidates : Index_Vectors.Vector; Kind : Opening_Kind) is
+         begin
+            if Candidates.Is_Empty then
+               Open (Kind, Within, Site);
+            end if;
+            for Id of Candidates loop
+               Call (Within, IR.Item_Id (Id), Site);
+            end loop;
+         end Call_Each;
+
+         Signature : constant IR.Signature_Id :=
+           IR.Call_Signature (Unit, Within, Value);
       begin
          if Op = IR.Function_Address then
             Call (Within, IR.Callee_Of (Unit, Within, Callee), Site);
@@ -370,15 +510,34 @@ package body Landin.Build_Reports.Stacks is
                         IR.Nth_Operand (Unit, Within, Callee, 1)),
                      IR.Evidence_Entry_Of (Unit, Within, Callee)),
                   Site);
-         elsif Kind = IR.Evidence_Function then
-            Open ((if IR.Evidence_Is_Erased
-                     (Unit, IR.Evidence_Of (Unit, Within, Source))
-                   then Any_Call else Evidence_Call),
-                  Within, Site);
-         elsif Kind = IR.Code_Address then
-            Open (Foreign_Call, Within, Site);
-         else
+         elsif Op = IR.Evidence_Function then
+            --  D570: the entry of whichever table of its concept the
+            --  value carries.
+            Call_Each
+              (In_Family (IR.Evidence_Of (Unit, Within, Callee),
+                          IR.Evidence_Entry_Of (Unit, Within, Callee)),
+               (if IR.Evidence_Is_Erased
+                  (Unit, IR.Evidence_Of (Unit, Within, Callee))
+                then Any_Call else Evidence_Call));
+         elsif Kind = IR.Code_Address
+           or else (Signature /= IR.No_Signature
+                    and then IR.Signature_Uses_C_ABI (Unit, Signature))
+         then
+            --  A C function value may hold what C made.
+            Open ((if Kind = IR.Code_Address then Foreign_Call
+                   else Function_Value), Within, Site);
+         elsif Signature = IR.No_Signature then
             Open (Function_Value, Within, Site);
+         else
+            --  D570: a function value, however it was kept, holds a
+            --  routine the program exposes with the call's signature.
+            Call_Each
+              (With_Signature (Signature),
+               (if Kind = IR.Evidence_Function
+                then (if IR.Evidence_Is_Erased
+                        (Unit, IR.Evidence_Of (Unit, Within, Source))
+                      then Any_Call else Evidence_Call)
+                else Function_Value));
          end if;
       end Indirect;
 

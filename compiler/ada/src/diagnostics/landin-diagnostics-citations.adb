@@ -2218,6 +2218,9 @@ package body Landin.Diagnostics.Citations is
                & "t",
             when 547 =>
                "A declaration can be placed in a named region",
+            when 570 =>
+               "The depth report closes a call through a table or a func"
+               & "tion value",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -2594,6 +2597,9 @@ package body Landin.Diagnostics.Citations is
             when 531 =>
                "A released compiler carries no debug information, which "
                & "ships beside it",
+            when 571 =>
+               "A round's yield calls nothing beneath it but its sweep, "
+               & "its idler and its switch",
             when others => "");
 
    function Decision_Section (Number : Natural) return String
@@ -3360,6 +3366,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 547 =>
                "Decisions: The toolchain, C and the machine",
+            when 570 =>
+               "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
             when 152 =>
@@ -3657,6 +3665,8 @@ package body Landin.Diagnostics.Citations is
             when 527 =>
                "Decisions: The core library and the derived programs",
             when 531 =>
+               "Decisions: The core library and the derived programs",
+            when 571 =>
                "Decisions: The core library and the derived programs",
             when others => "");
 
@@ -4817,6 +4827,9 @@ package body Landin.Diagnostics.Citations is
             when 547 =>
                "https://www.701.dev/spec.html#d547-a-declaration-can-be-"
                & "placed-in-a-named-region",
+            when 570 =>
+               "https://www.701.dev/spec.html#d570-the-depth-report-clos"
+               & "es-a-call-through-a-table-or-a-function-value",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",
@@ -5278,6 +5291,10 @@ package body Landin.Diagnostics.Citations is
             when 531 =>
                "https://www.701.dev/spec.html#d531-a-released-compiler-c"
                & "arries-no-debug-information-which-ships-beside-it",
+            when 571 =>
+               "https://www.701.dev/spec.html#d571-a-round-s-yield-calls"
+               & "-nothing-beneath-it-but-its-sweep-its-idler-and-its-swit"
+               & "ch",
             when others => "");
 
 end Landin.Diagnostics.Citations;

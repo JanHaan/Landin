@@ -19597,6 +19597,12 @@ annotations, which the language has none of; and reading every assembly
 block as open, which would open every hosted program at its system calls.
 All were declined.
 
+**Amended by D570:** a call through `any`, a generic's table or a function
+value is no longer an opening when the program holds a routine it can
+reach: it reaches every such routine, which is not an assumed cost but the
+set the program fixes. The kinds stay for a call that reaches none, and for
+a C function value.
+
 **Pinned by** the `stack report` suite's `each opening is named` and `a
 helper opens the graph`.
 
@@ -21220,6 +21226,55 @@ description makes unnecessary.
 **Pinned by** `negative/region-placement-unknown` and
 `environments/cortex-m/descriptions.py`, which finds a datum placed in
 RP2040's `SCRATCH_X` inside that region in the linked image.
+
+### D570 — The depth report closes a call through a table or a function value
+
+**The tour said** nothing. D468 opened a call graph at every call through
+`any`, through a generic's table and through a function value, and
+declined, as a guess about what a run-time value holds, a bound from the
+providers of the call's concept. A fibre's task is reached only through
+such calls: `core/fibre`'s first frame calls its task through `any
+fibre.task`, the task's routine is a function value, and what the task waits
+on is `any` again, so every task's depth was open on every target and a
+stack was sized by bisecting until it no longer trapped.
+
+**Chosen:** the report closes such a call over the routines the whole
+program holds that it can be. A call through a table read from a value
+reaches entry N of every table of the same concept, direct and erased apart,
+which is the set D374 already relies on: a left-out entry is a zero word,
+so a table outside it could not be called through at all. A call through
+any other function value, however the value was kept, reaches every routine
+whose address the program exposes, by a function address, an image, an
+export or an import, and every table entry it may project, whose signature
+agrees with the call's, which is what the checker and the IR's verifier
+require of every function value that reaches a call. A routine that is
+neither emitted nor supplied by the link is left out, since nothing that
+names it was kept. A call stays open when it has no such routine, when its
+signature is a C function type, whose value may be one C made, and through
+a code address; recursion, foreign calls, runtime helpers and assembly stay
+open as D468 has them, and a closed call may meet recursion through what it
+reaches. A value made from integers or written by foreign code is outside
+the bound, as it is outside D374. The depth is then a bound over every task
+the program can start on a stack, not a measure of one run: the deepest
+provider of the concept counts wherever the call is, and on a hosted
+Linux target the vDSO's clock, a foreign call, still opens a task that may
+reach it.
+
+**The alternatives:** D468's openings, which leave no number for any task;
+the providers of a concept that the call's own routine can be shown to
+receive, which needs a whole-program flow analysis of values the report
+does not have and which `any` exists to avoid; closing only calls whose
+table or value is traced to one routine, which D468 already does and which
+reaches no task; and every exposed routine whatever its signature, which
+puts each task's own entry beneath every call through a value and makes
+every task recursive. All were declined.
+
+**Pinned by** the `stack report` suite's `each opening is named`, whose
+calls through a function value, `any` and a generic's table are closed by
+the one routine each can reach; `a fibre's entry through any is closed`, on
+every target; and `an open handler is refused`, whose handler reaches a
+recursion and whose same handler through `any` is judged against the
+margin instead.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
@@ -27260,3 +27315,51 @@ declined.
 with its debug information, and the gate's jobs that install a compiler
 outside the checkout, which package it the release's way; no fixture runs
 the release workflow itself.
+
+### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
+
+**The tour said** nothing. `core/fibre/stacks`' round of turns is the one
+provider of `fibre.turns` the library carries, and every task that waits
+through it pays for its yield on its own stack. The yield swept the ended
+entries through a chain of three small routines, counted the unfinished
+through two more and searched for the next entry through them again, so
+the deepest path beneath a yield was that chain, not the switch: at
+`size` it went 224 bytes deeper than the switch on x86-64 and 832 on RV64.
+D465's 1 KiB room was set from that chain, which on RV64 went past it,
+and D473 retired the room.
+
+**Chosen:** `sweep` empties the ended entries and counts the unfinished in
+one pass that calls nothing; `round_yield` takes its count, searches for
+the next entry in its own body with no division, which Cortex-M0 would
+call its runtime for, and switches through `compiler.stack_switch`
+directly. Beneath a yield there are then only the sweep, the round's idler
+and the switch, and in the depth report a yield with a spinning idler goes
+no more than D465's 1 KiB deeper than its switch on every target at every
+profile, 688 bytes at most, on x86-64 at `none`; the round's wait goes no
+deeper than through its yield. With RV64 reusing its scalar homes, a yield
+takes, with what the switch saves, 456 bytes on x86-64 at `size` and 392
+at `speed` where it took 552 and 600, 800 and 400 on arm64 where it took
+960 and 560, 960 on RV64 where it took 2,160 and 2,416, and 352 on
+Cortex-M0, its device idler included, where it took 504. At `none`, where
+every value keeps a home of its own, a yield takes about 2.1 KiB on the
+64-bit targets, as the chain did. The round's code is smaller than it was,
+which a 32 KiB Cortex-M0 image near its limit needs. The idler is the
+provider's to choose and runs where the yield does: the event provider
+waits for its events there.
+
+**The alternatives:** the sweep and the count written out in the yield
+too, which puts nothing but the switch beneath it at about the same depth
+but duplicates the sweep, so that `runtime/signals-fake-firmware` no longer fitted
+its 32 KiB at `none`; the chain kept and a room sized from it per target,
+which D473 declined with the room; the idler and the sweep run on the stack
+the round was made on, which needs a switch to it and back on every quiet
+round and changes which context answers events; and the compiler copying
+the helpers into the yield, which happens only at `speed`. All were
+declined.
+
+**Pinned by** the `stack report` suite's `a yield goes little deeper than its
+switch`, the library's own round on every native target at every profile;
+the fibre fixtures, `runtime/fibre-turns-interleave` and
+`runtime/fibre-join-first-failure` among them, on every hosted target and
+the Cortex-M corpus; and the `capacity` control of
+`environments/cortex-m/evidence.py` (D470).

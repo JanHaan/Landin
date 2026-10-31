@@ -313,9 +313,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   verdict at every profile (D470).
 - **Stack reports.** `--stack-report=PATH` writes, for every emitted routine
   on each of those targets, its frame and the deepest stack of the call
-  graph it can close, and names each `any`, generic, function-value or
-  foreign call, recursion, runtime helper and stack-moving assembly that
-  opens it (D447, D467, D468).
+  graph it can close, and names each foreign call, recursion, runtime
+  helper and stack-moving assembly that opens it (D447, D467, D468). A
+  call through `any`, a generic's table or a function value reaches every
+  routine of the program it can be, so a fibre's task has a depth to size
+  its stack from wherever nothing foreign is reached (D570).
 
 `compiler/tests/constructs.matrix` records every normative construct's
 state, targets and evidence, and `check.py` refuses a stale or unexplained
