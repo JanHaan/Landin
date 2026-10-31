@@ -240,7 +240,11 @@ Depends on: none
         #  Learning a chip from its SVD follows the descriptions it fills.
         assert_next(headings["Learn a device from its SVD"],
                     "Learn a device from its SVD")
-        complete([headings["Learn a device from its SVD"],
+        complete([headings["Learn a device from its SVD"]])
+        #  What the register owes the boards comes before the first one.
+        assert_next(headings["What the register owes now"],
+                    "What the register owes now")
+        complete([headings["What the register owes now"],
                   headings["The first board"],
                   headings["Thumb-2, Cortex-M33 and M7"]])
         assert_next(headings["RISC-V microcontrollers"], "RISC-V microcontrollers")
