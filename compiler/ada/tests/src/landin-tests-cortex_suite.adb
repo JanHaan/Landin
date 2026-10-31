@@ -2590,9 +2590,20 @@ package body Landin.Tests.Cortex_Suite is
          end if;
          Args.Append ("--root=/w/devices");
          Args.Append (Target);
-         if Extra /= "" then
-            Args.Append (Extra);
-         end if;
+         --  Extra is words separated by single spaces.
+         declare
+            First : Positive := Extra'First;
+         begin
+            for Index in Extra'Range loop
+               if Extra (Index) = ' ' then
+                  Args.Append (Extra (First .. Index - 1));
+                  First := Index + 1;
+               end if;
+            end loop;
+            if First <= Extra'Last then
+               Args.Append (Extra (First .. Extra'Last));
+            end if;
+         end;
          Args.Append ("--emit=asm");
          Args.Append ("-o");
          Args.Append ("/w/p.s");
@@ -2753,13 +2764,32 @@ package body Landin.Tests.Cortex_Suite is
       Expect ("an IRQ past the table is L0514", "",
         Plain_Interrupts & "compiler.interrupt(""FAR"", 40)" & LF,
         Plain_Memory, "L0514");
-      Expect ("a core at another level is L0515", "",
-        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
-        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0515");
+      --  D543: a core builds at its own level or a lower one of its
+      --  family, never a higher one, and the reference at every level.
+      Expect ("a core above its level is L0515", "", Plain_Interrupts,
+        Plain_Memory, "L0515",
+        Extra => "--firmware-entry=start --level=armv7-m");
       Expect ("a cortex-m4 at its own level compiles", "",
         "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
         & LF & "compiler.vectors(48)" & LF, Plain_Memory, "",
-        Extra => "--level=armv7e-m");
+        Extra => "--firmware-entry=start --level=armv7e-m");
+      Expect ("a cortex-m4 at armv7-m compiles", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "",
+        Extra => "--firmware-entry=start --level=armv7-m");
+      Expect ("a cortex-m4 at armv6-m compiles",
+        "link(vector: 11) extern(interrupt) h: () -> none = end h",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "",
+        Extra => "--firmware-entry=start");
+      Expect ("a cortex-m3 at armv7e-m is L0515", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m3"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0515",
+        Extra => "--firmware-entry=start --level=armv7e-m");
+      Expect ("the reference builds at armv7e-m",
+        "link(vector: 20) extern(interrupt) h: () -> none = end h",
+        "", "", "", Imports => False,
+        Extra => "--firmware-entry=start --level=armv7e-m");
       Expect ("a description on a hosted target is L0515", "",
         Plain_Interrupts, Plain_Memory, "L0515", Extra => "",
         Target => "--target=linux-x86-64");

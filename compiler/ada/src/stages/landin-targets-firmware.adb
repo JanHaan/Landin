@@ -39,6 +39,22 @@ package body Landin.Targets.Firmware is
         when Cortex_M3 => "armv7-m",
         when Cortex_M4 | Cortex_M7 => "armv7e-m");
 
+   function Rank (Level : String) return Natural;
+   function Rank (Level : String) return Natural is
+     (if Level = "armv6-m" then 1
+      elsif Level = "armv7-m" then 2
+      elsif Level = "armv7e-m" then 3
+      else 0);
+
+   function Executes (Core : Core_Kind; Level : String) return Boolean is
+     (Rank (Level) /= 0 and then Rank (Level) <= Rank (Level_Name (Core)));
+
+   function Lower_Levels (Core : Core_Kind) return String is
+     (case Rank (Level_Name (Core)) is
+        when 3 => "armv7e-m, armv7-m or armv6-m",
+        when 2 => "armv7-m or armv6-m",
+        when others => "armv6-m alone");
+
    function Is_Boot_Name (Text : String) return Boolean is
      (Text in "vector-table" | "rp2040-boot2" | "rp2350-image-block"
         | "esp-app-image");

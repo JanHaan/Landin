@@ -1007,14 +1007,16 @@ package body Landin.Diagnostics.Explanations is
                & "s, or the stack is larger than its region. The message n"
                & "ames the region or the slot.",
             when Catalogue.Description_Core_Mismatch =>
-               "A device description's core is not what the request buil"
-               & "ds for (D543): the target is not `cortex-m0`, or `--leve"
-               & "l` is not the core's level, `armv6-m` for `cortex-m0` an"
-               & "d `cortex-m0plus`, `armv7-m` for `cortex-m3` and `armv7e"
-               & "-m` for `cortex-m4` and `cortex-m7`. Build with the targ"
-               & "et and level the note names. The constrained reference p"
-               & "rofile, which applies when no description is imported, i"
-               & "s the one description used at every level.",
+               "A device description's core does not execute what the re"
+               & "quest builds (D543): the target is not `cortex-m0`, or `"
+               & "--level` is above the core's own, `armv6-m` for `cortex-"
+               & "m0` and `cortex-m0plus`, `armv7-m` for `cortex-m3` and `"
+               & "armv7e-m` for `cortex-m4` and `cortex-m7`. A lower M-pro"
+               & "file level is accepted: a `cortex-m4` builds at `armv7-m"
+               & "` or `armv6-m` too. Build with the target and a level th"
+               & "e note names. The constrained reference profile, which a"
+               & "pplies when no description is imported, is the one descr"
+               & "iption used at every level.",
             when Catalogue.Boot_Kind_Reserved =>
                "A device description selects a boot image kind refine re"
                & "serves but does not build yet (D545): `rp2350-image-bloc"

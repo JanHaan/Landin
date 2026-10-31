@@ -20832,12 +20832,17 @@ words on ARMv6-M and 512 on ARMv7-M; each interrupt's slot is inside it;
 and the stack fits its region. Those are L0514. `.ramtext` is placed with
 `data`, and every load image in the region `text` is placed in.
 
-A description's core must be the request's: the target `cortex-m0`, and
-`--level` the core's level, so an RP2040, a `cortex-m0plus`, builds at the
-default `armv6-m` and a `cortex-m4` asks for `--level=armv7e-m`; a mismatch
-is L0515, naming the options to give. The constrained reference alone is
+A description's core must execute what the request builds: the target is
+`cortex-m0`, and `--level` is the core's own level or a lower M-profile one,
+`armv6-m` below `armv7-m` below `armv7e-m`. So an RP2040, a `cortex-m0plus`,
+builds at the default `armv6-m` and no higher, and a `cortex-m4` builds at
+`armv7e-m`, `armv7-m` or `armv6-m`, its vector slots its core's at any of
+them; a level above the core's, or a target of another family, is L0515,
+naming the levels the core executes. The constrained reference alone is
 used at every level, with its ARMv6-M slots, because it is the profile the
-levels were always tested on and remains so. `refine lsp` checks a module
+levels were always tested on and remains so. The maintainer chose the lower
+levels over requiring the core's own: code built for less runs on the core,
+and a baseline build of a later chip is a choice a developer makes. `refine lsp` checks a module
 that imports a description against that profile, with the target and
 level it is given, and reports the same refusals at the directives.
 

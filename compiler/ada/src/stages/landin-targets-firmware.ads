@@ -32,6 +32,11 @@ package Landin.Targets.Firmware is
    function Spelling (Core : Core_Kind) return String;
    --  The feature level a core executes, as Landin.Targets.Levels names it.
    function Level_Name (Core : Core_Kind) return String;
+   --  D543: whether a build at LEVEL runs on CORE: the core's own level or
+   --  a lower M-profile one, armv6-m below armv7-m below armv7e-m.
+   function Executes (Core : Core_Kind; Level : String) return Boolean;
+   --  The levels Executes admits for CORE, as a note lists them.
+   function Lower_Levels (Core : Core_Kind) return String;
    function Is_Armv6_M (Core : Core_Kind) return Boolean
      is (Core in Cortex_M0 | Cortex_M0plus);
    --  The longest vector table the core's architecture allows, in words:

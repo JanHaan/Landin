@@ -1,9 +1,9 @@
 class: negative
-summary: D543: a description's core is the request's level, so a cortex-m4 asks for --level=armv7e-m
+summary: D543: a description's core builds at its own level or a lower one, so a cortex-m0plus refuses --level=armv7-m
 program: program.ldn
 constructs: 1990
 targets: cortex-m0
 codes: L0515
-args: --target=cortex-m0 ../tests/fixtures/negative/description-core-mismatch/program.ldn
+args: --target=cortex-m0 --level=armv7-m ../tests/fixtures/negative/description-core-mismatch/program.ldn
 expect: expected.txt
 status: 1

@@ -2039,8 +2039,8 @@ package body Landin.Stages.Configuration is
                & Firmware.Level_Name (Built.Core)
                & ", or import no description on this target");
          elsif not Built.Reference
-           and then Landin.Targets.Levels.Name (Level (Context))
-             /= Firmware.Level_Name (Built.Core)
+           and then not Firmware.Executes
+             (Built.Core, Landin.Targets.Levels.Name (Level (Context)))
          then
             Complete := False;
             Report_At
@@ -2049,9 +2049,12 @@ package body Landin.Stages.Configuration is
                & Firmware.Spelling (Built.Core) & ", an "
                & Firmware.Level_Name (Built.Core) & " core, and this build"
                & " is at --level="
-               & Landin.Targets.Levels.Name (Level (Context)),
-               "D543: build it with --level="
-               & Firmware.Level_Name (Built.Core));
+               & Landin.Targets.Levels.Name (Level (Context))
+               & ", which it does not execute",
+               "D543: a " & Firmware.Spelling (Built.Core)
+               & " executes its own level and the M-profile levels below"
+               & " it, --level=" & Firmware.Lower_Levels (Built.Core)
+               & "; build at one of them");
          end if;
          if Complete then
             Built.Present := True;

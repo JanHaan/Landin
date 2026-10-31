@@ -1,5 +1,5 @@
 compiler.device("plain")
-compiler.core("cortex-m4")
+compiler.core("cortex-m0plus")
 compiler.vectors(48)
 compiler.boot("vector-table")
 linker.region("FLASH", 0, 32 * 1024, "rx")
