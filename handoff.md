@@ -251,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Current roadmap work: R12.10 — Describe devices.**
+**Next roadmap item: R12.20 — The first board (planned).**
 
 ## Versions
 
