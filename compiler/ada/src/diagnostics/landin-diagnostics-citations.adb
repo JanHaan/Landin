@@ -2162,6 +2162,9 @@ package body Landin.Diagnostics.Citations is
             when 526 =>
                "`refine run` compiles to a temporary executable and runs"
                & " it",
+            when 565 =>
+               "What an option needs of its request is the command catal"
+               & "ogue's",
             when 528 =>
                "An identifier with capitals is one L0012, and a C name's"
                & " says `link(symbol: ...)`",
@@ -3300,6 +3303,8 @@ package body Landin.Diagnostics.Citations is
             when 525 =>
                "Decisions: The toolchain, C and the machine",
             when 526 =>
+               "Decisions: The toolchain, C and the machine",
+            when 565 =>
                "Decisions: The toolchain, C and the machine",
             when 528 =>
                "Decisions: The toolchain, C and the machine",
@@ -4722,6 +4727,9 @@ package body Landin.Diagnostics.Citations is
             when 526 =>
                "https://www.701.dev/spec.html#d526-refine-run-compiles-t"
                & "o-a-temporary-executable-and-runs-it",
+            when 565 =>
+               "https://www.701.dev/spec.html#d565-what-an-option-needs-"
+               & "of-its-request-is-the-command-catalogue-s",
             when 528 =>
                "https://www.701.dev/spec.html#d528-an-identifier-with-ca"
                & "pitals-is-one-l0012-and-a-c-name-s-says-link-symbol",

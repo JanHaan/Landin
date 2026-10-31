@@ -13,6 +13,7 @@ with Landin.Build_Reports;
 with Landin.Build_Reports.Firmware;
 with Landin.Build_Reports.Sources;
 with Landin.Build_Reports.Stacks;
+with Landin.Commands.Catalogue;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Debugging;
@@ -176,83 +177,9 @@ package body Landin.Driver is
       & "levels of cortex-m0: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Cortex_M) & LF);
 
-   function Usage return String is
-     ("usage: refine [options] [source.ldn ...]" & LF
-      & "       refine explain [CODE ...]" & LF
-      & "       refine fmt [--check|--stdout] source.ldn|DIR ..." & LF
-      & "       refine lsp" & LF
-      & LF
-      & "  --help              print this text" & LF
-      & "  --identify          print tool identity" & LF
-      & "  --target=NAME       select a described target" & LF
-      & "  --level=NAME        assume a CPU feature level of that target"
-      & LF
-      & "  --option=NAME=VALUE set a declared fixed build option" & LF
-      & "  --build-mode=NAME   debug (default) or release:"
-      & " compiler.build_mode only" & LF
-      & "  --optimize=NAME     none, size (default), or speed" & LF
-      & "  --specialize=NAME   off, auto (default), or all: direct"
-      & " evidence calls" & LF
-      & "  --panic-map         emit off-target check-site mapping" & LF
-      & "  --debug=NAME        none (default), full (hosted),"
-      & " lines (Cortex-M0)" & LF
-      & "  --build-report=PATH write deterministic build evidence JSON" & LF
-      & "  --stage-report=PATH write each stage's measured time and memory"
-      & LF
-      & "  --stack-report=PATH write each emitted routine's frame and"
-      & " deepest stack" & LF
-      & "  --root=DIR          append an ordered module import root" & LF
-      & "  --library=DIR       find core, hosted and platform under DIR" & LF
-      & "  --emit=asm|exe      write assembly, or assemble and link" & LF
-      & "  -o PATH             where to write it" & LF
-      & "  -o=PATH             write to a path beginning with -" & LF
-      & "  --toolchain=NAME    driver to run with --emit=exe" & LF
-      & "  --linker=NAME       pass -fuse-ld=NAME with --emit=exe" & LF
-      & "  --link=static|libc  Linux link: static (default) or with libc"
-      & LF
-      & "  --firmware-entry=NAME  Cortex entry-module routine, no results"
-      & LF
-      & LF
-      & "Source files are scanned, parsed, resolved and checked as one"
-      & LF
-      & "module. With --root, pass one entry-module directory, or the"
-      & LF
-      & "entry module's source files; its imports"
-      & LF
-      & "are found under the roots in option order. Either way core, hosted"
-      & LF
-      & "and platform are found beside this compiler unless --library names"
-      & LF
-      & "another. Without --emit a program"
-      & LF
-      & "that is accepted produces no"
-      & LF
-      & "output. Hosted --emit=exe requires "
-      & Landin.Backend.Entry_Point.Required_Shape & "." & LF
-      & "Cortex --emit=exe requires --firmware-entry=NAME." & LF
-      & LF
-      & "A warning does not change the exit status; an error makes it 1."
-      & LF
-      & "`refine explain` lists every diagnostic code and its rule;"
-      & LF
-      & "`refine explain L0201` says what that code means and how to fix"
-      & LF
-      & "it.  `refine fmt` rewrites each named source in the one layout;"
-      & LF
-      & "with --check it writes nothing and reports each line that is"
-      & LF
-      & "not in it, and with --stdout it prints the one source named in"
-      & LF
-      & "it.  `refine lsp` is a language server over standard" & LF
-      & "input and output." & LF
-      & LF
-      & "The toolchain is found by the target's GNU triplet, so"
-      & LF
-      & "linux-x86-64 runs x86_64-pc-linux-gnu-gcc and linux-arm64"
-      & LF
-      & "aarch64-linux-gnu-gcc unless --toolchain names another." & LF
-      & "FreeBSD uses its target triplet with -clang; the driver wrapper"
-      & LF & "must supply its FreeBSD sysroot and linker." & LF);
+   --  The command catalogue's own overview: one text for `refine`,
+   --  `refine --help` and a request the driver is handed with nothing in it.
+   function Usage return String is (Landin.Commands.Catalogue.Usage);
 
    ---------------------------------------------------------------------
    --  Explain
@@ -831,6 +758,58 @@ package body Landin.Driver is
       Skip_Compilation : Boolean := False;
       Index     : Positive := 1;
       Dependency_Directories : aliased Landin.Platform.Path_List;
+
+      --  Why the options given cannot be one request, or "": the command
+      --  catalogue's sentence for the first option whose requirement the
+      --  request does not meet (D565).
+      function Incompatible_Action return String;
+
+      function Incompatible_Action return String is
+         package C renames Landin.Commands.Catalogue;
+         use type C.Option;
+         Present : constant array (C.Option) of Boolean :=
+           [C.Optimize => Optimize_Seen, C.Specialize => Specialize_Seen,
+            C.Build_Report => Report_Seen, C.Debug => Debug_Seen,
+            C.Panic_Map => Panic_Map, C.Stage_Report => Stage_Report_Seen,
+            C.Stack_Report => Stack_Report_Seen,
+            C.Toolchain => Toolchain_Seen, C.Linker => Linker_Seen,
+            C.Link => Link_Seen, C.Firmware_Entry => Firmware_Seen,
+            C.Keep_Asm => Keep_Assembly,
+            C.Output => Output_Seen
+              and then Unbounded.Length (Output_Problem) = 0,
+            others => False];
+         Emitted : constant C.Emission :=
+           (case Emit is
+               when Emit_Nothing => C.No_Emission,
+               when Emit_Assembly => C.Emit_Asm,
+               when Emit_Executable => C.Emit_Exe,
+               when Emit_IR => C.Emit_IR);
+      begin
+         if (Wants_Usage or Wants_Identity)
+           and then (for some Flag in C.Option =>
+                       Present (Flag) and then Flag /= C.Output)
+         then
+            return C.Informational_Problem
+              (if Wants_Usage then "--help" else "--identify");
+         end if;
+         for Flag in C.Option loop
+            if Present (Flag) then
+               declare
+                  Problem : constant String :=
+                    C.Requirement_Problem
+                      (Flag, Emitted, Natural (Inputs.Length) > 0);
+               begin
+                  if Problem /= "" then
+                     return Problem;
+                  end if;
+               end;
+            end if;
+         end loop;
+         if Present (C.Output) and then Unbounded.Length (Output) = 0 then
+            return "-o needs a path";
+         end if;
+         return "";
+      end Incompatible_Action;
    begin
       if Natural (Arguments.Length) = 0 then
          Result.Status := Status_Misuse;
@@ -1129,26 +1108,11 @@ package body Landin.Driver is
       end loop;
 
       --  Compilation controls do not modify informational actions, and
-      --  debug information, a panic map and a stack report describe an
-      --  emitted artifact; a build report may describe a check (D383).
-      if ((Optimize_Seen or Specialize_Seen or Report_Seen
-           or Debug_Seen or Panic_Map or Stage_Report_Seen
-           or Stack_Report_Seen
-           or Toolchain_Seen or Linker_Seen or Link_Seen or Firmware_Seen)
-          and then (Wants_Usage or Wants_Identity))
-        or else ((Debug_Seen or Panic_Map) and then Emit = Emit_Nothing)
-        or else ((Debug_Seen or Panic_Map) and then Emit = Emit_IR)
-        or else (Stack_Report_Seen
-                 and then Emit in Emit_Nothing | Emit_IR)
-        or else (Keep_Assembly and then Emit /= Emit_Executable)
-        or else ((Optimize_Seen or Specialize_Seen or Report_Seen
-                  or Firmware_Seen or Link_Seen)
-                 and then Natural (Inputs.Length) = 0)
-        or else (Output_Seen
-                 and then Unbounded.Length (Output_Problem) = 0
-                 and then
-                 (Emit = Emit_Nothing or Unbounded.Length (Output) = 0))
-      then
+      --  what each option needs of the request is the command catalogue's
+      --  (D565): debug information, a panic map and a stack report describe
+      --  emitted machine code, and a build report may describe a check
+      --  (D383).
+      if Incompatible_Action /= "" then
          Unknowns.Append ("incompatible compilation action");
          Bad_Use := True;
       end if;
@@ -1287,14 +1251,13 @@ package body Landin.Driver is
          --  The options `refine` reads, each as it is spelled before any
          --  `=`, and those that read a value after it.
          function Is_Known_Option (Stem : String) return Boolean
-           is (Stem in "--help" | "--identify" | "--target" | "--level"
-                     | "--option" | "--build-mode" | "--optimize"
-                     | "--specialize" | "--panic-map" | "--debug"
-                     | "--build-report" | "--stage-report"
-                     | "--stack-report" | "--root"
-                     | "--library" | "--emit" | "-o" | "--toolchain"
-                     | "--linker" | "--link" | "--firmware-entry"
-                     | "--linker-script" | "--keep-asm" | "-L");
+           is (Stem in "--help" | "--identify"
+               or else
+                 (Landin.Commands.Catalogue.Known_Option (Stem)
+                  and then Landin.Commands.Catalogue.Name
+                    (Landin.Commands.Catalogue.Named_Option (Stem)) = Stem
+                  and then Landin.Commands.Catalogue.Compilation_Option
+                    (Landin.Commands.Catalogue.Named_Option (Stem))));
 
          --  How many times an option with this stem was written.
          function Times_Written (Stem : String) return Natural;
@@ -1312,16 +1275,7 @@ package body Landin.Driver is
             return Seen;
          end Times_Written;
 
-         --  The values an option takes, for a report that one was refused.
-         function Accepted_Values (Stem : String) return String
-           is (if Stem = "--optimize" then "; it takes none, size or speed"
-               elsif Stem = "--specialize" then
-                 "; it takes off, auto or all"
-               elsif Stem = "--debug" then
-                 "; it takes none, full or lines"
-               elsif Stem = "--emit" then "; it takes asm, exe or ir"
-               elsif Stem = "--link" then "; it takes static or libc"
-               else "");
+
 
          type Spelling_Access is access constant String;
          Target_Spellings : constant array (Positive range <>)
@@ -1331,58 +1285,9 @@ package body Landin.Driver is
               new String'("freebsd-arm64"), new String'("linux-rv64"),
               new String'("cortex-m0"),
               new String'("synthetic-32")];
-         Option_Spellings : constant array (Positive range <>)
-           of Spelling_Access :=
-             [new String'("--help"), new String'("--identify"),
-              new String'("--target"), new String'("--level"),
-              new String'("--option"), new String'("--build-mode"),
-              new String'("--optimize"), new String'("--specialize"),
-              new String'("--panic-map"), new String'("--debug"),
-              new String'("--build-report"), new String'("--stage-report"),
-              new String'("--stack-report"),
-              new String'("--root"), new String'("--library"),
-              new String'("--emit"),
-              new String'("--toolchain"), new String'("--linker"),
-              new String'("--link"), new String'("--firmware-entry"),
-              new String'("--linker-script"),
-              new String'("--keep-asm"), new String'("-L")];
 
-         --  Why the options given cannot be one request.
-         function Incompatible_Action return String
-           is (if (Optimize_Seen or Specialize_Seen or Report_Seen
-                   or Debug_Seen or Panic_Map or Stage_Report_Seen
-                   or Stack_Report_Seen
-                   or Toolchain_Seen or Linker_Seen or Link_Seen
-                   or Firmware_Seen)
-                  and then (Wants_Usage or Wants_Identity)
-               then (if Wants_Usage then "--help" else "--identify")
-                    & " prints and compiles nothing, so it takes no"
-                    & " compilation option"
-               elsif (Debug_Seen or Panic_Map) and then Emit = Emit_Nothing
-               then "--debug and --panic-map describe what is emitted;"
-                    & " add --emit"
-               elsif (Debug_Seen or Panic_Map) and then Emit = Emit_IR
-               then "--debug and --panic-map describe machine code, and"
-                    & " --emit=ir writes the IR before any is chosen"
-               elsif Stack_Report_Seen
-                 and then Emit in Emit_Nothing | Emit_IR
-               then "--stack-report measures the frames of emitted machine"
-                    & " code: add --emit=asm or --emit=exe"
-               elsif Keep_Assembly and then Emit /= Emit_Executable
-               then "--keep-asm keeps an executable's assembly beside it;"
-                    & " --emit=asm writes the assembly alone"
-               elsif (Optimize_Seen or Specialize_Seen or Report_Seen
-                      or Firmware_Seen or Link_Seen)
-                 and then Natural (Inputs.Length) = 0
-               then (if Optimize_Seen then "--optimize"
-                     elsif Specialize_Seen then "--specialize"
-                     elsif Report_Seen then "--build-report"
-                     elsif Firmware_Seen then "--firmware-entry"
-                     else "--link") & " needs a source to compile"
-               elsif Emit = Emit_Nothing
-               then "-o names what is emitted, and nothing is: add"
-                    & " --emit=asm or --emit=exe"
-               else "-o needs a path");
+
+
 
          --  "; did you mean T?" for the described target nearest Name,
          --  or "".  `macos` is what a reader calls `darwin`.
@@ -1427,9 +1332,15 @@ package body Landin.Driver is
             elsif Stem = "-O" or else Starts_With (Stem, "-O") then
                return "--optimize";
             end if;
-            for Known of Option_Spellings loop
-               Landin.Diagnostics.Suggestions.Consider
-                 (Offered, Stem, Known.all);
+            Landin.Diagnostics.Suggestions.Consider
+              (Offered, Stem, "--help");
+            Landin.Diagnostics.Suggestions.Consider
+              (Offered, Stem, "--identify");
+            for Flag in Landin.Commands.Catalogue.Option loop
+               if Landin.Commands.Catalogue.Compilation_Option (Flag) then
+                  Landin.Diagnostics.Suggestions.Consider
+                    (Offered, Stem, Landin.Commands.Catalogue.Name (Flag));
+               end if;
             end loop;
             if Landin.Diagnostics.Suggestions.Count (Offered) = 0 then
                return "";
@@ -1450,17 +1361,17 @@ package body Landin.Driver is
             if Option = "incompatible compilation action" then
                return Incompatible_Action;
             elsif Option = "--target given more than once" then
-               return "--target may be given once";
+               return Landin.Commands.Catalogue.Given_Twice ("--target");
             elsif Option = "--level given more than once" then
-               return "--level may be given once";
+               return Landin.Commands.Catalogue.Given_Twice ("--level");
             elsif Is_Known_Option (Stem) then
                if Times_Written (Stem) > 1 then
-                  return Stem & " may be given once";
+                  return Landin.Commands.Catalogue.Given_Twice (Stem);
                elsif Equals /= 0 and then Value = "" then
                   return Stem & " needs a value after `=`";
                elsif Equals /= 0 then
-                  return Stem & " does not take `" & Value & "`"
-                    & Accepted_Values (Stem);
+                  return Landin.Commands.Catalogue.Value_Problem
+                    (Landin.Commands.Catalogue.Named_Option (Stem), Value);
                elsif Stem = "-o" then
                   return "-o needs a path after it";
                end if;

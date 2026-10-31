@@ -254,6 +254,76 @@ package body Landin.Commands.Catalogue is
       raise Compiler_Defect with "unknown option passed to catalogue";
    end Named_Option;
 
+   function Needs (Flag : Option) return Requirement is
+     (case Flag is
+         when Optimize | Specialize | Build_Report | Firmware_Entry | Link =>
+            A_Source,
+         when Debug | Panic_Map | Stack_Report => Machine_Code,
+         when Keep_Asm => An_Executable,
+         when Output => An_Artifact,
+         when others => Nothing);
+
+   function Requirement_Problem
+     (Flag : Option; Emitted : Emission; Has_Source : Boolean)
+      return String is
+     (case Needs (Flag) is
+         when Nothing => "",
+         when A_Source =>
+           (if Has_Source then ""
+            else Name (Flag) & " needs a source to compile"),
+         when Machine_Code =>
+           (if Emitted in Emit_Asm | Emit_Exe then ""
+            elsif Emitted = Emit_IR
+            then Name (Flag) & " describes machine code, and --emit=ir"
+                 & " writes the IR before any is chosen"
+            else Name (Flag) & " describes emitted machine code: add"
+                 & " --emit=asm or --emit=exe"),
+         when An_Executable =>
+           (if Emitted = Emit_Exe then ""
+            else Name (Flag) & " describes an executable, which --emit=exe"
+                 & " writes; --emit=asm writes the assembly alone"),
+         when An_Artifact =>
+           (if Emitted /= No_Emission then ""
+            else Name (Flag) & " names what is emitted, and nothing is:"
+                 & " add --emit=asm or --emit=exe"));
+
+   function Compilation_Option (Flag : Option) return Boolean is
+     (Accepts (Compile, Flag) and then not Shared (Flag)
+      and then Flag not in Dry_Run | Depfile | Warnings .. Deny);
+
+   function Given_Twice (Stem : String) return String is
+     (Stem & " may be given once");
+
+   --  "none, size or speed" for "none|size|speed".
+   function Spoken (Choices : String) return String;
+
+   function Spoken (Choices : String) return String is
+      Last_Bar : constant Natural :=
+        Ada.Strings.Fixed.Index (Choices, "|", Ada.Strings.Backward);
+      Text : US.Unbounded_String;
+   begin
+      for Index in Choices'Range loop
+         if Choices (Index) /= '|' then
+            US.Append (Text, Choices (Index));
+         elsif Index = Last_Bar then
+            US.Append (Text, " or ");
+         else
+            US.Append (Text, ", ");
+         end if;
+      end loop;
+      return US.To_String (Text);
+   end Spoken;
+
+   function Value_Problem (Flag : Option; Value : String) return String is
+     (if Value = "" then Name (Flag) & " needs a value"
+      else Name (Flag) & " does not take `" & Value & "`"
+        & (if Values (Flag) = "" then ""
+           else "; it takes " & Spoken (Values (Flag))));
+
+   function Informational_Problem (Asked : String) return String is
+     (Asked & " prints and compiles nothing, so it takes no compilation"
+      & " option");
+
    function Usage (Command : Action := Overview) return String is
       Text : US.Unbounded_String;
       Operands : constant String :=

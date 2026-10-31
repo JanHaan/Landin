@@ -20399,6 +20399,44 @@ signal`, `run removes its directory`, `run refusals` and `the bare form says
 it only checked`; `end-to-end/run-another-target`; and the outside-user
 check's `refine run` of the first program.
 
+### D565 — What an option needs of its request is the command catalogue's
+
+**The tour said** nothing of the command line. `refine`'s commands parse
+their options from `Landin.Commands.Catalogue` and hand the driver a
+request it parses again, and the driver kept its own usage text, its own
+list of the options it reads and of the values each takes, and its own
+rules for which options a request can hold together, each with sentences
+of its own: `--debug` with nothing emitted was "describe what is emitted"
+to one and "not an option of check" to the other, and an option given
+twice was "option may be given once: --target" to one and "--target may
+be given once" to the other.
+
+**Chosen:** the catalogue says, for each option, what it needs of the rest
+of its request: nothing, a source to compile (`--optimize`,
+`--specialize`, `--build-report`, `--firmware-entry`, `--link`), emitted
+machine code (`--debug`, `--panic-map`, `--stack-report`), an executable
+(`--keep-asm`), or something emitted at all (`-o`); and it writes the one
+sentence for a request that does not meet it, for an option given twice,
+for a value an option does not take, naming the values it does, and for a
+compilation option beside `--help` or `--identify`. `refine compile` and
+`refine run` hold their requests to those requirements as they parse, and
+the driver holds the request it is handed to them, so both refuse one
+combination with one sentence. The options the driver reads are the
+catalogue's compile options less the commands' own, and its usage is the
+catalogue's overview. A command-line change is a change to the catalogue.
+
+**The alternatives:** a second parser that only translates, which leaves
+the driver's own callers, the test program's driver cases among them,
+reading a request nothing checked; and generating the driver's parse from
+the catalogue, which a hand-written classification of each option's value
+does not need. Both were declined.
+
+**Pinned by** the commands case `option requirements are one`, which holds
+the commands' parse and the driver to the catalogue's sentence for each
+requirement, a value and a repeated option, and the driver's usage to the
+catalogue's; and the debugging, stack report and driver cases whose
+refusals now read it.
+
 ### D528 — An identifier with capitals is one L0012, and a C name's says `link(symbol: ...)`
 
 **The tour said** at [1760] that identifier letters are lower-case ASCII. The

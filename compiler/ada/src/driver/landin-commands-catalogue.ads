@@ -39,6 +39,41 @@ package Landin.Commands.Catalogue is
    function Named_Option (Text : String) return Option
      with Pre => Known_Option (Text);
 
+   --  D565: what an option needs of the rest of its request, one column
+   --  read by the commands' parse and by the driver alike, so a request
+   --  is refused for one rule with one sentence whichever reads it first.
+   type Requirement is
+     (Nothing,
+      --  A source to compile.
+      A_Source,
+      --  Emitted machine code, --emit=asm or --emit=exe.
+      Machine_Code,
+      --  An executable, --emit=exe.
+      An_Executable,
+      --  Something emitted at all.
+      An_Artifact);
+
+   function Needs (Flag : Option) return Requirement;
+
+   type Emission is (No_Emission, Emit_Asm, Emit_Exe, Emit_IR);
+
+   --  Why FLAG cannot be in a request that emits EMITTED and names a
+   --  source or not, or "" when it can.
+   function Requirement_Problem
+     (Flag : Option; Emitted : Emission; Has_Source : Boolean)
+      return String;
+
+   --  Whether FLAG is one the driver reads for a compilation: what
+   --  check, compile and run hand on after the commands' own options.
+   function Compilation_Option (Flag : Option) return Boolean;
+
+   --  The sentences both readers refuse a written option with: a single
+   --  one given twice, a value it does not take, and a compilation option
+   --  beside a request that prints and compiles nothing.
+   function Given_Twice (Stem : String) return String;
+   function Value_Problem (Flag : Option; Value : String) return String;
+   function Informational_Problem (Asked : String) return String;
+
    function Usage (Command : Action := Overview) return String;
    function Reference return String;
    function Shell_Completion (Shell : String) return String;

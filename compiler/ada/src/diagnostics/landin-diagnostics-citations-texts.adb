@@ -23913,6 +23913,24 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e compile FILE -o NAME` to build it. `-q` silences it, a"
                & "nd `refine check` stays silent, since it is the form too"
                & "ls call.",
+            when 565 =>
+               "Chosen: the catalogue says, for each option, what it nee"
+               & "ds of the rest of its request: nothing, a source to comp"
+               & "ile (`--optimize`, `--specialize`, `--build-report`, `--"
+               & "firmware-entry`, `--link`), emitted machine code (`--deb"
+               & "ug`, `--panic-map`, `--stack-report`), an executable (`-"
+               & "-keep-asm`), or something emitted at all (`-o`); and it "
+               & "writes the one sentence for a request that does not meet"
+               & " it, for an option given twice, for a value an option do"
+               & "es not take, naming the values it does, and for a compil"
+               & "ation option beside `--help` or `--identify`. `refine co"
+               & "mpile` and `refine run` hold their requests to those req"
+               & "uirements as they parse, and the driver holds the reques"
+               & "t it is handed to them, so both refuse one combination w"
+               & "ith one sentence. The options the driver reads are the c"
+               & "atalogue's compile options less the commands' own, and i"
+               & "ts usage is the catalogue's overview. A command-line cha"
+               & "nge is a change to the catalogue.",
             when 528 =>
                "Chosen: a word of ASCII letters, digits and underscores "
                & "that begins with a letter or underscore and holds a capi"

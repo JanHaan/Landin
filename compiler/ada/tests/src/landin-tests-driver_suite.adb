@@ -5,6 +5,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
+with Landin.Commands.Catalogue;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Source;
@@ -1626,12 +1627,14 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check_Equal
         (Item, Unbounded.To_String (Asked.Output), Landin.Driver.Usage,
          "help prints exactly the usage text");
+      --  D565: one text, the command catalogue's, whichever is asked.
+      Landin.Testing.Check_Equal
+        (Item, Landin.Driver.Usage, Landin.Commands.Catalogue.Usage,
+         "the driver's usage is the command catalogue's");
       Landin.Testing.Check
-        (Item, Contains (Landin.Driver.Usage, "--target=NAME"),
-         "the usage text lists the target option");
-      Landin.Testing.Check
-        (Item, Contains (Landin.Driver.Usage, "source.ldn"),
-         "the usage text says what it takes");
+        (Item, Contains (Landin.Driver.Usage, "  check ")
+         and then Contains (Landin.Driver.Usage, "  compile "),
+         "the usage text lists the commands");
 
       --  And no arguments prints the same text, with the misuse status.
       declare
@@ -6095,7 +6098,7 @@ package body Landin.Tests.Driver_Suite is
                          "lsp takes no argument but --stdio"),
          "and says so");
       Landin.Testing.Check
-        (Item, Contains (Landin.Driver.Usage, "refine lsp"),
+        (Item, Contains (Landin.Driver.Usage, "  lsp "),
          "the usage names it");
    end Lsp_Is_A_Subcommand;
 

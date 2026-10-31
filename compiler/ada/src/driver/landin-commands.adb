@@ -125,6 +125,8 @@ package body Landin.Commands is
       First_Specific : US.Unbounded_String;
       First_Flag : C.Option := C.Help_Flag;
       Literal : Boolean := False;
+      --  What --emit named, if anything.
+      Emitted : US.Unbounded_String;
       --  How the option given before its command is placed after it.
       function Placed (Command : C.Action) return String;
       function Placed (Command : C.Action) return String is
@@ -194,7 +196,7 @@ package body Landin.Commands is
                      Flag : constant C.Option := C.Named_Option (Stem);
                   begin
                      if Seen (Flag) and then not C.Repeatable (Flag) then
-                        Refuse ("option may be given once: " & Stem);
+                        Refuse (C.Given_Twice (Stem));
                      end if;
                      Seen (Flag) := True;
                      if C.Takes_Value (Flag) then
@@ -211,11 +213,14 @@ package body Landin.Commands is
                            Value := US.To_Unbounded_String
                              (Expanded.Element (Index));
                         else
-                           Refuse ("option needs a value: " & Stem);
+                           Refuse (C.Value_Problem (Flag, ""));
                         end if;
                         if not C.Valid_Value (Flag, US.To_String (Value)) then
-                           Refuse ("invalid value for " & Stem & ": "
-                             & US.To_String (Value));
+                           Refuse (C.Value_Problem
+                                     (Flag, US.To_String (Value)));
+                        end if;
+                        if Flag = C.Emit then
+                           Emitted := Value;
                         end if;
                      elsif Equal /= 0 then
                         Refuse ("option takes no value: " & Stem);
@@ -338,6 +343,29 @@ package body Landin.Commands is
       end if;
       if Result.Quiet and then Result.Verbosity /= 0 then
          Refuse ("--quiet and --verbose cannot be combined");
+      end if;
+      --  D565: what each option needs of the request, as the driver
+      --  holds it, so a compile or run request is refused here, at its
+      --  parse, with the sentence the driver would give.
+      if Result.Command in C.Compile | C.Run and then not Result.Wants_Help
+      then
+         declare
+            Emission : constant C.Emission :=
+              (if Result.Command = C.Run then C.Emit_Exe
+               elsif US.To_String (Emitted) = "asm" then C.Emit_Asm
+               elsif US.To_String (Emitted) = "ir" then C.Emit_IR
+               else C.Emit_Exe);
+         begin
+            for Flag in C.Option loop
+               if Seen (Flag)
+                 and then C.Requirement_Problem
+                   (Flag, Emission, not Result.Operands.Is_Empty) /= ""
+               then
+                  Refuse (C.Requirement_Problem
+                            (Flag, Emission, not Result.Operands.Is_Empty));
+               end if;
+            end loop;
+         end;
       end if;
       case Result.Command is
          when C.Version | C.Targets | C.Server | C.Overview =>

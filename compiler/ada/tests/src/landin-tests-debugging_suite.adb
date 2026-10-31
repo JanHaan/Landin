@@ -1,6 +1,7 @@
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Landin.Commands.Catalogue;
 with Landin.Backend.Debug_Locations;
 with Landin.Backend.X86_64;
 with Landin.Backend.X86_64.Allocation;
@@ -115,10 +116,19 @@ package body Landin.Tests.Debugging_Suite is
       begin
          Landin.Testing.Check_Equal
            (Item, Result.Status, 0, "standalone help succeeds");
+         --  D565: the driver's help is the command catalogue's, and
+         --  compile's says what --debug takes.
          Landin.Testing.Check
-           (Item, Contains (US.To_String (Result.Output), "--debug=NAME")
-            and then Contains (US.To_String (Result.Output),
-              "none (default), full (hosted), lines (Cortex-M0)"),
+           (Item, US.To_String (Result.Output)
+              = Landin.Commands.Catalogue.Usage
+            and then Contains
+              (Landin.Commands.Catalogue.Usage
+                 (Landin.Commands.Catalogue.Compile),
+               "--debug VALUE")
+            and then Contains
+              (Landin.Commands.Catalogue.Usage
+                 (Landin.Commands.Catalogue.Compile),
+               "none (default), full, lines"),
             "help documents debug choices and the default");
       end;
    end Invalid_Requests;
