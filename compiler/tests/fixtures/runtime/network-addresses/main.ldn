@@ -1,8 +1,10 @@
 --  Internet addresses read from their text and written back: IPv4's four
 --  decimal parts, IPv6's groups as RFC 5952 writes them, shortened and in
---  lower case, an IPv4-mapped address in dotted decimal, and a port after
---  either, an IPv6 address then in brackets.  Text that is no address is
---  `invalid_address`, a zone among it.  It runs on every target, firmware
+--  lower case, an IPv4-mapped address in dotted decimal, an IPv6 zone
+--  after a `%` as it was written (D581), and a port after either, an IPv6
+--  address and its zone then in brackets.  Text that is no address is
+--  `invalid_address`: an empty or overlong zone, one holding a NUL, and a
+--  zone after an IPv4 address among it.  It runs on every target, firmware
 --  included, since an address is plain data.
 import core/cmp
 import core/net
@@ -15,7 +17,7 @@ case: type = struct
     written: []u8
 end case
 
-ips: [30]case =
+ips: [41]case =
     [(given: "127.0.0.1", written: "127.0.0.1"),
      (given: "0.0.0.0", written: "0.0.0.0"),
      (given: "255.255.255.255", written: "255.255.255.255"),
@@ -39,7 +41,18 @@ ips: [30]case =
      (given: "::ffff:c000:201", written: "::ffff:192.0.2.1"),
      (given: "64:ff9b::192.0.2.33", written: "64:ff9b::c000:221"),
      (given: "1:2:3:4:5:6:7:8", written: "1:2:3:4:5:6:7:8"),
-     (given: "fe80::1%eth0", written: ""),
+     (given: "fe80::1%eth0", written: "fe80::1%eth0"),
+     (given: "FE80::1%Eth0", written: "fe80::1%Eth0"),
+     (given: "fe80::1%2", written: "fe80::1%2"),
+     (given: "fe80::1%abcdefghijklmno", written: "fe80::1%abcdefghijklmno"),
+     (given: "::ffff:192.0.2.1%lo0", written: "::ffff:192.0.2.1%lo0"),
+     (given: "fe80::1%abcdefghijklmnop", written: ""),
+     (given: "fe80::1%", written: ""),
+     (given: "fe80::1%a%b", written: "fe80::1%a%b"),
+     (given: "fe80::1%a b", written: "fe80::1%a b"),
+     (given: "fe80::1%a\x00b", written: ""),
+     (given: "%eth0", written: ""),
+     (given: "127.0.0.1%lo", written: ""),
      (given: "1::2::3", written: ""),
      (given: ":1", written: ""),
      (given: "1:", written: ""),
@@ -49,7 +62,7 @@ ips: [30]case =
      (given: "", written: "")]
 
 --  Text read with a port and what it is written back as, or "".
-addresses: [11]case =
+addresses: [16]case =
     [(given: "127.0.0.1:80", written: "127.0.0.1:80"),
      (given: "0.0.0.0:0", written: "0.0.0.0:0"),
      (given: "[::1]:8080", written: "[::1]:8080"),
@@ -59,7 +72,12 @@ addresses: [11]case =
      (given: "1.2.3.4:65536", written: ""),
      (given: "1.2.3.4:", written: ""),
      (given: "::1:80", written: ""),
-     (given: "[fe80::1%eth0]:80", written: ""),
+     (given: "[fe80::1%eth0]:80", written: "[fe80::1%eth0]:80"),
+     (given: "[FE80::1%7]:0", written: "[fe80::1%7]:0"),
+     (given: "[fe80::1%eth0]", written: ""),
+     (given: "[fe80::1%]:80", written: ""),
+     (given: "fe80::1%eth0:80", written: ""),
+     (given: "127.0.0.1%lo:80", written: ""),
      (given: "1.2.3.4:x", written: "")]
 
 --  Whether reading C's text, with or without a port, writes it back as it
@@ -101,7 +119,8 @@ end read
 
 --  The constructors, the comparisons and the builder's rule that a piece
 --  is written whole or not at all.
-made: () -> (yes: bool) ! text.no_space | text.invalid_format =
+made: () -> (yes: bool)
+      ! text.no_space | text.invalid_format | net.invalid_address =
     groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]
     v6: net.address = net.ipv6_address(groups, 443)
     v4: net.address = net.ipv4_address(192, 0, 2, 1, 80)
@@ -129,7 +148,35 @@ made: () -> (yes: bool) ! text.no_space | text.invalid_format =
         full = problem == text.no_space
     end
     yes = yes and full and text.length(short) == 3
+    yes = yes and try zones()
 end made
+
+--  A zone given and taken away, compared, and refused where it cannot be.
+zones: () -> (yes: bool) ! net.invalid_address =
+    bare: net.address = try net.parse_ip("fe80::1")
+    named: net.address = try net.parse_ip("fe80::1%eth0")
+    given: net.address = try net.with_zone(bare, "eth0")
+    yes = net.same_address(named, given) and not net.same_address(named, bare)
+          and net.zone_length(named) == 4 and named.zone[3] == u8('0')
+          and named.zone[4] == 0 and net.zone_length(bare) == 0
+          and not net.same_address(named, try net.parse_ip("fe80::1%eth1"))
+    taken: net.address = try net.with_zone(named, "")
+    yes = yes and net.same_address(taken, bare)
+    mut refused: u32 = 0
+    _ = net.with_zone(net.loopback(net.ipv4, 0), "lo") else (problem)
+        if problem == net.invalid_address then inc refused end if
+        bare
+    end
+    _ = net.with_zone(bare, "a\x00b") else (problem)
+        if problem == net.invalid_address then inc refused end if
+        bare
+    end
+    _ = net.with_zone(bare, "abcdefghijklmnop") else (problem)
+        if problem == net.invalid_address then inc refused end if
+        bare
+    end
+    yes = yes and refused == 3
+end zones
 
 public main: () -> (code: i32) =
     code = 1
@@ -139,7 +186,7 @@ public main: () -> (code: i32) =
             return
         end
         if not good then
-            code = 10 + i32(index)
+            code = 100 + i32(index)
             return
         end if
     end for
@@ -150,7 +197,7 @@ public main: () -> (code: i32) =
             return
         end
         if not good then
-            code = 50 + i32(index)
+            code = 200 + i32(index)
             return
         end if
     end for

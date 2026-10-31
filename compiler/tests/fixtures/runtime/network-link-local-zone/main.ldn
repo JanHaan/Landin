@@ -1,0 +1,198 @@
+--  D581: a zone reaches the socket.  Darwin's and FreeBSD's loopback
+--  interface, `lo0`, holds the link-local address `fe80::1`, so there a
+--  listener at `fe80::1%lo0` takes a connection to it, made once with the
+--  zone named and once with the interface's number; both ends report
+--  their addresses with the zone the system's scope names, written in
+--  brackets with the port, and a datagram crosses the same way, its
+--  sender zoned.  Linux's loopback interface, `lo`, holds no link-local
+--  address, so the host does not allow one: the listener there is
+--  `address_unavailable`, a connection to `fe80::1%lo` is `unreachable`,
+--  the system having found the interface and no route on it, and one to
+--  `fe80::1` without its zone is `io_failed`, EINVAL, Linux's refusal of a
+--  link-local address that names no interface.  On every system a zone
+--  that names no interface is `address_unavailable`, whether it is
+--  listened at, connected to or bound to for datagrams.
+import core/cmp
+import core/io
+import core/net
+import core/text
+import core/time
+import hosted/blocking
+import platform/posix
+
+fixed if compiler.os == linux then
+    --- The loopback interface's name.
+    loopback_name: []u8 = "lo"
+else
+    loopback_name: []u8 = "lo0"
+end if
+
+--  Whether `at` is `fe80::1` at the loopback interface named in its zone,
+--  written `[fe80::1%NAME]:PORT`.
+on_loopback: (at: net.address) -> (yes: bool) ! text.no_space =
+    mut room: [48]u8 = zeroed
+    mut line := text.over(room[0..<48])
+    try text.append(line, "[fe80::1%")
+    try text.append(line, loopback_name)
+    try text.append(line, "]:")
+    try text.append_u32(line, u32(at.port))
+    mut written: [48]u8 = zeroed
+    mut back := text.over(written[0..<48])
+    try net.append_address(back, at)
+    yes = at.port <> 0
+          and cmp.compare(text.used(back), text.used(line)) == cmp.equal
+end on_loopback
+
+--  A connection to the listener at `at`, accepted, and a byte across it;
+--  both ends' addresses are on the loopback with its zone.
+crossed: (host: blocking.host, listener: io.file, to: net.address)
+         -> (yes: bool) ! ... =
+    client: io.file = try net.connect_within(host, to, time.seconds(5))
+    defer net.close_socket(host, client) else none
+    server: io.file = try net.accept(host, listener)
+    defer net.close_socket(host, server) else none
+    try net.send(host, client, "z")
+    mut buffer: [1]u8 = zeroed
+    got: usize = try net.receive(host, server, buffer)
+    at: net.address = try net.local_address(host, listener)
+    yes = got == 1 and buffer[0] == u8('z')
+          and net.same_address(try net.peer_address(host, client), at)
+          and try on_loopback(try net.local_address(host, client))
+          and try on_loopback(try net.peer_address(host, server))
+end crossed
+
+--  A datagram from one socket at `fe80::1%lo0` to another, its sender
+--  zoned.
+datagram: (host: blocking.host, bound: net.address) -> (yes: bool) ! ... =
+    first: io.file = try net.open_datagram(host, bound)
+    defer net.close_socket(host, first) else none
+    second: io.file = try net.open_datagram(host, bound)
+    defer net.close_socket(host, second) else none
+    to: net.address = try net.local_address(host, second)
+    try net.send_to(host, first, "d", to)
+    try net.set_timeouts(host, second, time.seconds(5), time.seconds(5))
+    mut buffer: [4]u8 = zeroed
+    got: net.datagram = try net.receive_from(host, second, buffer)
+    yes = got.count == 1 and buffer[0] == u8('d')
+          and net.same_address(got.sender, try net.local_address(host, first))
+          and try on_loopback(got.sender)
+end datagram
+
+--  Where the host allows it: connections by name and by number.
+allowed: (host: blocking.host, listener: io.file) -> (yes: bool) ! ... =
+    at: net.address = try net.local_address(host, listener)
+    yes = try on_loopback(at) and try crossed(host, listener, at)
+    --  The interface's number in place of its name.
+    mut digits: [16]u8 = zeroed
+    mut number := text.over(digits[0..<16])
+    try text.append_u32(number, try posix.interface_index(loopback_name))
+    numbered: net.address = try net.with_zone(at, text.used(number))
+    yes = yes and not net.same_address(numbered, at)
+          and try crossed(host, listener, numbered)
+    yes = yes and try datagram(host, net.with_port(at, 0))
+end allowed
+
+--  Where it does not, Linux: the zone still reaches the socket, which
+--  finds no route on the interface it names, where without one Linux
+--  refuses the address outright.
+refused_here: (host: blocking.host) -> (yes: bool) ! ... =
+    zoned: net.address = try net.with_zone(
+        try net.parse_address("[fe80::1]:9"), loopback_name)
+    mut unreachable: bool = false
+    made: io.file = net.connect_within(host, zoned, time.seconds(5))
+        else (problem)
+        unreachable = problem == net.unreachable
+        io.file(0)
+    end
+    if not unreachable then
+        try net.close_socket(host, made)
+        yes = false
+        return
+    end if
+    mut invalid: bool = false
+    bare: io.file = net.connect_within(host, try net.parse_address("[fe80::1]:9"),
+                                       time.seconds(5)) else (problem)
+        invalid = problem == io.io_failed
+                  and blocking.last_errno(host) == posix.number(posix.einval)
+        io.file(0)
+    end
+    if not invalid then
+        try net.close_socket(host, bare)
+    end if
+    yes = invalid
+end refused_here
+
+--  A zone that names no interface, on every system.
+nowhere: (host: blocking.host) -> (yes: bool) ! ... =
+    at: net.address = try net.parse_address("[fe80::1%no-such-if9]:9")
+    yes = false
+    listener: io.file = net.listen(host, at) else (problem)
+        yes = problem == net.address_unavailable
+        io.file(0)
+    end
+    if not yes then
+        try net.close_socket(host, listener)
+        return
+    end if
+    yes = false
+    made: io.file = net.connect_within(host, at, time.seconds(5))
+        else (problem)
+        yes = problem == net.address_unavailable
+        io.file(0)
+    end
+    if not yes then
+        try net.close_socket(host, made)
+        return
+    end if
+    yes = false
+    socket: io.file = net.open_datagram(host, at) else (problem)
+        yes = problem == net.address_unavailable
+        io.file(0)
+    end
+    if not yes then try net.close_socket(host, socket) end if
+end nowhere
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    mut yes: bool = nowhere(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not yes
+    code = 2
+    at: net.address = net.parse_address("[fe80::1]:0") else (problem)
+        _ = problem
+        return
+    end
+    zoned: net.address = net.with_zone(at, loopback_name) else (problem)
+        _ = problem
+        return
+    end
+    mut listened: bool = true
+    mut unavailable: bool = false
+    listener: io.file = net.listen(host, zoned) else (problem)
+        listened = false
+        unavailable = problem == net.address_unavailable
+        io.file(0)
+    end
+    return when not listened and not unavailable
+    if unavailable then
+        --  The host has no link-local address on its loopback.
+        code = 3
+        yes = refused_here(host) else (problem)
+            _ = problem
+            return
+        end
+        return when not yes
+    else
+        code = 4
+        yes = allowed(host, listener) else (problem)
+            _ = problem
+            return
+        end
+        net.close_socket(host, listener) else none
+        return when not yes
+    end if
+    code = 42
+end main

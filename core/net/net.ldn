@@ -10,8 +10,9 @@ import core/text
 import core/time
 
 --- The text of an address could not be read as one: not four decimal
---- parts from 0 to 255, not an IPv6 address's groups, a zone, or a port
---- that is missing, above 65535 or not decimal.
+--- parts from 0 to 255, not an IPv6 address's groups, a zone that is
+--- empty, longer than `zone_room` or holds a NUL, a zone after an IPv4
+--- address, or a port that is missing, above 65535 or not decimal.
 public invalid_address: atom
 --- Nothing listens at the address a connection was asked for: the system
 --- answered it at once, as a closed port is answered.
@@ -23,12 +24,13 @@ public unreachable: atom
 --- datagram socket bound there.
 public address_in_use: atom
 --- The address cannot be used here: no interface of this system holds it,
---- or the system does not have its family at all, as one without IPv6
---- does not.
+--- its zone names no interface of this system, or the system does not
+--- have its family at all, as one without IPv6 does not.
 public address_unavailable: atom
 --- The time limit `set_timeouts` gave passed before anything arrived or
---- could be sent, or a connection's handshake took longer than the system
---- waits.  The socket is still usable.
+--- could be sent, the limit `connect_within` was given passed before the
+--- connection was made, or a connection's handshake took longer than the
+--- system waits.  A socket `set_timeouts` limited is still usable.
 public timed_out: atom
 --- The connection's peer has gone: it closed or reset the connection, so
 --- what is sent cannot be delivered.  A write to such a connection is this
@@ -42,19 +44,29 @@ public ipv6: atom
 --- What an address is: `ipv4` or `ipv6`.
 public address_family: type = ipv4 | ipv6
 
+--- The most bytes a zone has: an interface's name on every hosted
+--- system, whose own limit, IFNAMSIZ, counts a NUL after them.
+public zone_room: usize = 15
+
 --- An internet address and a port: TCP's and UDP's endpoint.  `family`
 --- says which; an IPv4 address is `octets`' first four bytes, in the
 --- order its text writes them, and the other twelve are zero; an IPv6
 --- address is all sixteen, in network order.  `port` is a number from 0
 --- to 65535, and 0 asks the system for a free one when a socket is bound.
---- There is no zone: an IPv6 link-local address that needs one, `fe80::1%eth0`,
---- cannot be written.  Make one with `ipv4_address`, `ipv6_address`,
---- `loopback`, `unspecified` or `parse_address`, and compare two with
---- `same_address`.
+--- `zone` is an IPv6 address's zone, the interface a link-local address
+--- such as `fe80::1%eth0` is reached through: the name's bytes, at most
+--- `zone_room` of them, and zeros after it, or all zeros for none, which
+--- every IPv4 address has.  A zone of decimal digits is the interface's
+--- number, `fe80::1%2`, and a provider turns a name into the number its
+--- system gives the interface when the address is used (D581).  Make one
+--- with `ipv4_address`, `ipv6_address`, `loopback`, `unspecified`,
+--- `parse_ip` or `parse_address`, give it a zone with `with_zone`, and
+--- compare two with `same_address`.
 public address: type = struct
     family: address_family
     octets: [16]u8
     port: u16
+    zone: [16]u8
 end address
 
 --- What arrived in one `receive_from`: how many bytes, and the address and
@@ -97,6 +109,13 @@ public network: type = concept (provider: type) is io.reader, io.writer
     connect: (self: provider, to: address) -> (connected: io.file)
              ! refused | unreachable | address_unavailable | timed_out
              | io.io_failed
+    --- Connect as `connect` does, but fail `timed_out` once `limit` has
+    --- passed without the connection being made; a limit of zero is none,
+    --- as `set_timeouts` reads one (D580).
+    connect_within: (self: provider, to: address, limit: time.duration)
+                    -> (connected: io.file)
+                    ! refused | unreachable | address_unavailable | timed_out
+                    | io.io_failed
     --- Listen for connections at `at`, port 0 for a free one, which
     --- `local_address` then gives.  A listener may take an address its
     --- earlier connections still hold while they close, never one another
@@ -151,7 +170,7 @@ end network
 --- An IPv4 address `a.b.c.d` and a port.
 public ipv4_address: (a: u8, b: u8, c: u8, d: u8, port: u16)
                      -> (at: address) =
-    at = (family: ipv4, octets: zeroed, port: port)
+    at = (family: ipv4, octets: zeroed, port: port, zone: zeroed)
     at.octets[0] = a
     at.octets[1] = b
     at.octets[2] = c
@@ -159,9 +178,9 @@ public ipv4_address: (a: u8, b: u8, c: u8, d: u8, port: u16)
 end ipv4_address
 
 --- An IPv6 address of eight 16-bit groups, in the order its text writes
---- them, and a port.
+--- them, and a port, with no zone.
 public ipv6_address: (groups: [8]u16, port: u16) -> (at: address) =
-    at = (family: ipv6, octets: zeroed, port: port)
+    at = (family: ipv6, octets: zeroed, port: port, zone: zeroed)
     for index in usize(0)..<8 do
         at.octets[2 * index] = u8(groups[index] >> 8)
         at.octets[2 * index + 1] = u8(groups[index] & 255)
@@ -171,7 +190,7 @@ end ipv6_address
 --- The loopback address of `family`, `127.0.0.1` or `::1`, and a port:
 --- this system, reached without a network.
 public loopback: (family: address_family, port: u16) -> (at: address) =
-    at = (family: family, octets: zeroed, port: port)
+    at = (family: family, octets: zeroed, port: port, zone: zeroed)
     if family == ipv4 then
         at.octets[0] = 127
         at.octets[3] = 1
@@ -183,7 +202,7 @@ end loopback
 --- The unspecified address of `family`, `0.0.0.0` or `::`, and a port: a
 --- socket bound to it takes what arrives at the port on every interface.
 public unspecified: (family: address_family, port: u16) -> (at: address) =
-    at = (family: family, octets: zeroed, port: port)
+    at = (family: family, octets: zeroed, port: port, zone: zeroed)
 end unspecified
 
 --- The address `at` with another port.
@@ -192,11 +211,31 @@ public with_port: (at: address, port: u16) -> (result: address) =
     result.port = port
 end with_port
 
---- Whether two addresses are the same family, address and port.
+--- The address `at` with the zone `name`, an interface's name or its
+--- number in decimal: `invalid_address` for an IPv4 address, and for a
+--- name `parse_ip` would not read after a `%`.  An empty name takes the
+--- zone away.
+public with_zone: (at: address, name: []u8) -> (result: address)
+                  ! invalid_address =
+    result = at
+    result.zone = zeroed
+    return when lenof name == 0
+    fail invalid_address when at.family <> ipv6
+    try zone_into(result, name)
+end with_zone
+
+--- How many bytes the address's zone has, zero for none: the zone is
+--- `at.zone[0..<net.zone_length(at)]`.
+public zone_length: (at: address) -> (length: usize) =
+    length = mem.find(at.zone[0..<16], 0)
+end zone_length
+
+--- Whether two addresses are the same family, address, zone and port.
 public same_address: (left: address, right: address) -> (same: bool) =
     same = left.family == right.family and left.port == right.port
     for index in usize(0)..<16 do
-        if left.octets[index] <> right.octets[index] then
+        if left.octets[index] <> right.octets[index]
+          or left.zone[index] <> right.zone[index] then
             same = false
         end if
     end for
@@ -310,17 +349,41 @@ ipv6_octets: (source: []u8) -> (octets: [16]u8) ! invalid_address =
     end for
 end ipv6_octets
 
---- Read an address without a port from its text, `127.0.0.1` or
---- `2001:db8::1`, with port 0: four decimal parts from 0 to 255 without a
---- leading zero, or an IPv6 address's groups of one to four hexadecimal
---- digits in either case, at most one `::` and an IPv4 address in the last
---- 32 bits.  Anything else, a zone such as `%eth0` and surrounding spaces
+--  Give `at`, whose zone is all zeros, the zone `name`: one to
+--  `zone_room` bytes, none of them NUL, which ends a zone.
+zone_into: (inout at: address, name: []u8) -> none ! invalid_address =
+    length: usize = lenof name
+    fail invalid_address when length == 0 or length > zone_room
+      or mem.find(name, 0) < length
+    mem.copy(at.zone[0..<length], name) else (problem)
+        _ = problem
+        fail invalid_address
+    end
+end zone_into
+
+--  Read an IPv6 address into `at`, and the zone after its `%` when it has
+--  one.
+zoned: (inout at: address, source: []u8) -> none ! invalid_address =
+    percent: usize = mem.find(source, u8('%'))
+    at.family = ipv6
+    at.octets = try ipv6_octets(source[0..<percent])
+    if percent < lenof source then
+        try zone_into(at, source[percent + 1..<lenof source])
+    end if
+end zoned
+
+--- Read an address without a port from its text, `127.0.0.1`,
+--- `2001:db8::1` or `fe80::1%eth0`, with port 0: four decimal parts from 0
+--- to 255 without a leading zero, or an IPv6 address's groups of one to
+--- four hexadecimal digits in either case, at most one `::` and an IPv4
+--- address in the last 32 bits, and after them a zone: `%` and one to
+--- `zone_room` bytes, none of them NUL, kept as they are written.
+--- Anything else, a zone after an IPv4 address and surrounding spaces
 --- among it, is `invalid_address`.
 public parse_ip: (source: []u8) -> (at: address) ! invalid_address =
     at = unspecified(ipv4, 0)
     if mem.find(source, u8(':')) < lenof source then
-        at.family = ipv6
-        at.octets = try ipv6_octets(source)
+        try zoned(at, source)
         return
     end if
     four: [4]u8 = try ipv4_octets(source)
@@ -330,9 +393,10 @@ public parse_ip: (source: []u8) -> (at: address) ! invalid_address =
 end parse_ip
 
 --- Read an address and a port from their text: `127.0.0.1:8080`, or an
---- IPv6 address in brackets, `[::1]:8080`, as a URL writes them.  The
+--- IPv6 address in brackets, `[::1]:8080` and `[fe80::1%eth0]:8080`.  The
 --- port is decimal, from 0 to 65535; an address is read as `parse_ip`
---- reads one.  Anything else is `invalid_address`.
+--- reads one, its zone inside the brackets as written rather than as a
+--- URL escapes it, `%25eth0`.  Anything else is `invalid_address`.
 public parse_address: (source: []u8) -> (at: address) ! invalid_address =
     length: usize = lenof source
     mut colon: usize = length
@@ -353,8 +417,8 @@ public parse_address: (source: []u8) -> (at: address) ! invalid_address =
     if lenof host > 0 and host[0] == u8('[') then
         fail invalid_address when lenof host < 2
           or host[lenof host - 1] <> u8(']')
-        at = (family: ipv6, octets: try ipv6_octets(host[1..<lenof host - 1]),
-              port: port)
+        at = unspecified(ipv6, port)
+        try zoned(at, host[1..<lenof host - 1])
         return
     end if
     four: [4]u8 = try ipv4_octets(host)
@@ -427,8 +491,8 @@ end grouped
 --- Append an address's text without its port: `127.0.0.1`, or an IPv6
 --- address as RFC 5952 writes it, `::1` and `2001:db8::1`, lower case with
 --- the longest run of zero groups shortened and an IPv4-mapped address as
---- `::ffff:192.0.2.1`.  `parse_ip` reads it back.  It is written whole or
---- not at all.
+--- `::ffff:192.0.2.1`, and its zone after a `%`, `fe80::1%eth0`.
+--- `parse_ip` reads it back.  It is written whole or not at all.
 public append_ip: (inout into: text.builder, at: address)
                   -> none ! text.no_space =
     start: usize = text.length(into)
@@ -439,8 +503,9 @@ public append_ip: (inout into: text.builder, at: address)
 end append_ip
 
 --- Append an address's text with its port: `127.0.0.1:8080`, or an IPv6
---- address in brackets, `[::1]:8080`.  `parse_address` reads it back.  It
---- is written whole or not at all.
+--- address and its zone in brackets, `[::1]:8080` and
+--- `[fe80::1%eth0]:8080`.  `parse_address` reads it back.  It is written
+--- whole or not at all.
 public append_address: (inout into: text.builder, at: address)
                        -> none ! text.no_space =
     start: usize = text.length(into)
@@ -458,6 +523,11 @@ address_written: (inout into: text.builder, at: address, with_port: bool)
         try dotted(into, at, 0)
     else
         try grouped(into, at)
+        zone: usize = mem.find(at.zone[0..<16], 0)
+        if zone > 0 then
+            try text.append_byte(into, u8('%'))
+            try text.append(into, at.zone[0..<zone])
+        end if
     end if
     if bracketed then try text.append_byte(into, u8(']')) end if
     if with_port then
@@ -473,14 +543,27 @@ end address_text
 
 address is text.formattable (append: address_text)
 
---- Connect to a listener at `to` through `network` evidence.  Close the
---- connection with `close_socket`.
+--- Connect to a listener at `to` through `network` evidence, waiting as
+--- long as the system does.  Close the connection with `close_socket`.
 public connect: (provider: type is network, host: provider, to: address)
                 -> (connected: io.file)
                 ! refused | unreachable | address_unavailable | timed_out
                 | io.io_failed =
     connected = try provider.connect(host, to)
 end connect
+
+--- Connect to a listener at `to`, failing `timed_out` once `limit` has
+--- passed without an answer, as from a peer that never answers; a limit
+--- of zero is none.  The socket a limit ends is closed, and a connection
+--- made is as `connect` makes it, with no limit of its own on what it
+--- sends and receives.
+public connect_within: (provider: type is network, host: provider,
+                        to: address, limit: time.duration)
+                       -> (connected: io.file)
+                       ! refused | unreachable | address_unavailable
+                       | timed_out | io.io_failed =
+    connected = try provider.connect_within(host, to, limit)
+end connect_within
 
 --- Listen for connections at `at`, port 0 for a free one; close the
 --- listener with `close_socket`.

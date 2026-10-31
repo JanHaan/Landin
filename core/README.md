@@ -224,8 +224,12 @@ limit was set. An `address` is a value: a family, `ipv4` or `ipv6`,
 sixteen bytes and a port, made with `loopback`, `unspecified`,
 `ipv4_address` and `ipv6_address`, read from its text with `parse_ip` and
 `parse_address` and written back with `append_ip` and `append_address`, as
-RFC 5952 writes IPv6, and `text.formattable` too. It has no zone, and
-nothing here resolves a name. A refused connection, an address in use and
+RFC 5952 writes IPv6, and `text.formattable` too. An IPv6 address keeps
+its zone, `fe80::1%eth0`, as text, so that reading and writing it needs
+no system; a hosted provider turns the zone into the interface's number
+where the address meets a socket, and back (D581). Nothing here resolves
+a name. `connect_within` gives a connection a limit of its own, as
+`set_timeouts` gives a socket's sends and receives (D580). A refused connection, an address in use and
 an address this system does not have are atoms of their own. The fake is a
 `fake.network`, a machine of loopback addresses over the caller's socket
 records and their buffers: a connection and a datagram arrive at once and
@@ -299,7 +303,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
 | `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
-| `core/io` network | Reading and writing addresses run in `runtime/network-addresses-firmware`'s 29.8 KB image at size/auto, 31.9 KB at none/off, of which the address code is about 17 KB, `ipv6_octets` alone 4.6 KB. The memory network does not fit the profile: a provider's conformance table links every entry, about 40 KB of code, so its echo, `runtime/network-echo-memory`, needs about 135 KB and is a recorded image limit, as every form of address text, `runtime/network-addresses`, at about 45 KB, is. |
+| `core/io` network | Reading addresses, zones among them, runs in `runtime/network-addresses-firmware`'s 17.5 KB image at size/auto, 21.6 KB at none/off, and writing them in `runtime/network-addresses-written-firmware`'s 20.2 KB and 23.4 KB; one image doing both, about 35 KB at none/off, would not fit, and `ipv6_octets` alone is 3.9 KB at size/auto (D581). The memory network does not fit the profile: a provider's conformance table links every entry, about 40 KB of code, so its echo, `runtime/network-echo-memory`, needs about 135 KB and is a recorded image limit, as every form of address text, `runtime/network-addresses`, at about 47 KB, is. |
 | `core/io` file system | The names `make_temporary` tries and the memory terminals run in `runtime/file-system-firmware`'s 18.7 KB image at size/auto, 22.2 KB at none/off. The memory volume does not fit the profile: its conformances link every entry of `reader`, `writer`, `files`, `directories` and `file_system`, so `runtime/volume-memory` needs about 106 KB at size/auto and is a recorded image limit, and a program over the volume alone that makes, writes, renames and reads one file still needed about 61 KB. |
 | `platform/cortex_m` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers. A target assertion refuses import on other targets. |
 

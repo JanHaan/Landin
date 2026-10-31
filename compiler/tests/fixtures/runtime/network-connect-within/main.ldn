@@ -1,0 +1,146 @@
+--  D580: a connection with a limit of its own.  `net.connect_within`
+--  connects to a listener as `connect` does, with a limit and with none,
+--  is refused at once by a port nothing listens on, and fails `timed_out`
+--  once its limit has passed against a peer that never answers, after the
+--  limit and long before the system would give up, which is over a
+--  minute; a connection made afterwards is unharmed.  The peer that never
+--  answers is each system's own: Linux drops a connection's first segment
+--  while a listener's queue of finished handshakes is full, so once a
+--  listener of backlog 0 that nothing accepts from holds one connection,
+--  the next is never answered; FreeBSD answers such a connection from its
+--  SYN cache and resets it later, and Darwin and FreeBSD both carry a
+--  segment for `fe80::2%lo0`, an address on the loopback interface's
+--  link-local prefix that no interface holds, to nobody (D581).
+import core/io
+import core/net
+import core/time
+import hosted/blocking
+import platform/posix
+
+--  The limit each bounded attempt is given.
+limit: u64 = 200
+
+--  The connections an attempt made, kept until the end.
+kept: type = struct
+    files: [8]io.file
+    count: usize
+end kept
+
+--  Connect to `at` within the limit: kept in `held` when it connects, or
+--  `ended` when it timed out after the limit and well before a system's
+--  own wait.  Any other failure is the caller's.
+attempt: (host: blocking.host, at: net.address, inout held: kept)
+         -> (ended: bool) ! ... =
+    ended = false
+    start: time.instant = time.now(host)
+    made: io.file = net.connect_within(host, at, time.milliseconds(limit))
+        else (problem)
+        took: time.duration = time.elapsed(start, time.now(host))
+        fail problem when problem <> net.timed_out
+        fail io.io_failed when took < time.milliseconds(limit)
+          or took >= time.seconds(10)
+        ended = true
+        return
+    end
+    held.files[held.count] = made
+    inc held.count
+end attempt
+
+--  Attempt connections to `at` until one times out, at most eight.
+times_out: (host: blocking.host, at: net.address) -> (yes: bool) ! ... =
+    mut held: kept = zeroed
+    yes = false
+    while held.count < 8 and not yes do
+        yes = try attempt(host, at, held)
+    end while
+    for index in usize(0)..<held.count do
+        closing: io.file = held.files[index]
+        try net.close_socket(host, closing)
+    end for
+end times_out
+
+fixed if compiler.os == linux then
+    --  A listener of backlog 0 that nothing accepts from.
+    unanswered: (host: blocking.host) -> (yes: bool) ! ... =
+        held: posix.descriptor = try posix.socket(posix.internet,
+                                                  posix.stream)
+        defer posix.close(held) else none
+        try posix.bind(held,
+                       try posix.internet_address(net.loopback(net.ipv4, 0)))
+        try posix.listen(held, 0)
+        at: net.address = try posix.address_of(try posix.socket_name(held))
+        yes = try times_out(host, at)
+    end unanswered
+else
+    --  An address on the loopback's link-local prefix that nothing holds.
+    unanswered: (host: blocking.host) -> (yes: bool) ! ... =
+        yes = try times_out(host, try net.parse_address("[fe80::2%lo0]:9"))
+    end unanswered
+end if
+
+--  A connection made within a limit, and one with none, to a listener
+--  that accepts them, and a byte sent over the first.
+connects: (host: blocking.host) -> (yes: bool) ! ... =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    defer net.close_socket(host, listener) else none
+    at: net.address = try net.local_address(host, listener)
+    client: io.file = try net.connect_within(host, at, time.seconds(5))
+    defer net.close_socket(host, client) else none
+    server: io.file = try net.accept(host, listener)
+    defer net.close_socket(host, server) else none
+    try net.send(host, client, "!")
+    mut buffer: [1]u8 = zeroed
+    got: usize = try net.receive(host, server, buffer)
+    unlimited: io.file = try net.connect_within(host, at, time.nanoseconds(0))
+    defer net.close_socket(host, unlimited) else none
+    other: io.file = try net.accept(host, listener)
+    defer net.close_socket(host, other) else none
+    yes = got == 1 and buffer[0] == u8('!')
+          and net.same_address(try net.peer_address(host, client), at)
+end connects
+
+--  A connection within a limit to a port nothing listens on is refused,
+--  at once.
+refused: (host: blocking.host) -> (yes: bool) ! ... =
+    listener: io.file = try net.listen(host, net.loopback(net.ipv4, 0))
+    at: net.address = try net.local_address(host, listener)
+    try net.close_socket(host, listener)
+    yes = false
+    start: time.instant = time.now(host)
+    made: io.file = net.connect_within(host, at, time.seconds(5))
+        else (problem)
+        yes = problem == net.refused
+              and time.elapsed(start, time.now(host)) < time.seconds(5)
+        return
+    end
+    try net.close_socket(host, made)
+end refused
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    code = 1
+    mut yes: bool = connects(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not yes
+    code = 2
+    yes = refused(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not yes
+    code = 3
+    yes = unanswered(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not yes
+    code = 4
+    yes = connects(host) else (problem)
+        _ = problem
+        return
+    end
+    return when not yes
+    code = 42
+end main

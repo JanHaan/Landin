@@ -28,6 +28,15 @@ reading: () -> (at: u64) =
     at = u64(sample.seconds) * second + u64(sample.nanoseconds)
 end reading
 
+--  The instant `span` after now, the clock's last instant when that is
+--  past it.
+deadline_after: (span: time.duration) -> (deadline: u64) =
+    start: u64 = reading()
+    room: u64 = (0 -% 1) - start
+    deadline = if u64(span) > room then 0 -% 1
+               else start + u64(span) end if
+end deadline_after
+
 blocking_now: (self: host) -> (at: time.instant) =
     _ = self.services
     at = time.instant(reading())
@@ -42,10 +51,7 @@ end blocking_now
 --  the deadline, which is still never early; none of them does.
 blocking_sleep: (self: host, span: time.duration) -> none =
     _ = self.services
-    start: u64 = reading()
-    room: u64 = (0 -% 1) - start
-    deadline: u64 = if u64(span) > room then 0 -% 1
-                    else start + u64(span) end if
+    deadline: u64 = deadline_after(span)
     loop do
         now: u64 = reading()
         return when now >= deadline

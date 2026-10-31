@@ -1,0 +1,116 @@
+--  A sleep a signal interrupts sleeps on for what is left.  The program
+--  catches SIGUSR1 with a handler of its own, which only a C library's
+--  `sigaction` installs, so it links one; a thread of hosted/thread, which
+--  starts with the asynchronous signals blocked (D521), waits until the
+--  first thread is about to sleep for half a second on hosted/blocking's
+--  clock, sleeps a tenth of a second itself and sends SIGUSR1 to the
+--  process.  The signal can only be taken by the first thread, in its
+--  `nanosleep`, which the system then ends early with EINTR; the sleep
+--  reads the clock again and asks for the rest (core/time's `sleep`).  The
+--  oracle: the handler ran once, the signal was sent after the sleep
+--  began and before it ended, and the sleep lasted at least what it was
+--  asked.
+import core/failure
+import core/io
+import core/time
+import hosted/blocking
+import hosted/system
+import hosted/thread
+import platform/libc
+import platform/posix
+
+--  Set when the first thread is about to sleep; the second waits for it.
+mut asleep: u32 = 0
+--  How often the handler ran, and when the signal was sent.
+mut caught: u32 = 0
+mut sent_at: u64 = 0
+mut sent: bool = false
+
+--  A handler as `sigaction` calls one.
+caught_type: type = extern(c) (number: i32) -> none
+
+extern(c) caught_signal: (number: i32) -> none =
+    _ = number
+    seen: u32 = compiler.atomic_load(addr caught, compiler.acquire)
+    compiler.atomic_store(addr caught, seen + 1, compiler.release)
+end caught_signal
+
+--  Catch SIGUSR1 with `caught_signal`.  `signal_action` keeps the handler
+--  as the word its code address is.
+caught_by_handler: () -> (yes: bool) =
+    entry: caught_type = caught_signal
+    word: ptr u64 = ptr(usize(addr entry))
+    mut action: libc.signal_action = zeroed
+    action.handler = word.val
+    yes = libc.sigaction(libc.sigusr1, addr action, libc.no_address) == 0
+end caught_by_handler
+
+--  The monotonic clock in nanoseconds, read as hosted/blocking reads it.
+reading: () -> (at: u64) =
+    sample: posix.time_value = posix.clock_time(posix.monotonic_clock)
+        else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+    at = u64(sample.seconds) * 1000000000 + u64(sample.nanoseconds)
+end reading
+
+sender: type = struct
+    reserved: u32
+end sender
+
+--  Wait until the first thread is about to sleep, let it fall asleep,
+--  and send the signal.  A program that never slept gives up after ten
+--  seconds rather than hold its join.
+send: (inout state: sender) -> none ! failure.reason =
+    _ = state
+    deadline: u64 = reading() + 10000000000
+    while compiler.atomic_load(addr asleep, compiler.acquire) == 0 do
+        fail io.io_failed when reading() > deadline
+    end while
+    --  The thread blocks SIGUSR1, so no signal ends this sleep early.
+    posix.sleep((seconds: 0, nanoseconds: 100000000)) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    sent_at = reading()
+    sent = libc.kill(libc.getpid(), libc.sigusr1) == 0
+end send
+
+--  Two stacks of glibc's least, 128 KiB on arm64, and the task's own.
+mut backing: [147456]u8 = zeroed
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not caught_by_handler()
+    code = 2
+    host := blocking.new()
+    mut workers := thread.group_over(system.new(), backing, 1) else (problem)
+        _ = problem
+        return
+    end
+    defer thread.join(workers) else none
+    task: sender = (reserved: 0)
+    thread.admit(workers, send, task) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    start: time.instant = time.now(host)
+    compiler.atomic_store(addr asleep, u32(1), compiler.release)
+    time.sleep(host, time.milliseconds(500))
+    ended: time.instant = time.now(host)
+    thread.join(workers) else (problem)
+        _ = problem
+        return
+    end
+    code = 4
+    return when not sent
+    code = 5
+    return when compiler.atomic_load(addr caught, compiler.acquire) <> 1
+    code = 6
+    return when sent_at <= u64(start) or sent_at >= u64(ended)
+    code = 7
+    return when time.elapsed(start, ended) < time.milliseconds(500)
+    code = 42
+end main

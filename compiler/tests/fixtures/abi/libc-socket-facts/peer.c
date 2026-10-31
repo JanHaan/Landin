@@ -6,6 +6,7 @@
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <signal.h>
@@ -14,6 +15,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
@@ -22,8 +24,14 @@ extern int64_t l_number(int32_t index);
 extern int64_t l_offset(int32_t index);
 extern uint32_t l_encoded(int32_t index, uint8_t *into);
 extern int64_t l_decoded(const uint8_t *from, uint32_t length);
+extern uint32_t l_index_of(const char *name, uint32_t length);
+extern void l_zone_of(uint32_t index, uint8_t *into);
 #if defined(__linux__)
 extern bool l_linux_agrees(void);
+extern int64_t l_interface_fact(int32_t index);
+#define LOOPBACK "lo"
+#else
+#define LOOPBACK "lo0"
 #endif
 #if defined(__linux__) || defined(__FreeBSD__)
 extern int32_t l_cloexec_flag(void);
@@ -58,6 +66,11 @@ int main(void)
 #if defined(__linux__)
     if (!l_linux_agrees())
         return 3;
+    if (l_interface_fact(0) != SIOCGIFINDEX
+        || l_interface_fact(1) != SIOCGIFNAME
+        || l_interface_fact(2) != (int64_t)sizeof(struct ifreq)
+        || l_interface_fact(3) != (int64_t)offsetof(struct ifreq, ifr_ifindex))
+        return 47;
 #endif
 #if defined(__linux__) || defined(__FreeBSD__)
     if (l_cloexec_flag() != SOCK_CLOEXEC || l_no_signal() != MSG_NOSIGNAL)
@@ -131,5 +144,26 @@ int main(void)
         return 45;
     if (l_decoded(got, length) != -1)
         return 46;
+
+    /* A zone of digits is the scope as it stands, and a name is the
+       number the C library finds for it, and back. */
+    six.sin6_port = htons(1);
+    if (inet_pton(AF_INET6, "fe80::1", &six.sin6_addr) != 1)
+        return 48;
+    six.sin6_scope_id = 7;
+    memset(got, 0xAA, sizeof got);
+    if (l_encoded(3, got) != sizeof six || memcmp(got, &six, sizeof six))
+        return 49;
+    unsigned loopback = if_nametoindex(LOOPBACK);
+    if (loopback == 0 || l_index_of(LOOPBACK, sizeof LOOPBACK - 1) != loopback
+        || l_index_of("no-such-if9", 11) != 0)
+        return 50;
+    char named[IF_NAMESIZE];
+    uint8_t zone[16];
+    if (if_indextoname(loopback, named) == NULL)
+        return 51;
+    l_zone_of(loopback, zone);
+    if (strcmp((const char *)zone, named))
+        return 52;
     return 42;
 }

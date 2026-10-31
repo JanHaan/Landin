@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: within a Cortex-M0 image, an IPv4 and a compressed IPv6 address are read from their text and written back as the same text, a zone and a three-part IPv4 address are invalid_address, and an IPv4 address is written with its port; runtime/network-addresses holds every form on the hosted targets
+summary: within a Cortex-M0 image, net.parse_ip reads an IPv4 address, a compressed IPv6 address and a link-local one with its zone as the addresses their constructors and net.with_zone make, telling two zones and none apart, and refuses an empty zone, a zone after an IPv4 address and a three-part IPv4 address as invalid_address; runtime/network-addresses-written-firmware writes them, runtime/network-addresses holds every form on the hosted targets
 program: main.ldn
 root: ../../../../..
 status: 42

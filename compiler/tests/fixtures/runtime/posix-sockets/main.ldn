@@ -79,7 +79,7 @@ end named_listener
 
 --  A record for a failed call's value.
 nowhere: () -> (at: posix.socket_address) =
-    at = posix.internet_address(net.unspecified(net.ipv4, 0))
+    at = (bytes: zeroed, length: 0)
 end nowhere
 
 --  A Unix-domain path that is empty, holds a NUL or does not fit.
@@ -110,10 +110,10 @@ records: () -> none ! ... =
     six: net.address = net.ipv6_address(groups, 8080)
     four: net.address = net.ipv4_address(10, 1, 2, 3, 53)
     fail wrong when not net.same_address(
-        try posix.address_of(posix.internet_address(six)), six)
+        try posix.address_of(try posix.internet_address(six)), six)
       or not net.same_address(
-          try posix.address_of(posix.internet_address(four)), four)
-      or try posix.family_of(posix.internet_address(six)) <> posix.internet6
+          try posix.address_of(try posix.internet_address(four)), four)
+      or try posix.family_of(try posix.internet_address(six)) <> posix.internet6
     mut refused: bool = false
     unix: posix.socket_address = try posix.unix_address(text.host_over("x"))
     _ = posix.address_of(unix) else (problem)
@@ -131,18 +131,19 @@ stream_calls: (family: posix.socket_family, at: net.address) -> none ! ... =
         try posix.set_ipv6_only(listener, true)
     end if
     try posix.set_reuse_address(listener, true)
-    try posix.bind(listener, posix.internet_address(at))
+    try posix.bind(listener, try posix.internet_address(at))
     try posix.listen(listener, 4)
     bound: net.address = try posix.address_of(try posix.socket_name(listener))
     fail wrong when bound.port == 0
     taken: posix.descriptor = try posix.socket(family, posix.stream)
     mut in_use: bool = false
-    posix.bind(taken, posix.internet_address(bound)) else (problem)
+    bound_record: posix.socket_address = try posix.internet_address(bound)
+    posix.bind(taken, bound_record) else (problem)
         in_use = problem == posix.eaddrinuse
     end
     try posix.close(taken)
     client: posix.descriptor = try posix.socket(family, posix.stream)
-    try posix.connect(client, posix.internet_address(bound))
+    try posix.connect(client, bound_record)
     try posix.pending_error(client)
     try posix.set_no_delay(client, true)
     try posix.set_receive_timeout(client, (seconds: 2, nanoseconds: 0))
@@ -163,7 +164,7 @@ stream_calls: (family: posix.socket_family, at: net.address) -> none ! ... =
     try posix.close(listener)
     nothing: posix.descriptor = try posix.socket(family, posix.stream)
     mut refused: bool = false
-    posix.connect(nothing, posix.internet_address(bound)) else (problem)
+    posix.connect(nothing, bound_record) else (problem)
         refused = problem == posix.econnrefused
     end
     try posix.close(nothing)
@@ -176,9 +177,9 @@ end stream_calls
 datagram_calls: (family: posix.socket_family, at: net.address) -> none
                 ! ... =
     one: posix.descriptor = try posix.socket(family, posix.datagram)
-    try posix.bind(one, posix.internet_address(at))
+    try posix.bind(one, try posix.internet_address(at))
     other: posix.descriptor = try posix.socket(family, posix.datagram)
-    try posix.bind(other, posix.internet_address(at))
+    try posix.bind(other, try posix.internet_address(at))
     to: posix.socket_address = try posix.socket_name(other)
     sent: usize = try posix.send_to(one, "datagram", to)
     mut buffer: [16]u8 = zeroed
@@ -197,7 +198,7 @@ closed_on_exec: () -> none ! ... =
     listener: posix.descriptor = try posix.socket(posix.internet,
                                                   posix.stream)
     try posix.bind(listener,
-                   posix.internet_address(net.loopback(net.ipv4, 0)))
+                   try posix.internet_address(net.loopback(net.ipv4, 0)))
     try posix.listen(listener, 4)
     client: posix.descriptor = try posix.socket(posix.internet, posix.stream)
     try posix.connect(client, try posix.socket_name(listener))

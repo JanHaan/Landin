@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D580 net.connect_within over hosted/blocking connects within a limit and with none to a listener that accepts, is refused at once by a port nothing listens on, and fails timed_out against a peer that never answers once the limit has passed and well before the system's own wait, after which a connection is unharmed; the peer is a full listener of backlog 0 on Linux and fe80::2%lo0, on the loopback's link-local prefix, on Darwin and FreeBSD
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0680, 0940, 1030, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

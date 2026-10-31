@@ -1,0 +1,146 @@
+--  A signal that arrives while a fibre sleeps on hosted/events' clock
+--  wakes the loop, not the sleeper, which sleeps on for what is left
+--  (core/time's `sleep`).  One fibre watches SIGUSR1 and waits for it,
+--  another sleeps for half a second; a thread of hosted/thread, which
+--  starts with the asynchronous signals blocked (D521), waits until both
+--  have begun, sleeps a tenth of a second itself and sends SIGUSR1 to the
+--  process.  The loop, waiting for the sleeper's deadline, is woken by
+--  the signal, through signalfd on Linux and kqueue on Darwin and FreeBSD
+--  (D488), answers the watcher and waits again for what is left.  The
+--  oracle: the signal arrived after the sleep began and before it ended,
+--  and the sleep lasted at least what it was asked.
+import core/failure
+import core/fibre
+import core/io
+import core/io/signal
+import core/time
+import hosted/events
+import hosted/system
+import hosted/thread
+import platform/libc
+import platform/linux
+import platform/linux/numbers
+import platform/posix
+
+--  Set when the watcher watches and when the sleeper is about to sleep;
+--  the thread waits for both.
+mut watching: u32 = 0
+mut asleep: u32 = 0
+--  When the sleep began and ended and the signal arrived, and whether it
+--  was sent.
+mut began: u64 = 0
+mut ended: u64 = 0
+mut arrived_at: u64 = 0
+mut sent: bool = false
+
+--  Send SIGUSR1 to this process.
+fixed if compiler.os == linux then
+    signal_self: () -> (done: bool) =
+        process: i64 = linux.system_call(numbers.getpid_number, 0, 0, 0, 0,
+                                         0, 0)
+        done = linux.system_call(numbers.kill_number, process,
+                                 i64(linux.sigusr1), 0, 0, 0, 0) == 0
+    end signal_self
+else
+    signal_self: () -> (done: bool) =
+        done = libc.kill(libc.getpid(), libc.sigusr1) == 0
+    end signal_self
+end if
+
+sender: type = struct
+    reserved: u32
+end sender
+
+--  The monotonic clock in nanoseconds.
+reading: () -> (at: u64) =
+    sample: posix.time_value = posix.clock_time(posix.monotonic_clock)
+        else (problem)
+        _ = problem
+        compiler.unreachable()
+    end
+    at = u64(sample.seconds) * 1000000000 + u64(sample.nanoseconds)
+end reading
+
+--  Wait until the watcher watches and the sleeper sleeps, let the sleep
+--  begin, and send the signal.  A program whose fibres never began gives
+--  up after ten seconds rather than hold its join.
+send: (inout state: sender) -> none ! failure.reason =
+    _ = state
+    deadline: u64 = reading() + 10000000000
+    while compiler.atomic_load(addr watching, compiler.acquire) == 0
+      or compiler.atomic_load(addr asleep, compiler.acquire) == 0 do
+        fail io.io_failed when reading() > deadline
+    end while
+    --  The thread blocks SIGUSR1, so no signal ends this sleep early.
+    posix.sleep((seconds: 0, nanoseconds: 100000000)) else (problem)
+        _ = problem
+        fail io.io_failed
+    end
+    sent = signal_self()
+end send
+
+watcher: type = struct
+    host: events.host
+end watcher
+
+--  Watch SIGUSR1, say so, and wait for it.
+wait_for_signal: (inout state: watcher) -> none ! failure.reason =
+    try signal.watch(state.host, signal.user1)
+    compiler.atomic_store(addr watching, u32(1), compiler.release)
+    arrival: signal.event = try signal.next_signal(state.host)
+    fail io.io_failed when arrival.which <> signal.user1
+    arrived_at = u64(time.now(state.host))
+    try signal.stop_watching(state.host)
+end wait_for_signal
+
+sleeper: type = struct
+    host: events.host
+end sleeper
+
+--  Sleep for half a second.
+sleep_through: (inout state: sleeper) -> none ! failure.reason =
+    began = u64(time.now(state.host))
+    compiler.atomic_store(addr asleep, u32(1), compiler.release)
+    time.sleep(state.host, time.milliseconds(500))
+    ended = u64(time.now(state.host))
+end sleep_through
+
+--  One thread's stack, with room for Darwin's whole 16 KiB pages, and
+--  two fibres'.
+mut thread_backing: [2 * 32768]u8 = zeroed
+mut fibre_backing: [2 * 32768]u8 = zeroed
+
+run: (host: events.host) -> none ! failure.reason =
+    mut workers := try thread.group_over(system.new(), thread_backing, 1)
+    defer thread.join(workers) else none
+    task: sender = (reserved: 0)
+    try thread.admit(workers, send, task)
+    mut tasks := try fibre.turns_over(any(addr host), fibre_backing, 2)
+    defer fibre.join(tasks) else none
+    try fibre.admit(tasks, wait_for_signal, watcher(host: host))
+    try fibre.admit(tasks, sleep_through, sleeper(host: host))
+    --  The loop runs both fibres until they end: the signal arrives while
+    --  it waits for the sleeper's deadline.
+    try fibre.join(tasks)
+    try thread.join(workers)
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: events.space = zeroed
+    --  Two fibres, and one more for the routine that joins them.
+    mut entries: [3]usize = zeroed
+    host := events.new(state, entries) else (problem)
+        _ = problem
+        return
+    end
+    code = 2
+    run(host) else none
+    code = 3
+    return when not sent or ended == 0
+    code = 4
+    return when arrived_at <= began or arrived_at >= ended
+    code = 5
+    return when ended - began < 500000000
+    code = 42
+end main

@@ -1,19 +1,21 @@
---  Addresses on firmware: an IPv4 and an IPv6 address read from their
---  text and written back, text that is no address refused, and an address
---  written with its port, within a Cortex-M0 image.
---  runtime/network-addresses holds every form on the hosted targets.
-import core/cmp
+--  Addresses on firmware, read: an IPv4 address, a compressed IPv6
+--  address and a link-local one with its zone read from their text, each
+--  the same address its constructors make, and text that is no address
+--  refused, within a Cortex-M0 image.  Writing them is
+--  runtime/network-addresses-written-firmware's, since both together do
+--  not fit the profile at none/off, and runtime/network-addresses holds
+--  every form on the hosted targets.
 import core/net
-import core/text
 
---  Whether SOURCE reads as an address that is written back as itself.
-round_trip: (source: []u8) -> (yes: bool) ! ... =
-    at: net.address = try net.parse_ip(source)
-    mut room: [48]u8 = zeroed
-    mut line := text.over(room[0..<48])
-    try net.append_ip(line, at)
-    yes = cmp.compare(text.used(line), source) == cmp.equal
-end round_trip
+--  Whether SOURCE reads as the address WANTED.
+reads_as: (source: []u8, wanted: net.address) -> (yes: bool) =
+    yes = false
+    at: net.address = net.parse_ip(source) else (problem)
+        _ = problem
+        return
+    end
+    yes = net.same_address(at, wanted)
+end reads_as
 
 --  Whether SOURCE is refused as no address.
 refused: (source: []u8) -> (yes: bool) =
@@ -25,34 +27,24 @@ refused: (source: []u8) -> (yes: bool) =
     _ = at
 end refused
 
---  Whether an address is written with its port after it.
-with_port: () -> (yes: bool) ! ... =
-    mut room: [48]u8 = zeroed
-    mut line := text.over(room[0..<48])
-    try net.append_address(line, net.ipv4_address(192, 0, 2, 1, 80))
-    yes = cmp.compare(text.used(line), "192.0.2.1:80") == cmp.equal
-end with_port
-
 public main: () -> (code: i32) =
     code = 1
-    v4: bool = round_trip("192.0.2.1") else (problem)
-        _ = problem
-        return
-    end
-    return when not v4
+    return when not reads_as("192.0.2.1", net.ipv4_address(192, 0, 2, 1, 0))
     code = 2
-    v6: bool = round_trip("2001:db8::ff00:42:8329") else (problem)
-        _ = problem
-        return
-    end
-    return when not v6
+    groups: [8]u16 = [0x2001, 0xdb8, 0, 0, 0, 0xff00, 0x42, 0x8329]
+    return when not reads_as("2001:db8::ff00:42:8329",
+                             net.ipv6_address(groups, 0))
     code = 3
-    return when not refused("fe80::1%eth0") or not refused("1.2.3")
-    code = 4
-    port: bool = with_port() else (problem)
+    link: [8]u16 = [0xfe80, 0, 0, 0, 0, 0, 0, 1]
+    zoned: net.address = net.with_zone(net.ipv6_address(link, 0), "eth0")
+        else (problem)
         _ = problem
         return
     end
-    return when not port
+    return when not reads_as("fe80::1%eth0", zoned)
+      or reads_as("fe80::1%eth1", zoned) or reads_as("fe80::1", zoned)
+    code = 4
+    return when not refused("fe80::1%") or not refused("1.2.3")
+      or not refused("127.0.0.1%lo")
     code = 42
 end main

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: within a Cortex-M0 image, net.append_ip writes an IPv4 address, a compressed IPv6 address and a link-local one with the zone net.with_zone gave it as their text, and net.append_address the link-local one with its zone and port in brackets; runtime/network-addresses-firmware reads them
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0640, 0790, 0900, 1030
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

@@ -32,10 +32,12 @@ family_of: (at: net.address) -> (family: posix.socket_family) =
 end family_of
 
 --  Whether an errno says the system does not have the address here: no
---  interface holds it, or the family is missing altogether.
+--  interface holds it, its zone names no interface, or the family is
+--  missing altogether.
 unavailable: (problem: posix.errno) -> (yes: bool) =
     yes = problem == posix.eaddrnotavail or problem == posix.eafnosupport
-          or problem == posix.epfnosupport
+          or problem == posix.epfnosupport or problem == posix.enodev
+          or problem == posix.enxio
 end unavailable
 
 --  Whether an errno says the peer has gone: it closed or reset the
@@ -58,7 +60,7 @@ bound: (at: net.address, kind: posix.socket_kind, listening: bool)
     if listening then
         try posix.set_reuse_address(socket, true)
     end if
-    try posix.bind(socket, posix.internet_address(at))
+    try posix.bind(socket, try posix.internet_address(at))
     if listening then
         try posix.listen(socket, backlog)
     end if
@@ -114,29 +116,99 @@ finished: (socket: posix.descriptor) -> none ! posix.errno =
 end finished
 
 connected: (to: net.address) -> (socket: posix.descriptor) ! posix.errno =
+    target: posix.socket_address = try posix.internet_address(to)
     socket = try posix.socket(family_of(to), posix.stream)
     undo quietly_closed(socket)
-    posix.connect(socket, posix.internet_address(to)) else (problem)
+    posix.connect(socket, target) else (problem)
         fail problem when problem <> posix.eintr
         try finished(socket)
     end
 end connected
+
+--  Wait until a connection begun on `socket` has ended either way, or
+--  the clock has reached `deadline`, `etimedout`; take its outcome from
+--  the socket.  A poll a signal interrupts, or that ends early, is asked
+--  again for what is left, rounded up to the millisecond so that it
+--  never ends before the deadline.
+finished_by: (socket: posix.descriptor, deadline: u64) -> none ! posix.errno =
+    mut entries: [1]posix.poll_entry =
+        [posix.watch(socket, posix.poll_output)]
+    loop do
+        now: u64 = reading()
+        fail posix.etimedout when now >= deadline
+        left: u64 = deadline - now
+        mut milliseconds: u64 = left / 1000000
+        if left - milliseconds * 1000000 > 0 then inc milliseconds end if
+        bounded: i32 = if milliseconds > 2147483647 then 2147483647
+                       else i32(milliseconds) end if
+        found: usize = posix.poll(entries[0..<1], bounded) else (problem)
+            continue when problem == posix.eintr
+            fail problem
+        end
+        break when found > 0
+    end loop
+    try posix.pending_error(socket)
+end finished_by
+
+--  A connection begun on a non-blocking socket, so that its wait can be
+--  limited, and the socket made to block again once it is made, as every
+--  other socket of this provider's does (D580).
+connected_by: (to: net.address, deadline: u64)
+              -> (socket: posix.descriptor) ! posix.errno =
+    target: posix.socket_address = try posix.internet_address(to)
+    socket = try posix.socket(family_of(to), posix.stream)
+    undo quietly_closed(socket)
+    try posix.set_non_blocking(socket, true)
+    posix.connect(socket, target) else (problem)
+        fail problem when problem <> posix.einprogress
+          and problem <> posix.eintr
+        try finished_by(socket, deadline)
+    end
+    try posix.set_non_blocking(socket, false)
+end connected_by
+
+--  The errno a connection failed with, as the concept's atoms.
+connect_failure: (self: host, problem: posix.errno)
+                 -> none ! net.refused | net.unreachable
+                         | net.address_unavailable | net.timed_out
+                         | io.io_failed =
+    record(self, problem)
+    fail net.refused when problem == posix.econnrefused
+    fail net.unreachable when problem == posix.enetunreach
+      or problem == posix.ehostunreach
+    fail net.address_unavailable when unavailable(problem)
+    fail net.timed_out when problem == posix.etimedout
+    fail io.io_failed
+end connect_failure
 
 blocking_connect: (self: host, to: net.address) -> (opened: io.file)
                   ! net.refused | net.unreachable | net.address_unavailable
                   | net.timed_out | io.io_failed =
     cleared(self)
     made: posix.descriptor = connected(to) else (problem)
-        record(self, problem)
-        fail net.refused when problem == posix.econnrefused
-        fail net.unreachable when problem == posix.enetunreach
-          or problem == posix.ehostunreach
-        fail net.address_unavailable when unavailable(problem)
-        fail net.timed_out when problem == posix.etimedout
+        try connect_failure(self, problem)
         fail io.io_failed
     end
     opened = system.socket_of(made)
 end blocking_connect
+
+blocking_connect_within: (self: host, to: net.address, limit: time.duration)
+                         -> (opened: io.file)
+                         ! net.refused | net.unreachable
+                         | net.address_unavailable | net.timed_out
+                         | io.io_failed =
+    if u64(limit) == 0 then
+        opened = try blocking_connect(self, to)
+        return
+    end if
+    cleared(self)
+    made: posix.descriptor = connected_by(to, deadline_after(limit))
+        else (problem)
+        try connect_failure(self, problem)
+        fail io.io_failed
+    end
+    opened = system.socket_of(made)
+end blocking_connect_within
 
 blocking_accept: (self: host, listener: io.file) -> (accepted: io.file)
                  ! net.timed_out | io.io_failed =
@@ -204,10 +276,15 @@ blocking_send_to: (self: host, socket: io.file, bytes: []u8,
                    to: net.address) -> none
                   ! net.unreachable | net.timed_out | io.io_failed =
     cleared(self)
+    --  A zone that names no interface leads nowhere.
+    target: posix.socket_address = posix.internet_address(to) else (problem)
+        record(self, problem)
+        fail net.unreachable
+    end
     loop do
         accepted: usize =
             posix.send_to(system.descriptor_of(socket), bytes,
-                          posix.internet_address(to)) else (problem)
+                          target) else (problem)
                 continue when problem == posix.eintr
                 record(self, problem)
                 fail net.unreachable when problem == posix.enetunreach
@@ -330,7 +407,8 @@ blocking_close_socket: (self: host, sink socket: io.file)
 end blocking_close_socket
 
 host is net.network
-    (connect: blocking_connect, listen: blocking_listen,
+    (connect: blocking_connect, connect_within: blocking_connect_within,
+     listen: blocking_listen,
      accept: blocking_accept, open_datagram: blocking_open_datagram,
      send: blocking_send, receive: blocking_receive, send_to: blocking_send_to,
      receive_from: blocking_receive_from, shutdown: blocking_shutdown,

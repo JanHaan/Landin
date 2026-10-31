@@ -87,7 +87,7 @@
     },
     "abi/libc-socket-facts": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's socket and signal headers exist only on a hosted system; runtime/network-addresses-firmware reads and writes addresses on Cortex-M0.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's socket and signal headers exist only on a hosted system; runtime/network-addresses-firmware and runtime/network-addresses-written-firmware read and write addresses on Cortex-M0.",
       "witness": "compiler/tests/fixtures/abi/libc-socket-facts/fixture.meta"
     },
     "abi/library-names-beside-libc": {
@@ -1106,6 +1106,20 @@
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations."
     },
+    "runtime/events-connect-within": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events, the hosted event provider, on the freestanding target before checking declarations: firmware has no network stack here."
+    },
+    "runtime/events-signal-during-sleep": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/events and hosted/thread on the freestanding target before checking declarations: firmware has no event provider or threads; runtime/signals-fake-firmware waits for signals over the fake on Cortex-M0."
+    },
     "runtime/events-signal-stops-server": {
       "codes": [
         "L0015"
@@ -2008,9 +2022,12 @@
     "runtime/network-addresses": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "Every form of address text the fixture reads and writes, with text.format and its two conformances, needs about 45 KiB of flash at size/auto and 48 KiB at none/off, overflowing the 32 KiB profile by 13 and 16 KiB; the address code is about 17 KiB of it, ipv6_octets alone 4.6 KiB, most of it the Cortex-M0 backend's frame homes and copies between them. Each profile still attempts execution; runtime/network-addresses-firmware reads and writes an IPv4 and an IPv6 address within the image and requires execution; this image limit is not runtime evidence."
+      "reason": "Every form of address text the fixture reads and writes, with text.format and its two conformances, needs about 47 KiB of flash at size/auto and 56 KiB at none/off, overflowing the 32 KiB profile by 15 and 23 KiB; the address code is about 19 KiB of it, ipv6_octets alone 4.8 KiB, most of it the Cortex-M0 backend's frame homes and copies between them. Each profile still attempts execution; runtime/network-addresses-firmware reads an IPv4, an IPv6 and a zoned address and runtime/network-addresses-written-firmware writes them, each within its image, and both require execution; this image limit is not runtime evidence."
     },
     "runtime/network-addresses-firmware": {
+      "mode": "execute"
+    },
+    "runtime/network-addresses-written-firmware": {
       "mode": "execute"
     },
     "runtime/network-closed-peer": {
@@ -2019,6 +2036,13 @@
       ],
       "mode": "refuse",
       "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-echo-memory refuses, finds in use, disconnects and times out over core/io's memory network instead."
+    },
+    "runtime/network-connect-within": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here."
     },
     "runtime/network-datagram-memory-firmware": {
       "mode": "execute"
@@ -2049,6 +2073,13 @@
       "mode": "execute",
       "profile_limit": "selected-image",
       "reason": "The memory network's waits over a round of turns and at once, with its accept, receive, shutdown and close, need 65,216 bytes of flash at size/auto, overflowing the 32 KiB profile by 32,448. A table keeps only the entries something projects (D374), so what remains is the program's direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake's signals over a round of turns within the image and requires execution; this image limit is not runtime evidence."
+    },
+    "runtime/network-link-local-zone": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/blocking on the freestanding target before checking declarations: firmware has no network stack here. runtime/network-addresses-firmware and runtime/network-addresses-written-firmware read and write a zoned address on Cortex-M0."
     },
     "runtime/network-listen-beside-accepted": {
       "codes": [
@@ -3068,6 +3099,13 @@
       "counterpart": "sizeof-of-nominal-element-array",
       "mode": "execute",
       "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/sleep-signal-sleeps-on": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Source namespace checking refuses hosted/blocking, hosted/thread and platform/libc on the freestanding target before checking declarations: firmware has no system clock, threads or C runtime."
     },
     "runtime/slice-half-open-upper-traps": {
       "mode": "execute"

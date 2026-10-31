@@ -2368,6 +2368,11 @@ package body Landin.Diagnostics.Citations is
             when 323 =>
                "`platform/posix` gives sockets in the system's own recor"
                & "ds",
+            when 580 =>
+               "A connection's limit is a second entry, `connect_within`",
+            when 581 =>
+               "An IPv6 address keeps its zone as text, and the provider"
+               & " looks it up",
             when 325 =>
                "The rest of the file system is a concept of its own",
             when 326 =>
@@ -3458,6 +3463,10 @@ package body Landin.Diagnostics.Citations is
             when 322 =>
                "Decisions: The core library and the derived programs",
             when 323 =>
+               "Decisions: The core library and the derived programs",
+            when 580 =>
+               "Decisions: The core library and the derived programs",
+            when 581 =>
                "Decisions: The core library and the derived programs",
             when 325 =>
                "Decisions: The core library and the derived programs",
@@ -4969,6 +4978,12 @@ package body Landin.Diagnostics.Citations is
             when 323 =>
                "https://www.701.dev/spec.html#d323-platform-posix-gives-"
                & "sockets-in-the-system-s-own-records",
+            when 580 =>
+               "https://www.701.dev/spec.html#d580-a-connection-s-limit-"
+               & "is-a-second-entry-connect-within",
+            when 581 =>
+               "https://www.701.dev/spec.html#d581-an-ipv6-address-keeps"
+               & "-its-zone-as-text-and-the-provider-looks-it-up",
             when 325 =>
                "https://www.701.dev/spec.html#d325-the-rest-of-the-file-"
                & "system-is-a-concept-of-its-own",
