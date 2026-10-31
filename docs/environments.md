@@ -10,8 +10,8 @@ here are historical; `scripts/ci/` has been removed.
 
 Native macOS arm64 remains a development and gate environment. Use
 `./scripts/dev-test.sh --host` for compiler-host feedback; the gate runs
-`darwin-host`, `darwin-parity` and `lldb` on the GitHub-hosted `macos-26`
-image. The former Darwin
+`darwin-host`, `darwin-host-release`, whose last step is the LLDB sessions,
+and `darwin-parity` on the GitHub-hosted `macos-26` image. The former Darwin
 acceptance used `python3 scripts/ci/darwin.py accept COMMIT` on the Mac. Its
 verified bundle had to match the Linux bundle with compatible committed scope
 at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
@@ -91,7 +91,7 @@ See the [FreeBSD VMs](../environments/freebsd/README.md) for the guests.
 
 | environment | role | status |
 |---|---|---|
-| native macOS arm64 | compiler-host development; `darwin-host`, `darwin-parity` and `lldb` gate lanes | working |
+| native macOS arm64 | compiler-host development; `darwin-host`, `darwin-host-release` with the LLDB sessions, and `darwin-parity` gate lanes | working |
 | exact-revision Darwin acceptance | verified Mac evidence matched Linux before approval | retired |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | Apple Container, `linux/arm64` on Apple silicon | Linux arm64 work before a push: the pinned aarch64 toolchain runs natively, with no emulation, in a Debian container | working |

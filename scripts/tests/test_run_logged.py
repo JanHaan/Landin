@@ -110,6 +110,61 @@ class LoggedCommands(unittest.TestCase):
         self.assertEqual(self.result()["interrupted_by"], signal.SIGTERM)
         self.assertEqual(self.result()["returncode"], -signal.SIGTERM)
 
+    def start(self, code):
+        """Start a logged run without waiting for it, as in the background."""
+        process = subprocess.Popen(self.command(sys.executable, "-c", code),
+                                   stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL)
+
+        def cleanup():
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=5)
+
+        self.addCleanup(cleanup)
+        return process
+
+    def wait(self, *arguments):
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--wait", str(self.output),
+             *arguments], capture_output=True, text=True, timeout=30)
+
+    def test_wait_returns_the_runs_status_and_tail(self):
+        self.start("import time; time.sleep(1); print('failure-marker'); "
+                   "raise SystemExit(23)")
+        result = self.wait("--timeout=20")
+        self.assertEqual(result.returncode, 23, result.stdout)
+        self.assertIn("exit=23", result.stdout)
+        self.assertIn("failure-marker", result.stdout)
+        self.assertIn(str(self.output / "result.json"), result.stdout)
+
+    def test_wait_says_a_run_is_still_going_and_can_be_repeated(self):
+        process = self.start("import time; print('progress-marker', "
+                             "flush=True); time.sleep(3)")
+        result = self.wait("--timeout=1")
+        self.assertEqual(result.returncode, 124, result.stdout)
+        self.assertIn("still running", result.stdout)
+        self.assertIn("progress-marker", result.stdout)
+        self.assertEqual(self.wait("--timeout=20").returncode, 0)
+        self.assertEqual(process.wait(timeout=5), 0)
+
+    def test_wait_reports_a_wrapper_that_died_without_a_result(self):
+        process = self.start("import time; time.sleep(5)")
+        deadline = time.monotonic() + 5
+        while not (self.output / "running.json").exists():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        process.kill()
+        process.wait(timeout=5)
+        result = self.wait("--timeout=20")
+        self.assertEqual(result.returncode, 125, result.stdout)
+        self.assertIn("ended without a result", result.stdout)
+
+    def test_wait_refuses_a_directory_no_run_writes(self):
+        result = self.wait("--timeout=0.5")
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("holds no run_logged.py run", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

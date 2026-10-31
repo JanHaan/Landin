@@ -31,7 +31,7 @@ The host selector accepts a suite or case, not a fixture selector. With the
 default `darwin-arm64` build tag, an example is:
 
 ```sh
-./scripts/dev-build.sh -j2
+./scripts/dev-build.sh
 LANDIN_TEST_JOBS=1 ./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
 ```
 
@@ -101,18 +101,53 @@ nix develop -c python3 scripts/run_logged.py \
 ```
 
 Choose the selectors for the change. `dev-test.sh` checks its own build;
-a preceding `dev-build.sh -j2` is useful when compilation feedback or an
-explicit compiler-worker bound is needed, rather than a mandatory separate
-step before each suite. When several related commands are necessary, enter
+a preceding `dev-build.sh` is useful when compilation feedback is needed,
+rather than a mandatory separate step before each suite. Leave its worker
+count at the project's `-j0`, every core: a build of the whole compiler took
+190 seconds at `-j4` and 72 at the default on a 32-core host, and the kernel
+shares the cores between concurrent builds better than a `-j` or a `taskset`
+chosen for each one. When several related commands are necessary, enter
 `nix develop` once and run them inside it. Use `sh -eu -c` for dependent
 commands, so an earlier failure stops the sequence.
+
+An agent harness runs every command in a fresh shell, and `nix develop -c`
+evaluates the flake before each one, about two seconds a command.
+`scripts/agent_env.sh` evaluates it once per `flake.nix`, `flake.lock` and
+`environments/pins.sh`, writes what the shell exports to a file under
+`~/.cache/landin/agent-env/`, and prints that file's path; sourcing it takes a
+few milliseconds and leaves `TMPDIR` alone. It prints nothing where there is
+no nix or the toolchain is already on `PATH`. Claude Code takes the file
+through a SessionStart hook in `.claude/settings.local.json`, which then
+reaches every Bash command of the session and of its subagents:
+
+```json
+{"hooks": {"SessionStart": [{"matcher": "", "hooks": [{"type": "command",
+  "timeout": 180,
+  "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; [ -x \"$s\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && f=$(\"$s\") && [ -n \"$f\" ] && cat \"$f\" >> \"$CLAUDE_ENV_FILE\"; exit 0"}]}]}}
+```
+
+The file is the environment of the checkout the session started in; a
+worktree whose flake or pins differ needs its own `nix develop`.
 
 In Claude Code, launch the long command through Bash's `run_in_background`
 facility and use its completion notification. For a remote handoff, request
 the host tool's completion notification. Continue independent work while it
 runs; do not launch shell loops that sleep and probe logs. If notifications
-are unavailable, use the tool's blocking wait. A live progress inspection is
-appropriate when diagnosing a stall, rather than as a timer.
+are unavailable, as they are to a subagent, which ends when its turn does,
+block on the run itself:
+
+```sh
+python3 scripts/run_logged.py --wait "$feedback_parent/checking-and-lowering"
+```
+
+It returns the run's summary and exit status once `result.json` exists. After
+540 seconds, inside the ten-minute limit of one tool call, it exits 124 and
+prints the log's last line instead, so the same call is simply made again;
+give the call a timeout above the wait's, such as 600 seconds. A run whose
+wrapper died without a result exits 125 at once. Do not wait with `sleep`
+loops over the log, nor with `pgrep -f`, whose pattern also matches the
+waiting shell's own command line, so the wait never ends. A live progress
+inspection is appropriate when diagnosing a stall, rather than as a timer.
 
 `scripts/run_logged.py` requires a new output directory and writes complete
 combined stdout/stderr to `command.log`. It prints paths, elapsed time, CPU

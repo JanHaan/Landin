@@ -41,8 +41,10 @@ python3 check.py
 python3 scripts/script_tests.py
 
 # Follow HEAD's gate run and return at its first failed job, rather than
-# when its last lane ends.
+# when its last lane ends; with --all, follow it to its end and name every
+# failed job, when a round's fixes should go in one push.
 python3 scripts/gate_watch.py
+python3 scripts/gate_watch.py --all
 
 # Regenerate every generated file: the matrices, catalogue, token dump and
 # editor files.  A stale one is named by the full run above.
@@ -116,19 +118,46 @@ independent facts avoids a model round trip per fact.
 
 Use one `dev-test.sh` invocation with all affected exact `--suite` and `--case`
 selectors, rather than a shell loop invoking it once per selector. It already
-checks the build; run `dev-build.sh` separately when compilation feedback or an
-explicit build-worker bound is needed. Enter `nix develop` once around related
-commands. Keep the existing host, worker, target and verification requirements.
+checks the build; run `dev-build.sh` separately when compilation feedback is
+needed. Enter `nix develop` once around related commands, or source the file
+`scripts/agent_env.sh` names, the same environment at no cost per command
+([the local feedback recipe](docs/process.md#local-agent-feedback) says how a
+harness takes it). Keep the existing host, worker, target and verification
+requirements.
 
 For a long local command, use `scripts/run_logged.py` inside that environment
 and the agent's background-command facility. Wait for its completion
 notification while doing independent work;
-do not add sleep/log-probe loops. Without notifications, use the tool's blocking
-wait. Inspect `result.json` and the retained log after completion. Report the
+do not add sleep/log-probe loops. An agent that receives no notification, a
+subagent among them, waits with `python3 scripts/run_logged.py --wait DIR` in a
+foreground call whose own timeout exceeds the wait's 540 seconds, and makes the
+same call again while it exits 124. Never wait in a `sleep` loop, and never on
+`pgrep -f`, whose pattern matches the waiting shell's own command line, so the
+wait does not end. Inspect `result.json` and the retained log after completion.
+Report the
 command's scope and status, including `FILTERED` or `HOST-ONLY` where applicable;
 an exit-zero summary alone is not full-suite evidence. The wrapper retains full
 output and prints a bounded tail on failure. Never pipe a check through a
 filter that hides its failure status. See [the local feedback recipe](docs/process.md#local-agent-feedback).
+
+Push a candidate as soon as it builds and the checks for what it touches pass.
+Further local lanes run beside its gate, never between the candidate and its
+push: the lanes that fail a gate are mostly ones no local host has, and an
+hour spent on the local matrix first only delays hearing from them. A change to
+the grammar, the highlighters or a fixture also runs
+`./highlight/test.sh --integration`, about a minute, before the push.
+
+A question to the user holds up only the work its answer decides. Promote a
+candidate whose gate passed, start what the answer cannot change, and say
+which answer you would take by default.
+
+A brief to a subagent or a parallel stream carries these rules itself, because
+streams that were not told polled their logs and ran complete suites anyway.
+It names the exact selectors for what the stream changes, leaves the complete
+suite to the integrated tree or the gate, names `run_logged.py --wait` as the
+way to wait, and leaves the build's worker count and CPU placement at their
+defaults rather than choosing a `-j` or a `taskset`: a full build at `-j4`
+took two and a half times as long as at the default.
 
 Reduce repeated orchestration, not reasoning effort, model capability, required
 checks or review depth. Keep relevant design context; return concise results
@@ -197,11 +226,10 @@ still succeed. The linked full run contains the target-test results.
 | `cortex-m` | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, keeping the stack-switch consumer's capacity report (D470) as an artifact |
 | `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
 | `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
-| `darwin-release-build` | `macos-26` | build the release executables once for the Darwin host, parity and LLDB jobs |
+| `darwin-release-build` | `macos-26` | build the release executables once for the `darwin-host-release` and `darwin-parity` jobs |
 | `darwin-host` | `macos-26` | the debug compiler host suite, determinism, report identity and the scripted server sessions |
-| `darwin-host-release` | `macos-26` | the release compiler host suite and the same follow-on checks |
+| `darwin-host-release` | `macos-26` | the release compiler host suite and the same follow-on checks, then the LLDB sessions, which had a job of their own until it was found holding one of the five macOS runners the account may use at once while `darwin-parity` queued for it |
 | `darwin-parity` | `macos-26` | the hosted corpus executed natively, every Darwin source verdict and the bindings |
-| `lldb` | `macos-26` | the LLDB sessions |
 | `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` shards, `arm64-compiler-checks` and the Linux arm64 determinism manifest |
 | `arm64-compiler` matrix | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane in two `--shard` jobs, `arm64-compiler-1` and `arm64-compiler-2` |
 | `arm64-compiler-checks` | `ubuntu-24.04-arm` | with the same debug compiler: representative verifier resources, the default target, the determinism closures, native report identity and the scripted server sessions |
@@ -226,7 +254,8 @@ arm64's release lane still builds its own. In
 the successful shared release-build jobs took 300 seconds on Linux and 447
 on Darwin; their compilation steps took 273 and 425 seconds respectively.
 Successful verification jobs took 328 seconds for `release`, 153 for
-`scaling`, 102 for `lldb` and 486 for `darwin-parity`. These whole-job times
+`scaling`, 102 for the then separate `lldb` job and 486 for `darwin-parity`.
+These whole-job times
 include setup and artifact handling, but exclude queueing and waiting for
 the shared build dependency.
 
@@ -306,8 +335,11 @@ the same verdicts.
 Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
 gate, or from a host you run yourself; the former exact-revision native
 acceptance runner is retired.
-A Darwin change receives focused checks on a Mac before it is pushed; the
-full Darwin suites run in the candidate's CI matrix. LLDB must inherit a
+A Darwin change receives focused checks on a Mac before it is pushed, and so,
+when a Mac is available, does a change to the harness or to fixtures the
+Darwin lanes run: `darwin-parity` and `darwin-host` were the lanes most often
+red in October's gate runs. The full Darwin suites run in the candidate's CI
+matrix. LLDB must inherit a
 graphical or terminal security audit session; an arbitrary background
 session may not launch a debugged process, regardless of debugger rights.
 The hosted macOS image's runner session may launch one. The first native Mac run's retained

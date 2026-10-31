@@ -10,6 +10,12 @@ log, so the fix can start while the other lanes run on.  Pushing the fix
 cancels the superseded run, because the gate's concurrency group does.
 
     python3 scripts/gate_watch.py [--run ID | --commit SHA] [--interval S]
+                                  [--all]
+
+`--all` follows the run to its end instead and names every failed job,
+for a round whose fixes should all go in one push: returning at the first
+failure once left a second failed lane of the same run unseen, and the
+next push failed on it again.
 
 With neither, it follows the gate run for HEAD, waiting for one to appear.
 A commit may be anything `git rev-parse` names here, a short hash among
@@ -71,8 +77,9 @@ def minutes(job):
     return " %.1f min" % (elapsed.total_seconds() / 60)
 
 
-def watch(run, interval):
+def watch(run, interval, every=False):
     reported = set()
+    failed = []
     while True:
         view = gh("run", "view", str(run), "--json",
                   "status,conclusion,url,jobs")
@@ -90,9 +97,14 @@ def watch(run, interval):
                 print("log:    gh run view %s --job %s --log-failed"
                       % (run, job["databaseId"]))
                 print("run:    %s" % view["url"])
-                return 1
+                if not every:
+                    return 1
+                failed.append(job["name"])
         if view["status"] == "completed":
             print("run %s: %s  %s" % (run, view["conclusion"], view["url"]))
+            if failed:
+                print("failed jobs: %s" % ", ".join(failed))
+                return 1
             return 0 if view["conclusion"] == "success" else 2
         time.sleep(interval)
 
@@ -103,6 +115,8 @@ def main(argv):
     which.add_argument("--run", type=int)
     which.add_argument("--commit")
     parser.add_argument("--interval", type=float, default=30)
+    parser.add_argument("--all", action="store_true",
+                        help="follow the run to its end, naming every failure")
     args = parser.parse_args(argv[1:])
     run = args.run
     if run is None:
@@ -112,7 +126,7 @@ def main(argv):
                          "its full hash" % args.commit)
         run = find_run(commit, args.interval)
     print("following gate run %s" % run, flush=True)
-    return watch(run, args.interval)
+    return watch(run, args.interval, args.all)
 
 
 if __name__ == "__main__":
