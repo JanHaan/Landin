@@ -112,6 +112,12 @@ package Landin.Testing.Fakes is
       From, To : String;
       Status : out Landin.Platform.Move_Status);
 
+   --  D558: a directory, unless the path is a file or writes are refused.
+   overriding procedure Make_Directory
+     (Host   : Fake_Filesystem;
+      Path   : String;
+      Status : out Landin.Platform.Write_Status);
+
    --  D526: a private directory is /virtual/tmp/PREFIXn, n counting from
    --  1, until Refuse_Private_Directories; Remove_Tree removes it and
    --  every entry under it, unless Refuse_Removals.

@@ -147,6 +147,14 @@ package Landin.Platform is
    procedure Unlock_Output
      (Host : Filesystem; Handle : Integer) is abstract;
 
+   --  D558: make one directory, whose parent exists.  A directory already
+   --  there is Write_Ok; anything else already there, or a directory that
+   --  could not be made, is Not_Writable.
+   procedure Make_Directory
+     (Host   : Filesystem;
+      Path   : String;
+      Status : out Write_Status) is abstract;
+
    --  D526: a new directory only its user may enter, under `TMPDIR` or
    --  `/tmp`, its name beginning with Prefix; Path is where it is.  Where
    --  `refine run` writes the program it runs.

@@ -9,7 +9,7 @@ package body Landin.Commands.Catalogue is
      (case Command is
          when Overview => "", when Check => "check",
          when Compile => "compile", when Run => "run",
-         when Format => "fmt",
+         when Format => "fmt", when Svd => "svd",
          when Explain => "explain", when Server => "lsp",
          when Version => "version", when Targets => "targets",
          when Completion => "completion", when Help => "help");
@@ -24,6 +24,8 @@ package body Landin.Commands.Catalogue is
            "Compile a whole program to a temporary executable and run it",
          when Format =>
            "Format source files, or a directory's, in the one Landin layout",
+         when Svd =>
+           "Generate a device's register modules and interrupts from its SVD",
          when Explain =>
            "Explain diagnostic codes, and the rules and decisions notes cite",
          when Server => "Serve the language server protocol over stdio",
@@ -67,7 +69,8 @@ package body Landin.Commands.Catalogue is
          when Format_Stdout => "--stdout", when Explain_Full => "--full",
          when Stdio => "--stdio", when JSON => "--json",
          when Warnings => "--warnings", when Warn => "--warn",
-         when Allow => "--allow", when Deny => "--deny");
+         when Allow => "--allow", when Deny => "--deny",
+         when Policy => "--policy", when Out_Dir => "--out-dir");
 
    function Description (Flag : Option) return String is
      (case Flag is
@@ -120,7 +123,10 @@ package body Landin.Commands.Catalogue is
          when Warnings => "Base warning selection: default, all, none",
          when Warn => "Enable a warning code or all (repeatable)",
          when Allow => "Suppress a warning code or all (repeatable)",
-         when Deny => "Enable and promote a warning to an error (repeatable)");
+         when Deny => "Enable and promote a warning to an error (repeatable)",
+         when Policy => "The selection policy the SVD was reviewed against",
+         when Out_Dir =>
+           "Directory the modules and the description are written under");
 
    function Values (Flag : Option) return String is
      (case Flag is
@@ -160,6 +166,7 @@ package body Landin.Commands.Catalogue is
                            | Dry_Run | Depfile)
             or else Flag in Warnings .. Deny,
           when Format => Flag in Format_Check | Format_Stdout,
+          when Svd => Flag in Policy | Out_Dir,
           when Explain => Flag = Explain_Full,
           when Server => Flag = Stdio,
           when Version => Flag in JSON | Library,
@@ -251,6 +258,7 @@ package body Landin.Commands.Catalogue is
             when Check | Compile => " [options] source.ldn ...",
             when Run => " [options] source.ldn ... [-- ARGUMENT ...]",
             when Format => " [options] source.ldn|DIR ...",
+            when Svd => " --policy=POLICY.json --out-dir=DIR DEVICE.svd",
             when Explain => " [options] [CODE|[NNNN]|DNNN ...]",
             when Completion => " [options] bash|zsh|fish",
             when Help => " [COMMAND|reference]",
@@ -363,6 +371,19 @@ package body Landin.Commands.Catalogue is
                  & LF & "also where the program looks for them when it runs."
                  & LF);
             end if;
+         when Svd =>
+            US.Append (Text, LF
+              & "Example: refine svd --policy=devices/policies/rp2040.json"
+              & LF & "  --out-dir=devices RP2040.svd" & LF
+              & "The SVD must be the file the policy was reviewed against,"
+              & LF & "by its SHA-256. The policy selects the peripherals and"
+              & LF & "registers to generate and says how each may be read and"
+              & LF & "written; devices/README.md describes it. Every output is"
+              & LF & "written beside its destination and read back before any"
+              & LF & "is replaced, and a failure puts back what was replaced."
+              & LF & "scripts/fetch_inputs.py fetches a pinned SVD by its"
+              & " hash."
+              & LF);
          when others => null;
       end case;
       return US.To_String (Text);

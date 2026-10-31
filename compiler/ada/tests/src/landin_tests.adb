@@ -55,6 +55,7 @@ with Landin.Tests.Cortex_Suite;
 with Landin.Tests.Toolchain_Suite;
 with Landin.Tests.Verifier_Suite;
 with Landin.Tests.X86_Optimization_Suite;
+with Landin.Tests.Xml_Suite;
 
 procedure Landin_Tests is
 
@@ -129,7 +130,8 @@ procedure Landin_Tests is
       "cortex ABI       ",
       "toolchain        ",
       "verifier         ",
-      "x86 opt          "];
+      "x86 opt          ",
+      "xml              "];
 
    function Trimmed (Name : Suite_Name) return String;
 
@@ -548,6 +550,7 @@ begin
    Landin.Tests.Toolchain_Suite.Register (Cases);
    Landin.Tests.Verifier_Suite.Register (Cases);
    Landin.Tests.X86_Optimization_Suite.Register (Cases);
+   Landin.Tests.Xml_Suite.Register (Cases);
 
    for Suite of Expected_Suites loop
       if not Landin.Testing.Has_Suite (Cases, Trimmed (Suite)) then

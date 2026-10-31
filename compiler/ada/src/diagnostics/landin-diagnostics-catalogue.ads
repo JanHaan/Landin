@@ -214,7 +214,17 @@ package Landin.Diagnostics.Catalogue is
       Panic_Contract_Invalid,
       Firmware_Frame_Exceeds_Stack,
       Handler_Exceeds_Stack_Margin,
-      Library_Not_Found);
+      Library_Not_Found,
+      --  D555-D558: `refine svd`, which reads a vendor's SVD and a
+      --  selection policy and replaces the modules it generates.  No
+      --  program is refused for any of them.
+      Svd_Malformed,
+      Svd_Policy_Invalid,
+      Svd_Input_Mismatch,
+      Svd_Form_Unsupported,
+      Svd_Device_Inconsistent,
+      Svd_Not_Found,
+      Svd_Output_Refused);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -318,7 +328,14 @@ package Landin.Diagnostics.Catalogue is
             when Panic_Contract_Invalid    => "L0506",
             when Firmware_Frame_Exceeds_Stack => "L0507",
             when Handler_Exceeds_Stack_Margin => "L0508",
-            when Library_Not_Found => "L0509");
+            when Library_Not_Found => "L0509",
+            when Svd_Malformed => "L0525",
+            when Svd_Policy_Invalid => "L0526",
+            when Svd_Input_Mismatch => "L0527",
+            when Svd_Form_Unsupported => "L0528",
+            when Svd_Device_Inconsistent => "L0529",
+            when Svd_Not_Found => "L0530",
+            when Svd_Output_Refused => "L0531");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -348,7 +365,8 @@ package Landin.Diagnostics.Catalogue is
             when Call_Argument_Match .. Traversal_Source => Error,
             --  Stage warnings do not refuse; invocation policy is separate.
             when Mutable_Never_Written | Unused_Pure_Local => Warning,
-            when No_Toolchain .. Library_Not_Found => Error);
+            when No_Toolchain .. Library_Not_Found => Error,
+            when Svd_Malformed .. Svd_Output_Refused => Error);
 
    --  Argument_Not_In_A_Register was retired by the internal scalar
    --  convention, which places every argument after the sixth in an aligned
@@ -390,7 +408,8 @@ package Landin.Diagnostics.Catalogue is
             when Frame_Not_Addressable | Image_Materialization_Limit
                | Panic_Contract_Invalid | Firmware_Frame_Exceeds_Stack
                | Handler_Exceeds_Stack_Margin | Library_Not_Found
-               => Live);
+               => Live,
+            when Svd_Malformed .. Svd_Output_Refused => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -647,7 +666,24 @@ package Landin.Diagnostics.Catalogue is
                & " the target's stack margin",
             when Library_Not_Found =>
                "[1590]/D525: a failed link's library that no named"
-               & " directory and none of the C driver's own holds");
+               & " directory and none of the C driver's own holds",
+            when Svd_Malformed =>
+               "D555: an SVD that is not XML in the subset refine svd reads",
+            when Svd_Policy_Invalid =>
+               "D556: a selection policy refine svd cannot read",
+            when Svd_Input_Mismatch =>
+               "D556: an SVD that is not the one its policy was reviewed"
+               & " against",
+            when Svd_Form_Unsupported =>
+               "D557: an SVD form refine svd does not read, for a selected"
+               & " register",
+            when Svd_Device_Inconsistent =>
+               "D557: a selected register the SVD describes in a way that"
+               & " cannot be generated as it says",
+            when Svd_Not_Found =>
+               "D556: a policy that selects what its SVD does not have",
+            when Svd_Output_Refused =>
+               "D558: outputs refine svd will not replace");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -692,7 +728,11 @@ package Landin.Diagnostics.Catalogue is
             --  in an empty file or a source-free fallback.
             when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
             --  D525: a library is asked for by its directive, always.
-            when Library_Not_Found => True);
+            when Library_Not_Found => True,
+            --  D558: the SVD or the policy is the source a fault is in;
+            --  an output in the way is in neither.
+            when Svd_Malformed .. Svd_Not_Found => True,
+            when Svd_Output_Refused => False);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -733,7 +773,10 @@ package Landin.Diagnostics.Catalogue is
             when Call_Argument_Match .. Traversal_Source
                => True,
             when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
-            when Library_Not_Found => True);
+            when Library_Not_Found => True,
+            --  A fault in an SVD or a policy points at the element or
+            --  byte it is at, or at the start when it is the whole file's.
+            when Svd_Malformed .. Svd_Output_Refused => False);
 
    --  The admitted secondary-label interval. Every code except L0201, L0300,
    --  L0304, L0305, L0306 and L0325 has one exact count. L0300 and L0306

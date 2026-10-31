@@ -137,6 +137,16 @@ package body Landin.Platform.Overlays is
       Status := Not_Removable;
    end Remove_File;
 
+   overriding procedure Make_Directory
+     (Host   : Overlay;
+      Path   : String;
+      Status : out Write_Status)
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      Status := Not_Writable;
+   end Make_Directory;
+
    overriding procedure Make_Private_Directory
      (Host   : Overlay;
       Prefix : String;

@@ -88,6 +88,11 @@ package Landin.Platform.Overlays is
       From, To : String;
       Status : out Move_Status);
 
+   overriding procedure Make_Directory
+     (Host   : Overlay;
+      Path   : String;
+      Status : out Write_Status);
+
    overriding procedure Make_Private_Directory
      (Host   : Overlay;
       Prefix : String;

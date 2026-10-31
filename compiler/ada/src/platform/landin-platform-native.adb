@@ -466,6 +466,26 @@ package body Landin.Platform.Native is
                  else Not_Movable);
    end Move_File;
 
+   overriding procedure Make_Directory
+     (Host   : Native_Filesystem;
+      Path   : String;
+      Status : out Write_Status)
+   is
+      pragma Unreferenced (Host);
+   begin
+      if Ada.Directories.Exists (Path) then
+         Status :=
+           (if Ada.Directories.Kind (Path) = Ada.Directories.Directory
+            then Write_Ok else Not_Writable);
+         return;
+      end if;
+      Ada.Directories.Create_Directory (Path);
+      Status := Write_Ok;
+   exception
+      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error =>
+         Status := Not_Writable;
+   end Make_Directory;
+
    overriding procedure Make_Private_Directory
      (Host   : Native_Filesystem;
       Prefix : String;

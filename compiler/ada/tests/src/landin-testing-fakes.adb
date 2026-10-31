@@ -504,6 +504,33 @@ package body Landin.Testing.Fakes is
       end if;
    end Move_File;
 
+   overriding procedure Make_Directory
+     (Host   : Fake_Filesystem;
+      Path   : String;
+      Status : out Landin.Platform.Write_Status)
+   is
+      Existing : constant Natural := Find (Host, Path);
+   begin
+      if Existing /= 0 then
+         Status :=
+           (if Host.Writes.Data.Files (Existing).Kind = A_Directory
+            then Landin.Platform.Write_Ok
+            else Landin.Platform.Not_Writable);
+      elsif Host.Writes.Data.Refuses_Write then
+         Status := Landin.Platform.Not_Writable;
+      else
+         Host.Writes.Data.Files.Append
+           (File_Entry'(Path => Unbounded.To_Unbounded_String
+                          (Directory_Path (Path)),
+                        Content => Unbounded.Null_Unbounded_String,
+                        Kind => A_Directory,
+                        Identity => Host.Writes.Data.Next_Identity));
+         Host.Writes.Data.Next_Identity :=
+           Host.Writes.Data.Next_Identity + 1;
+         Status := Landin.Platform.Write_Ok;
+      end if;
+   end Make_Directory;
+
    overriding procedure Lock_Output
      (Host : Fake_Filesystem; Path : String; Handle : out Integer)
    is

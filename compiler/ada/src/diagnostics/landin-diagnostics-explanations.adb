@@ -1082,7 +1082,72 @@ package body Landin.Diagnostics.Explanations is
                & "irectory that holds the library with `linker.directory("""
                & "DIR"")`, relative to the declaring file, or with `-L DIR`"
                & " when building, or install the library where the C drive"
-               & "r finds it.");
+               & "r finds it.",
+            when Catalogue.Svd_Malformed =>
+               "`refine svd` read an SVD that is not XML in the subset i"
+               & "t reads (D555). The message says what was met and the li"
+               & "ne and column it was met at: bytes that are not UTF-8, a"
+               & "n end tag that does not close the element open, an attri"
+               & "bute given twice, an entity other than XML's five, a doc"
+               & "ument type declaration, or text outside the root element"
+               & ". An SVD is a vendor's file, fetched by its hash and nev"
+               & "er edited; one that is refused here is not the file its "
+               & "policy names, or is truncated. Fetch it again with `scri"
+               & "pts/fetch_inputs.py`.",
+            when Catalogue.Svd_Policy_Invalid =>
+               "`refine svd` cannot read its selection policy (D556): th"
+               & "e policy is not JSON, not schema 2, lacks a member it ne"
+               & "eds, names a member refine does not read, or gives one o"
+               & "f the wrong shape, such as a read policy other than `nor"
+               & "mal`, `modify` or `refused`, or a mask that is not a `0x"
+               & "` 32-bit value. The message names the member. A reviewer"
+               & "'s notes belong under `provenance`, which is not read. `"
+               & "devices/README.md` describes every member.",
+            when Catalogue.Svd_Input_Mismatch =>
+               "The SVD `refine svd` was given is not the one its policy"
+               & " was reviewed against (D556): its SHA-256, its device na"
+               & "me or its version differs from the policy's. A policy's "
+               & "access policies and corrections were reviewed for one fi"
+               & "le, and a different file is not covered by that review. "
+               & "Fetch the SVD the policy names, or review the policy aga"
+               & "inst the new file and give its hash.",
+            when Catalogue.Svd_Form_Unsupported =>
+               "A selected register of the SVD uses a form `refine svd` "
+               & "does not read (D557): an array (`dim`) of peripherals, r"
+               & "egisters or fields, a register in a `cluster`, a registe"
+               & "r or field derived from another, an `alternateGroup`, a "
+               & "derived peripheral that adds registers or is derived fro"
+               & "m a derived one, a width other than 32 bits, a default e"
+               & "numerated value or one with don't-care bits, or a number"
+               & " with a multiplier. The message names the element and th"
+               & "e line it is at. Select registers that use the forms D55"
+               & "7 lists, or extend the importer.",
+            when Catalogue.Svd_Device_Inconsistent =>
+               "The SVD describes a selected register in a way that cann"
+               & "ot be generated as it says (D557): two fields overlap, a"
+               & " field lies outside its register, an enumerated value do"
+               & "es not fit its field or encodes a value twice, a propert"
+               & "y the register needs is given nowhere it inherits from, "
+               & "an address is not a word-aligned 32-bit address, an alte"
+               & "rnate register is at another address, or two vendor name"
+               & "s become one Landin name once lowercased and joined. The"
+               & " message names the element. Leave the register out of th"
+               & "e selection, or record a reviewed correction.",
+            when Catalogue.Svd_Not_Found =>
+               "The policy selects what the SVD does not have (D556): a "
+               & "peripheral, a register, or a register's alternate. A reg"
+               & "ister that is part of a `dim` array is not found by its "
+               & "expanded name, and the message says so when the peripher"
+               & "al has arrays. Correct the selection's spelling against "
+               & "the SVD.",
+            when Catalogue.Svd_Output_Refused =>
+               "`refine svd` will not replace its outputs (D558): the ou"
+               & "tput directory is missing or not a directory, a destinat"
+               & "ion is a directory, an earlier run left its staged or ke"
+               & "pt copies beside a destination, or the manifest it finds"
+               & " there names a file outside the directory. Nothing was w"
+               & "ritten. Remove what the message names, or choose another"
+               & " `--out-dir`.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -1669,6 +1734,20 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Handler_Exceeds_Stack_Margin =>
                "",
             when Catalogue.Library_Not_Found =>
+               "",
+            when Catalogue.Svd_Malformed =>
+               "",
+            when Catalogue.Svd_Policy_Invalid =>
+               "",
+            when Catalogue.Svd_Input_Mismatch =>
+               "",
+            when Catalogue.Svd_Form_Unsupported =>
+               "",
+            when Catalogue.Svd_Device_Inconsistent =>
+               "",
+            when Catalogue.Svd_Not_Found =>
+               "",
+            when Catalogue.Svd_Output_Refused =>
                "");
 
 end Landin.Diagnostics.Explanations;

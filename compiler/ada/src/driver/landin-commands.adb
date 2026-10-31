@@ -3,6 +3,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Build_Identity;
 with Landin.Commands.Catalogue;
+with Landin.Commands.Devices;
 with Landin.Commands.Presentation;
 with Landin.Commands.Response_Files;
 with Landin.Commands.Tracing;
@@ -347,6 +348,19 @@ package body Landin.Commands is
             if Natural (Result.Operands.Length) > 1 then
                Refuse (C.Name (Result.Command) & " takes one operand");
             end if;
+         when C.Svd =>
+            if Natural (Result.Operands.Length) /= 1
+              and then not Result.Wants_Help
+            then
+               Refuse ("svd reads one SVD: refine svd"
+                 & " --policy=POLICY.json --out-dir=DIR DEVICE.svd");
+            elsif not Result.Wants_Help
+              and then (not Seen (C.Policy) or else not Seen (C.Out_Dir))
+            then
+               Refuse ("svd needs the policy the SVD was reviewed against"
+                 & " and where to write: refine svd --policy=POLICY.json"
+                 & " --out-dir=DIR DEVICE.svd");
+            end if;
          when C.Run =>
             if Result.Operands.Is_Empty and then not Result.Wants_Help then
                Refuse ("run needs a source to compile and run: refine run"
@@ -650,6 +664,12 @@ package body Landin.Commands is
                Result.Output := US.To_Unbounded_String (C.Usage);
             when C.Version => Identify;
             when C.Targets => List_Targets;
+            when C.Svd =>
+               Landin.Commands.Devices.Import
+                 (Svd_Path => Asked.Operands.First_Element,
+                  Policy_Path => Effective (C.Policy, ""),
+                  Out_Dir => Effective (C.Out_Dir, ""),
+                  Host => Host, Result => Result);
             when C.Completion =>
                if Asked.Operands.Is_Empty or else Asked.Operands.Element (1)
                  not in "bash" | "zsh" | "fish"

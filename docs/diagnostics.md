@@ -1540,3 +1540,67 @@ link has failed; a failed link whose libraries are all found stays L0501
 with the linker's own text. Name the directory that holds the library with
 `linker.directory("DIR")`, relative to the declaring file, or with
 `-L DIR` when building, or install the library where the C driver finds it.
+
+### L0525
+
+`refine svd` read an SVD that is not XML in the subset it reads (D555). The
+message says what was met and the line and column it was met at: bytes that
+are not UTF-8, an end tag that does not close the element open, an attribute
+given twice, an entity other than XML's five, a document type declaration,
+or text outside the root element. An SVD is a vendor's file, fetched by its
+hash and never edited; one that is refused here is not the file its policy
+names, or is truncated. Fetch it again with `scripts/fetch_inputs.py`.
+
+### L0526
+
+`refine svd` cannot read its selection policy (D556): the policy is not JSON,
+not schema 2, lacks a member it needs, names a member refine does not read,
+or gives one of the wrong shape, such as a read policy other than `normal`,
+`modify` or `refused`, or a mask that is not a `0x` 32-bit value. The message
+names the member. A reviewer's notes belong under `provenance`, which is not
+read. `devices/README.md` describes every member.
+
+### L0527
+
+The SVD `refine svd` was given is not the one its policy was reviewed against
+(D556): its SHA-256, its device name or its version differs from the
+policy's. A policy's access policies and corrections were reviewed for one
+file, and a different file is not covered by that review. Fetch the SVD the
+policy names, or review the policy against the new file and give its hash.
+
+### L0528
+
+A selected register of the SVD uses a form `refine svd` does not read
+(D557): an array (`dim`) of peripherals, registers or fields, a register in a
+`cluster`, a register or field derived from another, an `alternateGroup`, a
+derived peripheral that adds registers or is derived from a derived one, a
+width other than 32 bits, a default enumerated value or one with don't-care
+bits, or a number with a multiplier. The message names the element and the
+line it is at. Select registers that use the forms D557 lists, or extend the
+importer.
+
+### L0529
+
+The SVD describes a selected register in a way that cannot be generated as
+it says (D557): two fields overlap, a field lies outside its register, an
+enumerated value does not fit its field or encodes a value twice, a property
+the register needs is given nowhere it inherits from, an address is not a
+word-aligned 32-bit address, an alternate register is at another address, or
+two vendor names become one Landin name once lowercased and joined. The
+message names the element. Leave the register out of the selection, or
+record a reviewed correction.
+
+### L0530
+
+The policy selects what the SVD does not have (D556): a peripheral, a
+register, or a register's alternate. A register that is part of a `dim`
+array is not found by its expanded name, and the message says so when the
+peripheral has arrays. Correct the selection's spelling against the SVD.
+
+### L0531
+
+`refine svd` will not replace its outputs (D558): the output directory is
+missing or not a directory, a destination is a directory, an earlier run left
+its staged or kept copies beside a destination, or the manifest it finds there
+names a file outside the directory. Nothing was written. Remove what the
+message names, or choose another `--out-dir`.

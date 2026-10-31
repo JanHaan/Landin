@@ -74,6 +74,11 @@ package Landin.Platform.Native is
       From, To : String;
       Status : out Move_Status);
 
+   overriding procedure Make_Directory
+     (Host   : Native_Filesystem;
+      Path   : String;
+      Status : out Write_Status);
+
    --  Through `landin_file_identity.c`: mkdtemp, mode 0700.
    overriding procedure Make_Private_Directory
      (Host   : Native_Filesystem;
