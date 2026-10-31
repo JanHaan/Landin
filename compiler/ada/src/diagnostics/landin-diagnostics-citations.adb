@@ -2162,6 +2162,20 @@ package body Landin.Diagnostics.Citations is
             when 542 =>
                "A device description is a module of directives, and its "
                & "generated half has one text",
+            when 543 =>
+               "A program selects its device by importing its descriptio"
+               & "n",
+            when 544 =>
+               "The selected profile decides which vector slots a handle"
+               & "r takes",
+            when 545 =>
+               "The linker script is derived from the description, and b"
+               & "oot kinds are the compiler's",
+            when 546 =>
+               "A developer's linker script is held to a written contrac"
+               & "t",
+            when 547 =>
+               "A declaration can be placed in a named region",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3256,6 +3270,16 @@ package body Landin.Diagnostics.Citations is
             when 530 =>
                "Decisions: The toolchain, C and the machine",
             when 542 =>
+               "Decisions: The toolchain, C and the machine",
+            when 543 =>
+               "Decisions: The toolchain, C and the machine",
+            when 544 =>
+               "Decisions: The toolchain, C and the machine",
+            when 545 =>
+               "Decisions: The toolchain, C and the machine",
+            when 546 =>
+               "Decisions: The toolchain, C and the machine",
+            when 547 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -4645,6 +4669,22 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d542-a-device-description-"
                & "is-a-module-of-directives-and-its-generated-half-has-one"
                & "-text",
+            when 543 =>
+               "https://www.701.dev/spec.html#d543-a-program-selects-its"
+               & "-device-by-importing-its-description",
+            when 544 =>
+               "https://www.701.dev/spec.html#d544-the-selected-profile-"
+               & "decides-which-vector-slots-a-handler-takes",
+            when 545 =>
+               "https://www.701.dev/spec.html#d545-the-linker-script-is-"
+               & "derived-from-the-description-and-boot-kinds-are-the-comp"
+               & "iler-s",
+            when 546 =>
+               "https://www.701.dev/spec.html#d546-a-developer-s-linker-"
+               & "script-is-held-to-a-written-contract",
+            when 547 =>
+               "https://www.701.dev/spec.html#d547-a-declaration-can-be-"
+               & "placed-in-a-named-region",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",

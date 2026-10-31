@@ -10,6 +10,31 @@ the line/function debugger exposes no device-variable display and performs no
 hidden register reads. Generator provenance and source snapshots remain off
 target. No additional device semantics or companion-tool capability follows.
 
+## Device descriptions
+
+`descriptions/DEVICE/` holds a device's description (D542): Landin source of
+tool directives the compiler reads into the profile a firmware program is
+built for, imported as `descriptions/DEVICE` with `--root=devices`, apart from
+the register modules under `generated/`. `interrupts.ldn` is the half an SVD
+gives, in the one text D542 fixes, and `memory.ldn` the half a developer
+writes. RP2040's `interrupts.ldn` was written in that form from the pinned
+`inputs/RP2040.svd`, and `scripts/tests/test_device_descriptions.py` renders
+the form from the SVD and requires the file's bytes. Its `memory.ldn` follows
+pico-sdk 2.2.0, checked against
+[`memmap_default.ld`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2040/memmap_default.ld)
+(SHA-256 `d409afb35ec0a8c3edf5ad6935907cb45f225a3cbdfd4c3b8505a7ed92df28dc`),
+whose FLASH comes from
+[`pico_flash_region.template.ld`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld)
+(`a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a`) at
+`0x10000000` and its 2 MiB from the Pico's
+[`pico.h`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico.h)
+(`e88d258b92a7653c360d32042c2cac0de99010a6bc67d6935f6095b9612336d0`); none of
+them is vendored. Its stack takes the whole of SCRATCH_Y, where pico-sdk puts
+core 0's, and its boot kind is `rp2040-boot2`, whose second-stage slot holds
+zeros until the first board item supplies the code. The Cortex-M
+[descriptions lane](../environments/cortex-m/README.md#device-descriptions)
+compares what it selects with expectations recorded from those files.
+
 ## Inputs and provenance
 
 [fixture.json](fixture.json) records every input SHA-256, upstream identity,

@@ -21,7 +21,8 @@ class ProbeFailures(unittest.TestCase):
         lanes=[('abi','execute'),('memory','execute'),('packed','execute'),
                ('packed_native','execute'),('backend_acceptance','execute'),
                ('firmware','execute_suite'),('freestanding','execute_suite'),
-               ('devices','execute_suite'),('driver','execute_suite'),
+               ('devices','execute_suite'),('descriptions','execute_suite'),
+               ('driver','execute_suite'),
                ('evidence','execute_suite')]
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root=Path(directory)

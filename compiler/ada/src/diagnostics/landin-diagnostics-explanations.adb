@@ -1028,6 +1028,14 @@ package body Landin.Diagnostics.Explanations is
                & "old it: a routine needs a region code runs in, and a mut"
                & "able datum a writable one. On a hosted target placement "
                & "is refused as L0347 is.",
+            when Catalogue.No_Description =>
+               "A firmware request, a vector placement or a region place"
+               & "ment needs a device profile, and none can be selected (D"
+               & "543): the program imports no description, and the librar"
+               & "y refine found holds no `platform/cortex_m/reference`, o"
+               & "r no library was found. Import the device's description,"
+               & " or name a library that holds the reference with `--libr"
+               & "ary=DIR`.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -1140,14 +1148,6 @@ package body Landin.Diagnostics.Explanations is
                & "DIR"")`, relative to the declaring file, or with `-L DIR`"
                & " when building, or install the library where the C drive"
                & "r finds it.",
-            when Catalogue.No_Description =>
-               "A firmware request, a vector placement or a region place"
-               & "ment needs a device profile, and none can be selected (D"
-               & "543): the program imports no description, and the librar"
-               & "y refine found holds no `platform/cortex_m/reference`, o"
-               & "r no library was found. Import the device's description,"
-               & " or name a library that holds the reference with `--libr"
-               & "ary=DIR`.",
             when Catalogue.Linker_Script_Contract =>
                "A firmware image linked with `--linker-script=FILE` brea"
                & "ks the contract a developer's script must keep (D546), a"
@@ -1732,6 +1732,8 @@ package body Landin.Diagnostics.Explanations is
                "",
             when Catalogue.Region_Placement =>
                "",
+            when Catalogue.No_Description =>
+               "",
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="
                & LF
@@ -1758,8 +1760,6 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Handler_Exceeds_Stack_Margin =>
                "",
             when Catalogue.Library_Not_Found =>
-               "",
-            when Catalogue.No_Description =>
                "",
             when Catalogue.Linker_Script_Contract =>
                "");

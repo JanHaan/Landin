@@ -371,6 +371,11 @@ negative/derived-array-slice-by-value | linux-x86-64, linux-arm64, darwin-arm64,
 negative/derived-array-slice-local | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-local-field | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-wrong-from | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/description-core-mismatch | cortex-m0
+negative/description-directive-outside | cortex-m0
+negative/description-regions-overlap | cortex-m0
+negative/description-reserved-boot | cortex-m0
+negative/description-unknown-core | cortex-m0
 negative/destructured-local-escape | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/directory-name-outlives-read | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/discard-of-nothing | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1238,6 +1243,7 @@ negative/refused-statement-remains-are-quiet | linux-x86-64, linux-arm64, freebs
 negative/refused-struct-inline-argument | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/refused-width-conversion | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/refused-widths-name-their-owner | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/region-placement-unknown | cortex-m0
 negative/region-release-live-handle | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/register-class-as-operand-type-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/remainder-by-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

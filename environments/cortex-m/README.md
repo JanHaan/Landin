@@ -691,6 +691,37 @@ with the fixed map and runtime contract. The runner uses unchanged process
 cleanup. The complete derived driver, source debugging and full
 measurements have their own lanes below.
 
+## Device descriptions
+
+`descriptions.py` follows `devices.py` in `run.py`, in its own
+`descriptions` output directory, and runs nothing: RP2040 is a chip, and
+emulators cover cores. It builds RP2040's description,
+`devices/descriptions/rp2040` imported under `--root=devices`, and the
+constrained reference, which a program importing no description is given
+(D543), and compares every fact of each linked image and its build report
+with [`descriptions.json`](descriptions.json): the device, core, boot kind,
+regions and placements, the vector address and length, the stack top, every
+reserved vector word, the handler's word, RP2040's 256 zero bytes of second
+stage at the start of flash and a datum placed in its `SCRATCH_X`. Those
+expectations are recorded from pico-sdk 2.2.0's `memmap_default.ld`, its
+flash-region template, its Pico board header and its `intctrl.h`, each by
+URL and SHA-256, and from [1990]; none is read from the descriptions or the
+compiler, so a wrong or absent fact fails. RP2040's slot 21, `USBCTRL_IRQ`,
+holds its handler, and the reference refuses slot 21 as L0347 and links zero
+there. It then links RP2040's program with a copy of the derived script and
+with four scripts each breaking one clause of D546's contract, each refused
+as L0519 naming its clause, and refuses `link(region: "NOWHERE")` as L0517.
+
+```sh
+python3 environments/cortex-m/descriptions.py --refine PATH_TO_REFINE --output NEW_DIRECTORY
+```
+
+The lanes that stage their own library, `devices.py`, `driver.py` and
+`freestanding.py`, stage `platform/cortex_m/reference` beside the modules
+their programs import, since the reference is part of every program that
+imports no description. The corpus still links with its probe script, which
+holds the reference's map; its capacity verdicts are the reference's.
+
 ## Complete derived driver
 
 [`compiler/tests/driver/DERIVATION.md`](../../compiler/tests/driver/DERIVATION.md)
