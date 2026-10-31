@@ -38,6 +38,7 @@ compiler/ada/
     checking/           types, node facts, IR and verified transformations
     backend/            the frame, and the assembly emitted against it
     formatting/         the one layout of a source, as edits
+    devices/            a device's SVD and its policy, projected onto Landin
     driver/             request/results, source maps and report provenance
     server/             the language server, its stand-in, positions and protocol
     main/               the `refine` entry point
@@ -107,6 +108,7 @@ different responsibilities.
 | `Landin.Serials` | process-unique identities for trees and checking tables, so a stale key or tree is refused rather than matched by a reused address | reach output, numbering or iteration order |
 | `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
 | `Landin.Json` | reading a protocol message as strict RFC 8259 JSON, bounded in depth and never raising, and writing canonical JSON | convert a floating-point number, accept a duplicate key or invalid UTF-8, or write a build report or source map |
+| `Landin.Xml` | reading a vendor's file as strict well-formed XML 1.0 in the subset an SVD is written in, bounded in depth and never raising, its refusals placed by line and column (D555) | read a document type declaration or an entity it declares, accept bytes that are not UTF-8, or write XML |
 | `Landin.Source` | immutable snapshots, byte offsets, spans, line maps | read a file, or know an encoding beyond bytes |
 | `Landin.Source` storage | heap-allocated text and line maps, owned and freed by their snapshot, which is limited and handed out by reference | put a source file in an automatic object, or copy a snapshot |
 | `Landin.Source.Sets` | a compilation's snapshots and their identities | acquire bytes from a host |
@@ -186,6 +188,9 @@ different responsibilities.
 | `Landin.Diagnostics.Citations` | each construct's and decision's title, document, register section and page, generated from `tour.md` and `spec.md` | be edited by hand, or say anything the documents do not |
 | `Landin.Diagnostics.Citations.Texts` | the text `refine explain --full` adds, a construct's to its next heading and a decision's `Chosen` paragraphs, generated from the same documents and rendered for a terminal | be edited by hand, or say anything the documents do not |
 | `Landin.Diagnostics.Citations.Answers` | reading `[1590]`, `1590`, `D275` and `d275`, and what `refine explain` prints for one | decide which numbers exist, or reach a file |
+| `Landin.Devices` | what the SVD importer's parts share: a fault's kind, input and place, the files made, and the spellings of an SVD's numbers and names | read a file, or know a chip |
+| `Landin.Devices.Policies` | D556's selection policy read from JSON: the SVD it was reviewed against, the notice, the layout, the selection, access policies, numeric enumerations and reviewed reset corrections | read the SVD, or accept a member it does not know |
+| `Landin.Devices.Projection` | D557's projection of a policy's selection onto Landin: property inheritance, peripheral derivation, alternate registers, fields, encodings, the modules, the correspondence, the manifest and D542's interrupts.ldn, as bytes | read or write a file, expand an array or cluster, or name a chip in compiler source |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic, and a word with a capital into one once the parse says what it names | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
@@ -193,7 +198,7 @@ different responsibilities.
 | `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads and the byte channel a server talks through | perform an effect, or let a measurement decide anything |
 | `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, writing a formatted source into its own file through `landin_format_replace.c` (D358), the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
 | `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
-| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
+| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps`, `Landin.Build_Reports.Sources` and `Landin.Devices.Projection` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | constrained Cortex memory-map facts and source assembly admission | invoke tools or derive target widths from the host |
 | `Landin.Targets.Assembly` | each target's operand register table, the `general` class and the register it chooses, a register's spelling at a width, `{name}` substitution, the registers an ordinary block overwrites and those never named, and hosted assembly text admission | decide an operand's type or read the host's registers |
@@ -218,6 +223,7 @@ different responsibilities.
 | `Landin.Commands.Response_Files` | bounded quoted argument expansion through the supplied filesystem | expand environment variables or execute shell text |
 | `Landin.Commands.Presentation` | human, short and structured rendering of the driver's retained diagnostics and positions | reread source files or alter a diagnostic's meaning |
 | `Landin.Commands.Tracing` | native argument-vector tracing through the supplied tool runner | execute a command outside that capability |
+| `Landin.Commands.Devices` | `refine svd`: reading the SVD and policy through `Landin.Platform`, reporting a projection's fault at its place, and D558's preflighted, staged and verified replacement of the outputs, with rollback and the removal of what the old manifest names and this run does not make | project an SVD, or replace a file outside the output directory |
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, an import of `core`, `hosted` or `platform` from the library root alone, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
 | `Landin.Driver.Library` | where the repository-owned library is: beside the executable in an installed or a checkout layout, or a directory `--library=DIR` names, which imports name it, and where it looked when it found none | search any other default root, read a source, or acquire a package |

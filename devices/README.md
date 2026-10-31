@@ -1,49 +1,152 @@
-# Checked-in device fixtures
+# Learning a device from its SVD
 
-This is a bounded fixture set. These are reproducibly generated ordinary Landin modules, not a general SVD importer
-or a supported RP2040 board port. The compiler consumes the checked-in `.ldn`
-files without Python, network access, package acquisition or generator tooling.
+`refine svd` reads a vendor's CMSIS-SVD file and a reviewed selection policy
+and writes Landin: one register module per selected peripheral, a
+correspondence that records every selected register and field as the SVD gave
+it beside what was generated, a manifest of the files it wrote, and the
+generated half of the device's description, `interrupts.ldn` (D542). The
+importer is part of `refine`, written in Ada; nothing here needs Python
+except the repository's own fetcher and tests. The compiler consumes the
+generated `.ldn` files as ordinary source, without network access, package
+acquisition or generator tooling.
 
-The freestanding source/resource evidence uses these unchanged modules through the
-complete derived driver. Source breakpoints can enter generated accessors;
-the line/function debugger exposes no device-variable display and performs no
-hidden register reads. Generator provenance and source snapshots remain off
-target. No additional device semantics or companion-tool capability follows.
+```sh
+python3 scripts/fetch_inputs.py rp2040/RP2040.svd
+refine svd --policy=devices/policies/rp2040.json --out-dir=devices \
+    ~/.cache/landin/inputs/rp2040/RP2040.svd
+refine --root=devices/generated --root=. --target=cortex-m0 \
+    --firmware-entry=start --emit=exe devices/consumers/images -o fixture.elf
+```
 
-## Inputs and provenance
+This tree holds two devices: Raspberry Pi's RP2040 and ST's STM32H753. A
+description is imported as `descriptions/DEVICE` with `--root=devices`, and
+its register modules as `DEVICE/PERIPHERAL` with `--root=devices/generated`.
 
-[fixture.json](fixture.json) records every input SHA-256, upstream identity,
-selection and reviewed policy. The retained original
-[RP2040.svd](inputs/RP2040.svd) is Raspberry Pi's device `RP2040`, version `0.1`,
-SVD schema `1.1`, from official
-[pico-sdk 2.2.0](https://github.com/raspberrypi/pico-sdk/tree/2.2.0), commit
-`a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`. Its SHA-256 is
-`49f53398e0496b6de0849faf17a9f4e58565af311b98b727e4ebeee964619bc6`.
-The same commit's five independently shipped `hardware/regs` headers are
-retained for the oracle; the manifest gives their full acquisition URL pattern
-and hashes. They are vendor outputs, not outputs of our transformation.
+| Path | What it is |
+|---|---|
+| [`inputs.json`](inputs.json) | the lock: each vendor input's URL and SHA-256 |
+| [`policies/`](policies) | one selection policy per device |
+| [`generated/`](generated) | the register modules, correspondences and manifests `refine svd` writes |
+| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn` and the hand-written `memory.ldn` |
+| [`notices/`](notices) | the licences the generated files are derived under |
+| [`consumers/`](consumers) | firmware that uses the generated modules |
+| [`test.py`](test.py) | the offline checks, and with `--refine` the regeneration and the vendor-header oracles |
+| [`check_sources.py`](check_sources.py) | the precise source refusals against the generated interface |
 
-The source SVD carries Raspberry Pi's 2024 copyright and BSD-3-Clause terms;
-the headers carry their own copyright notices. The unmodified upstream
-[license](inputs/LICENSE.pico-sdk) and notices are retained, and generated
-modules identify that license. Only these permitted sources are vendored.
+## Inputs, fetched by hash
+
+No SVD, header or manual is in this tree (D559). [`inputs.json`](inputs.json)
+pins each input by the URL it is fetched from and its SHA-256, and
+`python3 scripts/fetch_inputs.py [NAME ...]` fetches each into
+`$LANDIN_INPUTS`, or `~/.cache/landin/inputs`, as `CACHE/NAME`, verifies it,
+and prints its path. A cached file is verified every time it is used; bytes
+of another hash are refused and never cached. `--offline` uses the cache
+alone.
+
+| Input | Source | Licence |
+|---|---|---|
+| `rp2040/RP2040.svd` | official [pico-sdk 2.2.0](https://github.com/raspberrypi/pico-sdk/tree/2.2.0), commit `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`; device `RP2040`, version `0.1`, SVD schema `1.1` | BSD-3-Clause, Raspberry Pi Ltd 2024 |
+| `rp2040/{dma,io_bank0,sio,timer,uart}.h` | the same commit's `hardware/regs` headers, used only by the oracle | BSD-3-Clause |
+| `stm32h753/STM32H753.svd` | Arm's [STM32H7xx_DFP](https://github.com/Open-CMSIS-Pack/STM32H7xx_DFP) tag `v4.1.3`, commit `4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d`, the device family pack Keil publishes; device `STM32H753`, version `2.0`, SVD schema `1.1` | Apache-2.0, STMicroelectronics 2024, stated in the file's own header |
+| `stm32h753/stm32h753xx.h` | ST's [cmsis-device-h7](https://github.com/STMicroelectronics/cmsis-device-h7), commit `81db1ec63cdc191fae1565b772da3ea5aa29a683`, used only by the oracle | Apache-2.0, per that repository's licence |
+
+ST also publishes the STM32H7 SVDs from st.com under its own licence
+agreement, SLA0048, which admits derivative representations for developing
+software for ST devices; the DFP's copy is the same file under Apache-2.0,
+which is the plainer grant and has a fixed URL, so it is the one pinned.
+`cmsis-svd-data`, a third party's collection, was not chosen over ST's own
+pack. The generated STM32H753 files are derivatives under Apache-2.0: each
+module names [the licence](notices/LICENSE-Apache-2.0.stm32h7), which is in
+the tree as Apache-2.0 asks a copy to be given. The generated RP2040 files
+are derivatives under BSD-3-Clause, which asks that a redistribution keep the
+licence's text; [its notice](notices/LICENSE.pico-sdk) is in the tree and
+each module names it.
+
 The official [RP2040 datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf)
-consulted here has build date **2025-02-20**, build version **3184e62-clean**,
-and SHA-256 `be56fbb75ba0ae9e26558a73c93ac3e75c2ad4e6878d3b6703de2a76d886ea8c`.
-Its document notice is CC BY-ND 4.0 with separate notices for additional
-resources. It is not redistributed here. Acquisition of that exact hash is
-required to repeat the manual review; a changed live PDF is not equivalent
-input. No manual download is required for generation or acceptance.
-
-Current official [CMSIS-SVD documentation](https://open-cmsis-pack.github.io/svd-spec/main/index.html)
+consulted for the RP2040 review has build date **2025-02-20**, build version
+**3184e62-clean**, and SHA-256
+`be56fbb75ba0ae9e26558a73c93ac3e75c2ad4e6878d3b6703de2a76d886ea8c`; the
+policy's `provenance` records it. Its notice is CC BY-ND 4.0 and it is not
+redistributed or needed for generation. Current official
+[CMSIS-SVD documentation](https://open-cmsis-pack.github.io/svd-spec/main/index.html)
 was consulted on 2026-09-18, pinned by documentation repository commit
-`250e414da502885efc7c7ef96b0a19bac9abf8da`. Its
-[register](https://open-cmsis-pack.github.io/svd-spec/main/elem_registers.html)
-and [special-element](https://open-cmsis-pack.github.io/svd-spec/main/elem_special.html)
-rules distinguish inherited properties, dimensions, alternate views and access
-side effects. This does not upgrade the vendor file's declared schema.
+`250e414da502885efc7c7ef96b0a19bac9abf8da`.
 
-## Selected surface and prototype derivation
+## The selection policy
+
+A policy is JSON, schema 2, read by refine without Python (D556). Every
+member below except the first four has a default or may be left out; a
+member refine does not read is refused, except `provenance`, which holds the
+reviewer's notes and is not read.
+
+| Member | Says |
+|---|---|
+| `schema` | `2` |
+| `device`, `svd_version` | the SVD's `device/name` and `version`, which must match |
+| `svd_sha256` | the SHA-256 of the SVD the policy was reviewed against; another file is L0527 |
+| `notice` | the lines each module begins with, after `-- `: provenance and the licence |
+| `modules` | the import root under `--out-dir`; default `.` |
+| `prefix` | the directory each peripheral's module is in, under the root; default the device's name in lowercase |
+| `correspondence`, `manifest` | their paths under the root; default `PREFIX/correspondence.json` and `PREFIX/outputs.json` |
+| `description` | where `interrupts.ldn` goes under `--out-dir`; default `descriptions/DEVICE` |
+| `selection` | each peripheral's selected registers, in the order generated |
+| `policies` | for each `PERIPHERAL.REGISTER`: `read` `normal`, `modify` or `refused`; `write` `normal`, `one_clears` or `refused`; `reserved` `zero` or `preserve`; an optional `write_mask` |
+| `numeric_enums` | the `PERIPHERAL.REGISTER.FIELD`s whose enumeration is read as a plain number |
+| `reset_mask_overrides` | the reset knowledge a reviewer promises for a register, replacing the SVD's |
+| `reset_corrections` | a reviewed reset `value` and the `source` it was read from, where the SVD is wrong |
+
+A refused read or write leaves no accessor, so a program that tries one is
+refused by name resolution. `modify` reads with one volatile load, for a FIFO
+whose read consumes data. `one_clears` writes a command that clears the bits
+written as one. A write admits only the named fields, or `write_mask`.
+
+## What the importer reads
+
+D557 says it in full. Properties are inherited from the register, its
+peripheral, the peripheral that is derived from, and the device. A derived
+peripheral takes its parent's registers and keeps its own base, once. An
+alternate register is generated at the address it shares. A field lies where
+its `bitRange`, `bitOffset` and `bitWidth`, or `lsb` and `msb` say, and may
+or may not enumerate its values. Arrays, clusters, derived registers and
+fields, alternate groups, default enumerated values and widths other than 32
+are refused by name (L0528), and what cannot be generated as described, such
+as overlapping fields, is L0529.
+
+Each module exports `base`, and for each register `_offset`, `_address`,
+`_named_mask`, `_reset_mask`, `_reset_value`, `_image`, `_decode` and
+`_encode`, and the admitted `_read(device_base)` and
+`_write(device_base, raw)`. Base arguments permit explicit synthetic
+relocation; the `_address` constants stay vendor facts. Raw decode and encode
+preserve every bit. Reset constants perform no initialization. Modules
+allocate nothing, import no library and have no module initialization.
+
+`refine svd` replaces its outputs whole or not at all (D558): every
+destination is checked, each new file is written beside its destination and
+read back, and only then is each replaced, its old bytes kept until all are.
+A file whose bytes are already the new ones is left alone, and a file the old
+manifest names that is no longer made is removed. Files beside them that the
+manifest does not name, such as a description's `memory.ldn`, are the
+developer's and are not touched.
+
+## Regeneration and its checks
+
+```sh
+python3 devices/test.py                          # offline, as check.py runs it
+python3 devices/test.py --refine "$(command -v refine)"   # fetches and regenerates
+```
+
+Offline, the test holds the lock and the policies to the same SVD hashes,
+every generated file to its manifest's hash, and every module to its notice.
+With `--refine` it fetches the inputs, regenerates both devices twice into
+fresh directories and requires every byte to be the checked-in one, puts back
+a changed output and removes a deselected one, refuses each unsupported form
+in a mutated, rehashed SVD with its code, and compares every selected register
+and field with the vendor's own C headers, which refine never reads. The
+gate's `cortex-m` job runs it with the release compiler. The two vendor
+formats may share an upstream database; they are independent of the
+projection, not a claim of independent silicon verification.
+
+## RP2040: the selected surface and its prototype derivation
 
 | Module under `generated/rp2040` | Selected vendor registers | Pressure and limits |
 |---|---|---|
@@ -73,7 +176,7 @@ not new compiler directives. No language or compiler extension is needed.
 [correspondence.json](generated/correspondence.json) preserves the original
 properties and the reviewed output for every selected field. Addresses,
 offsets, masks, encodings and access metadata are available without reverse
-engineering source code. Decisions below apply only to this selected input.
+engineering source code. Decisions below apply to the RP2040 selection.
 
 | Feature | Representation, normalization or refusal |
 |---|---|
@@ -81,7 +184,7 @@ engineering source code. Decisions below apply only to this selected input.
 | Arrays, dimensions, clusters | This SVD flattens repeated registers; it contains no `dim`, cluster or alternate-register elements. Explicit names/offsets remain explicit; GPIO/alarm/channel strides have independent literal assertions. The helper refuses selected dimension/alternate structures and does not implement cluster expansion or a general array importer. |
 | Sparse offsets and holes | Constants preserve actual addresses; no ordinary aggregate fills holes or permits bulk transactions. Size is inherited explicit 32-bit register size, never the sum of field widths. |
 | Alternate/overlapping views | CH0_AL1_CTRL remains a distinct raw type/address with unknown reset, and no write convenience. UARTRSR/UARTECR shares a read/error-clear address; the SVD's one-to-clear metadata and prose's write-to-clear semantics are insufficiently consistent for a safe generated write, which is refused. No alias is silently merged. Overlapping fields are refused. |
-| Encodings and incomplete lists | GPIO FUNCSEL and DMA DATA_SIZE/TREQ_SEL retain exact named values and holes. Raw images preserve unnamed values; extraction validates membership. RING_SIZE lists only RING_NONE but its description/manual defines numeric 0–15: the manifest explicitly normalizes it to `u4`, retaining the original enum in correspondence. Unlisted request values remain invalid. |
+| Encodings and incomplete lists | GPIO FUNCSEL and DMA DATA_SIZE/TREQ_SEL retain exact named values and holes. Raw images preserve unnamed values; extraction validates membership. RING_SIZE lists only RING_NONE but its description/manual defines numeric 0–15: the policy explicitly normalizes it to `u4`, retaining the original enum in correspondence. Unlisted request values remain invalid. |
 | Names and collisions | Lowercase register/field names are deterministic; fields use `f_`, atoms include register and field prefixes. Vendor `null` and `EN` therefore do not collide with language vocabulary. GPIO0/1's different domains remain distinct. Normalized field/enum collisions and duplicate encodings are refused. |
 | Reset knowledge | The original inherited reset value/mask remain recorded. Public reset masks contain only named bits known by the independent vendor headers. UARTDR/UARTICR are wholly unknown, UARTFR knows only mask `0xf8`, and DMA AL1 control is unknown. Reserved/unknown bits are not promised zero. Reset constants perform no initialization. |
 | Read/access policy | Missing forbidden accessors produce ordinary name-resolution refusal. UARTDR uses exactly one volatile scalar read: its `readAction=modify` consumes FIFO data and is not falsely described as clear-on-read. UARTFR and GPIO_IN have no writer. SET/CLR and UARTICR have no reader. |
@@ -98,52 +201,7 @@ protocol is offered by these small consumers. The separate
 [complete driver](../compiler/tests/driver/DERIVATION.md) uses the unchanged
 public accessors under an explicitly different synthetic protocol.
 
-## Reproduction and public use
-
-```sh
-python3 devices/generate.py
-python3 devices/test.py
-python3 devices/generate.py --output /tmp/new-device-output
-# With an independently copied fixture.json and inputs/ tree:
-python3 devices/generate.py --inputs /tmp/copied-inputs --output /tmp/new-copy-output
-refine --root=devices/generated --root=. --target=cortex-m0 \
-  --firmware-entry=start --emit=exe devices/consumers/images -o fixture.elf
-```
-
-`generate.py` is a fixture-specific Python standard-library projection, identified
-by its committed source hash and the acceptance Python identity. It accepts the
-pinned input inventory, six selected modules and reviewed policies only. It is
-not schema-complete, a general metadata validator, an acquisition tool or a
-sandbox. Extending its selection requires another reviewed fixture decision;
-rehashing arbitrary SVD input does not establish support. It resolves explicit
-properties, emits encoded/image declarations and existing access primitives,
-and writes canonical JSON and LF-terminated UTF-8. There are no timestamps,
-host-layout queries or network calls. New output directories must not exist.
-The default command compares both inventory and every byte, reporting stale
-inputs or specific stale outputs. [outputs.json](generated/outputs.json)
-records output hashes; its own hash is bound by the repository archive.
-
-The manual stage is selection, policy/reset review and transcription of the
-independent expected values in `test.py` and the execution model/oracles. No
-manual editing of generated `.ldn` files is part of regeneration. Tests generate
-from two fresh equivalent input trees, compare all outputs with the checked-in
-bytes, then deliberately alter input hashes, widths, dimensions, output bytes
-and inventory. Vendor header/literal checks independently cover every selected
-register/field geometry, enum, address and known reset bit. The two vendor
-formats may share an upstream database; they are independent of our projection,
-not a claim of independent silicon verification.
-
-Each module exports `base`, register `_offset`, `_address`, `_named_mask`,
-`_reset_mask`, `_reset_value`, `_image`, `_decode` and `_encode`, plus admitted
-`_read(device_base)` and `_write(device_base, raw)` operations. Base arguments
-permit explicit synthetic relocation; the real `_address` constants stay vendor
-facts. Pointer validity, base arithmetic, lifetime and device authority remain
-caller obligations. Raw image construction/copy is distinct from checked field
-extraction, policy and physical access. Modules allocate nothing, import no
-library and have no module initialization. They introduce no ownership system,
-hidden allocator, hosted reporting storage or mandatory source/provenance data.
-
-## Executable evidence and limits
+## RP2040: executable evidence and limits
 
 The mandatory [device runner](../environments/cortex-m/devices.py) follows all
 inherited lanes in `run.py`. Five consumers run at the inherited six profiles
@@ -198,7 +256,6 @@ pinned `thumb/v6-m/nofp/libgcc.a` and applicable linker stubs. Undefined symbols
 hosted startup/libc/heap dependencies fail. Optional panic maps stay off target;
 JSON provenance is never linked. Complete firmware/stack measurement and source debugging belong to
 the freestanding evidence lane, and the driver to its
-[derivation](../compiler/tests/driver/DERIVATION.md). A general SVD generator,
-package acquisition, sandboxed generator orchestration and the broader
-standard library are open work in `ROADMAP.md`. This guide creates no
-additional work owner.
+[derivation](../compiler/tests/driver/DERIVATION.md). Package acquisition, sandboxed generator
+orchestration and the broader standard library are open work in
+`ROADMAP.md`. This guide creates no additional work owner.

@@ -614,6 +614,54 @@ package body Landin.Tests.Devices_Suite is
       end;
    end Outputs_Are_Replaced_Whole;
 
+   procedure Each_Fault_Has_Its_Code (Item : in out Landin.Testing.Context);
+
+   procedure Each_Fault_Has_Its_Code (Item : in out Landin.Testing.Context)
+   is
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+
+      procedure Expect (Text, Policy, Code, Place : String);
+
+      procedure Expect (Text, Policy, Code, Place : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_File ("toy.svd", Text);
+         Host.Add_File ("toy.json", Policy);
+         Host.Add_Directory ("out");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute
+                (["svd", "--policy=toy.json", "--out-dir=out", "toy.svd"],
+                 Host, Tools, Meter);
+            Report : constant String := US.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Contains (Report, "error[" & Code & "]")
+               and then Contains (Report, "--> " & Place),
+               Code & " at " & Place & ": " & Report);
+         end;
+      end Expect;
+
+      Malformed : constant String := Replaced (Svd, "</device>", "</dev>");
+      Arrayed : constant String :=
+        Replaced (Svd, "<name>CR</name>", "<name>CR</name><dim>2</dim>");
+      Overlapping : constant String :=
+        Replaced (Svd, "<bitRange>[0:0]</bitRange>",
+                  "<bitRange>[1:0]</bitRange>");
+   begin
+      Expect (Malformed, Policy_For (Malformed), "L0525", "toy.svd:47:1");
+      Expect (Svd, "{", "L0526", "toy.json:1:2");
+      Expect (Svd, Policy_For (Malformed), "L0527", "toy.svd:1:1");
+      Expect (Arrayed, Policy_For (Arrayed), "L0528", "toy.svd:19:");
+      Expect (Overlapping, Policy_For (Overlapping), "L0529", "toy.svd:29:");
+      Expect (Svd, Replaced
+                (Replaced (Policy_For (Svd), """UARTB"": [""CR""]",
+                           """UARTC"": [""CR""]"),
+                 """UARTB.CR""", """UARTC.CR"""), "L0530", "toy.svd:");
+   end Each_Fault_Has_Its_Code;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -628,6 +676,9 @@ package body Landin.Tests.Devices_Suite is
       Landin.Testing.Register
         (Into, "devices", "outputs are replaced whole",
          Outputs_Are_Replaced_Whole'Access);
+      Landin.Testing.Register
+        (Into, "devices", "each fault has its code",
+         Each_Fault_Has_Its_Code'Access);
    end Register;
 
 end Landin.Tests.Devices_Suite;

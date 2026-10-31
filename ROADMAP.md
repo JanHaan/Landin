@@ -1096,8 +1096,8 @@ Depends on: R12.10
 `refine` generates Landin from a CMSIS-SVD file: the register modules, and
 the interrupt and vector part of the device description, beside which a
 developer writes its memory and boot part. The importer is part of
-`refine`, written in Ada with no new dependency, and replaces
-`devices/generate.py`. Its inputs, and every vendor header and document
+`refine`, written in Ada with no new dependency, and replaces the Python
+fixture generator. Its inputs, and every vendor header and document
 used to check its output, are pinned by URL and hash and fetched rather
 than vendored; the RP2040 inputs leave the tree too. The second family is
 the STM32H753 on the rig's NUCLEO-H753ZI; R12.30, R12.40 and R12.50 learn

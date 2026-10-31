@@ -250,8 +250,8 @@ the broader library disposition are unchanged.
 
 Vendor facts use retained **RP2040 Datasheet**, build **2025-02-20**, version
 **3184e62-clean**, DMA chapter and errata E12/E13, with the exact SVD/header
-versions/hashes and redistribution terms recorded in `devices/fixture.json`
-and `devices/README.md`. The current official CMSIS-SVD register documentation
+versions/hashes and redistribution terms recorded in `devices/inputs.json`,
+`devices/policies/rp2040.json` and `devices/README.md`. The current official CMSIS-SVD register documentation
 was consulted on 2026-09-18 for access, modified-write and read-action metadata:
 <https://open-cmsis-pack.github.io/svd-spec/main/elem_registers.html>.
 The official vendor document is <https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf>.

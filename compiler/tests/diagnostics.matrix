@@ -4,9 +4,9 @@
 # code state level fix source primary labels notes emitters evidence
 L0001  Retired  error   no-fix   true  empty-ok    0..0 1     -                                   test:landin-tests-diagnostics_suite.adb
 L0002  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/driver-unknown-option,test:landin-tests-diagnostics_suite.adb,test:landin-tests-driver_suite.adb
-L0003  Live     error   no-fix   false empty-ok    0..0 0     landin-driver-loading.adb,landin-driver.adb test:landin-tests-driver_suite.adb,test:landin-tests-stages_suite.adb
+L0003  Live     error   no-fix   false empty-ok    0..0 0     landin-commands-devices.adb,landin-driver-loading.adb,landin-driver.adb test:landin-tests-devices_suite.adb,test:landin-tests-driver_suite.adb,test:landin-tests-stages_suite.adb
 L0004  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
-L0005  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
+L0005  Live     error   no-fix   false empty-ok    0..0 0     landin-commands-devices.adb,landin-driver.adb test:landin-tests-devices_suite.adb,test:landin-tests-driver_suite.adb
 L0006  Live     error   may-fix  true  nonempty    0..0 1     landin-driver-loading.adb           negative/import-without-a-root-is-refused-there,negative/misspelt-module-is-offered-its-directory,negative/module-not-found,test:landin-tests-driver_suite.adb,test:landin-tests-server_suite.adb
 L0007  Live     error   no-fix   false empty-ok    0..0 1     landin-driver-loading.adb           negative/module-directory-invalid,test:landin-tests-driver_suite.adb
 L0015  Live     error   no-fix   true  nonempty    0..0 1     landin-driver-loading.adb           negative/library-platform-cortex-m-hosted,test:landin-tests-driver_suite.adb
@@ -98,10 +98,10 @@ L0506  Live     error   no-fix   false empty-ok    0..0 0     landin-driver-chec
 L0507  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/r660-firmware-frame,test:landin-tests-cortex_suite.adb
 L0508  Live     error   no-fix   false empty-ok    0..0 0     landin-driver.adb                   negative/stack-handler-exceeds-margin,negative/stack-handler-opens-its-graph
 L0509  Live     error   no-fix   true  nonempty    0..0 1     landin-driver.adb                   test:landin-tests-driver_suite.adb
-L0525  Live     error   no-fix   true  empty-ok    0..0 0     -                                   -
-L0526  Live     error   no-fix   true  empty-ok    0..0 0     -                                   -
-L0527  Live     error   no-fix   true  empty-ok    0..0 0     -                                   -
-L0528  Live     error   no-fix   true  empty-ok    0..0 0     -                                   -
-L0529  Live     error   no-fix   true  empty-ok    0..0 0     -                                   -
-L0530  Live     error   no-fix   true  empty-ok    0..0 0     -                                   -
-L0531  Live     error   no-fix   false empty-ok    0..0 0     -                                   -
+L0525  Live     error   no-fix   true  empty-ok    0..0 0     landin-commands-devices.adb         test:landin-tests-devices_suite.adb
+L0526  Live     error   no-fix   true  empty-ok    0..0 0     landin-commands-devices.adb         test:landin-tests-devices_suite.adb
+L0527  Live     error   no-fix   true  empty-ok    0..0 0     landin-commands-devices.adb         test:landin-tests-devices_suite.adb
+L0528  Live     error   no-fix   true  empty-ok    0..0 0     landin-commands-devices.adb         test:landin-tests-devices_suite.adb
+L0529  Live     error   no-fix   true  empty-ok    0..0 0     landin-commands-devices.adb         test:landin-tests-devices_suite.adb
+L0530  Live     error   no-fix   true  empty-ok    0..0 0     landin-commands-devices.adb         test:landin-tests-devices_suite.adb
+L0531  Live     error   no-fix   false empty-ok    0..0 0     landin-commands-devices.adb         test:landin-tests-devices_suite.adb

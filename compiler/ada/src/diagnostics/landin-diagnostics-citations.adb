@@ -2157,6 +2157,17 @@ package body Landin.Diagnostics.Citations is
                & " says `link(symbol: ...)`",
             when 529 =>
                "L0346 names the record that is not `layout(c)`",
+            when 555 =>
+               "refine reads a device's SVD with its own strict XML read"
+               & "er",
+            when 556 =>
+               "`refine svd` reads an SVD and a selection policy",
+            when 557 =>
+               "What the projection reads, and what it writes",
+            when 558 =>
+               "`refine svd` replaces its outputs whole or not at all",
+            when 559 =>
+               "Vendor inputs are pinned by URL and SHA-256 and fetched",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 151 =>
@@ -3249,6 +3260,16 @@ package body Landin.Diagnostics.Citations is
             when 528 =>
                "Decisions: The toolchain, C and the machine",
             when 529 =>
+               "Decisions: The toolchain, C and the machine",
+            when 555 =>
+               "Decisions: The toolchain, C and the machine",
+            when 556 =>
+               "Decisions: The toolchain, C and the machine",
+            when 557 =>
+               "Decisions: The toolchain, C and the machine",
+            when 558 =>
+               "Decisions: The toolchain, C and the machine",
+            when 559 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4633,6 +4654,21 @@ package body Landin.Diagnostics.Citations is
             when 529 =>
                "https://www.701.dev/spec.html#d529-l0346-names-the-recor"
                & "d-that-is-not-layout-c",
+            when 555 =>
+               "https://www.701.dev/spec.html#d555-refine-reads-a-device"
+               & "-s-svd-with-its-own-strict-xml-reader",
+            when 556 =>
+               "https://www.701.dev/spec.html#d556-refine-svd-reads-an-s"
+               & "vd-and-a-selection-policy",
+            when 557 =>
+               "https://www.701.dev/spec.html#d557-what-the-projection-r"
+               & "eads-and-what-it-writes",
+            when 558 =>
+               "https://www.701.dev/spec.html#d558-refine-svd-replaces-i"
+               & "ts-outputs-whole-or-not-at-all",
+            when 559 =>
+               "https://www.701.dev/spec.html#d559-vendor-inputs-are-pin"
+               & "ned-by-url-and-sha-256-and-fetched",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",
