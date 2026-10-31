@@ -13,7 +13,8 @@
 #  because that is the compiler people run and the one the bound was
 #  measured on; the debug build's checks make every size slower alike.
 #
-#  Arguments are passed to scaling.py.
+#  Arguments are passed to scaling.py.  scripts/image_bounds.py then holds
+#  compact static images to the same kind of bound with the host assembler.
 
 LANDIN_BUILD_MODE=release
 export LANDIN_BUILD_MODE
@@ -24,5 +25,11 @@ landin_build_lock mode "$@"
 
 "$LANDIN_ROOT/scripts/build.sh" --compiler-only -q
 
-exec python3 "$LANDIN_ROOT/scripts/scaling.py" \
-    --refine "$LANDIN_BUILD_DIR/bin/refine" "$@"
+python3 "$LANDIN_ROOT/scripts/scaling.py" \
+    --refine "$LANDIN_BUILD_DIR/bin/refine" "$@" || exit
+
+#  The same bound for the assembler: a few lines asking for a large static
+#  image cost the assembly and the assembler the source's size (D536), and
+#  one past the target's budget is refused before any tool runs (D537).
+exec python3 "$LANDIN_ROOT/scripts/image_bounds.py" \
+    --refine="$LANDIN_BUILD_DIR/bin/refine"

@@ -62433,6 +62433,42 @@ file negative/if-expression-missing-else/program.ldn tokens 22
   81 83 if
   84 87 end
   88 89 f
+file negative/image-budget-past-reach/program.ldn tokens 35
+  76 79 mut
+  80 85 image
+  85 86 :
+  87 88 [
+  88 98 2147483649
+  98 99 ]
+  99 101 u8
+  102 103 =
+  104 105 [
+  105 107 of
+  108 109 1
+  109 110 ]
+  111 117 public
+  118 122 main
+  122 123 :
+  124 125 (
+  125 126 )
+  127 129 ->
+  130 131 (
+  131 135 code
+  135 136 :
+  137 140 i32
+  140 141 )
+  142 143 =
+  144 148 code
+  149 150 =
+  151 154 i32
+  154 155 (
+  155 160 image
+  160 161 [
+  161 162 1
+  162 163 ]
+  163 164 )
+  165 168 end
+  169 173 main
 file negative/immutable-array-copy/program.ldn tokens 24
   0 6 source
   6 7 :

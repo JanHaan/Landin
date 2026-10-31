@@ -2376,9 +2376,11 @@ with no hosted startup, default libraries or libc. Only the selected private
 `thumb/v6-m/nofp/libgcc.a` helper closure is admitted. This does not enable the
 general C source surface. The linker checks flash bounds, static RAM/stack
 overlap and the vector address/size; unresolved symbols and relocation or
-encoding failures remain reported tool failures. An 8 MiB static-image
-materialization guard applies before firmware emission, including unreachable
-images, independently of the much smaller physical map and section GC.
+encoding failures remain reported tool failures. Before emission the
+program's static images are held to the profile's capacities (D537): every
+written image, including one section GC would drop, to its 32 KiB flash, and
+every mutable written image to its 16 KiB RAM. The linker stays the authority
+for the map itself.
 Hosted placement annotations, arbitrary section addresses/linker scripts,
 weak symbols, inline hints and general tool directives remain explicit
 refusals. No request is silently ignored.
@@ -5530,12 +5532,13 @@ D28, and therefore remains loader-zeroed storage rather than bytes in `.data`.
 Neither image resolution, copying, verification nor dumping enumerates the
 extent.
 
-The Linux x86-64 backend emits a constant-size `.rept`/width-specific-directive/
+The Linux x86-64 backend emitted a constant-size `.rept`/width-specific-directive/
 `.endr` sequence for a nonzero repeated image. The scalar directive is `.byte`,
 `.word`, `.long` or `.quad` according to the target element width. In particular,
 the eight-byte form does not use GNU `.fill`, whose value operand contributes at
 most four bytes and would discard the high half of a `u64` pattern. An absent zero
-image stays `.bss`.
+image stays `.bss`. D536 later writes a pattern of four bytes or fewer as one
+`.fill` on every target and keeps the repetition for eight-byte patterns.
 
 A repetition whose written contextual length is zero is refused at the
 repetition. This is a construct-specific nonzero requirement. D136 later
@@ -5757,7 +5760,7 @@ IR, verification, dumping or copying walks or allocates in proportion to `N`.
 A hybrid remains a present image when its suffix value is zero, because its
 nonempty written prefix makes it explicit `.data`; Linux x86-64 emits the prefix
 with width-matched scalar directives and then a constant-size `.rept N - k`
-around one zero directive. A full repetition of zero retains D34's absent image
+around one zero directive, which D536 writes as one `.zero`. A full repetition of zero retains D34's absent image
 and loader-zeroed `.bss`. For every nonzero suffix the backend uses the same
 `.byte`, `.word`, `.long` or `.quad` directive, so a 64-bit pattern reaches the
 assembler with all eight bytes rather than GNU `.fill`'s truncated value field.
@@ -5780,6 +5783,55 @@ public-seam cases; `positive/module-array-mixed-repetition`;
 `negative/module-array-mixed-repetition-fold-range`; the retained inferred,
 nested and general-value refusal fixtures; and
 `runtime/module-mixed-array-repetition-holds-hybrid` on Linux x86-64.
+
+### D536 — A static image's runs are written without expansion
+
+**The tour said** that repetition is a static pattern that lives in flash
+[0560], and D34, D38 and D132 kept every run compact through lowering, IR and
+the assembly text. It did not say what the assembler does with that text. GNU
+as and LLVM both expand `.rept` in memory, its body's text once per copy, and
+GNU as keeps what it expanded, so a compact `.rept 100000000` around a nested
+row asked a 76 MB object for gigabytes of assembler memory.
+
+**Chosen:** every native backend writes a run of one element through the one
+set of helpers in `Landin.Backend`, so the four, arm64 for Linux, FreeBSD and
+Darwin alike, agree on its form:
+
+- A run that writes only zero bytes is one `.zero`: a repeated zero scalar, a
+  hybrid's zero suffix, and a repeated aggregate or array element whose whole
+  image is zero, with its padding.
+- A run of a scalar of one, two or four bytes is one `.fill count, size,
+  value`, which both assemblers hold as one fragment.
+- What is left, a run of a nonzero composite element, of an address, of an
+  atom, or of an eight-byte scalar whose high half `.fill`'s four-byte value
+  field would drop, is repeated. A count above 256 is written in base 256: for
+  each nonzero digit, a `.rept` of that digit around as many nested
+  `.rept 256` as its place, around the body. A count up to 256 is one `.rept`
+  as before.
+
+A body is therefore written once per nonzero digit, at most eight times, and
+the text an assembler expands at once is the body's own times at most 256.
+Nested runs multiply their digits, which D537's budget bounds: within 4 GiB at
+most three dimensions of an image exceed 256. The object bytes are those the
+earlier `.rept` sequences assembled to.
+
+**Why one directive where one will do:** `.zero` and `.fill` are a fragment
+whose repetition the assembler writes out only into the object, so an image of
+hundreds of megabytes costs it a few megabytes. A repeated body is expanded,
+however it is nested, and is what D537 counts against the budget.
+
+**The alternatives:** emit every element, which makes the assembly as large as
+the image; keep one `.rept` of the whole count, whose expansion is the count
+times the body's text and which GNU as retains; or use `.fill` for eight-byte
+patterns, which loses their high half. Writing a composite run's bytes out as
+`.byte` lists was declined for the first reason.
+
+**Pinned by** `backend/module repetition uses compact full-width directives`,
+`backend/recursive array descriptors use target strides`,
+`backend scale/compact images emit compact assembly` on every native target,
+`runtime/static-image-runs` on every target and the Cortex-M corpus, and
+`scripts/image_bounds.py`, which assembles the compact shapes and holds the
+assembler's peak memory and the object's size to the image.
 
 ### D39 — A written module scalar gives `zeroed` its context
 
@@ -13764,7 +13816,7 @@ classified failure boundary before the repository gate can pass.
 | `functions.nonreturning` | static | 0890, 0940, 1000, 1100, 1240, 1290, 1370, 1930, 1960 | D231 separates infallible nonreturning signatures from none, rejects reachable return/fallthrough and preserves termination through generic/evidence calls and applicable cleanup | `positive/r491-noreturn-signatures`, `negative/r670-noreturn-fallthrough`, `abi/r670-noreturn` |
 | `panic.contract` | static | 0890, 1670 | D232 selects only a canonical public ordinary nonreturning entry-module hook; L0506 rejects malformed declarations and unrepresentable u32 site spaces | `negative/r670-panic-handler`, `abi/r670-panic` |
 | `panic.dispatch` | trap | 0300, 0470, 0570, 0890, 1100, 1670, 1675, 1950, 1960, 1995 | D232 dispatches kind/site at the failed operation, forbids later computation and cleanup, and terminates reentry; the default needs no reporting storage | `abi/r670-panic`, `environments/cortex-m/freestanding.py` selected/default/interrupt controls, `runtime/fibre-stack-past-limit-traps`, `runtime/stack-frame-past-limit-traps` |
-| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/assembly-synthetic-target` |
+| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers; L0505 holds static images to D537's budget before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/assembly-synthetic-target` |
 | `firmware.return` | trap | 1550, 1570, 1650, 1990 | D232 dispatches entry return as unreachable/site zero; D229 naked fallthrough retains its undefined-instruction guard and separate hardware-fault obligations | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
@@ -17308,7 +17360,7 @@ This is a toolchain slice, not a new initialization language or package system.
 | Conservative opaque assembly with restricted ordinary registers/control flow | Unstated clobbers corrupt live values; treating a compiler boundary as a hardware barrier invents ordering/completion | generic opaque-memory and ordinary-live-value execution, generated interrupt/DMA trace |
 | Flash immutable images, RAM data/BSS and explicit RAM code load images | Leaving initialization to test setup or treating load addresses as execution addresses conceals relocation failures | poisoned boot, copied RAM handler, veneer and libgcc execution |
 | Section retention separate from calling convention | Keeping every handler changes reachability and code size; dropping relocation targets breaks vector/data images | kept/discarded sections, first-class handler and text relocations |
-| Explicit constrained script, bounded materialization and one-frame check | A larger board hides overflows; a general script/build ecosystem exceeds this slice; materializing giant unreachable images before GC wastes unbounded resources | flash/stack overflow, L0505/L0507 and misplaced-vector controls |
+| Explicit constrained script, bounded materialization and one-frame check | A larger board hides overflows; a general script/build ecosystem exceeds this slice; materializing giant unreachable images before GC wastes unbounded resources; D537 replaces the 8 MiB bound with the profile's capacities | flash/stack overflow, L0505/L0507 and misplaced-vector controls |
 
 The physical startup/exception premises are outside language memory safety;
 shape, convention, placement and assembly restrictions are static checks;
@@ -17497,6 +17549,61 @@ A returning or failing handler would contradict D11 and [1670].
 **Pinned by** `driver/panic handler contracts`, `abi/r670-panic`,
 `core-panic.ldn`, the off-target identity refusal tests, and the inherited
 default-trap fixtures.
+
+### D537 — One image budget on every target, before emission
+
+**From** [1990], D18, D229 and D536.
+
+**The question:** D229 bounded firmware alone, at 8 MiB of materialized
+images, a number chosen to stop the assembler rather than to say anything
+about the image. A hosted program had no bound, so a line asking for more
+than the target can address reached the assembler and then the linker's
+relocation overflow, and Cortex-M's 8 MiB stood beside a 32 KiB flash.
+
+**Chosen:** one check, before anything is emitted, holds every target's static
+images to a budget in target bytes. It counts every datum the compilation
+lowers, before optimization and before section GC: a program with a public
+`main` lowers what that reaches, and one without, a firmware image or an
+object, lowers everything. Written images, those with bytes in the object,
+count against the initialized budget; mutable written images also against the
+writable one; zero images the loader or startup clears count only against the
+address space.
+
+| Target | Written images | Mutable written images | Zero images |
+| --- | --- | --- | --- |
+| linux-x86-64, freebsd-x86-64 | 2 GiB, the small code model's reach | 2 GiB | 2^64 - 1 bytes |
+| darwin-arm64 | 2 GiB, a Darwin static image | 2 GiB | 2^64 - 1 bytes |
+| linux-arm64, freebsd-arm64 | 4 GiB, ADRP's reach | 4 GiB | 2^64 - 1 bytes |
+| linux-rv64 | 2 GiB, AUIPC's reach | 2 GiB | 2^64 - 1 bytes |
+| cortex-m0 without a firmware request | 2^32 - 1 bytes, the address space | 2^32 - 1 bytes | 2^32 - 1 bytes |
+| cortex-m0 firmware, reference profile | 32 KiB, its flash | 16 KiB, its RAM | 2^32 - 1 bytes |
+
+A firmware image takes its profile's capacities as the check's argument,
+so a profile with more flash raises its budget without another rule. A
+scalar datum counts as written whatever it folds to. The refusal is L0505,
+which names the bytes the images take, the budget they exceed and what sets
+it, the code model, the address space or the profile's flash or RAM.
+
+This states the per-target limits that the roadmap's emission policy left
+open. The check is not a placement verdict: code is not counted, and the
+linker remains the authority for the map, the stack reservation and a zero
+image past a code model's reach.
+
+**Why counted before GC:** the assembler is given every image the compilation
+holds, whether or not the linker keeps it, so the bound on its work must count
+them all. A firmware image also refuses at the compiler a data image its flash
+cannot hold, where the linker would have.
+
+**The alternatives:** keep 8 MiB, a number that bounds no target's image;
+bound only firmware, which leaves a hosted program's line asking for
+gigabytes to the assembler; count after GC, which needs the link this check
+runs before; or count zero images against the code model, which refuses BSS
+that only a placement outside the code model's reach would trouble.
+
+**Pinned by** `backend scale/images past their budget run no tool` on every
+native target, `cortex ABI/firmware path`, `negative/r660-materialization`,
+`negative/image-budget-past-reach`, and `environments/cortex-m/firmware.py`'s
+flash-overflow, bounded-materialization, flash-budget and ram-budget controls.
 
 ### D248 — Assembly operands name their registers
 
