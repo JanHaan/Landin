@@ -8565,6 +8565,7 @@ package body Landin.Backend.X86_64 is
            and then Landin.IR.Layout_Of (Of_Unit, Item) = Landin.Layouts.Packed
          then
             Emit_Packed ((others => <>), (others => <>), Top => True);
+            Put (Character'Val (9) & ELF.Size_To_Here (Symbol (Item)));
             return;
          end if;
 

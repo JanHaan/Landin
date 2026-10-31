@@ -366,6 +366,44 @@ class ProbeFailures(unittest.TestCase):
                                       ' _landin_harness_vectors 192, tie_a 32'), line)
         self.assertIn('over by 32', line)
 
+    def test_every_module_datum_is_typed_and_sized(self):
+        from backend import check_datum_symbols, datum_symbols
+        sections = (
+            '  [ 1] .text             PROGBITS        00000000 000034 000010 00  AX  0   0  4\n'
+            '  [ 4] .bss.landin_1     NOBITS          00000000 000044 000040 00  WA  0   0  8\n'
+            '  [ 5] .data.landin_2    PROGBITS        00000000 000044 000008 00  WA  0   0  4\n'
+            '  [ 6] .rodata.landin_3  PROGBITS        00000000 00004c 000000 00   A  0   0  1\n')
+        symbols = (
+            '     1: 00000000     0 SECTION LOCAL  DEFAULT    4 .bss.landin_1\n'
+            '     2: 00000000     0 NOTYPE  LOCAL  DEFAULT    5 $d\n'
+            '     3: 00000000    64 OBJECT  LOCAL  DEFAULT    4 backing\n'
+            '     4: 00000000     8 OBJECT  GLOBAL DEFAULT    5 table\n'
+            '     5: 00000000     0 OBJECT  LOCAL  DEFAULT    6 empty\n'
+            '     6: 00000001    16 FUNC    GLOBAL DEFAULT    1 main\n')
+        found, sizes = datum_symbols(sections + symbols)
+        self.assertEqual(sorted(found), ['backing', 'empty', 'table'])
+        self.assertEqual(sizes['.bss.landin_1'], 64)
+
+        class Listing:
+            def __init__(self, text, out):
+                self.text, self.out, self.arm = text, out, Path('/arm')
+
+            def command(self, name, argv):
+                return self.text
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(sorted(check_datum_symbols(
+                Listing(sections + symbols, Path(tmp)), 'program.o')),
+                ['backing', 'empty', 'table'])
+            #  What the backend emitted before every datum was typed: a
+            #  label with neither a type nor a size.
+            untyped = symbols.replace('8 OBJECT  GLOBAL', '0 NOTYPE  GLOBAL')
+            with self.assertRaisesRegex(RuntimeError, 'table is NOTYPE'):
+                check_datum_symbols(Listing(sections + untyped, Path(tmp)), 'program.o')
+            unsized = symbols.replace('64 OBJECT', ' 0 OBJECT')
+            with self.assertRaisesRegex(RuntimeError, 'backing has no size'):
+                check_datum_symbols(Listing(sections + unsized, Path(tmp)), 'program.o')
+
     def test_a_limit_no_profile_meets_is_stale(self):
         from backend_corpus import stale_limits
         fits = {'regions': {'FLASH': {'used': 30000, 'limit': 32768},

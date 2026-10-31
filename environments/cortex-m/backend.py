@@ -211,6 +211,63 @@ def routine_sizes(listing):
     return dict(sorted(sizes.items(), key=lambda item: (-item[1], item[0])))
 
 
+#  A data section of the compiler's object: `.data`, `.bss` or `.rodata`,
+#  each item's own subsection of them, or a region's (D547).
+DATA_SECTION = re.compile(r'\.(data|bss|rodata)(\.|$)|\.landin_region\.[^.]+\.(data|bss|rodata)\.')
+
+
+def datum_symbols(listing):
+    """Each symbol `readelf -S -s -W` lists as defined in a data section,
+    with its type, size and section-relative address, and each data
+    section's size, from the section table readelf prints first.
+
+    A mapping symbol (`$d`, `$t`), a section or a file symbol is not a
+    datum.
+    """
+    names, sizes, symbols = {}, {}, {}
+    for line in listing.splitlines():
+        found = re.match(r'\s*\[\s*(\d+)\]\s+(\S+)\s+(\S+)\s+[0-9a-f]+\s+[0-9a-f]+\s+([0-9a-f]+)\s', line)
+        if found:
+            names[found.group(1)] = found.group(2)
+            sizes[found.group(2)] = int(found.group(4), 16)
+            continue
+        fields = line.split()
+        if len(fields) != 8 or not fields[0].endswith(':') or not fields[0][:-1].isdigit():
+            continue
+        _, value, size, kind, _, _, index, name = fields
+        section = names.get(index, '')
+        if kind in ('SECTION', 'FILE') or name.startswith('$') or not DATA_SECTION.match(section):
+            continue
+        symbols[name] = {'type': kind, 'size': int(size, 0), 'address': int(value, 16),
+                         'section': section}
+    return symbols, sizes
+
+
+def check_datum_symbols(run, obj):
+    """Every module datum is typed and sized in the symbol table, with an
+    initial image or without, as the other ELF backends' are, so that its
+    extent is read from `nm -S` or readelf rather than from the next
+    symbol's address (D470): an object symbol, whose size reaches no
+    further than the next datum of its section or the section's end, and
+    is nonzero unless the section is empty.  Writes `datum-symbols.json`."""
+    symbols, sizes = datum_symbols(run.command(
+        'datum-symbols', [run.arm / 'arm-eabi-readelf', '-S', '-s', '-W', obj]))
+    faults = []
+    for name, symbol in sorted(symbols.items()):
+        ends = [other['address'] for other in symbols.values()
+                if other['section'] == symbol['section'] and other['address'] > symbol['address']]
+        limit = min(ends + [sizes[symbol['section']]])
+        if symbol['type'] != 'OBJECT':
+            faults.append(name + ' is ' + symbol['type'] + ', not OBJECT')
+        elif symbol['address'] + symbol['size'] > limit:
+            faults.append(name + ' overruns ' + symbol['section'])
+        elif symbol['size'] == 0 and limit > symbol['address']:
+            faults.append(name + ' has no size in ' + symbol['section'])
+    require(not faults, 'module data not typed and sized: ' + '; '.join(faults))
+    (run.out / 'datum-symbols.json').write_text(json.dumps(symbols, indent=2, sort_keys=True) + '\n')
+    return symbols
+
+
 def image_sizes(run, elf, name='sections'):
     """Each region's use against its limit, each allocated section's size
     and each routine's, so where an image's bytes go is read from the
@@ -369,6 +426,7 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
                     '-c', source, '-o', obj])
         objects.append(obj)
     run.command('object-disassembly', [run.arm / 'arm-eabi-objdump', '-dr', objects[1]])
+    check_datum_symbols(run, objects[1])
     run.command('assemble-link', [run.arm / 'arm-eabi-gcc', *flags,
                 '-Wl,-T,' + str(linker or HERE / 'probes/backend-memory.ld') +
                 ',--gc-sections,-Map,program.map', *objects, '-lgcc', '-o', elf])
