@@ -512,6 +512,11 @@ package body Landin.Devices.Projection is
          Field_Lines : US.Unbounded_String;
          Field_Names : Name_Sets.Set;
          Field_Count : Natural := 0;
+         --  Every field the SVD gives, by its vendor name, and those a
+         --  correction omits, with the correction's source.
+         Seen : Name_Sets.Set;
+         Omitted : P.Text_Vectors.Vector;
+         Omitted_Sources : P.Text_Vectors.Vector;
       end record;
 
       procedure Project_Field
@@ -530,7 +535,18 @@ package body Landin.Devices.Projection is
          Values : Encoding_Vectors.Vector;
          Numeric : constant Boolean := P.Is_Numeric (Chosen, Where);
          Field_Type : US.Unbounded_String;
+         Correction : constant Natural := P.Correction_Of (Chosen, Where);
+         Svd_Low, Svd_High : Natural := 0;
       begin
+         if not State.Seen.Contains (Field_Name) then
+            State.Seen.Insert (Field_Name);
+         end if;
+         if Correction /= 0 and then Chosen.Fields (Correction).Omit then
+            State.Omitted.Append (Field_Name);
+            State.Omitted_Sources.Append
+              (US.To_String (Chosen.Fields (Correction).Source));
+            return;
+         end if;
          State.Field_Count := State.Field_Count + 1;
          if X.Attribute_Count (Document, Field) /= 0 then
             Fail (Unsupported_Form, Where & " has the attribute "
@@ -549,6 +565,12 @@ package body Landin.Devices.Projection is
          end if;
          State.Field_Names.Insert (Spelling);
          Field_Bits (Field, Where, Low, High);
+         if Correction /= 0 then
+            Svd_Low := Low;
+            Svd_High := High;
+            Low := Chosen.Fields (Correction).Low;
+            High := Chosen.Fields (Correction).High;
+         end if;
          Bits := Interfaces.Shift_Left
            (Interfaces.Shift_Left (1, High - Low + 1) - 1, Low);
          if (State.Named_Mask and Bits) /= 0 then
@@ -607,6 +629,18 @@ package body Landin.Devices.Projection is
             Fail (Inconsistent_Device, "the SVD gives " & Where & " no"
                   & " access, at the field, its register, its peripheral or"
                   & " the device", Field);
+         end if;
+         if Correction /= 0 then
+            Member (Rows, "correction");
+            Open (Rows, In_Object);
+            Member (Rows, "source");
+            String_Value
+              (Rows, US.To_String (Chosen.Fields (Correction).Source));
+            Member (Rows, "svd_high");
+            Number_Value (Rows, Word (Svd_High));
+            Member (Rows, "svd_low");
+            Number_Value (Rows, Word (Svd_Low));
+            Close (Rows, In_Object);
          end if;
          Member (Rows, "encodings");
          Open (Rows, In_Array);
@@ -861,6 +895,35 @@ package body Landin.Devices.Projection is
          Number_Value (Rows, State.Named_Mask);
          Member (Rows, "offset");
          Number_Value (Rows, Offset);
+         if not State.Omitted.Is_Empty then
+            Member (Rows, "omitted_fields");
+            Open (Rows, In_Array);
+            for Index in 1 .. State.Omitted.Last_Index loop
+               Open (Rows, In_Object);
+               Member (Rows, "name");
+               String_Value (Rows, State.Omitted (Index));
+               Member (Rows, "source");
+               String_Value (Rows, State.Omitted_Sources (Index));
+               Close (Rows, In_Object);
+            end loop;
+            Close (Rows, In_Array);
+         end if;
+         for Correction of Chosen.Fields loop
+            declare
+               Named : constant String := US.To_String (Correction.Key);
+            begin
+               if Named'Length > Key'Length + 1
+                 and then Named (Named'First .. Named'First + Key'Length)
+                   = Key & "."
+                 and then not State.Seen.Contains
+                   (Named (Named'First + Key'Length + 1 .. Named'Last))
+               then
+                  Fail (Not_In_Svd, "field_corrections." & Named
+                        & " names a field " & Key & " does not have",
+                        Element);
+               end if;
+            end;
+         end loop;
          Member (Rows, "policy");
          Open (Rows, In_Object);
          Member (Rows, "read");

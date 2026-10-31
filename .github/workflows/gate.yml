@@ -591,7 +591,8 @@ jobs:
       - name: Regenerate every device from its SVD and check it
         run: |
           python3 devices/test.py --require-inputs \
-            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine"
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --toolchain "$RUNNER_TEMP/cortex-m/gnat-arm-elf/bin/arm-eabi-gcc"
 
       - name: Every Cortex-M lane
         run: |

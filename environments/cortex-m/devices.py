@@ -296,7 +296,8 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
     # the test fetches by hash, and the vendor headers check what it made.
     parent.command('device-regeneration-and-oracles',
                    [sys.executable, DEVICES / 'test.py', '--refine', refine,
-                    '--require-inputs'])
+                    '--toolchain', parent.arm / 'arm-eabi-gcc',
+                    '--require-inputs'], timeout=300)
     compiler_hash = sha(refine)
     parent.command('device-refine-identity', [refine, '--identify'])
     parent.command('device-source-refusals', [sys.executable, DEVICES / 'check_sources.py',

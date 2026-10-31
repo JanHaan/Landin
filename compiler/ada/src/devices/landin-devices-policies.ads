@@ -55,6 +55,18 @@ package Landin.Devices.Policies is
    package Text_Vectors is new Ada.Containers.Indefinite_Vectors
      (Index_Type => Positive, Element_Type => String);
 
+   --  A reviewed correction of where a field lies, or that it is not a
+   --  field, with where the reviewer read it.
+   type Field_Correction is record
+      Key : US.Unbounded_String;
+      Omit : Boolean := False;
+      Low, High : Natural := 0;
+      Source : US.Unbounded_String;
+   end record;
+
+   package Correction_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Field_Correction);
+
    type Policy is record
       Device : US.Unbounded_String;
       Svd_Version : US.Unbounded_String;
@@ -74,11 +86,16 @@ package Landin.Devices.Policies is
       Registers : Choice_Vectors.Vector;
       --  `PERIPHERAL.REGISTER.FIELD` for each field read as a number.
       Numeric : Text_Vectors.Vector;
+      --  `PERIPHERAL.REGISTER.FIELD`'s reviewed corrections.
+      Fields : Correction_Vectors.Vector;
    end record;
 
    procedure Read
      (Text : String; Into : out Policy; Problem : out Fault);
 
    function Is_Numeric (Of_Policy : Policy; Key : String) return Boolean;
+
+   --  The correction of field Key, or zero.
+   function Correction_Of (Of_Policy : Policy; Key : String) return Natural;
 
 end Landin.Devices.Policies;

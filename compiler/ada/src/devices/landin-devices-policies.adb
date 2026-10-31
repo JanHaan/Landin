@@ -120,6 +120,7 @@ package body Landin.Devices.Policies is
               | "prefix" | "correspondence" | "manifest" | "description"
               | "selection" | "policies" | "numeric_enums"
               | "reset_mask_overrides" | "reset_corrections"
+              | "field_corrections"
             then
                Fail ("the policy's member """ & Name & """ is not one"
                  & " refine svd reads; the reviewer's notes go under"
@@ -460,10 +461,114 @@ package body Landin.Devices.Policies is
             end loop;
          end if;
       end;
+      declare
+         Corrections : constant J.Value :=
+           J.Member (Document, Root, "field_corrections");
+      begin
+         if J.Is_Present (Corrections) then
+            if not J.Is_Kind (Document, Corrections, J.Object_Value) then
+               Fail ("the policy's field_corrections is not an object");
+            end if;
+            for Position in 1 .. J.Length (Document, Corrections) loop
+               declare
+                  Key : constant String :=
+                    J.Key (Document, Corrections, Position);
+                  Item : constant J.Value :=
+                    J.Member_Value (Document, Corrections, Position);
+                  Where : constant String := "field_corrections." & Key;
+                  Last_Dot : Natural := 0;
+                  Made : Field_Correction;
+               begin
+                  for Index in Key'Range loop
+                     if Key (Index) = '.' then
+                        Last_Dot := Index;
+                     end if;
+                  end loop;
+                  if Last_Dot = 0
+                    or else Find (Key (Key'First .. Last_Dot - 1)) = 0
+                  then
+                     Fail (Where & " names a field of no selected register");
+                  elsif not J.Is_Kind (Document, Item, J.Object_Value) then
+                     Fail (Where & " is not an object of bits or omit, and"
+                       & " source");
+                  end if;
+                  for Member in 1 .. J.Length (Document, Item) loop
+                     if J.Key (Document, Item, Member) not in "bits" | "omit"
+                       | "source"
+                     then
+                        Fail (Where & " has the member '"
+                          & J.Key (Document, Item, Member) & "'; a"
+                          & " correction says bits or omit, and source");
+                     end if;
+                  end loop;
+                  Made.Key := US.To_Unbounded_String (Key);
+                  Made.Source := US.To_Unbounded_String
+                    (Member_String (Item, "source", Where));
+                  if Made.Source = "" then
+                     Fail (Where & ".source is empty: a correction says"
+                       & " where its reviewer read it");
+                  end if;
+                  if J.Is_Present (J.Member (Document, Item, "omit")) then
+                     if not J.Is_Kind
+                         (Document, J.Member (Document, Item, "omit"),
+                          J.True_Value)
+                       or else J.Is_Present (J.Member (Document, Item, "bits"))
+                     then
+                        Fail (Where & " says omit: true, or gives bits");
+                     end if;
+                     Made.Omit := True;
+                  else
+                     declare
+                        Said : constant String :=
+                          Member_String (Item, "bits", Where);
+                        Colon : Natural := 0;
+                     begin
+                        for Index in Said'Range loop
+                           if Said (Index) = ':' then
+                              Colon := Index;
+                           end if;
+                        end loop;
+                        if Said'Length < 5 or else Colon = 0
+                          or else Said (Said'First) /= '['
+                          or else Said (Said'Last) /= ']'
+                          or else not Is_Number
+                            (Said (Said'First + 1 .. Colon - 1))
+                          or else not Is_Number
+                            (Said (Colon + 1 .. Said'Last - 1))
+                          or else Number (Said (Said'First + 1 .. Colon - 1))
+                            > 31
+                          or else Number (Said (Colon + 1 .. Said'Last - 1))
+                            > Number (Said (Said'First + 1 .. Colon - 1))
+                        then
+                           Fail (Where & ".bits is '" & Said & "', not"
+                             & " [HIGH:LOW] within 32 bits");
+                        end if;
+                        Made.High := Natural
+                          (Number (Said (Said'First + 1 .. Colon - 1)));
+                        Made.Low := Natural
+                          (Number (Said (Colon + 1 .. Said'Last - 1)));
+                     end;
+                  end if;
+                  Into.Fields.Append (Made);
+               end;
+            end loop;
+         end if;
+      end;
    exception
       when Refused =>
          Into := (others => <>);
    end Read;
+
+   function Correction_Of (Of_Policy : Policy; Key : String) return Natural
+   is
+   begin
+      for Index in 1 .. Of_Policy.Fields.Last_Index loop
+         if US.To_String (Of_Policy.Fields (Index).Key) = Key then
+            return Index;
+         end if;
+      end loop;
+      return 0;
+   end Correction_Of;
 
    function Is_Numeric (Of_Policy : Policy; Key : String) return Boolean is
      (for some Field of Of_Policy.Numeric => Field = Key);

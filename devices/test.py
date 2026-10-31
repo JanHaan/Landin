@@ -37,12 +37,14 @@ import unittest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(HERE))
 import fetch_inputs  # noqa: E402
 
 POLICIES = HERE / 'policies'
 GENERATED = HERE / 'generated'
 DESCRIPTIONS = HERE / 'descriptions'
 REFINE = None
+TOOLCHAIN = None
 REQUIRE = False
 
 
@@ -51,8 +53,17 @@ def digest(data):
 
 
 def policies():
-    return {path.stem: json.loads(path.read_text())
-            for path in sorted(POLICIES.glob('*.json'))}
+    """Each policy, its layout's defaults filled in as refine fills them."""
+    found = {}
+    for path in sorted(POLICIES.glob('*.json')):
+        policy = json.loads(path.read_text())
+        prefix = policy.setdefault('prefix', policy['device'].lower())
+        policy.setdefault('modules', '.')
+        policy.setdefault('correspondence', prefix + '/correspondence.json')
+        policy.setdefault('manifest', prefix + '/outputs.json')
+        policy.setdefault('description', 'descriptions/' + policy['device'].lower())
+        found[path.stem] = policy
+    return found
 
 
 def svd_input(policy):
@@ -397,17 +408,286 @@ class Rp2040Oracles(unittest.TestCase):
         self.assertIn('compiler.vectors(48)\n', text)
 
 
+
+class CmsisHeader:
+    """ST's stm32h753xx.h, read for its macros and register structures."""
+
+    def __init__(self, text):
+        self.text = text
+        self.defines = {}
+        for m in re.finditer(r'^#define\s+(\w+)[ \t]+([^\n]*?)\s*(?:/\*.*)?$',
+                             text, re.MULTILINE):
+            self.defines.setdefault(m.group(1), m.group(2).strip())
+
+    def value(self, expression):
+        expression = expression.strip()
+        while expression.startswith('(') and expression.endswith(')') \
+                and self.balanced(expression[1:-1]):
+            expression = expression[1:-1].strip()
+        literal = re.fullmatch(r'(0x[0-9A-Fa-f]+|\d+)U?L?', expression)
+        if literal:
+            return int(literal.group(1), 0)
+        for operator in ('+', '<<'):
+            depth = 0
+            for at in range(len(expression)):
+                c = expression[at]
+                depth += (c == '(') - (c == ')')
+                if depth == 0 and expression.startswith(operator, at):
+                    left = self.value(expression[:at])
+                    right = self.value(expression[at + len(operator):])
+                    return left + right if operator == '+' else left << right
+        if expression in self.defines:
+            return self.value(self.defines[expression])
+        raise KeyError(expression)
+
+    @staticmethod
+    def balanced(text):
+        depth = 0
+        for c in text:
+            depth += (c == '(') - (c == ')')
+            if depth < 0:
+                return False
+        return depth == 0
+
+    def offsets(self, structure):
+        end = re.search(r'\}\s*' + structure + ';', self.text).start()
+        body = self.text[self.text.rindex('typedef struct', 0, end):end]
+        offsets, at = {}, 0
+        for member in re.finditer(r'(uint32_t|uint16_t|uint8_t)\s+(\w+)'
+                                  r'(?:\[(\w+)\])?\s*;', body):
+            size = {'uint32_t': 4, 'uint16_t': 2, 'uint8_t': 1}[member.group(1)]
+            count = int(member.group(3), 0) if member.group(3) else 1
+            at = (at + size - 1) // size * size
+            for i in range(count):
+                name = member.group(2) + ('[%d]' % i if member.group(3) else '')
+                offsets[name] = (at + i * size, size)
+            at += size * count
+        return offsets
+
+    def mask(self, *names):
+        for name in names:
+            for spelling in (name + '_Msk', name):
+                if spelling in self.defines:
+                    return self.value(spelling)
+        raise KeyError(' or '.join(names))
+
+
+#  Where each selected STM32H753 register is in ST's header: the base
+#  macro, the structure and its member, and the prefix its fields' macros
+#  take.  Reviewed by reading stm32h753xx.h, never the SVD.
+H753_REGISTERS = {
+    'RCC.AHB1ENR': ('RCC_BASE', 'RCC_TypeDef', 'AHB1ENR', 'RCC_AHB1ENR'),
+    'RCC.AHB4ENR': ('RCC_BASE', 'RCC_TypeDef', 'AHB4ENR', 'RCC_AHB4ENR'),
+    'RCC.APB1LENR': ('RCC_BASE', 'RCC_TypeDef', 'APB1LENR', 'RCC_APB1LENR'),
+    'GPIOD.MODER': ('GPIOD_BASE', 'GPIO_TypeDef', 'MODER', 'GPIO_MODER'),
+    'GPIOD.AFRH': ('GPIOD_BASE', 'GPIO_TypeDef', 'AFR[1]', 'GPIO_AFRH'),
+    'USART3.CR1': ('USART3_BASE', 'USART_TypeDef', 'CR1', 'USART_CR1'),
+    'USART3.CR3': ('USART3_BASE', 'USART_TypeDef', 'CR3', 'USART_CR3'),
+    'USART3.BRR': ('USART3_BASE', 'USART_TypeDef', 'BRR', 'USART_BRR'),
+    'USART3.ISR': ('USART3_BASE', 'USART_TypeDef', 'ISR', 'USART_ISR'),
+    'USART3.ICR': ('USART3_BASE', 'USART_TypeDef', 'ICR', 'USART_ICR'),
+    'USART3.RDR': ('USART3_BASE', 'USART_TypeDef', 'RDR', 'USART_RDR'),
+    'USART3.TDR': ('USART3_BASE', 'USART_TypeDef', 'TDR', 'USART_TDR'),
+    'DMA1.LISR': ('DMA1_BASE', 'DMA_TypeDef', 'LISR', 'DMA_LISR'),
+    'DMA1.LIFCR': ('DMA1_BASE', 'DMA_TypeDef', 'LIFCR', 'DMA_LIFCR'),
+    'DMA1.S0CR': ('DMA1_Stream0_BASE', 'DMA_Stream_TypeDef', 'CR', 'DMA_SxCR'),
+    'DMA1.S0NDTR': ('DMA1_Stream0_BASE', 'DMA_Stream_TypeDef', 'NDTR', 'DMA_SxNDT'),
+    'DMA1.S0PAR': ('DMA1_Stream0_BASE', 'DMA_Stream_TypeDef', 'PAR', 'DMA_SxPAR'),
+    'DMA1.S0M0AR': ('DMA1_Stream0_BASE', 'DMA_Stream_TypeDef', 'M0AR', 'DMA_SxM0AR'),
+    'DMAMUX1.DMAMUX_C0CR': ('DMAMUX1_Channel0_BASE', 'DMAMUX_Channel_TypeDef',
+                            'CCR', 'DMAMUX_CxCR'),
+    'TIM2.CCMR1_Input': ('TIM2_BASE', 'TIM_TypeDef', 'CCMR1', 'TIM_CCMR1'),
+}
+
+#  Fields the header spells otherwise, reviewed one by one.
+H753_FIELD_SPELLINGS = {
+    'USART3.BRR.BRR_4_15': 'USART_BRR_DIV_MANTISSA',
+    'USART3.BRR.BRR_0_3': 'USART_BRR_DIV_FRACTION',
+    'DMA1.S0NDTR.NDT': 'DMA_SxNDT',
+    'DMA1.S0PAR.PA': 'DMA_SxPAR_PA',
+    'DMA1.S0M0AR.M0A': 'DMA_SxM0AR_M0A',
+    'RCC.AHB1ENR.USB1OTGEN': 'RCC_AHB1ENR_USB1OTGHSEN',
+    'RCC.AHB1ENR.USB1ULPIEN': 'RCC_AHB1ENR_USB1OTGHSULPIEN',
+    'RCC.AHB1ENR.USB2OTGEN': 'RCC_AHB1ENR_USB2OTGFSEN',
+    'RCC.AHB1ENR.USB2ULPIEN': 'RCC_AHB1ENR_USB2OTGFSULPIEN',
+    'RCC.APB1LENR.USART7EN': 'RCC_APB1LENR_UART7EN',
+    'RCC.APB1LENR.USART8EN': 'RCC_APB1LENR_UART8EN',
+    'USART3.ISR.TXE': 'USART_ISR_TXE_TXFNF',
+    'USART3.ISR.RXNE': 'USART_ISR_RXNE_RXFNE',
+    'USART3.ISR.NF': 'USART_ISR_NE',
+    'USART3.ICR.NCF': 'USART_ICR_NECF',
+    'USART3.ICR.TCBGTC': 'USART_ICR_TCBGTCF',
+    'TIM2.CCMR1_Input.IC2PCS': 'TIM_CCMR1_IC2PSC',
+    'TIM2.CCMR1_Input.ICPCS': 'TIM_CCMR1_IC1PSC',
+    'USART3.CR1.TXEIE': 'USART_CR1_TXEIE_TXFNFIE',
+    'USART3.CR1.RXNEIE': 'USART_CR1_RXNEIE_RXFNEIE',
+}
+
+
+class Stm32h753Oracles(unittest.TestCase):
+    """The STM32H753's selection against ST's CMSIS header and reviewed
+    literals, neither of them the SVD or the generator."""
+
+    @classmethod
+    def rows(cls):
+        policy = policies()['stm32h753']
+        return json.loads((HERE / policy['modules'] /
+                           policy['correspondence']).read_text())
+
+    @requires_refine
+    def test_cmsis_header(self):
+        header = CmsisHeader(fetch_inputs.fetch('stm32h753/stm32h753xx.h')
+                             .read_text())
+        rows = {row['source']: row for row in self.rows()}
+        self.assertEqual(set(rows), set(H753_REGISTERS))
+        for key, (base, structure, member, prefix) in H753_REGISTERS.items():
+            row = rows[key]
+            offset, size = header.offsets(structure)[member]
+            with self.subTest(register=key):
+                self.assertEqual(row['address'], header.value(base) + offset)
+                self.assertEqual((row['width'], row['alignment']), (8 * size, size))
+                for field in row['fields']:
+                    name = key + '.' + field['name']
+                    spelled = H753_FIELD_SPELLINGS.get(name, prefix + '_' + field['name'])
+                    digits = re.fullmatch(r'(.*?)(\d)$', field['name'])
+                    candidates = [spelled]
+                    if digits:
+                        candidates.append(prefix + '_' + digits.group(1) + '_'
+                                          + digits.group(2))
+                    mask = header.mask(*candidates)
+                    with self.subTest(field=name):
+                        self.assertEqual(field['mask'], mask)
+                        self.assertEqual(field['low'], (mask & -mask).bit_length() - 1)
+                        self.assertEqual(field['high'], mask.bit_length() - 1)
+
+    def test_reset_values(self):
+        # Reviewed from RM0433's register descriptions, never the SVD: every
+        # selected register resets to zero but these.  GPIOD's mode register
+        # is all analog, 0xFFFF FFFF; 0xABFF FFFF is port A's, which the SVD
+        # gives port D by deriving it from port A.
+        expected = {'GPIOD.MODER': 0xffffffff, 'USART3.ISR': 0x000000c0}
+        for row in self.rows():
+            with self.subTest(register=row['source']):
+                self.assertEqual(row['known_reset_mask'], row['named_mask'])
+                self.assertEqual(row['known_reset_value'],
+                                 expected.get(row['source'], 0))
+        rows = {row['source']: row for row in self.rows()}
+        self.assertEqual(rows['GPIOD.MODER']['svd_reset_value'], 0xabffffff)
+        self.assertIn('RM0433', rows['GPIOD.MODER']['reset_correction']['source'])
+
+    def test_access_policies(self):
+        # Reviewed from RM0433's access types, never the policy: status is
+        # read-only, a clear register is write-1-to-clear and read as
+        # nothing, and a receive register's read takes a byte from its FIFO.
+        for row in self.rows():
+            key = row['source']
+            read = ('refused' if key in {'USART3.ICR', 'DMA1.LIFCR'}
+                    else 'modify' if key == 'USART3.RDR' else 'normal')
+            write = ('refused' if key in {'USART3.ISR', 'USART3.RDR', 'DMA1.LISR'}
+                     else 'one_clears' if key in {'USART3.ICR', 'DMA1.LIFCR'}
+                     else 'normal')
+            self.assertEqual(row['policy'], {'read': read, 'write': write,
+                                             'reserved': 'zero'}, key)
+
+    def test_reviewed_field_corrections(self):
+        rows = {row['source']: row for row in self.rows()}
+        fields = {f['name']: f for f in rows['DMAMUX1.DMAMUX_C0CR']['fields']}
+        self.assertEqual((fields['DMAREQ_ID']['mask'],
+                          fields['DMAREQ_ID']['correction']['svd_high']),
+                         (0xff, 6))
+        self.assertEqual(fields['SYNC_ID']['mask'], 0x1f000000)
+        self.assertEqual([f['name'] for f in rows['RCC.AHB1ENR']['omitted_fields']],
+                         ['USB2OTGHSULPIEN'])
+        self.assertEqual(rows['TIM2.CCMR1_Input']['alternate_register'],
+                         'CCMR1_Output')
+        self.assertEqual(rows['USART3.CR1']['derived_from'], 'USART1')
+        self.assertEqual(rows['GPIOD.MODER']['derived_from'], 'GPIOA')
+
+    @requires_refine
+    def test_interrupts_against_the_header(self):
+        header = fetch_inputs.fetch('stm32h753/stm32h753xx.h').read_text()
+        numbers = {int(m.group(2)): m.group(1) for m in re.finditer(
+            r'^\s*(\w+)_IRQn\s*=\s*(-?\d+)', header, re.MULTILINE)}
+        text = (DESCRIPTIONS / 'stm32h753/interrupts.ldn').read_text()
+        given = {int(value): name for name, value in re.findall(
+            r'^compiler\.interrupt\("(\w+)", (\d+)\)$', text, re.MULTILINE)}
+        external = {n for n in numbers if n >= 0}
+        # The two the SVD and the header disagree on: the SVD names a
+        # window watchdog reset at 143, which the header does not, and the
+        # header names the RAM ECC interrupt at 145, which the SVD does not.
+        self.assertEqual(set(given) - external, {143})
+        self.assertEqual(external - set(given), {145})
+        self.assertIn('compiler.vectors(%d)\n' % (16 + max(external) + 1), text)
+        self.assertIn('compiler.core("cortex-m7")\n', text)
+        for name, value in (('USART3', 39), ('DMA_STR0', 11), ('DMAMUX1_OV', 102),
+                            ('TIM2', 28)):
+            self.assertEqual(given[value], name)
+        self.assertEqual((numbers[39], numbers[11], numbers[102], numbers[28]),
+                         ('USART3', 'DMA1_Stream0', 'DMAMUX1_OVR', 'TIM2'))
+
+    @requires_refine
+    def test_the_consumer_s_linked_accesses(self):
+        """The consumer's every device store, read from its linked image."""
+        import thumb
+        if TOOLCHAIN is None and not shutil.which('arm-eabi-gcc') \
+                and not shutil.which('arm-none-eabi-gcc'):
+            if REQUIRE:
+                self.fail('--require-inputs needs --toolchain or a Cortex-M driver')
+            self.skipTest('no Cortex-M driver: pass --toolchain')
+        with tempfile.TemporaryDirectory() as root:
+            elf = Path(root) / 'consumer.elf'
+            command = [str(REFINE), 'compile', '--root=' + str(GENERATED),
+                       '--target=cortex-m0', '--level=armv7e-m',
+                       '--firmware-entry=start', str(HERE / 'consumers/stm32h753'),
+                       '-o', str(elf)]
+            if TOOLCHAIN is not None:
+                command.insert(2, '--toolchain=' + str(TOOLCHAIN))
+            result = subprocess.run(command, capture_output=True, text=True,
+                                    timeout=120)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = elf.read_bytes()
+        image = thumb.Image(data)
+        ram = (image.symbols['_landin_firmware_data_start'],
+               image.symbols['_landin_firmware_stack_top']
+               - image.symbols['_landin_firmware_data_start'])
+        windows = [(0x58024400, 0x400), (0x58020c00, 0x400), (0x40004800, 0x400),
+                   (0x40020000, 0x400), (0x40020800, 0x400)]
+        stores = [a for a in thumb.accesses(data, windows, ram) if a[0] != 'barrier']
+        message = image.symbols['message']
+        # Reviewed from RM0433's memory map and register descriptions: the
+        # address, the width and the value of every store, in order.
+        self.assertEqual(stores, [
+            ('w', 0x580244e0, 4, 0x00000008),   # RCC_AHB4ENR: GPIODEN
+            ('w', 0x580244e8, 4, 0x00040000),   # RCC_APB1LENR: USART3EN
+            ('w', 0x580244d8, 4, 0x00000001),   # RCC_AHB1ENR: DMA1EN
+            ('w', 0x58020c00, 4, 0xfffaffff),   # GPIOD_MODER: PD8, PD9 alternate
+            ('w', 0x58020c24, 4, 0x00000077),   # GPIOD_AFRH: PD8, PD9 AF7
+            ('w', 0x4000480c, 4, 556),          # USART3_BRR: 64 MHz / 115200
+            ('w', 0x40004808, 4, 0x00000080),   # USART3_CR3: DMAT
+            ('w', 0x40020800, 4, 46),           # DMAMUX1_C0CR: usart3_tx_dma
+            ('w', 0x40020018, 4, 0x40004828),   # DMA_S0PAR: USART3_TDR
+            ('w', 0x4002001c, 4, message),      # DMA_S0M0AR: the message
+            ('w', 0x40020014, 4, 4),            # DMA_S0NDTR: four bytes
+            ('w', 0x40020010, 4, 0x00000440),   # DMA_S0CR: MINC, memory to peripheral
+            ('w', 0x40004800, 4, 0x00000009),   # USART3_CR1: TE, UE
+            ('w', 0x40020010, 4, 0x00000441),   # DMA_S0CR: EN
+        ])
+
+
 def main():
-    global REFINE, REQUIRE
+    global REFINE, REQUIRE, TOOLCHAIN
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--refine', type=Path,
                         default=os.environ.get('LANDIN_REFINE'))
+    parser.add_argument('--toolchain', type=Path,
+                        help='the Cortex-M C driver the consumer links with')
     parser.add_argument('--require-inputs', action='store_true',
                         help='fail, rather than skip, without refine or inputs')
     args, rest = parser.parse_known_args()
     REFINE = Path(args.refine).resolve() if args.refine else None
     REQUIRE = args.require_inputs
+    TOOLCHAIN = args.toolchain
     unittest.main(argv=[sys.argv[0]] + rest)
 
 
