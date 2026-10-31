@@ -53,17 +53,25 @@ fi
 #  the one `nix develop` puts on PATH -- the same release binary, held to
 #  the same checksum.  Another version on PATH is not the pinned CLI.
 tree_pin=$(sed -n 's/^LANDIN_TREE_SITTER_VERSION=//p' "$root/environments/pins.sh")
-tree_cli="$root/highlight/tree-sitter/node_modules/.bin/tree-sitter"
+#  The grammar package's own comes first, but only when it runs and is the
+#  pinned version: on NixOS the binary npm installs there is linked for a
+#  glibc system and does not start, and the shell's patched one was then
+#  ignored in its favour.
+tree_cli=
 tree_other=
-if ! test -x "$tree_cli" && tree_path=$(command -v tree-sitter); then
+for tree_path in "$root/highlight/tree-sitter/node_modules/.bin/tree-sitter" \
+                 "$(command -v tree-sitter || :)"; do
+    if test -z "$tree_path" || ! test -x "$tree_path"; then
+        continue
+    fi
     tree_version=$("$tree_path" --version 2>/dev/null | sed -n '1s/^tree-sitter \([^ ]*\).*/\1/p')
     if test "$tree_version" = "$tree_pin"; then
         tree_cli=$tree_path
-    else
-        tree_other="$tree_path is ${tree_version:-of no known version}, not the pinned $tree_pin"
-        echo "tree-sitter: $tree_other; not used"
+        break
     fi
-fi
+    tree_other="${tree_other:+$tree_other; }$tree_path is ${tree_version:-of no known version, or does not run}, not the pinned $tree_pin"
+    echo "tree-sitter: $tree_path is ${tree_version:-of no known version, or does not run}, not the pinned $tree_pin; not used"
+done
 
 #  The structural block is optional, and --integration is the one
 #  caller that cannot treat it so.  The grammar's drift from the kernel went

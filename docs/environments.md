@@ -118,8 +118,9 @@ the mirror holds and how a deletion reaches it); the Pages and
 GitHub-mirror manifests are retired with the SourceHut gate, and
 `scripts/site.sh` renders and packages without publishing.
 `.github/workflows/pages.yml` is the only publisher. The former automatic Nix manifest was
-retired earlier, in favor of explicit supplemental native Nix checks when the
-shell's inputs change.
+retired earlier, and the gate's `flake` job now builds the flake whenever no
+push run in the last week built the same `flake.nix`, `flake.lock` and
+`environments/pins.sh` (D585).
 
 Native macOS arm64 began as a *development* loop and became a validated
 target of its own, with its own compiler build, platform tools and
@@ -283,9 +284,10 @@ generator's tests pass on both. GNAT and GPRbuild retain their
 existing versions and archive checksums.
 
 GDB comes from that same Debian channel for `scripts/debug.sh` in the local
-container, and the Linux nix shell provides GDB from its locked package set.
-The gate runs the script with the release compiler and the GDB the pinned
-GNAT bundles. It checks source debugging of emitted
+container. In the Linux nix shell `gdb` is the GDB the pinned GNAT bundles,
+which has no Python, and its locked package set's GDB, with Python and every
+architecture, is `gdb-multiarch`. The gate runs the script with the release
+compiler and the GDB the pinned GNAT bundles. It checks source debugging of emitted
 programs, which is separate from debugging the Ada compiler itself.
 
 Native GDB cannot read registers through Rosetta's `ptrace` interface:
@@ -352,8 +354,10 @@ It is defined for the three systems the pins carry checksums for,
 `.#refine-bin` exists only for a system a release has published an asset
 for, with its hash recorded in the flake, so `aarch64-linux` has the shell
 and the source build `.#refine` and gains the prebuilt compiler with the
-first release that publishes it. The aarch64-linux shell is evaluated on
-x86-64, not yet built on arm64 hardware; Nix CI stays deferred.
+first release that publishes it. The aarch64-linux and aarch64-darwin
+outputs are evaluated on x86-64 by the gate's `flake` job, and only the
+x86-64 ones are built there (D585); the aarch64-linux shell is not yet built
+on arm64 hardware. That job is the whole of Nix CI.
 
 Both packages install the standard library beside the compiler, as
 `lib/landin/{core,hosted,platform}` next to `bin/refine`, and `refine` finds
@@ -373,7 +377,10 @@ isolated build directory. `python3` comes with
 it, so `check.py` and `scripts/site.sh` work in that shell too. On Linux it
 also selects `llvmPackages."19".clang` and `glibc.dev` from the package set
 fixed by `flake.lock`, matching the Debian environments' Clang major without
-following nixpkgs' default. The Darwin shell does not pretend that its SDK is a
+following nixpkgs' default. Its `clang-19` is that package set's 19.1.7, not
+the gate's: the `bindings` job runs Ubuntu 24.04's clang-19 at the version
+`LANDIN_CLANG_UBUNTU` pins, 19.1.1, and the binding generator's tests pass on
+both. The Darwin shell does not pretend that its SDK is a
 Linux sysroot; run binding-generator tests through `scripts/linux-loop.sh`
 there.
 
@@ -384,9 +391,40 @@ runs in it without `npm`. Its `bash` is nixpkgs' interactive one, because
 stdenv's has no `compgen` or `complete` and the completion case of
 `scripts/tests/test_cli_native.py` needs both. Its two `landin:` banner
 lines go to standard error, so `nix develop -c cmd > file` captures only
-what the command writes; `check.py` holds the hook to that. `scripts/debug.sh`
+what the command writes; `check.py` holds the hook to that. They are written
+only when the shell is interactive, so `nix develop -c cmd` prints what the
+command prints and what nix itself says. `scripts/debug.sh`
 takes the pinned installation from the `gnat` on `PATH` when
-`LANDIN_GNAT_HOME` is unset, which in this shell is the wrapped GNAT.
+`LANDIN_GNAT_HOME` is unset, which in this shell is the wrapped GNAT, and
+its `gdb` is that installation's.
+
+Nix itself says two things around a command that are not the command's:
+`warning: Git tree '...' is dirty`, whenever the checkout has uncommitted
+changes, which only says the shell was evaluated from the working tree
+rather than a commit; and, while several `nix develop` commands start at
+once, `SQLite database '.../eval-cache-v6/...' is busy`, which says one of
+them waited for another's evaluation cache and changes nothing they do.
+`export NIX_CONFIG='warn-dirty = false'` silences the first. The second goes
+away with `--option eval-cache false`, at about a second more per command,
+or by entering `nix develop` once and running the commands inside it, which
+AGENTS.md asks of related commands anyway.
+
+On Linux the shell also holds LLDB, LLVM 19's from the same package set,
+FreeBSD 14.4's base LLDB being LLVM 19's too. The LLDB sessions FreeBSD's
+lane runs in its VM run against this host's own Linux images with
+
+```sh
+./scripts/dev-build.sh
+python3 compiler/tests/debugging/lldb_linux.py \
+    --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" \
+    --output "$(mktemp -d)/lldb"
+```
+
+the source session over `compiler/tests/freebsd/debug.ldn` and the stack
+switch's, at the four standard profiles, each held to the verdict the
+FreeBSD lane applies. It is evidence about the sessions and LLDB on a Linux
+image, none about FreeBSD or Darwin; the Darwin sessions read a dSYM through
+Apple's LLDB and run only on a Mac.
 
 Its Linux behaviour is not settled by the local container, and that is not a
 formality. The pinned gprbuild dies with a segmentation fault when argv[0]
@@ -419,9 +457,11 @@ driver the archive ships at the wrapper.
 
 Both of those were found by hand. The former automatic Nix manifest checked
 the shell at builds.sr.ht as a non-gate only when shell inputs changed.
-That automatic manifest is now retired. Run the same `scripts/toolchain.sh`
-and `scripts/test.sh` explicitly inside `nix develop` on native Linux after
-shell-input changes; this remains supplemental environment validation.
+That automatic manifest is now retired; the gate's `flake` job builds both
+packages and runs `scripts/toolchain.sh` inside the shell when its inputs
+change (D585). Run `scripts/test.sh` explicitly inside `nix develop` on
+native Linux after shell-input changes; this remains supplemental
+environment validation.
 Its first run settles both halves. The shell built on x86-64 nix with the
 pinned GNAT 16.1.0 and GPRbuild 26.0.0, and the suite passed 133 cases with
 no failures — `runtime fixtures execute` among them, which is the case that

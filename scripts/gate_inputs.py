@@ -13,18 +13,23 @@ change a target, language, scope or acceptance claim, and such a change
 keeps its target evidence.  Nothing here reads a sentence to decide.  A
 pass is reused only when all of these hold:
 
-  - the base is a commit on which a push to main ran this workflow under a
-    week ago, with every named job -- every matrix leg by its own name --
-    run and succeeded, read from a complete job listing.  GitHub records
-    that run; nothing a pull request writes is consulted, so a pass cannot
-    be forged from a branch;
+  - the base is a commit on which a push to a branch of this repository,
+    main or any other, ran this workflow under a week ago, with every
+    named job -- every matrix leg by its own name -- run and succeeded,
+    read from a complete job listing.  GitHub records that run; nothing a
+    pull request writes is consulted.  A branch's run is as good a base
+    as main's: only someone with write access can push to the branch, and
+    the key below covers the workflow that run executed and every tool
+    pin, so a run of a weakened workflow can only be reused by a tree that
+    still carries the weakened workflow, as with identical-tree reuse;
   - the tree differs from the base only in the content of the four files,
     so a path, a mode or any other byte runs everything;
-  - every commit since the base, on each side of what is checked out --
-    the pushed commit, or both parents of a pull request's merge commit, so
-    main-side commits merged after the base count too -- says `Gate:
-    explanatory` on a line of its own, and the run is a push to main or a
-    pull request from a branch of this repository whose author has write
+  - the base is an ancestor of every tip, and every commit since the base,
+    on each side of what is checked out -- the pushed commit, or both
+    parents of a pull request's merge commit, so main-side commits merged
+    after the base count too -- says `Gate: explanatory` on a line of its
+    own, and the run is a push to a branch of this repository or a pull
+    request from a branch of this repository whose author has write
     access.  The declaration is the trusted judgement no syntax can
     make, bound to the exact commits it covers: a new commit without it,
     or one with a semantic claim the author did not declare, runs
@@ -33,12 +38,20 @@ pass is reused only when all of these hold:
 An identical candidate tree may also reuse a recent full successful push
 run from a branch of this repository. This comparison includes ALL files,
 modes, workflow definitions and tool pins, without explanatory exclusions.
-Manual dispatch always runs the lanes. Anything uncertain runs every lane.
+A run that itself reused a pass skipped its lanes, so neither rule ever
+takes it as a full pass.  Manual dispatch always runs the lanes.  Anything
+uncertain runs every lane.
+
+The flake job asks a narrower question of the same record: whether a push
+run of this workflow built the flake, in the last week, from the inputs
+this checkout has (FLAKE_INPUTS).  When none did, or anything is in doubt,
+it builds.
 
     key [REV]                       print the key of REV, HEAD by default
     same A B                        succeed only when A and B have one key
     reuse WORKFLOW JOB ...          print reuse=true or reuse=false, and why;
                                     each JOB is an exact job name
+    flake WORKFLOW JOB STEP         print build=true or build=false, and why
     verdict [--always JOB ...]      judge the `needs` context in $NEEDS
 """
 from datetime import datetime, timedelta, timezone
@@ -57,6 +70,13 @@ MAX_AGE = timedelta(days=7)
 #  Exact repository paths.  scripts/tests/test_gate_inputs.py names every
 #  file that mentions one of these by name, so a new reader is a decision.
 CONTENT_FREE = ("AGENTS.md", "README.md", "ROADMAP.md", "handoff.md")
+
+#  What decides whether the flake job builds: the flake, its lock, and the
+#  pins it reads (D585).  The rest of the tree is the source the flake
+#  builds, which the other lanes build and test; flake.nix also reads
+#  README.md's status line, for a version string, which no edit can make
+#  fail to build.
+FLAKE_INPUTS = ("environments/pins.sh", "flake.lock", "flake.nix")
 
 
 def entries(rev, cwd=None):
@@ -86,20 +106,22 @@ def tips_of(event_name, event, checked_out):
     """The commits whose history this run's tree is, and why there are none.
 
     CHECKED_OUT is (sha, parents) of the commit the job checked out.  A
-    push to main checks out the pushed commit.  A pull request checks out
+    branch push checks out the pushed commit.  A pull request checks out
     GitHub's merge commit, whose first parent is main as it was when the
     merge was made -- possibly past the event's base.sha -- and whose
     second is the head; both histories are in the tree, so both are tips.
-    A push to main is trusted by having happened.  A pull request is
-    trusted when its author has write access and its branch is in this
-    repository, where only someone with write access can add a commit; a
-    fork's branch takes commits from whoever its owner lets in.
+    A push to a branch of this repository, main or another, is trusted by
+    having happened: only someone with write access can push one.  A tag
+    is not a branch, and is never reused.  A pull request is trusted when
+    its author has write access and its branch is in this repository,
+    where only someone with write access can add a commit; a fork's branch
+    takes commits from whoever its owner lets in.
     """
     sha, parents = checked_out
     if event_name == "push":
-        if event.get("ref") != "refs/heads/main":
-            return None, "only a push to main or a pull request can be reused"
-        if sha != event["after"]:
+        if not event.get("ref", "").startswith("refs/heads/"):
+            return None, "only a branch push or a pull request can be reused"
+        if sha != event.get("after"):
             return None, "the checkout is not the pushed commit"
         return [sha], None
     if event_name == "pull_request":
@@ -115,43 +137,40 @@ def tips_of(event_name, event, checked_out):
     return None, "a %s run is never reused" % event_name
 
 
-def full_run(run, listing, required, now, main_only=True):
+def recent_push(run, now):
+    """Whether RUN is a push run of this repository's branch from the last week."""
+    if run.get("event") != "push" or not run.get("head_branch"):
+        return False
+    started = datetime.fromisoformat(run["run_started_at"].replace("Z", "+00:00"))
+    return timedelta(0) <= now - started <= MAX_AGE
+
+
+def complete(listing):
+    """LISTING's jobs, or None when it is shorter than its own total."""
+    jobs = listing.get("jobs", [])
+    return jobs if listing.get("total_count") == len(jobs) else None
+
+
+def full_run(run, listing, required, now):
     """Whether RUN, with its job LISTING, ran every REQUIRED job and passed.
 
+    RUN is a push to any branch of this repository, main or another.
     REQUIRED names jobs exactly, a matrix leg by its own name, so a leg
     that never ran is missing rather than covered by its sibling.  A
     listing shorter than its total is not read as complete.  A run that
     itself reused a pass skipped its lanes, so it is not one: a reuse
     always points at a run that did the work.
     """
-    if (run.get("event") != "push"
-            or (main_only and run.get("head_branch") != "main")
-            or not run.get("head_branch")
-            or run.get("conclusion") != "success"):
+    if not recent_push(run, now) or run.get("conclusion") != "success":
         return False
-    started = datetime.fromisoformat(run["run_started_at"].replace("Z", "+00:00"))
-    if not timedelta(0) <= now - started <= MAX_AGE:
-        return False
-    jobs = listing.get("jobs", [])
-    if listing.get("total_count") != len(jobs):
+    jobs = complete(listing)
+    if jobs is None:
         return False
     for name in required:
         found = [job for job in jobs if job["name"] == name]
         if len(found) != 1 or found[0].get("conclusion") != "success":
             return False
     return True
-
-
-def candidate_tips(event_name, event, checked_out):
-    """Trusted branch pushes and same-repository merge checkouts only."""
-    sha, unused_parents = checked_out
-    if event_name == "push":
-        if not event.get("ref", "").startswith("refs/heads/"):
-            return None, "candidate reuse requires a branch push"
-        if sha != event.get("after"):
-            return None, "the checkout is not the pushed commit"
-        return [sha], None
-    return tips_of(event_name, event, checked_out)
 
 
 def decide_candidate(event_name, event, api, key_of, checked_out,
@@ -163,7 +182,7 @@ def decide_candidate(event_name, event, api, key_of, checked_out,
     branch-provided artifact or a local test transcript. A PR's checked-out
     merge tree must match; its head alone is insufficient.
     """
-    tips, why = candidate_tips(event_name, event, checked_out)
+    tips, why = tips_of(event_name, event, checked_out)
     if tips is None:
         return False, why
     here = key_of("HEAD")
@@ -174,7 +193,7 @@ def decide_candidate(event_name, event, api, key_of, checked_out,
         if key_of(run["head_sha"]) != here:
             continue
         listing = api("actions/runs/%d/jobs?filter=latest&per_page=100" % run["id"])
-        if full_run(run, listing, required, now, main_only=False):
+        if full_run(run, listing, required, now):
             return True, "identical candidate tree: reusing %s, which ran every lane on %s" % (
                 run["html_url"], run["head_sha"][:12])
     return False, "no recent full push run has the identical candidate tree"
@@ -198,16 +217,17 @@ def undeclared(compared):
 def decide(event_name, event, api, key_of, checked_out, workflow, required, now):
     """(reuse, reason).  API(path) answers GitHub's REST API; KEY_OF(rev).
 
-    The record is GitHub's own: a run of WORKFLOW from a push to main.
-    Nothing a pull request can write -- a cache, an artifact, a file -- is
-    consulted, so a branch cannot manufacture the pass it then reuses.
+    The record is GitHub's own: a run of WORKFLOW from a push to a branch
+    of this repository, main or another.  Nothing a pull request can write
+    -- a cache, an artifact, a file -- is consulted, and the key holds the
+    workflow a branch's run executed to the one this checkout carries.
     """
     tips, why = tips_of(event_name, event, checked_out)
     if tips is None:
         return False, why
     here = key_of("HEAD")
-    runs = api("actions/workflows/%s/runs?branch=main&event=push&status=success"
-               "&per_page=30" % workflow)
+    runs = api("actions/workflows/%s/runs?event=push&status=success&per_page=30"
+               % workflow)
     reasons = []
     for run in runs.get("workflow_runs", []):
         listing = api("actions/runs/%d/jobs?filter=latest&per_page=100" % run["id"])
@@ -223,9 +243,72 @@ def decide(event_name, event, api, key_of, checked_out, workflow, required, now)
         if missing:
             reasons.append("%s: %s" % (base[:12], ", ".join(missing)))
             continue
-        return True, "reusing %s, which ran every lane on %s" % (
-            run["html_url"], base[:12])
-    return False, "; ".join(reasons) or "no recent push to main ran every lane"
+        return True, "reusing %s, which ran every lane on %s of %s" % (
+            run["html_url"], base[:12], run["head_branch"])
+    return False, "; ".join(reasons) or "no recent push run ran every lane"
+
+
+def flake_key(rev="HEAD", cwd=None):
+    """The mode and object of each FLAKE_INPUTS path in REV, absent ones too."""
+    listing = subprocess.run(["git", "ls-tree", "-z", "--full-tree", rev, "--",
+                              *FLAKE_INPUTS], cwd=cwd, check=True,
+                             stdout=subprocess.PIPE).stdout
+    found = {}
+    for record in listing.split(b"\0"):
+        if record:
+            head, path = record.split(b"\t", 1)
+            mode, unused_kind, name = head.split(b" ")
+            found[path.decode("utf-8", "surrogateescape")] = (mode, name)
+    digest = hashlib.sha256()
+    for path in FLAKE_INPUTS:
+        mode, name = found.get(path, (b"-", b"absent"))
+        digest.update(b"%s %s\t%s\0" % (mode, name, path.encode()))
+    return digest.hexdigest()
+
+
+def built(listing, job, step):
+    """Whether the job named JOB in LISTING ran STEP and both succeeded.
+
+    The step is the build itself: a job that found an earlier build and
+    skipped its step succeeded without building, and is no record.
+    """
+    jobs = complete(listing)
+    if jobs is None:
+        return False
+    found = [entry for entry in jobs if entry["name"] == job]
+    if len(found) != 1 or found[0].get("conclusion") != "success":
+        return False
+    steps = [entry for entry in found[0].get("steps", []) if entry["name"] == step]
+    return len(steps) == 1 and steps[0].get("conclusion") == "success"
+
+
+def decide_flake(event_name, api, key_of, workflow, job, step, now):
+    """(build, reason): whether the flake job must build (D585).
+
+    "Changed" is decided against what was built rather than against a
+    parent: the flake is rebuilt unless a push run of WORKFLOW in the last
+    week ran JOB's STEP to success from these very FLAKE_INPUTS.  A diff
+    against the event's base would skip after a run whose flake build
+    failed, after a force push, or on a branch's first push; this asks
+    the same question of a branch push, a pull request's merge checkout
+    and a push to main, and fails towards building.  Only push runs are
+    records, as for reuse, so a fork's pull request cannot supply one.
+    Manual dispatch always builds.
+    """
+    if event_name not in ("push", "pull_request"):
+        return True, "a %s run always builds the flake" % event_name
+    here = key_of("HEAD")
+    runs = api("actions/workflows/%s/runs?event=push&per_page=30" % workflow)
+    for run in runs.get("workflow_runs", []):
+        if not recent_push(run, now):
+            continue
+        listing = api("actions/runs/%d/jobs?filter=latest&per_page=100" % run["id"])
+        if not built(listing, job, step):
+            continue
+        if key_of(run["head_sha"]) == here:
+            return False, "%s built the flake from these inputs on %s" % (
+                run["html_url"], run["head_sha"][:12])
+    return True, "no push run in the last week built the flake from these inputs"
 
 
 def github(path):
@@ -257,6 +340,13 @@ def fetched_key(rev, content_free=CONTENT_FREE):
 
 def fetched_candidate_key(rev):
     return fetched_key(rev, content_free=())
+
+
+def fetched_flake_key(rev):
+    if rev != "HEAD":
+        subprocess.run(["git", "fetch", "-q", "--no-tags", "--depth=1",
+                        "origin", rev], check=True)
+    return flake_key(rev)
 
 
 def verdict(needs, always):
@@ -306,6 +396,16 @@ def main(argv):
         print("gate_inputs: " + why, file=sys.stderr)
         print("reuse=" + ("true" if reuse else "false"))
         return 0
+    if len(argv) == 4 and argv[0] == "flake":
+        try:
+            build, why = decide_flake(
+                os.environ["GITHUB_EVENT_NAME"], github, fetched_flake_key,
+                argv[1], argv[2], argv[3], datetime.now(timezone.utc))
+        except Exception as error:  # noqa: BLE001 -- any doubt builds
+            build, why = True, "%s: %s" % (type(error).__name__, error)
+        print("gate_inputs: " + why, file=sys.stderr)
+        print("build=" + ("true" if build else "false"))
+        return 0
     if argv[:1] == ["verdict"] and argv[1:2] in ([], ["--always"]):
         always = ("inputs",) + tuple(argv[2:])
         needs = json.loads(os.environ["NEEDS"])
@@ -316,7 +416,8 @@ def main(argv):
             print("gate_inputs: " + problem, file=sys.stderr)
         return 1 if problems else 0
     print("usage: gate_inputs.py key [REV] | same A B"
-          " | reuse WORKFLOW JOB ... | verdict [--always JOB ...]",
+          " | reuse WORKFLOW JOB ... | flake WORKFLOW JOB STEP"
+          " | verdict [--always JOB ...]",
           file=sys.stderr)
     return 2
 

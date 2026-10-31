@@ -2172,6 +2172,12 @@ package body Landin.Diagnostics.Citations is
                "`refine svd` replaces its outputs whole or not at all",
             when 559 =>
                "Vendor inputs are pinned by URL and SHA-256 and fetched",
+            when 585 =>
+               "The gate builds the flake unless a recent push run built"
+               & " the same flake inputs",
+            when 586 =>
+               "An explanatory edit may take its base from any branch's "
+               & "full run",
             when 560 =>
                "The STM32H753 is learnt for prototype 1's UART and DMA, "
                & "with reviewed corrections",
@@ -3304,6 +3310,10 @@ package body Landin.Diagnostics.Citations is
             when 558 =>
                "Decisions: The toolchain, C and the machine",
             when 559 =>
+               "Decisions: The toolchain, C and the machine",
+            when 585 =>
+               "Decisions: The toolchain, C and the machine",
+            when 586 =>
                "Decisions: The toolchain, C and the machine",
             when 560 =>
                "Decisions: The toolchain, C and the machine",
@@ -4727,6 +4737,13 @@ package body Landin.Diagnostics.Citations is
             when 559 =>
                "https://www.701.dev/spec.html#d559-vendor-inputs-are-pin"
                & "ned-by-url-and-sha-256-and-fetched",
+            when 585 =>
+               "https://www.701.dev/spec.html#d585-the-gate-builds-the-f"
+               & "lake-unless-a-recent-push-run-built-the-same-flake-input"
+               & "s",
+            when 586 =>
+               "https://www.701.dev/spec.html#d586-an-explanatory-edit-m"
+               & "ay-take-its-base-from-any-branch-s-full-run",
             when 560 =>
                "https://www.701.dev/spec.html#d560-the-stm32h753-is-lear"
                & "nt-for-prototype-1-s-uart-and-dma-with-reviewed-correcti"
