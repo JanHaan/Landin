@@ -1,5 +1,5 @@
 {
-  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 from pico-sdk 2.2.0, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these.",
+  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these.",
   "devices": {
     "rp2040": {
       "sources": {
@@ -25,6 +25,35 @@
       "stack_reserved": 4096,
       "reserved_slots": [4, 5, 6, 7, 8, 9, 10, 12, 13],
       "handler_slot": 21
+    },
+    "stm32h753": {
+      "sources": {
+        "memory map": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683, SHA-256 4f6def439a9fa94705303fe227d34308048c44bd36263d311aa54cc94f8398f5: D1_AXIFLASH_BASE 0x08000000 to FLASH_END 0x081FFFFF, D1_ITCMRAM_BASE 0 64KB, D1_DTCMRAM_BASE 0x20000000 128KB, D1_AXISRAM_BASE 0x24000000 512KB, D2_AHBSRAM_BASE 0x30000000 288KB as SRAM1 128K, SRAM2 128K and SRAM3 32K, D3_SRAM_BASE 0x38000000 64 KB",
+        "interrupts": "the same header's IRQn_Type: external interrupts 0 to 149, of which the SVD-generated interrupts.ldn lacks ECC 145 and adds WWDG1_RST 143 (D542, D560); USART3_IRQn 39",
+        "core slots": "ARMv7-M: MemManage 4, BusFault 5, UsageFault 6 and DebugMonitor 12 taken, 7 to 10 and 13 reserved"
+      },
+      "core": "cortex-m7",
+      "level": "armv7e-m",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "FLASH", "origin": 134217728, "length": 2097152, "access": "rx"},
+        {"name": "ITCM", "origin": 0, "length": 65536, "access": "rwx"},
+        {"name": "DTCM", "origin": 536870912, "length": 131072, "access": "rw"},
+        {"name": "AXI_SRAM", "origin": 603979776, "length": 524288, "access": "rwx"},
+        {"name": "SRAM1", "origin": 805306368, "length": 131072, "access": "rw"},
+        {"name": "SRAM2", "origin": 805437440, "length": 131072, "access": "rw"},
+        {"name": "SRAM3", "origin": 805568512, "length": 32768, "access": "rw"},
+        {"name": "SRAM4", "origin": 939524096, "length": 65536, "access": "rw"}
+      ],
+      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "AXI_SRAM", "bss": "AXI_SRAM", "stack": "AXI_SRAM"},
+      "vector_address": 134217728,
+      "vector_words": 166,
+      "stack_top": 604504064,
+      "stack_reserved": 16384,
+      "reserved_slots": [7, 8, 9, 10, 13, 58, 80, 81, 82, 83, 139, 142, 161, 163, 164],
+      "handler_slot": 55,
+      "handler_symbol": "usart3",
+      "placed_datum": {"symbol": "fast", "region": "DTCM"}
     },
     "constrained-reference": {
       "sources": {"profile": "spec.md [1990]: 32 KiB flash at zero, 16 KiB RAM at 0x20000000, the upper 4 KiB the stack, a 48-word table at zero, core slots 4-10 and 12-13 and slots 21 and 42-47 zero"},

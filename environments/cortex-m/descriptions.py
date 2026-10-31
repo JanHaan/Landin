@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Device descriptions select their profiles: link-only Cortex-M controls.
 
-Each device of descriptions.json is selected by its identity, RP2040 by
-importing devices/descriptions/rp2040 and the constrained reference by
-importing none (D543), and every fact the linked image and its build report
+Each device of descriptions.json is selected by its identity, RP2040 and
+the STM32H753 by importing devices/descriptions/rp2040 and
+devices/descriptions/stm32h753 and the constrained reference by importing
+none (D543), and every fact the linked image and its build report
 carry is compared with the expectation recorded there, apart from the
 compiler and the description, so a wrong or absent fact fails.  The slot-21
 controls (D544), the region placement (D547) and the developer linker
 script's contract (D546), each clause broken once, are here too.
 
-Nothing here runs an image: RP2040 is a chip, and emulators cover cores
-only, so its evidence is compile-and-link.
+Nothing here runs an image: RP2040 and the STM32H753 are chips, and
+emulators cover cores only, so their evidence is compile-and-link.
 """
 import argparse
 import json
@@ -31,6 +32,11 @@ PROGRAMS = {
                'link(region: "SCRATCH_X") mut scratch: u32 = 7\n'
                'mut counted: u32 = 1\n'
                'start: () -> none = counted += scratch end start\n'),
+    'stm32h753': ('import descriptions/stm32h753\n'
+                  'link(vector: 55) extern(interrupt) usart3: () -> none = end usart3\n'
+                  'link(region: "DTCM") mut fast: u32 = 7\n'
+                  'mut counted: u32 = 1\n'
+                  'start: () -> none = counted += fast end start\n'),
     'constrained-reference': (
         'link(vector: 20) extern(interrupt) irq4: () -> none = end irq4\n'
         'mut counted: u32 = 1\n'
@@ -94,7 +100,8 @@ def compile_firmware(run, refine, program, extra=(), name='core.elf', check=True
 def select(run, refine, device):
     """D543/D544/D545: one device by its identity, every fact compared."""
     want = EXPECTED[device]
-    image = compile_firmware(run, refine, PROGRAMS[device])
+    image = compile_firmware(run, refine, PROGRAMS[device],
+                             ['--level=' + want['level']] if 'level' in want else ())
     report = json.loads((run.out / 'core.elf.json').read_text())['firmware']
     for key in ('core', 'boot', 'regions', 'placed', 'vector_address',
                 'vector_words', 'stack_reserved'):
@@ -112,7 +119,7 @@ def select(run, refine, device):
     words = [image.word(vectors + 4 * slot) for slot in range(want['vector_words'])]
     for slot in want['reserved_slots']:
         require(words[slot] == 0, '%s: reserved slot %d holds %#x' % (device, slot, words[slot]))
-    handler = 'usb' if device == 'rp2040' else 'irq4'
+    handler = want.get('handler_symbol', 'usb' if device == 'rp2040' else 'irq4')
     require(words[want['handler_slot']] == image.symbols[handler] | 1,
             '%s: slot %d is not its handler' % (device, want['handler_slot']))
     if 'boot2_address' in want:
@@ -127,6 +134,12 @@ def select(run, refine, device):
         require(scratch['origin'] <= image.symbols.get('scratch', -1)
                 < scratch['origin'] + scratch['length'],
                 'the datum placed in SCRATCH_X is not in it')
+    elif 'placed_datum' in want:
+        datum = want['placed_datum']
+        region = next(r for r in want['regions'] if r['name'] == datum['region'])
+        require(region['origin'] <= image.symbols.get(datum['symbol'], -1)
+                < region['origin'] + region['length'],
+                '%s: the datum placed in %s is not in it' % (device, datum['region']))
     else:
         refused = compile_firmware(run, refine, PROGRAMS[device].replace(
             'vector: 20', 'vector: %d' % want['refused_slot']), name='refused.elf', check=False)

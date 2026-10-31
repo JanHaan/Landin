@@ -3,6 +3,7 @@
 -- channel 0. Every write is a whole image computed here, never a read,
 -- modify and write: at reset each register written holds its reset value,
 -- so the static check knows every value the linked image stores.
+import descriptions/stm32h753
 import platform/cortex_m
 import stm32h753/dma1
 import stm32h753/dmamux1

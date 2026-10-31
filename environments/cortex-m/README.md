@@ -734,7 +734,8 @@ holds the reference's map, so its capacity verdicts are linked against the
 reference; `backend_corpus.py` then holds every limited verdict's measured
 image, largest frame or materialization to each description's capacities in
 `descriptions.json` and records them under `profiles` in its result. Against
-RP2040 that is a measurement, not a link or a run against its map.
+RP2040 and the STM32H753 that is a measurement from the images' sizes and
+frames, not a link or a run against their maps.
 
 ## Complete derived driver
 

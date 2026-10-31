@@ -20635,7 +20635,14 @@ placing data in SRAM1, which reaches no further and is smaller.
 **Pinned by** `devices/test.py`'s `the hand-written memory against the
 header`, which holds each region to the header and every placement DMA may
 touch out of the TCMs, and the cache check of `the consumer's linked
-accesses`.
+accesses`; and `environments/cortex-m/descriptions.py`, which selects the
+STM32H753 by importing its description at `--level=armv7e-m` and compares
+its linked regions, vector table at 0x0800_0000 of 166 words, reserved
+slots, USART3's handler at slot 55, a datum placed in the DTCM and its
+plain-table boot with `descriptions.json`, recorded from ST's header. Its
+capacity verdicts are those of `backend_corpus.py`'s `profiles`, measured
+from each limited image's sizes and frames, as RP2040's are, because the
+corpus links with the reference's probe map.
 
 ### D530 — `refine explain` answers a construct and a decision
 

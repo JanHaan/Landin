@@ -715,7 +715,8 @@ class Stm32h753Oracles(unittest.TestCase):
             self.skipTest('no Cortex-M driver: pass --toolchain')
         with tempfile.TemporaryDirectory() as root:
             elf = Path(root) / 'consumer.elf'
-            command = [str(REFINE), 'compile', '--root=' + str(GENERATED),
+            command = [str(REFINE), 'compile', '--root=' + str(HERE),
+                       '--root=' + str(GENERATED),
                        '--target=cortex-m0', '--level=armv7e-m',
                        '--firmware-entry=start', str(HERE / 'consumers/stm32h753'),
                        '-o', str(elf)]
@@ -726,9 +727,14 @@ class Stm32h753Oracles(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             data = elf.read_bytes()
         image = thumb.Image(data)
-        ram = (image.symbols['_landin_firmware_data_start'],
-               image.symbols['_landin_firmware_stack_top']
-               - image.symbols['_landin_firmware_data_start'])
+        # The description places data, BSS and the stack in the AXI SRAM,
+        # 512 KiB from 0x2400_0000, which is the image's RAM.
+        ram = (0x24000000, 512 * 1024)
+        self.assertEqual(image.symbols['_landin_firmware_data_start'], 0x24000000)
+        self.assertEqual(image.symbols['_landin_firmware_stack_top'],
+                         0x24000000 + 512 * 1024)
+        self.assertEqual(image.symbols['_landin_firmware_vectors'], 0x08000000)
+        self.assertTrue(0x08000000 <= image.symbols['message'] < 0x08200000)
         windows = [(0x58024400, 0x400), (0x58020c00, 0x400), (0x40004800, 0x400),
                    (0x40020000, 0x400), (0x40020800, 0x400), (0xe000e000, 0x1000)]
         stores = [a for a in thumb.accesses(data, windows, ram) if a[0] != 'barrier']

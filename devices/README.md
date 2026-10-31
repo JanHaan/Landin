@@ -226,7 +226,18 @@ written by hand and checked against the header's base addresses (D562):
 It boots from the plain vector table at 0x0800_0000. The profile is
 cacheless: startup leaves the M7's caches disabled, as reset leaves them,
 and a cached profile is not admitted. DMA1 and DMA2 reach neither TCM, so
-data, BSS and the stack are placed in the AXI SRAM.
+data, BSS and the stack are placed in the AXI SRAM. A program selects the
+profile by importing `descriptions/stm32h753` with `--root=devices`, and
+builds at `--level=armv7e-m`, the M7's level (D543); the consumer does, so
+its linked image is at the H753's addresses. The Cortex-M descriptions lane
+selects it by its identity and compares its linked regions, its 166-word
+vector table at 0x0800_0000, its reserved slots, a handler at USART3's slot
+55, a datum placed in the DTCM and its boot kind with
+`environments/cortex-m/descriptions.json`, recorded from ST's header.
+Every capacity verdict is rerun against its profile as RP2040's is: the
+corpus links with the reference's probe map, so its verdicts against the
+STM32H753 are a measurement from each limited image's sizes and frames, not
+a link against its map.
 
 RM0433 itself could not be fetched by URL and hash when this was written:
 ST's site refused the download. Its literals above were transcribed in
