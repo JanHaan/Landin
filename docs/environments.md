@@ -10,8 +10,8 @@ here are historical; `scripts/ci/` has been removed.
 
 Native macOS arm64 remains a development and gate environment. Use
 `./scripts/dev-test.sh --host` for compiler-host feedback; the gate runs
-`darwin-host`, `darwin-parity` and `lldb` on the GitHub-hosted `macos-26`
-image. The former Darwin
+`darwin-host`, `darwin-host-release`, whose last step is the LLDB sessions,
+and `darwin-parity` on the GitHub-hosted `macos-26` image. The former Darwin
 acceptance used `python3 scripts/ci/darwin.py accept COMMIT` on the Mac. Its
 verified bundle had to match the Linux bundle with compatible committed scope
 at approval (`--darwin DARWIN_BUNDLE`), binding both source and execution
@@ -91,7 +91,7 @@ See the [FreeBSD VMs](../environments/freebsd/README.md) for the guests.
 
 | environment | role | status |
 |---|---|---|
-| native macOS arm64 | compiler-host development; `darwin-host`, `darwin-parity` and `lldb` gate lanes | working |
+| native macOS arm64 | compiler-host development; `darwin-host`, `darwin-host-release` with the LLDB sessions, and `darwin-parity` gate lanes | working |
 | exact-revision Darwin acceptance | verified Mac evidence matched Linux before approval | retired |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | Apple Container, `linux/arm64` on Apple silicon | Linux arm64 work before a push: the pinned aarch64 toolchain runs natively, with no emulation, in a Debian container | working |
@@ -391,8 +391,9 @@ stdenv's has no `compgen` or `complete` and the completion case of
 `scripts/tests/test_cli_native.py` needs both. Its two `landin:` banner
 lines go to standard error, so `nix develop -c cmd > file` captures only
 what the command writes; `check.py` holds the hook to that. They are written
-only when the shell is interactive, so `nix develop -c cmd` prints what the
-command prints and what nix itself says. `scripts/debug.sh`
+only when standard error is a terminal, so `nix develop -c cmd` prints what
+the command prints and what nix itself says, and nothing drops `landin:`
+lines, the build's own among them. `scripts/debug.sh`
 takes the pinned installation from the `gnat` on `PATH` when
 `LANDIN_GNAT_HOME` is unset, which in this shell is the wrapped GNAT, and
 its `gdb` is that installation's.

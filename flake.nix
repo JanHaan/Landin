@@ -719,15 +719,13 @@
               #  On standard error: `nix develop -c cmd > file` runs this hook
               #  too, and the banner written to standard output went into the
               #  file -- a source rewritten that way was silently corrupted.
-              #  And only in an interactive shell: before every command of
-              #  `nix develop -c`, the banner was two more lines between the
-              #  person and what the command printed.
-              case $- in
-                *i*)
-                  echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix-${system}'" >&2
-                  echo "landin: ./scripts/toolchain.sh prints what is actually on PATH" >&2
-                  ;;
-              esac
+              #  Only to a terminal: an agent's every `nix develop -c` saw
+              #  the two lines, and the `grep -v '^landin:'` written to drop
+              #  them dropped the build's own "landin:" messages as well.
+              if [ -t 2 ]; then
+                echo "landin: GNAT ${gnatVersion}, GPRbuild ${gprbuildVersion}, build tag 'nix-${system}'" >&2
+                echo "landin: ./scripts/toolchain.sh prints what is actually on PATH" >&2
+              fi
             '';
           };
         }

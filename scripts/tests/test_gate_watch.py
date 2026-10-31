@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Hold the gate watcher to returning at the first failed job."""
+"""Hold the gate watcher to returning at the first failed job, or at the end
+naming every failed job when asked to."""
 import json
 import os
 import subprocess
@@ -78,6 +79,23 @@ class GateWatch(unittest.TestCase):
         self.assertIn("FAILED: scripts at scripts/tests", result.stdout)
         self.assertIn("gh run view 7 --job 3 --log-failed", result.stdout)
         self.assertEqual(result.stdout.count("documents"), 1)
+
+    def test_all_names_every_failed_job_once_the_run_ends(self):
+        result = self.watch([
+            state("in_progress", [job(1, "documents"),
+                                  job(2, "scripts", conclusion="failure"),
+                                  job(3, "compiler", status="in_progress")]),
+            state("completed", [job(1, "documents"),
+                                job(2, "scripts", conclusion="failure"),
+                                job(3, "editor-grammar", conclusion="failure",
+                                    steps=["The integration pass"])],
+                  conclusion="failure"),
+        ], "--run=7", "--all")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("FAILED: editor-grammar at The integration pass",
+                      result.stdout)
+        self.assertIn("failed jobs: scripts, editor-grammar", result.stdout)
+        self.assertIn("run 7: failure", result.stdout)
 
     def test_a_run_that_succeeds_exits_zero(self):
         result = self.watch([
