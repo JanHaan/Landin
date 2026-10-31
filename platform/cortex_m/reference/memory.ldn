@@ -1,0 +1,13 @@
+-- The constrained reference profile's memory: 32 KiB of flash at zero and
+-- 16 KiB of RAM, the upper 4 KiB of it the stack, with the vector table at
+-- the start of flash (D543).  This is a test profile, not a board's map.
+
+linker.region("FLASH", 0, 32 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 16 * 1024, "rwx")
+compiler.boot("vector-table")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)

@@ -5,6 +5,7 @@ with Landin.Backend.Arm32_ABI;
 with Landin.Backend.Cortex_M;
 with Landin.Build_Reports;
 with Landin.Build_Reports.Firmware;
+with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
@@ -26,6 +27,7 @@ with Landin.Stages.Configuration;
 with Landin.Stages.Resolution;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 with Landin.Targets.Layouts;
 with Landin.Types;
 
@@ -1547,6 +1549,32 @@ package body Landin.Tests.Cortex_Suite is
    end Backend_Boundaries;
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context);
+   --  [1990]'s constrained profile, written out here as the expectation
+   --  platform/cortex_m/reference must select, apart from its source.
+   function Reference return Landin.Targets.Firmware.Profile;
+   function Reference return Landin.Targets.Firmware.Profile is
+      package F renames Landin.Targets.Firmware;
+      Result : F.Profile;
+   begin
+      Result.Present := True;
+      Result.Reference := True;
+      Result.Device := F.To_Name ("constrained-reference");
+      Result.Core := F.Cortex_M0;
+      Result.Vector_Count := 48;
+      for Slot in 16 .. 41 loop
+         Result.Interrupts (Slot) := Slot /= 21;
+      end loop;
+      Result.Boot := F.Vector_Table;
+      Result.Count := 2;
+      Result.Regions (1) :=
+        (F.To_Name ("FLASH"), 0, 32 * 1024, F.Read_Execute);
+      Result.Regions (2) :=
+        (F.To_Name ("RAM"), 16#2000_0000#, 16 * 1024, F.Read_Write_Execute);
+      Result.Placed := [F.Vectors | F.Text | F.Rodata => 1, others => 2];
+      Result.Stack_Size := 4 * 1024;
+      return Result;
+   end Reference;
+
    procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context);
 
    procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context)
@@ -1600,7 +1628,8 @@ package body Landin.Tests.Cortex_Suite is
         & "/tool/libgcc.a(_muldi3.o)" & LF
         & "/tool/libgcc.a(_udivsi3.o)" & LF);
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Result, Valid);
+        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+         Result => Result);
       Landin.Testing.Check (Item, Valid, "ELF load extents are measured");
       Landin.Testing.Check_Equal
         (Item, U.To_String (Result),
@@ -1608,9 +1637,18 @@ package body Landin.Tests.Cortex_Suite is
          & """flash_remaining"":31984,""static_ram_used"":40,"
          & """static_ram_limit"":12288,""static_ram_remaining"":12248,"
          & """stack_reserved"":4096,""runtime_members"":"
-         & "[""_muldi3.o"",""_udivsi3.o""]}",
+         & "[""_muldi3.o"",""_udivsi3.o""],"
+         & """device"":""constrained-reference"",""core"":""cortex-m0"","
+         & """boot"":""vector-table"",""vector_address"":0,"
+         & """vector_words"":48,""regions"":[{""name"":""FLASH"","
+         & """origin"":0,""length"":32768,""access"":""rx""},"
+         & "{""name"":""RAM"",""origin"":536870912,""length"":16384,"
+         & """access"":""rwx""}],""placed"":{""vectors"":""FLASH"","
+         & """text"":""FLASH"",""rodata"":""FLASH"",""data"":""RAM"","
+         & """bss"":""RAM"",""stack"":""RAM""}}",
          "occupied extents include gaps and archive members are sorted");
 
+      Host.Add_Firmware_Library;
       Host.Add_File ("p.ldn", "start: () -> none = end start");
       Args.Append ("--target=cortex-m0");
       Args.Append ("--firmware-entry=start");
@@ -1637,13 +1675,64 @@ package body Landin.Tests.Cortex_Suite is
       end;
       Host.Add_File ("p.elf", "invalid ELF");
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Result, Valid);
+        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+         Result => Result);
       Landin.Testing.Check (Item, not Valid, "invalid ELF is refused");
       Host.Add_File ("p.elf", Data);
       Host.Add_File ("p.elf.map", "");
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Result, Valid);
+        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+         Result => Result);
       Landin.Testing.Check (Item, not Valid, "empty map is refused");
+
+      --  D546: a developer's script is linked in place of OUT.ld, and an
+      --  image with no startup symbols breaks the contract's clause 2.
+      Host.Add_File ("dev.ld", "SECTIONS { }");
+      Host.Add_File ("p.elf.map", "");
+      Args.Clear;
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--emit=exe");
+      Args.Append ("--linker-script=dev.ld");
+      Args.Append ("-o");
+      Args.Append ("p.elf");
+      Args.Append ("p.ldn");
+      Tools.Set_Output_Content (Data);
+      Tools.Set_Result (0, "");
+      declare
+         Built : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Landin.Diagnostics.Count (Built.Found) > 0
+              and then Landin.Diagnostics.Code
+                (Landin.Diagnostics.Get (Built.Found, 1)) = "L0519"
+              and then Ada.Strings.Fixed.Index
+                (U.To_String (Built.Report),
+                 "clause 2, the startup symbols") > 0,
+            "a script whose image lacks the startup symbols is L0519: "
+            & U.To_String (Built.Report));
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Host.Written ("p.elf.ld"), "MEMORY {") > 0,
+            "the derived script is still written beside the image");
+      end;
+      Args.Clear;
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("--linker-script=dev.ld");
+      Args.Append ("p.ldn");
+      declare
+         Refused : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (U.To_String (Refused.Report),
+               "--linker-script links firmware") > 0,
+            "--linker-script without a firmware link is refused: "
+            & U.To_String (Refused.Report));
+      end;
    end Linked_Firmware_Evidence;
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context) is
@@ -1654,6 +1743,7 @@ package body Landin.Tests.Cortex_Suite is
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args : Landin.Platform.Path_List;
          begin
+            Host.Add_Firmware_Library;
             Host.Add_File ("p.ldn",
               (case Mode is
                  when 1 => "mut result: u32 = 1 "
@@ -1767,6 +1857,7 @@ package body Landin.Tests.Cortex_Suite is
                                 elsif Mode = 5 then "4072" else "5000")
               & "]u8 = zeroed bytes[0] = 1 _ = bytes[0] ";
          begin
+            Host.Add_Firmware_Library;
             Host.Add_File ("p.ldn",
               (if Mode = 2 then
                  "large: () -> none = " & Body_Text & "end large "
@@ -1946,6 +2037,7 @@ package body Landin.Tests.Cortex_Suite is
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Args : Landin.Platform.Path_List;
          begin
+            Host.Add_Firmware_Library;
             Host.Add_File ("p.ldn", Program (Case_Number)
               & " start: () -> none = end start");
             if Case_Number = 1 then
@@ -2415,8 +2507,368 @@ package body Landin.Tests.Cortex_Suite is
       end;
    end Shared_Returns;
 
+   --  D542-D547: descriptions selected by device identity, every refusal
+   --  of one, and the vector words each profile leaves.  The RP2040 and
+   --  reference descriptions are the checkout's own files, read from the
+   --  real host deliberately; the expectations are written here apart from
+   --  them, from pico-sdk 2.2.0's map and [1990].
+   procedure Device_Descriptions (Item : in out Landin.Testing.Context);
+   procedure Device_Descriptions (Item : in out Landin.Testing.Context) is
+      Real : Landin.Platform.Native.Native_Filesystem;
+      LF : constant String := [1 => ASCII.LF];
+
+      function Checkout (Path : String) return String;
+      function Checkout (Path : String) return String is
+         Text : U.Unbounded_String;
+         Status : Landin.Platform.Read_Status;
+      begin
+         Real.Read_File ("../../" & Path, Text, Status);
+         if Status /= Landin.Platform.Read_Ok then
+            raise Program_Error with "cannot read " & Path;
+         end if;
+         return U.To_String (Text);
+      end Checkout;
+
+      Plain_Interrupts : constant String :=
+        "compiler.device(""plain"")" & LF
+        & "compiler.core(""cortex-m0plus"")" & LF
+        & "compiler.vectors(48)" & LF
+        & "compiler.interrupt(""ONE"", 1)" & LF;
+      Plain_Memory : constant String :=
+        "linker.region(""FLASH"", 0x0800_0000, 64 * 1024, ""rx"")" & LF
+        & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF
+        & "compiler.boot(""vector-table"")" & LF
+        & "linker.place(""vectors"", ""FLASH"")" & LF
+        & "linker.place(""text"", ""FLASH"")" & LF
+        & "linker.place(""rodata"", ""FLASH"")" & LF
+        & "linker.place(""data"", ""RAM"")" & LF
+        & "linker.place(""bss"", ""RAM"")" & LF
+        & "linker.place(""stack"", ""RAM"", 1024)" & LF;
+
+      --  Compile /w/app, which imports descriptions/dev when Imports,
+      --  against a description of those two files; the first code, or ""
+      --  when it compiled, and the assembly.
+      procedure Try
+        (Program : String; Interrupts, Memory : String;
+         Code : out U.Unbounded_String; Assembly : out U.Unbounded_String;
+         Imports : Boolean := True; Library : Boolean := True;
+         Extra : String := "--firmware-entry=start";
+         Target : String := "--target=cortex-m0";
+         Second : Boolean := False);
+      procedure Try
+        (Program : String; Interrupts, Memory : String;
+         Code : out U.Unbounded_String; Assembly : out U.Unbounded_String;
+         Imports : Boolean := True; Library : Boolean := True;
+         Extra : String := "--firmware-entry=start";
+         Target : String := "--target=cortex-m0";
+         Second : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Status : Landin.Platform.Read_Status;
+      begin
+         if Library then
+            Host.Add_Firmware_Library;
+         end if;
+         Host.Add_Directory ("/w");
+         Host.Add_Directory ("/w/app");
+         Host.Add_Directory ("/w/devices");
+         Host.Add_Directory ("/w/devices/descriptions");
+         Host.Add_Directory ("/w/devices/descriptions/dev");
+         Host.Add_File ("/w/app/main.ldn",
+           (if Imports then "import descriptions/dev" & LF else "")
+           & (if Second then "import descriptions/other" & LF else "")
+           & Program & LF & "start: () -> none = end start" & LF);
+         Host.Add_File ("/w/devices/descriptions/dev/interrupts.ldn",
+           Interrupts);
+         Host.Add_File ("/w/devices/descriptions/dev/memory.ldn", Memory);
+         if Second then
+            Host.Add_Directory ("/w/devices/descriptions/other");
+            Host.Add_File ("/w/devices/descriptions/other/interrupts.ldn",
+              "compiler.device(""other"")" & LF);
+         end if;
+         Args.Append ("--root=/w/devices");
+         Args.Append (Target);
+         if Extra /= "" then
+            Args.Append (Extra);
+         end if;
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("/w/p.s");
+         Args.Append ("/w/app");
+         declare
+            Ran : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Code := U.Null_Unbounded_String;
+            if Landin.Diagnostics.Count (Ran.Found) > 0 then
+               Code := U.To_Unbounded_String (Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Ran.Found, 1)));
+            end if;
+            Assembly := U.Null_Unbounded_String;
+            Host.Read_File ("/w/p.s", Assembly, Status);
+         end;
+      end Try;
+
+      --  The vector word at SLOT in an emitted table.
+      function Vector_Word (Assembly : String; Slot : Natural) return String;
+      function Vector_Word (Assembly : String; Slot : Natural) return String
+      is
+         Cursor : Natural := Ada.Strings.Fixed.Index
+           (Assembly, "_landin_firmware_vectors:");
+      begin
+         if Cursor = 0 then
+            return "";
+         end if;
+         for Index in 0 .. Slot loop
+            Cursor := Ada.Strings.Fixed.Index
+              (Assembly, ".word ", From => Cursor + 1);
+            exit when Cursor = 0;
+         end loop;
+         if Cursor = 0 then
+            return "";
+         end if;
+         return Assembly (Cursor + 6 .. Ada.Strings.Fixed.Index
+           (Assembly, LF, From => Cursor) - 1);
+      end Vector_Word;
+
+      procedure Expect
+        (Name, Program, Interrupts, Memory, Wanted : String;
+         Imports : Boolean := True; Library : Boolean := True;
+         Extra : String := "--firmware-entry=start";
+         Target : String := "--target=cortex-m0";
+         Second : Boolean := False);
+      procedure Expect
+        (Name, Program, Interrupts, Memory, Wanted : String;
+         Imports : Boolean := True; Library : Boolean := True;
+         Extra : String := "--firmware-entry=start";
+         Target : String := "--target=cortex-m0";
+         Second : Boolean := False)
+      is
+         Code, Assembly : U.Unbounded_String;
+      begin
+         Try (Program, Interrupts, Memory, Code, Assembly, Imports, Library,
+              Extra, Target, Second);
+         Landin.Testing.Check_Equal
+           (Item, U.To_String (Code), Wanted, Name);
+      end Expect;
+
+      RP2040_Interrupts : constant String :=
+        Checkout ("devices/descriptions/rp2040/interrupts.ldn");
+      RP2040_Memory : constant String :=
+        Checkout ("devices/descriptions/rp2040/memory.ldn");
+      Code, Assembly : U.Unbounded_String;
+   begin
+      --  RP2040 by its identity: USBCTRL_IRQ's slot 21 holds the handler,
+      --  the second stage comes first and the table follows it.
+      Try ("link(vector: 21) extern(interrupt) usb: () -> none = end usb",
+           RP2040_Interrupts, RP2040_Memory, Code, Assembly);
+      Landin.Testing.Check_Equal
+        (Item, U.To_String (Code), "", "RP2040 admits slot 21");
+      Landin.Testing.Check
+        (Item, Vector_Word (U.To_String (Assembly), 21) /= ""
+           and then Vector_Word (U.To_String (Assembly), 21)
+             not in "0" | "_landin_firmware_unhandled",
+         "RP2040's vector word 21 is the USBCTRL_IRQ handler");
+      Landin.Testing.Check_Equal
+        (Item, Vector_Word (U.To_String (Assembly), 47),
+         "_landin_firmware_unhandled",
+         "RP2040's spare IRQ5 at slot 47 is implemented");
+      Landin.Testing.Check_Equal
+        (Item, Vector_Word (U.To_String (Assembly), 4), "0",
+         "RP2040's ARMv6-M reserved slot 4 is zero");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index (U.To_String (Assembly),
+           ".section .boot2,""a"",%progbits" & LF
+           & ".globl _landin_firmware_boot2" & LF
+           & "_landin_firmware_boot2:" & LF & ".zero 256" & LF) > 0,
+         "RP2040's second-stage slot is 256 zero bytes");
+
+      --  The constrained reference: slot 21 refused, and zero beside a
+      --  handler at slot 20.
+      Expect ("the reference refuses slot 21",
+        "link(vector: 21) extern(interrupt) usb: () -> none = end usb",
+        "", "", "L0347", Imports => False);
+      Try ("link(vector: 20) extern(interrupt) h: () -> none = end h",
+           "", "", Code, Assembly, Imports => False);
+      Landin.Testing.Check_Equal
+        (Item, Vector_Word (U.To_String (Assembly), 21), "0",
+         "the reference emits zero at slot 21");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index (U.To_String (Assembly), ".boot2")
+           = 0 and then Ada.Strings.Fixed.Index
+             (U.To_String (Assembly), ".balign 256") > 0,
+         "the reference's table has no second stage and keeps its"
+         & " alignment");
+      Expect ("a plain description compiles", "", Plain_Interrupts,
+        Plain_Memory, "");
+
+      --  Each refusal.
+      Expect ("an unknown core is L0399", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m99"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0399");
+      Expect ("a stack without a size is L0399", "", Plain_Interrupts,
+        Plain_Memory & "linker.place(""stack"", ""RAM"")" & LF, "L0399");
+      Expect ("a directive outside a description is L0513",
+        "linker.region(""X"", 0, 4, ""rx"")", "", "", "L0513",
+        Imports => False);
+      Expect ("a directive in a fixed arm is L0513", "",
+        Plain_Interrupts & "fixed if false then" & LF
+        & "compiler.interrupt(""TWO"", 2)" & LF & "end if" & LF,
+        Plain_Memory, "L0513");
+      Expect ("a declaration in a description is L0513", "",
+        Plain_Interrupts & "x: u32 = 1" & LF, Plain_Memory, "L0513");
+      Expect ("a missing boot kind is L0513", "", Plain_Interrupts,
+        "linker.region(""FLASH"", 0x0800_0000, 64 * 1024, ""rx"")" & LF
+        & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF
+        & "linker.place(""vectors"", ""FLASH"")" & LF
+        & "linker.place(""text"", ""FLASH"")" & LF
+        & "linker.place(""rodata"", ""FLASH"")" & LF
+        & "linker.place(""data"", ""RAM"")" & LF
+        & "linker.place(""bss"", ""RAM"")" & LF
+        & "linker.place(""stack"", ""RAM"", 1024)" & LF, "L0513");
+      Expect ("a second description is L0513", "", Plain_Interrupts,
+        Plain_Memory, "L0513", Second => True);
+      Expect ("overlapping regions are L0514", "", Plain_Interrupts,
+        Plain_Memory
+        & "linker.region(""MORE"", 0x2000_1000, 8 * 1024, ""rw"")" & LF,
+        "L0514");
+      Expect ("text in a region code cannot run in is L0514", "",
+        Plain_Interrupts,
+        "linker.region(""FLASH"", 0x0800_0000, 64 * 1024, ""rw"")" & LF
+        & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF
+        & "compiler.boot(""vector-table"")" & LF
+        & "linker.place(""vectors"", ""RAM"")" & LF
+        & "linker.place(""text"", ""FLASH"")" & LF
+        & "linker.place(""rodata"", ""FLASH"")" & LF
+        & "linker.place(""data"", ""RAM"")" & LF
+        & "linker.place(""bss"", ""RAM"")" & LF
+        & "linker.place(""stack"", ""RAM"", 1024)" & LF, "L0514");
+      Expect ("a placement into an unknown region is L0514", "",
+        Plain_Interrupts,
+        Plain_Memory (Plain_Memory'First .. Ada.Strings.Fixed.Index
+          (Plain_Memory, "linker.place(""stack""") - 1)
+        & "linker.place(""stack"", ""NOWHERE"", 1024)" & LF, "L0514");
+      Expect ("an IRQ past the table is L0514", "",
+        Plain_Interrupts & "compiler.interrupt(""FAR"", 40)" & LF,
+        Plain_Memory, "L0514");
+      Expect ("a core at another level is L0515", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0515");
+      Expect ("a cortex-m4 at its own level compiles", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "",
+        Extra => "--level=armv7e-m");
+      Expect ("a description on a hosted target is L0515", "",
+        Plain_Interrupts, Plain_Memory, "L0515", Extra => "",
+        Target => "--target=linux-x86-64");
+      Expect ("a reserved boot kind is L0516", "", Plain_Interrupts,
+        "compiler.boot(""rp2350-image-block"")" & LF
+        & Plain_Memory (Ada.Strings.Fixed.Index
+          (Plain_Memory, "linker.place(""vectors""") .. Plain_Memory'Last)
+        & "linker.region(""FLASH"", 0x0800_0000, 64 * 1024, ""rx"")" & LF
+        & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF,
+        "L0516");
+      Expect ("an unknown region placement is L0517",
+        "link(region: ""NOWHERE"") x: u32 = 1", Plain_Interrupts,
+        Plain_Memory, "L0517");
+      Expect ("a routine in a region code cannot run in is L0517",
+        "link(region: ""RAM"") f: () -> none = end f", Plain_Interrupts,
+        Plain_Memory, "L0517");
+      Expect ("firmware with no library and no description is L0518", "",
+        "", "", "L0518", Imports => False, Library => False);
+      Expect ("a vector with no profile is L0518",
+        "link(vector: 11) extern(interrupt) h: () -> none = end h",
+        "", "", "L0518", Imports => False, Library => False, Extra => "");
+      Expect ("a program with no placement needs no library", "",
+        "", "", "", Imports => False, Library => False, Extra => "");
+   end Device_Descriptions;
+
+   --  D545: for the constrained reference the derived script is D229's.
+   procedure Reference_Script (Item : in out Landin.Testing.Context);
+   procedure Reference_Script (Item : in out Landin.Testing.Context) is
+      LF : constant Character := ASCII.LF;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Firmware_Library;
+      Host.Add_File ("p.ldn", "start: () -> none = end start");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--emit=exe");
+      Args.Append ("-o");
+      Args.Append ("p.elf");
+      Args.Append ("p.ldn");
+      Tools.Set_Result (0, "");
+      declare
+         Ignored : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         pragma Unreferenced (Ignored);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Host.Written ("p.elf.ld"),
+            "OUTPUT_FORMAT(""elf32-littlearm"")" & LF
+            & "OUTPUT_ARCH(arm)" & LF
+            & "ENTRY(_landin_firmware_reset)" & LF
+            & "MEMORY {" & LF
+            & "  FLASH (rx) : ORIGIN = 0, LENGTH = 32768" & LF
+            & "  RAM (rwx) : ORIGIN = 536870912, LENGTH = 16384" & LF
+            & "}" & LF
+            & "_landin_firmware_stack_top = ORIGIN(RAM) + LENGTH(RAM);" & LF
+            & "_landin_firmware_stack_bottom = _landin_firmware_stack_top"
+            & " - 4096;" & LF
+            & "SECTIONS {" & LF
+            & "  .isr_vector ORIGIN(FLASH) : { KEEP(*(.isr_vector)) } > FLASH"
+            & LF
+            & "  .text : { *(.text .text.*) } > FLASH" & LF
+            & "  .rodata : { *(.rodata .rodata.*) } > FLASH" & LF
+            & "  .ARM.extab : { *(.ARM.extab*) } > FLASH" & LF
+            & "  .ARM.exidx : { *(.ARM.exidx*) } > FLASH" & LF
+            & "  .data : ALIGN(8) {" & LF
+            & "    _landin_firmware_data_start = .;" & LF
+            & "    *(.data .data.*)" & LF
+            & "    _landin_firmware_data_end = .;" & LF
+            & "  } > RAM AT> FLASH" & LF
+            & "  _landin_firmware_data_load = LOADADDR(.data);" & LF
+            & "  .ramtext : ALIGN(8) {" & LF
+            & "    _landin_firmware_ramtext_start = .;" & LF
+            & "    *(.ramtext.*)" & LF
+            & "    _landin_firmware_ramtext_end = .;" & LF
+            & "  } > RAM AT> FLASH" & LF
+            & "  _landin_firmware_ramtext_load = LOADADDR(.ramtext);" & LF
+            & "  .bss (NOLOAD) : AT(ADDR(.bss)) ALIGN(8) {" & LF
+            & "    _landin_firmware_bss_start = .;" & LF
+            & "    *(.bss .bss.* COMMON)" & LF
+            & "    _landin_firmware_bss_end = .;" & LF
+            & "  } > RAM" & LF
+            & "  /DISCARD/ : { *(.comment .note.GNU-stack) }" & LF
+            & "}" & LF
+            & "ASSERT(ADDR(.isr_vector) == 0, ""vectors must start at zero"")"
+            & LF
+            & "ASSERT(SIZEOF(.isr_vector) == 192, ""vectors must contain 48"
+            & " words"")" & LF
+            & "ASSERT((_landin_firmware_stack_top & 7) == 0, ""unaligned"
+            & " initial stack"")" & LF
+            & "ASSERT(_landin_firmware_bss_end <= _landin_firmware_stack"
+            & "_bottom," & LF
+            & "       ""RAM image overlaps the reserved 4 KiB stack"")" & LF
+            & "ASSERT(LOADADDR(.ramtext) + SIZEOF(.ramtext) <= ORIGIN(FLASH)"
+            & " + LENGTH(FLASH)," & LF
+            & "       ""initialized image exceeds flash"")" & LF,
+            "the reference's derived script is D229's, byte for byte");
+      end;
+   end Reference_Script;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "device descriptions select their profiles",
+         Device_Descriptions'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "the reference derives D229's script",
+         Reference_Script'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "routine register saves", Frame_Saves'Access);
       Landin.Testing.Register

@@ -145,6 +145,7 @@ with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
+with Landin.Targets.Firmware;
 with Landin.Types;
 
 package Landin.IR is
@@ -1202,6 +1203,15 @@ package Landin.IR is
    --  with threads places it in the system's thread storage and reaches
    --  it through the thread pointer, and one without keeps it as ordinary
    --  module storage.
+   --  D543/D544: the firmware profile the program's device description
+   --  selects, which says which vector slots a handler may take and where
+   --  each region is.  Lowering records the configuration's; a unit
+   --  nothing recorded one in has none, and admits no vector slot.
+   procedure Set_Firmware_Profile
+     (Into : in out Unit; Profile : Landin.Targets.Firmware.Profile);
+   function Firmware_Profile
+     (Of_Unit : Unit) return Landin.Targets.Firmware.Profile;
+
    function Is_Thread_Storage (Of_Unit : Unit; Item : Item_Id) return Boolean
      with Pre => Holds (Of_Unit, Item);
    procedure Mark_Thread_Storage (Into : in out Unit; Item : Item_Id)
@@ -4599,6 +4609,7 @@ private
       --  across items so a datum with no image contributes no bytes here.
       Images      : Image_Vectors.Vector;
       Aggregate_Images : Aggregate_Field_Image_Vectors.Vector;
+      Firmware    : Landin.Targets.Firmware.Profile;
    end record;
 
 end Landin.IR;

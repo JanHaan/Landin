@@ -197,6 +197,15 @@ package Landin.Diagnostics.Catalogue is
       Foreign_Boundary,
       Linkage_Contract,
       Traversal_Source,
+      --  D542-D547: a device description, and a placement in a region of
+      --  the one it selects.  Configuration finds all but the last.
+      Invalid_Description_Directive,
+      Description_Structure,
+      Description_Layout,
+      Description_Core_Mismatch,
+      Boot_Kind_Reserved,
+      Region_Placement,
+      No_Description,
       --  D251 also admits removing a whole unused, effect-free local.
       Unused_Pure_Local,
       --  The backend and its toolchain.  None is about a frontend
@@ -210,11 +219,13 @@ package Landin.Diagnostics.Catalogue is
       Entry_Point_Missing,
       Argument_Not_In_A_Register,
       Frame_Not_Addressable,
-      Image_Materialization_Limit,
+      Image_Budget_Exceeded,
       Panic_Contract_Invalid,
       Firmware_Frame_Exceeds_Stack,
       Handler_Exceeds_Stack_Margin,
       Library_Not_Found,
+      --  D546's post-link contract.
+      Linker_Script_Contract,
       --  D555-D558: `refine svd`, which reads a vendor's SVD and a
       --  selection policy and replaces the modules it generates.  No
       --  program is refused for any of them.
@@ -318,17 +329,25 @@ package Landin.Diagnostics.Catalogue is
             when Foreign_Boundary => "L0346",
             when Linkage_Contract => "L0347",
             when Traversal_Source => "L0348",
+            when Invalid_Description_Directive => "L0399",
+            when Description_Structure => "L0513",
+            when Description_Layout => "L0514",
+            when Description_Core_Mismatch => "L0515",
+            when Boot_Kind_Reserved => "L0516",
+            when Region_Placement => "L0517",
+            when No_Description => "L0518",
             when Unused_Pure_Local              => "L0349",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
             when Argument_Not_In_A_Register => "L0503",
             when Frame_Not_Addressable      => "L0504",
-            when Image_Materialization_Limit => "L0505",
+            when Image_Budget_Exceeded => "L0505",
             when Panic_Contract_Invalid    => "L0506",
             when Firmware_Frame_Exceeds_Stack => "L0507",
             when Handler_Exceeds_Stack_Margin => "L0508",
             when Library_Not_Found => "L0509",
+            when Linker_Script_Contract => "L0519",
             when Svd_Malformed => "L0525",
             when Svd_Policy_Invalid => "L0526",
             when Svd_Input_Mismatch => "L0527",
@@ -362,10 +381,10 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
                .. Invalid_Tool_Directive => Error,
-            when Call_Argument_Match .. Traversal_Source => Error,
+            when Call_Argument_Match .. No_Description => Error,
             --  Stage warnings do not refuse; invocation policy is separate.
             when Mutable_Never_Written | Unused_Pure_Local => Warning,
-            when No_Toolchain .. Library_Not_Found => Error,
+            when No_Toolchain .. Linker_Script_Contract => Error,
             when Svd_Malformed .. Svd_Output_Refused => Error);
 
    --  Argument_Not_In_A_Register was retired by the internal scalar
@@ -400,14 +419,15 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Live,
             when Literal_Out_Of_Range
                .. Mutable_Never_Written => Live,
-            when Call_Argument_Match .. Traversal_Source
+            when Call_Argument_Match .. No_Description
                => Live,
             when Unused_Pure_Local => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
-            when Frame_Not_Addressable | Image_Materialization_Limit
+            when Frame_Not_Addressable | Image_Budget_Exceeded
                | Panic_Contract_Invalid | Firmware_Frame_Exceeds_Stack
                | Handler_Exceeds_Stack_Margin | Library_Not_Found
+               | Linker_Script_Contract
                => Live,
             when Svd_Malformed .. Svd_Output_Refused => Live);
 
@@ -636,6 +656,24 @@ package Landin.Diagnostics.Catalogue is
             when Traversal_Source =>
                "[1150]/D180: a for source is a range, a traversable"
                & " value or one exact iterable conformance",
+            when Invalid_Description_Directive =>
+               "D542: a device description directive whose arguments are"
+               & " not the forms its row says",
+            when Description_Structure =>
+               "D542/D543: a description directive outside one"
+               & " description, a repeated or missing one, or a second"
+               & " description",
+            when Description_Layout =>
+               "D543: regions that overlap, or a placement, vector table"
+               & " or stack its regions cannot hold",
+            when Description_Core_Mismatch =>
+               "D543: a description whose core is not the request's"
+               & " target and level",
+            when Boot_Kind_Reserved =>
+               "D545: a reserved boot image kind refine does not build",
+            when Region_Placement =>
+               "D547: a link(region: ...) the selected description"
+               & " cannot hold",
             when Unused_Pure_Local =>
                "D251: an unused local with an effect-free literal initializer",
             when No_Toolchain          =>
@@ -652,9 +690,9 @@ package Landin.Diagnostics.Catalogue is
             when Frame_Not_Addressable =>
                "a verified frame outside x86-64's signed displacement"
                & " encoding",
-            when Image_Materialization_Limit =>
-               "[1640]: firmware static images exceed the bounded"
-               & " assembler materialization budget",
+            when Image_Budget_Exceeded =>
+               "D537: static images exceed the image budget of the target"
+               & " or the firmware profile",
             when Panic_Contract_Invalid =>
                "[1670]: invalid panic handler or unrepresentable site space",
             when Firmware_Frame_Exceeds_Stack =>
@@ -667,6 +705,12 @@ package Landin.Diagnostics.Catalogue is
             when Library_Not_Found =>
                "[1590]/D525: a failed link's library that no named"
                & " directory and none of the C driver's own holds",
+            when No_Description =>
+               "D543: firmware or a placement that needs a profile, with no"
+               & " description reached and none in the library",
+            when Linker_Script_Contract =>
+               "D546: a linked firmware image that breaks a clause of the"
+               & " linker script contract",
             when Svd_Malformed =>
                "D555: an SVD that is not XML in the subset refine svd reads",
             when Svd_Policy_Invalid =>
@@ -720,8 +764,10 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => True,
             when Literal_Out_Of_Range
                .. Mutable_Never_Written => True,
-            when Call_Argument_Match .. Traversal_Source
+            when Call_Argument_Match .. Region_Placement
                => True,
+            --  D543: raised at a placement, or by the driver for a request.
+            when No_Description => False,
             when Unused_Pure_Local => True,
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
@@ -729,6 +775,8 @@ package Landin.Diagnostics.Catalogue is
             when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
             --  D525: a library is asked for by its directive, always.
             when Library_Not_Found => True,
+            --  D546: about a linked image.
+            when Linker_Script_Contract => False,
             --  D558: the SVD or the policy is the source a fault is in;
             --  an output in the way is in neither.
             when Svd_Malformed .. Svd_Not_Found => True,
@@ -770,10 +818,12 @@ package Landin.Diagnostics.Catalogue is
                .. Mutable_Never_Written =>
                True,
             when Unused_Pure_Local => True,
-            when Call_Argument_Match .. Traversal_Source
+            when Call_Argument_Match .. Region_Placement
                => True,
+            when No_Description => False,
             when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
             when Library_Not_Found => True,
+            when Linker_Script_Contract => False,
             --  A fault in an SVD or a policy points at the element or
             --  byte it is at, or at the start when it is the whole file's.
             when Svd_Malformed .. Svd_Output_Refused => False);
@@ -918,6 +968,10 @@ package Landin.Diagnostics.Catalogue is
             when No_Toolchain          => 1,
             --  D525: how to name where the library is.
             when Library_Not_Found     => 1,
+            --  D542-D547: what to write instead, and for a broken contract
+            --  the clause it states.
+            when Invalid_Description_Directive .. Region_Placement => 1,
+            when No_Description | Linker_Script_Contract => 1,
             when others                => 0);
 
    function Warning_Enabled_By_Default (Of_Code : Code_Name) return Boolean

@@ -158,9 +158,12 @@ package Landin.Backend.Toolchain is
       Static : Boolean := False;
       Threads : Boolean := False;
       Directories : Landin.Platform.Path_List :=
-        Landin.Platform.No_Arguments)
+        Landin.Platform.No_Arguments;
+      Script : String := "")
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
+   --  Script, when given, is a developer's linker script for a Cortex-M
+   --  link (D546), passed where the derived OUTPUT.ld would be.
 
    --  The same at the target's default level.
    function Link_Arguments

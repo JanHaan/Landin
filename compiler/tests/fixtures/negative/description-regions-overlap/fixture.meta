@@ -1,0 +1,9 @@
+class: negative
+summary: D543: no byte of a description is in two regions
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0514
+args: --target=cortex-m0 ../tests/fixtures/negative/description-regions-overlap/program.ldn
+expect: expected.txt
+status: 1

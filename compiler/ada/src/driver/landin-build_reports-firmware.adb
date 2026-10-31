@@ -1,6 +1,6 @@
+with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Strings.Fixed;
-with Landin.Targets.Firmware;
 
 package body Landin.Build_Reports.Firmware is
    package US renames Ada.Strings.Unbounded;
@@ -14,14 +14,43 @@ package body Landin.Build_Reports.Firmware is
    procedure Measure
      (Host : Landin.Platform.Filesystem'Class;
       Executable, Link_Map : String;
+      Profile : Landin.Targets.Firmware.Profile;
       Result : out US.Unbounded_String;
       Valid : out Boolean)
    is
+      package Firmware renames Landin.Targets.Firmware;
+      use type Firmware.Section_Kind;
       ELF, Map : US.Unbounded_String;
       Status : Landin.Platform.Read_Status;
-      Flash_End : Landin.Targets.Byte_Count := 0;
-      RAM_End : Landin.Targets.Byte_Count :=
-        Landin.Targets.Firmware.RAM_Base;
+      Flash : constant Firmware.Region :=
+        Firmware.Placed_Region (Profile, Firmware.Text);
+      RAM : constant Firmware.Region :=
+        Firmware.Placed_Region (Profile, Firmware.Data);
+      RAM_Limit : constant Landin.Targets.Byte_Count :=
+        Firmware.Static_RAM_Capacity (Profile);
+      Flash_End : Landin.Targets.Byte_Count := Flash.Origin;
+      RAM_End : Landin.Targets.Byte_Count := RAM.Origin;
+
+      --  Whether [FIRST, FIRST + SIZE) lies in a region of the profile,
+      --  and which: a region placement (D547) is outside the two the
+      --  capacity figures describe and is still the image's.
+      function Region_Of
+        (First, Size : Landin.Targets.Byte_Count)
+         return Firmware.Region_Count;
+      function Region_Of
+        (First, Size : Landin.Targets.Byte_Count) return Firmware.Region_Count
+      is
+      begin
+         for Index in 1 .. Profile.Count loop
+            if First >= Profile.Regions (Index).Origin
+              and then First + Size <= Profile.Regions (Index).Origin
+                + Profile.Regions (Index).Length
+            then
+               return Index;
+            end if;
+         end loop;
+         return 0;
+      end Region_Of;
       Selected : Members.Set;
       Prefix : constant String := "libgcc.a(";
    begin
@@ -107,37 +136,42 @@ package body Landin.Build_Reports.Firmware is
                      then
                         return;
                      end if;
-                     if Virtual < Landin.Targets.Firmware.Flash_Size then
-                        if Virtual + Memory_Size >
-                          Landin.Targets.Firmware.Flash_Size
+                     if Region_Of (Virtual, Memory_Size)
+                       = Profile.Placed (Firmware.Text)
+                     then
+                        null;
+                     elsif Region_Of (Virtual, Memory_Size)
+                       = Profile.Placed (Firmware.Data)
+                     then
+                        if Virtual + Memory_Size > RAM.Origin + RAM_Limit
                         then
                            return;
                         end if;
-                     elsif Virtual >= Landin.Targets.Firmware.RAM_Base
-                       and then Virtual + Memory_Size <=
-                         Landin.Targets.Firmware.RAM_Base
-                           + Landin.Targets.Firmware.RAM_Size
-                           - Landin.Targets.Firmware.Stack_Size
-                     then
                         RAM_End := Landin.Targets.Byte_Count'Max
                           (RAM_End, Virtual + Memory_Size);
-                     else
+                     elsif Region_Of (Virtual, Memory_Size) = 0 then
                         return;
                      end if;
                      if File_Size > 0 then
-                        if Physical + File_Size >
-                          Landin.Targets.Firmware.Flash_Size
+                        if Region_Of (Physical, File_Size) = 0
+                          or else Firmware.Writable
+                            (Profile.Regions
+                               (Region_Of (Physical, File_Size)).Mode)
                         then
                            return;
                         end if;
-                        Flash_End := Landin.Targets.Byte_Count'Max
-                          (Flash_End, Physical + File_Size);
+                        if Region_Of (Physical, File_Size)
+                          = Profile.Placed (Firmware.Text)
+                        then
+                           Flash_End := Landin.Targets.Byte_Count'Max
+                             (Flash_End, Physical + File_Size);
+                        end if;
                      end if;
                   end if;
                end;
             end loop;
          end;
-         if Flash_End = 0 then
+         if Flash_End = Flash.Origin then
             return;
          end if;
 
@@ -178,22 +212,15 @@ package body Landin.Build_Reports.Firmware is
          end;
       end;
 
-      US.Append (Result, "{""flash_used"":" & Image (Flash_End)
-        & ",""flash_limit"":"
-        & Image (Landin.Targets.Firmware.Flash_Size)
+      US.Append (Result, "{""flash_used"":" & Image (Flash_End - Flash.Origin)
+        & ",""flash_limit"":" & Image (Flash.Length)
         & ",""flash_remaining"":"
-        & Image (Landin.Targets.Firmware.Flash_Size - Flash_End)
-        & ",""static_ram_used"":"
-        & Image (RAM_End - Landin.Targets.Firmware.RAM_Base)
-        & ",""static_ram_limit"":"
-        & Image (Landin.Targets.Firmware.RAM_Size
-          - Landin.Targets.Firmware.Stack_Size)
+        & Image (Flash.Origin + Flash.Length - Flash_End)
+        & ",""static_ram_used"":" & Image (RAM_End - RAM.Origin)
+        & ",""static_ram_limit"":" & Image (RAM_Limit)
         & ",""static_ram_remaining"":"
-        & Image (Landin.Targets.Firmware.RAM_Base
-          + Landin.Targets.Firmware.RAM_Size
-          - Landin.Targets.Firmware.Stack_Size - RAM_End)
-        & ",""stack_reserved"":"
-        & Image (Landin.Targets.Firmware.Stack_Size)
+        & Image (RAM.Origin + RAM_Limit - RAM_End)
+        & ",""stack_reserved"":" & Image (Profile.Stack_Size)
         & ",""runtime_members"":[");
       for Member of Selected loop
          if Member /= Selected.First_Element then
@@ -201,11 +228,401 @@ package body Landin.Build_Reports.Firmware is
          end if;
          US.Append (Result, """" & Member & """");
       end loop;
-      US.Append (Result, "]}");
+      --  D543: what the description selected, so that a check can compare
+      --  each fact with one recorded apart from the compiler.
+      US.Append (Result, "],""device"":"""
+        & Firmware.Spelling (Profile.Device)
+        & """,""core"":""" & Firmware.Spelling (Profile.Core)
+        & """,""boot"":""" & Firmware.Spelling (Profile.Boot)
+        & """,""vector_address"":" & Image (Firmware.Vector_Address (Profile))
+        & ",""vector_words"":" & Image
+          (Landin.Targets.Byte_Count (Profile.Vector_Count))
+        & ",""regions"":[");
+      for Index in 1 .. Profile.Count loop
+         US.Append (Result, (if Index = 1 then "" else ",")
+           & "{""name"":"""
+           & Firmware.Spelling (Profile.Regions (Index).Name)
+           & """,""origin"":" & Image (Profile.Regions (Index).Origin)
+           & ",""length"":" & Image (Profile.Regions (Index).Length)
+           & ",""access"":"""
+           & Firmware.Spelling (Profile.Regions (Index).Mode) & """}");
+      end loop;
+      US.Append (Result, "],""placed"":{");
+      for Section in Firmware.Section_Kind loop
+         US.Append (Result,
+           (if Section = Firmware.Section_Kind'First then "" else ",")
+           & """" & Firmware.Spelling (Section) & """:"""
+           & Firmware.Spelling
+               (Firmware.Placed_Region (Profile, Section).Name) & """");
+      end loop;
+      US.Append (Result, "}}");
       Valid := True;
    exception
       when Constraint_Error =>
          Result := US.Null_Unbounded_String;
          Valid := False;
    end Measure;
+   function Contract_Fault
+     (Host : Landin.Platform.Filesystem'Class;
+      Executable : String;
+      Profile : Landin.Targets.Firmware.Profile;
+      Used : Landin.Backend.Firmware.Region_Use) return String
+   is
+      package Firmware renames Landin.Targets.Firmware;
+      type Word_List is array (Positive range <>) of access constant String;
+      Load : aliased constant String := "load";
+      Start : aliased constant String := "start";
+      Finish : aliased constant String := "end";
+      Data_Stem : aliased constant String := "data";
+      Ramtext_Stem : aliased constant String := "ramtext";
+      BSS_Stem : aliased constant String := "bss";
+      Image_Parts : constant Word_List :=
+        [Load'Access, Start'Access, Finish'Access];
+      Ram_Images : constant Word_List :=
+        [Data_Stem'Access, Ramtext_Stem'Access, BSS_Stem'Access];
+      package Symbol_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => Landin.Targets.Byte_Count);
+      use type Firmware.Boot_Kind;
+      ELF : US.Unbounded_String;
+      Status : Landin.Platform.Read_Status;
+      Symbols : Symbol_Maps.Map;
+   begin
+      Host.Read_File (Executable, ELF, Status);
+      if Status /= Landin.Platform.Read_Ok then
+         return "the linked image cannot be read: " & Executable;
+      end if;
+      declare
+         Data : constant String := US.To_String (ELF);
+
+         function Number (Position : Natural; Width : Positive)
+           return Landin.Targets.Byte_Count;
+         function Number (Position : Natural; Width : Positive)
+           return Landin.Targets.Byte_Count is
+            Value : Landin.Targets.Byte_Count := 0;
+         begin
+            if Position > Data'Length
+              or else Width > Data'Length - Position
+            then
+               raise Constraint_Error;
+            end if;
+            for Offset in reverse 0 .. Width - 1 loop
+               Value := Value * 256
+                 + Character'Pos (Data (Position + Offset + 1));
+            end loop;
+            return Value;
+         end Number;
+
+         function Word (Position : Natural) return Landin.Targets.Byte_Count
+           is (Number (Position, 4));
+
+         function Text_At (Position : Natural) return String;
+         function Text_At (Position : Natural) return String is
+            Last : Natural := Position;
+         begin
+            while Last < Data'Length and then Data (Last + 1) /= ASCII.NUL
+            loop
+               Last := Last + 1;
+            end loop;
+            return Data (Position + 1 .. Last);
+         end Text_At;
+
+         --  The file offset of load address ADDRESS, holding SIZE bytes
+         --  of file content, or Natural'Last when no segment does.
+         function Loaded (Address, Size : Landin.Targets.Byte_Count)
+           return Natural;
+         function Loaded (Address, Size : Landin.Targets.Byte_Count)
+           return Natural
+         is
+            Header : constant Natural := Natural (Word (28));
+         begin
+            for Index in 0 .. Natural (Number (44, 2)) - 1 loop
+               declare
+                  At_Entry : constant Natural := Header + Index * 32;
+                  Physical : constant Landin.Targets.Byte_Count :=
+                    Word (At_Entry + 12);
+                  File_Size : constant Landin.Targets.Byte_Count :=
+                    Word (At_Entry + 16);
+               begin
+                  if Word (At_Entry) = 1
+                    and then Address >= Physical
+                    and then Address + Size <= Physical + File_Size
+                  then
+                     return Natural (Word (At_Entry + 4)
+                       + (Address - Physical));
+                  end if;
+               end;
+            end loop;
+            return Natural'Last;
+         end Loaded;
+
+         function Has (Name : String) return Boolean
+           is (Symbols.Contains (Name));
+         function Value (Name : String) return Landin.Targets.Byte_Count
+           is (Symbols.Element (Name));
+
+         function Within
+           (First, Size : Landin.Targets.Byte_Count;
+            Of_Region : Firmware.Region) return Boolean
+           is (First >= Of_Region.Origin
+               and then First + Size <= Of_Region.Origin + Of_Region.Length);
+
+         Required : US.Unbounded_String;
+         Missing : US.Unbounded_String;
+
+         procedure Need (Name : String);
+         procedure Need (Name : String) is
+         begin
+            US.Append (Required, Name & " ");
+            if not Has (Name) then
+               US.Append (Missing, (if US.Length (Missing) = 0 then ""
+                                     else ", ") & Name);
+            end if;
+         end Need;
+
+         --  D546's fourth clause for one load image.
+         function Image_Fault (Name, Load, First, Last : String)
+           return String;
+         function Image_Fault (Name, Load, First, Last : String)
+           return String
+         is
+            Size : constant Landin.Targets.Byte_Count :=
+              (if Value (Last) >= Value (First)
+               then Value (Last) - Value (First) else 0);
+         begin
+            if Value (Last) < Value (First) then
+               return "clause 4, the initialized images: " & Name
+                 & " ends before it begins";
+            elsif Size > 0 and then not Within
+              (Value (Load), Size,
+               Firmware.Placed_Region (Profile, Firmware.Text))
+            then
+               return "clause 4, the initialized images: " & Name
+                 & "'s load image at "
+                 & Landin.Backend.Firmware.Hex (Value (Load))
+                 & " is not in "
+                 & Firmware.Spelling
+                     (Firmware.Placed_Region (Profile, Firmware.Text).Name)
+                 & ", where text is placed";
+            elsif Size > 0 and then Loaded (Value (Load), Size)
+              = Natural'Last
+            then
+               return "clause 4, the initialized images: " & Name
+                 & "'s load image holds no file content";
+            end if;
+            return "";
+         end Image_Fault;
+      begin
+         if Data'Length < 52
+           or else Data (1 .. 6) /= Character'Val (127) & "ELF"
+             & Character'Val (1) & Character'Val (1)
+           or else Number (16, 2) /= 2
+           or else Number (18, 2) /= 40
+         then
+            return "the linked image is not a 32-bit little-endian Arm"
+              & " executable";
+         end if;
+         declare
+            Sections : constant Natural := Natural (Word (32));
+            Size : constant Natural := Natural (Number (46, 2));
+         begin
+            for Index in 0 .. Natural (Number (48, 2)) - 1 loop
+               declare
+                  Header : constant Natural := Sections + Index * Size;
+               begin
+                  if Word (Header + 4) = 2 then
+                     declare
+                        Table : constant Natural :=
+                          Natural (Word (Header + 16));
+                        Count : constant Natural :=
+                          Natural (Word (Header + 20)) / 16;
+                        Strings_Header : constant Natural :=
+                          Sections + Natural (Word (Header + 24)) * Size;
+                        Strings : constant Natural :=
+                          Natural (Word (Strings_Header + 16));
+                     begin
+                        for Symbol in 1 .. Count - 1 loop
+                           declare
+                              Name : constant String := Text_At
+                                (Strings + Natural
+                                   (Word (Table + Symbol * 16)));
+                           begin
+                              if Name'Length > 17
+                                and then Name (Name'First .. Name'First + 16)
+                                  = "_landin_firmware_"
+                                and then not Symbols.Contains (Name)
+                              then
+                                 Symbols.Insert
+                                   (Name, Word (Table + Symbol * 16 + 4));
+                              end if;
+                           end;
+                        end loop;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end;
+
+         --  Clause 2: the startup symbols.
+         Need ("_landin_firmware_reset");
+         Need ("_landin_firmware_unhandled");
+         Need ("_landin_firmware_vectors");
+         Need ("_landin_firmware_stack_top");
+         Need ("_landin_firmware_stack_bottom");
+         for Part of Image_Parts loop
+            Need ("_landin_firmware_data_" & Part.all);
+            Need ("_landin_firmware_ramtext_" & Part.all);
+         end loop;
+         Need ("_landin_firmware_bss_start");
+         Need ("_landin_firmware_bss_end");
+         if Profile.Boot = Firmware.RP2040_Boot2 then
+            Need ("_landin_firmware_boot2");
+         end if;
+         for Index in 1 .. Profile.Count loop
+            if Used (Index)
+              and then Firmware.Writable (Profile.Regions (Index).Mode)
+            then
+               for Part of Image_Parts loop
+                  Need ("_landin_firmware_region_"
+                    & Firmware.Spelling (Profile.Regions (Index).Name)
+                    & "_data_" & Part.all);
+               end loop;
+               Need ("_landin_firmware_region_"
+                 & Firmware.Spelling (Profile.Regions (Index).Name)
+                 & "_bss_start");
+               Need ("_landin_firmware_region_"
+                 & Firmware.Spelling (Profile.Regions (Index).Name)
+                 & "_bss_end");
+            end if;
+         end loop;
+         if US.Length (Missing) > 0 then
+            return "clause 2, the startup symbols: the image defines no "
+              & US.To_String (Missing);
+         end if;
+
+         --  Clause 1: the vector table at the boot address, whole.
+         declare
+            Address : constant Landin.Targets.Byte_Count :=
+              Firmware.Vector_Address (Profile);
+            Bytes : constant Landin.Targets.Byte_Count :=
+              Firmware.Vector_Bytes (Profile);
+            At_File : constant Natural := Loaded (Address, Bytes);
+         begin
+            if Value ("_landin_firmware_vectors") /= Address then
+               return "clause 1, the vector table: it is at "
+                 & Landin.Backend.Firmware.Hex
+                     (Value ("_landin_firmware_vectors"))
+                 & " and " & Firmware.Spelling (Profile.Device)
+                 & "'s boot address is "
+                 & Landin.Backend.Firmware.Hex (Address);
+            elsif At_File = Natural'Last then
+               return "clause 1, the vector table: the image does not hold"
+                 & " its" & Landin.Targets.Byte_Count'Image (Bytes)
+                 & " bytes at its address";
+            elsif Word (At_File) /= Value ("_landin_firmware_stack_top")
+              or else Word (At_File + 4)
+                /= (Value ("_landin_firmware_reset") / 2) * 2 + 1
+            then
+               return "clause 1, the vector table: its first words are not"
+                 & " the initial stack pointer and reset";
+            elsif Profile.Boot = Firmware.RP2040_Boot2
+              and then Value ("_landin_firmware_boot2")
+                /= Firmware.Placed_Region (Profile, Firmware.Vectors).Origin
+            then
+               return "clause 1, the vector table: the second stage is not"
+                 & " at the start of "
+                 & Firmware.Spelling
+                     (Firmware.Placed_Region (Profile, Firmware.Vectors).Name);
+            end if;
+         end;
+
+         --  Clause 3: the stack, in a writable region, of its size.
+         declare
+            Top : constant Landin.Targets.Byte_Count :=
+              Value ("_landin_firmware_stack_top");
+            Bottom : constant Landin.Targets.Byte_Count :=
+              Value ("_landin_firmware_stack_bottom");
+            Held : Boolean := False;
+         begin
+            for Index in 1 .. Profile.Count loop
+               Held := Held or else
+                 (Firmware.Writable (Profile.Regions (Index).Mode)
+                  and then Bottom <= Top
+                  and then Within (Bottom, Top - Bottom,
+                                   Profile.Regions (Index)));
+            end loop;
+            if Top mod 8 /= 0 then
+               return "clause 3, the stack: its top is not aligned to eight"
+                 & " bytes";
+            elsif not Held then
+               return "clause 3, the stack: it does not lie in a writable"
+                 & " region of " & Firmware.Spelling (Profile.Device);
+            elsif Top - Bottom /= Profile.Stack_Size then
+               return "clause 3, the stack: it holds"
+                 & Landin.Targets.Byte_Count'Image (Top - Bottom)
+                 & " bytes and the description reserves"
+                 & Landin.Targets.Byte_Count'Image (Profile.Stack_Size);
+            end if;
+            for Stem of Ram_Images loop
+               declare
+                  Name : constant String :=
+                    "_landin_firmware_" & Stem.all & "_end";
+                  First : constant String :=
+                    "_landin_firmware_" & Stem.all & "_start";
+               begin
+                  if Value (Name) > Value (First)
+                    and then Value (First) < Top
+                    and then Value (Name) > Bottom
+                  then
+                     return "clause 3, the stack: ." & Stem.all
+                       & " overlaps it";
+                  end if;
+               end;
+            end loop;
+         end;
+
+         --  Clause 4: each initialized image loads from flash.
+         declare
+            Fault : constant String := Image_Fault
+              (".data", "_landin_firmware_data_load",
+               "_landin_firmware_data_start", "_landin_firmware_data_end");
+         begin
+            if Fault /= "" then
+               return Fault;
+            end if;
+         end;
+         declare
+            Fault : constant String := Image_Fault
+              (".ramtext", "_landin_firmware_ramtext_load",
+               "_landin_firmware_ramtext_start",
+               "_landin_firmware_ramtext_end");
+         begin
+            if Fault /= "" then
+               return Fault;
+            end if;
+         end;
+         for Index in 1 .. Profile.Count loop
+            if Used (Index)
+              and then Firmware.Writable (Profile.Regions (Index).Mode)
+            then
+               declare
+                  Stem : constant String := "_landin_firmware_region_"
+                    & Firmware.Spelling (Profile.Regions (Index).Name);
+                  Fault : constant String := Image_Fault
+                    (Firmware.Spelling (Profile.Regions (Index).Name),
+                     Stem & "_data_load", Stem & "_data_start",
+                     Stem & "_data_end");
+               begin
+                  if Fault /= "" then
+                     return Fault;
+                  end if;
+               end;
+            end if;
+         end loop;
+         return "";
+      end;
+   exception
+      when Constraint_Error =>
+         return "the linked image is not a well-formed ELF executable";
+   end Contract_Fault;
+
 end Landin.Build_Reports.Firmware;

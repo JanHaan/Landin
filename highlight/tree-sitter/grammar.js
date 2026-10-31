@@ -201,7 +201,7 @@ module.exports = grammar({
     link_symbol: $ => seq(
       field('attribute', alias('link', $.identifier)), '(',
       commaSep1(choice(
-        seq(field('label', choice(alias('symbol', $.identifier), alias('section', $.identifier))), ':',
+        seq(field('label', choice(alias('symbol', $.identifier), alias('section', $.identifier), alias('region', $.identifier))), ':',
             field('value', $.text_literal)),
         seq(field('label', alias(choice('align', 'vector'), $.identifier)), ':',
             field('value', $.integer_literal)),

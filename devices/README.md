@@ -22,6 +22,33 @@ This tree holds two devices: Raspberry Pi's RP2040 and ST's STM32H753. A
 description is imported as `descriptions/DEVICE` with `--root=devices`, and
 its register modules as `DEVICE/PERIPHERAL` with `--root=devices/generated`.
 
+## Device descriptions
+
+`descriptions/DEVICE/` holds a device's description (D542): Landin source of
+tool directives the compiler reads into the profile a firmware program is
+built for, imported as `descriptions/DEVICE` with `--root=devices`, apart from
+the register modules under `generated/`. `interrupts.ldn` is the half an SVD
+gives, in the one text D542 fixes, and `memory.ldn` the half a developer
+writes. RP2040's `interrupts.ldn` was first written in that form by hand and is now
+what `refine svd` generates; `devices/test.py` regenerates it, and renders
+D542's form from the fetched SVD with nothing of the compiler's, and
+requires the file's bytes to be both. Its `memory.ldn` follows
+pico-sdk 2.2.0, checked against
+[`memmap_default.ld`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2040/memmap_default.ld)
+(SHA-256 `d409afb35ec0a8c3edf5ad6935907cb45f225a3cbdfd4c3b8505a7ed92df28dc`),
+whose FLASH comes from
+[`pico_flash_region.template.ld`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld)
+(`a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a`) at
+`0x10000000` and its 2 MiB from the Pico's
+[`pico.h`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico.h)
+(`e88d258b92a7653c360d32042c2cac0de99010a6bc67d6935f6095b9612336d0`); none of
+them is vendored. Its stack takes the whole of SCRATCH_Y, where pico-sdk puts
+core 0's, and its boot kind is `rp2040-boot2`, whose second-stage slot holds
+zeros until the first board item supplies the code. The Cortex-M
+[descriptions lane](../environments/cortex-m/README.md#device-descriptions)
+compares what it selects with expectations recorded from those files.
+
+
 | Path | What it is |
 |---|---|
 | [`inputs.json`](inputs.json) | the lock: each vendor input's URL and SHA-256 |

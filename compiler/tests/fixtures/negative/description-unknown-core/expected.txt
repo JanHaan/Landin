@@ -1,0 +1,6 @@
+error[L0399]: this is not a core refine builds for
+  --> ../tests/fixtures/negative/description-unknown-core/program.ldn:2:15
+  |
+2 | compiler.core("cortex-m99")
+  |               ^^^^^^^^^^^^
+  = note: D542: compiler.core names "cortex-m0", "cortex-m0plus", "cortex-m3", "cortex-m4" or "cortex-m7"

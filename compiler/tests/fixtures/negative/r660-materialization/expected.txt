@@ -1,1 +1,2 @@
-error[L0505]: firmware static images exceed 8 MiB before section GC
+error[L0505]: static images write 8388609 bytes before section GC, past the 32768 bytes that the flash of cortex-m0's constrained reference profile holds
+  = note: every image the program lowers counts before section GC; make the static data smaller, or allocate it when the program runs (D537)

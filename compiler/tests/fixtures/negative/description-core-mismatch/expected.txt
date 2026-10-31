@@ -1,0 +1,6 @@
+error[L0515]: this description's core is a cortex-m4, an armv7e-m core, and this build is at --level=armv6-m
+  --> ../tests/fixtures/negative/description-core-mismatch/program.ldn:2:1
+  |
+2 | compiler.core("cortex-m4")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D543: build it with --level=armv7e-m

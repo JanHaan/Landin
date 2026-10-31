@@ -93,7 +93,7 @@ package body Landin.Configuration is
          for C of Text loop
             if C = '_' then
                null;
-            elsif C not in '0' .. '9' or else Value > 256 then
+            elsif C not in '0' .. '9' or else Value > 65_535 then
                return Natural'Last;
             else
                Value := Value * 10 + Character'Pos (C) - Character'Pos ('0');
@@ -111,6 +111,15 @@ package body Landin.Configuration is
               (Snapshot, Attr.Section);
          begin
             Result.Section := Landin.Source.Names.Intern
+              (Names, Text (Text'First + 1 .. Text'Last - 1));
+         end;
+      end if;
+      if Attr.Region /= Landin.Source.Empty_Span then
+         declare
+            Text : constant String := Landin.Source.Slice
+              (Snapshot, Attr.Region);
+         begin
+            Result.Region := Landin.Source.Names.Intern
               (Names, Text (Text'First + 1 .. Text'Last - 1));
          end;
       end if;
@@ -206,6 +215,10 @@ package body Landin.Configuration is
          return "D437: compiler." & Member & " is read in fixed"
            & " configuration expressions and module values; a routine"
            & " body reads a module value that holds it";
+      elsif Is_Description_Member (Namespace, Member) then
+         return "D542: " & Namespace & "." & Member & " is a directive of a"
+           & " device description, written at module level in the"
+           & " description's own module";
       elsif Namespace = "compiler" and then Member = "feature" then
          return "D437: compiler.feature.NAME is read in fixed configuration"
            & " expressions and module values; a routine body reads a module"
@@ -344,8 +357,20 @@ package body Landin.Configuration is
      (In_Table : Table; Index : Positive) return Landin.Syntax.Node_Id
      is (In_Table.Deferred.Element (Index).Node);
 
-   procedure Prepare (Into : in out Table) is
+   procedure Set_Profile
+     (Into : in out Table; Selected : Landin.Targets.Firmware.Profile) is
    begin
+      Into.Selected_Profile := Selected;
+   end Set_Profile;
+
+   function Profile
+     (In_Table : Table) return Landin.Targets.Firmware.Profile is
+     (In_Table.Selected_Profile);
+
+   procedure Prepare (Into : in out Table) is
+      Unselected : Landin.Targets.Firmware.Profile;
+   begin
+      Into.Selected_Profile := Unselected;
       Into.Deferred.Clear;
       Into.Facts.Clear;
       Into.Inactive.Clear;

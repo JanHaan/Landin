@@ -1788,10 +1788,21 @@ package body Landin.IR is
       Into.Items (Positive (Item)).Placement := Value;
       if Value.Keep or else Value.Vector /= 0
         or else Value.Section /= Landin.Source.Names.No_Name
+        or else Value.Region /= Landin.Source.Names.No_Name
       then
          Into.Items (Positive (Item)).Address_Exposed := True;
       end if;
    end Set_Placement;
+
+   procedure Set_Firmware_Profile
+     (Into : in out Unit; Profile : Landin.Targets.Firmware.Profile) is
+   begin
+      Into.Firmware := Profile;
+   end Set_Firmware_Profile;
+
+   function Firmware_Profile
+     (Of_Unit : Unit) return Landin.Targets.Firmware.Profile
+     is (Of_Unit.Firmware);
 
    function Is_Thread_Storage (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).Thread_Storage);

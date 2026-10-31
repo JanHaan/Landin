@@ -636,6 +636,8 @@ package Landin.Syntax is
       Present : Boolean := False;
       Section, Alignment, Vector : Landin.Source.Span :=
         Landin.Source.Empty_Span;
+      --  D547: `link(region: "NAME")`, the quoted name as written.
+      Region : Landin.Source.Span := Landin.Source.Empty_Span;
       Keep : Boolean := False;
       --  D496: `link(thread)`.  Thread storage is no machine placement, so
       --  it leaves Present alone: Present says a Cortex-M0 placement was

@@ -1,0 +1,9 @@
+class: negative
+summary: D547: a region placement names a region of the selected description
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0517
+args: --target=cortex-m0 ../tests/fixtures/negative/region-placement-unknown/program.ldn
+expect: expected.txt
+status: 1

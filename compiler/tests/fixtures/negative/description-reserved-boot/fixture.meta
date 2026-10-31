@@ -1,0 +1,9 @@
+class: negative
+summary: D545: RP2350's image block is a reserved boot image kind refine does not build yet
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0516
+args: --target=cortex-m0 ../tests/fixtures/negative/description-reserved-boot/program.ldn
+expect: expected.txt
+status: 1

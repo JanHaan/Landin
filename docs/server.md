@@ -76,6 +76,12 @@ declared type. A value the server refuses is reported once, through
 analysis checks the same entry shape as a firmware build and publishes
 `L0502` at an invalid candidate, or at the first entry-module source if it
 is missing. With no selection, analysis makes no firmware entry claim.
+On `cortex-m0` a module is checked with the profile of the device
+description it imports (D543), as `refine` checks it: a handler at a slot
+that description reserves is L0347 naming the device, a description's own
+refusals are published at its directives, and with no description the
+library's constrained reference applies. The scripted session
+`firmware-description` holds the server to it.
 Nor does it make a claim about the link: a static Linux link's refusal of a
 C library or of a C symbol nothing defines, L0500, answers a build's
 `--link`, which the server is not given, so `refine check` reports it and

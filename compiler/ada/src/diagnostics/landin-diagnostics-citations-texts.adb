@@ -7529,8 +7529,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "    link_attributes    ::= ""link"" ""("" link_attribute ("""
                & ","" link_attribute)* "")"""
                & LF
-               & "    link_attribute     ::= (""symbol"" | ""section"") "":"" "
-               & "text"
+               & "    link_attribute     ::= (""symbol"" | ""section"" | ""reg"
+               & "ion"") "":"" text"
                & LF
                & "                         | (""align"" | ""vector"") "":"" in"
                & "teger | ""keep"" | ""thread"""
@@ -9909,20 +9909,30 @@ package body Landin.Diagnostics.Citations.Texts is
                & "inkage rules remain [1970]/[1975]."
                & LF
                & LF
-               & "The selected image has 32 KiB flash at zero and 16 KiB R"
-               & "AM at `0x20000000`. The initial SP is `0x20004000`, alig"
-               & "ned to eight bytes. The upper 4 KiB of RAM is reserved f"
-               & "or stacks; static RAM ends no later than `0x20003000`. T"
-               & "his is a constrained test profile, not permission to use"
-               & " the board's larger flash. The firmware request refuses "
-               & "a compiler-framed routine when its known frame alone, in"
-               & "cluding saved registers and reserved homes, exceeds the "
-               & "selected 4 KiB stack reservation. This does not bound to"
-               & "tal stack use across calls or interrupts; those paths re"
-               & "main programmer obligations. The compiler creates a 48-w"
-               & "ord, 256-byte-aligned vector image at address zero. Its "
-               & "first two words are the initial SP and compiler reset fu"
-               & "nction. Core slots 4"
+               & "The image follows the profile the program's device descr"
+               & "iption selects (D542, D543): its regions, where each par"
+               & "t of the image is placed, its stack and its vector table"
+               & ". A program that imports no description is given the con"
+               & "strained reference profile, `platform/cortex_m/reference"
+               & "`: 32 KiB flash at zero and 16 KiB RAM at `0x20000000`, "
+               & "the initial SP `0x20004000`, aligned to eight bytes, the"
+               & " upper 4 KiB of RAM reserved for stacks, so static RAM e"
+               & "nds no later than `0x20003000`. That is a constrained te"
+               & "st profile, not permission to use a board's larger flash"
+               & ". The firmware request refuses a compiler-framed routine"
+               & " when its known frame alone, including saved registers a"
+               & "nd reserved homes, exceeds the selected stack reservatio"
+               & "n. This does not bound total stack use across calls or i"
+               & "nterrupts; those paths remain programmer obligations. Th"
+               & "e compiler creates the profile's vector image, as many w"
+               & "ords as its description counts, aligned to its length ro"
+               & "unded up to a power of two and no less than 128 bytes, a"
+               & "t its boot address (D545). Its first two words are the i"
+               & "nitial SP and compiler reset function. The slots a handl"
+               & "er may take are the profile's (D544): its core's archite"
+               & "ctural exceptions and 16 + IRQ for each interrupt its de"
+               & "scription names; every other slot is zero, which in the "
+               & "reference is core slots 4"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -9930,14 +9940,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "13 and selected-device slots 21 and 42"
+               & "13 and slots 21 and 42"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "47 are zero. Other unspecified handlers enter the compil"
-               & "er's terminal unhandled-exception loop. There is no VTOR"
-               & " relocation, FPU frame, exclusive-access primitive, prio"
-               & "rity grouping or later-Thumb instruction contract."
+               & "47 of its 48. Other unspecified handlers enter the compi"
+               & "ler's terminal unhandled-exception loop. There is no VTO"
+               & "R relocation, FPU frame, exclusive-access primitive, pri"
+               & "ority grouping or later-Thumb instruction contract."
                & LF
                & LF
                & "Reset masks configurable interrupts, initializes reserve"
@@ -10304,23 +10314,24 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "Placement is a declaration annotation: `link(section: te"
-               & "xt, align: integer, vector: integer, keep, symbol: text)"
-               & "`. Only supplied attributes apply, and duplicate attribu"
-               & "tes/annotations are errors. Section names are at most 80"
-               & " ASCII letters, digits, underscores or dots, with a none"
-               & "mpty suffix. Functions select `.text.*` (flash) or `.ram"
-               & "text.*` (RAM execution with a flash load image); immutab"
-               & "le data selects `.rodata.*`, mutable data `.data.*` or `"
-               & ".bss.*`. An explicit BSS initializer must be `zeroed` or"
-               & " the integer literal `0`. Compiler `.landin_` section na"
-               & "mes are reserved. Alignment is a decimal power of two fr"
-               & "om 1 through 256 and is a minimum placement alignment; t"
-               & "ype layout and `alignof` do not change. Alignment and ve"
-               & "ctor indexes use decimal integer literals, with the ordi"
-               & "nary digit separators allowed; nondecimal prefixes and c"
-               & "omputed expressions refuse. Without a section annotation"
-               & " every datum/routine has its own input section; mutable "
-               & "zero images use BSS and immutable images use flash."
+               & "xt, align: integer, vector: integer, keep, symbol: text,"
+               & " region: text)`. Only supplied attributes apply, and dup"
+               & "licate attributes/annotations are errors. Section names "
+               & "are at most 80 ASCII letters, digits, underscores or dot"
+               & "s, with a nonempty suffix. Functions select `.text.*` (f"
+               & "lash) or `.ramtext.*` (RAM execution with a flash load i"
+               & "mage); immutable data selects `.rodata.*`, mutable data "
+               & "`.data.*` or `.bss.*`. An explicit BSS initializer must "
+               & "be `zeroed` or the integer literal `0`. Compiler `.landi"
+               & "n_` section names are reserved. Alignment is a decimal p"
+               & "ower of two from 1 through 256 and is a minimum placemen"
+               & "t alignment; type layout and `alignof` do not change. Al"
+               & "ignment and vector indexes use decimal integer literals,"
+               & " with the ordinary digit separators allowed; nondecimal "
+               & "prefixes and computed expressions refuse. Without a sect"
+               & "ion annotation every datum/routine has its own input sec"
+               & "tion; mutable zero images use BSS and immutable images u"
+               & "se flash."
                & LF
                & LF
                & "`keep` marks the containing input section as a retention"
@@ -10337,7 +10348,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "`vector: N` associates a defined interrupt/naked routine"
-               & " with one unique implemented exception slot: 2, 3, 11, 1"
+               & " with one unique exception slot the selected profile imp"
+               & "lements (D544): in the constrained reference 2, 3, 11, 1"
                & "4, 15, 16"
                & Character'Val (226)
                & Character'Val (128)
@@ -10346,41 +10358,47 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "41. Slots are absolute vector indexes, not IRQ numbers. "
-               & "Zero, reset, reserved slots, duplicates and ordinary/C r"
-               & "outines are refused. Emitting such an annotation require"
-               & "s an explicit firmware-entry request. The compiler-owned"
-               & " kept vector image carries a relocation to the handler; "
-               & "an unreferenced interrupt routine without keep can still"
-               & " disappear. Thumb function relocations retain bit zero; "
-               & "data addresses are not tagged as code. Linker-defined st"
-               & "artup addresses distinguish load from execution location"
-               & "s. Existing static function/text-address images remain r"
-               & "elocations, not calls or user-code initialization. The c"
-               & "ompiler does not enable an arbitrary source initializer "
-               & "referring to a linker symbol; fixed assembly can name th"
-               & "e documented `_landin_firmware_*` startup symbols."
+               & "41. Slots are absolute vector indexes, not IRQ numbers; "
+               & "external IRQ n is slot 16 + n. `region: text` places the"
+               & " declaration in a region of the selected description (D5"
+               & "47). Zero, reset, reserved slots, duplicates and ordinar"
+               & "y/C routines are refused. Emitting such an annotation re"
+               & "quires an explicit firmware-entry request. The compiler-"
+               & "owned kept vector image carries a relocation to the hand"
+               & "ler; an unreferenced interrupt routine without keep can "
+               & "still disappear. Thumb function relocations retain bit z"
+               & "ero; data addresses are not tagged as code. Linker-defin"
+               & "ed startup addresses distinguish load from execution loc"
+               & "ations. Existing static function/text-address images rem"
+               & "ain relocations, not calls or user-code initialization. "
+               & "The compiler does not enable an arbitrary source initial"
+               & "izer referring to a linker symbol; fixed assembly can na"
+               & "me the documented `_landin_firmware_*` startup symbols."
                & LF
                & LF
                & "Executable emission retains assembly, object, compiler-g"
-               & "enerated linker script, ELF and map as explicit outputs."
-               & " The driver passes each host effect through `Landin.Plat"
-               & "form`, checks output/source aliases before writes, uses "
-               & "ARMv6-M Thumb/AAPCS soft-float assembler flags with fata"
-               & "l warnings, and links with no hosted startup, default li"
-               & "braries or libc. Only the selected private `thumb/v6-m/n"
-               & "ofp/libgcc.a` helper closure is admitted. This does not "
-               & "enable the general C source surface. The linker checks f"
-               & "lash bounds, static RAM/stack overlap and the vector add"
-               & "ress/size; unresolved symbols and relocation or encoding"
-               & " failures remain reported tool failures. An 8 MiB static"
-               & "-image materialization guard applies before firmware emi"
-               & "ssion, including unreachable images, independently of th"
-               & "e much smaller physical map and section GC. Hosted place"
-               & "ment annotations, arbitrary section addresses/linker scr"
-               & "ipts, weak symbols, inline hints and general tool direct"
-               & "ives remain explicit refusals. No request is silently ig"
-               & "nored.",
+               & "enerated linker script, ELF and map as explicit outputs;"
+               & " `--linker-script=FILE` links with a developer's script "
+               & "instead, held to D546's contract. The driver passes each"
+               & " host effect through `Landin.Platform`, checks output/so"
+               & "urce aliases before writes, uses ARMv6-M Thumb/AAPCS sof"
+               & "t-float assembler flags with fatal warnings, and links w"
+               & "ith no hosted startup, default libraries or libc. Only t"
+               & "he selected private `thumb/v6-m/nofp/libgcc.a` helper cl"
+               & "osure is admitted. This does not enable the general C so"
+               & "urce surface. The derived script checks flash bounds, st"
+               & "atic RAM/stack overlap and the vector address/size; unre"
+               & "solved symbols and relocation or encoding failures remai"
+               & "n reported tool failures. Before emission the program's "
+               & "static images are held to the selected profile's capacit"
+               & "ies (D537): every written image, including one section G"
+               & "C would drop, to the region text is placed in, 32 KiB in"
+               & " the reference, and every mutable written image to the d"
+               & "ata region, 16 KiB in the reference. The linker stays th"
+               & "e authority for the map itself. Hosted placement annotat"
+               & "ions, arbitrary section addresses, weak symbols, inline "
+               & "hints and general tool directives remain explicit refusa"
+               & "ls. No request is silently ignored.",
             when 1995 =>
                "[1675] teaches fibres through `core/fibre` and leaves un"
                & "said what the two stack builtins under it do, where a fi"
@@ -12455,14 +12473,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "g, verification nor dumping enumerates the extent."
                & LF
                & LF
-               & "The Linux x86-64 backend emits a constant-size `.rept`/w"
-               & "idth-specific-directive/ `.endr` sequence for a nonzero "
-               & "repeated image. The scalar directive is `.byte`, `.word`"
-               & ", `.long` or `.quad` according to the target element wid"
-               & "th. In particular, the eight-byte form does not use GNU "
-               & "`.fill`, whose value operand contributes at most four by"
-               & "tes and would discard the high half of a `u64` pattern. "
-               & "An absent zero image stays `.bss`."
+               & "The Linux x86-64 backend emitted a constant-size `.rept`"
+               & "/width-specific-directive/ `.endr` sequence for a nonzer"
+               & "o repeated image. The scalar directive is `.byte`, `.wor"
+               & "d`, `.long` or `.quad` according to the target element w"
+               & "idth. In particular, the eight-byte form does not use GN"
+               & "U `.fill`, whose value operand contributes at most four "
+               & "bytes and would discard the high half of a `u64` pattern"
+               & ". An absent zero image stays `.bss`. D536 later writes a"
+               & " pattern of four bytes or fewer as one `.fill` on every "
+               & "target and keeps the repetition for eight-byte patterns."
                & LF
                & LF
                & "A repetition whose written contextual length is zero is "
@@ -12618,12 +12638,45 @@ package body Landin.Diagnostics.Citations.Texts is
                & "s zero, because its nonempty written prefix makes it exp"
                & "licit `.data`; Linux x86-64 emits the prefix with width-"
                & "matched scalar directives and then a constant-size `.rep"
-               & "t N - k` around one zero directive. A full repetition of"
-               & " zero retains D34's absent image and loader-zeroed `.bss"
-               & "`. For every nonzero suffix the backend uses the same `."
-               & "byte`, `.word`, `.long` or `.quad` directive, so a 64-bi"
-               & "t pattern reaches the assembler with all eight bytes rat"
-               & "her than GNU `.fill`'s truncated value field.",
+               & "t N - k` around one zero directive, which D536 writes as"
+               & " one `.zero`. A full repetition of zero retains D34's ab"
+               & "sent image and loader-zeroed `.bss`. For every nonzero s"
+               & "uffix the backend uses the same `.byte`, `.word`, `.long"
+               & "` or `.quad` directive, so a 64-bit pattern reaches the "
+               & "assembler with all eight bytes rather than GNU `.fill`'s"
+               & " truncated value field.",
+            when 536 =>
+               "Chosen: every native backend writes a run of one element"
+               & " through the one set of helpers in `Landin.Backend`, so "
+               & "the four, arm64 for Linux, FreeBSD and Darwin alike, agr"
+               & "ee on its form:"
+               & LF
+               & LF
+               & "- A run that writes only zero bytes is one `.zero`: a re"
+               & "peated zero scalar, a hybrid's zero suffix, and a repeat"
+               & "ed aggregate or array element whose whole image is zero,"
+               & " with its padding."
+               & LF
+               & "- A run of a scalar of one, two or four bytes is one `.f"
+               & "ill count, size, value`, which both assemblers hold as o"
+               & "ne fragment."
+               & LF
+               & "- What is left, a run of a nonzero composite element, of"
+               & " an address, of an atom, or of an eight-byte scalar whos"
+               & "e high half `.fill`'s four-byte value field would drop, "
+               & "is repeated. A count above 256 is written in base 256: f"
+               & "or each nonzero digit, a `.rept` of that digit around as"
+               & " many nested `.rept 256` as its place, around the body. "
+               & "A count up to 256 is one `.rept` as before."
+               & LF
+               & LF
+               & "A body is therefore written once per nonzero digit, at m"
+               & "ost eight times, and the text an assembler expands at on"
+               & "ce is the body's own times at most 256. Nested runs mult"
+               & "iply their digits, which D537's budget bounds: within 4 "
+               & "GiB at most three dimensions of an image exceed 256. The"
+               & " object bytes are those the earlier `.rept` sequences as"
+               & "sembled to.",
             when 39 =>
                "Chosen: `zeroed` may directly initialize an explicitly t"
                & "yped module scalar binding: `[mut] name: T = zeroed`. Th"
@@ -18244,11 +18297,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 che"
                & "ck target, machine signatures, placement, fixed assembly"
                & " and scalar transport; D248 checks named operands agains"
-               & "t each target's registers; L0505 bounds static image mat"
-               & "erialization before section GC | `positive/r660-machine-"
-               & "directives`, `positive/r670-scalar-assembly`, `positive/"
-               & "assembly-operand-forms`, `negative/r660-materialization`"
-               & ", `negative/assembly-synthetic-target` |"
+               & "t each target's registers; L0505 holds static images to "
+               & "D537's budget before section GC | `positive/r660-machine"
+               & "-directives`, `positive/r670-scalar-assembly`, `positive"
+               & "/assembly-operand-forms`, `negative/r660-materialization"
+               & "`, `negative/assembly-synthetic-target` |"
                & LF
                & "| `firmware.return` | trap | 1550, 1570, 1650, 1990 | D2"
                & "32 dispatches entry return as unreachable/site zero; D22"
@@ -21786,11 +21839,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ed device profile.",
             when 229 =>
                "Decision: [1990] defines the enabled Cortex-M0 source/re"
-               & "quest contract. The compiler owns reset, the fixed const"
-               & "rained linker script and the vector image; source annota"
-               & "tions contribute typed handler references and placement."
-               & " This is a toolchain slice, not a new initialization lan"
-               & "guage or package system."
+               & "quest contract. The compiler owns reset, the linker scri"
+               & "pt and the vector image; source annotations contribute t"
+               & "yped handler references and placement. D543-D547 make th"
+               & "e memory map, the vector slot exclusions, the script and"
+               & " the boot image follow the selected device description, "
+               & "with the constrained profile kept as the reference descr"
+               & "iption. This is a toolchain slice, not a new initializat"
+               & "ion language or package system."
                & LF
                & LF
                & "| Choice | Alternative and reason for declining it | Exe"
@@ -21846,8 +21902,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "nd one-frame check | A larger board hides overflows; a g"
                & "eneral script/build ecosystem exceeds this slice; materi"
                & "alizing giant unreachable images before GC wastes unboun"
-               & "ded resources | flash/stack overflow, L0505/L0507 and mi"
-               & "splaced-vector controls |"
+               & "ded resources; D537 replaces the 8 MiB bound with the pr"
+               & "ofile's capacities | flash/stack overflow, L0505/L0507 a"
+               & "nd misplaced-vector controls |"
                & LF
                & LF
                & "The physical startup/exception premises are outside lang"
@@ -22085,6 +22142,57 @@ package body Landin.Diagnostics.Citations.Texts is
                & "it. Caller coordinates remain their separate three-scala"
                & "r D192 contract; they do not become panic numbers. Corte"
                & "x source debugging is separate evidence.",
+            when 537 =>
+               "Chosen: one check, before anything is emitted, holds eve"
+               & "ry target's static images to a budget in target bytes. I"
+               & "t counts every datum the compilation lowers, before opti"
+               & "mization and before section GC: a program with a public "
+               & "`main` lowers what that reaches, and one without, a firm"
+               & "ware image or an object, lowers everything. Written imag"
+               & "es, those with bytes in the object, count against the in"
+               & "itialized budget; mutable written images also against th"
+               & "e writable one; zero images the loader or startup clears"
+               & " count only against the address space."
+               & LF
+               & LF
+               & "| Target | Written images | Mutable written images | Zer"
+               & "o images |"
+               & LF
+               & "| --- | --- | --- | --- |"
+               & LF
+               & "| linux-x86-64, freebsd-x86-64 | 2 GiB, the small code m"
+               & "odel's reach | 2 GiB | 2^64 - 1 bytes |"
+               & LF
+               & "| darwin-arm64 | 2 GiB, a Darwin static image | 2 GiB | "
+               & "2^64 - 1 bytes |"
+               & LF
+               & "| linux-arm64, freebsd-arm64 | 4 GiB, ADRP's reach | 4 G"
+               & "iB | 2^64 - 1 bytes |"
+               & LF
+               & "| linux-rv64 | 2 GiB, AUIPC's reach | 2 GiB | 2^64 - 1 b"
+               & "ytes |"
+               & LF
+               & "| cortex-m0 without a firmware request | 2^32 - 1 bytes,"
+               & " the address space | 2^32 - 1 bytes | 2^32 - 1 bytes |"
+               & LF
+               & "| cortex-m0 firmware, reference profile | 32 KiB, its fl"
+               & "ash | 16 KiB, its RAM | 2^32 - 1 bytes |"
+               & LF
+               & LF
+               & "A firmware image takes its profile's capacities as the c"
+               & "heck's argument, so a profile with more flash raises its"
+               & " budget without another rule. A scalar datum counts as w"
+               & "ritten whatever it folds to. The refusal is L0505, which"
+               & " names the bytes the images take, the budget they exceed"
+               & " and what sets it, the code model, the address space or "
+               & "the profile's flash or RAM."
+               & LF
+               & LF
+               & "This states the per-target limits that the roadmap's emi"
+               & "ssion policy left open. The check is not a placement ver"
+               & "dict: code is not counted, and the linker remains the au"
+               & "thority for the map, the stack reservation and a zero im"
+               & "age past a code model's reach.",
             when 248 =>
                "Chosen: [1990]'s operand form. An operand has a directio"
                & "n, a name, an integer type and a register, and the regis"
@@ -24007,6 +24115,262 @@ package body Landin.Diagnostics.Citations.Texts is
                & "-full` may stand anywhere among what is asked, and a dec"
                & "ision's `Chosen` text runs to the next paragraph that op"
                & "ens with a bold label.",
+            when 542 =>
+               "Chosen: a device is described in Landin source, as one m"
+               & "odule made only of tool directives in [1740]'s `tool_dir"
+               & "ective` form. Each argument is positional: a text is a t"
+               & "ext literal, decoded by the ordinary text decoder as `li"
+               & "nker.library`'s is, and an integer is a fixed integer ex"
+               & "pression in D202's closed fold, so `0x2000_0000` and `25"
+               & "6 * 1024` are both written as they read. The directives "
+               & "are:"
+               & LF
+               & LF
+               & "| directive | arguments | says |"
+               & LF
+               & "|---|---|---|"
+               & LF
+               & "| `compiler.device(name)` | lowercase ASCII letters, dig"
+               & "its and hyphens, beginning with a letter, at most 32 byt"
+               & "es | the device's identity; the module holding it is a d"
+               & "escription |"
+               & LF
+               & "| `compiler.core(name)` | `cortex-m0`, `cortex-m0plus`, "
+               & "`cortex-m3`, `cortex-m4` or `cortex-m7` | the core, and "
+               & "through it the architecture level: `armv6-m`, `armv6-m`,"
+               & " `armv7-m`, `armv7e-m` and `armv7e-m` |"
+               & LF
+               & "| `compiler.vectors(count)` | an integer | the vector ta"
+               & "ble's whole length in words, the initial SP and reset in"
+               & "cluded |"
+               & LF
+               & "| `compiler.interrupt(name, irq)` | an ASCII letter, the"
+               & "n letters, digits and underscores, at most 64 bytes; an "
+               & "integer | that external interrupt `irq` is implemented, "
+               & "at absolute slot 16 + `irq` |"
+               & LF
+               & "| `compiler.boot(kind)` | a boot image kind | how the im"
+               & "age begins |"
+               & LF
+               & "| `linker.region(name, origin, length, access)` | an ASC"
+               & "II letter, then letters, digits and underscores, at most"
+               & " 32 bytes; two integers; `""rx""`, `""rw""` or `""rwx""` | o"
+               & "ne memory region |"
+               & LF
+               & "| `linker.place(kind, region[, size])` | `""vectors""`, `"""
+               & "text""`, `""rodata""`, `""data""`, `""bss""` or `""stack""`;"
+               & " a region's name; for `""stack""` alone, its size in bytes"
+               & " | where the compiler places that part of the image |"
+               & LF
+               & LF
+               & "A slot no `compiler.interrupt` names is reserved and hol"
+               & "ds zero. The directives' order carries no meaning."
+               & LF
+               & LF
+               & "A description is usually two files, which the compiler d"
+               & "oes not tell apart. `interrupts.ldn` holds `compiler.dev"
+               & "ice`, `compiler.core`, `compiler.vectors` and the interr"
+               & "upts, and is generated from the device's CMSIS-SVD file;"
+               & " `memory.ldn` holds the regions, the placements and `com"
+               & "piler.boot`, and is written by the developer, since an S"
+               & "VD says nothing of either. A generated `interrupts.ldn` "
+               & "has exactly this text, so that whatever generates it, an"
+               & "d a reviewer, can compare bytes:"
+               & LF
+               & LF
+               & "1. Line 1 is `-- Interrupts of the NAME, from its SVD: v"
+               & "endor VENDOR, version VERSION.`, with the SVD's `device/"
+               & "name`, `vendor` and `version` as written, surrounding wh"
+               & "itespace removed; a clause whose element the SVD lacks i"
+               & "s left out with its comma."
+               & LF
+               & "2. Line 2 is `-- SVD SHA-256 HEX.`, the lowercase SHA-25"
+               & "6 of the SVD file's bytes."
+               & LF
+               & "3. Each nonempty line of the SVD's `licenseText`, its su"
+               & "rrounding whitespace removed, follows as `-- LINE`."
+               & LF
+               & "4. Then `-- Generated from the SVD; memory.ldn beside it"
+               & " is written by hand.` and one empty line."
+               & LF
+               & "5. `compiler.device(""ID"")`, ID being `device/name` in lo"
+               & "wercase; `compiler.core(""CORE"")`, from `cpu/name`, where"
+               & " `CM0`, `CM0PLUS`, `CM3`, `CM4` and `CM7` are the five c"
+               & "ores above; and `compiler.vectors(N)`, N being 16 plus t"
+               & "he larger of `cpu/deviceNumInterrupts` and one more than"
+               & " the highest interrupt value, or plus the latter alone w"
+               & "hen the SVD has no `deviceNumInterrupts`."
+               & LF
+               & "6. One `compiler.interrupt(""NAME"", VALUE)` for each dist"
+               & "inct pair of an `interrupt` element's name and value in "
+               & "any peripheral, derived ones included, ordered by value "
+               & "and then by the name's bytes; VALUE is decimal with no s"
+               & "eparators."
+               & LF
+               & LF
+               & "The file is ASCII with LF line ends, one directive or co"
+               & "mment per line, no trailing spaces, no other empty line,"
+               & " and it ends with one LF. It is the form `refine fmt` le"
+               & "aves unchanged. RP2040's SVD gives 48 slots: it says 26 "
+               & "interrupts and names 32, the last six its spare software"
+               & " interrupts, and pico-sdk's vector table has 48 words."
+               & LF
+               & LF
+               & "The repository keeps a description in `devices/descripti"
+               & "ons/DEVICE/`, beside and apart from the register modules"
+               & " under `devices/generated`, which are regenerated byte f"
+               & "or byte; a program imports it as `descriptions/DEVICE` w"
+               & "ith `--root=devices`, a name no root of register modules"
+               & " can hold. The constrained reference profile is a descri"
+               & "ption in refine's own library, `platform/cortex_m/refere"
+               & "nce`, so an installed compiler finds it as it finds `pla"
+               & "tform/cortex_m`.",
+            when 543 =>
+               "Chosen: the firmware entry module imports its descriptio"
+               & "n, directly or through any module it imports; a descript"
+               & "ion is the module holding `compiler.device`, and at most"
+               & " one is in the reached graph. On a Cortex-M target, a pr"
+               & "ogram that reaches none is given the library's `platform"
+               & "/cortex_m/reference`, the constrained profile [1990] fix"
+               & "ed written as a description, which the loader adds once "
+               & "everything the imports reach is read; its sources join t"
+               & "he program as any library module's do, and its directive"
+               & "s emit nothing, so the assembly of a program that import"
+               & "s no description is what it was. A host whose library la"
+               & "cks it can still check and emit a program with no vector"
+               & " or region placement, and refuses one that has either, o"
+               & "r a firmware request, as L0518, saying to import a descr"
+               & "iption or name a library with `--library=DIR`."
+               & LF
+               & LF
+               & "The directives join D202's closed configuration fold. Ea"
+               & "ch is a module-level directive of the description's own "
+               & "module, outside every fixed arm, active or not, as an op"
+               & "tion is; one in another module, or in an arm, is L0513, "
+               & "and so is an import or any other declaration in a descri"
+               & "ption, and a second description. A description names its"
+               & " device, core, vector table and boot image kind once eac"
+               & "h, and places each of `vectors`, `text`, `rodata`, `data"
+               & "`, `bss` and `stack` once; an argument outside its row's"
+               & " form is L0399. Once all are read: regions do not overla"
+               & "p; a placement names one of the description's regions, c"
+               & "ode and the vector table one that may execute, and data,"
+               & " BSS and the stack one that may be written; the vector t"
+               & "able, aligned to its length rounded up to a power of two"
+               & " and no less than 128 bytes, fits its region past the bo"
+               & "ot kind's prefix; the table is no longer than the core's"
+               & " architecture allows, 48 words on ARMv6-M and 512 on ARM"
+               & "v7-M; each interrupt's slot is inside it; and the stack "
+               & "fits its region. Those are L0514. `.ramtext` is placed w"
+               & "ith `data`, and every load image in the region `text` is"
+               & " placed in."
+               & LF
+               & LF
+               & "A description's core must be the request's: the target `"
+               & "cortex-m0`, and `--level` the core's level, so an RP2040"
+               & ", a `cortex-m0plus`, builds at the default `armv6-m` and"
+               & " a `cortex-m4` asks for `--level=armv7e-m`; a mismatch i"
+               & "s L0515, naming the options to give. The constrained ref"
+               & "erence alone is used at every level, with its ARMv6-M sl"
+               & "ots, because it is the profile the levels were always te"
+               & "sted on and remains so. `refine lsp` checks a module tha"
+               & "t imports a description against that profile, with the t"
+               & "arget and level it is given, and reports the same refusa"
+               & "ls at the directives.",
+            when 544 =>
+               "Chosen: a handler's `link(vector: N)` takes slot N when "
+               & "the selected profile admits it: a core slot of the descr"
+               & "iption's core, NMI 2, HardFault 3, SVCall 11, PendSV 14 "
+               & "and SysTick 15, with MemManage 4, BusFault 5, UsageFault"
+               & " 6 and DebugMonitor 12 on ARMv7-M, or 16 + IRQ for an in"
+               & "terrupt its description names, and below its `compiler.v"
+               & "ectors` count. The table has that many words; an admitte"
+               & "d slot holds its handler or the unhandled loop, and ever"
+               & "y other slot holds zero. The checker, the verifier and t"
+               & "he backend read one profile, which the IR carries. A slo"
+               & "t the profile reserves is L0347, naming the device and t"
+               & "he slots its core takes. The constrained reference keeps"
+               & " [1990]'s table byte for byte: 48 words, IRQ5 and IRQ26"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "31 reserved. RP2040's description names all 32 of its in"
+               & "terrupts, so a handler at slot 21, `USBCTRL_IRQ`, occupi"
+               & "es that word.",
+            when 545 =>
+               "Chosen: the driver writes the derived script as `OUT.ld`"
+               & ": a MEMORY line for each region in the description's ord"
+               & "er, the stack at the top of its region, the vector table"
+               & " at the start of its region, past the boot kind's prefix"
+               & ", then text, read-only data and the unwind tables in the"
+               & "ir regions, initialized data and RAM code in the data re"
+               & "gion loaded from the text region, BSS, and each region a"
+               & " `link(region: ...)` uses (D547). It asserts the vector "
+               & "address and length, the stack's alignment, that nothing "
+               & "placed in the stack's region reaches the stack, and that"
+               & " the last load image ends inside the text region. Reset "
+               & "copies and clears what the script places, by the `_landi"
+               & "n_firmware_*` symbols. For the constrained reference the"
+               & " script is, byte for byte, the one D229 fixed."
+               & LF
+               & LF
+               & "A boot image kind is a fact of the target, not of a devi"
+               & "ce. The closed set is `vector-table`, the plain table at"
+               & " the boot address; `rp2040-boot2`, a 256-byte second sta"
+               & "ge at the start of the vectors' region, in a `.boot2` se"
+               & "ction, with the table after it at 256-byte alignment, as"
+               & " pico-sdk lays it out; and the reserved `rp2350-image-bl"
+               & "ock` and `esp-app-image`, which a description may name a"
+               & "nd refine refuses as L0516 until it builds them. The sec"
+               & "ond stage's code is not refine's yet: the slot holds 256"
+               & " zero bytes, which fail the RP2040 boot ROM's CRC check,"
+               & " so the ROM does not enter the image and stays in its US"
+               & "B boot mode. The firmware build report records the selec"
+               & "ted device, core, boot kind, vector address and length, "
+               & "regions and placements beside the capacities, which are "
+               & "the text region's length and the data region's less a st"
+               & "ack it holds.",
+            when 546 =>
+               "Chosen: `--linker-script=FILE` links firmware with FILE "
+               & "in place of `OUT.ld`, which refine still writes beside t"
+               & "he image. It is refused unless the request is `--target="
+               & "cortex-m0 --firmware-entry=NAME --emit=exe`. refine does"
+               & " not parse the script: after the link it reads the ELF a"
+               & "nd holds it to four clauses, in order, and a broken one "
+               & "is L0519 naming it, the executable is removed and the de"
+               & "rived script is offered:"
+               & LF
+               & LF
+               & "1. the vector table: `_landin_firmware_vectors` at the p"
+               & "rofile's boot address, its whole length loaded there, it"
+               & "s first words the initial stack pointer and reset, and f"
+               & "or `rp2040-boot2` the second stage at the start of its r"
+               & "egion;"
+               & LF
+               & "2. the startup symbols: every `_landin_firmware_*` symbo"
+               & "l reset reads, the stack's two, and each used region's;"
+               & LF
+               & "3. the stack: in a writable region of the description, i"
+               & "ts top aligned to eight bytes, its size the description'"
+               & "s, and no data, RAM code or BSS reaching into it;"
+               & LF
+               & "4. the initialized images: each load image of data, RAM "
+               & "code and a used writable region in the region text is pl"
+               & "aced in, held in the file.",
+            when 547 =>
+               "Chosen: `link_attribute` gains `region: text`, which pla"
+               & "ces a routine or module datum in a region of the selecte"
+               & "d description by name, without a section: a routine need"
+               & "s a region that may execute, a mutable datum one that ma"
+               & "y be written. A routine and initialized data in a writab"
+               & "le region are copied from their load image in the text r"
+               & "egion by reset, and zero data is cleared, after `.data`,"
+               & " RAM code and `.bss`; in a read-only region they run and"
+               & " are read in place. A region the description does not ha"
+               & "ve, a region beside a section, or a region whose access "
+               & "does not hold the declaration is L0517, and a region pla"
+               & "cement with no profile is L0518. On a hosted target plac"
+               & "ement is L0347, as every placement is.",
             when 151 =>
                "Chosen: the repository-owned `core/mem` module declares "
                & "a private parameterized nominal `raw(item)` with an allo"

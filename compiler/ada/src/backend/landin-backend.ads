@@ -546,6 +546,57 @@ package Landin.Backend is
    function Runs_Before_Thread_Pointer
      (Facts : Landin.Targets.Target_Facts; Symbol : String) return Boolean;
 
+   ---------------------------------------------------------------------
+   --  D536: a run of one element in a static image
+   --
+   --  An assembler expands `.rept` in memory, its body's text once per
+   --  copy, so a run is written with nothing to expand wherever one
+   --  directive can write it: a zero run is `.zero`, and a run of one
+   --  scalar of four bytes or fewer is `.fill`.  What is left, a
+   --  composite element or an eight-byte scalar `.fill` cannot carry, is
+   --  repeated, and a long repetition nests repetitions no wider than
+   --  Repetition_Width, so the text expanded at once is the body's own
+   --  times at most that, whatever the count.  Every backend writes its
+   --  runs through these, so the four agree on which form a run takes.
+   ---------------------------------------------------------------------
+
+   Repetition_Width : constant := 256;
+
+   --  Whether one directive writes a run of a scalar of Size bytes holding
+   --  Value.  GNU as and LLVM alike take `.fill`'s value from four bytes
+   --  and write zeros above them, so an eight-byte pattern is repeated.
+   function Is_Filled
+     (Size : Landin.Targets.Scalar_Size; Value : Landin.Types.Folded)
+      return Boolean
+     is (Landin.Types."=" (Value, 0)
+         or else Landin.Targets.Bytes (Size) <= 4);
+
+   --  That directive, for Count copies, without its leading tab.
+   function Scalar_Run
+     (Count : Landin.IR.Element_Total;
+      Size  : Landin.Targets.Scalar_Size;
+      Value : Landin.Types.Folded) return String
+     with Pre => Is_Filled (Size, Value);
+
+   --  Whether Image, a recursive image of Shape inside Item's, writes
+   --  only zero bytes, so that a run of it is one `.zero`.  Conservative:
+   --  a routine address, an atom, a slice and a written packed or variant
+   --  image are never zero, whatever their bits.
+   function Is_Zero_Image
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Shape   : Landin.IR.Field_Shape;
+      Image   : Landin.IR.Aggregate_Field_Image) return Boolean;
+
+   --  Count copies of what Emit_Body writes, which it writes once for
+   --  each nonzero base-Repetition_Width digit of Count: at most eight
+   --  times, and once for any Count up to Repetition_Width, which is
+   --  written as one `.rept` as it always was.
+   generic
+      with procedure Emit (Line : String);
+      with procedure Emit_Body;
+   procedure Repeat (Count : Landin.IR.Element_Total);
+
 private
 
    package Spelling_Maps is new Ada.Containers.Indefinite_Hashed_Maps

@@ -31,6 +31,11 @@ def build(run, refine, name, optimize, specialize, debug='none'):
         origin = (SOURCE if module.startswith('drivers/') else
                   ROOT / 'devices/generated' if module.startswith('rp2040/') else ROOT)
         shutil.copytree(origin / module, source / module)
+    #  A program that imports no device description is given the
+    #  library's constrained reference (D543), so the staged library
+    #  holds it too.
+    shutil.copytree(ROOT / 'platform/cortex_m/reference',
+                    source / 'platform/cortex_m/reference', dirs_exist_ok=True)
     elf = run.out / 'core.elf'
     #  The staged tree is this build's library as well as its root: the
     #  library namespaces resolve from the library alone (D275), and the

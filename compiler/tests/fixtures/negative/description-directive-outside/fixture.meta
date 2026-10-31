@@ -1,0 +1,9 @@
+class: negative
+summary: D542: a description directive stands beside compiler.device, in the description's own module
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0513
+args: --target=cortex-m0 ../tests/fixtures/negative/description-directive-outside/program.ldn
+expect: expected.txt
+status: 1

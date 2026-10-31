@@ -908,21 +908,43 @@ contract is above.
 ## Cortex-M0 firmware images
 
 `--target=cortex-m0 --firmware-entry=NAME --emit=exe` selects the entry-module
-source definition; its exported symbol may differ. `Backend.Firmware` generates
-the reset source and linker script for the existing 32 KiB flash/16 KiB RAM
-profile. The top 4 KiB of RAM is reserved for stacks, with eight-byte-aligned
-initial MSP `0x20004000`. Static images cannot overlap `0x20003000`.
-The driver refuses a known compiler-framed routine larger than the 4 KiB reservation,
-counting its saved registers and reserved homes. This per-routine check does
-not bound stack use through calls or interrupt nesting.
-The 48-word vector image starts at zero. There is no VTOR relocation, FPU,
-exclusive-access implementation or change of board. D229 owns the exact
-implemented/reserved slots, typed handlers and ordinary/naked obligations.
+source definition; its exported symbol may differ. The image follows the
+profile of the device description the program imports (D542, D543): a module
+of `compiler.device`, `compiler.core`, `compiler.vectors`,
+`compiler.interrupt`, `compiler.boot`, `linker.region` and `linker.place`
+directives, which configuration reads into a `Landin.Targets.Firmware`
+profile that the IR carries to the verifier and the backend. A program that
+imports none is given the library's `platform/cortex_m/reference`: 32 KiB
+flash and 16 KiB RAM, the top 4 KiB of RAM reserved for stacks, with
+eight-byte-aligned initial MSP `0x20004000`, so static images cannot overlap
+`0x20003000`. RP2040's is `devices/descriptions/rp2040`, imported as
+`descriptions/rp2040` under `--root=devices`.
+The driver refuses a known compiler-framed routine larger than the selected
+stack reservation, counting its saved registers and reserved homes. This
+per-routine check does not bound stack use through calls or interrupt nesting.
+The vector image has the description's word count at its boot address, the
+start of the region it places `vectors` in, after RP2040's 256-byte
+second-stage slot for `rp2040-boot2` (D545). The slots a handler takes are its
+core's exceptions and 16 + IRQ for each interrupt the description names, and
+every other slot is zero (D544). There is no VTOR relocation, FPU or
+exclusive-access implementation. D229 owns the typed handlers and
+ordinary/naked obligations.
 
-The driver retains `OUTPUT.s`, `OUTPUT.o`, `OUTPUT.ld`, `OUTPUT.map` and the ELF.
+`Backend.Firmware` derives the reset source and the linker script from the
+profile: a MEMORY region for each of the description's, each part of the image
+in the region it is placed in, and an output section, a reset copy and a reset
+clear for each region `link(region: "NAME")` uses (D547). For the reference the
+script is D229's, byte for byte. The driver retains `OUTPUT.s`, `OUTPUT.o`,
+`OUTPUT.ld`, `OUTPUT.map` and the ELF. `--linker-script=FILE` links with a
+developer's script instead, still writing `OUTPUT.ld`, and then holds the ELF
+to D546's four clauses: the vector table at the boot address, the startup
+symbols, the stack in a writable region of its size, and each initialized
+image loaded from the text region; a broken one is L0519, naming it.
 With `--build-report=PATH`, a successful firmware executable also reports
 post-link occupied flash and static RAM extents, their limits and remaining
-capacity, the reserved stack size, and the selected libgcc archive members.
+capacity, the reserved stack size, the selected libgcc archive members, and
+the profile it was built for: device, core, boot kind, vector address and
+length, regions and placements.
 The sizes come from ELF load segments; the helper names come from the linker
 map. Assembly-only reports have no linked capacity measurement.
 The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings.
@@ -934,15 +956,17 @@ library requests refuse. Assembler/linker failures retain the invoked tool's
 diagnostic and driver failure status. ELF attributes and helper selection do
 not enable the general C source surface.
 
-`.text.*` and `.rodata.*` reside in flash; `.data.*`, `.bss.*` and `.ramtext.*`
-execute in RAM, with flash load images for initialized data and RAM code.
+`.text.*` and `.rodata.*` reside in the regions text and rodata are placed in;
+`.data.*`, `.bss.*` and `.ramtext.*` in the data and BSS regions, with load
+images in the text region for initialized data and RAM code.
 Each conformance evidence table has its own `.rodata.landin_evidence_*` input
 section, so section garbage collection can discard an unused table and its
 provider references independently of live tables.
 Startup copies both load images and clears BSS before source entry. GNU ARM
 veneers handle out-of-range calls between flash and RAM. Link assertions bound
-physical images; L0505 independently bounds pre-GC static materialization to
-8 MiB. Explicit symbol/section collisions and alignment/convention violations
+physical images; before emission L0505 independently holds every image the
+compilation lowers, before GC, to the profile's 32 KiB flash, and the mutable
+ones to its 16 KiB RAM (D537). Explicit symbol/section collisions and alignment/convention violations
 refuse rather than silently changing requested placement. Section retention
 is independent of calling convention, and a kept vector image retains its
 referenced handlers. Linker symbols are private fixed assembly inputs, not

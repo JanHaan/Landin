@@ -1,0 +1,6 @@
+error[L0516]: refine does not yet build a rp2350-image-block image
+  --> ../tests/fixtures/negative/description-reserved-boot/program.ldn:4:1
+  |
+4 | compiler.boot("rp2350-image-block")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D545: rp2350-image-block is a reserved boot image kind; this compiler builds "vector-table" and "rp2040-boot2" images

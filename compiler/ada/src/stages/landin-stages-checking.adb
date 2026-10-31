@@ -40147,8 +40147,11 @@ package body Landin.Stages.Checking is
          end;
       end Check_Data_Link;
 
-      Vector_Owner : array (2 .. 47) of Landin.Provenance.Origin :=
-        [others => Landin.Provenance.No_Origin];
+      Vector_Owner : array (0 .. Landin.Targets.Firmware.Slot_Capacity - 1)
+        of Landin.Provenance.Origin := [others => Landin.Provenance.No_Origin];
+      --  D543: the profile the program's description selected, if any.
+      Profile : constant Landin.Targets.Firmware.Profile :=
+        Landin.Configuration.Profile (Configurations (Context).all);
 
       procedure Check_Placement (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Check_Placement (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
@@ -40238,13 +40241,104 @@ package body Landin.Stages.Checking is
                end if;
             end;
          end if;
+         if (Attr.Vector /= Landin.Source.Empty_Span
+             or else Attr.Region /= Landin.Source.Empty_Span)
+           and then Valid
+           and then not Profile.Present
+         then
+            --  D543: a slot or a region is the selected description's.
+            Bad.Report
+              (Item => Bad.No_Description, Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message => "this placement needs a device profile, and the"
+                 & " program selects none",
+               Note => "D543: import the device's description; with none,"
+                 & " the library's platform/cortex_m/reference applies, and"
+                 & " this library holds none: name one that does with"
+                 & " --library=DIR",
+               Into => Found);
+            return;
+         end if;
+         if Attr.Region /= Landin.Source.Empty_Span and then Valid then
+            declare
+               Name : constant String := Landin.Source.Names.Spelling
+                 (Spellings.all, Value.Region);
+               Index : constant Landin.Targets.Firmware.Region_Count :=
+                 Landin.Targets.Firmware.Region_Named (Profile, Name);
+               function Mode_Of return String is
+                 ("""" & Landin.Targets.Firmware.Spelling
+                    (Profile.Regions (Index).Mode) & """");
+               Problem : constant String :=
+                 (if Index = 0
+                  then Landin.Targets.Firmware.Spelling (Profile.Device)
+                    & " has no region named " & Name
+                  elsif Attr.Section /= Landin.Source.Empty_Span
+                  then "a region placement chooses its own section"
+                  elsif Routine and then not Landin.Targets.Firmware
+                    .Executable (Profile.Regions (Index).Mode)
+                  then "a routine needs a region code runs in, and " & Name
+                    & " is " & Mode_Of
+                  elsif not Routine and then Syn.Is_Mutable (Of_Tree, Node)
+                    and then not Landin.Targets.Firmware.Writable
+                      (Profile.Regions (Index).Mode)
+                  then "a mutable binding needs a writable region, and "
+                    & Name & " is " & Mode_Of
+                  else "");
+            begin
+               if Problem /= "" then
+                  Bad.Report
+                    (Item => Bad.Region_Placement,
+                     Source => Syn.Source_Of (Of_Tree),
+                     Where => Syn.Anchor (Of_Tree, Node),
+                     Message => Problem,
+                     Note => "D547: link(region: ""NAME"") places a routine"
+                       & " or module datum in a region of the selected"
+                       & " description, without a section of its own",
+                     Into => Found);
+                  return;
+               end if;
+            end;
+         end if;
+         if Attr.Vector /= Landin.Source.Empty_Span
+           and then Valid
+           and then Routine
+           and then Syn.Machine_Convention (Of_Tree, Node)
+             in Landin.Machine.Interrupt_Handler
+               | Landin.Machine.Naked_Routine
+           and then Value.Vector < Landin.Targets.Firmware.Slot_Capacity
+           and then Value.Vector not in 0 | 1
+           and then not Landin.Targets.Firmware.Admits
+             (Profile, Value.Vector)
+         then
+            --  D544: the slot is reserved in this profile.
+            Bad.Report
+              (Item => Bad.Linkage_Contract,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message => "vector slot"
+                 & Natural'Image (Value.Vector) & " is reserved in "
+                 & Landin.Targets.Firmware.Spelling (Profile.Device)
+                 & ", so no handler takes it",
+               Note => "[1990]/D544: a "
+                 & Landin.Targets.Firmware.Spelling (Profile.Core)
+                 & " takes handlers at "
+                 & (if Landin.Targets.Firmware.Is_Armv6_M (Profile.Core)
+                    then "core slots 2, 3, 11, 14 and 15"
+                    else "core slots 2 to 6, 11, 12, 14 and 15")
+                 & " and at 16 + IRQ for each interrupt the description"
+                 & " names; its" & Natural'Image (Profile.Vector_Count)
+                 & "-word table holds every other slot as zero",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "the declaration it places", Into => Found);
+            return;
+         end if;
          if Attr.Vector /= Landin.Source.Empty_Span then
             Valid := Valid and then Routine
               and then Syn.Machine_Convention (Of_Tree, Node)
                 in Landin.Machine.Interrupt_Handler
                   | Landin.Machine.Naked_Routine
-              and then Value.Vector in 2 | 3 | 11 | 14 | 15 | 16 .. 20
-                | 22 .. 41;
+              and then Landin.Targets.Firmware.Admits
+                (Profile, Value.Vector);
             if Valid then
                if Vector_Owner (Value.Vector).Source
                  /= Landin.Source.No_Source

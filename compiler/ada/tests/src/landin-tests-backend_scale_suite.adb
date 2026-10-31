@@ -1,15 +1,18 @@
 --  In-memory source and structural probes only.  The large-routine and
---  C-entry ABI fixtures separately execute the original result oracles.
+--  C-entry ABI fixtures separately execute the original result oracles,
+--  and scripts/image_bounds.py assembles the compact images below.
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Backend.X86_64.Allocation;
+with Landin.Driver;
 with Landin.Backend.X86_64.Machine;
 with Landin.Build_Reports;
 with Landin.IR.Shape_Measurement;
 with Landin.Layouts;
 with Landin.Optimization;
+with Landin.Platform;
 with Landin.Source;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
@@ -17,6 +20,7 @@ with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets.Layouts;
+with Landin.Testing.Fakes;
 with Landin.Types;
 
 package body Landin.Tests.Backend_Scale_Suite is
@@ -52,6 +56,8 @@ package body Landin.Tests.Backend_Scale_Suite is
      (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));
    function Contains (Text, Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
+   function Occurrences (Text, Needle : String) return Natural is
+     (Ada.Strings.Fixed.Count (Text, Needle));
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
@@ -727,8 +733,333 @@ package body Landin.Tests.Backend_Scale_Suite is
       end;
    end Cyclic_Shapes_Stop_Measurement;
 
+
+   --  D536/D537 on every native target, through the driver on a fake host.
+   type Target_Name is access constant String;
+   Native : constant array (Positive range <>) of Target_Name :=
+     [new String'("linux-x86-64"), new String'("linux-arm64"),
+      new String'("darwin-arm64"), new String'("freebsd-x86-64"),
+      new String'("freebsd-arm64"), new String'("linux-rv64"),
+      new String'("cortex-m0")];
+
+   --  A few lines that ask for 1.26 GB of written images and 3 GB of
+   --  reserved ones at Scale 1000: every run D536 writes without
+   --  expansion, beside a nested run of a nonzero record.
+   function Compact_Images (Scale : Positive) return String;
+
+   function Compact_Images (Scale : Positive) return String is
+      function Count (Value : Positive) return String is
+        (Ada.Strings.Fixed.Trim
+           (Long_Long_Integer'Image
+              (Long_Long_Integer (Value) * Long_Long_Integer (Scale)),
+            Ada.Strings.Both));
+   begin
+      return "cell: type = struct" & LF
+        & "    tag: u8" & LF & "    value: u32" & LF & "end cell" & LF
+        & "mut reserved: [" & Count (3_000_000) & "]u8 = zeroed" & LF
+        & "mut written_zero: [" & Count (100_000) & "]u32 = [7, of 0]" & LF
+        & "mut bytes: [" & Count (100_000) & "]u8 = [of 165]" & LF
+        & "mut halves: [" & Count (100_000) & "]u16 = [of 4660]" & LF
+        & "mut words: [" & Count (100_000) & "]u32 = [of 305419896]" & LF
+        & "mut quads: [" & Count (10_000)
+        & "]u64 = [of 0x123456789ABCDEF0]" & LF
+        & "mut grid: [" & Count (10) & "][1000]cell ="
+        & " [of [of cell(tag: 1, value: 2)]]" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    code = i32(reserved[1]) + i32(written_zero[1])"
+        & " + i32(bytes[1]) + i32(halves[1]) + i32(words[1])"
+        & " + i32(quads[1]) + i32(grid[1][1].value)" & LF
+        & "end main" & LF;
+   end Compact_Images;
+
+   --  Every `.rept` count a text holds is at most Repetition_Width.
+   function Repetitions_Are_Narrow (Text : String) return Boolean;
+
+   function Repetitions_Are_Narrow (Text : String) return Boolean is
+      Needle : constant String := HT & ".rept ";
+      From : Natural := Text'First;
+      At_Rept : Natural;
+      Last : Natural;
+   begin
+      loop
+         At_Rept := Ada.Strings.Fixed.Index (Text, Needle, From);
+         exit when At_Rept = 0;
+         Last := At_Rept + Needle'Length;
+         while Last <= Text'Last and then Text (Last) in '0' .. '9' loop
+            Last := Last + 1;
+         end loop;
+         if Last - (At_Rept + Needle'Length) > 3
+           or else Natural'Value (Text (At_Rept + Needle'Length .. Last - 1))
+             > Backend.Repetition_Width
+         then
+            return False;
+         end if;
+         From := Last;
+      end loop;
+      return True;
+   end Repetitions_Are_Narrow;
+
+   function Emitted
+     (Item    : in out Landin.Testing.Context;
+      Target  : String;
+      Program : String) return String;
+
+   function Emitted
+     (Item    : in out Landin.Testing.Context;
+      Target  : String;
+      Program : String) return String
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Add_File ("images.ldn", Program);
+      Args.Append ("--target=" & Target);
+      if Target /= "cortex-m0" then
+         Args.Append ("--link=libc");
+      end if;
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("images.s");
+      Args.Append ("images.ldn");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, Landin.Driver.Status_Success,
+         Target & " emits compact images: " & US.To_String (Result.Report));
+      Landin.Testing.Check_Equal
+        (Item, Tools.Run_Count, 0, Target & " assembly runs no tool");
+      return Host.Written ("images.s");
+   end Emitted;
+
+   procedure Compact_Images_Emit_Compact_Assembly
+     (Item : in out Landin.Testing.Context);
+
+   procedure Compact_Images_Emit_Compact_Assembly
+     (Item : in out Landin.Testing.Context) is
+   begin
+      for Target of Native loop
+         declare
+            Small : constant String :=
+              Emitted (Item, Target.all, Compact_Images (1));
+            Large : constant String :=
+              Emitted (Item, Target.all, Compact_Images (1000));
+            Darwin : constant Boolean := Target.all = "darwin-arm64";
+            Half : constant String :=
+              (if Target.all in "linux-x86-64" | "freebsd-x86-64"
+               then ".word" else ".short");
+         begin
+            --  A thousand times the extent adds digits and, for the runs
+            --  still repeated, one nested level per base-256 digit.
+            Landin.Testing.Check
+              (Item, Large'Length < Small'Length + 1024,
+               Target.all & ": the assembly is the source's size, not the"
+               & " image's:" & Natural'Image (Small'Length) & " then"
+               & Natural'Image (Large'Length));
+            Landin.Testing.Check
+              (Item, Repetitions_Are_Narrow (Large),
+               Target.all & ": no repetition is wider than"
+               & Natural'Image (Backend.Repetition_Width));
+            Landin.Testing.Check
+              (Item, Contains (Large, HT & ".fill 100000000, 1, 165" & LF)
+               and then Contains
+                 (Large, HT & ".fill 100000000, 2, 4660" & LF)
+               and then Contains
+                 (Large, HT & ".fill 100000000, 4, 305419896" & LF),
+               Target.all & ": a run of a scalar of four bytes or fewer is"
+               & " one .fill");
+            Landin.Testing.Check
+              (Item, Contains (Large, HT & ".long 7" & LF & HT
+                               & ".zero 399999996" & LF),
+               Target.all & ": a written zero run is one .zero");
+            Landin.Testing.Check
+              (Item, (if Darwin
+                      then Contains (Large, ",3000000000,")
+                      else Contains (Large, HT & ".zero 3000000000" & LF)),
+               Target.all & ": a zero image is reserved");
+            Landin.Testing.Check
+              (Item, not Contains (Large, Half & " 4660"),
+               Target.all & ": no halfword is repeated one at a time");
+            Landin.Testing.Check
+              (Item, Occurrences (Large, ".quad 1311768467463790320")
+                 in 1 .. 8
+               and then Occurrences (Large, HT & ".byte 1" & LF) in 1 .. 8,
+               Target.all & ": an eight-byte scalar and a record are"
+               & " written once per base-256 digit of their run");
+         end;
+      end loop;
+   end Compact_Images_Emit_Compact_Assembly;
+
+   procedure Images_Past_Their_Budget_Run_No_Tool
+     (Item : in out Landin.Testing.Context);
+
+   procedure Images_Past_Their_Budget_Run_No_Tool
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refused
+        (Target   : String;
+         Program  : String;
+         Needle   : String;
+         Firmware : Boolean := False);
+
+      procedure Refused
+        (Target   : String;
+         Program  : String;
+         Needle   : String;
+         Firmware : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("images.ldn", Program);
+         if Target = "cortex-m0" then
+            --  D543: the reference profile is the library's description.
+            Host.Add_Firmware_Library;
+         end if;
+         Args.Append ("--target=" & Target);
+         if Firmware then
+            Args.Append ("--firmware-entry=start");
+         elsif Target /= "cortex-m0" then
+            Args.Append ("--link=libc");
+         end if;
+         Args.Append ("--emit=exe");
+         Args.Append ("-o");
+         Args.Append ("images");
+         Args.Append ("images.ldn");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         declare
+            Report : constant String := US.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Contains (Report, "error[L0505]")
+               and then Contains (Report, Needle),
+               Target & " refuses an image past its budget, naming it: "
+               & Needle & ": " & Report);
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, Target & ": no tool runs");
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0, Target & ": nothing is written");
+      end Refused;
+
+      Entry_Point : constant String :=
+        LF & "start: () -> none = end start" & LF;
+      --  A public main prunes what it does not reach (D537 counts what
+      --  is lowered), so each image is read.
+      Main : constant String :=
+        LF & "public main: () -> (code: i32) = code = i32(image[1])"
+        & " end main" & LF;
+   begin
+      --  A program of one line asking for one byte past each reach.
+      Refused
+        ("linux-x86-64", "mut image: [2147483649]u8 = [of 1]" & Main,
+         "past the 2147483648 bytes that x86-64's small code model"
+         & " reaches on linux-x86-64");
+      Refused
+        ("freebsd-x86-64", "image: [2147483649]u8 = [of 1]" & Main,
+         "x86-64's small code model reaches on freebsd-x86-64");
+      Refused
+        ("darwin-arm64", "mut image: [2147483649]u8 = [of 1]" & Main,
+         "past the 2147483648 bytes that a Darwin static image holds on"
+         & " darwin-arm64");
+      Refused
+        ("linux-arm64", "mut image: [4294967297]u8 = [of 1]" & Main,
+         "past the 4294967296 bytes that arm64's ADRP reaches on"
+         & " linux-arm64");
+      Refused
+        ("freebsd-arm64", "mut image: [4294967297]u8 = [of 1]" & Main,
+         "arm64's ADRP reaches on freebsd-arm64");
+      Refused
+        ("linux-rv64", "mut image: [2147483649]u8 = [of 1]" & Main,
+         "past the 2147483648 bytes that RV64's AUIPC reaches on"
+         & " linux-rv64");
+      --  Zero images are held to the address space alone.
+      Refused
+        ("linux-x86-64",
+         "mut low: [9223372036854775808]u8 = zeroed" & LF
+         & "mut high: [9223372036854775808]u8 = zeroed" & LF
+         & "public main: () -> (code: i32) ="
+         & " code = i32(low[1]) + i32(high[1]) end main" & LF,
+         "zero static images reserve more than 18446744073709551615"
+         & " bytes before section GC, past the 18446744073709551615 bytes"
+         & " that linux-x86-64's address space holds");
+      Refused
+        ("cortex-m0",
+         "mut low: [2147483648]u8 = zeroed" & LF
+         & "mut high: [2147483648]u8 = zeroed" & Entry_Point,
+         "past the 4294967295 bytes that cortex-m0's address space holds",
+         Firmware => True);
+      --  A firmware image is held to its profile: the giant fixture's
+      --  image by flash, a mutable one by the RAM reset copies it to.
+      Refused
+        ("cortex-m0", "link(keep) image: [8388609]u8 = [of 1]" & Entry_Point,
+         "static images write 8388609 bytes before section GC, past the"
+         & " 32768 bytes that the flash of cortex-m0's constrained"
+         & " reference profile holds",
+         Firmware => True);
+      Refused
+        ("cortex-m0", "mut image: [16385]u8 = [of 1]" & Entry_Point,
+         "mutable static images write 16385 bytes before section GC, past"
+         & " the 16384 bytes that the RAM of cortex-m0's constrained"
+         & " reference profile holds",
+         Firmware => True);
+      --  With no public main nothing is pruned, so an image nothing
+      --  reaches still counts: the assembler is given it whether or not
+      --  the linker keeps it.
+      Refused
+        ("cortex-m0", "image: [32769]u8 = [of 1]" & Entry_Point,
+         "past the 32768 bytes that the flash", Firmware => True);
+
+      --  Without a firmware request Cortex-M is held to its reach, and
+      --  in budget a firmware image goes on to its tools.
+      declare
+         Text : constant String := Emitted
+           (Item, "cortex-m0",
+            "image: [8388609]u8 = [of 1]" & LF
+            & "read: () -> (value: u8) = value = image[3] end read" & LF);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".fill 8388609, 1, 1" & LF),
+            "Cortex-M assembly without a firmware request is held to the"
+            & " address space");
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_Firmware_Library;
+         Host.Add_File
+           ("images.ldn", "link(keep) image: [30000]u8 = [of 1]"
+            & Entry_Point);
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--firmware-entry=start");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("images.s");
+         Args.Append ("images.ldn");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success
+            and then Contains
+              (Host.Written ("images.s"), HT & ".fill 30000, 1, 1" & LF),
+            "a firmware image within its profile is emitted: "
+            & US.To_String (Result.Report));
+      end;
+   end Images_Past_Their_Budget_Run_No_Tool;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend scale", "compact images emit compact assembly",
+         Compact_Images_Emit_Compact_Assembly'Access);
+      Landin.Testing.Register
+        (Into, "backend scale", "images past their budget run no tool",
+         Images_Past_Their_Budget_Run_No_Tool'Access);
       Landin.Testing.Register
         (Into, "backend scale", "cyclic shapes stop measurement",
          Cyclic_Shapes_Stop_Measurement'Access);

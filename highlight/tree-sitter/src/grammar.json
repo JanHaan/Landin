@@ -574,6 +574,15 @@
                             },
                             "named": true,
                             "value": "identifier"
+                          },
+                          {
+                            "type": "ALIAS",
+                            "content": {
+                              "type": "STRING",
+                              "value": "region"
+                            },
+                            "named": true,
+                            "value": "identifier"
                           }
                         ]
                       }
@@ -690,6 +699,15 @@
                                   "content": {
                                     "type": "STRING",
                                     "value": "section"
+                                  },
+                                  "named": true,
+                                  "value": "identifier"
+                                },
+                                {
+                                  "type": "ALIAS",
+                                  "content": {
+                                    "type": "STRING",
+                                    "value": "region"
                                   },
                                   "named": true,
                                   "value": "identifier"

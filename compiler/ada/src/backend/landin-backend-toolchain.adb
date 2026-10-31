@@ -343,7 +343,8 @@ package body Landin.Backend.Toolchain is
       Static : Boolean := False;
       Threads : Boolean := False;
       Directories : Landin.Platform.Path_List :=
-        Landin.Platform.No_Arguments)
+        Landin.Platform.No_Arguments;
+      Script : String := "")
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -381,7 +382,9 @@ package body Landin.Backend.Toolchain is
          List.Append ("-Xlinker");
          List.Append ("-T");
          List.Append ("-Xlinker");
-         List.Append (File_Operand (Output & ".ld"));
+         --  D546: a developer's script replaces the derived OUT.ld.
+         List.Append (File_Operand
+           (if Script = "" then Output & ".ld" else Script));
          List.Append ("-Xlinker");
          List.Append ("-Map");
          List.Append ("-Xlinker");

@@ -6,6 +6,7 @@ with Ada.Strings.Maps;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Firmware;
+with Landin.Backend.Images;
 with Landin.Backend.Toolchain;
 with Landin.Backend.Dispatch;
 with Landin.Build_Reports;
@@ -42,6 +43,7 @@ with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 
 package body Landin.Driver is
@@ -805,6 +807,9 @@ package body Landin.Driver is
       Link_Seen : Boolean := False;
       Firmware_Name : Unbounded.Unbounded_String;
       Firmware_Seen : Boolean := False;
+      --  D546: a developer's linker script, linked in place of OUT.ld.
+      Script_Path : Unbounded.Unbounded_String;
+      Script_Seen : Boolean := False;
       Library_Path : Unbounded.Unbounded_String;
       Library_Seen : Boolean := False;
       --  D524: each `-L` as written, in the order written.
@@ -1003,6 +1008,17 @@ package body Landin.Driver is
                Firmware_Seen := True;
                Firmware_Name := Unbounded.To_Unbounded_String
                  (After (Argument, "--firmware-entry="));
+
+            elsif Starts_With (Argument, "--linker-script=") then
+               if Script_Seen
+                 or else After (Argument, "--linker-script=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Script_Seen := True;
+               Script_Path := Unbounded.To_Unbounded_String
+                 (After (Argument, "--linker-script="));
 
             elsif Starts_With (Argument, "--toolchain=") then
                if Toolchain_Seen
@@ -1278,7 +1294,7 @@ package body Landin.Driver is
                      | "--stack-report" | "--root"
                      | "--library" | "--emit" | "-o" | "--toolchain"
                      | "--linker" | "--link" | "--firmware-entry"
-                     | "--keep-asm" | "-L");
+                     | "--linker-script" | "--keep-asm" | "-L");
 
          --  How many times an option with this stem was written.
          function Times_Written (Stem : String) return Natural;
@@ -1328,6 +1344,7 @@ package body Landin.Driver is
               new String'("--emit"),
               new String'("--toolchain"), new String'("--linker"),
               new String'("--link"), new String'("--firmware-entry"),
+              new String'("--linker-script"),
               new String'("--keep-asm"), new String'("-L")];
 
          --  Why the options given cannot be one request.
@@ -2400,7 +2417,13 @@ package body Landin.Driver is
                   if Cortex then
                      Host.Write_File
                        (Product_Path & ".ld",
-                        Landin.Backend.Firmware.Linker_Script, Written);
+                        Landin.Backend.Firmware.Linker_Script
+                          (Landin.IR.Firmware_Profile
+                             (Landin.Stages.Code (Context).all),
+                           Landin.Backend.Firmware.Used_Regions
+                             (Landin.Stages.Code (Context).all,
+                              Landin.Stages.Identities (Context).all)),
+                        Written);
                      if Written /= Landin.Platform.Write_Ok then
                         Note_Failure
                           (Code_Unwritable,
@@ -2516,7 +2539,8 @@ package body Landin.Driver is
                           Level => Landin.Stages.Level (Context),
                           Static => Static_Link,
                           Threads => Starts_C_Threads,
-                          Directories => Directories),
+                          Directories => Directories,
+                          Script => Unbounded.To_String (Script_Path)),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -2615,6 +2639,30 @@ package body Landin.Driver is
                     (Code_Toolchain_Failed,
                      Driver & " left executable output aliasing its prior"
                      & " backup at " & Target_Path);
+               elsif Cortex and then Script_Seen
+                 and then Landin.Build_Reports.Firmware.Contract_Fault
+                   (Host, Target_Path,
+                    Landin.IR.Firmware_Profile
+                      (Landin.Stages.Code (Context).all),
+                    Landin.Backend.Firmware.Used_Regions
+                      (Landin.Stages.Code (Context).all,
+                       Landin.Stages.Identities (Context).all)) /= ""
+               then
+                  --  D546: the developer's script broke a clause.
+                  Note_Failure
+                    (Rows.Code (Rows.Linker_Script_Contract),
+                     Unbounded.To_String (Script_Path)
+                     & " breaks the firmware linker script contract, "
+                     & Landin.Build_Reports.Firmware.Contract_Fault
+                         (Host, Target_Path,
+                          Landin.IR.Firmware_Profile
+                            (Landin.Stages.Code (Context).all),
+                          Landin.Backend.Firmware.Used_Regions
+                            (Landin.Stages.Code (Context).all,
+                             Landin.Stages.Identities (Context).all))
+                     & " (D546); the derived script beside it, "
+                     & Target_Path & ".ld, keeps every clause");
+                  Restore_Output;
                elsif Unbounded.Length (Backup) > 0 then
                   Host.Remove_File (Unbounded.To_String (Backup), Removed);
                   if Removed = Landin.Platform.Not_Removable then
@@ -2719,6 +2767,8 @@ package body Landin.Driver is
                   if Cortex and then Emit = Emit_Executable then
                      Landin.Build_Reports.Firmware.Measure
                        (Host, Product_Path, Product_Path & ".map",
+                        Landin.IR.Firmware_Profile
+                          (Landin.Stages.Code (Context).all),
                         Firmware, Valid);
                      if not Valid then
                         Note_Failure
@@ -2885,12 +2935,17 @@ package body Landin.Driver is
                   Note_No_Entry (For_Firmware => True);
                   return;
                end if;
-               if not Landin.Backend.Firmware.Materialization_Fits
-                 (Landin.Stages.Code (Context).all)
+               if not Landin.Configuration.Profile
+                 (Landin.Stages.Configurations (Context).all).Present
                then
+                  --  D543: no description reached, and no library holds
+                  --  the reference.
                   Note_Failure
-                    (Rows.Code (Rows.Image_Materialization_Limit),
-                     "firmware static images exceed 8 MiB before section GC");
+                    (Rows.Code (Rows.No_Description),
+                     "firmware needs a device profile, and the program"
+                     & " selects none: import the device's description, or"
+                     & " name a library holding platform/cortex_m/reference"
+                     & " with --library=DIR (D543)");
                   return;
                end if;
                if Landin.Configuration.Library_Count
@@ -2925,6 +2980,72 @@ package body Landin.Driver is
                   & Landin.Targets.Name (Facts),
                   "describe a target with a backend, or drop --emit");
                return;
+            end if;
+
+            --  D537: every static image against one budget before
+            --  anything is emitted, so a few lines of source cannot ask
+            --  the assembler for more than the image could hold: a
+            --  firmware image's profile, or the target's reach.
+            if Emit in Emit_Assembly | Emit_Executable then
+               declare
+                  package Images renames Landin.Backend.Images;
+                  use type Images.Excess;
+                  Firmware : constant Boolean :=
+                    Cortex and then (Emit = Emit_Executable or Firmware_Seen);
+                  Budget : constant Landin.Targets.Image_Budget :=
+                    (if Firmware then Landin.Targets.Firmware.Budget
+                       (Landin.IR.Firmware_Profile
+                          (Landin.Stages.Code (Context).all))
+                     else Landin.Targets.Capabilities.Image_Budget_Of
+                       (Facts));
+                  Used : constant Images.Usage :=
+                    Images.Measure (Landin.Stages.Code (Context).all, Facts);
+                  Over : constant Images.Excess :=
+                    Images.Exceeded (Used, Budget);
+               begin
+                  if Over /= Images.Within then
+                     declare
+                        Profile : constant String :=
+                          Landin.Targets.Name (Facts) & "'s "
+                          & Landin.Targets.Firmware.Profile_Name
+                              (Landin.IR.Firmware_Profile
+                                 (Landin.Stages.Code (Context).all));
+                        Refused : Landin.Diagnostics.Diagnostic :=
+                          Landin.Diagnostics.Make
+                            (Code    => Rows.Code
+                                          (Rows.Image_Budget_Exceeded),
+                             Level   => Landin.Diagnostics.Error,
+                             Source  => Landin.Source.No_Source,
+                             Where   => Landin.Source.Empty_Span,
+                             Message => Images.Refusal
+                               (Used, Budget, Over,
+                                (case Over is
+                                    when Images.Reserved =>
+                                       Landin.Targets.Name (Facts)
+                                       & "'s address space holds",
+                                    when Images.Writable =>
+                                       (if Firmware
+                                        then "the RAM of " & Profile
+                                          & " holds"
+                                        else Landin.Targets.Capabilities
+                                          .Image_Reach_Source (Facts)),
+                                    when others =>
+                                       (if Firmware
+                                        then "the flash of " & Profile
+                                          & " holds"
+                                        else Landin.Targets.Capabilities
+                                          .Image_Reach_Source (Facts)))));
+                     begin
+                        Landin.Diagnostics.Add_Note
+                          (Refused,
+                           "every image the program lowers counts before"
+                           & " section GC; make the static data smaller,"
+                           & " or allocate it when the program runs (D537)");
+                        Landin.Stages.Report (Context, Refused);
+                     end;
+                     return;
+                  end if;
+               end;
             end if;
 
             --  [1970]'s entry is required before anything is written, so a
@@ -2992,6 +3113,18 @@ package body Landin.Driver is
                Spellings : Landin.Source.Names.Table renames
                  Landin.Stages.Identities (Context).all;
                Refused : Boolean := False;
+               --  The selected profile's stack, as [1990] says "4 KiB".
+               Stack_Bytes : constant Landin.Targets.Byte_Count :=
+                 Landin.IR.Firmware_Profile (Unit).Stack_Size;
+               use type Landin.Targets.Byte_Count;
+               Stack_Words : constant String :=
+                 (if Stack_Bytes mod 1024 = 0
+                  then Ada.Strings.Fixed.Trim
+                    (Landin.Targets.Byte_Count'Image (Stack_Bytes / 1024),
+                     Ada.Strings.Both) & " KiB"
+                  else Ada.Strings.Fixed.Trim
+                    (Landin.Targets.Byte_Count'Image (Stack_Bytes),
+                     Ada.Strings.Both) & "-byte");
             begin
                for Index in 1 .. Landin.IR.Item_Count (Unit) loop
                   declare
@@ -3028,7 +3161,8 @@ package body Landin.Driver is
                                   (Known,
                                    Landin.IR.Declares (Unit, Item)))
                            & "` has a frame larger than the selected "
-                           & "4 KiB firmware stack reservation");
+                           & Stack_Words
+                           & " firmware stack reservation");
                         Refused := True;
                      end if;
                   end;
@@ -3805,6 +3939,17 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Unknown_Option,
                      "--firmware-entry requires --target=cortex-m0");
+                  Target_Option_Refused := True;
+               elsif Script_Seen
+                 and then (not Cortex or else Emit /= Emit_Executable
+                           or else not Firmware_Seen)
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--linker-script links firmware: it needs"
+                     & " --target=cortex-m0, --firmware-entry=NAME and"
+                     & " --emit=exe (D546)");
                   Target_Option_Refused := True;
                elsif Link_Seen
                  and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)

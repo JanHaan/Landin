@@ -3114,6 +3114,9 @@
     "runtime/statements-run-as-they-read": {
       "mode": "execute"
     },
+    "runtime/static-image-runs": {
+      "mode": "execute"
+    },
     "runtime/static-origin-satisfies-from": {
       "mode": "execute"
     },

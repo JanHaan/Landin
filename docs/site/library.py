@@ -245,6 +245,12 @@ def read_items(text, source):
 def collect(root):
     files = {str(p.relative_to(root)): p.read_text()
              for base in ROOTS for p in sorted((root / base).rglob('*.ldn'))}
+    #  A device description (D542), the constrained reference among them,
+    #  is configuration with no declarations, and no part of the API.
+    described = {str(Path(path).parent) for path, text in files.items()
+                 if re.search(r'^compiler\.device\(', text, re.M)}
+    files = {path: text for path, text in files.items()
+             if str(Path(path).parent) not in described}
     modules = {}
     for path, text in files.items():
         modules.setdefault(str(Path(path).parent), []).extend(read_items(text, path))

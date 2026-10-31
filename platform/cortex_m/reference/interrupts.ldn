@@ -1,0 +1,33 @@
+-- The constrained reference profile's interrupts and vector slots: the
+-- profile [1990] fixed, which applies when a firmware program imports no
+-- device description (D543).  It names no chip and comes from no SVD.  Slot
+-- 21, IRQ5, and slots 42 to 47 are reserved, so they hold zero.
+
+compiler.device("constrained-reference")
+compiler.core("cortex-m0")
+compiler.vectors(48)
+compiler.interrupt("IRQ0", 0)
+compiler.interrupt("IRQ1", 1)
+compiler.interrupt("IRQ2", 2)
+compiler.interrupt("IRQ3", 3)
+compiler.interrupt("IRQ4", 4)
+compiler.interrupt("IRQ6", 6)
+compiler.interrupt("IRQ7", 7)
+compiler.interrupt("IRQ8", 8)
+compiler.interrupt("IRQ9", 9)
+compiler.interrupt("IRQ10", 10)
+compiler.interrupt("IRQ11", 11)
+compiler.interrupt("IRQ12", 12)
+compiler.interrupt("IRQ13", 13)
+compiler.interrupt("IRQ14", 14)
+compiler.interrupt("IRQ15", 15)
+compiler.interrupt("IRQ16", 16)
+compiler.interrupt("IRQ17", 17)
+compiler.interrupt("IRQ18", 18)
+compiler.interrupt("IRQ19", 19)
+compiler.interrupt("IRQ20", 20)
+compiler.interrupt("IRQ21", 21)
+compiler.interrupt("IRQ22", 22)
+compiler.interrupt("IRQ23", 23)
+compiler.interrupt("IRQ24", 24)
+compiler.interrupt("IRQ25", 25)

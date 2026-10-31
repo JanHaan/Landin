@@ -1,0 +1,18 @@
+-- The RP2040's memory as pico-sdk 2.2.0 lays it out for a Raspberry Pi
+-- Pico: 2 MiB of flash behind XIP from 0x1000_0000, 256 KiB of striped
+-- SRAM and the two 4 KiB scratch banks, the stack at the top of SCRATCH_Y.
+-- Written by hand; see devices/README.md for the sources it was checked
+-- against.  The boot ROM reads a 256-byte second stage at the start of
+-- flash, and the vector table follows it.
+
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.region("SCRATCH_X", 0x2004_0000, 4 * 1024, "rwx")
+linker.region("SCRATCH_Y", 0x2004_1000, 4 * 1024, "rwx")
+compiler.boot("rp2040-boot2")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "SCRATCH_Y", 4 * 1024)

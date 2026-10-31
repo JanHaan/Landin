@@ -397,9 +397,10 @@ package body Landin.Backend.Cortex_M is
       then
          return True;
       end if;
-      return Extent (Allocated_Frame
-        (Of_Unit, Item, Facts, 16#FFFF_FFC0#)) <=
-          Landin.Targets.Firmware.Stack_Size - Overhead;
+      return Landin.IR.Firmware_Profile (Of_Unit).Stack_Size >= Overhead
+        and then Extent (Allocated_Frame
+          (Of_Unit, Item, Facts, 16#FFFF_FFC0#)) <=
+            Landin.IR.Firmware_Profile (Of_Unit).Stack_Size - Overhead;
    exception
       when Stack_Limit_Exceeded => return False;
    end Frame_Fits_Firmware_Stack;
@@ -1330,15 +1331,41 @@ package body Landin.Backend.Cortex_M is
       is
          Attr : constant Landin.Machine.Placement :=
            Landin.IR.Placement_Of (Of_Unit, Item);
+         --  D547: a region placement's section names the region and what
+         --  the region does with it: run or read in place, or copy from
+         --  its load image, or clear, when the region is writable.
+         function Region_Section return String;
+         function Region_Section return String is
+            Region : constant String :=
+              Landin.Source.Names.Spelling (Names, Attr.Region);
+            Profile : constant Landin.Targets.Firmware.Profile :=
+              Landin.IR.Firmware_Profile (Of_Unit);
+            Writable : constant Boolean :=
+              Landin.Targets.Firmware.Writable
+                (Profile.Regions (Landin.Targets.Firmware.Region_Named
+                   (Profile, Region)).Mode);
+            Kind : constant String :=
+              (if Prefix = ".bss." then "bss"
+               elsif Writable then "data"
+               elsif Prefix = ".text." then "text"
+               else "rodata");
+         begin
+            return ".landin_region." & Region & "." & Kind & ".landin_"
+              & Trimmed (Item'Image);
+         end Region_Section;
          Name : constant String :=
-           (if Attr.Section = Landin.Source.Names.No_Name
+           (if Attr.Region /= Landin.Source.Names.No_Name
+            then Region_Section
+            elsif Attr.Section = Landin.Source.Names.No_Name
             then Prefix & "landin_" & Trimmed (Item'Image)
             else Landin.Source.Names.Spelling (Names, Attr.Section));
          Retained : constant Boolean := Attr.Keep or else
            (Attr.Section /= Landin.Source.Names.No_Name
             and then Retained_Sections.Contains (Attr.Section));
          BSS : constant Boolean :=
-           Ada.Strings.Fixed.Index (Name, ".bss.") = Name'First;
+           Ada.Strings.Fixed.Index (Name, ".bss.") = Name'First
+           or else (Attr.Region /= Landin.Source.Names.No_Name
+             and then Ada.Strings.Fixed.Index (Name, ".bss.") /= 0);
       begin
          Emit (".section " & Name & ",""" & Flags
            & (if Retained then "R" else "") & """,%"
@@ -1350,8 +1377,12 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit_Vectors;
       procedure Emit_Vectors is
-         Handlers : array (2 .. 47) of Landin.IR.Item_Id :=
-           [others => Landin.IR.No_Item];
+         --  D544: the selected profile's table.  A slot it admits takes its
+         --  handler or the unhandled loop, and every other slot is zero.
+         Profile : constant Landin.Targets.Firmware.Profile :=
+           Landin.IR.Firmware_Profile (Of_Unit);
+         Handlers : array (2 .. Landin.Targets.Firmware.Slot_Capacity - 1)
+           of Landin.IR.Item_Id := [others => Landin.IR.No_Item];
       begin
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
@@ -1365,13 +1396,14 @@ package body Landin.Backend.Cortex_M is
             end;
          end loop;
          Emit (".section .isr_vector,""a"",%progbits");
-         Emit (".balign 256");
+         Emit (".balign " & Trimmed (Landin.Targets.Firmware.Vector_Alignment
+           (Profile)'Image));
          Emit (".globl _landin_firmware_vectors");
          Put ("_landin_firmware_vectors:");
          Emit (".word _landin_firmware_stack_top");
          Emit (".word _landin_firmware_reset");
-         for Slot in Handlers'Range loop
-            if Slot in 4 .. 10 | 12 | 13 | 21 | 42 .. 47 then
+         for Slot in 2 .. Profile.Vector_Count - 1 loop
+            if not Landin.Targets.Firmware.Admits (Profile, Slot) then
                Emit (".word 0");
             elsif Handlers (Slot) /= Landin.IR.No_Item then
                Emit (".word " & Symbol (Handlers (Slot)));
@@ -5435,6 +5467,39 @@ package body Landin.Backend.Cortex_M is
                when Landin.Targets.Byte_4 => ".long",
                when Landin.Targets.Byte_8 => ".quad");
 
+      --  D536: Count copies of one scalar, as `.zero` or `.fill` where one
+      --  directive writes them and as nested repetitions of the scalar's
+      --  own directive where `.fill` cannot carry its eight bytes.
+      procedure Emit_Scalar_Run
+        (Count : Landin.IR.Element_Total;
+         Held  : Held_Size;
+         Value : Landin.Types.Folded);
+
+      procedure Emit_Scalar_Run
+        (Count : Landin.IR.Element_Total;
+         Held  : Held_Size;
+         Value : Landin.Types.Folded)
+      is
+         procedure Emit_Value;
+
+         procedure Emit_Value is
+         begin
+            Emit (Directive (Held) & " "
+                  & Trimmed (Landin.Types.Folded'Image (Value)));
+         end Emit_Value;
+
+         procedure Emit_Copies is new Landin.Backend.Repeat
+           (Emit, Emit_Value);
+      begin
+         if Count = 0 then
+            return;
+         elsif Landin.Backend.Is_Filled (Held, Value) then
+            Emit (Landin.Backend.Scalar_Run (Count, Held, Value));
+         else
+            Emit_Copies (Count);
+         end if;
+      end Emit_Scalar_Run;
+
       procedure Emit_Datum (Item : Landin.IR.Item_Id);
 
       procedure Emit_Slice_Image_Datum (Item : Landin.IR.Item_Id);
@@ -5557,6 +5622,51 @@ package body Landin.Backend.Cortex_M is
             end if;
          end Emit_Zero;
 
+         --  D536: Copies of one element after the first, as one directive
+         --  when the element is a plain scalar or writes only zeros, and
+         --  as nested repetitions of its image otherwise.
+         procedure Emit_Run
+           (Element : Landin.IR.Field_Shape;
+            Child   : Landin.IR.Aggregate_Field_Image;
+            Copies  : Landin.IR.Element_Total);
+
+         procedure Emit_Run
+           (Element : Landin.IR.Field_Shape;
+            Child   : Landin.IR.Aggregate_Field_Image;
+            Copies  : Landin.IR.Element_Total)
+         is
+            procedure Emit_Element;
+
+            procedure Emit_Element is
+            begin
+               Emit_Field (Element, Child, Child.Value);
+            end Emit_Element;
+
+            procedure Emit_Copies is new Landin.Backend.Repeat
+              (Emit, Emit_Element);
+
+            Element_Size : Landin.Targets.Byte_Count;
+            Element_Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            if Element.Kind = Landin.IR.Scalar_Field_Shape
+              and then Child.Target = Landin.IR.No_Item
+              and then Element.Atoms = Landin.IR.No_Atom_Set
+            then
+               Emit_Scalar_Run
+                 (Copies, Size_Of (Element.Element, Facts), Child.Value);
+            elsif Element.Kind /= Landin.IR.Scalar_Field_Shape
+              and then Landin.Backend.Is_Zero_Image
+                (Of_Unit, Item, Element, Child)
+            then
+               Landin.Backend.Field_Extent
+                 (Of_Unit, Element, Facts, Element_Size, Element_Alignment);
+               pragma Unreferenced (Element_Alignment);
+               Emit_Zero (Landin.Targets.Byte_Count (Copies) * Element_Size);
+            else
+               Emit_Copies (Copies);
+            end if;
+         end Emit_Run;
+
          procedure Emit_Array
            (Shape : Landin.IR.Field_Shape;
             Image : Landin.IR.Aggregate_Field_Image)
@@ -5624,18 +5734,14 @@ package body Landin.Backend.Cortex_M is
                        (if Position = Image.Count then Image.Value else 1);
                   begin
                      --  A zero suffix was evaluated but stores nothing.
-                     if Copies > 0 then
-                        if Copies > 1 then
-                           Emit
-                             (".rept " & Trimmed
-                                (Landin.Types.Folded'Image (Copies)));
-                        end if;
+                     if Copies = 1 then
                         Emit_Field
                           (Landin.IR.Array_Element_Shape (Of_Unit, Shape),
                            Child, Child.Value);
-                        if Copies > 1 then
-                           Emit (".endr");
-                        end if;
+                     elsif Copies > 1 then
+                        Emit_Run
+                          (Landin.IR.Array_Element_Shape (Of_Unit, Shape),
+                           Child, Landin.IR.Element_Total (Copies));
                      end if;
                   end;
                end loop;
@@ -5668,16 +5774,9 @@ package body Landin.Backend.Cortex_M is
                                    Landin.IR.Part_Position (Position)))));
                   end loop;
                end if;
-               Emit
-                 (".rept "
-                  & Trimmed
-                      (Landin.IR.Element_Total'Image
-                         (Shape.Length
-                          - Landin.IR.Element_Total (Image.Count))));
-               Emit
-                 (Directive (Size_Of (Shape.Element, Facts)) & " "
-                  & Trimmed (Landin.Types.Folded'Image (Image.Value)));
-               Emit (".endr");
+               Emit_Scalar_Run
+                 (Shape.Length - Landin.IR.Element_Total (Image.Count),
+                  Size_Of (Shape.Element, Facts), Image.Value);
             else
                raise Landin.Compiler_Defect with
                  "a malformed recursive array image reached Cortex-M";
@@ -5973,8 +6072,8 @@ package body Landin.Backend.Cortex_M is
       end Emit_Array_Datum;
 
       --  D24/D34: an array datum with an image.  Each literal element becomes
-      --  one directive of its own size; a repetition becomes one directive
-      --  inside `.rept`.  Nonzero or mixed images reach `.data`, while
+      --  one directive of its own size; a repetition becomes one run
+      --  (D536).  Nonzero or mixed images reach `.data`, while
       --  omitted, explicit-zero and repeated-zero images stay in `.bss`.  A
       --  negative fold is written as the number
       --  the assembler encodes at this width -- the same spelling
@@ -6008,11 +6107,10 @@ package body Landin.Backend.Cortex_M is
             Put (Symbol (Item) & ":");
 
             if Landin.IR.Is_Repeated_Image (Of_Unit, Item) then
-               --  D34 uses `.rept` around one width-specific scalar directive.
-               --  D38 writes its finite prefix first, then repeats one suffix
-               --  value for N - k positions.  Assembly size depends on
-               --  the written prefix, never the target-sized extent; `.quad`
-               --  preserves all eight bytes unlike GNU `.fill`.
+               --  D38 writes its finite prefix first, then one run of the
+               --  suffix value for N - k positions (D536).  Assembly size
+               --  depends on the written prefix, never the target-sized
+               --  extent.
                declare
                   Prefix : constant Landin.IR.Element_Total :=
                     Landin.IR.Image_Prefix_Length (Of_Unit, Item);
@@ -6029,16 +6127,9 @@ package body Landin.Backend.Cortex_M is
                                      (Of_Unit, Item, Position))));
                      end loop;
                   end if;
-                  Emit
-                    (".rept "
-                     & Trimmed
-                         (Landin.IR.Element_Total'Image (Length - Prefix)));
-                  Emit
-                    (Directive (Held) & " "
-                     & Trimmed
-                         (Landin.Types.Folded'Image
-                            (Landin.IR.Repeated_Image_Value (Of_Unit, Item))));
-                  Emit (".endr");
+                  Emit_Scalar_Run
+                    (Length - Prefix, Held,
+                     Landin.IR.Repeated_Image_Value (Of_Unit, Item));
                end;
             else
                for Position in Landin.IR.Part_Position'(1)
@@ -6156,6 +6247,8 @@ package body Landin.Backend.Cortex_M is
          Emit_Vectors;
          Put (Landin.Backend.Firmware.Startup
            (Symbol (Firmware_Entry),
+            Landin.IR.Firmware_Profile (Of_Unit),
+            Landin.Backend.Firmware.Used_Regions (Of_Unit, Names),
             (if Panic = null or else Landin.Panics.Handler (Panic.all)
                = Landin.IR.No_Item then "udf #1"
              else "ldr r0, =" & Trimmed (Positive'Image

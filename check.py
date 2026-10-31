@@ -7331,12 +7331,16 @@ def check_diagnostic_matrix(full_run):
     #  evidence is the driver case that names a level another family has.
     #  L0509 refuses no source either: only a failed link raises it, so its
     #  evidence is end-to-end/link-missing-library and the driver case.
-    #  L0525-L0531 refuse no program either: `refine svd` raises them for
-    #  an SVD, its policy or its outputs, and the devices suite owns them.
+    #  L0518 is raised only where the library holds no reference
+    #  description, which every corpus run has, and L0519 only by a linked
+    #  image: their evidence is the cortex ABI cases and the Cortex-M
+    #  descriptions lane.  L0525-L0531 refuse no program either: `refine
+    #  svd` raises them for an SVD, its policy or its outputs, and the
+    #  devices suite owns them.
     driver = {"L0002", "L0003", "L0004", "L0005", "L0008", "L0009",
-              "L0500", "L0501", "L0502", "L0504", "L0509",
-              "L0525", "L0526", "L0527", "L0528", "L0529", "L0530",
-              "L0531"}
+              "L0500", "L0501", "L0502", "L0504", "L0509", "L0518",
+              "L0519", "L0525", "L0526", "L0527", "L0528", "L0529",
+              "L0530", "L0531"}
     fixed = set()
     for _, fields in fixture_records().values():
         if fields.get("fixed"):

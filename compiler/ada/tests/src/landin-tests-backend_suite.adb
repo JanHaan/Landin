@@ -2071,13 +2071,9 @@ package body Landin.Tests.Backend_Suite is
                Contains
                  (Text,
                   "pattern_state:" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".long 7" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 4, 7" & LF
                   & HT & ".byte 1" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".byte 2" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 1, 2" & LF
                   & HT & ".zero 1" & LF
                   & HT & ".size pattern_state, 12" & LF),
                "32-bit repetition and hybrid fields retain target padding");
@@ -2087,9 +2083,7 @@ package body Landin.Tests.Backend_Suite is
                  (Text,
                   "zero_pattern_state:" & LF
                   & HT & ".byte 0" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".byte 0" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".zero 2" & LF
                   & HT & ".size zero_pattern_state, 3" & LF),
                "an all-zero hybrid remains a written 32-bit image");
             Landin.Testing.Check
@@ -2130,13 +2124,9 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".zero 1" & LF
                   & HT & ".byte 17" & LF
                   & HT & ".byte 19" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".word 23" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 2, 23" & LF
                   & HT & ".byte 29" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".byte 31" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 1, 31" & LF
                   & HT & ".zero 2" & LF
                   & HT & ".zero 1" & LF
                   & HT & ".size array_selected, 14" & LF)
@@ -2147,13 +2137,9 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".zero 1" & LF
                   & HT & ".byte 17" & LF
                   & HT & ".byte 19" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".word 23" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 2, 23" & LF
                   & HT & ".byte 29" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".byte 31" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 1, 31" & LF
                   & HT & ".zero 2" & LF
                   & HT & ".zero 1" & LF
                   & HT & ".size array_selected_copy, 14" & LF),
@@ -2167,13 +2153,9 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".zero 1" & LF
                   & HT & ".byte 43" & LF
                   & HT & ".byte 47" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".word 61" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 2, 61" & LF
                   & HT & ".byte 53" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".byte 59" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 1, 59" & LF
                   & HT & ".zero 2" & LF
                   & HT & ".zero 1" & LF
                   & HT & ".size array_copied, 14" & LF)
@@ -2184,13 +2166,9 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".zero 1" & LF
                   & HT & ".byte 43" & LF
                   & HT & ".byte 47" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".word 61" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 2, 61" & LF
                   & HT & ".byte 53" & LF
-                  & HT & ".rept 2" & LF
-                  & HT & ".byte 59" & LF
-                  & HT & ".endr" & LF
+                  & HT & ".fill 2, 1, 59" & LF
                   & HT & ".zero 2" & LF
                   & HT & ".zero 1" & LF
                   & HT & ".size array_copied_copy, 14" & LF),
@@ -2241,9 +2219,7 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".quad 7" & LF
                & HT & ".endr" & LF
                & HT & ".byte 1" & LF
-               & HT & ".rept 2" & LF
-               & HT & ".byte 2" & LF
-               & HT & ".endr" & LF
+               & HT & ".fill 2, 1, 2" & LF
                & HT & ".zero 5" & LF
                & HT & ".size pattern_state, 24" & LF),
             "64-bit repetition and hybrid fields retain target padding");
@@ -2253,9 +2229,7 @@ package body Landin.Tests.Backend_Suite is
               (Emitted (Work),
                "zero_pattern_state:" & LF
                & HT & ".byte 0" & LF
-               & HT & ".rept 2" & LF
-               & HT & ".byte 0" & LF
-               & HT & ".endr" & LF
+               & HT & ".zero 2" & LF
                & HT & ".size zero_pattern_state, 3" & LF),
             "an all-zero hybrid remains a written 64-bit image");
          Landin.Testing.Check
@@ -2280,13 +2254,9 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".zero 1" & LF
                & HT & ".byte 17" & LF
                & HT & ".byte 19" & LF
-               & HT & ".rept 2" & LF
-               & HT & ".word 23" & LF
-               & HT & ".endr" & LF
+               & HT & ".fill 2, 2, 23" & LF
                & HT & ".byte 29" & LF
-               & HT & ".rept 2" & LF
-               & HT & ".byte 31" & LF
-               & HT & ".endr" & LF
+               & HT & ".fill 2, 1, 31" & LF
                & HT & ".zero 2" & LF
                & HT & ".zero 1" & LF
                & HT & ".size array_selected, 14" & LF),
@@ -2300,13 +2270,9 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".zero 1" & LF
                & HT & ".byte 43" & LF
                & HT & ".byte 47" & LF
-               & HT & ".rept 2" & LF
-               & HT & ".word 61" & LF
-               & HT & ".endr" & LF
+               & HT & ".fill 2, 2, 61" & LF
                & HT & ".byte 53" & LF
-               & HT & ".rept 2" & LF
-               & HT & ".byte 59" & LF
-               & HT & ".endr" & LF
+               & HT & ".fill 2, 1, 59" & LF
                & HT & ".zero 2" & LF
                & HT & ".zero 1" & LF
                & HT & ".size array_copied, 14" & LF),
@@ -2516,20 +2482,43 @@ package body Landin.Tests.Backend_Suite is
                                  & (if Wide then "48" else "24") & LF),
                               "nested finite folds use no array-root prefix");
                         when 2 =>
-                           Landin.Testing.Check
-                             (Item, Contains
-                                (Text, "image:" & LF
-                                 & HT & ".rept 100000000" & LF
-                                 & HT & ".rept 3" & LF
-                                 & HT & Width & " 37" & LF
-                                 & HT & ".endr" & LF & HT & ".endr" & LF
-                                 & HT & ".size image, "
-                                 & (if Wide then "2400000000"
-                                    else "1200000000") & LF),
-                              "nested repetitions retain target-sized stride");
+                           --  D536: 100000000 is 0x05F5E100, so the row is
+                           --  written once per nonzero base-256 digit, and
+                           --  the 32-bit row of three is one `.fill`.
+                           declare
+                              Row : constant String :=
+                                (if Wide
+                                 then HT & ".rept 3" & LF
+                                   & HT & Width & " 37" & LF
+                                   & HT & ".endr" & LF
+                                 else HT & ".fill 3, 4, 37" & LF);
+                              Wide_256 : constant String :=
+                                HT & ".rept 256" & LF;
+                              Close : constant String :=
+                                HT & ".endr" & LF;
+                           begin
+                              Landin.Testing.Check
+                                (Item, Contains
+                                   (Text, "image:" & LF
+                                    & HT & ".rept 5" & LF
+                                    & Wide_256 & Wide_256 & Wide_256 & Row
+                                    & Close & Close & Close & Close
+                                    & HT & ".rept 245" & LF
+                                    & Wide_256 & Wide_256 & Row
+                                    & Close & Close & Close
+                                    & HT & ".rept 225" & LF
+                                    & Wide_256 & Row & Close & Close
+                                    & HT & ".size image, "
+                                    & (if Wide then "2400000000"
+                                       else "1200000000") & LF),
+                                 "nested repetitions retain target-sized"
+                                 & " stride");
+                           end;
                            Landin.Testing.Check
                              (Item, Text'Length < 1024
-                              and then Occurrences (Text, Width & " 37") = 1,
+                              and then Occurrences
+                                (Text, (if Wide then Width & " 37"
+                                        else ".fill 3, 4, 37")) = 3,
                               "output is bounded by descriptors, not extent");
                         when 3 =>
                            Landin.Testing.Check
@@ -4883,8 +4872,9 @@ package body Landin.Tests.Backend_Suite is
    end Text_Literals_Are_Shared_Read_Only_Data;
 
    --  D34: a nonzero repeated image is emitted as a constant number of
-   --  directives for every scalar width.  In particular, the eight-byte
-   --  pattern must not travel through GNU `.fill`'s four-byte value field.
+   --  directives for every scalar width.  D536 writes one to four bytes as
+   --  `.fill`, and the eight-byte pattern must not travel through its
+   --  four-byte value field.
    procedure Module_Repetition_Uses_Compact_Full_Width_Directives
      (Item : in out Landin.Testing.Context);
 
@@ -4917,15 +4907,12 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Contains (Text, "bytes:" & LF & HT & ".rept 3" & LF
-                            & HT & ".byte 165" & LF & HT & ".endr" & LF)
+            Contains (Text, "bytes:" & LF & HT & ".fill 3, 1, 165" & LF)
             and then Contains
-              (Text, "words:" & LF & HT & ".rept 4" & LF
-                     & HT & ".word 4660" & LF & HT & ".endr" & LF)
+              (Text, "words:" & LF & HT & ".fill 4, 2, 4660" & LF)
             and then Contains
-              (Text, "longs:" & LF & HT & ".rept 5" & LF
-                     & HT & ".long 305419896" & LF & HT & ".endr" & LF),
-            "one repeated directive preserves each one-to-four-byte pattern");
+              (Text, "longs:" & LF & HT & ".fill 5, 4, 305419896" & LF),
+            "one .fill preserves each one-to-four-byte pattern (D536)");
          Landin.Testing.Check
            (Item,
             Contains
@@ -4936,24 +4923,21 @@ package body Landin.Tests.Backend_Suite is
          Landin.Testing.Check
            (Item,
             Contains
-              (Text, "huge:" & LF & HT & ".rept 4294967295" & LF
-                     & HT & ".byte 1" & LF & HT & ".endr" & LF),
+              (Text, "huge:" & LF & HT & ".fill 4294967295, 1, 1" & LF),
             "a target-sized extent does not enlarge the assembly text");
          Landin.Testing.Check
            (Item,
             Contains
               (Text, "hybrid:" & LF & HT & ".byte 1" & LF
                      & HT & ".byte 2" & LF
-                     & HT & ".rept 4294967293" & LF
-                     & HT & ".byte 3" & LF & HT & ".endr" & LF),
+                     & HT & ".fill 4294967293, 1, 3" & LF),
             "a target-sized hybrid emits its prefix and one compact suffix");
          Landin.Testing.Check
            (Item,
             Contains
               (Text, "hybrid_zero:" & LF & HT & ".long 7" & LF
-                     & HT & ".rept 3" & LF & HT & ".long 0" & LF
-                     & HT & ".endr" & LF),
-            "a zero suffix remains a present data image");
+                     & HT & ".zero 12" & LF),
+            "a zero suffix remains a present data image, written as .zero");
          Landin.Testing.Check
            (Item,
             Contains

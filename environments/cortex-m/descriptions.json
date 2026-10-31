@@ -1,0 +1,47 @@
+{
+  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 from pico-sdk 2.2.0, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these.",
+  "devices": {
+    "rp2040": {
+      "sources": {
+        "memory map": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2040/memmap_default.ld, SHA-256 d409afb35ec0a8c3edf5ad6935907cb45f225a3cbdfd4c3b8505a7ed92df28dc: RAM 0x20000000 256k, SCRATCH_X 0x20040000 4k, SCRATCH_Y 0x20041000 4k, the 256-byte .boot2 first in FLASH, then the vectors",
+        "flash region": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld, SHA-256 a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a: FLASH at 0x10000000",
+        "flash size": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico.h, SHA-256 e88d258b92a7653c360d32042c2cac0de99010a6bc67d6935f6095b9612336d0: PICO_FLASH_SIZE_BYTES (2 * 1024 * 1024)",
+        "interrupts": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2040/hardware_regs/include/hardware/regs/intctrl.h, SHA-256 2b980182228b23774923de78b85da5900ad3976a07ffd5c437915f9b8c0af6e4: USBCTRL_IRQ 5, SPARE_IRQ_5 31"
+      },
+      "core": "cortex-m0plus",
+      "boot": "rp2040-boot2",
+      "regions": [
+        {"name": "FLASH", "origin": 268435456, "length": 2097152, "access": "rx"},
+        {"name": "RAM", "origin": 536870912, "length": 262144, "access": "rwx"},
+        {"name": "SCRATCH_X", "origin": 537133056, "length": 4096, "access": "rwx"},
+        {"name": "SCRATCH_Y", "origin": 537137152, "length": 4096, "access": "rwx"}
+      ],
+      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "SCRATCH_Y"},
+      "boot2_address": 268435456,
+      "boot2_bytes": 256,
+      "vector_address": 268435712,
+      "vector_words": 48,
+      "stack_top": 537141248,
+      "stack_reserved": 4096,
+      "reserved_slots": [4, 5, 6, 7, 8, 9, 10, 12, 13],
+      "handler_slot": 21
+    },
+    "constrained-reference": {
+      "sources": {"profile": "spec.md [1990]: 32 KiB flash at zero, 16 KiB RAM at 0x20000000, the upper 4 KiB the stack, a 48-word table at zero, core slots 4-10 and 12-13 and slots 21 and 42-47 zero"},
+      "core": "cortex-m0",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "FLASH", "origin": 0, "length": 32768, "access": "rx"},
+        {"name": "RAM", "origin": 536870912, "length": 16384, "access": "rwx"}
+      ],
+      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "RAM"},
+      "vector_address": 0,
+      "vector_words": 48,
+      "stack_top": 536887296,
+      "stack_reserved": 4096,
+      "reserved_slots": [4, 5, 6, 7, 8, 9, 10, 12, 13, 21, 42, 43, 44, 45, 46, 47],
+      "handler_slot": 20,
+      "refused_slot": 21
+    }
+  }
+}

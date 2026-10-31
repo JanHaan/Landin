@@ -310,6 +310,64 @@ class Regeneration(unittest.TestCase):
             self.assertIn('error[L0530]', result.stderr)
 
 
+CORES = {'CM0': 'cortex-m0', 'CM0PLUS': 'cortex-m0plus',
+         'CM3': 'cortex-m3', 'CM4': 'cortex-m4', 'CM7': 'cortex-m7'}
+
+
+def render_d542(raw):
+    """D542's generated half from an SVD's bytes, with nothing of refine's."""
+    import xml.etree.ElementTree as ElementTree
+
+    def text_of(element, name):
+        found = element.find(name)
+        return None if found is None or found.text is None else found.text.strip()
+
+    device = ElementTree.fromstring(raw)
+    name = text_of(device, 'name')
+    clauses = [label + ' ' + value for label, value in
+               (('vendor', text_of(device, 'vendor')),
+                ('version', text_of(device, 'version'))) if value]
+    lines = ['-- Interrupts of the ' + name + ', from its SVD'
+             + (': ' + ', '.join(clauses) if clauses else '') + '.',
+             '-- SVD SHA-256 ' + hashlib.sha256(raw).hexdigest() + '.']
+    licence = device.find('licenseText')
+    if licence is not None and licence.text:
+        lines += ['-- ' + line.strip() for line in licence.text.splitlines()
+                  if line.strip()]
+    lines += ['-- Generated from the SVD; memory.ldn beside it is written'
+              ' by hand.', '']
+    cpu = device.find('cpu')
+    pairs = set()
+    for peripheral in device.iter('peripheral'):
+        for interrupt in peripheral.findall('interrupt'):
+            pairs.add((int(text_of(interrupt, 'value'), 0),
+                       text_of(interrupt, 'name')))
+    declared = int(text_of(cpu, 'deviceNumInterrupts') or '0', 0)
+    count = 16 + max(declared, max(value for value, _ in pairs) + 1)
+    lines += ['compiler.device("%s")' % name.lower(),
+              'compiler.core("%s")' % CORES[text_of(cpu, 'name')],
+              'compiler.vectors(%d)' % count]
+    lines += ['compiler.interrupt("%s", %d)' % (interrupt, value)
+              for value, interrupt in
+              sorted(pairs, key=lambda pair: (pair[0], pair[1].encode()))]
+    return '\n'.join(lines) + '\n'
+
+
+class D542Form(unittest.TestCase):
+    """Each generated interrupts.ldn is D542's text, rendered apart from
+    refine from the fetched SVD; this replaced the scripts test that read a
+    vendored copy."""
+
+    @requires_refine
+    def test_each_interrupts_ldn_is_the_form(self):
+        for name, policy in policies().items():
+            with self.subTest(policy=name):
+                raw = fetch_inputs.fetch(svd_input(policy)).read_bytes()
+                self.assertEqual(
+                    (HERE / policy['description'] / 'interrupts.ldn').read_bytes(),
+                    render_d542(raw).encode('ascii'))
+
+
 class Rp2040Oracles(unittest.TestCase):
     """The RP2040's selection against pico-sdk's own headers and literals."""
 

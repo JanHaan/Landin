@@ -37,6 +37,11 @@ def build(run, refine, program, optimize, specialize):
         modules.add(module)
         origin = ROOT / module if module.startswith(('core/', 'platform/')) else DEVICES / 'generated' / module
         shutil.copytree(origin, source / module)
+    #  A program that imports no device description is given the
+    #  library's constrained reference (D543), so the staged library
+    #  holds it too.
+    shutil.copytree(ROOT / 'platform/cortex_m/reference',
+                    source / 'platform/cortex_m/reference', dirs_exist_ok=True)
     inputs = {str(p.relative_to(source)): sha(p)
               for p in sorted(source.rglob('*.ldn'))}
     (run.out / 'inputs.json').write_text(json.dumps(inputs, indent=2)+'\n')
@@ -259,7 +264,10 @@ def refusal(run, elf, name):
             files = sorted((source / line[7:]).glob('*.ldn'))
             require(len(files) == 1, 'panic oracle module is not one file: ' + line[7:])
             paths += files
-    require(set(paths) == set(source.rglob('*.ldn')),
+    #  The reference description the program is given (D543) is read
+    #  after everything it imports, so it moves no site before it.
+    reference = sorted((source / 'platform/cortex_m/reference').glob('*.ldn'))
+    require(set(paths) | set(reference) == set(source.rglob('*.ldn')),
             'panic oracle source inventory changed')
     offset = 0
     for path in paths:

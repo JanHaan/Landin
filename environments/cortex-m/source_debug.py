@@ -37,8 +37,12 @@ PRELUDE = [
 
 
 def checked(run, elf):
+    #  A lane that stages its library builds against `source`; one that
+    #  stages none builds against this checkout's, which a program that
+    #  imports nothing still reads the reference description from (D543).
+    staged = elf.parent/'source'
     record = verify(elf, elf, str(elf)+'.sources.json', str(elf)+'.s', elf.parent,
-                    elf.parent/'source')
+                    *([staged] if (staged/'platform').is_dir() else []))
     (run.out/'debug-selection.json').write_text(json.dumps(record, indent=2)+'\n')
     return record
 

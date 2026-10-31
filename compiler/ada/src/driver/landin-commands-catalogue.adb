@@ -62,6 +62,7 @@ package body Landin.Commands.Catalogue is
          when Panic_Map => "--panic-map", when Toolchain => "--toolchain",
          when Linker => "--linker", when Link => "--link",
          when Firmware_Entry => "--firmware-entry",
+         when Linker_Script => "--linker-script",
          when Build_Report => "--build-report",
          when Stage_Report => "--stage-report", when Dry_Run => "--dry-run",
          when Stack_Report => "--stack-report",
@@ -104,6 +105,8 @@ package body Landin.Commands.Catalogue is
          when Link =>
            "Linux link: static (default) alone, or libc with C's runtime",
          when Firmware_Entry => "Select the Cortex-M firmware entry routine",
+         when Linker_Script =>
+           "Link firmware with FILE, checked against the contract",
          when Build_Report => "Write deterministic build evidence JSON",
          when Stage_Report => "Write stage CPU time and peak memory JSON",
          when Stack_Report =>

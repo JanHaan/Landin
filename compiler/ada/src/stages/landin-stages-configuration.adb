@@ -1,5 +1,6 @@
 with Landin.Targets.Capabilities;
 with Ada.Containers.Vectors;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
@@ -7,6 +8,7 @@ with Landin.Configuration;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Modules;
+with Landin.Modules;
 with Landin.Modules.Availability;
 with Landin.Diagnostics.Resolution;
 with Landin.Source;
@@ -14,6 +16,7 @@ with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 with Landin.Types;
 with Landin.Tokens.Text;
@@ -23,6 +26,7 @@ package body Landin.Stages.Configuration is
    package Bad renames Landin.Diagnostics.Checking;
    package Syn renames Landin.Syntax;
    package Ty renames Landin.Types;
+   package Firmware renames Landin.Targets.Firmware;
 
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
@@ -35,6 +39,8 @@ package body Landin.Stages.Configuration is
    use type Landin.Configuration.Build_Mode;
    use type Landin.Targets.Endianness;
    use type Landin.Tokens.Text.Problem;
+   use type Landin.Modules.Module_Id;
+   use type Landin.Source.Source_Id;
 
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
@@ -1192,6 +1198,867 @@ package body Landin.Stages.Configuration is
          return Value;
       end Evaluate_Option;
 
+      --  D542/D543: the one description the program reaches, its module,
+      --  where each of its directives stands, and the profile it builds.
+      type Site is record
+         Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+         Node : Syn.Node_Id := Syn.No_Node;
+      end record;
+      No_Site : constant Site := (others => <>);
+      type Interrupt_Entry is record
+         Name : Ada.Strings.Unbounded.Unbounded_String;
+         IRQ : Natural := 0;
+         At_Site : Site;
+      end record;
+      package Interrupt_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Interrupt_Entry);
+      type Region_Sites is array (Firmware.Region_Index) of Site;
+      type Place_Sites is array (Firmware.Section_Kind) of Site;
+      type Place_Names is array (Firmware.Section_Kind)
+        of Ada.Strings.Unbounded.Unbounded_String;
+      Described : Landin.Modules.Module_Id := Landin.Modules.No_Module;
+      Device_Site, Core_Site, Vectors_Site, Boot_Site : Site;
+      Regions_At : Region_Sites := [others => No_Site];
+      Placed_At : Place_Sites := [others => No_Site];
+      Placed_Names : Place_Names;
+      Interrupts : Interrupt_Vectors.Vector;
+      Built : Firmware.Profile;
+      Arm_Depth : Natural := 0;
+      --  A directive refused for its own arguments leaves the description
+      --  short of it; Finish_Profile does not report that again.
+      Description_Refused : Boolean := False;
+
+      function Module_For
+        (Source : Landin.Source.Source_Id) return Landin.Modules.Module_Id
+        is (if Natural (Source) <= Landin.Modules.Source_Count
+              (Landin.Stages.Modules (Context).all)
+            then Landin.Modules.Module_Of
+              (Landin.Stages.Modules (Context).all, Source)
+            else Landin.Modules.Entry_Module);
+
+      function Description_Directive
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Description_Directive
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Callee : Syn.Node_Id;
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Tool_Directive then
+            return False;
+         end if;
+         Callee := Syn.Callee_Of (Of_Tree, Syn.Directive_Call (Of_Tree, Node));
+         return Landin.Configuration.Is_Description_Member
+           (Spelled (Syn.Name (Of_Tree, Syn.Target_Of (Of_Tree, Callee))),
+            Spelled (Syn.Name (Of_Tree, Callee)));
+      end Description_Directive;
+
+      function Names_Device
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Description_Directive (Of_Tree, Node)
+            and then Spelled (Syn.Name (Of_Tree, Syn.Callee_Of
+              (Of_Tree, Syn.Directive_Call (Of_Tree, Node)))) = "device");
+
+      procedure Report_At
+        (Item : Bad.Failure; At_Site : Site; Message, Note : String;
+         Related : Site := No_Site; Because : String := "");
+      procedure Report_At
+        (Item : Bad.Failure; At_Site : Site; Message, Note : String;
+         Related : Site := No_Site; Because : String := "")
+      is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Landin.Syntax.Forest.Tree_Of (Trees.all, At_Site.Source);
+      begin
+         --  L0513 and L0514 point at one place; the one already written
+         --  is named in the message (D543).
+         Bad.Report
+           (Item => Item, Source => At_Site.Source,
+            Where => Syn.Where (Of_Tree.all, At_Site.Node),
+            Message => Message
+              & (if Related.Source = Landin.Source.No_Source then ""
+                 else "; " & Because & " is at "
+                   & Landin.Source.Name (Source (Context, Related.Source))
+                   & ":" & Ada.Strings.Fixed.Trim
+                     (Landin.Source.Position_Of
+                        (Source (Context, Related.Source),
+                         Syn.Where (Landin.Syntax.Forest.Tree_Of
+                           (Trees.all, Related.Source).all,
+                          Related.Node).First).Line'Image,
+                      Ada.Strings.Both)),
+            Note => Note, Into => Found);
+      end Report_At;
+
+      --  A description directive is unconditional, in an active arm or
+      --  not, as an option is (D202).
+      procedure Refuse_In_Arms (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Refuse_In_Arms (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Fixed_Conditional then
+            return;
+         end if;
+         for Index in 1 .. Syn.Fixed_Arm_Count (Of_Tree, Node) loop
+            declare
+               Arm : constant Syn.Node_Id :=
+                 Syn.Nth_Fixed_Arm (Of_Tree, Node, Index);
+            begin
+               for Which in 1 .. Syn.Fixed_Declaration_Count (Of_Tree, Arm)
+               loop
+                  declare
+                     Inner : constant Syn.Node_Id :=
+                       Syn.Nth_Fixed_Declaration (Of_Tree, Arm, Which);
+                  begin
+                     if Description_Directive (Of_Tree, Inner) then
+                        Report_At
+                          (Bad.Description_Structure,
+                           (Syn.Source_Of (Of_Tree), Inner),
+                           "a device description's directive is"
+                           & " unconditional",
+                           "D543: a description is selected by import, not"
+                           & " by a fixed arm; import a different"
+                           & " description instead");
+                     else
+                        Refuse_In_Arms (Of_Tree, Inner);
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+      end Refuse_In_Arms;
+
+      --  Which module is the description, refusing a second one and
+      --  whatever else a description module holds.
+      procedure Find_Description;
+      procedure Find_Description is
+         First_Device : Site;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Id : constant Landin.Source.Source_Id :=
+                 Nth_Source (Context, Index);
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of (Trees.all, Id);
+            begin
+               for Which in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                  declare
+                     Node : constant Syn.Node_Id :=
+                       Syn.Nth_Declaration (Of_Tree.all, Which);
+                  begin
+                     if Names_Device (Of_Tree.all, Node) then
+                        if Described = Landin.Modules.No_Module then
+                           Described := Module_For (Id);
+                           First_Device := (Id, Node);
+                        elsif Module_For (Id) /= Described then
+                           Report_At
+                             (Bad.Description_Structure, (Id, Node),
+                              "this program reaches a second device"
+                              & " description, "
+                              & Landin.Modules.Logical_Path
+                                  (Landin.Stages.Modules (Context).all,
+                                   Module_For (Id)),
+                              "D543: a program is built for one device;"
+                              & " import one description, directly or"
+                              & " through another module",
+                              Related => First_Device,
+                              Because => "the description it already"
+                                & " reaches");
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Trees.all, Nth_Source (Context, Index));
+            begin
+               for Which in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                  exit when Described /= Landin.Modules.No_Module
+                    and then Module_For (Nth_Source (Context, Index))
+                      = Described;
+                  Refuse_In_Arms
+                    (Of_Tree.all, Syn.Nth_Declaration (Of_Tree.all, Which));
+               end loop;
+            end;
+         end loop;
+         if Described = Landin.Modules.No_Module then
+            return;
+         end if;
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Id : constant Landin.Source.Source_Id :=
+                 Nth_Source (Context, Index);
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of (Trees.all, Id);
+            begin
+               if Module_For (Id) = Described then
+                  for Which in 1 .. Syn.Import_Count (Of_Tree.all) loop
+                     Report_At
+                       (Bad.Description_Structure,
+                        (Id, Syn.Nth_Import (Of_Tree.all, Which)),
+                        "a device description imports nothing",
+                        "D542: a description is made only of its"
+                        & " directives; import it from the program instead");
+                  end loop;
+                  for Which in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                     declare
+                        Node : constant Syn.Node_Id :=
+                          Syn.Nth_Declaration (Of_Tree.all, Which);
+                     begin
+                        if not Description_Directive (Of_Tree.all, Node)
+                        then
+                           Report_At
+                             (Bad.Description_Structure, (Id, Node),
+                              "a device description holds only its"
+                              & " directives, unconditionally",
+                              "D542: a description is compiler.device,"
+                              & " compiler.core, compiler.vectors,"
+                              & " compiler.interrupt, compiler.boot,"
+                              & " linker.region and linker.place; move this"
+                              & " declaration to another module");
+                        end if;
+                     end;
+                  end loop;
+               end if;
+            end;
+         end loop;
+      end Find_Description;
+
+      --  A text argument, decoded as linker.library's is; "" refused.
+      function Text_Argument
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
+      function Text_Argument
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Text_Literal then
+            return "";
+         end if;
+         declare
+            Text : constant String := Landin.Source.Slice
+              (Source (Context, Syn.Source_Of (Of_Tree)),
+               Syn.Where (Of_Tree, Node));
+            Bytes : String (1 .. Text'Length);
+            Length, Fault_First, Fault_Last : Natural;
+            Fault : Landin.Tokens.Text.Problem;
+         begin
+            Landin.Tokens.Text.Decode
+              (Text, Bytes, Length, Fault, Fault_First, Fault_Last);
+            if Fault /= Landin.Tokens.Text.Well_Formed then
+               return "";
+            end if;
+            return Bytes (1 .. Length);
+         end;
+      end Text_Argument;
+
+      --  A fixed integer argument in D202's fold, or -1 when it is none
+      --  or lies outside a 32-bit address space.
+      function Integer_Argument
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Folded;
+      function Integer_Argument
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Folded
+      is
+         Value : Fixed_Value;
+      begin
+         if not Validate (Of_Tree, Node) then
+            Description_Refused := True;
+            return -2;
+         end if;
+         Value := Evaluate (Of_Tree, Node);
+         if Value.Kind = Bad_Value then
+            Description_Refused := True;
+            return -2;
+         elsif Value.Kind /= Number
+           or else Value.Integer_Value < 0
+           or else Value.Integer_Value > 2 ** 32
+         then
+            return -1;
+         end if;
+         return Value.Integer_Value;
+      end Integer_Argument;
+
+      function Name_Form (Text : String; Capacity : Positive)
+        return Boolean
+        is (Text'Length in 1 .. Capacity
+            and then Text (Text'First) in 'a' .. 'z' | 'A' .. 'Z'
+            and then (for all C of Text =>
+                        C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_'));
+
+      --  D542: one description directive, recorded once its arguments are
+      --  the forms its row says.  What it means beside the others is
+      --  Finish_Profile's.
+      procedure Configure_Description
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Configure_Description
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         Call : constant Syn.Node_Id := Syn.Directive_Call (Of_Tree, Node);
+         Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Call);
+         Base : constant String :=
+           Spelled (Syn.Name (Of_Tree, Syn.Target_Of (Of_Tree, Callee)));
+         Member : constant String := Spelled (Syn.Name (Of_Tree, Callee));
+         Directive : constant String := Base & "." & Member;
+         Here : constant Site := (Syn.Source_Of (Of_Tree), Node);
+         Count : constant Natural := Syn.Argument_Count (Of_Tree, Call);
+         Shape : constant String :=
+           (if Member = "device" then "(""name"")"
+            elsif Member = "core" then "(""cortex-m0plus"")"
+            elsif Member = "vectors" then "(count)"
+            elsif Member = "interrupt" then "(""NAME"", irq)"
+            elsif Member = "boot" then "(""vector-table"")"
+            elsif Member = "region"
+            then "(""NAME"", origin, length, ""rx"")"
+            else "(""text"", ""REGION"")");
+
+         function Argument (Position : Positive) return Syn.Node_Id
+           is (Syn.Nth_Argument (Of_Tree, Call, Position));
+
+         procedure Refuse (At_Node : Syn.Node_Id; Message, Note : String);
+         procedure Refuse (At_Node : Syn.Node_Id; Message, Note : String) is
+         begin
+            Description_Refused := True;
+            Report_Configuration_Rule
+              (Bad.Invalid_Description_Directive, Of_Tree, At_Node,
+               Message, "D542: " & Note);
+         end Refuse;
+
+         procedure Repeated (First : Site);
+         procedure Repeated (First : Site) is
+         begin
+            Report_At
+              (Bad.Description_Structure, Here,
+               "this description says " & Directive & " twice",
+               "D543: a description names its " & Member & " once;"
+               & " remove one of them",
+               Related => First, Because => "the one it already has");
+         end Repeated;
+
+         Lowest, Highest : Natural;
+      begin
+         if Arm_Depth > 0 then
+            --  Gather_Options has refused it, active or not.
+            return;
+         elsif Module_For (Here.Source) /= Described then
+            Report_At
+              (Bad.Description_Structure, Here,
+               Directive & " is a device description's directive, and this"
+               & " module names no device",
+               "D542: a description is the module that holds"
+               & " compiler.device(""NAME""); write this beside it");
+            return;
+         end if;
+         if Member = "interrupt" then
+            Lowest := 2;
+            Highest := 2;
+         elsif Member = "region" then
+            Lowest := 4;
+            Highest := 4;
+         elsif Member = "place" then
+            Lowest := 2;
+            Highest := 3;
+         else
+            Lowest := 1;
+            Highest := 1;
+         end if;
+         if Count not in Lowest .. Highest then
+            Description_Refused := True;
+            Report_Configuration_Rule
+              (Bad.Invalid_Description_Directive, Of_Tree, Node,
+               Directive & " takes "
+               & (if Lowest = Highest
+                  then Ada.Strings.Fixed.Trim (Lowest'Image, Ada.Strings.Both)
+                  else Ada.Strings.Fixed.Trim (Lowest'Image, Ada.Strings.Both)
+                    & " or "
+                    & Ada.Strings.Fixed.Trim (Highest'Image, Ada.Strings.Both))
+               & (if Highest = 1 then " argument" else " arguments")
+               & ", and this has"
+               & (if Count = 0 then " none"
+                  else Natural'Image (Count)),
+               "D542: write it as " & Directive & Shape);
+            return;
+         end if;
+
+         if Member = "device" then
+            declare
+               Name : constant String := Text_Argument (Of_Tree, Argument (1));
+            begin
+               if Name'Length not in 1 .. 32
+                 or else Name (Name'First) not in 'a' .. 'z'
+                 or else (for some C of Name =>
+                            C not in 'a' .. 'z' | '0' .. '9' | '-')
+               then
+                  Refuse (Argument (1), "a device is named by a quoted"
+                    & " lowercase identity",
+                    "compiler.device takes lowercase ASCII letters, digits"
+                    & " and hyphens, beginning with a letter and at most 32"
+                    & " bytes, such as compiler.device(""rp2040"")");
+               elsif Device_Site /= No_Site then
+                  Repeated (Device_Site);
+               else
+                  Device_Site := Here;
+                  Built.Device := Firmware.To_Name (Name);
+               end if;
+            end;
+         elsif Member = "core" then
+            declare
+               Name : constant String := Text_Argument (Of_Tree, Argument (1));
+            begin
+               if not Firmware.Is_Core_Name (Name) then
+                  Refuse (Argument (1), "this is not a core refine builds"
+                    & " for",
+                    "compiler.core names ""cortex-m0"", ""cortex-m0plus"","
+                    & " ""cortex-m3"", ""cortex-m4"" or ""cortex-m7""");
+               elsif Core_Site /= No_Site then
+                  Repeated (Core_Site);
+               else
+                  Core_Site := Here;
+                  Built.Core := Firmware.Core_Named (Name);
+               end if;
+            end;
+         elsif Member = "vectors" then
+            declare
+               Value : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (1));
+            begin
+               if Value = -2 then
+                  null;
+               elsif Value < 16 or else Value > Firmware.Slot_Capacity then
+                  Refuse (Argument (1), "a vector table holds 16 to 512"
+                    & " words",
+                    "compiler.vectors counts the whole table, the initial"
+                    & " SP, reset and the core's exceptions included, so"
+                    & " it is 16 plus the external interrupts");
+               elsif Vectors_Site /= No_Site then
+                  Repeated (Vectors_Site);
+               else
+                  Vectors_Site := Here;
+                  Built.Vector_Count := Natural (Value);
+               end if;
+            end;
+         elsif Member = "interrupt" then
+            declare
+               Name : constant String := Text_Argument (Of_Tree, Argument (1));
+               Value : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (2));
+            begin
+               if not Name_Form (Name, 64) then
+                  Refuse (Argument (1), "an interrupt is named by a quoted"
+                    & " identifier",
+                    "compiler.interrupt's name is an ASCII letter, then"
+                    & " letters, digits and underscores, at most 64 bytes,"
+                    & " as the SVD names it");
+               elsif Value = -2 then
+                  null;
+               elsif Value < 0 or else Value > Firmware.Slot_Capacity - 17
+               then
+                  Refuse (Argument (2), "an external interrupt number is 0"
+                    & " to 495",
+                    "compiler.interrupt takes the IRQ number, and its"
+                    & " vector slot is 16 plus that number");
+               else
+                  for Prior of Interrupts loop
+                     if Ada.Strings.Unbounded.To_String (Prior.Name) = Name
+                       or else Prior.IRQ = Natural (Value)
+                     then
+                        Report_At
+                          (Bad.Description_Structure, Here,
+                           (if Prior.IRQ = Natural (Value)
+                            then "IRQ" & Natural'Image (Prior.IRQ)
+                              & " is already named "
+                              & Ada.Strings.Unbounded.To_String (Prior.Name)
+                            else "interrupt " & Name
+                              & " is already IRQ"
+                              & Natural'Image (Prior.IRQ)),
+                           "D543: each interrupt has one name and one"
+                           & " number; remove one of them",
+                           Related => Prior.At_Site,
+                           Because => "the one it already has");
+                        return;
+                     end if;
+                  end loop;
+                  Interrupts.Append
+                    (Interrupt_Entry'
+                       (Ada.Strings.Unbounded.To_Unbounded_String (Name),
+                        Natural (Value), Here));
+               end if;
+            end;
+         elsif Member = "boot" then
+            declare
+               Name : constant String := Text_Argument (Of_Tree, Argument (1));
+            begin
+               if not Firmware.Is_Boot_Name (Name) then
+                  Refuse (Argument (1), "this is not a boot image kind",
+                    "compiler.boot names ""vector-table"","
+                    & " ""rp2040-boot2"", ""rp2350-image-block"" or"
+                    & " ""esp-app-image""");
+               elsif Boot_Site /= No_Site then
+                  Repeated (Boot_Site);
+               else
+                  Boot_Site := Here;
+                  Built.Boot := Firmware.Boot_Named (Name);
+               end if;
+            end;
+         elsif Member = "region" then
+            declare
+               Name : constant String := Text_Argument (Of_Tree, Argument (1));
+               Origin : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (2));
+               Length : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (3));
+               Mode : constant String := Text_Argument (Of_Tree, Argument (4));
+            begin
+               if not Name_Form (Name, 32) then
+                  Refuse (Argument (1), "a region is named by a quoted"
+                    & " identifier",
+                    "linker.region's name is an ASCII letter, then letters,"
+                    & " digits and underscores, at most 32 bytes, such as"
+                    & " ""FLASH""");
+               elsif Origin = -2 or else Length = -2 then
+                  null;
+               elsif Origin < 0 or else Origin >= 2 ** 32 then
+                  Refuse (Argument (2), "a region's origin is an address in"
+                    & " the 32-bit address space",
+                    "linker.region takes its origin and length in bytes");
+               elsif Length <= 0 or else Origin + Length > 2 ** 32 then
+                  Refuse (Argument (3), "a region's length is at least one"
+                    & " byte and ends inside the 32-bit address space",
+                    "linker.region takes its origin and length in bytes");
+               elsif not Firmware.Is_Access_Name (Mode) then
+                  Refuse (Argument (4), "a region's access is ""rx"","
+                    & " ""rw"" or ""rwx""",
+                    "linker.region's last argument says whether code may"
+                    & " run in it and data be written to it");
+               elsif Built.Count = Firmware.Region_Capacity then
+                  Refuse (Node, "a description has at most 16 regions",
+                    "merge adjacent regions of the same access");
+               else
+                  for Index in 1 .. Built.Count loop
+                     if Firmware.Spelling (Built.Regions (Index).Name) = Name
+                     then
+                        Report_At
+                          (Bad.Description_Structure, Here,
+                           "this description already has a region named "
+                           & Name,
+                           "D543: each region has its own name; rename or"
+                           & " remove one of them",
+                           Related => Regions_At (Index),
+                           Because => "the region of that name");
+                        return;
+                     end if;
+                  end loop;
+                  Built.Count := Built.Count + 1;
+                  Built.Regions (Built.Count) :=
+                    (Name => Firmware.To_Name (Name),
+                     Origin => Landin.Targets.Byte_Count (Origin),
+                     Length => Landin.Targets.Byte_Count (Length),
+                     Mode => Firmware.Access_Named (Mode));
+                  Regions_At (Built.Count) := Here;
+               end if;
+            end;
+         else
+            declare
+               Kind : constant String := Text_Argument (Of_Tree, Argument (1));
+               Region : constant String :=
+                 Text_Argument (Of_Tree, Argument (2));
+               Size : Ty.Folded := 0;
+            begin
+               if not Firmware.Is_Section_Name (Kind) then
+                  Refuse (Argument (1), "this is not a part of the image a"
+                    & " description places",
+                    "linker.place places ""vectors"", ""text"", ""rodata"","
+                    & " ""data"", ""bss"" or ""stack""");
+                  return;
+               elsif not Name_Form (Region, 32) then
+                  Refuse (Argument (2), "a placement names its region in"
+                    & " quotes",
+                    "linker.place's second argument is the name of one of"
+                    & " this description's linker.region directives");
+                  return;
+               end if;
+               declare
+                  Section : constant Firmware.Section_Kind :=
+                    Firmware.Section_Named (Kind);
+                  use type Firmware.Section_Kind;
+               begin
+                  if Section = Firmware.Stack and then Count /= 3 then
+                     Refuse (Node, "the stack's placement gives its size",
+                       "write linker.place(""stack"", """ & Region
+                       & """, SIZE), SIZE being the bytes reserved at the"
+                       & " top of the region");
+                     return;
+                  elsif Section /= Firmware.Stack and then Count = 3 then
+                     Refuse (Argument (3), "only the stack's placement"
+                       & " takes a size",
+                       "every other part of the image is as large as what"
+                       & " the program places in it");
+                     return;
+                  elsif Count = 3 then
+                     Size := Integer_Argument (Of_Tree, Argument (3));
+                     if Size = -2 then
+                        return;
+                     elsif Size <= 0 or else Size mod 8 /= 0 then
+                        Refuse (Argument (3), "a stack is a positive"
+                          & " multiple of 8 bytes",
+                          "the stack's top stays aligned to eight bytes, as"
+                          & " the AAPCS requires at a call");
+                        return;
+                     end if;
+                  end if;
+                  if Placed_At (Section) /= No_Site then
+                     Report_At
+                       (Bad.Description_Structure, Here,
+                        "this description places " & Kind & " twice",
+                        "D543: each part of the image is placed once;"
+                        & " remove one of them",
+                        Related => Placed_At (Section),
+                        Because => "the placement it already has");
+                     return;
+                  end if;
+                  Placed_At (Section) := Here;
+                  Placed_Names (Section) :=
+                    Ada.Strings.Unbounded.To_Unbounded_String (Region);
+                  if Section = Firmware.Stack then
+                     Built.Stack_Size := Landin.Targets.Byte_Count (Size);
+                  end if;
+               end;
+            end;
+         end if;
+      end Configure_Description;
+
+      --  D543: what a description must hold, how its parts fit, and that
+      --  its core is the request's.  Run once every directive is read.
+      procedure Finish_Profile;
+      procedure Finish_Profile is
+         use type Firmware.Section_Kind;
+         use type Firmware.Boot_Kind;
+         use type Landin.Targets.Byte_Count;
+         Complete : Boolean := True;
+         Logical : constant String :=
+           (if Described = Landin.Modules.No_Module then ""
+            else Landin.Modules.Logical_Path
+              (Landin.Stages.Modules (Context).all, Described));
+
+         procedure Missing (What, Write : String);
+         procedure Missing (What, Write : String) is
+         begin
+            Complete := False;
+            Report_At
+              (Bad.Description_Structure, Device_Site,
+               "this description names no " & What,
+               "D543: a description holds one each of compiler.device,"
+               & " compiler.core, compiler.vectors and compiler.boot, and"
+               & " places every part of the image; add " & Write);
+         end Missing;
+
+         procedure Layout (At_Site : Site; Message, Note : String);
+         procedure Layout (At_Site : Site; Message, Note : String) is
+         begin
+            Complete := False;
+            Report_At
+              (Bad.Description_Layout, At_Site, Message, "D543: " & Note);
+         end Layout;
+      begin
+         if Described = Landin.Modules.No_Module
+           or else Device_Site = No_Site
+           or else Description_Refused
+         then
+            return;
+         end if;
+         Built.Reference := Logical = Firmware.Reference_Module;
+         if Core_Site = No_Site then
+            Missing ("core", "compiler.core(""cortex-m0plus""), naming its"
+              & " core");
+         end if;
+         if Vectors_Site = No_Site then
+            Missing ("vector table", "compiler.vectors(COUNT), the table's"
+              & " words");
+         end if;
+         if Boot_Site = No_Site then
+            Missing ("boot image kind", "compiler.boot(""vector-table""),"
+              & " or the kind its boot ROM reads");
+         end if;
+         for Section in Firmware.Section_Kind loop
+            if Placed_At (Section) = No_Site then
+               Missing ("place for " & Firmware.Spelling (Section),
+                 "linker.place(""" & Firmware.Spelling (Section)
+                 & """, ""REGION""" & (if Section = Firmware.Stack
+                                      then ", SIZE)" else ")"));
+            end if;
+         end loop;
+         if not Complete then
+            return;
+         end if;
+
+         --  Regions do not overlap.
+         for Later in 2 .. Built.Count loop
+            for Earlier in 1 .. Later - 1 loop
+               declare
+                  A : Firmware.Region renames Built.Regions (Earlier);
+                  B : Firmware.Region renames Built.Regions (Later);
+               begin
+                  if A.Origin < B.Origin + B.Length
+                    and then B.Origin < A.Origin + A.Length
+                  then
+                     Complete := False;
+                     Report_At
+                       (Bad.Description_Layout, Regions_At (Later),
+                        "region " & Firmware.Spelling (B.Name)
+                        & " overlaps region " & Firmware.Spelling (A.Name),
+                        "D543: no byte is in two regions; make one end"
+                        & " where the next begins",
+                        Related => Regions_At (Earlier),
+                        Because => "the region it overlaps");
+                  end if;
+               end;
+            end loop;
+         end loop;
+
+         --  Each placement names a region whose access fits it.
+         for Section in Firmware.Section_Kind loop
+            declare
+               Name : constant String := Ada.Strings.Unbounded.To_String
+                 (Placed_Names (Section));
+               Index : constant Firmware.Region_Count :=
+                 Firmware.Region_Named (Built, Name);
+            begin
+               if Index = 0 then
+                  Layout (Placed_At (Section),
+                    "this description has no region named " & Name,
+                    "linker.place names one of the description's"
+                    & " linker.region directives");
+               elsif Section in Firmware.Vectors | Firmware.Text
+                 and then not Firmware.Executable
+                   (Built.Regions (Index).Mode)
+               then
+                  Layout (Placed_At (Section),
+                    Firmware.Spelling (Section) & " needs a region code runs"
+                    & " in, and " & Name & " is "
+                    & Firmware.Spelling (Built.Regions (Index).Mode),
+                    "place " & Firmware.Spelling (Section)
+                    & " in an ""rx"" or ""rwx"" region");
+               elsif Section in Firmware.Data | Firmware.BSS | Firmware.Stack
+                 and then not Firmware.Writable (Built.Regions (Index).Mode)
+               then
+                  Layout (Placed_At (Section),
+                    Firmware.Spelling (Section) & " needs a writable region,"
+                    & " and " & Name & " is "
+                    & Firmware.Spelling (Built.Regions (Index).Mode),
+                    "place " & Firmware.Spelling (Section)
+                    & " in an ""rw"" or ""rwx"" region");
+               else
+                  Built.Placed (Section) := Index;
+               end if;
+            end;
+         end loop;
+         if not Complete then
+            return;
+         end if;
+
+         if Built.Vector_Count > Firmware.Vector_Limit (Built.Core) then
+            Layout (Vectors_Site,
+              "a " & Firmware.Spelling (Built.Core) & " vector table holds"
+              & " at most"
+              & Positive'Image (Firmware.Vector_Limit (Built.Core))
+              & " words",
+              Firmware.Level_Name (Built.Core) & " has"
+              & Positive'Image (Firmware.Vector_Limit (Built.Core) - 16)
+              & " external interrupts at most");
+         end if;
+         for Item of Interrupts loop
+            if 16 + Item.IRQ >= Built.Vector_Count then
+               Layout (Item.At_Site,
+                 "IRQ" & Natural'Image (Item.IRQ) & " is slot"
+                 & Natural'Image (16 + Item.IRQ) & ", past the"
+                 & Natural'Image (Built.Vector_Count) & "-word vector table",
+                 "compiler.vectors counts every slot, so it is at least 17"
+                 & " plus the highest IRQ");
+            else
+               Built.Interrupts (16 + Item.IRQ) := True;
+            end if;
+         end loop;
+         declare
+            Vectors_Region : constant Firmware.Region :=
+              Firmware.Placed_Region (Built, Firmware.Vectors);
+            Stack_Region : constant Firmware.Region :=
+              Firmware.Placed_Region (Built, Firmware.Stack);
+         begin
+            if Built.Boot = Firmware.Vector_Table
+              or else Built.Boot = Firmware.RP2040_Boot2
+            then
+               if (Vectors_Region.Origin
+                     + Firmware.Boot_Prefix (Built.Boot))
+                 mod Firmware.Vector_Alignment (Built) /= 0
+               then
+                  Layout (Placed_At (Firmware.Vectors),
+                    "the vector table would start at an address not"
+                    & " aligned to its"
+                    & Landin.Targets.Byte_Count'Image
+                        (Firmware.Vector_Alignment (Built))
+                    & " bytes",
+                    "the table is aligned to its length rounded up to a"
+                    & " power of two; place vectors in a region whose"
+                    & " origin is");
+               elsif Firmware.Boot_Prefix (Built.Boot)
+                 + Firmware.Vector_Bytes (Built) > Vectors_Region.Length
+               then
+                  Layout (Placed_At (Firmware.Vectors),
+                    "the vector table does not fit in region "
+                    & Firmware.Spelling (Vectors_Region.Name),
+                    "place vectors in a larger region");
+               end if;
+            end if;
+            if Built.Stack_Size > Stack_Region.Length then
+               Layout (Placed_At (Firmware.Stack),
+                 "the stack is larger than region "
+                 & Firmware.Spelling (Stack_Region.Name),
+                 "make the stack smaller or place it in a larger region");
+            end if;
+         end;
+         if not Firmware.Implemented (Built.Boot) then
+            Complete := False;
+            Report_At
+              (Bad.Boot_Kind_Reserved, Boot_Site,
+               "refine does not yet build a "
+               & Firmware.Spelling (Built.Boot) & " image",
+               "D545: " & Firmware.Spelling (Built.Boot) & " is a reserved"
+               & " boot image kind; this compiler builds ""vector-table"""
+               & " and ""rp2040-boot2"" images");
+         end if;
+
+         --  D543: the core is the request's, but for the library's
+         --  constrained reference, which every level is tested on.
+         if Landin.Targets.Architecture_Of (Target (Context))
+           /= Landin.Targets.Cortex_M0
+         then
+            Complete := False;
+            Report_At
+              (Bad.Description_Core_Mismatch, Core_Site,
+               "this description is for a " & Firmware.Spelling (Built.Core)
+               & ", and this build is for "
+               & Landin.Targets.Name (Target (Context)),
+               "D543: build it with --target=cortex-m0 --level="
+               & Firmware.Level_Name (Built.Core)
+               & ", or import no description on this target");
+         elsif not Built.Reference
+           and then Landin.Targets.Levels.Name (Level (Context))
+             /= Firmware.Level_Name (Built.Core)
+         then
+            Complete := False;
+            Report_At
+              (Bad.Description_Core_Mismatch, Core_Site,
+               "this description's core is a "
+               & Firmware.Spelling (Built.Core) & ", an "
+               & Firmware.Level_Name (Built.Core) & " core, and this build"
+               & " is at --level="
+               & Landin.Targets.Levels.Name (Level (Context)),
+               "D543: build it with --level="
+               & Firmware.Level_Name (Built.Core));
+         end if;
+         if Complete then
+            Built.Present := True;
+            Landin.Configuration.Set_Profile (Activity.all, Built);
+         end if;
+      end Finish_Profile;
+
       procedure Configure_Directive (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          Call : constant Syn.Node_Id := Syn.Directive_Call (Of_Tree, Node);
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Call);
@@ -1201,7 +2068,11 @@ package body Landin.Stages.Configuration is
          Argument : Syn.Node_Id;
          Value : Fixed_Value;
       begin
-         if (Base /= "compiler" or else Member /= "assert")
+         if Landin.Configuration.Is_Description_Member (Base, Member) then
+            if not Late then
+               Configure_Description (Of_Tree, Node);
+            end if;
+         elsif (Base /= "compiler" or else Member /= "assert")
            and then (Base /= "linker"
                      or else Member not in "library" | "directory")
          then
@@ -1478,7 +2349,9 @@ package body Landin.Stages.Configuration is
                        Syn.Nth_Fixed_Declaration (Of_Tree, Arm, Which);
                   begin
                      if Index = Selected then
+                        Arm_Depth := Arm_Depth + 1;
                         Configure_Declaration (Of_Tree, Declaration);
+                        Arm_Depth := Arm_Depth - 1;
                      else
                         Mark_Subtree_Inactive (Of_Tree, Declaration);
                      end if;
@@ -1652,6 +2525,7 @@ package body Landin.Stages.Configuration is
             end if;
          end;
       end loop;
+      Find_Description;
       for Index in 1 .. Source_Count (Context) loop
          declare
             Of_Tree : constant not null access constant Syn.Tree :=
@@ -1664,6 +2538,7 @@ package body Landin.Stages.Configuration is
             end loop;
          end;
       end loop;
+      Finish_Profile;
 
       declare
          Ordered : constant Landin.Diagnostics.Diagnostic_List :=

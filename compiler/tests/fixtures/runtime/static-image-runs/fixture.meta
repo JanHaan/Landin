@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D536 writes static image runs as .fill, .zero and narrow nested repetitions, and every element reads back as written
+constructs: 0520, 0560, 0750, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

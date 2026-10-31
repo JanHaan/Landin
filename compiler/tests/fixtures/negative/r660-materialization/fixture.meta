@@ -1,5 +1,5 @@
 class: negative
-summary: D229 bounds firmware image materialization before assembly and before section garbage collection
+summary: D537 holds a firmware image to its profile before emission and before section garbage collection: the 8 MiB + 1 image is past the reference profile's 32 KiB flash
 program: program.ldn
 constructs: 1640, 1990
 targets: cortex-m0

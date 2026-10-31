@@ -66,7 +66,8 @@ keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'offsetof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
 'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
-'align', 'section', 'keep', 'thread', 'vector', 'interrupt', 'naked', 'noreturn',
+'align', 'section', 'region', 'keep', 'thread', 'vector', 'interrupt', 'naked',
+'noreturn',
 'distinct', 'out' and 'into' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
@@ -508,7 +509,7 @@ c_convention       ::= "extern" "(" "c" ")"
 machine_convention ::= "extern" "(" ("interrupt" | "naked") ")"
 link_symbol        ::= "link" "(" "symbol" ":" text ")"
 link_attributes    ::= "link" "(" link_attribute ("," link_attribute)* ")"
-link_attribute     ::= ("symbol" | "section") ":" text
+link_attribute     ::= ("symbol" | "section" | "region") ":" text
                      | ("align" | "vector") ":" integer | "keep" | "thread"
 c_signature        ::= "(" (parameters ("," "...")?)? ")" "->" returns errors?
 c_declared_signature ::= "(" (routine_formals ("," "...")?)? ")"
@@ -2151,17 +2152,24 @@ errors. Entry selection does not require `public`. A different explicit
 `link(symbol: text)` does not change which source declaration is selected.
 Hosted entry and linkage rules remain [1970]/[1975].
 
-The selected image has 32 KiB flash at zero and 16 KiB RAM at `0x20000000`.
-The initial SP is `0x20004000`, aligned to eight bytes. The upper 4 KiB of RAM
-is reserved for stacks; static RAM ends no later than `0x20003000`. This is a
-constrained test profile, not permission to use the board's larger flash.
-The firmware request refuses a compiler-framed routine when its known frame alone,
-including saved registers and reserved homes, exceeds the selected 4 KiB stack
-reservation. This does not bound total stack use across calls or interrupts;
-those paths remain programmer obligations.
-The compiler creates a 48-word, 256-byte-aligned vector image at address zero.
-Its first two words are the initial SP and compiler reset function. Core
-slots 4–10 and 12–13 and selected-device slots 21 and 42–47 are zero.
+The image follows the profile the program's device description selects
+(D542, D543): its regions, where each part of the image is placed, its stack
+and its vector table. A program that imports no description is given the
+constrained reference profile, `platform/cortex_m/reference`: 32 KiB flash at
+zero and 16 KiB RAM at `0x20000000`, the initial SP `0x20004000`, aligned to
+eight bytes, the upper 4 KiB of RAM reserved for stacks, so static RAM ends no
+later than `0x20003000`. That is a constrained test profile, not permission
+to use a board's larger flash. The firmware request refuses a compiler-framed
+routine when its known frame alone, including saved registers and reserved
+homes, exceeds the selected stack reservation. This does not bound total stack
+use across calls or interrupts; those paths remain programmer obligations.
+The compiler creates the profile's vector image, as many words as its
+description counts, aligned to its length rounded up to a power of two and
+no less than 128 bytes, at its boot address (D545). Its first two words are
+the initial SP and compiler reset function. The slots a handler may take are
+the profile's (D544): its core's architectural exceptions and 16 + IRQ for
+each interrupt its description names; every other slot is zero, which in the
+reference is core slots 4–10 and 12–13 and slots 21 and 42–47 of its 48.
 Other unspecified handlers enter the compiler's terminal unhandled-exception
 loop. There is no VTOR relocation, FPU frame, exclusive-access primitive,
 priority grouping or later-Thumb instruction contract.
@@ -2332,7 +2340,8 @@ transfer control, takes no operands and is followed by a trap (D279).
 The synthetic target has no registers and refuses assembly outright.
 
 Placement is a declaration annotation:
-`link(section: text, align: integer, vector: integer, keep, symbol: text)`.
+`link(section: text, align: integer, vector: integer, keep, symbol: text,
+region: text)`.
 Only supplied attributes apply, and duplicate attributes/annotations are
 errors. Section names are at most 80 ASCII letters, digits, underscores or
 dots, with a nonempty suffix. Functions select `.text.*` (flash) or
@@ -2356,8 +2365,10 @@ compiler startup/private Arm helpers. Function symbol spelling retains
 [1975]'s existing rules. Ordinary, C and optimal aggregate layout do not change.
 
 `vector: N` associates a defined interrupt/naked routine with one unique
-implemented exception slot: 2, 3, 11, 14, 15, 16–20 or 22–41. Slots are absolute
-vector indexes, not IRQ numbers. Zero, reset, reserved slots, duplicates and
+exception slot the selected profile implements (D544): in the constrained
+reference 2, 3, 11, 14, 15, 16–20 or 22–41. Slots are absolute vector indexes,
+not IRQ numbers; external IRQ n is slot 16 + n. `region: text` places the
+declaration in a region of the selected description (D547). Zero, reset, reserved slots, duplicates and
 ordinary/C routines are refused. Emitting such an annotation requires an
 explicit firmware-entry request. The compiler-owned kept vector image carries
 a relocation to the handler; an unreferenced interrupt routine without keep
@@ -2369,17 +2380,21 @@ not enable an arbitrary source initializer referring to a linker symbol;
 fixed assembly can name the documented `_landin_firmware_*` startup symbols.
 
 Executable emission retains assembly, object, compiler-generated linker
-script, ELF and map as explicit outputs. The driver passes each host effect
+script, ELF and map as explicit outputs; `--linker-script=FILE` links with a
+developer's script instead, held to D546's contract. The driver passes each host effect
 through `Landin.Platform`, checks output/source aliases before writes, uses
 ARMv6-M Thumb/AAPCS soft-float assembler flags with fatal warnings, and links
 with no hosted startup, default libraries or libc. Only the selected private
 `thumb/v6-m/nofp/libgcc.a` helper closure is admitted. This does not enable the
-general C source surface. The linker checks flash bounds, static RAM/stack
+general C source surface. The derived script checks flash bounds, static RAM/stack
 overlap and the vector address/size; unresolved symbols and relocation or
-encoding failures remain reported tool failures. An 8 MiB static-image
-materialization guard applies before firmware emission, including unreachable
-images, independently of the much smaller physical map and section GC.
-Hosted placement annotations, arbitrary section addresses/linker scripts,
+encoding failures remain reported tool failures. Before emission the
+program's static images are held to the selected profile's capacities
+(D537): every written image, including one section GC would drop, to the
+region text is placed in, 32 KiB in the reference, and every mutable written
+image to the data region, 16 KiB in the reference. The linker stays the
+authority for the map itself.
+Hosted placement annotations, arbitrary section addresses,
 weak symbols, inline hints and general tool directives remain explicit
 refusals. No request is silently ignored.
 
@@ -5530,12 +5545,13 @@ D28, and therefore remains loader-zeroed storage rather than bytes in `.data`.
 Neither image resolution, copying, verification nor dumping enumerates the
 extent.
 
-The Linux x86-64 backend emits a constant-size `.rept`/width-specific-directive/
+The Linux x86-64 backend emitted a constant-size `.rept`/width-specific-directive/
 `.endr` sequence for a nonzero repeated image. The scalar directive is `.byte`,
 `.word`, `.long` or `.quad` according to the target element width. In particular,
 the eight-byte form does not use GNU `.fill`, whose value operand contributes at
 most four bytes and would discard the high half of a `u64` pattern. An absent zero
-image stays `.bss`.
+image stays `.bss`. D536 later writes a pattern of four bytes or fewer as one
+`.fill` on every target and keeps the repetition for eight-byte patterns.
 
 A repetition whose written contextual length is zero is refused at the
 repetition. This is a construct-specific nonzero requirement. D136 later
@@ -5757,7 +5773,7 @@ IR, verification, dumping or copying walks or allocates in proportion to `N`.
 A hybrid remains a present image when its suffix value is zero, because its
 nonempty written prefix makes it explicit `.data`; Linux x86-64 emits the prefix
 with width-matched scalar directives and then a constant-size `.rept N - k`
-around one zero directive. A full repetition of zero retains D34's absent image
+around one zero directive, which D536 writes as one `.zero`. A full repetition of zero retains D34's absent image
 and loader-zeroed `.bss`. For every nonzero suffix the backend uses the same
 `.byte`, `.word`, `.long` or `.quad` directive, so a 64-bit pattern reaches the
 assembler with all eight bytes rather than GNU `.fill`'s truncated value field.
@@ -5780,6 +5796,55 @@ public-seam cases; `positive/module-array-mixed-repetition`;
 `negative/module-array-mixed-repetition-fold-range`; the retained inferred,
 nested and general-value refusal fixtures; and
 `runtime/module-mixed-array-repetition-holds-hybrid` on Linux x86-64.
+
+### D536 — A static image's runs are written without expansion
+
+**The tour said** that repetition is a static pattern that lives in flash
+[0560], and D34, D38 and D132 kept every run compact through lowering, IR and
+the assembly text. It did not say what the assembler does with that text. GNU
+as and LLVM both expand `.rept` in memory, its body's text once per copy, and
+GNU as keeps what it expanded, so a compact `.rept 100000000` around a nested
+row asked a 76 MB object for gigabytes of assembler memory.
+
+**Chosen:** every native backend writes a run of one element through the one
+set of helpers in `Landin.Backend`, so the four, arm64 for Linux, FreeBSD and
+Darwin alike, agree on its form:
+
+- A run that writes only zero bytes is one `.zero`: a repeated zero scalar, a
+  hybrid's zero suffix, and a repeated aggregate or array element whose whole
+  image is zero, with its padding.
+- A run of a scalar of one, two or four bytes is one `.fill count, size,
+  value`, which both assemblers hold as one fragment.
+- What is left, a run of a nonzero composite element, of an address, of an
+  atom, or of an eight-byte scalar whose high half `.fill`'s four-byte value
+  field would drop, is repeated. A count above 256 is written in base 256: for
+  each nonzero digit, a `.rept` of that digit around as many nested
+  `.rept 256` as its place, around the body. A count up to 256 is one `.rept`
+  as before.
+
+A body is therefore written once per nonzero digit, at most eight times, and
+the text an assembler expands at once is the body's own times at most 256.
+Nested runs multiply their digits, which D537's budget bounds: within 4 GiB at
+most three dimensions of an image exceed 256. The object bytes are those the
+earlier `.rept` sequences assembled to.
+
+**Why one directive where one will do:** `.zero` and `.fill` are a fragment
+whose repetition the assembler writes out only into the object, so an image of
+hundreds of megabytes costs it a few megabytes. A repeated body is expanded,
+however it is nested, and is what D537 counts against the budget.
+
+**The alternatives:** emit every element, which makes the assembly as large as
+the image; keep one `.rept` of the whole count, whose expansion is the count
+times the body's text and which GNU as retains; or use `.fill` for eight-byte
+patterns, which loses their high half. Writing a composite run's bytes out as
+`.byte` lists was declined for the first reason.
+
+**Pinned by** `backend/module repetition uses compact full-width directives`,
+`backend/recursive array descriptors use target strides`,
+`backend scale/compact images emit compact assembly` on every native target,
+`runtime/static-image-runs` on every target and the Cortex-M corpus, and
+`scripts/image_bounds.py`, which assembles the compact shapes and holds the
+assembler's peak memory and the object's size to the image.
 
 ### D39 — A written module scalar gives `zeroed` its context
 
@@ -13764,7 +13829,7 @@ classified failure boundary before the repository gate can pass.
 | `functions.nonreturning` | static | 0890, 0940, 1000, 1100, 1240, 1290, 1370, 1930, 1960 | D231 separates infallible nonreturning signatures from none, rejects reachable return/fallthrough and preserves termination through generic/evidence calls and applicable cleanup | `positive/r491-noreturn-signatures`, `negative/r670-noreturn-fallthrough`, `abi/r670-noreturn` |
 | `panic.contract` | static | 0890, 1670 | D232 selects only a canonical public ordinary nonreturning entry-module hook; L0506 rejects malformed declarations and unrepresentable u32 site spaces | `negative/r670-panic-handler`, `abi/r670-panic` |
 | `panic.dispatch` | trap | 0300, 0470, 0570, 0890, 1100, 1670, 1675, 1950, 1960, 1995 | D232 dispatches kind/site at the failed operation, forbids later computation and cleanup, and terminates reentry; the default needs no reporting storage | `abi/r670-panic`, `environments/cortex-m/freestanding.py` selected/default/interrupt controls, `runtime/fibre-stack-past-limit-traps`, `runtime/stack-frame-past-limit-traps` |
-| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/assembly-synthetic-target` |
+| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers; L0505 holds static images to D537's budget before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/assembly-synthetic-target` |
 | `firmware.return` | trap | 1550, 1570, 1650, 1990 | D232 dispatches entry return as unreachable/site zero; D229 naked fallthrough retains its undefined-instruction guard and separate hardware-fault obligations | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
@@ -17295,8 +17360,11 @@ independent CPU/interrupt/DMA controls and the bounded cache/store-buffer models
 **From** [1460], [1550]–[1570], [1630]–[1660], [1940], D202, D227 and D228.
 
 **Decision:** [1990] defines the enabled Cortex-M0 source/request contract.
-The compiler owns reset, the fixed constrained linker script and the vector
-image; source annotations contribute typed handler references and placement.
+The compiler owns reset, the linker script and the vector image; source
+annotations contribute typed handler references and placement. D543-D547
+make the memory map, the vector slot exclusions, the script and the boot
+image follow the selected device description, with the constrained profile
+kept as the reference description.
 This is a toolchain slice, not a new initialization language or package system.
 
 | Choice | Alternative and reason for declining it | Executable pin |
@@ -17308,7 +17376,7 @@ This is a toolchain slice, not a new initialization language or package system.
 | Conservative opaque assembly with restricted ordinary registers/control flow | Unstated clobbers corrupt live values; treating a compiler boundary as a hardware barrier invents ordering/completion | generic opaque-memory and ordinary-live-value execution, generated interrupt/DMA trace |
 | Flash immutable images, RAM data/BSS and explicit RAM code load images | Leaving initialization to test setup or treating load addresses as execution addresses conceals relocation failures | poisoned boot, copied RAM handler, veneer and libgcc execution |
 | Section retention separate from calling convention | Keeping every handler changes reachability and code size; dropping relocation targets breaks vector/data images | kept/discarded sections, first-class handler and text relocations |
-| Explicit constrained script, bounded materialization and one-frame check | A larger board hides overflows; a general script/build ecosystem exceeds this slice; materializing giant unreachable images before GC wastes unbounded resources | flash/stack overflow, L0505/L0507 and misplaced-vector controls |
+| Explicit constrained script, bounded materialization and one-frame check | A larger board hides overflows; a general script/build ecosystem exceeds this slice; materializing giant unreachable images before GC wastes unbounded resources; D537 replaces the 8 MiB bound with the profile's capacities | flash/stack overflow, L0505/L0507 and misplaced-vector controls |
 
 The physical startup/exception premises are outside language memory safety;
 shape, convention, placement and assembly restrictions are static checks;
@@ -17497,6 +17565,61 @@ A returning or failing handler would contradict D11 and [1670].
 **Pinned by** `driver/panic handler contracts`, `abi/r670-panic`,
 `core-panic.ldn`, the off-target identity refusal tests, and the inherited
 default-trap fixtures.
+
+### D537 — One image budget on every target, before emission
+
+**From** [1990], D18, D229 and D536.
+
+**The question:** D229 bounded firmware alone, at 8 MiB of materialized
+images, a number chosen to stop the assembler rather than to say anything
+about the image. A hosted program had no bound, so a line asking for more
+than the target can address reached the assembler and then the linker's
+relocation overflow, and Cortex-M's 8 MiB stood beside a 32 KiB flash.
+
+**Chosen:** one check, before anything is emitted, holds every target's static
+images to a budget in target bytes. It counts every datum the compilation
+lowers, before optimization and before section GC: a program with a public
+`main` lowers what that reaches, and one without, a firmware image or an
+object, lowers everything. Written images, those with bytes in the object,
+count against the initialized budget; mutable written images also against the
+writable one; zero images the loader or startup clears count only against the
+address space.
+
+| Target | Written images | Mutable written images | Zero images |
+| --- | --- | --- | --- |
+| linux-x86-64, freebsd-x86-64 | 2 GiB, the small code model's reach | 2 GiB | 2^64 - 1 bytes |
+| darwin-arm64 | 2 GiB, a Darwin static image | 2 GiB | 2^64 - 1 bytes |
+| linux-arm64, freebsd-arm64 | 4 GiB, ADRP's reach | 4 GiB | 2^64 - 1 bytes |
+| linux-rv64 | 2 GiB, AUIPC's reach | 2 GiB | 2^64 - 1 bytes |
+| cortex-m0 without a firmware request | 2^32 - 1 bytes, the address space | 2^32 - 1 bytes | 2^32 - 1 bytes |
+| cortex-m0 firmware, reference profile | 32 KiB, its flash | 16 KiB, its RAM | 2^32 - 1 bytes |
+
+A firmware image takes its profile's capacities as the check's argument,
+so a profile with more flash raises its budget without another rule. A
+scalar datum counts as written whatever it folds to. The refusal is L0505,
+which names the bytes the images take, the budget they exceed and what sets
+it, the code model, the address space or the profile's flash or RAM.
+
+This states the per-target limits that the roadmap's emission policy left
+open. The check is not a placement verdict: code is not counted, and the
+linker remains the authority for the map, the stack reservation and a zero
+image past a code model's reach.
+
+**Why counted before GC:** the assembler is given every image the compilation
+holds, whether or not the linker keeps it, so the bound on its work must count
+them all. A firmware image also refuses at the compiler a data image its flash
+cannot hold, where the linker would have.
+
+**The alternatives:** keep 8 MiB, a number that bounds no target's image;
+bound only firmware, which leaves a hosted program's line asking for
+gigabytes to the assembler; count after GC, which needs the link this check
+runs before; or count zero images against the code model, which refuses BSS
+that only a placement outside the code model's reach would trouble.
+
+**Pinned by** `backend scale/images past their budget run no tool` on every
+native target, `cortex ABI/firmware path`, `negative/r660-materialization`,
+`negative/image-budget-past-reach`, and `environments/cortex-m/firmware.py`'s
+flash-overflow, bounded-materialization, flash-budget and ram-budget controls.
 
 ### D248 — Assembly operands name their registers
 
@@ -20550,6 +20673,280 @@ and the text on request.
 `check.py`'s comparison of the generated
 `compiler/ada/src/diagnostics/landin-diagnostics-citations.adb` and
 `landin-diagnostics-citations-texts.adb` with the documents.
+
+### D542 — A device description is a module of directives, and its generated half has one text
+
+**The tour said** at [1410] that a module is every `.ldn` file of one
+directory, at [1560] that tool directives run no user code, and [1990]
+fixed one constrained Cortex-M0 profile: its memory, its stack, its 48 vector
+slots and which of them are reserved, in the compiler. A device was nowhere
+a reader could see it, and a second one would have been compiler source.
+
+**Chosen:** a device is described in Landin source, as one module made only
+of tool directives in [1740]'s `tool_directive` form. Each argument is
+positional: a text is a text literal, decoded by the ordinary text decoder
+as `linker.library`'s is, and an integer is a fixed integer expression in
+D202's closed fold, so `0x2000_0000` and `256 * 1024` are both written as
+they read. The directives are:
+
+| directive | arguments | says |
+|---|---|---|
+| `compiler.device(name)` | lowercase ASCII letters, digits and hyphens, beginning with a letter, at most 32 bytes | the device's identity; the module holding it is a description |
+| `compiler.core(name)` | `cortex-m0`, `cortex-m0plus`, `cortex-m3`, `cortex-m4` or `cortex-m7` | the core, and through it the architecture level: `armv6-m`, `armv6-m`, `armv7-m`, `armv7e-m` and `armv7e-m` |
+| `compiler.vectors(count)` | an integer | the vector table's whole length in words, the initial SP and reset included |
+| `compiler.interrupt(name, irq)` | an ASCII letter, then letters, digits and underscores, at most 64 bytes; an integer | that external interrupt `irq` is implemented, at absolute slot 16 + `irq` |
+| `compiler.boot(kind)` | a boot image kind | how the image begins |
+| `linker.region(name, origin, length, access)` | an ASCII letter, then letters, digits and underscores, at most 32 bytes; two integers; `"rx"`, `"rw"` or `"rwx"` | one memory region |
+| `linker.place(kind, region[, size])` | `"vectors"`, `"text"`, `"rodata"`, `"data"`, `"bss"` or `"stack"`; a region's name; for `"stack"` alone, its size in bytes | where the compiler places that part of the image |
+
+A slot no `compiler.interrupt` names is reserved and holds zero. The
+directives' order carries no meaning.
+
+A description is usually two files, which the compiler does not tell
+apart. `interrupts.ldn` holds `compiler.device`, `compiler.core`,
+`compiler.vectors` and the interrupts, and is generated from the device's
+CMSIS-SVD file; `memory.ldn` holds the regions, the placements and
+`compiler.boot`, and is written by the developer, since an SVD says nothing
+of either. A generated `interrupts.ldn` has exactly this text, so that
+whatever generates it, and a reviewer, can compare bytes:
+
+1. Line 1 is `-- Interrupts of the NAME, from its SVD: vendor VENDOR, version
+   VERSION.`, with the SVD's `device/name`, `vendor` and `version` as written,
+   surrounding whitespace removed; a clause whose element the SVD lacks is
+   left out with its comma.
+2. Line 2 is `-- SVD SHA-256 HEX.`, the lowercase SHA-256 of the SVD file's
+   bytes.
+3. Each nonempty line of the SVD's `licenseText`, its surrounding whitespace
+   removed, follows as `-- LINE`.
+4. Then `-- Generated from the SVD; memory.ldn beside it is written by hand.`
+   and one empty line.
+5. `compiler.device("ID")`, ID being `device/name` in lowercase;
+   `compiler.core("CORE")`, from `cpu/name`, where `CM0`, `CM0PLUS`, `CM3`,
+   `CM4` and `CM7` are the five cores above; and `compiler.vectors(N)`, N being
+   16 plus the larger of `cpu/deviceNumInterrupts` and one more than the
+   highest interrupt value, or plus the latter alone when the SVD has no
+   `deviceNumInterrupts`.
+6. One `compiler.interrupt("NAME", VALUE)` for each distinct pair of an
+   `interrupt` element's name and value in any peripheral, derived ones
+   included, ordered by value and then by the name's bytes; VALUE is
+   decimal with no separators.
+
+The file is ASCII with LF line ends, one directive or comment per line, no
+trailing spaces, no other empty line, and it ends with one LF. It is the
+form `refine fmt` leaves unchanged. RP2040's SVD gives 48 slots: it says 26
+interrupts and names 32, the last six its spare software interrupts, and
+pico-sdk's vector table has 48 words.
+
+The repository keeps a description in `devices/descriptions/DEVICE/`, beside
+and apart from the register modules under `devices/generated`, which are
+regenerated byte for byte; a program imports it as `descriptions/DEVICE` with
+`--root=devices`, a name no root of register modules can hold. The
+constrained reference profile is a description in refine's own library,
+`platform/cortex_m/reference`, so an installed compiler finds it as it finds
+`platform/cortex_m`.
+
+**The alternatives:** a chip table in the compiler, which makes every new
+chip compiler source; a separate description language or a JSON file beside
+the program, which the editor tooling, the formatter and the module rules do
+not reach and a reader has to learn; named arguments, which [1740]'s
+directive form does not have; generating the memory half from the SVD, which
+does not hold it; and putting the description beside the register modules,
+whose directory is the generator's to rewrite.
+
+**Pinned by** `devices/descriptions/rp2040/interrupts.ldn`, first written by
+hand in this form from the pinned SVD and now generated by `refine svd`
+(D557), and `devices/test.py`'s `D542Form`, which renders the form from each
+fetched SVD with nothing of the compiler's and requires each device's file to
+be the rendering, beside its regeneration of the same files by refine.
+
+### D543 — A program selects its device by importing its description
+
+**The tour said** nothing of how a firmware program says which device it
+is built for; [1990] had one profile, and D542 makes a device a module.
+
+**Chosen:** the firmware entry module imports its description, directly or
+through any module it imports; a description is the module holding
+`compiler.device`, and at most one is in the reached graph. On a Cortex-M
+target, a program that reaches none is given the library's
+`platform/cortex_m/reference`, the constrained profile [1990] fixed written
+as a description, which the loader adds once everything the imports reach
+is read; its sources join the program as any library module's do, and its
+directives emit nothing, so the assembly of a program that imports no
+description is what it was. A host whose library lacks it can still check
+and emit a program with no vector or region placement, and refuses one that
+has either, or a firmware request, as L0518, saying to import a description
+or name a library with `--library=DIR`.
+
+The directives join D202's closed configuration fold. Each is a
+module-level directive of the description's own module, outside every
+fixed arm, active or not, as an option is; one in another module, or in an
+arm, is L0513, and so is an import or any other declaration in a
+description, and a second description. A description names its device,
+core, vector table and boot image kind once each, and places each of
+`vectors`, `text`, `rodata`, `data`, `bss` and `stack` once; an argument
+outside its row's form is L0399. Once all are read: regions do not overlap;
+a placement names one of the description's regions, code and the vector
+table one that may execute, and data, BSS and the stack one that may be
+written; the vector table, aligned to its length rounded up to a power of
+two and no less than 128 bytes, fits its region past the boot kind's
+prefix; the table is no longer than the core's architecture allows, 48
+words on ARMv6-M and 512 on ARMv7-M; each interrupt's slot is inside it;
+and the stack fits its region. Those are L0514. `.ramtext` is placed with
+`data`, and every load image in the region `text` is placed in.
+
+A description's core must be the request's: the target `cortex-m0`, and
+`--level` the core's level, so an RP2040, a `cortex-m0plus`, builds at the
+default `armv6-m` and a `cortex-m4` asks for `--level=armv7e-m`; a mismatch
+is L0515, naming the options to give. The constrained reference alone is
+used at every level, with its ARMv6-M slots, because it is the profile the
+levels were always tested on and remains so. `refine lsp` checks a module
+that imports a description against that profile, with the target and
+level it is given, and reports the same refusals at the directives.
+
+**The alternatives:** a `--device=NAME` option, which puts the device
+outside the source the editor and the formatter see and lets two builds of
+one program disagree; selecting the description by a fixed arm, which
+makes every description reachable and the selection a configuration
+expression; letting the core select the level, which hides from the
+request what it builds for; and keeping the reference profile in the
+compiler, which makes it the one device that is not a description.
+
+**Pinned by** `negative/description-unknown-core`,
+`negative/description-directive-outside`,
+`negative/description-regions-overlap`,
+`negative/description-core-mismatch`, the `cortex ABI` case
+`device descriptions select their profiles`, which holds every refusal and
+the selection of RP2040 and of the reference by device identity, and
+`environments/cortex-m/descriptions.py`, which compares each selected
+region, vector mapping and boot kind of the linked images with
+`environments/cortex-m/descriptions.json`, recorded apart from the
+compiler from pico-sdk 2.2.0's map and [1990].
+
+### D544 — The selected profile decides which vector slots a handler takes
+
+**The tour said** at [1990] which slots the constrained profile reserves,
+2, 3, 11, 14, 15, 16–20 and 22–41 taking handlers, and D229 wrote them
+into the checker, the verifier and the backend.
+
+**Chosen:** a handler's `link(vector: N)` takes slot N when the selected
+profile admits it: a core slot of the description's core, NMI 2,
+HardFault 3, SVCall 11, PendSV 14 and SysTick 15, with MemManage 4,
+BusFault 5, UsageFault 6 and DebugMonitor 12 on ARMv7-M, or 16 + IRQ for an
+interrupt its description names, and below its `compiler.vectors` count.
+The table has that many words; an admitted slot holds its handler or the
+unhandled loop, and every other slot holds zero. The checker, the verifier
+and the backend read one profile, which the IR carries. A slot the profile
+reserves is L0347, naming the device and the slots its core takes. The
+constrained reference keeps [1990]'s table byte for byte: 48 words, IRQ5
+and IRQ26–31 reserved. RP2040's description names all 32 of its
+interrupts, so a handler at slot 21, `USBCTRL_IRQ`, occupies that word.
+
+**The alternatives:** admitting every slot below the count, which turns a
+reserved word into a branch to the unhandled loop that the device never
+takes and hides a misnumbered handler; and naming slots by interrupt name,
+which a later decision may add beside numbers without changing this.
+
+**Pinned by** the `cortex ABI` cases `device descriptions select their
+profiles` and `machine directives`, and `environments/cortex-m/descriptions.py`'s
+slot-21 controls: RP2040's linked vector word 21 is the handler, and the
+reference refuses slot 21 and links zero there.
+
+### D545 — The linker script is derived from the description, and boot kinds are the compiler's
+
+**The tour said** nothing; D229 kept one fixed script.
+
+**Chosen:** the driver writes the derived script as `OUT.ld`: a MEMORY line
+for each region in the description's order, the stack at the top of its
+region, the vector table at the start of its region, past the boot kind's
+prefix, then text, read-only data and the unwind tables in their regions,
+initialized data and RAM code in the data region loaded from the text
+region, BSS, and each region a `link(region: ...)` uses (D547). It asserts
+the vector address and length, the stack's alignment, that nothing placed
+in the stack's region reaches the stack, and that the last load image ends
+inside the text region. Reset copies and clears what the script places, by
+the `_landin_firmware_*` symbols. For the constrained reference the script
+is, byte for byte, the one D229 fixed.
+
+A boot image kind is a fact of the target, not of a device. The closed set
+is `vector-table`, the plain table at the boot address; `rp2040-boot2`, a
+256-byte second stage at the start of the vectors' region, in a `.boot2`
+section, with the table after it at 256-byte alignment, as pico-sdk lays it
+out; and the reserved `rp2350-image-block` and `esp-app-image`, which a
+description may name and refine refuses as L0516 until it builds them. The
+second stage's code is not refine's yet: the slot holds 256 zero bytes,
+which fail the RP2040 boot ROM's CRC check, so the ROM does not enter the
+image and stays in its USB boot mode. The firmware build report records the
+selected device, core, boot kind, vector address and length, regions and
+placements beside the capacities, which are the text region's length and
+the data region's less a stack it holds.
+
+**The alternatives:** a script template the developer fills, which is a
+second configuration language; deriving the script from the program's
+sections alone, which leaves the regions nowhere a reader sees them; and
+filling the second stage with erased-flash bytes, which a debugger reads
+as an instruction stream rather than an absent one.
+
+**Pinned by** the `cortex ABI` cases `firmware path` and `device descriptions
+select their profiles`, the latter holding the reference's derived script
+to D229's text, and `environments/cortex-m/descriptions.py`, which holds the
+linked `.boot2` and vector addresses and the build report's facts to
+`environments/cortex-m/descriptions.json`.
+
+### D546 — A developer's linker script is held to a written contract
+
+**The tour said** nothing; [1990] refused linker scripts.
+
+**Chosen:** `--linker-script=FILE` links firmware with FILE in place of
+`OUT.ld`, which refine still writes beside the image. It is refused
+unless the request is `--target=cortex-m0 --firmware-entry=NAME
+--emit=exe`. refine does not parse the script: after the link it reads the
+ELF and holds it to four clauses, in order, and a broken one is L0519
+naming it, the executable is removed and the derived script is offered:
+
+1. the vector table: `_landin_firmware_vectors` at the profile's boot
+   address, its whole length loaded there, its first words the initial
+   stack pointer and reset, and for `rp2040-boot2` the second stage at the
+   start of its region;
+2. the startup symbols: every `_landin_firmware_*` symbol reset reads, the
+   stack's two, and each used region's;
+3. the stack: in a writable region of the description, its top aligned to
+   eight bytes, its size the description's, and no data, RAM code or BSS
+   reaching into it;
+4. the initialized images: each load image of data, RAM code and a used
+   writable region in the region text is placed in, held in the file.
+
+**The alternatives:** parsing the script, which is the linker's language
+and changes with it; trusting a developer's script unchecked, which lets an
+image boot to nowhere; and refusing scripts until a build tool exists,
+which the developer's ownership of the linker does not wait for.
+
+**Pinned by** `environments/cortex-m/descriptions.py`, which links with a
+copy of the derived script and with one breaking each clause, each refused
+naming its clause.
+
+### D547 — A declaration can be placed in a named region
+
+**The tour said** at [1640] that placement chooses a section and an
+alignment, and [1990] refused section addresses.
+
+**Chosen:** `link_attribute` gains `region: text`, which places a routine or
+module datum in a region of the selected description by name, without a
+section: a routine needs a region that may execute, a mutable datum one
+that may be written. A routine and initialized data in a writable region
+are copied from their load image in the text region by reset, and zero data
+is cleared, after `.data`, RAM code and `.bss`; in a read-only region they
+run and are read in place. A region the description does not have, a
+region beside a section, or a region whose access does not hold the
+declaration is L0517, and a region placement with no profile is L0518. On a
+hosted target placement is L0347, as every placement is.
+
+**The alternatives:** a section name per region, which leaves the reset
+loops to the developer; and an address, which [1990] refuses and a
+description makes unnecessary.
+
+**Pinned by** `negative/region-placement-unknown` and
+`environments/cortex-m/descriptions.py`, which finds a datum placed in
+RP2040's `SCRATCH_X` inside that region in the linked image.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

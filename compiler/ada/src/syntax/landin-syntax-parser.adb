@@ -3435,10 +3435,10 @@ package body Landin.Syntax.Parser is
                begin
                   Complain
                     (Syn.Token_Expected, Here, Message,
-                     Note => "[1640]: a link annotation takes `section` and"
-                             & " `symbol` with text, `align` and `vector`"
-                             & " with an integer, and `keep` and `thread`"
-                             & " alone, each once",
+                     Note => "[1640]: a link annotation takes `section`,"
+                             & " `symbol` and `region` with text, `align`"
+                             & " and `vector` with an integer, and `keep`"
+                             & " and `thread` alone, each once",
                      Related => Opened, Because => "this annotation");
                end Refuse_Link;
             begin
@@ -3465,7 +3465,7 @@ package body Landin.Syntax.Parser is
                         then
                            exit;
                         end if;
-                        if (Label in "section" | "symbol"
+                        if (Label in "section" | "symbol" | "region"
                             and then Peek = Tok.Text_Literal)
                           or else (Label in "align" | "vector"
                             and then Peek = Tok.Integer_Literal)
@@ -3486,6 +3486,8 @@ package body Landin.Syntax.Parser is
                            /= Landin.Source.Empty_Span)
                        or else (Label = "symbol" and then Symbol
                            /= Landin.Source.Empty_Span)
+                       or else (Label = "region" and then Attr.Region
+                           /= Landin.Source.Empty_Span)
                        or else (Label = "keep" and then Attr.Keep)
                        or else (Label = "thread" and then Attr.Thread)
                      then
@@ -3499,6 +3501,8 @@ package body Landin.Syntax.Parser is
                         Attr.Alignment := Value;
                      elsif Label = "vector" then
                         Attr.Vector := Value;
+                     elsif Label = "region" then
+                        Attr.Region := Value;
                      elsif Label = "thread" then
                         Attr.Thread := True;
                      else
