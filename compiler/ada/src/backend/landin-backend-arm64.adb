@@ -7456,9 +7456,14 @@ package body Landin.Backend.Arm64 is
                when Landin.Targets.Byte_4 => ".long",
                when Landin.Targets.Byte_8 => ".quad");
 
+      --  D536: how many repeated bodies the image being written is inside,
+      --  where a short run is written as plain values.
+      Repeating : Natural := 0;
+
       --  D536: Count copies of one scalar, as `.zero` or `.fill` where one
       --  directive writes them and as nested repetitions of the scalar's
-      --  own directive where `.fill` cannot carry its eight bytes.
+      --  own directive where `.fill` cannot carry its eight bytes; inside a
+      --  repeated body a short run is plain values.
       procedure Emit_Scalar_Run
         (Count : Landin.IR.Element_Total;
          Held  : Held_Size;
@@ -7482,6 +7487,9 @@ package body Landin.Backend.Arm64 is
       begin
          if Count = 0 then
             return;
+         elsif Landin.Backend.Is_Plain (Count, Held, Repeating > 0) then
+            Emit (Landin.Backend.Plain_Run
+              (Count, Held, Value, Directive (Held)));
          elsif Landin.Backend.Is_Filled (Held, Value) then
             Emit (Landin.Backend.Scalar_Run (Count, Held, Value));
          else
@@ -7613,9 +7621,7 @@ package body Landin.Backend.Arm64 is
          procedure Emit_Zero (Bytes : Landin.Targets.Byte_Count) is
          begin
             if Bytes > 0 then
-               Emit
-                 (".zero "
-                  & Trimmed (Landin.Targets.Byte_Count'Image (Bytes)));
+               Emit (Landin.Backend.Zero_Run (Bytes, Repeating > 0));
             end if;
          end Emit_Zero;
 
@@ -7660,7 +7666,9 @@ package body Landin.Backend.Arm64 is
                pragma Unreferenced (Element_Alignment);
                Emit_Zero (Landin.Targets.Byte_Count (Copies) * Element_Size);
             else
+               Repeating := Repeating + 1;
                Emit_Copies (Copies);
+               Repeating := Repeating - 1;
             end if;
          end Emit_Run;
 

@@ -1823,6 +1823,58 @@ package body Landin.Backend is
       end case;
    end Is_Zero_Image;
 
+   function Is_Plain
+     (Count   : Landin.IR.Element_Total;
+      Size    : Landin.Targets.Scalar_Size;
+      In_Body : Boolean) return Boolean
+     is (In_Body and then Count > 0
+         and then Count <= Plain_Run_Limit
+         and then Count * Landin.IR.Element_Total (Landin.Targets.Bytes (Size))
+                  <= Plain_Run_Limit);
+
+   function Plain_Run
+     (Count     : Landin.IR.Element_Total;
+      Size      : Landin.Targets.Scalar_Size;
+      Value     : Landin.Types.Folded;
+      Directive : String) return String
+   is
+   begin
+      if Value = 0 then
+         return Zero_Run
+           (Landin.Targets.Byte_Count (Count)
+            * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Size)),
+            In_Body => True);
+      end if;
+      declare
+         One : constant String :=
+           Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both);
+         Text : Ada.Strings.Unbounded.Unbounded_String :=
+           Ada.Strings.Unbounded.To_Unbounded_String (Directive & " " & One);
+      begin
+         for Copy in 2 .. Count loop
+            Ada.Strings.Unbounded.Append (Text, ", " & One);
+         end loop;
+         return Ada.Strings.Unbounded.To_String (Text);
+      end;
+   end Plain_Run;
+
+   function Zero_Run
+     (Bytes : Landin.Targets.Byte_Count; In_Body : Boolean) return String is
+   begin
+      if In_Body and then Bytes <= Plain_Run_Limit then
+         declare
+            Text : Ada.Strings.Unbounded.Unbounded_String :=
+              Ada.Strings.Unbounded.To_Unbounded_String (".byte 0");
+         begin
+            for Copy in 2 .. Bytes loop
+               Ada.Strings.Unbounded.Append (Text, ", 0");
+            end loop;
+            return Ada.Strings.Unbounded.To_String (Text);
+         end;
+      end if;
+      return ".zero " & Ada.Strings.Fixed.Trim (Bytes'Image, Ada.Strings.Both);
+   end Zero_Run;
+
    procedure Repeat (Count : Landin.IR.Element_Total) is
       Width : constant Landin.IR.Element_Total := Repetition_Width;
       Width_Image : constant String :=

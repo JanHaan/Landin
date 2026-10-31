@@ -578,6 +578,36 @@ package Landin.Backend is
       Value : Landin.Types.Folded) return String
      with Pre => Is_Filled (Size, Value);
 
+   --  Inside a body that is itself repeated, a run of at most this many
+   --  bytes is written as plain values instead.  GNU as opens a fragment
+   --  of its own for each `.zero` and `.fill`, about 140 bytes of its
+   --  memory, and a repeated body asks for one per copy: a record's
+   --  three-byte padding then cost 47 bytes per image byte, where plain
+   --  values cost the expanded text, about four.  Beyond sixteen bytes the
+   --  text of plain values costs more than the fragment it saves.
+   Plain_Run_Limit : constant := 16;
+
+   --  Whether a run of Count scalars of Size bytes, inside a repeated
+   --  body or not, is written as plain values.
+   function Is_Plain
+     (Count   : Landin.IR.Element_Total;
+      Size    : Landin.Targets.Scalar_Size;
+      In_Body : Boolean) return Boolean;
+
+   --  Count copies of Value as Directive's plain values, a zero run as
+   --  `.byte 0` values, without the leading tab.
+   function Plain_Run
+     (Count     : Landin.IR.Element_Total;
+      Size      : Landin.Targets.Scalar_Size;
+      Value     : Landin.Types.Folded;
+      Directive : String) return String
+     with Pre => Is_Plain (Count, Size, True);
+
+   --  A run of Bytes zero bytes: plain `.byte 0` values inside a repeated
+   --  body when short enough, and one `.zero` otherwise.
+   function Zero_Run
+     (Bytes : Landin.Targets.Byte_Count; In_Body : Boolean) return String;
+
    --  Whether Image, a recursive image of Shape inside Item's, writes
    --  only zero bytes, so that a run of it is one `.zero`.  Conservative:
    --  a routine address, an atom, a slice and a written packed or variant
