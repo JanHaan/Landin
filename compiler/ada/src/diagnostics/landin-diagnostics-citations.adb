@@ -2094,6 +2094,9 @@ package body Landin.Diagnostics.Citations is
             when 453 =>
                "The stack builtins' refusals, and a backend that does no"
                & "t emit them yet",
+            when 564 =>
+               "A target-limited builtin is refused where the program re"
+               & "aches it",
             when 460 =>
                "On Cortex-M0 a saved context records which stack pointer"
                & " it uses",
@@ -3247,6 +3250,8 @@ package body Landin.Diagnostics.Citations is
             when 452 =>
                "Decisions: The toolchain, C and the machine",
             when 453 =>
+               "Decisions: The toolchain, C and the machine",
+            when 564 =>
                "Decisions: The toolchain, C and the machine",
             when 460 =>
                "Decisions: The toolchain, C and the machine",
@@ -4641,6 +4646,9 @@ package body Landin.Diagnostics.Citations is
             when 453 =>
                "https://www.701.dev/spec.html#d453-the-stack-builtins-re"
                & "fusals-and-a-backend-that-does-not-emit-them-yet",
+            when 564 =>
+               "https://www.701.dev/spec.html#d564-a-target-limited-buil"
+               & "tin-is-refused-where-the-program-reaches-it",
             when 460 =>
                "https://www.701.dev/spec.html#d460-on-cortex-m0-a-saved-"
                & "context-records-which-stack-pointer-it-uses",

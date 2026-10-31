@@ -1283,7 +1283,10 @@ support it, and an intrinsic cannot fail. `compiler.stack_prepare` takes a
 `[]mut u8`, an ordinary `(argument: usize) -> noreturn` entry and a `usize`;
 `compiler.stack_switch` takes a `ptr mut usize` and a `usize` (D472); a target
 whose backend does not emit them yet refuses both by name. Use an ordering and
-operand the operation admits on this target.
+operand the operation admits on this target. A refusal that names the target
+is made only where the program reaches the call (D564): a builtin in an
+imported routine nothing calls refuses nothing, and a module compiled with no
+`main` reaches everything it holds.
 
 A `core/atomic` cell the target's atomics cannot carry is refused the same
 way where the program uses it (D510): on Cortex-M0 a `u64` cell, and a

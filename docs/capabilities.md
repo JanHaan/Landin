@@ -284,7 +284,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   `compiler.stack_switch`, run on every target with a native backend. On
   Cortex-M0 a prepared stack runs on the process stack pointer, and an
   interrupt in a fibre runs its handler on the main one (D460, D461).
-  Synthetic-32 refuses both builtins.
+  Synthetic-32 refuses both builtins, where the program reaches them
+  (D564): a module that offers a switch nothing calls is admitted.
 - **Stack limits.** In a program that prepares a stack, every routine checks
   its frame against the current stack's limit in its prologue and traps
   D451's fifth panic kind, `stack_exhausted`, at its own site before it

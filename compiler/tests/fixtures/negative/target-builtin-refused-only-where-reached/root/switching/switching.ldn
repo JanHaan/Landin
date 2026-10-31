@@ -1,0 +1,16 @@
+--  A module offering two routines that call the stack builtins.
+mut saved: usize = 0
+mut stack: [256]u8 = zeroed
+
+entry: (argument: usize) -> noreturn =
+    _ = argument
+    compiler.unreachable()
+end entry
+
+public unused: () -> (resume: usize) =
+    resume = compiler.stack_prepare(stack[0..<256], entry, 0)
+end unused
+
+public used: (resume: usize) -> none =
+    compiler.stack_switch(addr saved, resume)
+end used

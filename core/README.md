@@ -25,8 +25,9 @@ The shared freestanding modules are `core/arena`, `core/atomic`, `core/cmp`,
 `core/sort`, `core/spill`, `core/text`, `core/time`, `core/tree` and
 `core/vec`. Every public interface is
 available on every target, but for `core/fibre/stacks`, which switches
-stacks through the compiler's stack builtins and is admitted only where the
-target's backend emits them (D453); `core/fibre` itself, its groups over
+stacks through the compiler's stack builtins, which a target whose backend
+does not emit them refuses where the program reaches one (D453, D564);
+`core/fibre` itself, its groups over
 `fibre.whole` and over the blocking host, needs no switch and serves every
 target. `core/atomic`'s cells serve every target too, but for a `u64`
 cell and the read-modify-writes, which Cortex-M0 has not and refuses where

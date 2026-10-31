@@ -204,6 +204,35 @@ package body Landin.Stages is
    function Failed (Context : Compilation) return Boolean
      is (Context.Reports.Has_Errors);
 
+   procedure Hold_Until_Reached
+     (Context : in out Compilation;
+      Source  : Landin.Source.Source_Id;
+      Node    : Landin.Syntax.Node_Id;
+      Item    : Landin.Diagnostics.Diagnostic) is
+   begin
+      Context.Holding.Append (Held_Refusal'(Source, Node, Item));
+   end Hold_Until_Reached;
+
+   procedure Clear_Held (Context : in out Compilation) is
+   begin
+      Context.Holding.Clear;
+   end Clear_Held;
+
+   function Held_Count (Context : Compilation) return Natural
+     is (Natural (Context.Holding.Length));
+
+   function Held_Source (Context : Compilation; Index : Positive)
+     return Landin.Source.Source_Id
+     is (Context.Holding.Element (Index).Source);
+
+   function Held_Node (Context : Compilation; Index : Positive)
+     return Landin.Syntax.Node_Id
+     is (Context.Holding.Element (Index).Node);
+
+   function Held_Report (Context : Compilation; Index : Positive)
+     return Landin.Diagnostics.Diagnostic
+     is (Context.Holding.Element (Index).Item);
+
    function Rendered_Report (Context : Compilation) return String
      is (Landin.Diagnostics.Text.Render (Context.Reports, Context.Held));
 

@@ -1,0 +1,12 @@
+--  D564: a target-limited builtin is refused where the program reaches it.
+--  `core/fibre/stacks` offers the switch and nothing here calls it, and
+--  `switching` offers a routine that prepares a stack, which nothing
+--  calls; only `switching.used`'s switch, which `main` reaches, is refused
+--  on synthetic-32.
+import core/fibre/stacks
+import switching
+
+public main: () -> (code: i32) =
+    switching.used(0)
+    code = 0
+end main

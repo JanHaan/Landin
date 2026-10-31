@@ -23285,9 +23285,29 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e target, rather than admitting a call its backend canno"
                & "t carry; each backend lifts the refusal for its targets "
                & "as it lands, which leaves D450's admission the rule once"
-               & " all have. An argument that is not a `usize` is the ordi"
-               & "nary type disagreement, L0301, as an atomic's value oper"
-               & "and is.",
+               & " all have. D564 amends where a target's refusal is made:"
+               & " only where the program reaches the call. An argument th"
+               & "at is not a `usize` is the ordinary type disagreement, L"
+               & "0301, as an atomic's value operand is.",
+            when 564 =>
+               "Chosen: this amends D453. A refusal that names the targe"
+               & "t, L0344's ""needs a native backend"", ""is not yet emitted"
+               & " on"" and ""memory operation or width unavailable on targe"
+               & "t"", is made by the checker as before, with the same mess"
+               & "age, site, second place and note, and held against its c"
+               & "all rather than reported; the call is otherwise checked "
+               & "and typed as an admitted one. Once the lowering knows wh"
+               & "ich code the program keeps, which D296's walk from the e"
+               & "ntry module's routines decides, it reports each held ref"
+               & "usal whose call is in kept code, and lowers nothing when"
+               & " any is. A compilation with no `main` to root the walk k"
+               & "eeps everything, so a module checked on its own still re"
+               & "ports every one, as a firmware image does. A refusal of "
+               & "the call's own form, an argument outside the contract, a"
+               & " missing argument or a recovery, is reported where it is"
+               & " written, as every other checker refusal is. A held refu"
+               & "sal joins the report only when the checker accepted the "
+               & "rest of the program.",
             when 460 =>
                "Chosen: the saved word is the stack pointer itself, and "
                & "the frame it points at records the selection. A switch p"
@@ -26200,11 +26220,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ot a use, and neither is a native routine's link symbol,"
                & " which [1975] makes its linker identity rather than an e"
                & "xport. Every declaration is still checked, so an unreach"
-               & "ed declaration's errors are still errors. Reachability c"
-               & "an keep too much but never too little, and kept items ar"
-               & "e numbered in declaration order, so the output stays a f"
-               & "unction of the sources. Any compilation without a public"
-               & " `main` keeps everything.",
+               & "ed declaration's errors are still errors, except a targe"
+               & "t-limited builtin's refusal, which D564 makes where the "
+               & "call is reached. Reachability can keep too much but neve"
+               & "r too little, and kept items are numbered in declaration"
+               & " order, so the output stays a function of the sources. A"
+               & "ny compilation without a public `main` keeps everything.",
             when 303 =>
                "Chosen: the ELF backends for x86-64, arm64 and RV64, on "
                & "Linux and FreeBSD, give every routine, datum and evidenc"

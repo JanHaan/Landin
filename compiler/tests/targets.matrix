@@ -1368,6 +1368,7 @@ negative/sunk-inout-field-in-loop | linux-x86-64, linux-arm64, darwin-arm64, fre
 negative/sunk-inout-not-restored | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/system-compared-with-architecture | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
 negative/system-outside-configuration | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, synthetic-32, linux-rv64
+negative/target-builtin-refused-only-where-reached | synthetic-32
 negative/temporary-outlives-buffer | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-conversion-exact-identities | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/text-conversion-mutable-source | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

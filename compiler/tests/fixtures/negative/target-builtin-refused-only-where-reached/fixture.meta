@@ -1,0 +1,10 @@
+class: negative
+summary: D564 a target-limited builtin is refused only in code the program reaches, so an imported switch and an imported routine nothing calls refuse nothing on synthetic-32
+program: main.ldn
+root: root
+expect: expected.txt
+args: --target=synthetic-32
+codes: L0344
+status: 1
+constructs: 1620, 1995
+targets: synthetic-32

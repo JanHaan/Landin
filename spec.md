@@ -19329,7 +19329,8 @@ recovery, and a target that does not admit them. A target whose backend does
 not emit them yet refuses both by name, "not yet emitted on" the target,
 rather than admitting a call its backend cannot carry; each backend lifts the
 refusal for its targets as it lands, which leaves D450's admission the rule
-once all have. An argument that is not a `usize` is the ordinary type
+once all have. D564 amends where a target's refusal is made: only where the
+program reaches the call. An argument that is not a `usize` is the ordinary type
 disagreement, L0301, as an atomic's value operand is.
 
 **The alternatives:** a code of the stack builtins' own, which would split
@@ -19342,6 +19343,42 @@ breaks a program at emission that checking accepted. Both were declined.
 the stack fixtures with L0344, and a negative fixture refused them on
 linux-arm64, until each backend emitted the builtins; both were retired
 then.
+
+### D564 — A target-limited builtin is refused where the program reaches it
+
+**The tour said** nothing; D453 refused a stack builtin by name on a target
+that does not emit it, and D227 a memory intrinsic, or a width, that a
+target does not have, wherever it was written: in a routine of an imported
+module the program never calls as well, so a module that offered a switch
+refused every program that imported it on such a target, and D463 put
+`core/fibre`'s switch in a submodule of its own for that reason alone.
+
+**Chosen:** this amends D453. A refusal that names the target, L0344's
+"needs a native backend", "is not yet emitted on" and "memory operation or
+width unavailable on target", is made by the checker as before, with the
+same message, site, second place and note, and held against its call
+rather than reported; the call is otherwise checked and typed as an
+admitted one. Once the lowering knows which code the program keeps, which
+D296's walk from the entry module's routines decides, it reports each held
+refusal whose call is in kept code, and lowers nothing when any is. A
+compilation with no `main` to root the walk keeps everything, so a module
+checked on its own still reports every one, as a firmware image does. A
+refusal of the call's own form, an argument outside the contract, a
+missing argument or a recovery, is reported where it is written, as every
+other checker refusal is. A held refusal joins the report only when the
+checker accepted the rest of the program.
+
+**The alternatives:** the submodule rule written into `core/README.md` for
+every module that calls such a builtin, which makes the library's layout
+answer for the checker; and a reachability walk of the checker's own, which
+would be a second account of what a program keeps beside the lowering's.
+Both were declined.
+
+**Pinned by** `negative/target-builtin-refused-only-where-reached`, which on
+synthetic-32 imports `core/fibre/stacks` and a module with a routine that
+prepares a stack, neither called, and is refused once, at the switch
+`main` reaches; and `negative/stack-builtins-target-synthetic-32`, whose
+two builtins `main` calls.
 
 ### D460 — On Cortex-M0 a saved context records which stack pointer it uses
 
@@ -23205,7 +23242,8 @@ its providers and, for an erased table, D145's parent conformances.
 `public` alone is not a use, and neither is a native routine's link
 symbol, which [1975] makes its linker identity rather than an export.
 Every declaration is still checked, so an unreached declaration's errors
-are still errors. Reachability can keep too much but never too little, and
+are still errors, except a target-limited builtin's refusal, which D564
+makes where the call is reached. Reachability can keep too much but never too little, and
 kept items are numbered in declaration order, so the output stays a
 function of the sources. Any compilation without a public `main` keeps
 everything.
@@ -25628,7 +25666,8 @@ the host's conformance in a module a program imports to get it, which leaves
 `any(addr host)` refused where prototype 5 writes it, for a reason the source
 does not show; and the checker refusing a builtin only in a routine the
 program reaches, which would change D453 for one library's sake. All were
-declined.
+declined. D564 later made that change for every module that calls such a
+builtin; the submodule stands.
 
 **Pinned by** `runtime/library-shared-fibre`, a group over `whole` executed on
 every target Cortex-M0 included; `runtime/fibre-same-source-any-provider`,
