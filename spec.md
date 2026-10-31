@@ -20569,7 +20569,7 @@ maintainer declined; and fetching inside `check.py`, which runs offline.
 **Pinned by** `scripts/tests/test_fetch_inputs.py`, `devices/test.py`'s
 offline tests, and the gate's `cortex-m` steps that fetch and regenerate.
 
-### D585 — The gate builds the flake unless a recent push run built the same flake inputs
+### D585 — The gate builds the flake on every run that does not reuse a pass
 
 **The tour said** nothing. `nix build .#refine`, the documented default,
 failed unnoticed from 2026-10-08, "build/nix/release/generated is not a valid
@@ -20579,35 +20579,28 @@ and Nix CI was deferred.
 **Chosen:** the gate has a `flake` job. It runs `nix build .#refine
 .#refine-bin`, `nix flake check --no-build --all-systems`, which evaluates
 every package and the development shell of every system, and
-`nix develop --command ./scripts/toolchain.sh` on Linux x86-64. That is the
-whole of Nix CI: no derivation is cached, and the only other job that uses
-nix, `rv64-qemu`, takes its emulator from the flake. The job builds unless
-a push run of the gate, in the last seven days, ran the job's build step
-to success from the same
-`flake.nix`, `flake.lock` and `environments/pins.sh`: the same mode and
-object of each, an absent one included. That record is GitHub's job
-listing, read by `scripts/gate_inputs.py flake`; only push runs count, so
-a fork's pull request cannot supply one, and a job that relied on an
-earlier build is not itself a record. One rule serves a branch push, a pull
-request's merge checkout and a push to main; manual dispatch always builds,
-and any failure to read the record builds. Under a reused pass the job is
-skipped with the other lanes, and the run reused had it succeed on the same
-flake inputs, since its tree key covers them. The source the flake builds is
-not an input to the decision: the other lanes build and test it, and the
-first push more than seven days after the last build builds it again.
+`nix develop --command ./scripts/toolchain.sh` on Linux x86-64. It runs on
+every gate run that does not reuse a pass, manual dispatch included, so a
+change anywhere in the source that breaks `nix build .#refine`, as the
+failure above was, fails the commit that makes it. Under a reused pass it
+is skipped with the other lanes, and the reuse list requires it, so the
+run reused built the flake from the same tree, or from one that differs
+only in the four documents no lane reads. That is the whole of Nix CI: no
+derivation is cached, and the only other job that uses nix, `rv64-qemu`,
+takes its emulator from the flake.
 
-**The alternatives:** a diff against the event's base, the parent of a
-push or a pull request's base: it skips wrongly after a run whose flake
-build failed, since the next push changes nothing in the flake, and it has
-no base on a branch's first push or after a force push. Building on every
-run, which costs every gate the toolchain's 478 MB and a compilation the
-other lanes already make. And the whole of Nix CI, cached derivations and
-the test suite under nix, which the maintainer limited to building the
-flake.
+**The alternatives:** building only when `flake.nix`, `flake.lock` or
+`environments/pins.sh` changed, decided by a diff against the event's base
+or by GitHub's record of the last build from the same three files: either
+leaves a source change that breaks the source build unseen until those
+files next change or the record expires, and a diff also skips wrongly
+after a run whose flake build failed. The maintainer chose to build on every
+run. And the whole of Nix CI, cached derivations and the test suite under
+nix, which the maintainer limited to building the flake.
 
-**Pinned by** `scripts/tests/test_gate_inputs.py`'s `Flake` and
-`FlakeKey` cases, which also hold the workflow to the job and step names
-the record is read by.
+**Pinned by** the gate's `flake` job, and `scripts/tests/test_gate_inputs.py`'s
+`Workflow` case, which holds the reuse list to every job the aggregate
+needs, `flake` among them.
 
 ### D586 — An explanatory edit may take its base from any branch's full run
 

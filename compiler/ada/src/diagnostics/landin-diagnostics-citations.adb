@@ -2173,8 +2173,8 @@ package body Landin.Diagnostics.Citations is
             when 559 =>
                "Vendor inputs are pinned by URL and SHA-256 and fetched",
             when 585 =>
-               "The gate builds the flake unless a recent push run built"
-               & " the same flake inputs",
+               "The gate builds the flake on every run that does not reu"
+               & "se a pass",
             when 586 =>
                "An explanatory edit may take its base from any branch's "
                & "full run",
@@ -4739,8 +4739,7 @@ package body Landin.Diagnostics.Citations is
                & "ned-by-url-and-sha-256-and-fetched",
             when 585 =>
                "https://www.701.dev/spec.html#d585-the-gate-builds-the-f"
-               & "lake-unless-a-recent-push-run-built-the-same-flake-input"
-               & "s",
+               & "lake-on-every-run-that-does-not-reuse-a-pass",
             when 586 =>
                "https://www.701.dev/spec.html#d586-an-explanatory-edit-m"
                & "ay-take-its-base-from-any-branch-s-full-run",

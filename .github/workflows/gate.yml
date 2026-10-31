@@ -548,42 +548,23 @@ jobs:
         run: git diff --exit-code -- highlight/tree-sitter
 
   #  The flake (D585): `nix build .#refine` and `.#refine-bin`, every
-  #  output of every system evaluated, and the development shell entered.
-  #  It builds unless a push run of this workflow built the same flake.nix,
-  #  flake.lock and environments/pins.sh in the last week, which
-  #  gate_inputs.py reads from GitHub's job listings.  That one rule serves
-  #  a branch push, a pull request's merge checkout and a push to main, and
-  #  any doubt builds; a diff against the event's base would skip after a
-  #  failed build.  Manual dispatch always builds.  Skipped under a reused
-  #  pass like every lane: the run reused had this job succeed on the same
-  #  flake inputs.  About 140 s of compilation once the toolchain is fetched.
+  #  output of every system evaluated, and the development shell entered,
+  #  on every run that does not reuse a pass, so a change anywhere in the
+  #  source that breaks `nix build .#refine` fails the commit that makes it.
+  #  Skipped under a reused pass like every lane.  About 140 s of
+  #  compilation once the toolchain is fetched.
   flake:
     needs: inputs
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    permissions:
-      actions: read
-      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Whether a push run built these flake inputs in the last week
-        id: flake
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 scripts/gate_inputs.py flake gate.yml flake "Build the flake" \
-            >> "$GITHUB_OUTPUT"
-
       - name: Install nix for the flake
-        if: steps.flake.outputs.build == 'true'
         uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
 
-      #  The step's name is what the next run looks for; rename it and
-      #  every run builds until a run under the new name has.
       - name: Build the flake
-        if: steps.flake.outputs.build == 'true'
         run: |
           set -eu
           nix build -L --no-link .#refine .#refine-bin

@@ -201,7 +201,7 @@ still succeed. The linked full run contains the target-test results.
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2` |
 | `bindings` | `ubuntu-24.04` | the C binding generator against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
-| `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, every flake output of every system evaluated and the development shell entered, unless a push run built the same `flake.nix`, `flake.lock` and `environments/pins.sh` in the last seven days (D585); manual dispatch always builds |
+| `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, manual dispatch included (D585) |
 | `cortex-m` | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, keeping the stack-switch consumer's capacity report (D470) as an artifact |
 | `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
 | `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
@@ -287,8 +287,7 @@ URL. Nothing reports a disagreement between the two. `pages.yml` fetches the lic
 face from object storage because it is not in this repository; it renders and
 verifies, and runs no compiler test. `scripts/site.sh` renders and packages
 and does not publish. Nix CI is limited to the gate's `flake` job, which
-builds the flake when its inputs have not been built in the last week
-(D585); no derivation is cached, `rv64-qemu` takes only its emulator from
+builds the flake on every run that does not reuse a pass (D585); no derivation is cached, `rv64-qemu` takes only its emulator from
 the flake, and the former automatic Nix manifest is retired. Historical SourceHut gate links
 remain evidence for their original revisions.
 
