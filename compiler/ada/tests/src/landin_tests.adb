@@ -26,6 +26,7 @@ with Landin.Tests.Backend_Suite;
 with Landin.Tests.Catalogue_Suite;
 with Landin.Tests.Checking_Suite;
 with Landin.Tests.Debugging_Suite;
+with Landin.Tests.Devices_Suite;
 with Landin.Tests.Diagnostics_Suite;
 with Landin.Tests.Driver_Suite;
 with Landin.Tests.Commands_Suite;
@@ -102,6 +103,7 @@ procedure Landin_Tests is
       "catalogue        ",
       "checking         ",
       "debugging        ",
+      "devices          ",
       "diagnostics      ",
       "driver           ",
       "commands         ",
@@ -520,6 +522,7 @@ begin
    Landin.Tests.Catalogue_Suite.Register (Cases);
    Landin.Tests.Checking_Suite.Register (Cases);
    Landin.Tests.Debugging_Suite.Register (Cases);
+   Landin.Tests.Devices_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
    Landin.Tests.Newcomer_Suite.Register (Cases);
