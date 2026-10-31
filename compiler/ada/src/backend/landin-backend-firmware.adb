@@ -214,7 +214,6 @@ package body Landin.Backend.Firmware is
         & LF;
    end Startup;
 
-   function Hex (Value : Landin.Targets.Byte_Count) return String;
    function Hex (Value : Landin.Targets.Byte_Count) return String is
       Digits_Of : constant String := "0123456789abcdef";
       Result : String (1 .. 16);

@@ -24,6 +24,9 @@ package Landin.Backend.Firmware is
       Returned : String := "udf #1";
       Debug : Boolean := False) return String;
 
+   --  An address as a reader compares it with a datasheet: 0x10000100.
+   function Hex (Value : Landin.Targets.Byte_Count) return String;
+
    --  D545: the derived script, which the driver writes as OUT.ld.
    function Linker_Script
      (Profile : Landin.Targets.Firmware.Profile; Used : Region_Use)

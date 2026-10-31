@@ -2637,6 +2637,30 @@ package body Landin.Driver is
                     (Code_Toolchain_Failed,
                      Driver & " left executable output aliasing its prior"
                      & " backup at " & Target_Path);
+               elsif Cortex and then Script_Seen
+                 and then Landin.Build_Reports.Firmware.Contract_Fault
+                   (Host, Target_Path,
+                    Landin.IR.Firmware_Profile
+                      (Landin.Stages.Code (Context).all),
+                    Landin.Backend.Firmware.Used_Regions
+                      (Landin.Stages.Code (Context).all,
+                       Landin.Stages.Identities (Context).all)) /= ""
+               then
+                  --  D546: the developer's script broke a clause.
+                  Note_Failure
+                    (Rows.Code (Rows.Linker_Script_Contract),
+                     Unbounded.To_String (Script_Path)
+                     & " breaks the firmware linker script contract, "
+                     & Landin.Build_Reports.Firmware.Contract_Fault
+                         (Host, Target_Path,
+                          Landin.IR.Firmware_Profile
+                            (Landin.Stages.Code (Context).all),
+                          Landin.Backend.Firmware.Used_Regions
+                            (Landin.Stages.Code (Context).all,
+                             Landin.Stages.Identities (Context).all))
+                     & " (D546); the derived script beside it, "
+                     & Target_Path & ".ld, keeps every clause");
+                  Restore_Output;
                elsif Unbounded.Length (Backup) > 0 then
                   Host.Remove_File (Unbounded.To_String (Backup), Removed);
                   if Removed = Landin.Platform.Not_Removable then
