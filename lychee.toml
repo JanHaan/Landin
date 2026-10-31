@@ -15,6 +15,13 @@ timeout = 30
 #  not broken.
 accept = ["200..=299", "403", "429"]
 
+#  www.st.com refuses an unattended client below HTTP: it resets the HTTP/2
+#  stream and times out over HTTP/1.1, so no status code reaches the list
+#  above.  Its documents are linked for a person to open, and the ones the
+#  repository relies on are pinned by hash in devices/inputs.json, where a
+#  person supplies them.
+exclude = ["^https://www\\.st\\.com/"]
+
 #  Generated output, vendored packages and other people's checkouts.
 exclude_path = [
     "docs/site/site",
