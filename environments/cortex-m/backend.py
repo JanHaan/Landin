@@ -10,6 +10,7 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
+import threading
 import time
 
 from run import FLAGS, CommandFailed, Run, gdb_listener, oracle, require, stop
@@ -45,20 +46,163 @@ def level_flags(level):
     return LEVELS[level]['flags'] + [f for f in FLAGS if not f.startswith('-mcpu=')]
 
 
+#  The described devices, recorded apart from the compiler; descriptions.py
+#  holds every linked image's facts to them.  A program that imports no
+#  description is given the constrained reference (D543), which is the
+#  profile the corpus executes on QEMU's micro:bit.
+DESCRIPTIONS = json.loads((HERE / 'descriptions.json').read_text())['devices']
+REFERENCE = 'constrained-reference'
+
+#  What each boot image kind (D545) puts before the vector table in its
+#  region, which the harness start supplies as zero bytes: the closed set
+#  refine builds.
+BOOT_PREFIX = {'vector-table': 0, 'rp2040-boot2': 256}
+
+#  A profile's facts, as the firmware build report states them, with the
+#  stack top read from the linked image.
+FACTS = ('device', 'boot', 'regions', 'placed', 'vector_address', 'vector_words',
+         'flash_limit', 'static_ram_limit', 'stack_reserved')
+
+
+def region(profile, part):
+    """The region PROFILE places PART in: text, data or stack."""
+    name = profile['placed'][part]
+    return next(r for r in profile['regions'] if r['name'] == name)
+
+
+def stack_bottom(profile):
+    return profile['stack_top'] - profile['stack_reserved']
+
+
+def recorded(device=REFERENCE):
+    """DEVICE's profile as descriptions.json records it, apart from the
+    compiler, with the capacities a firmware build report derives (D545):
+    the text region's length, and the data region's less a stack it holds."""
+    want = DESCRIPTIONS[device]
+    profile = {key: want[key] for key in FACTS if key in want}
+    profile.update(device=device, stack_top=want['stack_top'], script=None)
+    ram = region(profile, 'data')['length']
+    if want['placed']['stack'] == want['placed']['data']:
+        ram -= want['stack_reserved']
+    profile.update(flash_limit=region(profile, 'text')['length'], static_ram_limit=ram)
+    return profile
+
+
+#  Each device's derived profile, once per compiler and process: deriving
+#  it is one firmware build, and the corpus links every program with it.
+DERIVED = {}
+DERIVING = threading.Lock()
+
+#  The firmware program each device's profile is derived from: it imports
+#  the device's description, or none for the reference, and places nothing,
+#  as a corpus program places nothing.
+def probe_program(device):
+    selection = '' if device == REFERENCE else 'import descriptions/%s\n' % device
+    return selection + 'start: () -> none = end start\n'
+
+
+def derived(run, refine, device=REFERENCE, where=None):
+    """DEVICE's profile as refine derives it: the linker script a firmware
+    build of a program selecting it writes (D545), and the limits its build
+    report gives, from one build in WHERE/DEVICE, by default `profiles/DEVICE`
+    beside RUN's output.
+
+    The facts are held to descriptions.json's record, so a profile the
+    harness links with is the one descriptions.py compares.
+    """
+    key = (str(refine), device)
+    with DERIVING:
+        if key in DERIVED:
+            return DERIVED[key]
+        out = (where or run.out.parent / 'profiles') / device
+        out.mkdir(parents=True, exist_ok=True)
+        (out / 'app').mkdir(exist_ok=True)
+        (out / 'app/main.ldn').write_text(probe_program(device))
+        probe = Run(out, run.tools)
+        probe.command('derive-profile', [
+            refine, '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
+            '--firmware-entry=start', '--emit=exe',
+            '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
+            '--build-report=profile.json', 'app', '-o', 'profile.elf'], timeout=60)
+        report = json.loads((out / 'profile.json').read_text())['firmware']
+        symbols = probe.command('profile-symbols', [run.arm / 'arm-eabi-nm', out / 'profile.elf'])
+        top = next(int(parts[0], 16) for line in symbols.splitlines()
+                   if len(parts := line.split()) == 3
+                   and parts[2] == '_landin_firmware_stack_top')
+        profile = {key: report[key] for key in FACTS}
+        profile.update(stack_top=top, script=str(out / 'profile.elf.ld'))
+        require(profile['boot'] in BOOT_PREFIX,
+                '%s: the harness supplies no %s boot prefix' % (device, profile['boot']))
+        want = recorded(device)
+        differ = sorted(k for k in FACTS + ('stack_top',) if profile[k] != want[k])
+        require(not differ, '%s: refine derives %s other than descriptions.json records'
+                % (device, ', '.join(differ)))
+        (out / 'facts.json').write_text(json.dumps(profile, indent=2) + '\n')
+        DERIVED[key] = profile
+        return profile
+
+
 def metadata(path):
     """The metadata of the fixture whose `fixture.meta` is PATH, read as
     the test program reads it (compiler/tests/fixture_meta.py)."""
     return fixture_meta.read(path.parent)
 
 
-def execute(run, elf, expected, traps, before=(), level='armv6-m'):
-    listener, port, stub = gdb_listener()
-    script = run.out / 'backend.gdb'
-    script.write_text('\n'.join([
+def session(run, port, expected, traps, before=(), profile=None):
+    """The debugger session that runs one harness image and holds it to its oracle.
+
+    EXPECTED is the exit byte the program must return, or None to observe
+    whatever it returns or traps with, as `backend_corpus.py --program`
+    does; TRAPS that it must reach the harness's HardFault at a UDF #1.
+    Once the harness has painted the stack, a write watchpoint covers the
+    reservation's lowest 16 bytes, so a stack that overruns its
+    reservation stops at the instruction that reached the guard, and the
+    failure names that routine, its caller and how much of which stack was
+    in use, rather than an assertion after the fact.
+    """
+    profile = profile or recorded()
+    top, bottom, reserved = profile['stack_top'], stack_bottom(profile), profile['stack_reserved']
+    observe = expected is None
+    finish = []
+    if observe:
+        finish = [
+            'result = value("*(unsigned int*)&backend_result")',
+            'observed = {"status": result & 255, "result": result,'
+            ' "r12": value("*((unsigned int*)&backend_result+1)"),'
+            ' "trapped": fault == 3, "stopped": where(value("$pc"))}',
+            'if fault:',
+            '    observed["stacked_pc"] = where(frame[6])',
+            '    observed["udf_1"] = value("*(unsigned short*)%d" % (frame[6] & ~1)) == 0xde01',
+            f'with open({str(run.out / "observed.json")!r}, "w") as f: json.dump(observed, f)']
+    elif traps:
+        finish = [
+            'check(fault == 3, "backend_fault is %d, expected 3" % fault)',
+            'check(value("$pc") == value("&backend_fault_done"), "the program did not stop at backend_fault_done")',
+            'check(value("*(unsigned short*)*(unsigned int*)($sp+24)") == 0xde01, '
+            '"the stacked pc is no udf #1, the trap instruction")']
+    else:
+        finish = [
+            'check(fault == 0, "backend_fault is %d, expected 0" % fault)',
+            'check(value("$pc") == value("&backend_done"), "the program did not stop at backend_done")',
+            f'check(value("*(unsigned int*)&backend_result") & 255 == {expected}, '
+            f'"the result is %d, expected {expected}" % (value("*(unsigned int*)&backend_result") & 255))',
+            'check(value("*((unsigned int*)&backend_result+1)") == 0, "r12 was not zero at return")',
+            f'check(value("$sp") == {top}, "sp is %#x at return, expected {top:#x}" % value("$sp"))',
+            'check(value("$r11") == 0, "r11 is not zero at return")',
+            'check([value("$r%d" % i) for i in range(4, 11)] == [44,55,66,77,88,99,100], '
+            '"a callee-saved register r4-r10 was not preserved")']
+    return '\n'.join([
         'set pagination off', 'set confirm off',
-        f'target remote 127.0.0.1:{port}', *before,
-        'break backend_done', 'break backend_fault_done', 'continue',
+        f'target remote 127.0.0.1:{port}',
+        'break backend_painted', 'continue', 'delete breakpoints', *before,
+        'delete breakpoints',
         'python', 'import gdb',
+        f'guard = gdb.Breakpoint("*(unsigned char (*)[16]){bottom}", gdb.BP_WATCHPOINT, gdb.WP_WRITE)',
+        #  A software watchpoint would single-step the whole program.
+        'assert guard.type == gdb.BP_HARDWARE_WATCHPOINT, "the stack guard is no hardware watchpoint"',
+        'end',
+        'break backend_done', 'break backend_fault_done', 'continue',
+        'python', 'import json, struct',
         'def value(expr): return int(gdb.parse_and_eval(expr))',
         #  Where the program stopped, said before anything is held to it:
         #  the exception the harness recorded (3, HardFault, for a trap or
@@ -68,36 +212,45 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m'):
         '    said = gdb.execute("info symbol %#x" % address, to_string=True).strip()',
         '    line = gdb.execute("info line *%#x" % address, to_string=True).strip()',
         '    return "%#x (%s; %s)" % (address, said, line.split(" and ends")[0])',
+        'def check(holds, what):',
+        '    if not holds: raise gdb.GdbError("LANDIN-CHECK " + what + "; " + state)',
+        'pc = value("$pc")',
+        'if pc not in (value("&backend_done"), value("&backend_fault_done")):',
+        '    sp = value("$sp")',
+        '    which = "process stack (PSP)" if value("$control") & 2 else "main stack (MSP)"',
+        '    state = "stopped by the write watchpoint on the guard"',
+        f'    check(False, "the stack overran its {reserved}-byte reservation: %s wrote into'
+        f' its lowest 16 bytes at {bottom:#x}, called from %s, with sp %#x and %d bytes of the'
+        f' %s in use" % (where(pc), where(value("$lr") & ~1), sp, {top} - sp, which))',
         'fault = value("*(unsigned int*)&backend_fault")',
         'state = "fault=%d%s pc=%s" % (fault, " (HardFault)" if fault == 3 else "", where(value("$pc")))',
+        'frame = None',
         'if fault:',
         '    frame = [value("*(unsigned int*)($sp+%d)" % (4 * i)) for i in range(8)]',
         '    state += " stacked pc=%s lr=%s xpsr=%#x" % (where(frame[6]), where(frame[5] & ~1), frame[7])',
         'print("LANDIN-STATE " + state)',
-        'def check(holds, what):',
-        '    if not holds: raise gdb.GdbError("LANDIN-CHECK " + what + "; " + state)',
-        'check(fault == ' + ('3' if traps else '0') + ', "backend_fault is %d, expected '
-        + ('3' if traps else '0') + '" % fault)',
-        ('check(value("$pc") == value("&backend_fault_done"), "the program did not stop at backend_fault_done")'
-         if traps else
-         'check(value("$pc") == value("&backend_done"), "the program did not stop at backend_done")'),
-        *(['check(value("*(unsigned short*)*(unsigned int*)($sp+24)") == 0xde01, '
-           '"the stacked pc is no udf #1, the trap instruction")'] if traps else [
-            f'check(value("*(unsigned int*)&backend_result") & 255 == {expected}, '
-            f'"the result is %d, expected {expected}" % (value("*(unsigned int*)&backend_result") & 255))',
-            'check(value("*((unsigned int*)&backend_result+1)") == 0, "r12 was not zero at return")',
-            'check(value("$sp") == 0x20004000, "sp is %#x at return, expected 0x20004000" % value("$sp"))',
-            'check(value("$r11") == 0, "r11 is not zero at return")',
-            'check([value("$r%d" % i) for i in range(4, 11)] == [44,55,66,77,88,99,100], '
-            '"a callee-saved register r4-r10 was not preserved")']),
-         'import json, struct',
-        #  One 4 KiB read rather than 1,024 one-word round trips to the stub.
-        'words=list(struct.unpack("<1024I", bytes(gdb.selected_inferior().read_memory(0x20003000, 4096))))',
-        'check(words[:4] == [0xa55ac33c]*4, "the stack overran its 4 KiB reservation")',
-        'check(value("$sp") >= 0x20003000, "sp is below the stack reservation")',
+        *finish,
+        #  One read of the reservation rather than a round trip a word.
+        f'words=list(struct.unpack("<{reserved // 4}I", bytes(gdb.selected_inferior().read_memory({bottom}, {reserved}))))',
+        f'check(words[:4] == [0xa55ac33c]*4, "the stack overran its {reserved}-byte reservation")',
+        f'check(value("$sp") >= {bottom}, "sp is below the stack reservation")',
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
-        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":0x20003000+4*first,"reserved_bytes":4096,"is_stack_bound":False}},f)',
-        'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', '']))
+        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"is_stack_bound":False}},f)',
+        'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
+
+
+def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None):
+    """Run ELF under QEMU and hold it to its oracle; see `session`.
+
+    PROFILE is the one the image was linked for, which must be the
+    constrained reference: QEMU's machines have its map, not a chip's.
+    """
+    require(profile is None or profile['device'] == REFERENCE,
+            '%s images are linked, not run: QEMU has no %s' % (
+                profile and profile['device'], profile and profile['device']))
+    listener, port, stub = gdb_listener()
+    script = run.out / 'backend.gdb'
+    script.write_text(session(run, port, expected, traps, before, profile))
     argv = [str(run.bin / 'qemu-system-arm'), '-M', LEVELS[level]['machine'], '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
             '-serial', 'none', '-kernel', str(elf), '-S', *stub]
@@ -170,30 +323,36 @@ def timed_out(error, process, elapsed):
         % (process.returncode, elapsed, SESSION_LIMIT, error.log))
 
 
-#  The regions the external harness's map gives a program: 32 KiB of
-#  flash, and 16 KiB of RAM of which the top 4 KiB is the stack.
-REGIONS = {'FLASH': 32768, 'RAM': 12288}
+class ImageLimit(RuntimeError):
+    """An image the harness will not assemble for the selected profile: a
+    materialization past its resource guard, or a routine frame past the
+    stack.  The linker's own overflow is a failed `assemble-link`."""
 
 
-def load_extents(path):
+def load_extents(path, profile):
     """Flash and static RAM a linked image occupies, read from its LOAD headers.
 
-    Unlike image_contract this holds the image to no bound, so it measures
-    an image linked with the enlarged map as well as a fitting one.
+    Flash is the end of the last file-backed segment in the text region,
+    and static RAM the end of the last segment in the data region, each
+    counted from the region's origin, as the firmware build report counts
+    them (D545).  Unlike image_contract this holds the image to no bound,
+    so it measures an image linked with the enlarged map as well as a
+    fitting one.
     """
+    text, data_region = region(profile, 'text'), region(profile, 'data')
     data = path.read_bytes()
     header = struct.unpack_from('<16sHHIIIIIHHHHHH', data)
-    flash, ram = 0, 0
+    flash, ram = text['origin'], data_region['origin']
     for index in range(header[10]):
         kind, _, virtual, physical, file_size, memory_size, _, _ = struct.unpack_from(
             '<8I', data, header[5] + index * 32)
         if kind != 1:
             continue
-        if file_size:
+        if file_size and physical >= text['origin']:
             flash = max(flash, physical + file_size)
-        if virtual >= 0x20000000:
-            ram = max(ram, virtual + memory_size - 0x20000000)
-    return {'FLASH': flash, 'RAM': ram}
+        if data_region['origin'] <= virtual < data_region['origin'] + (1 << 28):
+            ram = max(ram, virtual + memory_size)
+    return {'FLASH': flash - text['origin'], 'RAM': ram - data_region['origin']}
 
 
 def routine_sizes(listing):
@@ -211,10 +370,12 @@ def routine_sizes(listing):
     return dict(sorted(sizes.items(), key=lambda item: (-item[1], item[0])))
 
 
-def image_sizes(run, elf, name='sections'):
-    """Each region's use against its limit, each allocated section's size
-    and each routine's, so where an image's bytes go is read from the
-    corpus rather than from hand-run tools, overflowing or not."""
+def image_sizes(run, elf, profile, name='sections'):
+    """Each region's use against the limit the profile's build report
+    gives, each allocated section's size and each routine's, so where an
+    image's bytes go is read from the corpus rather than from hand-run
+    tools, overflowing or not.  `FLASH` is the text region and `RAM` the
+    static RAM of the data region, whatever the description names them."""
     listing = run.command(name, [run.arm / 'arm-eabi-size', '-A', elf])
     sections = {}
     for line in listing.splitlines():
@@ -224,9 +385,10 @@ def image_sizes(run, elf, name='sections'):
                 sections[parts[0]] = int(parts[1])
     routines = routine_sizes(run.command(
         name + '-routines', [run.arm / 'arm-eabi-nm', '-S', '--defined-only', elf]))
-    used = load_extents(elf)
-    return {'regions': {region: {'used': used[region], 'limit': limit}
-                        for region, limit in REGIONS.items()},
+    used = load_extents(elf, profile)
+    limits = {'FLASH': profile['flash_limit'], 'RAM': profile['static_ram_limit']}
+    return {'regions': {part: {'used': used[part], 'limit': limit}
+                        for part, limit in limits.items()},
             'sections': sections, 'routines': routines}
 
 
@@ -242,38 +404,59 @@ def describe_sizes(sizes):
     """One corpus-line clause: every region against its limit, and its sections."""
     members = {'FLASH': ('.isr_vector', '.text', '.data'), 'RAM': ('.data', '.bss')}
     parts = []
-    for region, record in sizes['regions'].items():
-        text = '%s %d of %d' % (region, record['used'], record['limit'])
+    for part, record in sizes['regions'].items():
+        text = '%s %d of %d' % (part, record['used'], record['limit'])
         if record['used'] > record['limit']:
             text += ', over by %d' % (record['used'] - record['limit'])
         inside = ['%s %d' % (section, sizes['sections'][section])
-                  for section in members[region] if section in sizes['sections']]
+                  for section in members[part] if section in sizes['sections']]
         if inside:
             text += ' (' + ', '.join(inside) + ')'
         parts.append(text)
     return '; '.join(parts)
 
 
-def measure_overflow(run, level='armv6-m'):
+def harness_start(run, profile, level='armv6-m', name='input-0.o'):
+    """backend-start.S assembled for PROFILE: its table's length and its
+    boot kind's prefix."""
+    obj = run.out / name
+    run.command('assemble-start' if name == 'input-0.o' else 'assemble-' + Path(name).stem,
+                [run.arm / 'arm-eabi-gcc', *level_flags(level),
+                 '-DLANDIN_VECTOR_WORDS=%d' % profile['vector_words'],
+                 '-DLANDIN_BOOT_PREFIX=%d' % BOOT_PREFIX[profile['boot']],
+                 '-c', HERE / 'probes/backend-start.S', '-o', obj])
+    return obj
+
+
+def link(run, objects, script, level, elf, name='assemble-link'):
+    run.command(name, [run.arm / 'arm-eabi-gcc', *level_flags(level),
+                '-Wl,-T,' + str(script) + ',--gc-sections,-Map,' + elf.stem + '.map',
+                *objects, '-lgcc', '-o', elf])
+
+
+def measure_overflow(run, profile, objects=None, level='armv6-m'):
     """The sizes an image that overflowed the map would have had.
 
     The objects the failed link left are relinked against a copy of the
-    probe's map with both regions enlarged and the stack reservation's
-    assertion removed.  The result is a measurement and never runs.
+    profile's derived script with its text and data regions enlarged and
+    its assertions removed.  The result is a measurement and never runs.
     """
-    text = (HERE / 'probes/backend-memory.ld').read_text()
-    for old, new in (('LENGTH = 32K', 'LENGTH = 256M'), ('LENGTH = 16K', 'LENGTH = 256M')):
-        require(old in text, 'the probe map no longer says ' + old)
-        text = text.replace(old, new)
-    text = '\n'.join(line for line in text.splitlines()
-                     if not line.startswith('ASSERT(__bss_end'))
+    text = Path(profile['script']).read_text()
+    for part in ('text', 'data'):
+        name = region(profile, part)['name']
+        line = re.search(r'^  %s \((\w+)\) : ORIGIN = (\d+), LENGTH = (\d+)$' % name, text, re.M)
+        require(line is not None, 'the derived script has no MEMORY line for ' + name)
+        text = text.replace(line.group(0), '  %s (%s) : ORIGIN = %s, LENGTH = 256M'
+                            % (name, line.group(1), line.group(2)))
+    require('\nASSERT(' in text, 'the derived script asserts nothing')
+    text = text[:text.index('\nASSERT(')]
     script = run.out / 'measure-memory.ld'
     script.write_text('/* Measurement only: never executed. */\n' + text + '\n')
-    objects = sorted(run.out.glob('input-*.o'), key=lambda p: int(p.stem.split('-')[1]))
+    if objects is None:
+        objects = sorted(run.out.glob('input-*.o'), key=lambda p: int(p.stem.split('-')[1]))
     elf = run.out / 'measure.elf'
-    run.command('measure-link', [run.arm / 'arm-eabi-gcc', *level_flags(level),
-                '-Wl,-T,' + str(script) + ',--gc-sections', *objects, '-lgcc', '-o', elf])
-    return image_sizes(run, elf, 'measure-sections')
+    link(run, objects, script, level, elf, 'measure-link')
+    return image_sizes(run, elf, profile, 'measure-sections')
 
 
 def preflight(assembly):
@@ -308,21 +491,40 @@ def preflight(assembly):
             total += factor * width[directive] * len(values.split(','))
         elif text and not text.startswith(('.', '@')) and not text.endswith(':'):
             total += factor * 4
-        require(total <= 8 * 1024 * 1024,
-                'bounded assembly materialization exceeds 8 MiB')
+        if total > MATERIALIZATION:
+            raise ImageLimit('bounded assembly materialization exceeds 8 MiB')
     require(not nesting, 'unclosed assembly repetition')
     return total
 
 
-def image_contract(path):
-    """Independently read actual ELF LOAD extents, rather than trust a map label."""
+#  What preflight lets the assembler materialize.
+MATERIALIZATION = 8 * 1024 * 1024
+
+
+def image_contract(path, profile=None):
+    """Independently read actual ELF LOAD extents, rather than trust a map label.
+
+    Every loaded segment lies in the profile's text region or below its
+    static RAM limit in the data region, and the vector table at the
+    profile's address holds its stack top and the entry.  PROFILE is the
+    one the image was linked for; without one it is the constrained
+    reference as descriptions.json records it, the profile the firmware
+    lanes build for.
+    """
+    profile = profile or recorded()
+    text, data_region = region(profile, 'text'), region(profile, 'data')
+    flash_lo, flash_hi = text['origin'], text['origin'] + text['length']
+    ram_lo = data_region['origin']
+    ram_hi = ram_lo + profile['static_ram_limit']
     data = path.read_bytes()
     require(len(data) >= 52 and data[:6] == b'\x7fELF\x01\x01', 'expected little-endian ELF32')
     header = struct.unpack_from('<16sHHIIIIIHHHHHH', data)
     require(header[1:4] == (2, 40, 1) and header[8] == 52 and header[9] == 32,
             'unexpected ELF identity or program header')
-    require(header[4] & 1 and header[4] < 32768, 'entry loses Thumb identity or flash bound')
-    flash_end, ram_end, vectors = 0, 0x20000000, False
+    require(header[4] & 1 and flash_lo <= header[4] < flash_hi,
+            'entry loses Thumb identity or flash bound')
+    flash_end, ram_end, vectors = flash_lo, ram_lo, False
+    table = profile['vector_address']
     for index in range(header[10]):
         offset = header[5] + index * 32
         require(offset + 32 <= len(data), 'truncated ELF program header')
@@ -330,27 +532,38 @@ def image_contract(path):
         if kind != 1:
             continue
         require(file_size <= memory_size and file_at + file_size <= len(data), 'invalid ELF load extent')
-        if virtual < 32768:
-            require(virtual + memory_size <= 32768, 'ELF exceeds selected flash')
+        if flash_lo <= virtual < flash_hi:
+            require(virtual + memory_size <= flash_hi, 'ELF exceeds selected flash')
         else:
-            require(0x20000000 <= virtual and virtual + memory_size <= 0x20003000,
+            require(ram_lo <= virtual and virtual + memory_size <= ram_hi,
                     'ELF intrudes on selected RAM/stack boundary')
             ram_end = max(ram_end, virtual + memory_size)
         if file_size:
-            require(physical + file_size <= 32768, 'ELF load image exceeds selected flash')
+            require(flash_lo <= physical and physical + file_size <= flash_hi,
+                    'ELF load image exceeds selected flash')
             flash_end = max(flash_end, physical + file_size)
-        if virtual == 0 and physical == 0:
-            require(file_size >= 192, 'missing external vectors')
-            require(struct.unpack_from('<II', data, file_at) == (0x20004000, header[4]),
+        if virtual == physical and physical <= table < physical + file_size:
+            require(table + 4 * profile['vector_words'] <= physical + file_size,
+                    'missing external vectors')
+            require(struct.unpack_from('<II', data, file_at + table - physical)
+                    == (profile['stack_top'], header[4]),
                     'external initial SP/reset words disagree')
             vectors = True
     require(vectors, 'no external vector load segment')
-    return {'flash_load_extent': flash_end, 'ram_static_extent': ram_end - 0x20000000,
-            'stack_reserved': 4096, 'entry': header[4]}
+    return {'flash_load_extent': flash_end - flash_lo, 'ram_static_extent': ram_end - ram_lo,
+            'stack_reserved': profile['stack_reserved'], 'entry': header[4]}
 
 
 def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
-          level='armv6-m'):
+          level='armv6-m', profile=None):
+    """Compile INPUTS to assembly and link them with the external harness.
+
+    The image is linked with PROFILE's derived script, the constrained
+    reference's unless another is given, and held to the limits its build
+    report gives; LINKER replaces the script for a control that places a
+    routine of its own, keeping the reference's facts.
+    """
+    profile = profile or derived(run, refine)
     flags = level_flags(level)
     selected = [] if level == 'armv6-m' else ['--level=' + level]
     assembly = run.out / 'program.s'
@@ -359,21 +572,21 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
                 '-o', assembly, '--build-report=' + str(run.out / 'build.json')], timeout=60)
     preflight(assembly)
     report = json.loads((run.out / 'build.json').read_text())['build']
-    require(all(r['frame_bytes'] <= 4096 for r in report['routines']),
-            'routine frame exceeds selected 4 KiB test stack reservation')
+    if any(r['frame_bytes'] > profile['stack_reserved'] for r in report['routines']):
+        raise ImageLimit('routine frame exceeds the selected %d-byte stack reservation'
+                         % profile['stack_reserved'])
     elf = run.out / 'program.elf'
-    objects = []
-    for index, source in enumerate([HERE / 'probes/backend-start.S', assembly, *extra]):
+    objects = [harness_start(run, profile, level)]
+    for index, source in enumerate([assembly, *extra], start=1):
         obj = run.out / ('input-' + str(index) + '.o')
         run.command('assemble-' + str(index), [run.arm / 'arm-eabi-gcc', *flags,
                     '-c', source, '-o', obj])
         objects.append(obj)
     run.command('object-disassembly', [run.arm / 'arm-eabi-objdump', '-dr', objects[1]])
-    run.command('assemble-link', [run.arm / 'arm-eabi-gcc', *flags,
-                '-Wl,-T,' + str(linker or HERE / 'probes/backend-memory.ld') +
-                ',--gc-sections,-Map,program.map', *objects, '-lgcc', '-o', elf])
-    image = image_contract(elf)
-    image.update(image_sizes(run, elf))
+    link(run, objects, linker or profile['script'], level, elf)
+    image = image_contract(elf, profile)
+    image.update(image_sizes(run, elf, profile))
+    image['profile'] = profile['device']
     (run.out / 'image.json').write_text(json.dumps(image, indent=2)+'\n')
     attributes = run.command('elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', elf])
     require(all(tag in attributes for tag in LEVELS[level]['attributes']),
@@ -435,7 +648,7 @@ def main():
     parser.add_argument('--optimize', default='none', choices=['none', 'size', 'speed'])
     parser.add_argument('--specialize', default='off', choices=['off', 'auto', 'all'])
     args = parser.parse_args()
-    supported_host()
+    supported_host(args.output)
     args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)

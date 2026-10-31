@@ -300,7 +300,15 @@ class Run:
         model.set_input(0x1234)
         require(model.read(0x10, 2) == 0x1234, 'halfword input')
 
-    def execute(self, refine=None):
+    def execute(self, refine=None, lanes=None):
+        """Run LANES, every lane by default, each after the lanes it needs,
+        and report each one's verdict whether or not an earlier one failed.
+
+        The installation and tool versions are checked first, and a failure
+        there stops the run, since nothing after it would be evidence.  A
+        lane whose prerequisite failed is reported as not run.  Raises once
+        every selected lane has run, naming each that did not pass.
+        """
         supported_host()
         installed = json.loads((self.tools / 'installation.json').read_text())
         require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'), 'tool lock mismatch')
@@ -316,32 +324,96 @@ class Run:
             ('binutils-version', self.arm / 'arm-eabi-as', '2.46.1'),
             ('gdb-version', self.bin / 'gdb-multiarch', '16.3')]:
             require(expected in self.command(name, [tool, '--version']), name + ' mismatch')
-        self.qemu()
-        self.peripheral()
-        from abi import execute
-        execute(self)
-        from memory import execute as memory_execute
-        memory_execute(self)
-        from packed import execute as packed_execute
-        packed_execute(self)
-        require(refine is not None, 'native Landin compiler is required')
-        from packed_native import execute as native_execute
-        native_execute(self, refine)
-        from backend_acceptance import execute as backend_execute
-        backend_execute(self, refine)
-        from firmware import execute_suite as firmware_execute
-        firmware_execute(self, refine)
-        from freestanding import execute_suite as freestanding_execute
-        freestanding_execute(self, refine)
-        from devices import execute_suite as devices_execute
-        devices_execute(self, refine)
-        from descriptions import execute_suite as descriptions_execute
-        descriptions_execute(self, refine)
-        from driver import execute_suite as driver_execute
-        driver_execute(self, refine)
-        from evidence import execute_suite as evidence_execute
-        evidence_execute(self, refine)
+        selected = selection(lanes)
+        require(refine is not None or not set(selected) & NEEDS_REFINE,
+                'native Landin compiler is required')
+        verdicts = {}
+        for name in selected:
+            missing = [need for need in NEEDS.get(name, ())
+                       if verdicts.get(need, {}).get('status') != 'passed']
+            if missing:
+                verdicts[name] = {'status': 'not run',
+                                  'error': 'it needs the %s lane, which did not pass'
+                                           % ', '.join(missing)}
+            else:
+                try:
+                    self.lane(name, refine)
+                    verdicts[name] = {'status': 'passed'}
+                except Exception as error:
+                    verdicts[name] = {'status': 'failed', 'error': str(error)}
+            print('Cortex-M lane %s %s%s' % (name, verdicts[name]['status'],
+                  ': ' + verdicts[name]['error'] if 'error' in verdicts[name] else ''),
+                  file=sys.stderr if 'error' in verdicts[name] else sys.stdout, flush=True)
+        self.verdicts = verdicts
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
+        failed = [name for name, verdict in verdicts.items() if verdict['status'] != 'passed']
+        require(not failed, '%d of %d lanes did not pass: %s' % (
+            len(failed), len(verdicts), '; '.join(
+                '%s %s: %s' % (name, verdicts[name]['status'], verdicts[name]['error'])
+                for name in failed)))
+        return verdicts
+
+    def lane(self, name, refine):
+        """Run the lane NAME of LANES."""
+        if name == 'cpu':
+            self.qemu()
+        elif name == 'peripheral':
+            self.peripheral()
+        elif name == 'abi':
+            from abi import execute
+            execute(self)
+        elif name == 'memory':
+            from memory import execute as memory_execute
+            memory_execute(self)
+        elif name == 'packed':
+            from packed import execute as packed_execute
+            packed_execute(self)
+        elif name == 'packed-native':
+            from packed_native import execute as native_execute
+            native_execute(self, refine)
+        elif name == 'backend':
+            from backend_acceptance import execute as backend_execute
+            backend_execute(self, refine)
+        elif name == 'firmware':
+            from firmware import execute_suite as firmware_execute
+            firmware_execute(self, refine)
+        elif name == 'freestanding':
+            from freestanding import execute_suite as freestanding_execute
+            freestanding_execute(self, refine)
+        elif name == 'devices':
+            from devices import execute_suite as devices_execute
+            devices_execute(self, refine)
+        elif name == 'descriptions':
+            from descriptions import execute_suite as descriptions_execute
+            descriptions_execute(self, refine)
+        elif name == 'driver':
+            from driver import execute_suite as driver_execute
+            driver_execute(self, refine)
+        else:
+            from evidence import execute_suite as evidence_execute
+            evidence_execute(self, refine)
+
+
+#  Every lane run.py runs, in the order it runs them.  `evidence` compares
+#  each debug image with the `driver` lane's, so it needs that lane, and
+#  selecting it alone runs both.
+LANES = ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native', 'backend',
+         'firmware', 'freestanding', 'devices', 'descriptions', 'driver', 'evidence')
+NEEDS = {'evidence': ('driver',)}
+NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
+
+
+def selection(lanes):
+    """LANES in run order with every lane they need; every lane for None."""
+    if not lanes:
+        return list(LANES)
+    unknown = sorted(set(lanes) - set(LANES))
+    require(not unknown, 'unknown lane %s; the lanes are %s'
+            % (', '.join(unknown), ', '.join(LANES)))
+    wanted = set(lanes)
+    for name in lanes:
+        wanted.update(NEEDS.get(name, ()))
+    return [name for name in LANES if name in wanted]
 
 
 def main():
@@ -349,6 +421,9 @@ def main():
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--refine', type=Path, required=True)
+    parser.add_argument('--lane', action='append', choices=LANES,
+                        help='run only this lane, and the lanes it needs; repeat for more.'
+                             ' A run that selects lanes is FILTERED and is not the gate\'s')
     args = parser.parse_args()
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
@@ -356,22 +431,29 @@ def main():
     import build_lock
     if args.refine:
         build_lock.reading(args.refine)
+    supported_host(args.output)
     tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
+    lanes = selection(args.lane)
     record = {'status': 'failed', 'inputs': inventory(HERE), 'platform': os.uname().sysname,
-              'machine': os.uname().machine, 'kernel': os.uname().release}
+              'machine': os.uname().machine, 'kernel': os.uname().release,
+              'scope': 'every lane' if not args.lane else 'FILTERED: ' + ', '.join(lanes)}
+    run = Run(out, tools)
     try:
-        Run(out, tools).execute(args.refine)
+        run.execute(args.refine, args.lane)
         require(record['inputs'] == inventory(HERE), 'probe inputs changed')
         record['status'] = 'passed'
     except Exception as exc:
         record['error'] = str(exc)
         print('Cortex-M probes FAILED:', exc, file=sys.stderr)
     finally:
+        record['lanes'] = getattr(run, 'verdicts', {})
         record['files'] = inventory(out)
         (out / 'result.json').write_text(json.dumps(record, indent=2, sort_keys=True)+'\n')
-    print('Cortex-M probes ' + record['status'] + ': ' + str(out))
+    print('Cortex-M probes ' + record['status'] + (
+        '' if not args.lane else ' (FILTERED: the lanes %s only, not the gate\'s run)'
+        % ', '.join(lanes)) + ': ' + str(out))
     return 0 if record['status'] == 'passed' else 1
 
 

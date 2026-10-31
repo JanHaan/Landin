@@ -360,7 +360,7 @@ def main():
     parser.add_argument('--all-profiles', action='store_true')
     parser.add_argument('--case', action='append')
     args = parser.parse_args()
-    supported_host()
+    supported_host(args.output)
     args.tools = installed_tools(args.tools)
     before = inventory(args.tools)
     args.output.mkdir(parents=True, exist_ok=False)

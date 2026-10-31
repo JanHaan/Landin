@@ -105,7 +105,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--all-profiles', action='store_true')
     args = parser.parse_args()
-    supported_host()
+    supported_host(args.output)
     args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)

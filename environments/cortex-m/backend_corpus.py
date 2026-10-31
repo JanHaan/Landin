@@ -11,8 +11,10 @@ from pathlib import Path
 import re
 import sys
 
-from backend import (HERE, ROOT, COUNTERPARTS, describe_routines, describe_sizes, fixture,
-                     levels_of, measure_overflow, metadata)
+from backend import (BOOT_PREFIX, HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
+                     MATERIALIZATION, REFERENCE, ImageLimit, build, derived, describe_routines, describe_sizes,
+                     execute as qemu, fixture, harness_start, image_contract, image_sizes,
+                     level_flags, levels_of, link, measure_overflow, metadata, region)
 from run import CommandFailed, Run, require, workers
 from setup import DEFAULT, installed_tools, sha, supported_host
 
@@ -52,14 +54,15 @@ def inventory():
         expected = '-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.\n' + source
         require((COUNTERPARTS / 'cases' / name / 'main.ldn').read_text() == expected,
                 'unreviewed counterpart change: ' + name)
+    hosted = []
     for name, row in rows.items():
         require(row['mode'] in ('execute', 'refuse', 'restriction'), 'unknown corpus disposition')
-        #  Firmware has no standard input to give a program, so one that
-        #  reads it is refused by name or restricted, never executed.
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
-        require(row['mode'] != 'execute' or not meta.get('stdin'),
-                'a fixture reading standard input cannot execute on firmware: ' + name)
-        if row['mode'] != 'execute' or 'profile_limit' in row:
+        if row['mode'] == 'execute' and (said := hosted_oracle(meta)):
+            hosted.append('  %s %s' % (name, said))
+        #  A source refusal on namespace availability alone explains
+        #  itself: the corpus reads the refused imports from it.
+        if (row['mode'] != 'execute' or 'profile_limit' in row) and not namespace_only(row):
             require(bool(row.get('reason')), 'unexplained corpus exclusion: ' + name)
         if row['mode'] == 'restriction':
             witness = ROOT / row['witness']
@@ -69,7 +72,48 @@ def inventory():
                 require(meta['class'] == 'abi' and meta.get('c-sources'), 'C peer restriction changed')
             else:
                 require('extern(c)' in witness.read_text(), 'hosted heap restriction changed')
+    #  Firmware has no standard input, arguments, files or output to give a
+    #  program, so one whose oracle needs them never executes: refused
+    #  before anything builds, every one at once, with the two ways out.
+    require(not hosted, '\n'.join(
+        ['Cortex corpus inventory %s has execute rows firmware cannot run:' % INVENTORY]
+        + hosted + ['Firmware gives a program no standard input, arguments, files or output,'
+                    ' and a counterpart cannot help, since the original\'s metadata is read.'
+                    ' Give each fixture a status oracle, or write a "refuse" row with the'
+                    ' codes Cortex-M0 refuses it with or a "restriction" row with its reason'
+                    ' (see %s)' % RULES]))
     return rows
+
+
+#  What a fixture's metadata asks of a hosted run that firmware cannot give.
+HOSTED_ORACLE = (('stdin', 'reads standard input (stdin:)'),
+                 ('run_args', 'takes arguments (run_args:)'),
+                 ('run_files', 'reads files beside it (run_files:)'),
+                 ('run_expect', 'has its output as its oracle (run_expect:)'))
+
+
+def hosted_oracle(meta):
+    """What METADATA's oracle needs of a hosted run, said for a refusal, or ""."""
+    return ' and '.join(said for key, said in HOSTED_ORACLE if meta.get(key))
+
+
+def namespace_only(row):
+    """A refuse row whose only code is L0015, namespace availability (D267)."""
+    return row['mode'] == 'refuse' and row.get('codes') == ['L0015']
+
+
+#  The module an L0015 refusal names, in the compiler's own words.
+UNAVAILABLE = re.compile(r'error\[L0015\]: module unavailable for target: (\S+)')
+
+
+def namespace_reason(refused, reason):
+    """A namespace refusal's reason, its modules read from the refusal."""
+    modules = sorted(refused)
+    listed = modules[0] if len(modules) == 1 else (
+        ', '.join(modules[:-1]) + ' and ' + modules[-1])
+    text = ('Source namespace checking refuses %s on the freestanding target before'
+            ' checking declarations' % listed)
+    return text + ('. ' + reason if reason else '.')
 
 
 def source_refusal(run, refine, name, row):
@@ -85,44 +129,71 @@ def source_refusal(run, refine, name, row):
                 'source restriction did not produce a compiler diagnostic')
     else:
         raise RuntimeError('recorded source restriction unexpectedly compiled: ' + name)
-    codes = sorted(set(re.findall(r'error\[(L\d+)\]', (run.out / 'compile-refusal.log').read_text())))
+    log = (run.out / 'compile-refusal.log').read_text()
+    codes = sorted(set(re.findall(r'error\[(L\d+)\]', log)))
     require(codes == row['codes'] and bool(codes), 'source restriction diagnostics changed: ' + name)
     require(not (run.out / 'refused.s').exists(), 'refusal wrote an assembly artifact')
-    return {'verdict': 'source-refusal', 'codes': codes, 'reason': row['reason']}
+    if not namespace_only(row):
+        return {'verdict': 'source-refusal', 'codes': codes, 'reason': row['reason']}
+    #  The refused imports are the refusal's, so a row never repeats them
+    #  and a module's rename or split leaves no stale reason behind.
+    refused = sorted(set(UNAVAILABLE.findall(log)))
+    require(bool(refused), 'an L0015 refusal names no module: ' + name)
+    repeated = [module for module in refused if module in row.get('reason', '')]
+    require(not repeated, '%s: the %s row\'s reason names %s, which the corpus reads from the'
+            ' refusal; remove it from the reason (see %s)'
+            % (name, INVENTORY, ', '.join(repeated), RULES))
+    return {'verdict': 'source-refusal', 'codes': codes, 'refused_imports': refused,
+            'reason': namespace_reason(refused, row.get('reason', ''))}
 
 
-def overflowed(run, error):
-    """The regions a failed link overflowed, if overflow is why it failed."""
+def overflowed(run, error, profile):
+    """The parts a failed link overflowed, if overflow is why it failed.
+
+    A region of the profile's text or data overflowing is `FLASH` or
+    `RAM`, whatever the description names it; static RAM reaching the
+    stack that shares its region is the derived script's assertion, and
+    is `RAM` too, by as much as the measurement says.
+    """
     if not (isinstance(error, CommandFailed) and error.name == 'assemble-link'):
         return None
-    log = (run.out / 'assemble-link.log').read_text()
-    overflows = re.findall(r"region `(FLASH|RAM)' overflowed by (\d+) bytes", log)
-    if not overflows or 'undefined reference' in log or 'Assembler messages' in log:
+    log = Path(error.log).read_text()
+    if 'undefined reference' in log or 'Assembler messages' in log:
         return None
-    return {key: int(value) for key, value in overflows}
+    parts = {region(profile, 'text')['name']: 'FLASH', region(profile, 'data')['name']: 'RAM'}
+    overflows = {}
+    for name, value in re.findall(r"region `(\w+)' overflowed by (\d+) bytes", log):
+        if name not in parts:
+            return None
+        overflows[parts[name]] = int(value)
+    if 'image overlaps the reserved' in log:
+        overflows.setdefault('RAM', None)
+    return overflows or None
 
 
-def image_limit(run, row, error, level='armv6-m'):
+def image_limit(run, row, error, profile, level='armv6-m'):
     text = str(error)
     result = {'verdict': 'selected-image-limit', 'reason': row.get('reason', '')}
-    if text == 'bounded assembly materialization exceeds 8 MiB':
+    if isinstance(error, ImageLimit) and 'materialization' in text:
         result['boundary'] = 'represented static image exceeds selected memory map'
-    elif text == 'routine frame exceeds selected 4 KiB test stack reservation':
+    elif isinstance(error, ImageLimit):
         report = json.loads((run.out / 'build.json').read_text())['build']
         result['minimum_frame_bytes'] = max(r['frame_bytes'] for r in report['routines'])
-        require(result['minimum_frame_bytes'] > 4096, 'false frame-limit report')
+        require(result['minimum_frame_bytes'] > profile['stack_reserved'],
+                'false frame-limit report')
         result['boundary'] = 'single routine frame exceeds stack reservation'
+        result['stack_reserved'] = profile['stack_reserved']
     elif isinstance(error, CommandFailed) and error.name == 'assemble-link':
-        log = (run.out / 'assemble-link.log').read_text()
-        overflows = overflowed(run, error)
+        log = Path(error.log).read_text()
+        overflows = overflowed(run, error, profile)
         require(overflows is not None or 'undefined reference' in log
                 or 'Assembler messages' in log,
                 'link failed without an identified physical image overflow: ' + text)
         require(overflows is not None,
                 'image limit conceals a code-generation/link defect: ' + text)
-        result['overflow_bytes'] = overflows
+        result['image'] = measure_overflow(run, profile, level=level)
+        result['overflow_bytes'] = over(overflows, result['image'])
         result['boundary'] = 'selected external linker map'
-        result['image'] = measure_overflow(run, level)
     else:
         raise error
     if row.get('profile_limit') != 'selected-image':
@@ -135,6 +206,13 @@ def image_limit(run, row, error, level='armv6-m'):
             % (text, ': ' + describe_sizes(result['image']) if 'image' in result else '',
                INVENTORY, RULES))
     return result
+
+
+def over(overflows, image):
+    """OVERFLOWS with an amount the link did not state read from IMAGE."""
+    return {part: value if value is not None else
+            image['regions'][part]['used'] - image['regions'][part]['limit']
+            for part, value in overflows.items()}
 
 
 def stale_limits(rows, results):
@@ -172,8 +250,10 @@ def corpus_line(result):
     elif result.get('boundary') == 'represented static image exceeds selected memory map':
         text += ': its assembly materialises more than 8 MiB, past any region of the map'
     elif 'minimum_frame_bytes' in result:
-        text += ': a routine frame of %d bytes exceeds the 4096-byte stack reservation' % (
-            result['minimum_frame_bytes'])
+        text += ': a routine frame of %d bytes exceeds the %d-byte stack reservation' % (
+            result['minimum_frame_bytes'], result.get('stack_reserved', 4096))
+    elif 'refused_imports' in result:
+        text += ': ' + ', '.join(result['codes']) + ' refuses ' + ', '.join(result['refused_imports'])
     return text
 
 
@@ -193,56 +273,152 @@ def divide_lowering(run):
     return {'hardware_divides': divides, 'helper_divides': 0}
 
 
-def capacities():
-    """Each description's capacities, from descriptions.json: the flash its
-    text region gives after the boot kind's prefix, the static RAM its data
-    region gives beside a stack it holds, and the stack (D543, D545)."""
-    devices = json.loads((HERE / 'descriptions.json').read_text())['devices']
-    out = {}
-    for device, facts in devices.items():
-        regions = {r['name']: r for r in facts['regions']}
-        flash = regions[facts['placed']['text']]['length']
-        if 'boot2_bytes' in facts:
-            flash -= facts['boot2_bytes']
-        ram = regions[facts['placed']['data']]['length']
-        if facts['placed']['stack'] == facts['placed']['data']:
-            ram -= facts['stack_reserved']
-        out[device] = {'FLASH': flash, 'RAM': ram, 'stack': facts['stack_reserved']}
-    return out
+def dominates(profile, reference):
+    """Whether every image that fits REFERENCE fits PROFILE: as much flash
+    past its boot prefix and vector table, static RAM and stack, so a
+    program the corpus executed on the reference needs no link of its own
+    to show it fits, and only the limited ones are linked again."""
+    def room(one):
+        return one['flash_limit'] - BOOT_PREFIX[one['boot']] - 4 * one['vector_words']
+    return (room(profile) >= room(reference)
+            and profile['static_ram_limit'] >= reference['static_ram_limit']
+            and profile['stack_reserved'] >= reference['stack_reserved'])
 
 
-def profile_verdicts(results):
-    """Every capacity verdict again against each described profile.
+def against(parent, profile, result):
+    """A limited program linked again for another described PROFILE.
 
-    A limited image's measured extents, from the enlarged probe map, its
-    largest frame, or its materialization, are held to each profile's
-    capacities; the reference's must agree with the verdict the corpus
-    reached by linking.  A measurement: nothing here is linked or run
-    against the other profiles' maps.
+    The program's object the reference link left, or its assembly
+    assembled here for one whose frame stopped it before assembly, is
+    linked with that profile's derived script and the harness start
+    assembled for it, under `DEVICE/` beside the program's own output.
+    The verdict is the link's and the frame's against the profile's build
+    report: nothing is run, for QEMU has no such chip.  An image past the
+    harness's materialization guard is past every region of the profile,
+    which is checked rather than assumed.
     """
+    device = profile['device']
+    verdict = {'device': device, 'linked': True}
+    if result.get('boundary') == 'represented static image exceeds selected memory map':
+        require(MATERIALIZATION > profile['flash_limit'] + profile['static_ram_limit'],
+                '%s holds more than the harness materializes; link the image to judge it'
+                % device)
+        verdict.update(fits=False, linked=False,
+                       boundary='its assembly materialises more than 8 MiB, past every region')
+        return verdict
+    out = parent.out / device
+    out.mkdir()
+    run = Run(out, parent.tools)
+    program = parent.out / 'input-1.o'
+    if not program.exists():
+        program = out / 'input-1.o'
+        run.command('assemble-1', [run.arm / 'arm-eabi-gcc', *level_flags('armv6-m'),
+                    '-c', parent.out / 'program.s', '-o', program])
+    objects = [harness_start(run, profile), program]
+    elf = out / 'program.elf'
+    try:
+        link(run, objects, profile['script'], 'armv6-m', elf)
+    except CommandFailed as error:
+        overflows = overflowed(run, error, profile)
+        require(overflows is not None,
+                'the link for %s failed without an identified image overflow: %s'
+                % (device, error))
+        verdict['image'] = measure_overflow(run, profile, objects)
+        verdict.update(fits=False, overflow_bytes=over(overflows, verdict['image']))
+    else:
+        image_contract(elf, profile)
+        verdict.update(fits=True, image=image_sizes(run, elf, profile))
+    if 'minimum_frame_bytes' in result and result['minimum_frame_bytes'] > profile['stack_reserved']:
+        verdict.update(fits=False, minimum_frame_bytes=result['minimum_frame_bytes'],
+                       stack_reserved=profile['stack_reserved'])
+    return verdict
+
+
+def profile_verdicts(results, others):
+    """Every capacity verdict again against each described profile, linked.
+
+    The reference's are the corpus's own links; each other profile's are
+    `against`'s, for the limited verdicts at the default level, the only
+    ones its core is sure to execute.
+    """
+    limited = [r for r in results if r.get('verdict') == 'selected-image-limit']
+    def tag(result):
+        return '%s %s/%s' % (result['fixture'], result['optimize'], result['specialize'])
     verdicts = {}
-    for device, limit in capacities().items():
-        fits, exceeds = [], []
-        for result in results:
-            if result.get('verdict') != 'selected-image-limit':
-                continue
-            tag = '%s %s/%s' % (result['fixture'], result['optimize'], result['specialize'])
-            if 'minimum_frame_bytes' in result:
-                over = result['minimum_frame_bytes'] > limit['stack']
-            elif 'image' in result:
-                used = {region: result['image']['regions'][region]['used']
-                        for region in ('FLASH', 'RAM')}
-                over = used['FLASH'] > limit['FLASH'] or used['RAM'] > limit['RAM']
-            else:
-                over = True
-            (exceeds if over else fits).append(tag)
-        verdicts[device] = {'verdicts': len(fits) + len(exceeds),
-                            'exceed': len(exceeds), 'fit': sorted(fits),
-                            'programs_exceeding': len({t.split()[0] for t in exceeds})}
-    require(verdicts['constrained-reference']['fit'] == [],
-            'the reference capacities disagree with the linked verdicts: '
-            + ', '.join(verdicts['constrained-reference']['fit']))
+    for device in DESCRIPTIONS:
+        if device == REFERENCE:
+            mine = [(r, False) for r in limited]
+        elif device in others:
+            mine = [(r, r['profiles'][device]['fits']) for r in limited
+                    if device in r.get('profiles', {})]
+        else:
+            continue
+        exceeds = [r for r, fits in mine if not fits]
+        verdicts[device] = {'verdicts': len(mine), 'exceed': len(exceeds),
+                            'fit': sorted(tag(r) for r, fits in mine if fits),
+                            'programs_exceeding': len({r['fixture'] for r in exceeds}),
+                            'linked': True}
     return verdicts
+
+
+def observe(output, tools, refine, program, profiles, level='armv6-m', roots=()):
+    """Run PROGRAM, a source file or a module directory, at PROFILES on the
+    constrained reference and say what it returned or where it trapped.
+
+    No oracle is held: the status is printed, with the image against the
+    map, so a measured value comes back as a value.  The harness still
+    holds the stack to its reservation and names the routine that overran
+    it.  Nothing here is corpus evidence.
+    """
+    path = Path(program).resolve(strict=True)
+    inputs = [*('--root=' + str(Path(root).resolve()) for root in roots)]
+    inputs += (['--root=' + str(path.parent), str(path)] if path.is_dir() else [str(path)])
+    results = []
+    for opt, spec in profiles:
+        out = output / (path.stem + '--' + opt + '-' + spec
+                        + ('' if level == 'armv6-m' else '--' + level))
+        out.mkdir(parents=True, exist_ok=False)
+        run = Run(out, tools)
+        result = {'program': str(path), 'optimize': opt, 'specialize': spec, 'level': level}
+        try:
+            try:
+                elf = build(run, refine, inputs, opt, spec, level=level)
+            except (ImageLimit, CommandFailed) as error:
+                limit = image_limit(run, {'profile_limit': 'selected-image'}, error,
+                                    derived(run, refine), level)
+                result.update(status='does not fit', limit=limit)
+                text = corpus_line(dict(limit, fixture=str(path), optimize=opt, specialize=spec))
+                print(text.replace('cortex corpus: ', 'cortex program: ', 1), flush=True)
+                results.append(result)
+                continue
+            result['image'] = {key: json.loads((out / 'image.json').read_text())[key]
+                               for key in ('regions', 'sections', 'routines')}
+            qemu(run, elf, None, False, level=level)
+            seen = json.loads((out / 'observed.json').read_text())
+            result.update(seen, status='ran')
+            said = ('trapped: HardFault at %s%s' % (seen['stacked_pc'],
+                    ', a udf #1 trap' if seen['udf_1'] else '')
+                    if seen['trapped'] else 'returned %d (r12 %d)' % (seen['status'], seen['r12']))
+            print('cortex program: %s %s/%s %s: %s; %s' % (
+                path.name, opt, spec, said, describe_sizes(result['image']),
+                describe_routines(result['image'])), flush=True)
+        except Exception as error:
+            said = str(error)
+            if isinstance(error, CommandFailed) and error.name == 'compile':
+                #  The compiler's first diagnostic, so the line says why.
+                first = next((line for line in Path(error.log).read_text().splitlines()
+                              if line.startswith('error[')), '')
+                said += (': ' + first) if first else ''
+            result.update(status='failed', error=said)
+            print('cortex program: %s %s/%s FAILED: %s' % (path.name, opt, spec, said),
+                  flush=True)
+        results.append(result)
+    (output / 'result.json').write_text(json.dumps(
+        {'scope': 'one program, not corpus evidence', 'compiler_sha256': sha(refine),
+         'results': results}, indent=2) + '\n')
+    require(all(r['status'] != 'failed' for r in results),
+            'the program failed at %d profiles' % sum(r['status'] == 'failed' for r in results))
+    return results
 
 
 def execute(output, tools, refine, selected=(), profiles=()):
@@ -252,7 +428,23 @@ def execute(output, tools, refine, selected=(), profiles=()):
     require(set(profiles) <= set(known),
             'unknown exact corpus profile %s; the profiles are %s, written with - or /'
             % (', '.join(sorted(set(profiles) - set(known))), ', '.join(known)))
-    require(not selected or set(selected) <= set(rows), 'unknown exact corpus case')
+    unknown = sorted(set(selected) - set(rows))
+    require(not unknown, 'unknown exact corpus case %s: a case is a fixture directory under'
+            ' compiler/tests/fixtures with a row in %s, such as runtime/word-count; to run a'
+            ' program of your own, pass --program PATH' % (', '.join(unknown), INVENTORY))
+    #  Every profile the corpus links with, derived once by refine: the
+    #  reference's, which the corpus executes, and each other described
+    #  device's, which a limited verdict is linked again against.
+    deriving = Run(output, tools)
+    reference = derived(deriving, refine, REFERENCE, output / 'profiles')
+    others = {}
+    for device in DESCRIPTIONS:
+        if device != REFERENCE:
+            others[device] = derived(deriving, refine, device, output / 'profiles')
+            require(dominates(others[device], reference),
+                    '%s holds less than the constrained reference somewhere, so a program'
+                    ' that fits the reference may not fit it, and the corpus links only'
+                    ' its limited programs again' % device)
     work = []
     for name, row in rows.items():
         if selected and name not in selected:
@@ -297,7 +489,10 @@ def execute(output, tools, refine, selected=(), profiles=()):
                     if level != 'armv6-m':
                         result['lowering'] = divide_lowering(run)
                 except RuntimeError as error:
-                    result.update(image_limit(run, row, error, level))
+                    result.update(image_limit(run, row, error, reference, level))
+                    if level == 'armv6-m':
+                        result['profiles'] = {device: against(run, profile, result)
+                                              for device, profile in others.items()}
             result['status'] = 'passed'
         except Exception as error:
             result.update(status='failed', error='%s: %s' % (out.name, error))
@@ -318,29 +513,47 @@ def execute(output, tools, refine, selected=(), profiles=()):
     stale = [] if profiles else stale_limits(rows, results)
     summary = {'scope': 'development-filtered' if selected or profiles else 'complete-inventory',
                'compiler_sha256': sha(refine), 'results': results, 'stale_limits': stale,
-               'profiles': profile_verdicts(results)}
+               'profiles': profile_verdicts(results, others)}
     for device, verdict in summary['profiles'].items():
         print('cortex corpus capacity against %s: %d of %d limited verdicts still exceed it,'
-              ' in %d programs' % (device, verdict['exceed'], verdict['verdicts'],
-                                   verdict['programs_exceeding']), flush=True)
+              ' in %d programs, linked with its derived script'
+              % (device, verdict['exceed'], verdict['verdicts'],
+                 verdict['programs_exceeding']), flush=True)
     (output / 'result.json').write_text(json.dumps(summary, indent=2)+'\n')
     failed = [r for r in results if r['status'] != 'passed']
     require(not failed, 'Cortex corpus has %d failures:\n%s' % (len(failed), '\n'.join(
         '  %s %s/%s: %s' % (r['fixture'], r['optimize'], r['specialize'], r['error'])
         for r in failed)))
     require(not stale, 'Cortex corpus records image limits no profile met:\n' + '\n'.join(stale))
+    if selected or profiles:
+        print('FILTERED: this corpus run selected %s; it judges no stale limit and is not'
+              ' the complete inventory' % ', '.join(
+                  ['--case ' + one for one in selected] + ['--profile ' + one for one in profiles]),
+              flush=True)
     return summary
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog='--program runs a source file or module directory of your own at the corpus\'s'
+               ' profiles on the constrained reference and prints what it returned, or where'
+               ' it trapped, with its image against the map; no oracle is held.')
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--case', action='append', default=[])
+    parser.add_argument('--case', action='append', default=[],
+                        help='a fixture directory under compiler/tests/fixtures, such as'
+                             ' runtime/word-count; repeat for more')
     parser.add_argument('--profile', action='append', default=[],
                         help='none-off, size-off, size-auto, speed-auto, none-all or speed-all;'
                              ' none/off as the log prints it is the same profile')
+    parser.add_argument('--program', type=Path,
+                        help='a .ldn file or module directory to run instead of the corpus')
+    parser.add_argument('--root', action='append', default=[],
+                        help='a module root for --program, passed to refine')
+    parser.add_argument('--level', default='armv6-m', choices=sorted(LEVELS),
+                        help='the M-profile level --program is built and run at')
     args = parser.parse_args()
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
@@ -348,10 +561,20 @@ def main():
     import build_lock
     if args.refine:
         build_lock.reading(args.refine)
-    supported_host()
+    if args.program is not None and args.case:
+        parser.error('--program runs one program of your own; --case selects corpus fixtures')
+    supported_host(args.output)
     args.tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
+    if args.program is not None:
+        known = {'-'.join(p): p for p in PROFILES + SPECIALIZATION_PROFILES}
+        chosen = [profile_name(p) for p in args.profile]
+        require(set(chosen) <= set(known), 'unknown profile %s; the profiles are %s'
+                % (', '.join(sorted(set(chosen) - set(known))), ', '.join(known)))
+        observe(out, args.tools.resolve(), args.refine.resolve(), args.program,
+                [known[p] for p in chosen] or PROFILES, args.level, args.root)
+        return
     execute(out, args.tools.resolve(), args.refine.resolve(), args.case, args.profile)
 
 

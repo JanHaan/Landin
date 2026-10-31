@@ -1,7 +1,7 @@
 """Mandatory compiler-generated execution lanes, within run.py's pinned tool/evidence boundary."""
 from concurrent.futures import ThreadPoolExecutor
 import json
-from backend import build, execute as qemu
+from backend import build, derived, execute as qemu
 from backend_corpus import execute as corpus
 from backend_controls import frame_control, instruction_controls
 from backend_peripheral import execute as peripheral, dma, byte
@@ -55,7 +55,8 @@ def execute(parent, refine):
             print('cortex backend control: ' + name + ' passed', flush=True)
     out = root / 'independent-instructions'
     out.mkdir()
-    instruction_controls(Run(out, parent.tools))
+    run = Run(out, parent.tools)
+    instruction_controls(run, derived(run, refine))
     require(sha(refine) == compiler_hash, 'compiler changed during embedded execution')
     record = {'status': 'passed', 'compiler_sha256': compiler_hash,
               'corpus_rows': len(summary['results']), 'controls': controls,

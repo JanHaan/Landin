@@ -1,16 +1,25 @@
-"""Mandatory freestanding source-debugging and constrained firmware evidence."""
+#!/usr/bin/env python3
+"""Mandatory freestanding source-debugging and constrained firmware evidence.
+
+Run alone, it takes the programs and controls to run and the profiles to
+run them at: `--control capacity --profile none-off` measures D470's
+stack-switch consumer once.  A program's evidence compares its debug image
+with the driver lane's, which it builds first for the same profiles.
+"""
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import shutil
 import struct
+import sys
 
 import driver
 import firmware
 import freestanding
 from packed_native import PROFILES
 from run import Run, require, workers
-from setup import sha
+from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 import source_debug
 from cortex_debug import Image, verify
 import resources
@@ -255,14 +264,31 @@ def capacity_text(report):
     return '\n'.join(lines)+'\n'
 
 
-def execute_suite(parent, refine, profiles=PROFILES):
+#  What the lane runs at each profile: the driver's programs under the
+#  debugger, then the controls.
+PROGRAMS=('app','protocol','layout')
+CONTROLS=('pool','vec','cpu','noreturn','panic','veneer','irq','machine','leaf',
+          'switch','capacity')
+
+
+def execute_suite(parent, refine, profiles=PROFILES, programs=None, controls=None):
+    """Every program and control at PROFILES, or the PROGRAMS and CONTROLS
+    named, either of which may be empty; a selection is FILTERED."""
     refine=refine.resolve()
+    programs=PROGRAMS if programs is None else programs
+    controls=CONTROLS if controls is None else controls
+    require(set(programs)<=set(PROGRAMS) and set(controls)<=set(CONTROLS),
+            'unknown evidence program or control; the programs are %s and the controls %s'
+            % (', '.join(PROGRAMS),', '.join(CONTROLS)))
     root=child(parent,'evidence')
     compiler_hash=sha(refine)
     rows=[]
     parent.command('evidence-refine-identity',[refine,'--identify'])
-    import stack_control
-    stack_control.run(child(root,'independent-stack'))
+    #  The observer's independent calibration, which the programs'
+    #  measurements stand on; a run of controls alone needs none.
+    if programs:
+        import stack_control
+        stack_control.run(child(root,'independent-stack'))
     def program(item):
         optimize,specialize,name=item
         profile=optimize+'-'+specialize
@@ -351,10 +377,8 @@ def execute_suite(parent, refine, profiles=PROFILES):
     #  against their own emulators; rows report in the sequential order.
     work=[]
     for optimize,specialize in profiles:
-        work+=[(program,(optimize,specialize,n)) for n in ('app','protocol','layout')]
-        work+=[(control,(optimize,specialize,k)) for k in
-               ('pool','vec','cpu','noreturn','panic','veneer','irq','machine','leaf',
-                'switch','capacity')]
+        work+=[(program,(optimize,specialize,n)) for n in PROGRAMS if n in programs]
+        work+=[(control,(optimize,specialize,k)) for k in CONTROLS if k in controls]
     with ThreadPoolExecutor(max_workers=workers()) as pool:
         for row in pool.map(lambda job: job[0](job[1]),work):
             rows.append(row)
@@ -365,8 +389,53 @@ def execute_suite(parent, refine, profiles=PROFILES):
     capacity=[row.pop('capacity') for row in rows if 'capacity' in row]
     (root.out/'capacity.json').write_text(json.dumps(capacity,indent=2)+'\n')
     (root.out/'capacity.txt').write_text(''.join(capacity_text(r)+'\n' for r in capacity))
+    filtered=tuple(programs)!=PROGRAMS or tuple(controls)!=CONTROLS
     record=dict(status='passed',compiler_sha256=compiler_hash,rows=rows,
+        scope='FILTERED: '+', '.join([*programs,*controls]) if filtered else 'every row',
         artifacts={str(p.relative_to(root.out)):sha(p)
                    for p in sorted(root.out.rglob('*')) if p.is_file()})
     (root.out/'result.json').write_text(json.dumps(record,indent=2)+'\n')
     return record
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--refine',type=Path,required=True)
+    parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--tools',type=Path,default=DEFAULT)
+    parser.add_argument('--program',action='append',choices=PROGRAMS,default=[],
+                        help='a driver program to run under the debugger; repeat for more')
+    parser.add_argument('--control',action='append',choices=CONTROLS,default=[],
+                        help='a control to run, such as capacity; repeat for more')
+    parser.add_argument('--profile',action='append',default=[],
+                        choices=[o+'-'+s for o,s in PROFILES],
+                        help='a profile to run at; repeat for more, and the first without one')
+    parser.add_argument('--all-profiles',action='store_true')
+    args=parser.parse_args()
+    if not args.program and not args.control:
+        parser.error('name a --program or a --control; run.py --lane evidence runs them all')
+    supported_host(args.output)
+    args.tools=installed_tools(args.tools)
+    before=inventory(args.tools)
+    args.output.mkdir(parents=True,exist_ok=False)
+    profiles=([tuple(p.split('-')) for p in args.profile] if args.profile else
+              PROFILES if args.all_profiles else PROFILES[:1])
+    parent=Run(args.output.resolve(),args.tools.resolve())
+    record={'status':'failed','tools':before,'scope':'development; FILTERED; not acceptance'}
+    try:
+        if args.program:
+            record['driver']=driver.execute_suite(parent,args.refine.resolve(),profiles,
+                                                  args.program)
+        record['evidence']=execute_suite(parent,args.refine,profiles,args.program,args.control)
+        require(inventory(args.tools)==before,'embedded tool drift')
+        record['status']='passed'
+    finally:
+        (args.output/'result.json').write_text(json.dumps(record,indent=2)+'\n')
+    print('DEVELOPMENT / FILTERED: evidence %s at %s %s; see %s' % (
+        ', '.join(args.program+args.control),', '.join(o+'/'+s for o,s in profiles),
+        record['status'],args.output/'evidence'))
+    return 0 if record['status']=='passed' else 1
+
+
+if __name__=='__main__':
+    sys.exit(main())

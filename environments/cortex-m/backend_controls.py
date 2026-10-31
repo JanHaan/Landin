@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from backend import build, execute
+from backend import build, derived, execute, harness_start
 from run import Run
 from setup import DEFAULT, HERE, installed_tools, sha, supported_host
 
@@ -47,13 +47,15 @@ def frame_control(run, refine, opt, spec, veneer=False):
     execute(run, elf, 42, False, checks)
 
 
-def instruction_controls(run):
-    # Independent assembly uses no generated Landin instructions.
+def instruction_controls(run, profile):
+    # Independent assembly uses no generated Landin instructions; it links
+    # with the constrained reference's derived script, as the corpus does.
     from run import FLAGS, require
     elf = run.out / 'instructions.elf'
+    start = harness_start(run, profile, name='start.o')
     run.command('assemble-instructions', [run.arm / 'arm-eabi-gcc', *FLAGS,
-                '-Wl,-T,' + str(HERE / 'probes/backend-memory.ld') + ',--gc-sections,-Map,instructions.map',
-                HERE / 'probes/backend-start.S', HERE / 'probes/backend-instructions.S', '-o', elf])
+                '-Wl,-T,' + profile['script'] + ',--gc-sections,-Map,instructions.map',
+                start, HERE / 'probes/backend-instructions.S', '-o', elf])
     run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
     execute(run, elf, 42, False)
     illegal = {
@@ -86,7 +88,7 @@ def main():
     parser.add_argument('--optimize', default='none')
     parser.add_argument('--specialize', default='off')
     args = parser.parse_args()
-    supported_host()
+    supported_host(args.output)
     args.tools = installed_tools(args.tools)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -99,7 +101,7 @@ def main():
             frame_control(run, args.refine.resolve(), args.optimize, args.specialize,
                           veneer=name == 'veneer')
         elif name == 'instructions':
-            instruction_controls(run)
+            instruction_controls(run, derived(run, args.refine.resolve()))
         else:
             source = HERE / ('probes/backend-' + name + '.ldn')
             elf = build(run, args.refine.resolve(), [source],
