@@ -705,10 +705,14 @@ specialization and simplification run before all native emitters. arm64 body
 folding remains separate from scalar home reuse. Reports record frame, spill,
 save and register use, while source debugging consumes the same placement
 plan for the fixed source slots.
-The RV64 backend keeps source slots and scalar spills in fixed frame homes
-at every optimization profile, with x8 holding the entry CFA and the saved
-caller frame and return address immediately below it. It does not promote
-SSA values into persistent registers or reuse scalar homes. Neutral
+The RV64 backend keeps source slots in fixed frame homes at every
+optimization profile, with x8 holding the entry CFA and the saved caller
+frame and return address immediately below it. Without optimization every
+scalar IR value also has a home of its own; size and speed modes reuse
+nonoverlapping scalar homes as arm64 does, a value's home freed once the
+operation that reads it last has run, which takes 36 per cent off the
+runtime corpus's frame bytes at both. It does not promote SSA values into
+persistent registers. Neutral
 specialization and simplification still run before emission. The explicit
 LP64D planner assigns C carriers without putting register banks or stack
 positions into the IR. XLEN-specific instruction helpers select baseline
